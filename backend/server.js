@@ -23,6 +23,13 @@ const Prova = require('./models/Prova');
 const Turma = require('./models/Turma');
 // NÃO importar Resultado ou ProvaRealizada se forem criados inline
 
+
+// ADICIONE ISSO LOGO APÓS OS IMPORTS (linha ~20):
+if (process.env.PORT === '10000') {
+  console.log('⚠️  Removendo PORT fixa do Render...');
+  delete process.env.PORT; // Força o Render a usar porta automática
+}
+
 // ============ CRIAR MODELOS INLINE ============
 
 // 1. CRIAR MODELO Resultado inline (ATUALIZADO)
