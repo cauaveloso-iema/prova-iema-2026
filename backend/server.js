@@ -147,6 +147,9 @@ if (process.env.OPENROUTER_API_KEY) {
   });
 }
 
+const app = express();
+const PORT = process.env.PORT || 3000;
+
 // ============ MIDDLEWARES DE SEGURANÇA ============
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -3518,9 +3521,6 @@ app.get('/api/test', (req, res) => {
         }
     });
 });
-
-const app = express();
-const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(50));
