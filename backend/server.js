@@ -150,12 +150,19 @@ if (process.env.OPENROUTER_API_KEY) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, '0.0.0.0', () => {  // 👈 ADICIONE '0.0.0.0' SIM
+app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(50));
-  console.log(`🚀 SISTEMA DE PROVAS ONLINE - PRODUÇÃO`);
+  console.log(`🚀 SISTEMA DE PROVAS ONLINE - ${process.env.NODE_ENV || 'development'}`);
   console.log(`📡 Servidor rodando na porta: ${PORT}`);
+  
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🌐 URL Pública: https://seu-app.onrender.com`);
+  }
+  
+  console.log(`🗄️  Banco de Dados: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
   console.log('='.repeat(50));
 });
+
 // ============ MIDDLEWARES DE SEGURANÇA ============
 app.use(helmet({
   contentSecurityPolicy: false,
