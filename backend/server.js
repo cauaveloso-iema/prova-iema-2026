@@ -9,11 +9,11 @@ const helmet = require('helmet');
 const compression = require('compression');
 const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // Logo após require('dotenv')
 console.log('📁 Diretório atual:', __dirname);
-console.log('🔍 Procurando .env em:', path.resolve(__dirname, '..', '.env'));
+console.log('🔍 Procurando .env em:', path.join(__dirname, '..', '.env'));
 console.log('🔑 Chave encontrada?:', process.env.OPENROUTER_API_KEY ? '✅ Sim' : '❌ Não');
 console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Configurada' : '❌ Não configurada');
 
@@ -148,20 +148,7 @@ if (process.env.OPENROUTER_API_KEY) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('='.repeat(50));
-  console.log(`🚀 SISTEMA DE PROVAS ONLINE - ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📡 Servidor rodando na porta: ${PORT}`);
-  
-  if (process.env.NODE_ENV === 'production') {
-    console.log(`🌐 URL Pública: https://seu-app.onrender.com`);
-  }
-  
-  console.log(`🗄️  Banco de Dados: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
-  console.log('='.repeat(50));
-});
+const PORT = process.env.PORT || 10000;
 
 // ============ MIDDLEWARES DE SEGURANÇA ============
 app.use(helmet({
@@ -3536,18 +3523,17 @@ app.get('/api/test', (req, res) => {
 });
 
 // ============ FRONTEND ESTÁTICO ============
-app.use(express.static(path.join(__dirname, '../frontend')));
-
-// Rota fallback
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/index.html'));
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
 
 // ============ INICIAR SERVIDOR ============
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(50));
   console.log(`🚀 SISTEMA DE PROVAS ONLINE - PRODUÇÃO`);
-  console.log(`📡 Servidor: http://localhost:${PORT}`);
+  console.log(`📡 Servidor rodando na porta: ${PORT}`);
+  console.log(`🌐 URL: https://prova-iema-2026.onrender.com`);
   console.log(`🗄️  Banco de Dados: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
   console.log(`🔐 Autenticação: ${process.env.JWT_SECRET ? '✅ Configurada' : '⚠️  Configurar JWT_SECRET'}`);
   console.log(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
