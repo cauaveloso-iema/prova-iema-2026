@@ -150,6 +150,12 @@ if (process.env.OPENROUTER_API_KEY) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.listen(PORT, '0.0.0.0', () => {  // 👈 ADICIONE '0.0.0.0' SIM
+  console.log('='.repeat(50));
+  console.log(`🚀 SISTEMA DE PROVAS ONLINE - PRODUÇÃO`);
+  console.log(`📡 Servidor rodando na porta: ${PORT}`);
+  console.log('='.repeat(50));
+});
 // ============ MIDDLEWARES DE SEGURANÇA ============
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -159,7 +165,7 @@ app.use(helmet({
 
 app.use(compression());
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:5500'],
+  origin: true,  // 👈 Permite TODAS as origens por enquanto
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
