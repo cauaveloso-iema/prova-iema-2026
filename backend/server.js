@@ -9,7 +9,12 @@ const helmet = require('helmet');
 const compression = require('compression');
 const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
-require('dotenv').config({ path: '.env' });
+require('dotenv').config({ path: '../.env' });
+
+// Logo após require('dotenv')
+console.log('📁 Diretório atual:', __dirname);
+console.log('🔍 Procurando .env em:', path.resolve(__dirname, '..', '.env'));
+console.log('🔑 Chave encontrada?:', process.env.OPENROUTER_API_KEY ? '✅ Sim' : '❌ Não');
 console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Configurada' : '❌ Não configurada');
 
 // Importar modelos - APENAS os que existem como arquivos separados
