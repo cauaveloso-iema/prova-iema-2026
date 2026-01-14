@@ -193,24 +193,25 @@ app.use(session({
 }));
 
 // ============ CONEXÃO COM MONGODB ============
+// Na conexão MongoDB (~linha 150), modifique:
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000, // Timeout após 5 segundos
-  socketTimeoutMS: 45000, // Fecha sockets após 45s de inatividade
+  serverSelectionTimeoutMS: 10000, // Aumente para 10 segundos
 })
-.then(() => console.log('✅ MongoDB Atlas conectado com sucesso'))
+.then(() => {
+  console.log('✅ MongoDB Atlas conectado com sucesso');
+  console.log('📊 URI:', process.env.MONGODB_URI ? '✅ Configurada' : '❌ Não configurada');
+})
 .catch(err => {
-  console.error('❌ Erro ao conectar com MongoDB Atlas:', err);
-  console.log('⚠️  Tentando conexão local como fallback...');
+  console.error('❌ ERRO CRÍTICO ao conectar com MongoDB Atlas:', err.message);
+  console.log('🔍 Verifique:');
+  console.log('   1. MONGODB_URI está correta no Render?');
+  console.log('   2. MongoDB Atlas permite conexões de qualquer IP (0.0.0.0/0)?');
+  console.log('   3. Usuário/senha estão corretos?');
   
-  // Fallback para MongoDB local (se necessário)
-  mongoose.connect('mongodb://localhost:27017/provas_online', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-  })
-  .then(() => console.log('✅ MongoDB local conectado (fallback)'))
-  .catch(fallbackErr => console.error('❌ Erro no fallback:', fallbackErr));
+  // Não tente fallback, apenas encerre
+  process.exit(1);
 });
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO ============
