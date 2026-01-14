@@ -1,0 +1,17 @@
+# Configurações sensíveis
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Backup e logs
+backups/
+*.log
+logs/
+
+# Outros
+node_modules/
+.DS_Store
+.vscode/
+.idea/
