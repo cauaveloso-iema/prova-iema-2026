@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sistema de Provas</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        .login-header {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+        }
+        
+        .login-header h1 {
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+        
+        .login-header p {
+            opacity: 0.9;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f3f4f6;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6b7280;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #4f46e5;
+            border-bottom-color: #4f46e5;
+            background: white;
+        }
+        
+        .tab-content {
+            padding: 30px;
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4b5563;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+        
+        select.form-control {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+        
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: transform 0.3s;
+        }
+        
+        .btn-login:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-register {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: transform 0.3s;
+        }
+        
+        .btn-register:hover {
+            transform: translateY(-2px);
+        }
+        
+        .alert {
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+        }
+        
+        .alert-success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #16a34a;
+        }
+        
+        .role-selection {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .role-option {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .role-option:hover {
+            border-color: #4f46e5;
+        }
+        
+        .role-option.active {
+            border-color: #4f46e5;
+            background: #f5f3ff;
+        }
+        
+        .role-option i {
+            display: block;
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #4f46e5;
+        }
+        
+        .role-fields {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+        
+        .role-fields.active {
+            display: block;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading i {
+            font-size: 2rem;
+            color: #4f46e5;
+            margin-bottom: 10px;
+        }
+        
+        /* Estilo para o botão de WhatsApp */
+        .whatsapp-contact {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .whatsapp-contact a {
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 1rem;
+        }
+        
+        .whatsapp-contact:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
+        }
+        
+        .whatsapp-contact i {
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1><i class="fas fa-graduation-cap"></i> Sistema de Provas</h1>
+            <p>Faça login ou cadastre-se para acessar o sistema</p>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="mostrarLogin()">Login</div>
+            <div class="tab" onclick="mostrarCadastro()">Cadastro</div>
+        </div>
+        
+        <!-- Alertas -->
+        <div id="alert" class="alert"></div>
+        
+        <!-- Conteúdo Login -->
+        <div id="login-tab" class="tab-content active">
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail"><i class="fas fa-envelope"></i> Email</label>
+                    <input type="email" id="loginEmail" class="form-control" required placeholder="seu@email.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="loginPassword"><i class="fas fa-lock"></i> Senha</label>
+                    <input type="password" id="loginPassword" class="form-control" required placeholder="••••••••">
+                </div>
+                
+                <button type="submit" class="btn-login" id="btnLogin">
+                    <i class="fas fa-sign-in-alt"></i> Entrar
+                </button>
+            </form>
+            
+            <!-- Botão de WhatsApp no lugar do "Continuar como visitante" -->
+            <div class="whatsapp-contact">
+                <a href="https://wa.me/qr/F4U5WMT37EUDB1" target="_blank">
+                    <i class="fab fa-whatsapp"></i> Entre em contato via WhatsApp
+                </a>
+            </div>
+        </div>
+        
+        <!-- Conteúdo Cadastro -->
+        <div id="register-tab" class="tab-content">
+            <form id="registerForm">
+                <!-- Seleção de Tipo de Usuário -->
+                <div class="role-selection">
+                    <div class="role-option active" data-role="aluno" onclick="selecionarRole('aluno')">
+                        <i class="fas fa-user-graduate"></i>
+                        <span>Aluno</span>
+                    </div>
+                    <div class="role-option" data-role="professor" onclick="selecionarRole('professor')">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span>Professor</span>
+                    </div>
+                </div>
+                
+                <input type="hidden" id="registerRole" value="aluno">
+                
+                <!-- Campos comuns -->
+                <div class="form-group">
+                    <label for="registerNome"><i class="fas fa-user"></i> Nome Completo</label>
+                    <input type="text" id="registerNome" class="form-control" required placeholder="Seu nome completo">
+                </div>
+                
+                <div class="form-group">
+                    <label for="registerEmail"><i class="fas fa-envelope"></i> Email</label>
+                    <input type="email" id="registerEmail" class="form-control" required placeholder="seu@email.com">
+                </div>
+                
+                <!-- Campos para Aluno -->
+                <div id="alunoFields" class="role-fields active">
+                    <div class="form-group">
+                        <label for="registerCurso"><i class="fas fa-graduation-cap"></i> Curso (opcional)</label>
+                        <input type="text" id="registerCurso" class="form-control" placeholder="Ex: Engenharia, Medicina, Direito">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="registerPeriodo"><i class="fas fa-calendar-alt"></i> Período (opcional)</label>
+                        <input type="text" id="registerPeriodo" class="form-control" placeholder="Ex: 3º período">
+                    </div>
+                </div>
+                
+                <!-- Campos para Professor -->
+                <div id="professorFields" class="role-fields">
+                    <div class="form-group">
+                        <label for="registerEixo"><i class="fas fa-sitemap"></i> Eixo</label>
+                        <select id="registerEixo" class="form-control">
+                            <option value="">Selecione seu eixo</option>
+                            <option value="natureza">Natureza (Exatas, Biológicas)</option>
+                            <option value="humanas">Humanas (Humanidades, Sociais)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="registerDepartamento"><i class="fas fa-building"></i> Departamento (opcional)</label>
+                        <input type="text" id="registerDepartamento" class="form-control" placeholder="Seu departamento">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="registerTitulacao"><i class="fas fa-award"></i> Titulação (opcional)</label>
+                        <input type="text" id="registerTitulacao" class="form-control" placeholder="Ex: Mestre, Doutor">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="registerMatricula"><i class="fas fa-id-card"></i> Matrícula (opcional)</label>
+                    <input type="text" id="registerMatricula" class="form-control" placeholder="Sua matrícula">
+                </div>
+                
+                <div class="form-group">
+                    <label for="registerPassword"><i class="fas fa-lock"></i> Senha</label>
+                    <input type="password" id="registerPassword" class="form-control" required placeholder="Mínimo 6 caracteres">
+                </div>
+                
+                <div class="form-group">
+                    <label for="registerConfirmPassword"><i class="fas fa-lock"></i> Confirmar Senha</label>
+                    <input type="password" id="registerConfirmPassword" class="form-control" required placeholder="Digite a senha novamente">
+                </div>
+                
+                <button type="submit" class="btn-register" id="btnRegister">
+                    <i class="fas fa-user-plus"></i> Criar Conta
+                </button>
+            </form>
+            
+            <!-- Também adicionar na aba de cadastro -->
+            <div class="whatsapp-contact" style="margin-top: 20px;">
+                <a href="https://wa.me/qr/F4U5WMT37EUDB1" target="_blank">
+                    <i class="fab fa-whatsapp"></i> Precisa de ajuda? Entre em contato
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Funções básicas
+        function mostrarLogin() {
+            document.getElementById('register-tab').classList.remove('active');
+            document.getElementById('login-tab').classList.add('active');
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector('.tab:nth-child(1)').classList.add('active');
+            document.getElementById('alert').style.display = 'none';
+        }
+        
+        function mostrarCadastro() {
+            document.getElementById('login-tab').classList.remove('active');
+            document.getElementById('register-tab').classList.add('active');
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector('.tab:nth-child(2)').classList.add('active');
+            document.getElementById('alert').style.display = 'none';
+        }
+        
+        function selecionarRole(role) {
+            // Atualizar botões de seleção
+            document.querySelectorAll('.role-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            document.querySelector(`.role-option[data-role="${role}"]`).classList.add('active');
+            
+            // Atualizar campo hidden
+            document.getElementById('registerRole').value = role;
+            
+            // Mostrar/ocultar campos específicos
+            if (role === 'aluno') {
+                document.getElementById('alunoFields').classList.add('active');
+                document.getElementById('professorFields').classList.remove('active');
+                // Não tornar eixo obrigatório para alunos
+                document.getElementById('registerEixo').removeAttribute('required');
+            } else {
+                document.getElementById('alunoFields').classList.remove('active');
+                document.getElementById('professorFields').classList.add('active');
+                // Eixo obrigatório apenas para professores
+                document.getElementById('registerEixo').setAttribute('required', 'true');
+            }
+        }
+        
+        function mostrarAlerta(mensagem, tipo = 'error') {
+            const alerta = document.getElementById('alert');
+            alerta.textContent = mensagem;
+            alerta.className = `alert alert-${tipo}`;
+            alerta.style.display = 'block';
+            
+            // Scroll para o alerta
+            alerta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        // Configuração do formulário de login
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('loginEmail').value.trim();
+            const senha = document.getElementById('loginPassword').value;
+            
+            if (!email || !senha) {
+                mostrarAlerta('Preencha todos os campos');
+                return;
+            }
+            
+            const btn = document.getElementById('btnLogin');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
+            btn.disabled = true;
+            
+            try {
+                const resposta = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email, password: senha})
+                });
+                
+                const dados = await resposta.json();
+                
+                if (dados.success) {
+                    mostrarAlerta('✅ Login realizado! Redirecionando...', 'success');
+                    
+                    // Salvar token e dados do usuário
+                    localStorage.setItem('auth_token', dados.token);
+                    localStorage.setItem('user_data', JSON.stringify(dados.user));
+                    
+                    // Redirecionar baseado no role
+                    setTimeout(() => {
+                        window.location.href = dados.redirectTo || 
+                            (dados.user.role === 'professor' ? 'index.html' : 'aluno.html');
+                    }, 1000);
+                    
+                } else {
+                    mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro no login'));
+                }
+            } catch (erro) {
+                console.error('Erro no login:', erro);
+                mostrarAlerta('❌ Erro de conexão com o servidor');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+        
+        // Configuração do formulário de cadastro
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Coletar dados básicos
+            const role = document.getElementById('registerRole').value;
+            const nome = document.getElementById('registerNome').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const matricula = document.getElementById('registerMatricula').value.trim();
+            const senha = document.getElementById('registerPassword').value;
+            const confirmarSenha = document.getElementById('registerConfirmPassword').value;
+            
+            // Validações básicas
+            if (!nome || !email || !senha || !confirmarSenha) {
+                mostrarAlerta('Preencha todos os campos obrigatórios');
+                return;
+            }
+            
+            if (senha.length < 6) {
+                mostrarAlerta('A senha deve ter no mínimo 6 caracteres');
+                return;
+            }
+            
+            if (senha !== confirmarSenha) {
+                mostrarAlerta('As senhas não coincidem');
+                return;
+            }
+            
+            // Preparar objeto de dados
+            const dadosCadastro = {
+                nome: nome,
+                email: email,
+                password: senha,
+                role: role,
+                matricula: matricula || undefined
+            };
+            
+            // Adicionar dados específicos por role
+            if (role === 'aluno') {
+                dadosCadastro.curso = document.getElementById('registerCurso').value.trim() || undefined;
+                dadosCadastro.periodo = document.getElementById('registerPeriodo').value.trim() || undefined;
+                // Alunos não enviam eixo
+            } else if (role === 'professor') {
+                const eixo = document.getElementById('registerEixo').value;
+                if (!eixo) {
+                    mostrarAlerta('Professores devem selecionar um eixo');
+                    return;
+                }
+                dadosCadastro.eixo = eixo;
+                dadosCadastro.departamento = document.getElementById('registerDepartamento').value.trim() || undefined;
+                dadosCadastro.titulacao = document.getElementById('registerTitulacao').value.trim() || undefined;
+            }
+            
+            // Remover campos undefined
+            Object.keys(dadosCadastro).forEach(key => {
+                if (dadosCadastro[key] === undefined) {
+                    delete dadosCadastro[key];
+                }
+            });
+            
+            console.log('📤 Enviando dados de cadastro:', dadosCadastro);
+            
+            // Mostrar loading
+            const btn = document.getElementById('btnRegister');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando conta...';
+            btn.disabled = true;
+            
+            try {
+                const resposta = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(dadosCadastro)
+                });
+                
+                console.log('📥 Resposta do servidor:', resposta.status);
+                
+                const dados = await resposta.json().catch(() => ({}));
+                console.log('📊 Dados da resposta:', dados);
+                
+                if (dados.success) {
+                    mostrarAlerta('✅ Conta criada com sucesso! Redirecionando...', 'success');
+                    
+                    // Salvar token e dados do usuário
+                    localStorage.setItem('auth_token', dados.token);
+                    localStorage.setItem('user_data', JSON.stringify(dados.user));
+                    
+                    // Redirecionar baseado no role
+                    setTimeout(() => {
+                        window.location.href = dados.redirectTo || 
+                            (role === 'professor' ? 'index.html' : 'aluno.html');
+                    }, 1500);
+                    
+                } else {
+                    mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro ao criar conta'));
+                }
+            } catch (erro) {
+                console.error('Erro no cadastro:', erro);
+                mostrarAlerta('❌ Erro de conexão com o servidor');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Sistema de login/cadastro carregado!');
+            
+            // Verificar se já está logado
+            const token = localStorage.getItem('auth_token');
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            
+            if (token && userData.role) {
+                console.log('Usuário já autenticado como:', userData.role);
+                // Redirecionar automaticamente
+                const redirectUrl = userData.role === 'professor' ? 'index.html' : 'aluno.html';
+                window.location.href = redirectUrl;
+            }
+            
+            // Configurar data mínima para inputs date
+            const hoje = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('input[type="date"]').forEach(input => {
+                input.min = hoje;
+            });
+        });
+    </script>
+</body>
+</html>

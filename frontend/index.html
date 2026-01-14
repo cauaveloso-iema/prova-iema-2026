@@ -1,0 +1,3953 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Professor | Sistema de Provas</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ===== VARIÁVEIS CSS ===== */
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #3730a3;
+            --primary-light: #818cf8;
+            --secondary: #10b981;
+            --secondary-dark: #059669;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --success: #10b981;
+            
+            --dark: #1f2937;
+            --gray-900: #111827;
+            --gray-800: #1f2937;
+            --gray-700: #374151;
+            --gray-600: #4b5563;
+            --gray-500: #6b7280;
+            --gray-400: #9ca3af;
+            --gray-300: #d1d5db;
+            --gray-200: #e5e7eb;
+            --gray-100: #f3f4f6;
+            --gray-50: #f9fafb;
+            --white: #ffffff;
+            
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            
+            --radius-sm: 0.375rem;
+            --radius: 0.5rem;
+            --radius-md: 0.75rem;
+            --radius-lg: 1rem;
+            --radius-xl: 1.5rem;
+            --radius-full: 9999px;
+            
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* ===== RESET E BASE ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--gray-800);
+            line-height: 1.5;
+        }
+        
+        /* ===== LOADING OVERLAY ===== */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        .loading-spinner-large {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--white);
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 1.5rem;
+        }
+        
+        #loading-overlay p {
+            color: var(--white);
+            font-size: 1.125rem;
+            font-weight: 500;
+            opacity: 0.9;
+        }
+        
+        /* ===== LAYOUT PRINCIPAL ===== */
+        .container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 2rem;
+            max-width: 1600px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+            min-height: calc(100vh - 4rem);
+        }
+        
+        /* ===== SIDEBAR ===== */
+        .sidebar {
+            background: var(--white);
+            border-radius: var(--radius-xl);
+            padding: 2rem;
+            box-shadow: var(--shadow-xl);
+            display: flex;
+            flex-direction: column;
+            height: fit-content;
+            position: sticky;
+            top: 2rem;
+        }
+        
+        .professor-info {
+            text-align: center;
+            padding: 1.5rem 0;
+            border-bottom: 2px solid var(--gray-100);
+            margin-bottom: 2rem;
+        }
+        
+        .professor-avatar {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+        }
+        
+        .professor-avatar::after {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            right: -3px;
+            bottom: -3px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: var(--radius-full);
+            z-index: -1;
+            opacity: 0.3;
+        }
+        
+        .professor-avatar i {
+            font-size: 2rem;
+            color: var(--white);
+        }
+        
+        .professor-info h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--gray-900);
+            margin-bottom: 0.25rem;
+        }
+        
+        .professor-info p {
+            color: var(--gray-500);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+        
+        .eixo-badge {
+            display: inline-block;
+            padding: 0.375rem 1rem;
+            border-radius: var(--radius-full);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .eixo-natureza {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: var(--white);
+        }
+        
+        .eixo-humanas {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: var(--white);
+        }
+        
+        /* ===== NAVEGAÇÃO SIDEBAR ===== */
+        .sidebar nav {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            flex: 1;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1rem;
+            color: var(--gray-600);
+            text-decoration: none;
+            border-radius: var(--radius);
+            font-weight: 500;
+            transition: var(--transition);
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 0.9375rem;
+            text-align: left;
+        }
+        
+        .nav-item:hover {
+            background: var(--gray-50);
+            color: var(--primary);
+            transform: translateX(4px);
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--white);
+            box-shadow: var(--shadow);
+        }
+        
+        .nav-item i {
+            width: 20px;
+            text-align: center;
+            font-size: 1.125rem;
+        }
+        
+        /* ===== BOTÃO LOGOUT ===== */
+        .btn-logout {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: var(--white);
+            border: none;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 0.9375rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+            box-shadow: var(--shadow);
+        }
+        
+        .btn-logout:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        /* ===== CONTEÚDO PRINCIPAL ===== */
+        .main-content {
+            background: var(--white);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            overflow: hidden;
+            min-height: calc(100vh - 4rem);
+        }
+        
+        /* ===== HEADER TABS ===== */
+        .content-header {
+            background: var(--gray-50);
+            padding: 2rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        
+        .header-title {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            -webkit-background-clip: text;
+            -moz-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            -moz-text-fill-color: transparent;
+        }
+        
+        .header-subtitle {
+            color: var(--gray-500);
+            font-size: 0.875rem;
+        }
+        
+        /* ===== TABS DE NAVEGAÇÃO ===== */
+        .content-tabs {
+            display: flex;
+            background: var(--white);
+            border-bottom: 1px solid var(--gray-200);
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .content-tabs::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .content-tab {
+            padding: 1rem 1.5rem;
+            font-weight: 500;
+            color: var(--gray-600);
+            border: none;
+            background: none;
+            cursor: pointer;
+            position: relative;
+            white-space: nowrap;
+            transition: var(--transition);
+            font-size: 0.9375rem;
+        }
+        
+        .content-tab:hover {
+            color: var(--primary);
+        }
+        
+        .content-tab.active {
+            color: var(--primary);
+            font-weight: 600;
+        }
+        
+        .content-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: var(--radius-full) var(--radius-full) 0 0;
+        }
+        
+        /* ===== CONTEÚDO DAS TABS ===== */
+        .tab-content {
+            padding: 2rem;
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* ===== CARD DE TEMA ===== */
+        .theme-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--white);
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .theme-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at top right, rgba(255,255,255,0.1) 0%, transparent 50%);
+        }
+        
+        .theme-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .theme-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .theme-header h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .theme-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: var(--radius);
+            margin-top: 1rem;
+            position: relative;
+            z-index: 1;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            font-size: 0.9375rem;
+        }
+        
+        /* ===== FORMULÁRIOS ===== */
+        .form-container {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 2rem;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--gray-700);
+            font-size: 0.875rem;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--gray-200);
+            border-radius: var(--radius);
+            font-size: 0.9375rem;
+            transition: var(--transition);
+            background: var(--white);
+            color: var(--gray-800);
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        
+        .form-control::placeholder {
+            color: var(--gray-400);
+        }
+        
+        textarea.form-control {
+            min-height: 120px;
+            resize: vertical;
+            line-height: 1.5;
+        }
+        
+        select.form-control {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 16px;
+            padding-right: 3rem;
+        }
+        
+        /* ===== BOTÕES ===== */
+        .btn {
+            padding: 0.875rem 1.75rem;
+            border: none;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 0.9375rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+        
+        .btn:hover::after {
+            left: 100%;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--white);
+            box-shadow: var(--shadow);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, var(--success) 0%, var(--secondary-dark) 100%);
+            color: var(--white);
+            box-shadow: var(--shadow);
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+            color: var(--white);
+            box-shadow: var(--shadow);
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .btn-full {
+            width: 100%;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        /* ===== ALERTAS ===== */
+        .alert {
+            padding: 1rem;
+            border-radius: var(--radius);
+            margin-bottom: 1.5rem;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+            border-left: 4px solid transparent;
+        }
+        
+        .alert.show {
+            display: block;
+        }
+        
+        .alert-success {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border-color: var(--success);
+            color: #065f46;
+        }
+        
+        .alert-error {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            border-color: var(--danger);
+            color: #7f1d1d;
+        }
+        
+        .alert-info {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-color: var(--info);
+            color: #1e40af;
+        }
+        
+        .alert-content {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+        
+        .alert-content i {
+            font-size: 1.25rem;
+            margin-top: 0.125rem;
+        }
+        
+        /* ===== INFO CARD ===== */
+        .info-card {
+            background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+            border-left: 4px solid var(--primary-light);
+            padding: 1.5rem;
+            border-radius: 0 var(--radius) var(--radius) 0;
+            margin: 1.5rem 0;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .info-card h4 {
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .info-card ul {
+            margin: 0.75rem 0 0 1.25rem;
+            padding: 0;
+        }
+        
+        .info-card li {
+            margin-bottom: 0.375rem;
+            color: var(--gray-600);
+            font-size: 0.875rem;
+        }
+        
+        /* ===== PREVIEW QUESTÕES ===== */
+        .preview-container {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 2px solid var(--gray-200);
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        .preview-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            color: var(--gray-700);
+        }
+        
+        .question-preview {
+            background: var(--gray-50);
+            padding: 1.5rem;
+            border-radius: var(--radius);
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary);
+            transition: var(--transition);
+        }
+        
+        .question-preview:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow);
+        }
+        
+        .question-text {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--gray-800);
+            line-height: 1.6;
+        }
+        
+        .options-preview {
+            margin-left: 0.5rem;
+        }
+        
+        .option-item {
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+        }
+        
+        .option-item:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        
+        .option-correct {
+            color: var(--success);
+            font-weight: 600;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: var(--radius-sm);
+        }
+        
+        .explanation-preview {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            color: #065f46;
+            border-left: 3px solid var(--success);
+        }
+        
+        /* ===== LISTA DE TURMAS ===== */
+        .turma-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        
+        .turma-card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-200);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .turma-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+        }
+        
+        .turma-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .turma-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        
+        .turma-nome {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--gray-900);
+            margin: 0;
+        }
+        
+        .turma-codigo {
+            background: var(--gray-100);
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius);
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 0.875rem;
+        }
+        
+        .turma-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            color: var(--gray-600);
+        }
+        
+        .turma-info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .turma-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.25rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--gray-200);
+        }
+        
+        /* ===== ESTATÍSTICAS ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .stat-card {
+            background: var(--white);
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            text-align: center;
+            border: 1px solid var(--gray-200);
+            transition: var(--transition);
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            -webkit-background-clip: text;
+            -moz-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            -moz-text-fill-color: transparent;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+        
+        /* ===== RESULTADOS GERAIS ===== */
+        .filter-bar {
+            background: var(--white);
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+        
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        
+        .result-tabs {
+            display: flex;
+            background: var(--gray-100);
+            border-radius: var(--radius);
+            padding: 0.25rem;
+            margin-bottom: 2rem;
+        }
+        
+        .result-tab {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            background: none;
+            color: var(--gray-600);
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-size: 0.9375rem;
+        }
+        
+        .result-tab.active {
+            background: var(--white);
+            color: var(--primary);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        /* ===== MODAL ===== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .modal-content {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: var(--radius-xl);
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow-lg);
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray-500);
+            transition: var(--transition);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius);
+        }
+        
+        .modal-close:hover {
+            background: var(--gray-100);
+            color: var(--gray-700);
+        }
+        
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--gray-500);
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        .empty-state h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--gray-700);
+        }
+        
+        /* ===== ANIMAÇÕES ===== */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* ===== RESPONSIVIDADE ===== */
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                padding: 1rem;
+            }
+            
+            .sidebar {
+                position: static;
+                margin-bottom: 1rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .turma-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .content-tabs {
+                overflow-x: auto;
+            }
+            
+            .content-tab {
+                padding: 0.875rem 1rem;
+                font-size: 0.875rem;
+            }
+            
+            .header-title {
+                font-size: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 640px) {
+            .tab-content {
+                padding: 1.5rem 1rem;
+            }
+            
+            .theme-card {
+                padding: 1.5rem;
+            }
+            
+            .form-container {
+                padding: 1.5rem;
+            }
+            
+            .turma-actions {
+                flex-direction: column;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* ===== UTILITÁRIOS ===== */
+        .progress-bar {
+            height: 8px;
+            background: var(--gray-200);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin: 0.5rem 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: var(--radius-full);
+            transition: width 0.3s ease;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-full);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .badge-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+        
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+        
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+        
+        .badge-info {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--info);
+        }
+        
+        /* ===== FALLBACK PARA TEXT GRADIENT ===== */
+        .no-textgradient .header-title,
+        .no-textgradient .stat-number {
+            color: var(--primary);
+            background: none;
+            -webkit-text-fill-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="loading-spinner-large"></div>
+        <p>Carregando dashboard do professor...</p>
+    </div>
+    
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="professor-info">
+                <div class="professor-avatar">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+                <h3 id="professorNome">Professor</h3>
+                <p id="professorEmail">carregando...</p>
+                <span id="professorEixo" class="eixo-badge">Eixo</span>
+            </div>
+            
+            <!-- Menu de navegação -->
+            <nav>
+                <button class="nav-item active" onclick="mostrarTab('nova-prova')">
+                    <i class="fas fa-plus-circle"></i> Nova Prova
+                </button>
+                <button class="nav-item" onclick="mostrarTab('nova-turma')">
+                    <i class="fas fa-plus"></i> Nova Turma
+                </button>
+                <button class="nav-item" onclick="mostrarTab('minhas-provas')">
+                    <i class="fas fa-file-alt"></i> Minhas Provas
+                </button>
+                <button class="nav-item" onclick="mostrarTab('turmas')">
+                    <i class="fas fa-school"></i> Minhas Turmas
+                </button>
+                <button class="nav-item" onclick="mostrarTab('resultados-gerais')">
+                    <i class="fas fa-chart-bar"></i> Resultados
+                </button>
+            </nav>
+            
+            <!-- Botão logout -->
+            <button class="btn-logout" id="btnLogout">
+                <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+            </button>
+        </aside>
+        
+        <main class="main-content">
+            <!-- Header -->
+            <div class="content-header">
+                <h1 class="header-title">Dashboard do Professor</h1>
+                <p class="header-subtitle">Gerencie suas provas, turmas e resultados de forma eficiente</p>
+            </div>
+            
+            <!-- Tabs de Navegação -->
+            <div class="content-tabs">
+                <button class="content-tab active" onclick="mostrarTab('nova-prova')">
+                    <i class="fas fa-plus-circle"></i> Nova Prova
+                </button>
+                <button class="content-tab" onclick="mostrarTab('nova-turma')">
+                    <i class="fas fa-plus"></i> Nova Turma
+                </button>
+                <button class="content-tab" onclick="mostrarTab('minhas-provas')">
+                    <i class="fas fa-file-alt"></i> Minhas Provas
+                </button>
+                <button class="content-tab" onclick="mostrarTab('turmas')">
+                    <i class="fas fa-school"></i> Minhas Turmas
+                </button>
+                <button class="content-tab" onclick="mostrarTab('resultados-gerais')">
+                    <i class="fas fa-chart-bar"></i> Resultados
+                </button>
+            </div>
+            
+            <!-- Conteúdo da Aba Nova Prova -->
+            <div id="nova-prova" class="tab-content active">
+                <div class="theme-card">
+                    <div class="theme-header">
+                        <div class="theme-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div>
+                            <h2>Gerar Prova com IA</h2>
+                            <p>Crie provas personalizadas automaticamente</p>
+                        </div>
+                    </div>
+                    <div class="theme-info">
+                        <p><strong>Como funciona:</strong> Descreva o tema da prova e a IA irá gerar questões automaticamente. Personalize quantidade, dificuldade e turma.</p>
+                    </div>
+                </div>
+                
+                <!-- Alertas -->
+                <div id="alertProva" class="alert"></div>
+                
+                <!-- Formulário Nova Prova -->
+                <div class="form-container">
+                    <form id="formNovaProva">
+                        <div class="form-grid">
+                            <!-- Tema -->
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="temaProva" class="form-label">
+                                    <i class="fas fa-lightbulb"></i> Tema da Prova
+                                </label>
+                                <textarea 
+                                    id="temaProva" 
+                                    class="form-control" 
+                                    placeholder="Ex: 'Equações do 2º grau', 'Segunda Guerra Mundial', 'Fotossíntese', 'Estrutura atômica'..."
+                                    required
+                                    rows="3"
+                                ></textarea>
+                                <small style="color: var(--gray-500); display: block; margin-top: 0.5rem; font-size: 0.875rem;">
+                                    Seja específico para melhores resultados. Ex: "Funções trigonométricas - seno, cosseno e tangente"
+                                </small>
+                            </div>
+                            
+                            <!-- Título -->
+                            <div class="form-group">
+                                <label for="tituloProva" class="form-label">
+                                    <i class="fas fa-heading"></i> Título da Prova
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="tituloProva" 
+                                    class="form-control" 
+                                    placeholder="Ex: Prova Bimestral de Matemática"
+                                    required
+                                >
+                            </div>
+                            
+                            <!-- Quantidade -->
+                            <div class="form-group">
+                                <label for="quantidadeQuestoes" class="form-label">
+                                    <i class="fas fa-question-circle"></i> Quantidade
+                                </label>
+                                <select id="quantidadeQuestoes" class="form-control" required>
+                                    <option value="5">5 questões</option>
+                                    <option value="10" selected>10 questões</option>
+                                    <option value="15">15 questões</option>
+                                    <option value="20">20 questões</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Dificuldade -->
+                            <div class="form-group">
+                                <label for="dificuldade" class="form-label">
+                                    <i class="fas fa-chart-line"></i> Dificuldade
+                                </label>
+                                <select id="dificuldade" class="form-control" required>
+                                    <option value="facil">Fácil</option>
+                                    <option value="media" selected>Médio</option>
+                                    <option value="dificil">Difícil</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Turma -->
+                            <div class="form-group">
+                                <label for="turmaProva" class="form-label">
+                                    <i class="fas fa-school"></i> Turma
+                                </label>
+                                <select id="turmaProva" class="form-control" required>
+                                    <option value="">Selecione uma turma...</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Data Limite -->
+                            <div class="form-group">
+                                <label for="dataLimite" class="form-label">
+                                    <i class="fas fa-calendar-alt"></i> Data Limite
+                                </label>
+                                <input 
+                                    type="date" 
+                                    id="dataLimite" 
+                                    class="form-control"
+                                >
+                            </div>
+                            
+                            <!-- Duração -->
+                            <div class="form-group">
+                                <label for="duracao" class="form-label">
+                                    <i class="fas fa-clock"></i> Duração (min)
+                                </label>
+                                <input 
+                                    type="number" 
+                                    id="duracao" 
+                                    class="form-control" 
+                                    placeholder="Ex: 60"
+                                    min="10"
+                                    value="60"
+                                >
+                            </div>
+                        </div>
+                        
+                        <!-- Informações IA -->
+                        <div class="info-card">
+                            <h4><i class="fas fa-robot"></i> Sobre a IA</h4>
+                            <p>A prova será gerada automaticamente usando inteligência artificial:</p>
+                            <ul>
+                                <li>Criação de questões de múltipla escolha com 4 alternativas</li>
+                                <li>Inclusão de resposta correta e explicação detalhada</li>
+                                <li>Ajuste automático do nível de dificuldade</li>
+                                <li>Salvamento automático no banco de dados</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Botão Gerar -->
+                        <button type="submit" class="btn btn-success btn-full" id="btnGerarProva">
+                            <i class="fas fa-magic"></i> Gerar Prova com IA
+                        </button>
+                    </form>
+                    
+                    <!-- Preview das Questões -->
+                    <div id="previewQuestoes" class="preview-container" style="display: none;">
+                        <div class="preview-header">
+                            <i class="fas fa-eye"></i>
+                            <h3>Pré-visualização da Prova</h3>
+                        </div>
+                        <div id="questoesPreview">
+                            <!-- Questões serão inseridas aqui -->
+                        </div>
+                        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                            <button class="btn btn-success" onclick="publicarProva()" style="flex: 1;">
+                                <i class="fas fa-paper-plane"></i> Publicar para a Turma
+                            </button>
+                            <button class="btn btn-danger" onclick="regenerarProva()" style="flex: 1;">
+                                <i class="fas fa-redo"></i> Regenerar Prova
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba Nova Turma -->
+            <div id="nova-turma" class="tab-content">
+                <div class="theme-card" style="background: linear-gradient(135deg, var(--success) 0%, var(--secondary-dark) 100%);">
+                    <div class="theme-header">
+                        <div class="theme-icon">
+                            <i class="fas fa-school"></i>
+                        </div>
+                        <div>
+                            <h2>Criar Nova Turma</h2>
+                            <p>Organize seus alunos e atribua provas</p>
+                        </div>
+                    </div>
+                    <div class="theme-info">
+                        <p><strong>Como funciona:</strong> Crie turmas para organizar seus alunos. Cada turma terá um código único para acesso.</p>
+                    </div>
+                </div>
+                
+                <!-- Alertas -->
+                <div id="alertTurma" class="alert"></div>
+                
+                <!-- Formulário Nova Turma -->
+                <div class="form-container">
+                    <form id="formNovaTurma">
+                        <div class="form-grid">
+                            <!-- Nome -->
+                            <div class="form-group">
+                                <label for="nomeTurma" class="form-label">
+                                    <i class="fas fa-graduation-cap"></i> Nome da Turma
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="nomeTurma" 
+                                    class="form-control" 
+                                    placeholder="Ex: 1º Ano A, Turma de Cálculo I"
+                                    required
+                                >
+                            </div>
+                            
+                            <!-- Disciplina -->
+                            <div class="form-group">
+                                <label for="disciplinaTurma" class="form-label">
+                                    <i class="fas fa-book"></i> Disciplina
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="disciplinaTurma" 
+                                    class="form-control" 
+                                    placeholder="Ex: Matemática, História, Física"
+                                    required
+                                >
+                            </div>
+                            
+                            <!-- Eixo -->
+                            <div class="form-group">
+                                <label for="eixoTurma" class="form-label">
+                                    <i class="fas fa-sitemap"></i> Eixo
+                                </label>
+                                <select id="eixoTurma" class="form-control" required>
+                                    <option value="geral">Geral (Todos os alunos)</option>
+                                    <option value="natureza">Natureza (Exatas e Biológicas)</option>
+                                    <option value="humanas">Humanas (Humanidades e Sociais)</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Descrição -->
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="descricaoTurma" class="form-label">
+                                    <i class="fas fa-align-left"></i> Descrição (opcional)
+                                </label>
+                                <textarea 
+                                    id="descricaoTurma" 
+                                    class="form-control" 
+                                    placeholder="Descreva a turma, objetivos, etc..."
+                                    rows="3"
+                                ></textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- Informações -->
+                        <div class="info-card" style="border-left-color: var(--success);">
+                            <h4><i class="fas fa-info-circle"></i> Informações Importantes</h4>
+                            <ul>
+                                <li>Cada turma recebe um <strong>código único</strong> automaticamente</li>
+                                <li>Os alunos usam esse código para entrar na turma</li>
+                                <li>Você pode criar quantas turmas precisar</li>
+                                <li>As provas podem ser atribuídas a turmas específicas</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Botão Criar -->
+                        <button type="submit" class="btn btn-success btn-full" id="btnCriarTurma">
+                            <i class="fas fa-plus-circle"></i> Criar Turma
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Aba Minhas Turmas -->
+            <div id="turmas" class="tab-content">
+                <div class="theme-card" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                    <div class="theme-header">
+                        <div class="theme-icon">
+                            <i class="fas fa-school"></i>
+                        </div>
+                        <div>
+                            <h2>Minhas Turmas</h2>
+                            <p>Gerencie suas turmas e alunos</p>
+                        </div>
+                    </div>
+                    <div class="theme-info">
+                        <p><strong>Total de turmas:</strong> <span id="totalTurmas">0</span> | <strong>Total de alunos:</strong> <span id="totalAlunos">0</span></p>
+                    </div>
+                </div>
+                
+                <!-- Alertas -->
+                <div id="alertMinhasTurmas" class="alert"></div>
+                
+                <!-- Estatísticas -->
+                <div class="stats-grid" id="turmaStats" style="display: none;">
+                    <div class="stat-card">
+                        <div class="stat-number" id="statTurmasAtivas">0</div>
+                        <div class="stat-label">Turmas Ativas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="statTotalProvas">0</div>
+                        <div class="stat-label">Provas Criadas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="statMediaAlunos">0</div>
+                        <div class="stat-label">Média de Alunos</div>
+                    </div>
+                </div>
+                
+                <!-- Lista de Turmas -->
+                <div id="listaTurmas">
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <h3>Carregando suas turmas...</h3>
+                        <p>Aguarde enquanto buscamos suas informações</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba Minhas Provas -->
+            <div id="minhas-provas" class="tab-content">
+                <div class="theme-card" style="background: linear-gradient(135deg, var(--info) 0%, #1d4ed8 100%);">
+                    <div class="theme-header">
+                        <div class="theme-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div>
+                            <h2>Minhas Provas</h2>
+                            <p>Visualize e gerencie todas as suas provas</p>
+                        </div>
+                    </div>
+                    <div class="theme-info">
+                        <p>Gerencie todas as provas criadas e seus resultados</p>
+                    </div>
+                </div>
+                
+                <!-- Alertas -->
+                <div id="alertMinhasProvas" class="alert" style="display: none;"></div>
+                
+                <!-- Lista de Provas -->
+                <div id="listaProvas">
+                    <div class="empty-state">
+                        <i class="fas fa-file-alt"></i>
+                        <h3>Suas Provas</h3>
+                        <p>As provas criadas aparecerão aqui</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba Resultados Gerais -->
+            <div id="resultados-gerais" class="tab-content">
+                <div class="theme-card" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                    <div class="theme-header">
+                        <div class="theme-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <div>
+                            <h2>Resultados Gerais</h2>
+                            <p>Desempenho geral dos alunos por turma e disciplina</p>
+                        </div>
+                    </div>
+                    <div class="theme-info">
+                        <p>Analise o desempenho e acompanhe o progresso dos alunos</p>
+                    </div>
+                </div>
+                
+                <!-- Filtros -->
+                <div class="filter-bar">
+                    <h3 style="margin: 0 0 1rem 0; color: var(--gray-700); font-size: 1.125rem;">
+                        <i class="fas fa-filter"></i> Filtros
+                    </h3>
+                    <div class="filter-grid">
+                        <div>
+                            <label class="form-label">Turma</label>
+                            <select id="filtroTurma" class="form-control" onchange="filtrarResultados()">
+                                <option value="">Todas as turmas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Disciplina</label>
+                            <select id="filtroDisciplina" class="form-control" onchange="filtrarResultados()">
+                                <option value="">Todas as disciplinas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Período</label>
+                            <select id="filtroPeriodo" class="form-control" onchange="filtrarResultados()">
+                                <option value="">Todo o período</option>
+                                <option value="7">Últimos 7 dias</option>
+                                <option value="30">Últimos 30 dias</option>
+                                <option value="90">Últimos 90 dias</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Estatísticas Gerais -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="statTotalAlunos">0</div>
+                        <div class="stat-label">Total de Alunos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="statTotalProvas">0</div>
+                        <div class="stat-label">Provas Aplicadas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="statMediaGeral">0.0</div>
+                        <div class="stat-label">Média Geral</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="statTaxaConclusao">0%</div>
+                        <div class="stat-label">Taxa de Conclusão</div>
+                    </div>
+                </div>
+                
+                <!-- Tabs Internas -->
+                <div class="result-tabs">
+                    <button class="result-tab active" onclick="mostrarTabResultados('por-turma')">
+                        <i class="fas fa-school"></i> Por Turma
+                    </button>
+                    <button class="result-tab" onclick="mostrarTabResultados('por-aluno')">
+                        <i class="fas fa-user-graduate"></i> Por Aluno
+                    </button>
+                    <button class="result-tab" onclick="mostrarTabResultados('por-disciplina')">
+                        <i class="fas fa-book"></i> Por Disciplina
+                    </button>
+                </div>
+                
+                <!-- Conteúdo -->
+                <div id="conteudo-por-turma" class="conteudo-resultados">
+                    <div id="listaTurmasResultados" class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <h3>Carregando resultados por turma...</h3>
+                        <p>Aguarde enquanto processamos os dados</p>
+                    </div>
+                </div>
+                
+                <div id="conteudo-por-aluno" class="conteudo-resultados" style="display: none;">
+                    <div style="margin-bottom: 1.5rem;">
+                        <input type="text" id="buscaAluno" class="form-control" placeholder="🔍 Buscar aluno por nome ou matrícula..." 
+                            onkeyup="filtrarAlunos()">
+                    </div>
+                    <div id="listaAlunosResultados" class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <h3>Carregando resultados por aluno...</h3>
+                        <p>Aguarde enquanto processamos os dados</p>
+                    </div>
+                </div>
+                
+                <div id="conteudo-por-disciplina" class="conteudo-resultados" style="display: none;">
+                    <div id="listaDisciplinasResultados" class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <h3>Carregando resultados por disciplina...</h3>
+                        <p>Aguarde enquanto processamos os dados</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modal de Confirmação para Excluir Turma -->
+    <div class="modal" id="modalExcluirTurma">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin: 0; color: var(--gray-800);">
+                    <i class="fas fa-exclamation-triangle"></i> Excluir Turma
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalExcluirTurma')">&times;</button>
+            </div>
+            <div id="modalExcluirConteudo" style="margin: 1.5rem 0;">
+                <!-- Conteúdo será preenchido via JS -->
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="btn btn-danger" onclick="confirmarExclusaoTurma()" style="flex: 1;">
+                    <i class="fas fa-trash"></i> Excluir Turma
+                </button>
+                <button class="btn" onclick="fecharModal('modalExcluirTurma')" style="flex: 1; background: var(--gray-200); color: var(--gray-700);">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script>
+        // Detectar suporte a text gradient
+        function detectTextGradient() {
+            const el = document.createElement('div');
+            el.style.background = 'linear-gradient(black, black) text';
+            const style = el.style;
+            const supports = style.backgroundClip && style.backgroundClip.includes('text') ||
+                           style.webkitBackgroundClip && style.webkitBackgroundClip.includes('text');
+            
+            if (!supports) {
+                document.body.classList.add('no-textgradient');
+            }
+        }
+        
+        // Executar detecção quando o DOM carregar
+        document.addEventListener('DOMContentLoaded', detectTextGradient);
+        
+        // O restante do seu código JavaScript permanece exatamente o mesmo
+        // Variáveis globais e funções são preservadas
+        let usuario = null;
+        let turmasProfessor = [];
+        let provaGerada = null;
+        let turmaParaExcluir = null;
+        
+        // ============ FUNÇÕES PARA RESULTADOS GERAIS ============
+
+        // Variáveis globais para resultados
+        let resultadosGerais = {
+            turmas: [],
+            alunos: [],
+            disciplinas: []
+        };
+
+        // Função para mostrar tab de resultados internos
+        window.mostrarTabResultados = function(tabId) {
+            // Remover active de todas as tabs internas
+            document.querySelectorAll('.tab-interna').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Adicionar active à tab clicada
+            event.currentTarget.classList.add('active');
+            
+            // Esconder todos os conteúdos
+            document.querySelectorAll('.conteudo-resultados').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Mostrar conteúdo da tab selecionada
+            document.getElementById(`conteudo-${tabId}`).style.display = 'block';
+        };
+
+        // Carregar resultados gerais
+        async function carregarResultadosGerais() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log('📊 Carregando resultados gerais...');
+                
+                // Limpar alerta anterior
+                const alerta = document.getElementById('alertResultadosGerais');
+                if (alerta) {
+                    alerta.style.display = 'none';
+                }
+                
+                // Carregar dados do professor
+                const response = await fetch('/api/professor/resultados', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultadosGerais = {
+                        turmas: await processarResultadosPorTurma(data.resultados || []),
+                        alunos: await processarResultadosPorAluno(data.resultados || []),
+                        disciplinas: await processarResultadosPorDisciplina(data.resultados || [])
+                    };
+                    
+                    // Atualizar estatísticas gerais
+                    atualizarEstatisticasGerais(data.estatisticas || {});
+                    
+                    // Preencher filtros
+                    preencherFiltros();
+                    
+                    // Atualizar listas
+                    atualizarListaTurmasResultados();
+                    atualizarListaAlunosResultados();
+                    atualizarListaDisciplinasResultados();
+                    
+                    console.log('✅ Resultados gerais carregados com sucesso');
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar resultados');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar resultados gerais:', error);
+                mostrarAlerta('alertResultadosGerais', `❌ Erro ao carregar resultados: ${error.message}`, 'error');
+            }
+        }
+        
+        // ============ FUNÇÕES PARA LIBERAR NOTAS ============
+        // Função para liberar TODAS as notas de uma prova
+        async function liberarTodasNotas(provaId, provaTitulo) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const confirmacao = confirm(`Tem certeza que deseja liberar TODAS as notas da prova "${provaTitulo}"?\n\n⚠️ Esta ação irá:\n• Tornar as notas visíveis para todos os alunos\n• Não poderá ser desfeita`);
+            
+            if (!confirmacao) return;
+            
+            // Mostrar loading
+            mostrarAlerta('alertMinhasProvas', '🔧 Liberando notas para todos os alunos...', 'info');
+            
+            const response = await fetch(`/api/provas/${provaId}/liberar-notas-todos`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+            mostrarAlerta('alertMinhasProvas', `✅ ${data.message}`, 'success');
+            
+            // Recarregar a lista de provas após 2 segundos
+            setTimeout(() => {
+                carregarProvasProfessor();
+            }, 2000);
+            
+            } else {
+            throw new Error(data.error || 'Erro ao liberar notas');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao liberar notas:', error);
+            mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+        }
+        }
+
+        // Função para liberar nota de UM aluno específico
+        async function liberarNotaAluno(provaId, alunoId, alunoNome, notaAtual) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const confirmacao = confirm(`Liberar nota para o aluno ${alunoNome}?\nNota: ${notaAtual !== undefined ? notaAtual.toFixed(1) : 'N/A'}`);
+            
+            if (!confirmacao) return;
+            
+            // Mostrar loading
+            mostrarAlerta('alertMinhasProvas', `🔧 Liberando nota para ${alunoNome}...`, 'info');
+            
+            const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                alunoId: alunoId,
+                nota: notaAtual || 0,
+                liberarNota: true
+            })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+            mostrarAlerta('alertMinhasProvas', `✅ Nota liberada para ${alunoNome}!`, 'success');
+            
+            // Recarregar a lista de provas após 2 segundos
+            setTimeout(() => {
+                carregarProvasProfessor();
+            }, 2000);
+            
+            } else {
+            throw new Error(data.error || 'Erro ao liberar nota');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao liberar nota:', error);
+            mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+        }
+        }
+
+        // Processar resultados por turma
+        async function processarResultadosPorTurma(resultados) {
+            const turmasMap = new Map();
+            
+            resultados.forEach(resultado => {
+                const turmaKey = resultado.turmaId || 'sem-turma';
+                
+                if (!turmasMap.has(turmaKey)) {
+                    turmasMap.set(turmaKey, {
+                        id: resultado.turmaId,
+                        nome: resultado.turmaNome || 'Sem turma',
+                        disciplina: resultado.turmaDisciplina || 'Geral',
+                        alunos: new Set(),
+                        provas: new Set(),
+                        notas: [],
+                        acertos: 0,
+                        totalQuestoes: 0
+                    });
+                }
+                
+                const turma = turmasMap.get(turmaKey);
+                
+                // Adicionar aluno único
+                if (resultado.alunoId) {
+                    turma.alunos.add(resultado.alunoId);
+                }
+                
+                // Adicionar prova única
+                if (resultado.provaId) {
+                    turma.provas.add(resultado.provaId);
+                }
+                
+                // Adicionar nota se existir
+                if (resultado.nota !== undefined && resultado.nota !== null) {
+                    turma.notas.push(resultado.nota);
+                    turma.acertos += resultado.acertos || 0;
+                    turma.totalQuestoes += resultado.total || 0;
+                }
+            });
+            
+            // Converter Map para array e calcular médias
+            const turmasArray = Array.from(turmasMap.values()).map(turma => {
+                const mediaNotas = turma.notas.length > 0 
+                    ? turma.notas.reduce((sum, nota) => sum + nota, 0) / turma.notas.length 
+                    : 0;
+                
+                const taxaAcerto = turma.totalQuestoes > 0 
+                    ? (turma.acertos / turma.totalQuestoes) * 100 
+                    : 0;
+                
+                return {
+                    ...turma,
+                    totalAlunos: turma.alunos.size,
+                    totalProvas: turma.provas.size,
+                    mediaNotas: parseFloat(mediaNotas.toFixed(1)),
+                    taxaAcerto: parseFloat(taxaAcerto.toFixed(1)),
+                    alunos: Array.from(turma.alunos),
+                    provas: Array.from(turma.provas)
+                };
+            });
+            
+            return turmasArray;
+        }
+
+        // Processar resultados por aluno
+        async function processarResultadosPorAluno(resultados) {
+            const alunosMap = new Map();
+            
+            resultados.forEach(resultado => {
+                if (!resultado.alunoId) return;
+                
+                const alunoKey = resultado.alunoId;
+                
+                if (!alunosMap.has(alunoKey)) {
+                    alunosMap.set(alunoKey, {
+                        id: resultado.alunoId,
+                        nome: resultado.alunoNome,
+                        matricula: resultado.alunoMatricula,
+                        email: resultado.alunoEmail,
+                        turmas: new Set(),
+                        provas: new Set(),
+                        notas: [],
+                        acertos: 0,
+                        totalQuestoes: 0
+                    });
+                }
+                
+                const aluno = alunosMap.get(alunoKey);
+                
+                // Adicionar turma
+                if (resultado.turmaNome) {
+                    aluno.turmas.add(resultado.turmaNome);
+                }
+                
+                // Adicionar prova
+                if (resultado.provaId) {
+                    aluno.provas.add(resultado.provaId);
+                }
+                
+                // Adicionar nota se existir
+                if (resultado.nota !== undefined && resultado.nota !== null) {
+                    aluno.notas.push(resultado.nota);
+                    aluno.acertos += resultado.acertos || 0;
+                    aluno.totalQuestoes += resultado.total || 0;
+                }
+            });
+            
+            // Converter Map para array e calcular médias
+            const alunosArray = Array.from(alunosMap.values()).map(aluno => {
+                const mediaNotas = aluno.notas.length > 0 
+                    ? aluno.notas.reduce((sum, nota) => sum + nota, 0) / aluno.notas.length 
+                    : 0;
+                
+                const taxaAcerto = aluno.totalQuestoes > 0 
+                    ? (aluno.acertos / aluno.totalQuestoes) * 100 
+                    : 0;
+                
+                // Calcular tendência
+                let tendencia = 'estavel';
+                if (aluno.notas.length >= 2) {
+                    const notasOrdenadas = [...aluno.notas].sort((a, b) => a - b);
+                    const primeiraMetade = notasOrdenadas.slice(0, Math.floor(notasOrdenadas.length / 2));
+                    const segundaMetade = notasOrdenadas.slice(Math.floor(notasOrdenadas.length / 2));
+                    
+                    const mediaPrimeira = primeiraMetade.reduce((a, b) => a + b, 0) / primeiraMetade.length;
+                    const mediaSegunda = segundaMetade.reduce((a, b) => a + b, 0) / segundaMetade.length;
+                    
+                    if (mediaSegunda > mediaPrimeira + 1) tendencia = 'melhorando';
+                    else if (mediaSegunda < mediaPrimeira - 1) tendencia = 'piorando';
+                }
+                
+                return {
+                    ...aluno,
+                    totalTurmas: aluno.turmas.size,
+                    totalProvas: aluno.provas.size,
+                    mediaNotas: parseFloat(mediaNotas.toFixed(1)),
+                    taxaAcerto: parseFloat(taxaAcerto.toFixed(1)),
+                    tendencia: tendencia,
+                    turmas: Array.from(aluno.turmas),
+                    provas: Array.from(aluno.provas)
+                };
+            });
+            
+            return alunosArray.sort((a, b) => b.mediaNotas - a.mediaNotas);
+        }
+
+        // Processar resultados por disciplina
+        async function processarResultadosPorDisciplina(resultados) {
+            const disciplinasMap = new Map();
+            
+            resultados.forEach(resultado => {
+                const disciplina = resultado.disciplina || resultado.turmaDisciplina || 'Geral';
+                
+                if (!disciplinasMap.has(disciplina)) {
+                    disciplinasMap.set(disciplina, {
+                        nome: disciplina,
+                        turmas: new Set(),
+                        alunos: new Set(),
+                        provas: new Set(),
+                        notas: [],
+                        acertos: 0,
+                        totalQuestoes: 0
+                    });
+                }
+                
+                const disc = disciplinasMap.get(disciplina);
+                
+                // Adicionar turma
+                if (resultado.turmaNome) {
+                    disc.turmas.add(resultado.turmaNome);
+                }
+                
+                // Adicionar aluno
+                if (resultado.alunoId) {
+                    disc.alunos.add(resultado.alunoId);
+                }
+                
+                // Adicionar prova
+                if (resultado.provaId) {
+                    disc.provas.add(resultado.provaId);
+                }
+                
+                // Adicionar nota se existir
+                if (resultado.nota !== undefined && resultado.nota !== null) {
+                    disc.notas.push(resultado.nota);
+                    disc.acertos += resultado.acertos || 0;
+                    disc.totalQuestoes += resultado.total || 0;
+                }
+            });
+            
+            // Converter Map para array e calcular médias
+            const disciplinasArray = Array.from(disciplinasMap.values()).map(disc => {
+                const mediaNotas = disc.notas.length > 0 
+                    ? disc.notas.reduce((sum, nota) => sum + nota, 0) / disc.notas.length 
+                    : 0;
+                
+                const taxaAcerto = disc.totalQuestoes > 0 
+                    ? (disc.acertos / disc.totalQuestoes) * 100 
+                    : 0;
+                
+                return {
+                    ...disc,
+                    totalTurmas: disc.turmas.size,
+                    totalAlunos: disc.alunos.size,
+                    totalProvas: disc.provas.size,
+                    mediaNotas: parseFloat(mediaNotas.toFixed(1)),
+                    taxaAcerto: parseFloat(taxaAcerto.toFixed(1)),
+                    turmas: Array.from(disc.turmas),
+                    alunos: Array.from(disc.alunos),
+                    provas: Array.from(disc.provas)
+                };
+            });
+            
+            return disciplinasArray.sort((a, b) => b.mediaNotas - a.mediaNotas);
+        }
+
+        // Atualizar estatísticas gerais
+        function atualizarEstatisticasGerais(estatisticas) {
+            document.getElementById('statTotalAlunos').textContent = estatisticas.totalAlunos || 0;
+            document.getElementById('statTotalProvas').textContent = estatisticas.totalProvas || 0;
+            document.getElementById('statMediaGeral').textContent = estatisticas.mediaGeral || '0.0';
+            
+            // Calcular taxa de conclusão
+            const taxaConclusao = estatisticas.totalAlunos > 0 
+                ? Math.round((estatisticas.alunosCompletaram / estatisticas.totalAlunos) * 100) 
+                : 0;
+            document.getElementById('statTaxaConclusao').textContent = taxaConclusao + '%';
+        }
+
+        // Preencher filtros
+        function preencherFiltros() {
+            const filtroTurma = document.getElementById('filtroTurma');
+            const filtroDisciplina = document.getElementById('filtroDisciplina');
+            
+            if (!filtroTurma || !filtroDisciplina) return;
+            
+            // Limpar opções
+            filtroTurma.innerHTML = '<option value="">Todas as turmas</option>';
+            filtroDisciplina.innerHTML = '<option value="">Todas as disciplinas</option>';
+            
+            // Adicionar turmas únicas
+            const turmasUnicas = [...new Set(resultadosGerais.turmas.map(t => t.nome))];
+            turmasUnicas.forEach(turma => {
+                const option = document.createElement('option');
+                option.value = turma;
+                option.textContent = turma;
+                filtroTurma.appendChild(option);
+            });
+            
+            // Adicionar disciplinas únicas
+            const disciplinasUnicas = [...new Set(resultadosGerais.disciplinas.map(d => d.nome))];
+            disciplinasUnicas.forEach(disciplina => {
+                const option = document.createElement('option');
+                option.value = disciplina;
+                option.textContent = disciplina;
+                filtroDisciplina.appendChild(option);
+            });
+        }
+
+        // Atualizar lista de turmas nos resultados
+        function atualizarListaTurmasResultados() {
+            const container = document.getElementById('listaTurmasResultados');
+            if (!container) return;
+            
+            const turmasFiltradas = filtrarTurmas();
+            
+            if (turmasFiltradas.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-school" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                        <h3>Nenhuma turma encontrada</h3>
+                        <p>Não há resultados para as turmas com os filtros selecionados.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = turmasFiltradas.map(turma => `
+                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5; transition: transform 0.3s;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                        <div>
+                            <h4 style="margin: 0; color: #1f2937;">${turma.nome}</h4>
+                            <p style="margin: 5px 0; color: #6b7280; font-size: 0.9rem;">${turma.disciplina}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #4f46e5;">${turma.mediaNotas}</div>
+                            <small style="color: #6b7280;">Média</small>
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="font-size: 0.9rem; color: #6b7280;">Taxa de acerto</span>
+                            <span style="font-weight: 600; color: #4f46e5;">${turma.taxaAcerto}%</span>
+                        </div>
+                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; margin: 10px 0;">
+                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 5px; width: ${turma.taxaAcerto}%"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.9rem; color: #6b7280;">
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: #4f46e5;">${turma.totalAlunos}</div>
+                            <div>Alunos</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: #10b981;">${turma.totalProvas}</div>
+                            <div>Provas</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: ${turma.mediaNotas >= 7 ? '#10b981' : turma.mediaNotas >= 5 ? '#f59e0b' : '#ef4444'}">
+                                ${turma.mediaNotas >= 7 ? 'Bom' : turma.mediaNotas >= 5 ? 'Médio' : 'Baixo'}
+                            </div>
+                            <div>Desempenho</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                        <button onclick="verDetalhesTurma('${turma.id}')" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; width: 100%; justify-content: center;">
+                            <i class="fas fa-chart-bar"></i> Ver Detalhes da Turma
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Atualizar lista de alunos nos resultados
+        function atualizarListaAlunosResultados() {
+            const container = document.getElementById('listaAlunosResultados');
+            if (!container) return;
+            
+            const alunosFiltrados = filtrarAlunosLista();
+            
+            if (alunosFiltrados.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-graduate" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                        <h3>Nenhum aluno encontrado</h3>
+                        <p>Não há resultados para os alunos com os filtros selecionados.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = alunosFiltrados.map(aluno => `
+                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5; transition: transform 0.3s;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                        <div>
+                            <h4 style="margin: 0; color: #1f2937;">${aluno.nome}</h4>
+                            <p style="margin: 5px 0; color: #6b7280; font-size: 0.9rem;">
+                                ${aluno.matricula || 'Sem matrícula'} • ${aluno.email || ''}
+                            </p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #4f46e5;">${aluno.mediaNotas}</div>
+                            <small style="color: #6b7280;">Média</small>
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="font-size: 0.9rem; color: #6b7280;">Taxa de acerto</span>
+                            <span style="font-weight: 600; color: #4f46e5;">${aluno.taxaAcerto}%</span>
+                        </div>
+                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; margin: 10px 0;">
+                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 5px; width: ${aluno.taxaAcerto}%"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.9rem; color: #6b7280; margin-bottom: 15px;">
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: #4f46e5;">${aluno.totalTurmas}</div>
+                            <div>Turmas</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: #10b981;">${aluno.totalProvas}</div>
+                            <div>Provas</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: ${
+                                aluno.tendencia === 'melhorando' ? '#10b981' : 
+                                aluno.tendencia === 'piorando' ? '#ef4444' : '#6b7280'
+                            }">
+                                <i class="fas fa-${aluno.tendencia === 'melhorando' ? 'arrow-up' : aluno.tendencia === 'piorando' ? 'arrow-down' : 'minus'}"></i>
+                                ${aluno.tendencia === 'melhorando' ? 'Melhorando' : aluno.tendencia === 'piorando' ? 'Piorando' : 'Estável'}
+                            </div>
+                            <div>Tendência</div>
+                        </div>
+                    </div>
+                    
+                    ${aluno.turmas.length > 0 ? `
+                    <div style="margin-top: 10px;">
+                        <p style="margin: 0 0 5px 0; font-size: 0.9rem; color: #6b7280;">Turmas:</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                            ${aluno.turmas.slice(0, 3).map(turma => `
+                                <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; color: #4b5563;">
+                                    ${turma}
+                                </span>
+                            `).join('')}
+                            ${aluno.turmas.length > 3 ? `
+                                <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; color: #4b5563;">
+                                    +${aluno.turmas.length - 3}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                        <button onclick="verDetalhesAlunoResultado('${aluno.id}')" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; width: 100%; justify-content: center;">
+                            <i class="fas fa-eye"></i> Ver Desempenho Completo
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Atualizar lista de disciplinas nos resultados
+        function atualizarListaDisciplinasResultados() {
+            const container = document.getElementById('listaDisciplinasResultados');
+            if (!container) return;
+            
+            const disciplinasFiltradas = filtrarDisciplinas();
+            
+            if (disciplinasFiltradas.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-book" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                        <h3>Nenhuma disciplina encontrada</h3>
+                        <p>Não há resultados para as disciplinas com os filtros selecionados.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = disciplinasFiltradas.map(disciplina => `
+                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5; transition: transform 0.3s;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                        <div>
+                            <h4 style="margin: 0; color: #1f2937;">${disciplina.nome}</h4>
+                            <p style="margin: 5px 0; color: #6b7280; font-size: 0.9rem;">
+                                ${disciplina.totalTurmas} turmas • ${disciplina.totalAlunos} alunos
+                            </p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #4f46e5;">${disciplina.mediaNotas}</div>
+                            <small style="color: #6b7280;">Média</small>
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="font-size: 0.9rem; color: #6b7280;">Taxa de acerto</span>
+                            <span style="font-weight: 600; color: #4f46e5;">${disciplina.taxaAcerto}%</span>
+                        </div>
+                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; margin: 10px 0;">
+                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 5px; width: ${disciplina.taxaAcerto}%"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.9rem; color: #6b7280;">
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: #4f46e5;">${disciplina.totalProvas}</div>
+                            <div>Provas</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: #10b981;">${Math.round(disciplina.taxaAcerto)}%</div>
+                            <div>Acertos</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: 600; color: ${disciplina.mediaNotas >= 7 ? '#10b981' : disciplina.mediaNotas >= 5 ? '#f59e0b' : '#ef4444'}">
+                                ${disciplina.mediaNotas >= 7 ? 'Bom' : disciplina.mediaNotas >= 5 ? 'Médio' : 'Baixo'}
+                            </div>
+                            <div>Desempenho</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                        <button onclick="verDetalhesDisciplina('${disciplina.nome}')" style="background: #8b5cf6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; width: 100%; justify-content: center;">
+                            <i class="fas fa-chart-line"></i> Ver Análise da Disciplina
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Funções de filtro
+        function filtrarTurmas() {
+            const filtroTurma = document.getElementById('filtroTurma').value;
+            const filtroDisciplina = document.getElementById('filtroDisciplina').value;
+            const filtroPeriodo = document.getElementById('filtroPeriodo').value;
+            
+            return resultadosGerais.turmas.filter(turma => {
+                // Filtrar por turma
+                if (filtroTurma && turma.nome !== filtroTurma) return false;
+                
+                // Filtrar por disciplina
+                if (filtroDisciplina && turma.disciplina !== filtroDisciplina) return false;
+                
+                return true;
+            });
+        }
+
+        function filtrarAlunosLista() {
+            const busca = document.getElementById('buscaAluno')?.value.toLowerCase() || '';
+            const filtroTurma = document.getElementById('filtroTurma').value;
+            const filtroDisciplina = document.getElementById('filtroDisciplina').value;
+            
+            return resultadosGerais.alunos.filter(aluno => {
+                // Filtrar por busca
+                if (busca) {
+                    const nomeMatch = aluno.nome.toLowerCase().includes(busca);
+                    const matriculaMatch = aluno.matricula?.toLowerCase().includes(busca) || false;
+                    if (!nomeMatch && !matriculaMatch) return false;
+                }
+                
+                // Filtrar por turma
+                if (filtroTurma && !aluno.turmas.includes(filtroTurma)) return false;
+                
+                return true;
+            });
+        }
+
+        function filtrarDisciplinas() {
+            const filtroTurma = document.getElementById('filtroTurma').value;
+            const filtroDisciplina = document.getElementById('filtroDisciplina').value;
+            
+            return resultadosGerais.disciplinas.filter(disciplina => {
+                // Filtrar por disciplina
+                if (filtroDisciplina && disciplina.nome !== filtroDisciplina) return false;
+                
+                // Filtrar por turma (verificar se a disciplina tem a turma)
+                if (filtroTurma && !disciplina.turmas.includes(filtroTurma)) return false;
+                
+                return true;
+            });
+        }
+
+        // Funções de filtro
+        window.filtrarResultados = function() {
+            atualizarListaTurmasResultados();
+            atualizarListaAlunosResultados();
+            atualizarListaDisciplinasResultados();
+        };
+
+        window.filtrarAlunos = function() {
+            atualizarListaAlunosResultados();
+        };
+
+        // Funções auxiliares
+        window.verDetalhesTurma = function(turmaId) {
+            window.location.href = `detalhes-turma.html?id=${turmaId}`;
+        };
+
+        window.verDetalhesAlunoResultado = function(alunoId) {
+            window.location.href = `detalhes-aluno.html?id=${alunoId}`;
+        };
+
+        window.verDetalhesDisciplina = function(disciplinaNome) {
+            alert(`Detalhes da disciplina "${disciplinaNome}" - Funcionalidade em desenvolvimento`);
+        };
+        
+        // Esconder loading após carregamento
+        function esconderLoading() {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                }, 300);
+            }
+        }
+        
+        // Mostrar loading
+        function mostrarLoading(mensagem = 'Carregando...') {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'flex';
+                loadingOverlay.style.opacity = '1';
+                loadingOverlay.querySelector('p').textContent = mensagem;
+            }
+        }
+        
+        // Verificar autenticação
+        async function verificarAutenticacao() {
+            const token = localStorage.getItem('auth_token');
+            const userData = localStorage.getItem('user_data');
+            
+            if (!token) {
+                console.log('❌ Nenhum token encontrado, redirecionando para login...');
+                window.location.href = 'login.html';
+                return false;
+            }
+            
+            try {
+                // Verificar se o token é válido
+                const response = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    console.log('❌ Token inválido ou expirado');
+                    localStorage.clear();
+                    window.location.href = 'login.html';
+                    return false;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    usuario = data.user;
+                    localStorage.setItem('user_data', JSON.stringify(data.user));
+                    
+                    // Verificar se é professor
+                    if (usuario.role !== 'professor' && usuario.role !== 'admin') {
+                        console.log('❌ Acesso negado - Não é professor');
+                        window.location.href = usuario.role === 'aluno' ? 'aluno.html' : 'login.html';
+                        return false;
+                    }
+                    
+                    return true;
+                } else {
+                    throw new Error(data.error || 'Erro na autenticação');
+                }
+                
+            } catch (error) {
+                console.error('Erro na verificação de autenticação:', error);
+                localStorage.clear();
+                window.location.href = 'login.html';
+                return false;
+            }
+        }
+        
+        // Carregar dados do professor
+        async function carregarDadosProfessor() {
+            try {
+                mostrarLoading('Verificando autenticação...');
+                const autenticado = await verificarAutenticacao();
+                if (!autenticado) return;
+                
+                // Atualizar informações do professor na interface
+                atualizarInterfaceProfessor();
+                
+                // Carregar turmas do professor
+                await carregarTurmasProfessor();
+                
+                esconderLoading();
+                
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                mostrarAlerta('alertProva', '❌ Erro ao carregar dados. Tente recarregar a página.', 'error');
+                esconderLoading();
+            }
+        }
+        
+        // Atualizar interface com dados do professor
+        function atualizarInterfaceProfessor() {
+            try {
+                // Atualizar nome do professor
+                const professorNomeEl = document.getElementById('professorNome');
+                if (professorNomeEl) {
+                    professorNomeEl.textContent = usuario.nome;
+                }
+                
+                // Atualizar eixo do professor
+                const professorEixoEl = document.getElementById('professorEixo');
+                if (professorEixoEl) {
+                    if (usuario.eixo === 'natureza') {
+                        professorEixoEl.textContent = 'Eixo Natureza';
+                        professorEixoEl.className = 'eixo-badge eixo-natureza';
+                    } else if (usuario.eixo === 'humanas') {
+                        professorEixoEl.textContent = 'Eixo Humanas';
+                        professorEixoEl.className = 'eixo-badge eixo-humanas';
+                    } else {
+                        professorEixoEl.textContent = 'Sem eixo definido';
+                        professorEixoEl.style.background = '#f3f4f6';
+                        professorEixoEl.style.color = '#6b7280';
+                    }
+                }
+                
+                // Atualizar email
+                const professorEmailEl = document.getElementById('professorEmail');
+                if (professorEmailEl) {
+                    professorEmailEl.textContent = usuario.email;
+                }
+                
+            } catch (error) {
+                console.error('Erro ao atualizar interface:', error);
+            }
+        }
+        
+        // Carregar turmas do professor
+        async function carregarTurmasProfessor() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log('📚 Carregando turmas do professor...');
+                
+                const response = await fetch('/api/turmas', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    turmasProfessor = data.turmas || [];
+                    
+                    // Atualizar select de turmas na aba Nova Prova
+                    atualizarSelectTurmas();
+                    
+                    // Atualizar lista de turmas na aba Minhas Turmas
+                    atualizarListaTurmas();
+                    
+                    // Atualizar estatísticas
+                    atualizarEstatisticasTurmas();
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar turmas');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar turmas:', error);
+                
+                // Verificar se é erro de rede
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    mostrarAlerta('alertMinhasTurmas', '❌ Erro de conexão com o servidor. Verifique sua internet.', 'error');
+                } else {
+                    mostrarAlerta('alertMinhasTurmas', '❌ Erro ao carregar turmas: ' + error.message, 'error');
+                }
+            }
+        }
+
+        // Carregar provas do professor (VERSÃO CORRIGIDA)
+        async function carregarProvasProfessor() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log('📚 Carregando provas do professor...');
+                
+                // Mostrar loading
+                const listaProvas = document.getElementById('listaProvas');
+                if (listaProvas) {
+                    listaProvas.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4f46e5;"></i>
+                            <p>Carregando suas provas...</p>
+                        </div>
+                    `;
+                }
+                
+                // Limpar alerta anterior
+                const alerta = document.getElementById('alertMinhasProvas');
+                if (alerta) {
+                    alerta.style.display = 'none';
+                }
+                
+                const response = await fetch('/api/professor/provas', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                console.log('Status da resposta:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erro HTTP:', response.status, errorText);
+                    
+                    if (listaProvas) {
+                        listaProvas.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 15px; color: #ef4444;"></i>
+                                <h3>Erro ao carregar provas</h3>
+                                <p>Erro ${response.status}: ${response.statusText}</p>
+                                <p style="font-size: 0.9rem; color: #6b7280; margin-top: 10px;">
+                                    Verifique se a rota está configurada no servidor.
+                                </p>
+                                <button onclick="carregarProvasProfessor()" style="margin-top: 15px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                    <i class="fas fa-redo"></i> Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                    }
+                    
+                    throw new Error(`Erro ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Dados recebidos:', data);
+                
+                if (data.success) {
+                    atualizarListaProvas(data.provas);
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar provas');
+                }
+                
+            } catch (error) {
+                console.error('Erro completo ao carregar provas:', error);
+                
+                // Mostrar erro no alerta
+                mostrarAlerta('alertMinhasProvas', `❌ Erro ao carregar provas: ${error.message}`, 'error');
+                
+                // Mostrar estado de erro na lista
+                const listaProvas = document.getElementById('listaProvas');
+                if (listaProvas) {
+                    listaProvas.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 15px; color: #ef4444;"></i>
+                            <h3>Erro ao carregar provas</h3>
+                            <p>${error.message}</p>
+                            <button onclick="carregarProvasProfessor()" style="margin-top: 15px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                <i class="fas fa-redo"></i> Tentar novamente
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Atualizar lista de provas na interface (VERSÃO CORRIGIDA)
+        function atualizarListaProvas(provas) {
+            const listaProvas = document.getElementById('listaProvas');
+            const alerta = document.getElementById('alertMinhasProvas');
+            
+            if (!listaProvas) return;
+            
+            // Esconder alerta se tiver sucesso
+            if (alerta) {
+                alerta.style.display = 'none';
+            }
+            
+            if (!provas || provas.length === 0) {
+                listaProvas.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-file-alt" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                        <h3>Nenhuma prova criada</h3>
+                        <p>Você ainda não criou nenhuma prova. Crie sua primeira prova na aba "Nova Prova".</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            listaProvas.innerHTML = provas.map(prova => {
+                // Estilo baseado no status
+                let statusClass = 'status-ativa';
+                let statusText = 'Ativa';
+                let statusIcon = 'fa-check-circle';
+                
+                if (prova.status === 'inativa') {
+                    statusClass = 'status-inativa';
+                    statusText = 'Inativa';
+                    statusIcon = 'fa-times-circle';
+                } else if (prova.dataLimite && new Date(prova.dataLimite) < new Date()) {
+                    statusClass = 'status-concluida';
+                    statusText = 'Concluída';
+                    statusIcon = 'fa-check-double';
+                }
+                
+                // Cor baseada na dificuldade
+                let dificuldadeColor = '#4f46e5'; // média (padrão)
+                if (prova.dificuldade === 'facil') {
+                    dificuldadeColor = '#10b981'; // verde
+                } else if (prova.dificuldade === 'dificil') {
+                    dificuldadeColor = '#ef4444'; // vermelho
+                }
+                
+                // CORREÇÃO: Formatar data corretamente
+                const formatarData = (dataString) => {
+                    if (!dataString) return 'Não disponível';
+                    try {
+                        const data = new Date(dataString);
+                        if (isNaN(data.getTime())) return 'Data inválida';
+                        return data.toLocaleDateString('pt-BR');
+                    } catch (error) {
+                        return 'Data inválida';
+                    }
+                };
+                
+                // CORREÇÃO: Extrair nome da turma corretamente
+                const obterNomeTurma = () => {
+                    if (!prova.turma) return 'Sem turma';
+                    
+                    // Se for uma string, retorna direto
+                    if (typeof prova.turma === 'string') {
+                        return prova.turma;
+                    }
+                    
+                    // Se for um objeto, tenta pegar o nome
+                    if (typeof prova.turma === 'object' && prova.turma !== null) {
+                        return prova.turma.nome || prova.turma.Nome || 'Turma sem nome';
+                    }
+                    
+                    return 'Sem turma';
+                };
+                
+                const dataCriacao = formatarData(prova.dataCriacao);
+                const dataLimite = formatarData(prova.dataLimite);
+                const nomeTurma = obterNomeTurma();
+                
+                // Evitar erro se mediaNotas não existir
+                const mediaNotas = prova.mediaNotas || prova.mediaNotas === 0 ? 
+                    (typeof prova.mediaNotas === 'number' ? prova.mediaNotas.toFixed(1) : prova.mediaNotas) : 
+                    '0.0';
+                
+                // Verificar contagens de alunos
+                const alunosRealizaram = prova.alunosRealizaram || prova.totalRealizados || 0;
+                const totalAlunos = prova.totalAlunos || prova.totalAlunosTurma || 0;
+                
+                return `
+                    <div class="prova-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid ${dificuldadeColor};">
+                        <div class="prova-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                            <div>
+                                <h3 class="prova-titulo" style="font-size: 1.2rem; font-weight: 600; color: #1f2937; margin: 0;">
+                                    ${prova.titulo || 'Sem título'}
+                                </h3>
+                                <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
+                                    ${prova.conteudo ? (prova.conteudo.length > 100 ? prova.conteudo.substring(0, 100) + '...' : prova.conteudo) : 'Sem conteúdo'}
+                                </p>
+                            </div>
+                            <div>
+                                <span class="prova-status ${statusClass}" style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: ${statusClass === 'status-ativa' ? '#d1fae5' : statusClass === 'status-concluida' ? '#fef3c7' : '#f3f4f6'}; color: ${statusClass === 'status-ativa' ? '#065f46' : statusClass === 'status-concluida' ? '#92400e' : '#6b7280'}">
+                                    <i class="fas ${statusIcon}"></i> ${statusText}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="prova-info" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; font-size: 0.9rem; color: #6b7280;">
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-question-circle"></i>
+                                <span><strong>${prova.quantidadeQuestoes || 0}</strong> questões</span>
+                            </div>
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-school"></i>
+                                <span>${nomeTurma}</span>
+                            </div>
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-users"></i>
+                                <span><strong>${alunosRealizaram}/${totalAlunos}</strong> alunos</span>
+                            </div>
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-chart-line"></i>
+                                <span>Média: <strong>${mediaNotas}</strong></span>
+                            </div>
+                        </div>
+                        
+                        <div class="prova-datas" style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6b7280; margin-bottom: 15px;">
+                            <div>
+                                <i class="fas fa-calendar-plus"></i> Criada: ${dataCriacao}
+                            </div>
+                            <div>
+                                <i class="fas fa-calendar-times"></i> Limite: ${dataLimite}
+                            </div>
+                        </div>
+                        
+                        <div class="prova-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="btn-ver-prova" onclick="verResultadosProva('${prova.id}')" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                            <i class="fas fa-chart-bar"></i> Ver Resultados
+                        </button>
+                        <button class="btn-visualizar-prova" onclick="visualizarProva('${prova.id}')" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                            <i class="fas fa-eye"></i> Visualizar
+                        </button>
+                        ${prova.codigo ? `
+                        <button class="btn-compartilhar-prova" onclick="compartilharProva('${prova.codigo}')" style="background: #8b5cf6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                            <i class="fas fa-share-alt"></i> Código: ${prova.codigo}
+                        </button>
+                        ` : ''}
+                        <!-- BOTÃO PARA LIBERAR TODAS AS NOTAS -->
+                        ${prova.alunosRealizaram > 0 ? `
+                        <button class="btn-liberar-notas" onclick="liberarTodasNotas('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                            <i class="fas fa-unlock"></i> Liberar Notas
+                        </button>
+                        ` : ''}
+                        </div>
+                `;
+            }).join('');
+        }
+
+        // Adicionar funções auxiliares
+        window.verResultadosProva = function(provaId) {
+            window.location.href = `resultados.html?provaId=${provaId}&tipo=professor`;
+        };
+
+        // Adicione esta função para visualizar a prova completa
+        window.visualizarProva = async function(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Mostrar loading no modal
+                const modalContent = `
+                    <div class="modal-header">
+                        <h3><i class="fas fa-eye"></i> Visualizar Prova</h3>
+                        <button class="modal-close" onclick="fecharModal('modalVisualizarProva')">&times;</button>
+                    </div>
+                    <div style="padding: 20px; text-align: center;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4f46e5;"></i>
+                        <p>Carregando detalhes da prova...</p>
+                    </div>
+                `;
+                
+                // Criar modal dinamicamente
+                let modal = document.getElementById('modalVisualizarProva');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.id = 'modalVisualizarProva';
+                    modal.innerHTML = `
+                        <div class="modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+                            ${modalContent}
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                } else {
+                    modal.querySelector('.modal-content').innerHTML = modalContent;
+                }
+                
+                modal.style.display = 'flex';
+                
+                // Buscar detalhes da prova
+                const response = await fetch(`/api/provas/${provaId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro ${response.status}: Não foi possível carregar a prova`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const prova = data.prova;
+                    const questoes = data.questoes || [];
+                    
+                    // Montar HTML da prova
+                    let questoesHTML = '';
+                    
+                    if (questoes.length === 0) {
+                        questoesHTML = `
+                            <div style="text-align: center; padding: 40px; color: #6b7280;">
+                                <i class="fas fa-question-circle" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                                <h3>Nenhuma questão disponível</h3>
+                                <p>Esta prova não possui questões ou elas não puderam ser carregadas.</p>
+                            </div>
+                        `;
+                    } else {
+                        questoesHTML = questoes.map((questao, index) => {
+                            // Calcular letra da resposta correta
+                            const respostaCorreta = questao.respostaCorreta;
+                            const letras = ['A', 'B', 'C', 'D'];
+                            const letraCorreta = letras[respostaCorreta];
+                            
+                            // Mapear opções
+                            const opcoes = questao.opcoes || [];
+                            
+                            return `
+                                <div class="questao-completa" style="margin-bottom: 30px; padding: 20px; background: #f9fafb; border-radius: 10px; border-left: 4px solid #4f46e5;">
+                                    <div class="questao-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                        <h4 style="margin: 0; color: #1f2937;">
+                                            <span style="background: #4f46e5; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.9rem; margin-right: 10px;">
+                                                ${index + 1}
+                                            </span>
+                                            Questão ${index + 1}
+                                        </h4>
+                                        <span style="font-size: 0.85rem; padding: 5px 10px; border-radius: 20px; background: #d1fae5; color: #065f46; font-weight: 600;">
+                                            <i class="fas fa-check-circle"></i> Resposta: ${letraCorreta}
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="questao-texto" style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 8px;">
+                                        <p style="margin: 0; font-size: 1.1rem; line-height: 1.6;">${questao.pergunta || 'Pergunta não disponível'}</p>
+                                    </div>
+                                    
+                                    <div class="opcoes-container" style="margin-bottom: 20px;">
+                                        ${opcoes.map((opcao, opcaoIndex) => {
+                                            const letra = letras[opcaoIndex];
+                                            const isCorreta = opcaoIndex === respostaCorreta;
+                                            
+                                            return `
+                                                <div class="opcao-item" style="
+                                                    display: flex; 
+                                                    align-items: center; 
+                                                    gap: 10px; 
+                                                    padding: 12px 15px; 
+                                                    margin-bottom: 8px; 
+                                                    background: ${isCorreta ? '#d1fae5' : 'white'};
+                                                    border: 2px solid ${isCorreta ? '#10b981' : '#e5e7eb'};
+                                                    border-radius: 8px;
+                                                    transition: all 0.3s;
+                                                ">
+                                                    <span style="
+                                                        width: 30px; 
+                                                        height: 30px; 
+                                                        display: flex; 
+                                                        align-items: center; 
+                                                        justify-content: center; 
+                                                        border-radius: 50%; 
+                                                        background: ${isCorreta ? '#10b981' : '#f3f4f6'}; 
+                                                        color: ${isCorreta ? 'white' : '#4b5563'}; 
+                                                        font-weight: 600;
+                                                    ">
+                                                        ${letra}
+                                                    </span>
+                                                    <span style="flex: 1; ${isCorreta ? 'color: #065f46; font-weight: 600;' : 'color: #4b5563;'}">
+                                                        ${opcao || 'Opção não disponível'}
+                                                    </span>
+                                                    ${isCorreta ? 
+                                                        '<span style="color: #10b981;"><i class="fas fa-check-circle"></i> Correta</span>' : 
+                                                        '<span style="color: #9ca3af;"><i class="fas fa-circle"></i></span>'
+                                                    }
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                    
+                                    ${questao.explicacao ? `
+                                    <div class="explicacao" style="
+                                        margin-top: 15px; 
+                                        padding: 15px; 
+                                        background: #f0fdf4; 
+                                        border-radius: 8px; 
+                                        border-left: 3px solid #10b981;
+                                    ">
+                                        <h5 style="margin: 0 0 10px 0; color: #065f46; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fas fa-lightbulb"></i> Explicação
+                                        </h5>
+                                        <p style="margin: 0; color: #065f46; line-height: 1.5;">
+                                            ${questao.explicacao}
+                                        </p>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    <div class="questao-metadata" style="
+                                        margin-top: 15px; 
+                                        padding-top: 15px; 
+                                        border-top: 1px solid #e5e7eb; 
+                                        display: flex; 
+                                        justify-content: space-between; 
+                                        font-size: 0.85rem; 
+                                        color: #6b7280;
+                                    ">
+                                        <span>
+                                            <i class="fas fa-hashtag"></i> ID: ${questao.id || 'N/A'}
+                                        </span>
+                                        <span>
+                                            <i class="fas fa-star"></i> Dificuldade: ${questao.dificuldade || 'Média'}
+                                        </span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                    
+                    // Informações da prova
+                    const dataCriacao = prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'Não disponível';
+                    const dataLimite = prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'Sem limite';
+                    const duracao = prova.duracao || 'Não definida';
+                    
+                    const modalFinalContent = `
+                        <div class="modal-header">
+                            <h3><i class="fas fa-eye"></i> Visualizar Prova</h3>
+                            <button class="modal-close" onclick="fecharModal('modalVisualizarProva')">&times;</button>
+                        </div>
+                        
+                        <div style="padding: 25px;">
+                            <!-- Cabeçalho da prova -->
+                            <div class="prova-header" style="
+                                background: linear-gradient(135deg, #4f46e5, #7c3aed); 
+                                color: white; 
+                                padding: 25px; 
+                                border-radius: 12px; 
+                                margin-bottom: 25px;
+                            ">
+                                <h2 style="margin: 0 0 10px 0;">${prova.titulo || 'Prova sem título'}</h2>
+                                <p style="margin: 0; opacity: 0.9;">${prova.conteudo || 'Conteúdo não especificado'}</p>
+                                
+                                <div style="
+                                    display: grid; 
+                                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+                                    gap: 15px; 
+                                    margin-top: 20px;
+                                ">
+                                    <div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Data de Criação</div>
+                                        <div style="font-weight: 600;">${dataCriacao}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Data Limite</div>
+                                        <div style="font-weight: 600;">${dataLimite}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Questões</div>
+                                        <div style="font-weight: 600;">${questoes.length}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Duração</div>
+                                        <div style="font-weight: 600;">${duracao} min</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Questões -->
+                            <div style="margin-bottom: 25px;">
+                                <h3 style="color: #4b5563; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-list-ol"></i> Questões
+                                    <span style="font-size: 0.9rem; background: #e5e7eb; padding: 2px 10px; border-radius: 12px; color: #6b7280;">
+                                        ${questoes.length} questões
+                                    </span>
+                                </h3>
+                                
+                                ${questoesHTML}
+                            </div>
+                            
+                            <!-- Botões de ação -->
+                            <div style="display: flex; gap: 10px; margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                                <button onclick="imprimirProva('${provaId}')" style="
+                                    flex: 1; 
+                                    padding: 12px; 
+                                    background: #3b82f6; 
+                                    color: white; 
+                                    border: none; 
+                                    border-radius: 8px; 
+                                    cursor: pointer; 
+                                    font-weight: 600; 
+                                    display: flex; 
+                                    align-items: center; 
+                                    justify-content: center; 
+                                    gap: 8px;
+                                ">
+                                    <i class="fas fa-print"></i> Imprimir
+                                </button>
+                                <button onclick="compartilharProva('${prova.codigo || ''}')" style="
+                                    flex: 1; 
+                                    padding: 12px; 
+                                    background: #10b981; 
+                                    color: white; 
+                                    border: none; 
+                                    border-radius: 8px; 
+                                    cursor: pointer; 
+                                    font-weight: 600; 
+                                    display: flex; 
+                                    align-items: center; 
+                                    justify-content: center; 
+                                    gap: 8px;
+                                ">
+                                    <i class="fas fa-share-alt"></i> Compartilhar
+                                </button>
+                                <button onclick="fecharModal('modalVisualizarProva')" style="
+                                    flex: 1; 
+                                    padding: 12px; 
+                                    background: #6b7280; 
+                                    color: white; 
+                                    border: none; 
+                                    border-radius: 8px; 
+                                    cursor: pointer; 
+                                    font-weight: 600; 
+                                    display: flex; 
+                                    align-items: center; 
+                                    justify-content: center; 
+                                    gap: 8px;
+                                ">
+                                    <i class="fas fa-times"></i> Fechar
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    modal.querySelector('.modal-content').innerHTML = modalFinalContent;
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar detalhes da prova');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao visualizar prova:', error);
+                
+                const modal = document.getElementById('modalVisualizarProva');
+                if (modal) {
+                    modal.querySelector('.modal-content').innerHTML = `
+                        <div class="modal-header">
+                            <h3><i class="fas fa-exclamation-triangle"></i> Erro</h3>
+                            <button class="modal-close" onclick="fecharModal('modalVisualizarProva')">&times;</button>
+                        </div>
+                        <div style="padding: 30px; text-align: center;">
+                            <i class="fas fa-exclamation-circle" style="font-size: 3rem; color: #ef4444; margin-bottom: 15px;"></i>
+                            <h3 style="color: #7f1d1d;">Erro ao carregar a prova</h3>
+                            <p style="color: #6b7280;">${error.message}</p>
+                            <button onclick="fecharModal('modalVisualizarProva')" style="
+                                margin-top: 20px;
+                                padding: 10px 20px;
+                                background: #4f46e5;
+                                color: white;
+                                border: none;
+                                border-radius: 6px;
+                                cursor: pointer;
+                                font-weight: 600;
+                            ">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        };
+
+        // Função para imprimir a prova
+        window.imprimirProva = function(provaId) {
+            const modal = document.getElementById('modalVisualizarProva');
+            if (!modal) return;
+            
+            const printContent = modal.querySelector('.modal-content').innerHTML;
+            
+            // Criar nova janela para impressão
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Prova - Sistema de Provas</title>
+                    <style>
+                        @media print {
+                            body { 
+                                margin: 0; 
+                                padding: 20px; 
+                                font-family: Arial, sans-serif; 
+                            }
+                            .no-print { display: none !important; }
+                            h2 { color: #000 !important; }
+                            .questao-completa { 
+                                page-break-inside: avoid; 
+                                border: 1px solid #ddd !important; 
+                                background: #fff !important;
+                            }
+                        }
+                        body { font-family: Arial, sans-serif; }
+                        .prova-header { 
+                            background: #f8f9fa !important; 
+                            color: #000 !important; 
+                            padding: 20px; 
+                            border: 2px solid #000; 
+                            margin-bottom: 20px; 
+                        }
+                        .questao-completa { 
+                            margin-bottom: 25px; 
+                            padding: 15px; 
+                            border: 1px solid #ddd; 
+                            border-radius: 5px; 
+                        }
+                        .opcao-item { 
+                            padding: 10px; 
+                            margin-bottom: 5px; 
+                            border: 1px solid #ddd; 
+                            background: #fff !important; 
+                        }
+                        .explicacao { 
+                            background: #f0f8ff !important; 
+                            padding: 10px; 
+                            border-left: 3px solid #007bff; 
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${printContent}
+                    <div style="text-align: center; margin-top: 30px; font-size: 0.8rem; color: #666;">
+                        Sistema de Provas - Impresso em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.onafterprint = function() {
+                    printWindow.close();
+                };
+            }, 500);
+        };
+
+        // Função auxiliar para fechar o modal
+        function fecharModalVisualizarProva() {
+            const modal = document.getElementById('modalVisualizarProva');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        window.compartilharProva = function(codigoProva) {
+            if (!codigoProva || codigoProva === '') {
+                alert('Esta prova não tem código disponível');
+                return;
+            }
+            
+            navigator.clipboard.writeText(codigoProva)
+                .then(() => {
+                    alert(`✅ Código ${codigoProva} copiado para a área de transferência!`);
+                })
+                .catch(err => {
+                    alert(`📋 Código: ${codigoProva}`);
+                });
+        };
+
+        // Atualizar select de turmas
+        function atualizarSelectTurmas() {
+            const selectTurma = document.getElementById('turmaProva');
+            if (!selectTurma) return;
+            
+            selectTurma.innerHTML = '<option value="">Selecione uma turma...</option>';
+            
+            if (turmasProfessor.length === 0) {
+                selectTurma.innerHTML += `
+                    <option value="" disabled>
+                        ⚠️ Nenhuma turma disponível. Crie uma turma primeiro.
+                    </option>
+                `;
+                selectTurma.disabled = true;
+                return;
+            }
+            
+            turmasProfessor.forEach(turma => {
+                const option = document.createElement('option');
+                option.value = turma.id;
+                option.textContent = `📚 ${turma.nome} - ${turma.disciplina} (${turma.totalAlunos || 0} alunos)`;
+                
+                // Destacar turma do eixo atual
+                if (turma.eixo === usuario.eixo) {
+                    option.style.fontWeight = 'bold';
+                    option.textContent += ` [${turma.eixo === 'natureza' ? '🌿 Natureza' : '📖 Humanas'}]`;
+                }
+                
+                selectTurma.appendChild(option);
+            });
+            
+            selectTurma.disabled = false;
+        }
+        
+        // Atualizar lista de turmas na aba Minhas Turmas
+        function atualizarListaTurmas() {
+            const listaTurmas = document.getElementById('listaTurmas');
+            if (!listaTurmas) return;
+            
+            if (turmasProfessor.length === 0) {
+                listaTurmas.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-school" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                        <h3>Nenhuma turma criada</h3>
+                        <p>Você ainda não criou nenhuma turma. Crie sua primeira turma na aba "Nova Turma".</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            listaTurmas.innerHTML = turmasProfessor.map(turma => `
+                <div class="turma-card">
+                    <div class="turma-header">
+                        <div>
+                            <h3 class="turma-nome">${turma.nome}</h3>
+                            <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
+                                ${turma.disciplina} • Criada em ${new Date(turma.dataCriacao).toLocaleDateString()}
+                            </p>
+                        </div>
+                        <div class="turma-codigo">${turma.codigo}</div>
+                    </div>
+                    
+                    <div class="turma-info">
+                        <div class="turma-info-item">
+                            <i class="fas fa-users"></i>
+                            <span><strong>${turma.totalAlunos || 0}</strong> alunos</span>
+                        </div>
+                        <div class="turma-info-item">
+                            <i class="fas fa-file-alt"></i>
+                            <span><strong>${turma.totalProvas || 0}</strong> provas</span>
+                        </div>
+                        <div class="turma-info-item">
+                            <i class="fas fa-sitemap"></i>
+                            <span>${turma.eixo === 'natureza' ? '🌿 Natureza' : turma.eixo === 'humanas' ? '📖 Humanas' : '🌐 Geral'}</span>
+                        </div>
+                        <div class="turma-info-item">
+                            <i class="fas ${turma.ativa ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                            <span>${turma.ativa ? 'Ativa' : 'Inativa'}</span>
+                        </div>
+                    </div>
+                    
+                    ${turma.descricao ? `
+                    <div style="margin: 10px 0; padding: 10px; background: #f3f4f6; border-radius: 6px;">
+                        <p style="margin: 0; font-size: 0.9rem; color: #6b7280;">${turma.descricao}</p>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="turma-actions">
+                        <button class="btn-ver-turma" onclick="verTurma('${turma.id}')">
+                            <i class="fas fa-eye"></i> Ver Turma
+                        </button>
+                        <button class="btn-excluir-turma" onclick="solicitarExclusaoTurma('${turma.id}', '${turma.nome}')">
+                            <i class="fas fa-trash"></i> Excluir
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Atualizar estatísticas das turmas
+        function atualizarEstatisticasTurmas() {
+            const totalTurmas = turmasProfessor.length;
+            const totalAlunos = turmasProfessor.reduce((sum, turma) => sum + (turma.totalAlunos || 0), 0);
+            const totalProvas = turmasProfessor.reduce((sum, turma) => sum + (turma.totalProvas || 0), 0);
+            const turmasAtivas = turmasProfessor.filter(t => t.ativa).length;
+            const mediaAlunos = totalTurmas > 0 ? Math.round(totalAlunos / totalTurmas) : 0;
+            
+            // Atualizar totais no header
+            document.getElementById('totalTurmas').textContent = totalTurmas;
+            document.getElementById('totalAlunos').textContent = totalAlunos;
+            
+            // Atualizar estatísticas
+            document.getElementById('statTurmasAtivas').textContent = turmasAtivas;
+            document.getElementById('statTotalProvas').textContent = totalProvas;
+            document.getElementById('statMediaAlunos').textContent = mediaAlunos;
+            
+            // Mostrar estatísticas se houver turmas
+            const statsElement = document.getElementById('turmaStats');
+            if (statsElement) {
+                statsElement.style.display = totalTurmas > 0 ? 'flex' : 'none';
+            }
+        }
+        
+        // Mostrar alerta
+        function mostrarAlerta(elementId, mensagem, tipo = 'info') {
+            const alerta = document.getElementById(elementId);
+            if (!alerta) {
+                console.error('Elemento de alerta não encontrado:', elementId);
+                return;
+            }
+            
+            alerta.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                    <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                    <div>
+                        <strong>${tipo === 'success' ? 'Sucesso!' : tipo === 'error' ? 'Erro!' : 'Informação'}</strong>
+                        <p style="margin: 5px 0 0 0;">${mensagem}</p>
+                    </div>
+                </div>
+            `;
+            
+            alerta.className = `alert alert-${tipo}`;
+            alerta.style.display = 'block';
+            
+            // Auto-esconder alertas de sucesso/info após alguns segundos
+            if (tipo !== 'error') {
+                setTimeout(() => {
+                    alerta.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        // Criar nova turma
+        async function criarNovaTurma(dadosTurma) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log('🏫 Criando nova turma:', dadosTurma);
+                
+                const response = await fetch('/api/turmas', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dadosTurma)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Erro HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    return { 
+                        success: true, 
+                        data: data,
+                        mensagem: '✅ Turma criada com sucesso!' 
+                    };
+                } else {
+                    throw new Error(data.error || 'Erro desconhecido');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao criar turma:', error);
+                return { 
+                    success: false, 
+                    error: '❌ Erro ao criar turma: ' + error.message 
+                };
+            }
+        }
+        
+        // Excluir turma
+        async function excluirTurma(turmaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log('🗑️ Excluindo turma:', turmaId);
+                
+                const response = await fetch(`/api/turmas/${turmaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Erro HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    return { 
+                        success: true, 
+                        mensagem: '✅ Turma excluída com sucesso!' 
+                    };
+                } else {
+                    throw new Error(data.error || 'Erro desconhecido');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao excluir turma:', error);
+                return { 
+                    success: false, 
+                    error: '❌ Erro ao excluir turma: ' + error.message 
+                };
+            }
+        }
+        
+        // Solicitar exclusão de turma
+        function solicitarExclusaoTurma(turmaId, turmaNome) {
+            turmaParaExcluir = turmaId;
+            
+            document.getElementById('modalExcluirConteudo').innerHTML = `
+                <p>Tem certeza que deseja excluir a turma <strong>"${turmaNome}"</strong>?</p>
+                <div class="warning-box" style="margin-top: 15px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <strong>Atenção:</strong> Esta ação não pode ser desfeita.
+                        <ul style="margin: 10px 0 0 20px;">
+                            <li>Todas as provas associadas a esta turma serão removidas</li>
+                            <li>Os alunos serão removidos da turma</li>
+                            <li>Os resultados das provas serão mantidos</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            
+            mostrarModal('modalExcluirTurma');
+        }
+        
+        // Confirmar exclusão de turma
+        async function confirmarExclusaoTurma() {
+            if (!turmaParaExcluir) return;
+            
+            const resultado = await excluirTurma(turmaParaExcluir);
+            
+            if (resultado.success) {
+                mostrarAlerta('alertMinhasTurmas', resultado.mensagem, 'success');
+                fecharModal('modalExcluirTurma');
+                
+                // Recarregar lista de turmas
+                await carregarTurmasProfessor();
+            } else {
+                mostrarAlerta('alertMinhasTurmas', resultado.error, 'error');
+            }
+            
+            turmaParaExcluir = null;
+        }
+        
+        // Funções do modal
+        function mostrarModal(id) {
+            document.getElementById(id).style.display = 'flex';
+        }
+        
+        function fecharModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+        
+        // Gerar prova com IA
+        async function gerarProvaComIA(dadosProva) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log('🤖 Gerando prova com IA:', dadosProva);
+                
+                // Montar objeto para enviar ao servidor
+                const dadosEnvio = {
+                    turmaId: dadosProva.turmaId,
+                    titulo: dadosProva.titulo,
+                    conteudo: dadosProva.tema,
+                    quantidadeQuestoes: parseInt(dadosProva.quantidadeQuestoes),
+                    dificuldade: dadosProva.dificuldade,
+                    dataLimite: dadosProva.dataLimite || null,
+                    duracao: parseInt(dadosProva.duracao) || 60
+                };
+                
+                console.log('📤 Enviando para servidor:', dadosEnvio);
+                
+                const response = await fetch(`/api/turmas/${dadosProva.turmaId}/prova`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dadosEnvio)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ Erro na resposta:', errorText);
+                    throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ Resposta do servidor:', data);
+                
+                if (data.success) {
+                    // Salvar dados da prova gerada
+                    provaGerada = {
+                        ...data.prova,
+                        questoes: data.questoes || []
+                    };
+                    
+                    return { 
+                        success: true, 
+                        data: data,
+                        mensagem: '✅ Prova gerada com sucesso!' 
+                    };
+                } else {
+                    throw new Error(data.error || 'Erro desconhecido');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao gerar prova:', error);
+                return { 
+                    success: false, 
+                    error: '❌ Erro ao gerar prova: ' + error.message 
+                };
+            }
+        }
+        
+        // Mostrar preview das questões (mantido da versão anterior)
+        function mostrarPreviewQuestoes(questoes) {
+            const previewContainer = document.getElementById('previewQuestoes');
+            const questoesContainer = document.getElementById('questoesPreview');
+            
+            if (!previewContainer || !questoesContainer) return;
+            
+            if (!questoes || questoes.length === 0) {
+                questoesContainer.innerHTML = `
+                    <div class="empty-state" style="text-align: center; padding: 20px; color: #6b7280;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <p>Não foi possível carregar as questões geradas</p>
+                    </div>
+                `;
+            } else {
+                questoesContainer.innerHTML = questoes.map((questao, index) => `
+                    <div class="questao-preview">
+                        <div class="questao-texto">
+                            <strong>Questão ${index + 1}:</strong> ${questao.pergunta || 'Pergunta não disponível'}
+                        </div>
+                        <div class="opcoes-preview">
+                            ${questao.opcoes ? questao.opcoes.map((opcao, opcaoIndex) => `
+                                <div class="opcao-item ${opcaoIndex === questao.respostaCorreta ? 'opcao-correta' : ''}">
+                                    <span>${opcao || 'Opção não disponível'}</span>
+                                    ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle" style="color: #10b981;"></i>' : ''}
+                                </div>
+                            `).join('') : '<p>Opções não disponíveis</p>'}
+                        </div>
+                        ${questao.explicacao ? `
+                        <div class="explicacao-preview">
+                            <strong><i class="fas fa-lightbulb"></i> Explicação:</strong> ${questao.explicacao}
+                        </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            }
+            
+            previewContainer.style.display = 'block';
+            setTimeout(() => {
+                previewContainer.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+        
+        // Publicar prova para a turma (mantido da versão anterior)
+        async function publicarProva() {
+            if (!provaGerada) {
+                mostrarAlerta('alertProva', '⚠️ Nenhuma prova gerada para publicar', 'info');
+                return;
+            }
+            
+            mostrarAlerta('alertProva', '✅ Prova publicada com sucesso! Os alunos já podem visualizá-la.', 'success');
+            
+            document.getElementById('formNovaProva').reset();
+            document.getElementById('previewQuestoes').style.display = 'none';
+            provaGerada = null;
+            
+            await carregarTurmasProfessor();
+        }
+        
+        // Regenerar prova (mantido da versão anterior)
+        async function regenerarProva() {
+            if (!provaGerada) {
+                mostrarAlerta('alertProva', '⚠️ Nenhuma prova para regenerar', 'info');
+                return;
+            }
+            
+            const formData = {
+                turmaId: document.getElementById('turmaProva').value,
+                titulo: document.getElementById('tituloProva').value,
+                tema: document.getElementById('temaProva').value,
+                quantidadeQuestoes: document.getElementById('quantidadeQuestoes').value,
+                dificuldade: document.getElementById('dificuldade').value,
+                dataLimite: document.getElementById('dataLimite').value,
+                duracao: document.getElementById('duracao').value
+            };
+            
+            if (!formData.turmaId) {
+                mostrarAlerta('alertProva', '⚠️ Selecione uma turma primeiro', 'info');
+                return;
+            }
+            
+            const btn = document.getElementById('btnGerarProva');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerando prova...';
+            btn.disabled = true;
+            
+            const resultado = await gerarProvaComIA(formData);
+            
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            
+            if (resultado.success) {
+                mostrarAlerta('alertProva', resultado.mensagem, 'success');
+                mostrarPreviewQuestoes(resultado.data.questoes || []);
+            } else {
+                mostrarAlerta('alertProva', resultado.error, 'error');
+            }
+        }
+        
+        // Função mostrarTab atualizada
+        function mostrarTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            const tabElement = document.getElementById(tabId);
+            if (tabElement) {
+                tabElement.classList.add('active');
+            }
+            
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            const clickedTab = event.currentTarget;
+            clickedTab.classList.add('active');
+            
+            // Recarregar dados se necessário
+            if (tabId === 'turmas') {
+                carregarTurmasProfessor();
+            } else if (tabId === 'minhas-provas') {
+                carregarProvasProfessor();
+            } else if (tabId === 'resultados-gerais') {
+                setTimeout(() => {
+                    carregarResultadosGerais();
+                }, 100);
+            }
+        }
+        
+        // Logout
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Dashboard do Professor - Carregando...');
+            
+            // Configurar data mínima para hoje
+            const hoje = new Date().toISOString().split('T')[0];
+            const dataLimiteInput = document.getElementById('dataLimite');
+            if (dataLimiteInput) {
+                dataLimiteInput.min = hoje;
+                dataLimiteInput.value = hoje;
+            }
+            
+            // Configurar formulário de nova prova
+            const formNovaProva = document.getElementById('formNovaProva');
+            if (formNovaProva) {
+                formNovaProva.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    // Validar campos
+                    const tema = document.getElementById('temaProva').value.trim();
+                    const titulo = document.getElementById('tituloProva').value.trim();
+                    const turmaId = document.getElementById('turmaProva').value;
+                    
+                    if (!tema) {
+                        mostrarAlerta('alertProva', '⚠️ Digite o tema da prova', 'info');
+                        document.getElementById('temaProva').focus();
+                        return;
+                    }
+                    
+                    if (!titulo) {
+                        mostrarAlerta('alertProva', '⚠️ Digite o título da prova', 'info');
+                        document.getElementById('tituloProva').focus();
+                        return;
+                    }
+                    
+                    if (!turmaId) {
+                        mostrarAlerta('alertProva', '⚠️ Selecione uma turma', 'info');
+                        document.getElementById('turmaProva').focus();
+                        return;
+                    }
+                    
+                    // Verificar se a turma selecionada existe
+                    const turmaSelecionada = turmasProfessor.find(t => t.id === turmaId);
+                    if (!turmaSelecionada) {
+                        mostrarAlerta('alertProva', '⚠️ Turma selecionada não encontrada', 'error');
+                        return;
+                    }
+                    
+                    // Verificar se a turma tem alunos
+                    if (turmaSelecionada.totalAlunos === 0) {
+                        mostrarAlerta('alertProva', '⚠️ Esta turma não tem alunos. Adicione alunos primeiro.', 'warning');
+                        return;
+                    }
+                    
+                    // Mostrar loading
+                    const btn = document.getElementById('btnGerarProva');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando prova com IA...';
+                    btn.disabled = true;
+                    
+                    // Coletar dados do formulário
+                    const formData = {
+                        turmaId: turmaId,
+                        titulo: titulo,
+                        tema: tema,
+                        quantidadeQuestoes: document.getElementById('quantidadeQuestoes').value,
+                        dificuldade: document.getElementById('dificuldade').value,
+                        dataLimite: document.getElementById('dataLimite').value || null,
+                        duracao: document.getElementById('duracao').value || 60
+                    };
+                    
+                    // Gerar prova
+                    const resultado = await gerarProvaComIA(formData);
+                    
+                    // Restaurar botão
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    
+                    if (resultado.success) {
+                        mostrarAlerta('alertProva', resultado.mensagem, 'success');
+                        mostrarPreviewQuestoes(resultado.data.questoes || []);
+                    } else {
+                        mostrarAlerta('alertProva', resultado.error, 'error');
+                    }
+                });
+            }
+            
+            // Configurar formulário de nova turma
+            const formNovaTurma = document.getElementById('formNovaTurma');
+            if (formNovaTurma) {
+                formNovaTurma.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    const nome = document.getElementById('nomeTurma').value.trim();
+                    const disciplina = document.getElementById('disciplinaTurma').value.trim();
+                    const eixo = document.getElementById('eixoTurma').value;
+                    const descricao = document.getElementById('descricaoTurma').value.trim();
+                    
+                    if (!nome) {
+                        mostrarAlerta('alertTurma', '⚠️ Digite o nome da turma', 'info');
+                        document.getElementById('nomeTurma').focus();
+                        return;
+                    }
+                    
+                    if (!disciplina) {
+                        mostrarAlerta('alertTurma', '⚠️ Digite a disciplina', 'info');
+                        document.getElementById('disciplinaTurma').focus();
+                        return;
+                    }
+                    
+                    const btn = document.getElementById('btnCriarTurma');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando turma...';
+                    btn.disabled = true;
+                    
+                    const dadosTurma = {
+                        nome: nome,
+                        disciplina: disciplina,
+                        eixo: eixo,
+                        descricao: descricao || undefined
+                    };
+                    
+                    const resultado = await criarNovaTurma(dadosTurma);
+                    
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    
+                    if (resultado.success) {
+                        mostrarAlerta('alertTurma', resultado.mensagem, 'success');
+                        formNovaTurma.reset();
+                        
+                        // Recarregar turmas
+                        await carregarTurmasProfessor();
+                        
+                        // Mudar para aba de turmas
+                        setTimeout(() => {
+                            document.querySelector('[onclick="mostrarTab(\'turmas\')"]').click();
+                        }, 1500);
+                    } else {
+                        mostrarAlerta('alertTurma', resultado.error, 'error');
+                    }
+                });
+            }
+            
+            // Auto-preenchimento do título baseado no tema
+            const temaInput = document.getElementById('temaProva');
+            const tituloInput = document.getElementById('tituloProva');
+            
+            if (temaInput && tituloInput) {
+                temaInput.addEventListener('input', function() {
+                    if (this.value.trim().length > 0 && (!tituloInput.value || tituloInput.value.startsWith('Prova: '))) {
+                        const tema = this.value.trim();
+                        if (tema.length > 50) {
+                            tituloInput.value = `Prova: ${tema.substring(0, 50)}...`;
+                        } else {
+                            tituloInput.value = `Prova: ${tema}`;
+                        }
+                    }
+                });
+            }
+            
+            // Configurar logout
+            const btnLogout = document.getElementById('btnLogout');
+            if (btnLogout) {
+                btnLogout.addEventListener('click', logout);
+            }
+            
+            // Configurar navegação entre tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabId = this.getAttribute('onclick').match(/'([^']+)'/)[1];
+                    mostrarTab(tabId);
+                });
+            });
+            
+            // Configurar fechar modal ao clicar fora
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        this.style.display = 'none';
+                    }
+                });
+            });
+            
+            // Configurar botões de fechar modal
+            document.querySelectorAll('.modal-close').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    this.closest('.modal').style.display = 'none';
+                });
+            });
+            
+            // Carregar dados do professor
+            carregarDadosProfessor();
+            
+            // Configurar timeout para esconder loading
+            setTimeout(esconderLoading, 5000);
+            
+            // Quando a aba de resultados gerais for clicada
+            const tabResultadosGerais = document.querySelector('[onclick="mostrarTab(\'resultados-gerais\')"]');
+            if (tabResultadosGerais) {
+                tabResultadosGerais.addEventListener('click', function() {
+                    setTimeout(() => {
+                        carregarResultadosGerais();
+                    }, 100);
+                });
+            }
+        });
+        
+        // Verificar periodicamente a autenticação
+        setInterval(async () => {
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                try {
+                    await fetch('/api/auth/me', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch (error) {
+                    console.log('Sessão expirada');
+                }
+            }
+        }, 5 * 60 * 1000);
+        
+        // Tornar funções globais
+        window.mostrarTab = mostrarTab;
+        window.publicarProva = publicarProva;
+        window.regenerarProva = regenerarProva;
+        window.verTurma = function(turmaId) {
+            alert(`Visualizando turma ${turmaId} - Funcionalidade em desenvolvimento`);
+        };
+        window.solicitarExclusaoTurma = solicitarExclusaoTurma;
+        window.confirmarExclusaoTurma = confirmarExclusaoTurma;
+        window.fecharModal = fecharModal;
+    </script>
+</body>
+</html>

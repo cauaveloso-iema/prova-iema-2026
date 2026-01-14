@@ -1,0 +1,1945 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realizar Prova - Sistema de Provas</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ESTILOS FULLSCREEN COM SCROLL VERTICAL CORRIGIDO */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100vh;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .prova-header {
+            background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+            color: white;
+            padding: 20px 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+            z-index: 100;
+        }
+        
+        .prova-header h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.5rem;
+        }
+        
+        .prova-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+        }
+        
+        .meta-left, .meta-right {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .meta-item {
+            background: rgba(255,255,255,0.15);
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .timer-container {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            min-width: 120px;
+            text-align: center;
+        }
+        
+        /* CONTAINER DAS QUESTÕES COM SCROLL VERTICAL - CORRIGIDO */
+        .questao-container-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+        
+        .questao-container {
+            height: 100%;
+            padding: 20px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch; /* Para scroll suave em iOS */
+        }
+        
+        /* Garantir que todas as questões caibam na largura */
+        .questoes-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .questao-card {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+            width: 100%;
+        }
+        
+        .questao-card:last-child {
+            margin-bottom: 40px;
+        }
+        
+        .questao-card:hover {
+            border-color: #4f46e5;
+            box-shadow: 0 5px 15px rgba(79, 70, 229, 0.1);
+        }
+        
+        .questao-numero {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: #4f46e5;
+            color: white;
+            border-radius: 50%;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .questao-texto {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            color: #1f2937;
+        }
+        
+        .opcoes-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .opcao {
+            padding: 16px 18px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .opcao:hover {
+            border-color: #4f46e5;
+            background: #f0f9ff;
+        }
+        
+        .opcao.selecionada {
+            border-color: #10b981;
+            background: #d1fae5;
+        }
+        
+        .opcao-letra {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: #6b7280;
+            color: white;
+            border-radius: 50%;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .opcao.selecionada .opcao-letra {
+            background: #10b981;
+        }
+        
+        .btn-finalizar {
+            display: block;
+            width: calc(100% - 40px);
+            max-width: 400px;
+            margin: 20px auto 40px auto;
+            padding: 16px 30px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        
+        .btn-finalizar:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.2);
+        }
+        
+        .progresso-container {
+            padding: 15px 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
+        .progresso {
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+        
+        /* SCROLLBAR PERSONALIZADA VISÍVEL */
+        .questao-container::-webkit-scrollbar {
+            width: 12px;
+        }
+        
+        .questao-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+        }
+        
+        .questao-container::-webkit-scrollbar-thumb {
+            background: #4f46e5;
+            border-radius: 6px;
+            border: 2px solid #f1f1f1;
+        }
+        
+        .questao-container::-webkit-scrollbar-thumb:hover {
+            background: #3730a3;
+        }
+        
+        /* Indicador visual de que há mais conteúdo para rolar */
+        .scroll-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(79, 70, 229, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: bounce 2s infinite;
+            z-index: 50;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-5px); }
+        }
+        
+        /* Resto dos estilos mantidos... */
+        .loading-screen, .error-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+            z-index: 10000;
+        }
+        
+        .loading-screen {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        }
+        
+        .error-screen {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        }
+        
+        .error-screen i {
+            font-size: 4rem;
+            color: #ef4444;
+            margin-bottom: 20px;
+        }
+        
+        .btn-voltar {
+            margin-top: 20px;
+            padding: 12px 25px;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* MODAL DE AVISO */
+        .modal-warning {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 9999;
+            display: none;
+        }
+        
+        .modal-warning.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: slideIn 0.4s ease;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        
+        .modal-body {
+            padding: 30px;
+            text-align: center;
+        }
+        
+        #warningMessage {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            color: #374151;
+        }
+        
+        .countdown-container {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        #countdown {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #dc2626;
+            display: inline-block;
+            min-width: 40px;
+        }
+        
+        .modal-footer {
+            padding: 20px;
+            background: #f9fafb;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .btn-return {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.2s, background 0.3s;
+        }
+        
+        .btn-return:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(135deg, #059669, #047857);
+        }
+        
+        /* PAINEL DE MONITORAMENTO */
+        .monitor-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            width: 280px;
+            z-index: 1000;
+            border: 2px solid #e5e7eb;
+            overflow: hidden;
+        }
+        
+        .panel-header {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            padding: 10px 12px;
+        }
+        
+        .panel-header h4 {
+            margin: 0;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .panel-body {
+            padding: 12px;
+        }
+        
+        .metric-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .metric {
+            text-align: center;
+            padding: 8px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .metric-label {
+            font-size: 0.65rem;
+            color: #6b7280;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        
+        .metric-value {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #374151;
+        }
+        
+        .status-row {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .status-item {
+            flex: 1;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        
+        /* BOTÃO DE AJUDA */
+        #monitorHelp {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            font-size: 1.1rem;
+        }
+        
+        /* TELA DE CANCELAMENTO */
+        #cancelMessage {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0f172a;
+            z-index: 99999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+        }
+        
+        #cancelMessage.active {
+            display: flex;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #ef4444;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #9ca3af;
+        }
+        
+        /* ANIMAÇÕES */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideIn {
+            from { 
+                opacity: 0;
+                transform: translateY(-50px) scale(0.9);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .blink {
+            animation: blink 1s infinite;
+        }
+        
+        .warning-low { color: #f59e0b; font-weight: bold; }
+        .warning-medium { color: #ea580c; font-weight: bold; }
+        .warning-high { color: #dc2626; font-weight: bold; animation: pulse 1s infinite; }
+    </style>
+</head>
+<body>
+    <!-- Modal de Aviso -->
+    <div id="warningModal" class="modal-warning">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Atenção!</h3>
+            </div>
+            <div class="modal-body">
+                <p id="warningMessage">Você saiu da página da prova!</p>
+                <div class="countdown-container">
+                    <p>Retorne à prova em: <span id="countdown">5</span> segundos</p>
+                </div>
+                <div class="warning-details">
+                    <p><small>Isso conta como uma violação das regras da prova.</small></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnReturn" class="btn-return">
+                    <i class="fas fa-arrow-left"></i> Retornar à Prova
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Botão de ajuda -->
+    <button id="monitorHelp" title="Sobre o sistema de monitoramento">
+        <i class="fas fa-question-circle"></i>
+    </button>
+
+    <!-- Tela de Cancelamento -->
+    <div id="cancelMessage">
+        <div style="max-width: 600px; padding: 30px;">
+            <div style="font-size: 4rem; margin-bottom: 20px; color: #ef4444;">
+                <i class="fas fa-ban"></i>
+            </div>
+            <h1 style="color: #ef4444; margin-bottom: 20px;">PROVA CANCELADA</h1>
+            <div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 10px; margin-bottom: 30px;">
+                <p style="font-size: 1.2rem; margin-bottom: 10px;">
+                    <strong>Motivo:</strong> Múltiplas violações das regras da prova
+                </p>
+                <div style="display: flex; justify-content: center; gap: 20px; margin-top: 15px;" id="cancelStats">
+                    <!-- Estatísticas serão preenchidas por JS -->
+                </div>
+            </div>
+            <p style="color: #9ca3af; margin-bottom: 30px;">
+                Esta ação foi registrada e será reportada ao professor.
+            </p>
+            <p style="color: #f87171; margin-bottom: 30px; font-style: italic;">
+                <i class="fas fa-lock"></i> A tela será desbloqueada em <span id="unlockTimer">30</span> segundos
+            </p>
+        </div>
+    </div>
+
+    <!-- Container Principal -->
+    <div class="container">
+        <!-- Tela de Loading -->
+        <div id="loadingScreen" class="loading-screen">
+            <div style="border: 4px solid #f3f3f3; border-top: 4px solid #4f46e5; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+            <h2 id="loadingMessage">Carregando prova...</h2>
+            <p id="loadingDetails">Por favor, aguarde</p>
+        </div>
+        
+        <!-- Tela de Erro -->
+        <div id="errorScreen" class="error-screen" style="display: none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h2 id="errorTitle">Erro ao Carregar Prova</h2>
+            <p id="errorMessage">Ocorreu um erro ao carregar a prova.</p>
+            <button onclick="voltarAoPainel()" class="btn-voltar">
+                <i class="fas fa-arrow-left"></i> Voltar ao Painel
+            </button>
+        </div>
+        
+        <!-- Conteúdo da Prova -->
+        <div id="provaContent" style="display: none; flex: 1; display: flex; flex-direction: column; height: 100%;">
+            <!-- Header da Prova -->
+            <div class="prova-header">
+                <h1 id="provaTitulo">Título da Prova</h1>
+                <p id="provaConteudo">Conteúdo da prova</p>
+                
+                <div class="prova-meta">
+                    <div class="meta-left">
+                        <div class="meta-item">
+                            <i class="fas fa-question-circle"></i> 
+                            <span id="questoesCount">0 questões</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-clock"></i> 
+                            <span id="provaDuracao">-- minutos</span>
+                        </div>
+                    </div>
+                    
+                    <div class="timer-container">
+                        <i class="fas fa-stopwatch"></i>
+                        <span id="contadorTempo">00:00:00</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Container das Questões COM SCROLL - ESTRUTURA CORRIGIDA -->
+            <div class="questao-container-wrapper">
+                <div class="questao-container" id="questoesContainer">
+                    <!-- Indicador visual de scroll -->
+                    <div id="scrollIndicator" class="scroll-indicator" style="display: none;">
+                        <i class="fas fa-chevron-down"></i> Role para ver mais questões
+                    </div>
+                    
+                    <!-- Questões serão inseridas aqui dinamicamente -->
+                    <div id="questoesWrapper" class="questoes-wrapper"></div>
+                    
+                    <!-- Botão Finalizar INSERIDO DENTRO DO CONTAINER DE SCROLL -->
+                    <button onclick="finalizarProva()" class="btn-finalizar" id="btnFinalizarScroll">
+                        <i class="fas fa-paper-plane"></i> Finalizar Prova
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Progresso -->
+            <div class="progresso-container">
+                <div class="progresso">
+                    <span id="progressoTexto">0 de 0 questões respondidas</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SISTEMA DE MONITORAMENTO COMPLETO - SIMPLIFICADO PARA PERMITIR SCROLL -->
+    <script>
+        // ============ SISTEMA DE FULLSCREEN E BLOQUEIO ============
+        
+        function entrarEmFullscreen() {
+            const elem = document.documentElement;
+            
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(err => {
+                    console.log('Erro ao entrar em fullscreen:', err);
+                });
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+            }
+            
+            // Forçar retorno ao fullscreen se usuário tentar sair
+            document.addEventListener('fullscreenchange', () => {
+                if (!document.fullscreenElement) {
+                    setTimeout(() => entrarEmFullscreen(), 100);
+                    monitoramento?.registrarTentativaAtalho('Saída do modo tela cheia');
+                }
+            });
+        }
+        
+        function bloquearTelaCompletamente(tempoSegundos = 30) {
+            const cancelScreen = document.getElementById('cancelMessage');
+            cancelScreen.classList.add('active');
+            
+            document.querySelectorAll('.container, #monitorHelp, .monitor-panel').forEach(el => {
+                if (el !== cancelScreen) {
+                    el.style.display = 'none';
+                }
+            });
+            
+            document.body.style.overflow = 'hidden';
+            
+            let tempoRestante = tempoSegundos;
+            const timerElement = document.getElementById('unlockTimer');
+            
+            const timer = setInterval(() => {
+                tempoRestante--;
+                if (timerElement) {
+                    timerElement.textContent = tempoRestante;
+                }
+                
+                if (tempoRestante <= 0) {
+                    clearInterval(timer);
+                    setTimeout(() => {
+                        window.location.href = '/login.html?reason=prova_cancelada';
+                    }, 1000);
+                }
+            }, 1000);
+            
+            const blockAllKeys = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            };
+            
+            document.addEventListener('keydown', blockAllKeys, true);
+            document.addEventListener('keyup', blockAllKeys, true);
+            document.addEventListener('keypress', blockAllKeys, true);
+            
+            document.addEventListener('click', blockAllKeys, true);
+            document.addEventListener('contextmenu', blockAllKeys, true);
+            
+            window.history.pushState(null, null, window.location.href);
+            window.onpopstate = function() {
+                window.history.go(1);
+            };
+        }
+        
+        // ============ SISTEMA DE SCROLL E NAVEGAÇÃO ============
+        
+        function mostrarIndicadorScroll() {
+            const container = document.getElementById('questoesContainer');
+            const indicador = document.getElementById('scrollIndicator');
+            
+            if (container && indicador) {
+                // Verificar se há conteúdo para rolar
+                setTimeout(() => {
+                    const temScroll = container.scrollHeight > container.clientHeight;
+                    
+                    if (temScroll) {
+                        indicador.style.display = 'flex';
+                        
+                        // Ocultar indicador quando usuário rolar
+                        container.addEventListener('scroll', () => {
+                            if (container.scrollTop > 50) {
+                                indicador.style.opacity = '0';
+                                indicador.style.transition = 'opacity 0.3s';
+                            }
+                        });
+                        
+                        // Remover indicador após 10 segundos
+                        setTimeout(() => {
+                            indicador.style.opacity = '0';
+                            indicador.style.transition = 'opacity 0.5s';
+                            setTimeout(() => indicador.style.display = 'none', 500);
+                        }, 10000);
+                    }
+                }, 1000);
+            }
+        }
+        
+        // ============ CLASSE DE MONITORAMENTO (SIMPLIFICADA PARA SCROLL) ============
+        class MonitoramentoProva {
+            constructor() {
+                this.avisos = 0;
+                this.maxAvisos = 3;
+                this.tempoFora = 0;
+                this.maxTempoFora = 5;
+                this.isModalOpen = false;
+                this.timerPerdaFoco = null;
+                this.tentativasAtalho = 0;
+                this.maxTentativasAtalho = 5;
+                this.screenshots = 0;
+                this.maxScreenshots = 2;
+                this.capturasAtividades = [];
+                
+                this.init();
+            }
+            
+            init() {
+                setTimeout(() => entrarEmFullscreen(), 500);
+                
+                this.configurarMonitoramento();
+                this.criarPainelMonitoramento();
+                this.atualizarStatus();
+                this.registrarInicioProva();
+                
+                console.log('✅ Sistema de monitoramento iniciado');
+            }
+            
+            configurarMonitoramento() {
+                // 1. Monitorar perda de foco
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        this.registrarPerdaFoco();
+                    } else {
+                        this.tempoFora = 0;
+                    }
+                });
+                
+                // 2. Monitorar saída da janela
+                window.addEventListener('blur', () => {
+                    this.registrarPerdaFoco();
+                });
+                
+                window.addEventListener('focus', () => {
+                    this.tempoFora = 0;
+                });
+                
+                // 3. Prevenir saída da página
+                window.addEventListener('beforeunload', (e) => {
+                    if (this.avisos < this.maxAvisos) {
+                        e.preventDefault();
+                        e.returnValue = 'Se você sair da página, sua prova será cancelada.';
+                    }
+                });
+                
+                // 4. Prevenir teclas de atalho (SEM BLOQUEAR SETAS)
+                document.addEventListener('keydown', (e) => {
+                    const teclasBloqueadas = ['F5', 'F11', 'F12', 'Escape', 'PrintScreen'];
+                    
+                    // PERMITIR TODAS AS TECLAS DE NAVEGAÇÃO E SCROLL
+                    const teclasPermitidas = [
+                        'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                        'PageUp', 'PageDown', 'Home', 'End', ' ',
+                        'Tab', 'Enter'
+                    ];
+                    
+                    if (teclasPermitidas.includes(e.key)) {
+                        return true; // Permitir tecla
+                    }
+                    
+                    if (teclasBloqueadas.includes(e.key)) {
+                        e.preventDefault();
+                        this.registrarTentativaAtalho(`Tecla ${e.key} pressionada`);
+                    }
+                    
+                    // Bloquear combinações de teclas específicas
+                    if (e.ctrlKey || e.altKey || e.metaKey) {
+                        if ((e.ctrlKey && (e.key === 'r' || e.key === 'R' || e.key === 'n' || e.key === 't' || e.key === 'w')) ||
+                            (e.ctrlKey && e.shiftKey && (e.key === 'r' || e.key === 'R')) ||
+                            (e.altKey && e.key === 'Tab') ||
+                            (e.altKey && e.key === 'F4')) {
+                            e.preventDefault();
+                            this.registrarTentativaAtalho(`Atalho bloqueado`);
+                        }
+                    }
+                    
+                    if (e.key === 'PrintScreen' || (e.ctrlKey && e.key === 'p')) {
+                        e.preventDefault();
+                        this.registrarScreenshot();
+                    }
+                    
+                    if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+                        e.preventDefault();
+                        this.registrarTentativaAtalho('Tentativa de abrir DevTools');
+                    }
+                });
+                
+                // 5. Prevenir clique com botão direito
+                document.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    this.registrarTentativaAtalho('Clique direito bloqueado');
+                    return false;
+                });
+                
+                // 6. Prevenir seleção de texto (exceto em inputs)
+                document.addEventListener('selectstart', (e) => {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
+                        e.preventDefault();
+                    }
+                });
+                
+                // 7. Prevenir cópia/cola
+                document.addEventListener('copy', (e) => {
+                    e.preventDefault();
+                    this.registrarTentativaAtalho('Tentativa de cópia bloqueada');
+                    return false;
+                });
+                
+                document.addEventListener('cut', (e) => {
+                    e.preventDefault();
+                    this.registrarTentativaAtalho('Tentativa de recorte bloqueada');
+                    return false;
+                });
+                
+                document.addEventListener('paste', (e) => {
+                    e.preventDefault();
+                    this.registrarTentativaAtalho('Tentativa de colar bloqueada');
+                    return false;
+                });
+                
+                // 8. Monitorar fullscreen
+                document.addEventListener('fullscreenchange', () => {
+                    if (!document.fullscreenElement) {
+                        this.registrarTentativaAtalho('Saída do modo tela cheia');
+                        setTimeout(() => entrarEmFullscreen(), 100);
+                    }
+                });
+                
+                // 9. IMPORTANTE: PERMITIR SCROLL COMPLETAMENTE
+                // Não bloquear eventos de wheel de forma alguma
+                document.addEventListener('wheel', (e) => {
+                    // Permitir scroll completamente
+                    // Não fazer nada - permitir comportamento padrão
+                }, { passive: true });
+                
+                // Permitir eventos de touch para scroll em dispositivos móveis
+                document.addEventListener('touchstart', () => {}, { passive: true });
+                document.addEventListener('touchmove', () => {}, { passive: true });
+                document.addEventListener('touchend', () => {}, { passive: true });
+            }
+            
+            criarPainelMonitoramento() {
+                const panel = document.createElement('div');
+                panel.id = 'monitorPanel';
+                panel.className = 'monitor-panel';
+                panel.innerHTML = `
+                    <div class="panel-header">
+                        <h4><i class="fas fa-shield-alt"></i> Monitoramento</h4>
+                    </div>
+                    <div class="panel-body">
+                        <div class="metric-row">
+                            <div class="metric">
+                                <div class="metric-label">Avisos</div>
+                                <div class="metric-value" id="warningCount">0/3</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Atalhos</div>
+                                <div class="metric-value" id="shortcutCount">0/5</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Capturas</div>
+                                <div class="metric-value" id="screenshotCount">0/2</div>
+                            </div>
+                        </div>
+                        <div class="status-row">
+                            <div class="status-item" id="statusFocus">
+                                <i class="fas fa-check-circle"></i> Foco OK
+                            </div>
+                            <div class="status-item" id="statusFullscreen">
+                                <i class="fas fa-expand"></i> Tela Cheia
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(panel);
+            }
+            
+            registrarPerdaFoco() {
+                this.avisos++;
+                this.atualizarStatus();
+                
+                if (this.avisos >= this.maxAvisos) {
+                    this.cancelarProva();
+                    return;
+                }
+                
+                this.mostrarModalAviso();
+            }
+            
+            registrarTentativaAtalho(tipo) {
+                this.tentativasAtalho++;
+                this.capturasAtividades.push({
+                    tipo: 'atalho',
+                    descricao: tipo,
+                    timestamp: new Date().toISOString()
+                });
+                
+                this.atualizarStatus();
+                
+                if (this.tentativasAtalho >= this.maxTentativasAtalho) {
+                    this.cancelarProva();
+                }
+            }
+            
+            registrarScreenshot() {
+                this.screenshots++;
+                this.atualizarStatus();
+                
+                if (this.screenshots >= this.maxScreenshots) {
+                    this.cancelarProva();
+                }
+            }
+            
+            mostrarModalAviso() {
+                if (this.isModalOpen) return;
+                
+                this.isModalOpen = true;
+                const modal = document.getElementById('warningModal');
+                const countdownElement = document.getElementById('countdown');
+                const messageElement = document.getElementById('warningMessage');
+                
+                const messages = [
+                    '⚠️ ATENÇÃO: Você saiu da página da prova!',
+                    '⚠️ ALERTA: Comportamento suspeito detectado!',
+                    '⚠️ ÚLTIMO AVISO: A prova será cancelada!'
+                ];
+                
+                messageElement.textContent = messages[Math.min(this.avisos - 1, messages.length - 1)];
+                modal.classList.add('active');
+                
+                let countdown = this.maxTempoFora;
+                countdownElement.textContent = countdown;
+                countdownElement.classList.add('blink');
+                
+                this.timerPerdaFoco = setInterval(() => {
+                    countdown--;
+                    countdownElement.textContent = countdown;
+                    
+                    if (countdown <= 0) {
+                        clearInterval(this.timerPerdaFoco);
+                        countdownElement.classList.remove('blink');
+                        this.cancelarProva();
+                    }
+                }, 1000);
+                
+                document.getElementById('btnReturn').addEventListener('click', () => {
+                    if (this.timerPerdaFoco) {
+                        clearInterval(this.timerPerdaFoco);
+                    }
+                    countdownElement.classList.remove('blink');
+                    modal.classList.remove('active');
+                    this.isModalOpen = false;
+                    entrarEmFullscreen();
+                }, { once: true });
+            }
+            
+            atualizarStatus() {
+                const warningCount = document.getElementById('warningCount');
+                const shortcutCount = document.getElementById('shortcutCount');
+                const screenshotCount = document.getElementById('screenshotCount');
+                
+                if (warningCount) warningCount.textContent = `${this.avisos}/3`;
+                if (shortcutCount) shortcutCount.textContent = `${this.tentativasAtalho}/5`;
+                if (screenshotCount) screenshotCount.textContent = `${this.screenshots}/2`;
+                
+                const statusFocus = document.getElementById('statusFocus');
+                if (statusFocus) {
+                    if (document.hidden) {
+                        statusFocus.innerHTML = '<i class="fas fa-times-circle"></i> Foco Perdido';
+                        statusFocus.style.background = '#fef3c7';
+                        statusFocus.style.color = '#92400e';
+                    } else {
+                        statusFocus.innerHTML = '<i class="fas fa-check-circle"></i> Foco OK';
+                        statusFocus.style.background = '#d1fae5';
+                        statusFocus.style.color = '#065f46';
+                    }
+                }
+            }
+            
+            async registrarInicioProva() {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const provaId = window.provaData?._id;
+                    
+                    if (!token || !provaId) return;
+                    
+                    await fetch('http://localhost:3000/api/monitor/inicio', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            provaId: provaId,
+                            timestamp: new Date().toISOString(),
+                            userAgent: navigator.userAgent,
+                            screenResolution: `${window.screen.width}x${window.screen.height}`,
+                            iniciouFullscreen: true
+                        })
+                    });
+                    
+                } catch (error) {
+                    console.error('Erro ao registrar início:', error);
+                }
+            }
+            
+            cancelarProva() {
+                if (this.timerPerdaFoco) {
+                    clearInterval(this.timerPerdaFoco);
+                }
+                
+                const modal = document.getElementById('warningModal');
+                if (modal) {
+                    modal.classList.remove('active');
+                }
+                
+                const cancelStats = document.getElementById('cancelStats');
+                if (cancelStats) {
+                    cancelStats.innerHTML = `
+                        <div class="stat">
+                            <div class="stat-value">${this.avisos}</div>
+                            <div class="stat-label">Avisos</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${this.tentativasAtalho}</div>
+                            <div class="stat-label">Atalhos</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${this.screenshots}</div>
+                            <div class="stat-label">Capturas</div>
+                        </div>
+                    `;
+                }
+                
+                bloquearTelaCompletamente(30);
+            }
+        }
+        
+        // ============ LÓGICA PRINCIPAL DA PROVA ============
+        
+        const API_BASE_URL = 'http://localhost:3000/api';
+        
+        let prova = null;
+        let respostas = {};
+        let tempoInicio = null;
+        let tempoTotal = 0;
+        let timerInterval = null;
+        let monitoramento = null;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📄 Página de prova carregada');
+            
+            // Habilitar scroll imediatamente
+            document.body.style.overflow = 'auto';
+            document.documentElement.style.overflow = 'auto';
+            
+            document.getElementById('monitorHelp').addEventListener('click', () => {
+                alert(`
+🚫 SISTEMA DE MONITORAMENTO - MODO RESTRITO
+
+⚠️ ATENÇÃO: Esta prova está em modo de segurança máxima.
+
+🔒 RESTRIÇÕES ATIVAS:
+• TELA CHEIA OBRIGATÓRIA
+• Bloqueio de teclas: F5, F11, F12, ESC, PrintScreen
+• Bloqueio de atalhos: Ctrl+R, Ctrl+T, Ctrl+N, Alt+Tab
+• Bloqueio de DevTools
+• Sem clique direito
+• Sem cópia/cola
+• Sem captura de tela
+• Monitoramento de foco constante
+
+✅ PERMITIDO:
+• Scroll vertical e horizontal
+• Setas do teclado para navegar
+• Mouse para rolar
+• Toque para scroll em dispositivos móveis
+• Tecla Espaço para scroll
+
+📊 LIMITES:
+• 3 perdas de foco = PROVA CANCELADA
+• 5 atalhos bloqueados = PROVA CANCELADA
+• 2 capturas de tela = PROVA CANCELADA
+
+Boa prova! 🎯
+                `);
+            });
+            
+            const token = getTokenFromURL();
+            if (!token) {
+                mostrarErro('Acesso Negado', 'Token de prova não encontrado.');
+                return;
+            }
+            
+            carregarProva(token);
+        });
+        
+        function getTokenFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('token');
+        }
+        
+        async function carregarProva(token) {
+            try {
+                atualizarMensagemLoading('Iniciando prova em modo seguro...');
+                
+                const response = await fetch(`${API_BASE_URL}/provas/dados?token=${encodeURIComponent(token)}`);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Erro ao carregar prova');
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro na resposta do servidor');
+                }
+                
+                prova = data.prova;
+                console.log('✅ Prova carregada:', prova);
+                
+                monitoramento = new MonitoramentoProva();
+                setTimeout(() => iniciarProvaInterface(), 100);
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar prova:', error);
+                mostrarErro('Erro ao Carregar Prova', error.message);
+            }
+        }
+        
+        function iniciarProvaInterface() {
+            document.getElementById('provaTitulo').textContent = prova.titulo;
+            document.getElementById('provaConteudo').textContent = prova.conteudo;
+            document.getElementById('questoesCount').textContent = `${prova.quantidadeQuestoes} questões`;
+            document.getElementById('provaDuracao').textContent = `${prova.duracao} minutos`;
+            
+            renderizarQuestoes();
+            iniciarTimer();
+            
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('provaContent').style.display = 'flex';
+            
+            atualizarProgresso();
+            
+            // Habilitar scroll na área de questões
+            const questoesContainer = document.getElementById('questoesContainer');
+            if (questoesContainer) {
+                questoesContainer.style.overflowY = 'auto';
+                questoesContainer.style.overflowX = 'hidden';
+            }
+            
+            // Mostrar indicador de scroll se necessário
+            setTimeout(() => mostrarIndicadorScroll(), 500);
+            
+            // Testar scroll
+            console.log('Scroll habilitado - container height:', questoesContainer.scrollHeight, 'client height:', questoesContainer.clientHeight);
+        }
+        
+        function renderizarQuestoes() {
+            const container = document.getElementById('questoesWrapper');
+            
+            if (!prova.questoes || prova.questoes.length === 0) {
+                container.innerHTML = '<div class="questao-card"><p>Nenhuma questão disponível</p></div>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            prova.questoes.forEach((questao, index) => {
+                const questaoDiv = document.createElement('div');
+                questaoDiv.className = 'questao-card';
+                questaoDiv.id = `questao-${index}`;
+                
+                questaoDiv.innerHTML = `
+                    <div class="questao-numero">${index + 1}</div>
+                    <div class="questao-texto">${questao.pergunta}</div>
+                    <div class="opcoes-container" id="opcoes-${index}"></div>
+                `;
+                
+                const opcoesContainer = questaoDiv.querySelector(`#opcoes-${index}`);
+                questao.opcoes.forEach((opcao, opcaoIndex) => {
+                    const letra = String.fromCharCode(65 + opcaoIndex);
+                    const opcaoDiv = document.createElement('div');
+                    opcaoDiv.className = 'opcao';
+                    opcaoDiv.id = `opcao-${index}-${opcaoIndex}`;
+                    opcaoDiv.onclick = () => selecionarResposta(index, opcaoIndex);
+                    
+                    opcaoDiv.innerHTML = `
+                        <div class="opcao-letra">${letra}</div>
+                        <div class="opcao-texto">${opcao}</div>
+                    `;
+                    
+                    opcoesContainer.appendChild(opcaoDiv);
+                });
+                
+                container.appendChild(questaoDiv);
+            });
+        }
+        
+        function selecionarResposta(questaoIndex, opcaoIndex) {
+            const letras = ['A', 'B', 'C', 'D'];
+            const resposta = letras[opcaoIndex];
+            
+            respostas[questaoIndex] = resposta;
+            atualizarInterfaceResposta(questaoIndex, opcaoIndex);
+            atualizarProgresso();
+            salvarRespostasLocalmente();
+        }
+        
+        function atualizarInterfaceResposta(questaoIndex, opcaoIndexSelecionado) {
+            const questaoDiv = document.getElementById(`questao-${questaoIndex}`);
+            const todasOpcoes = questaoDiv.querySelectorAll('.opcao');
+            
+            todasOpcoes.forEach(opcao => {
+                opcao.classList.remove('selecionada');
+            });
+            
+            const opcaoSelecionada = document.getElementById(`opcao-${questaoIndex}-${opcaoIndexSelecionado}`);
+            if (opcaoSelecionada) {
+                opcaoSelecionada.classList.add('selecionada');
+            }
+        }
+        
+        function iniciarTimer() {
+            tempoInicio = new Date();
+            
+            const tempoSalvo = localStorage.getItem(`tempo_prova_${prova._id}`);
+            if (tempoSalvo) {
+                try {
+                    tempoTotal = parseInt(tempoSalvo);
+                } catch (e) {
+                    tempoTotal = 0;
+                }
+            }
+            
+            timerInterval = setInterval(atualizarTimer, 1000);
+            atualizarTimer();
+        }
+        
+        function atualizarTimer() {
+            const agora = new Date();
+            const diferenca = agora - tempoInicio;
+            
+            tempoTotal = Math.floor((diferenca / 1000) + (tempoTotal || 0));
+            
+            if (tempoTotal % 30 === 0) {
+                localStorage.setItem(`tempo_prova_${prova._id}`, tempoTotal);
+            }
+            
+            const horas = Math.floor(tempoTotal / 3600);
+            const minutos = Math.floor((tempoTotal % 3600) / 60);
+            const segundos = tempoTotal % 60;
+            
+            document.getElementById('contadorTempo').textContent = 
+                `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+            
+            if (prova.duracao && prova.duracao > 0) {
+                const tempoRestanteMinutos = (prova.duracao * 60) - tempoTotal;
+                
+                if (tempoRestanteMinutos <= 0) {
+                    clearInterval(timerInterval);
+                    finalizarProva();
+                } else if (tempoRestanteMinutos <= 5) {
+                    document.getElementById('contadorTempo').style.color = '#ef4444';
+                }
+            }
+        }
+        
+        function atualizarProgresso() {
+            const total = prova.questoes.length;
+            const respondidas = Object.keys(respostas).length;
+            const porcentagem = total > 0 ? Math.round((respondidas / total) * 100) : 0;
+            
+            document.getElementById('progressoTexto').textContent = 
+                `${respondidas} de ${total} questões respondidas (${porcentagem}%)`;
+        }
+        
+        function salvarRespostasLocalmente() {
+            if (prova && prova._id) {
+                const dados = {
+                    respostas: respostas,
+                    tempo: tempoTotal,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem(`prova_${prova._id}`, JSON.stringify(dados));
+            }
+        }
+        
+        async function finalizarProva() {
+            try {
+                if (monitoramento && monitoramento.timerPerdaFoco) {
+                    clearInterval(monitoramento.timerPerdaFoco);
+                }
+                
+                const totalQuestoes = prova.questoes.length;
+                const respondidas = Object.keys(respostas).length;
+                
+                if (respondidas < totalQuestoes) {
+                    if (!confirm(`Você respondeu ${respondidas} de ${totalQuestoes} questões.\nDeseja finalizar mesmo assim?`)) {
+                        return;
+                    }
+                }
+                
+                if (!confirm('Tem certeza que deseja finalizar a prova?\nEsta ação não pode ser desfeita.')) {
+                    return;
+                }
+                
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+                
+                document.getElementById('provaContent').style.display = 'none';
+                document.getElementById('loadingScreen').style.display = 'flex';
+                atualizarMensagemLoading('Enviando respostas...');
+                
+                const respostasArray = [];
+                for (let i = 0; i < totalQuestoes; i++) {
+                    respostasArray.push(respostas[i] || null);
+                }
+                
+                const tempoGasto = Math.ceil(tempoTotal / 60);
+                const authToken = localStorage.getItem('auth_token');
+                
+                if (!authToken) {
+                    throw new Error('Sessão expirada');
+                }
+                
+                const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/responder`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        respostas: respostasArray,
+                        tempoGasto: tempoGasto
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Erro ao enviar respostas');
+                }
+                
+                localStorage.removeItem(`prova_${prova._id}`);
+                localStorage.removeItem(`tempo_prova_${prova._id}`);
+                
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+                
+                alert(
+                    `✅ Prova finalizada com sucesso!\n\n` +
+                    `⏱️  Tempo gasto: ${tempoGasto} minutos\n` +
+                    `📊 Aguarde a correção do professor.`
+                );
+                
+                window.location.href = '/login.html?prova_finalizada=true';
+                
+            } catch (error) {
+                console.error('❌ Erro ao finalizar prova:', error);
+                
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('provaContent').style.display = 'flex';
+                
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = setInterval(atualizarTimer, 1000);
+                }
+                
+                alert(`Erro: ${error.message}`);
+            }
+        }
+        
+        function atualizarMensagemLoading(mensagem) {
+            const elemento = document.getElementById('loadingMessage');
+            if (elemento) {
+                elemento.textContent = mensagem;
+            }
+        }
+        
+        function mostrarErro(titulo, mensagem) {
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('errorScreen').style.display = 'flex';
+            document.getElementById('errorTitle').textContent = titulo;
+            document.getElementById('errorMessage').textContent = mensagem;
+        }
+        
+        function voltarAoPainel() {
+            if (Object.keys(respostas).length === 0) {
+                if (confirm('Deseja realmente voltar ao painel?')) {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                    window.location.href = '/aluno.html';
+                }
+            } else {
+                alert('Você já começou a prova. Não é possível voltar agora.');
+            }
+        }
+        
+        window.addEventListener('beforeunload', function(e) {
+            if (prova && Object.keys(respostas).length > 0) {
+                e.preventDefault();
+                e.returnValue = 'Você tem respostas não enviadas. A prova será perdida.';
+                return e.returnValue;
+            }
+        });
+    </script>
+
+    <!-- SISTEMA OFFLINE PARA PROVA - SEPARADO PARA CLAREZA -->
+    <script>
+        // ============ SISTEMA OFFLINE PARA PROVA ============
+
+        class OfflineManager {
+            constructor() {
+                this.isOnline = navigator.onLine;
+                this.init();
+            }
+            
+            init() {
+                // Monitorar conexão
+                window.addEventListener('online', () => this.handleOnline());
+                window.addEventListener('offline', () => this.handleOffline());
+                
+                // Verificar se há dados offline pendentes
+                this.checkPendingSync();
+            }
+            
+            handleOnline() {
+                console.log('✅ Conexão restaurada');
+                this.isOnline = true;
+                this.syncPendingData();
+            }
+            
+            handleOffline() {
+                console.log('⚠️ Conexão perdida - Modo offline ativado');
+                this.isOnline = false;
+                alert('⚠️ Conexão perdida. Suas respostas serão salvas localmente e enviadas quando a conexão voltar.');
+            }
+            
+            async saveProvaOffline(provaId, respostas, tempoGasto) {
+                try {
+                    const offlineData = {
+                        provaId,
+                        respostas,
+                        tempoGasto,
+                        timestamp: new Date().toISOString(),
+                        status: 'pending'
+                    };
+                    
+                    // Salvar no localStorage
+                    localStorage.setItem(`prova_offline_${provaId}`, JSON.stringify(offlineData));
+                    
+                    // Tentar enviar imediatamente se online
+                    if (this.isOnline) {
+                        await this.syncProvaData(offlineData);
+                    } else {
+                        console.log('💾 Prova salva offline:', offlineData);
+                    }
+                    
+                    return offlineData;
+                } catch (error) {
+                    console.error('❌ Erro ao salvar offline:', error);
+                    throw error;
+                }
+            }
+            
+            async syncProvaData(offlineData) {
+                try {
+                    const authToken = localStorage.getItem('auth_token');
+                    
+                    if (!authToken) {
+                        throw new Error('Token de autenticação não encontrado');
+                    }
+                    
+                    const response = await fetch('http://localhost:3000/api/provas/offline/save', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(offlineData)
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        console.log('✅ Prova sincronizada com sucesso:', result);
+                        
+                        // Remover do localStorage
+                        localStorage.removeItem(`prova_offline_${offlineData.provaId}`);
+                        
+                        return result;
+                    } else {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Falha ao sincronizar');
+                    }
+                } catch (error) {
+                    console.error('❌ Erro na sincronização:', error);
+                    throw error;
+                }
+            }
+            
+            async syncPendingData() {
+                try {
+                    console.log('🔄 Sincronizando dados pendentes...');
+                    
+                    // Buscar todas as provas offline pendentes
+                    const keys = Object.keys(localStorage);
+                    const offlineKeys = keys.filter(key => key.startsWith('prova_offline_'));
+                    
+                    for (const key of offlineKeys) {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        if (data && data.status === 'pending') {
+                            try {
+                                await this.syncProvaData(data);
+                                console.log(`✅ ${key} sincronizada`);
+                            } catch (error) {
+                                console.error(`❌ Falha ao sincronizar ${key}:`, error);
+                            }
+                        }
+                    }
+                    
+                    console.log('✅ Sincronização completa');
+                } catch (error) {
+                    console.error('❌ Erro na sincronização pendente:', error);
+                }
+            }
+            
+            checkPendingSync() {
+                const keys = Object.keys(localStorage);
+                const offlineKeys = keys.filter(key => key.startsWith('prova_offline_'));
+                
+                if (offlineKeys.length > 0) {
+                    console.log(`📋 ${offlineKeys.length} provas pendentes para sincronização`);
+                    
+                    // Se estiver online, tentar sincronizar
+                    if (this.isOnline) {
+                        this.syncPendingData();
+                    }
+                }
+            }
+            
+            getOfflineProvasCount() {
+                const keys = Object.keys(localStorage);
+                return keys.filter(key => key.startsWith('prova_offline_')).length;
+            }
+            
+            clearOfflineData(provaId) {
+                localStorage.removeItem(`prova_offline_${provaId}`);
+                console.log(`🗑️ Dados offline da prova ${provaId} removidos`);
+            }
+        }
+
+        // Inicializar gerenciador offline
+        let offlineManager;
+
+        // Modificar a função finalizarProva para suporte offline
+        async function finalizarProvaComOffline() {
+            try {
+                const totalQuestoes = prova.questoes.length;
+                const respondidas = Object.keys(respostas).length;
+                
+                if (respondidas < totalQuestoes) {
+                    if (!confirm(`Você respondeu ${respondidas} de ${totalQuestoes} questões.\nDeseja finalizar mesmo assim?`)) {
+                        return;
+                    }
+                }
+                
+                if (!confirm('Tem certeza que deseja finalizar a prova?\nEsta ação não pode ser desfeita.')) {
+                    return;
+                }
+                
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+                
+                document.getElementById('provaContent').style.display = 'none';
+                document.getElementById('loadingScreen').style.display = 'flex';
+                atualizarMensagemLoading('Salvando respostas...');
+                
+                const respostasArray = [];
+                for (let i = 0; i < totalQuestoes; i++) {
+                    respostasArray.push(respostas[i] || null);
+                }
+                
+                const tempoGasto = Math.ceil(tempoTotal / 60);
+                const authToken = localStorage.getItem('auth_token');
+                
+                // Se não tiver conexão ou token, salvar offline
+                if (!authToken || !offlineManager.isOnline) {
+                    console.log('⚠️ Salvando prova offline...');
+                    
+                    const offlineData = await offlineManager.saveProvaOffline(
+                        prova._id,
+                        respostasArray,
+                        tempoGasto
+                    );
+                    
+                    alert(
+                        `📱 Prova salva offline!\n\n` +
+                        `Suas respostas foram salvas localmente.\n` +
+                        `Elas serão enviadas automaticamente quando a conexão voltar.\n\n` +
+                        `📊 Prova: ${prova.titulo}\n` +
+                        `📝 Respostas: ${respondidas}/${totalQuestoes}\n` +
+                        `⏱️ Tempo: ${tempoGasto} minutos\n\n` +
+                        `⚠️ Não feche esta aba até a sincronização ser concluída.`
+                    );
+                    
+                    // Manter a tela aberta
+                    document.getElementById('loadingScreen').style.display = 'none';
+                    document.getElementById('provaContent').style.display = 'flex';
+                    
+                    // Atualizar botão para mostrar status offline
+                    const btnFinalizar = document.getElementById('btnFinalizarScroll');
+                    if (btnFinalizar) {
+                        btnFinalizar.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Aguardando conexão...';
+                        btnFinalizar.disabled = true;
+                        btnFinalizar.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                    }
+                    
+                    // Tentar reconectar a cada 30 segundos
+                    const checkInterval = setInterval(async () => {
+                        if (offlineManager.isOnline && authToken) {
+                            clearInterval(checkInterval);
+                            try {
+                                atualizarMensagemLoading('Enviando prova salva offline...');
+                                await offlineManager.syncPendingData();
+                                
+                                // Restaurar botão
+                                if (btnFinalizar) {
+                                    btnFinalizar.innerHTML = '<i class="fas fa-paper-plane"></i> Prova Enviada!';
+                                    btnFinalizar.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                                }
+                                
+                                alert('✅ Prova enviada com sucesso!');
+                                window.location.href = '/login.html?prova_finalizada=true';
+                            } catch (error) {
+                                alert('❌ Erro ao enviar prova. Tente novamente mais tarde.');
+                                if (btnFinalizar) {
+                                    btnFinalizar.innerHTML = '<i class="fas fa-paper-plane"></i> Tentar Enviar Novamente';
+                                    btnFinalizar.disabled = false;
+                                    btnFinalizar.onclick = () => finalizarProvaComOffline();
+                                }
+                            }
+                        }
+                    }, 30000);
+                    
+                    return;
+                }
+                
+                // Se tiver conexão, enviar normalmente
+                atualizarMensagemLoading('Enviando respostas...');
+                
+                const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/responder`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        respostas: respostasArray,
+                        tempoGasto: tempoGasto
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Erro ao enviar respostas');
+                }
+                
+                // Limpar dados locais
+                localStorage.removeItem(`prova_${prova._id}`);
+                localStorage.removeItem(`tempo_prova_${prova._id}`);
+                
+                // Limpar também dados offline se existirem
+                offlineManager.clearOfflineData(prova._id);
+                
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+                
+                alert(
+                    `✅ Prova finalizada com sucesso!\n\n` +
+                    `📊 Prova: ${prova.titulo}\n` +
+                    `📝 Respostas: ${respondidas}/${totalQuestoes}\n` +
+                    `⏱️ Tempo gasto: ${tempoGasto} minutos\n` +
+                    `📤 Aguarde a correção do professor.`
+                );
+                
+                window.location.href = '/login.html?prova_finalizada=true';
+                
+            } catch (error) {
+                console.error('❌ Erro ao finalizar prova:', error);
+                
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('provaContent').style.display = 'flex';
+                
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = setInterval(atualizarTimer, 1000);
+                }
+                
+                const userChoice = confirm(
+                    `Erro: ${error.message}\n\n` +
+                    `📱 Deseja salvar a prova offline?\n` +
+                    `• SIM: Salvar localmente e enviar depois\n` +
+                    `• NÃO: Tentar enviar novamente`
+                );
+                
+                if (userChoice) {
+                    // Tentar salvar offline como fallback
+                    try {
+                        const respostasArray = [];
+                        for (let i = 0; i < prova.questoes.length; i++) {
+                            respostasArray.push(respostas[i] || null);
+                        }
+                        
+                        const tempoGasto = Math.ceil(tempoTotal / 60);
+                        await offlineManager.saveProvaOffline(
+                            prova._id,
+                            respostasArray,
+                            tempoGasto
+                        );
+                        
+                        alert(
+                            '📱 Prova salva offline com sucesso!\n\n' +
+                            'Suas respostas estão seguras no seu dispositivo.\n' +
+                            'Elas serão enviadas automaticamente quando a conexão voltar.'
+                        );
+                    } catch (offlineError) {
+                        alert('❌ Falha crítica! Não foi possível salvar a prova offline.');
+                    }
+                } else {
+                    // Tentar novamente
+                    finalizarProvaComOffline();
+                }
+            }
+        }
+
+        // Substituir a função original de finalizar prova
+        document.getElementById('btnFinalizarScroll').onclick = finalizarProvaComOffline;
+
+        // Inicializar offline manager quando a prova carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                offlineManager = new OfflineManager();
+                
+                // Verificar se há provas offline pendentes e mostrar notificação
+                const offlineCount = offlineManager.getOfflineProvasCount();
+                if (offlineCount > 0) {
+                    console.log(`ℹ️ ${offlineCount} prova(s) offline pendente(s)`);
+                    
+                    // Adicionar notificação visual
+                    const notificacao = document.createElement('div');
+                    notificacao.id = 'offlineNotification';
+                    notificacao.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        z-index: 10000;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        animation: slideIn 0.5s ease;
+                    `;
+                    notificacao.innerHTML = `
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div>
+                            <strong>${offlineCount} prova(s) offline</strong>
+                            <div style="font-size: 0.8rem;">Serão enviadas automaticamente</div>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(notificacao);
+                    
+                    // Remover após 5 segundos
+                    setTimeout(() => {
+                        notificacao.style.opacity = '0';
+                        notificacao.style.transition = 'opacity 0.5s';
+                        setTimeout(() => notificacao.remove(), 500);
+                    }, 5000);
+                }
+            }, 1000);
+        });
+
+        // Adicionar indicador de conexão
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('statusFocus');
+            if (statusElement && offlineManager) {
+                if (offlineManager.isOnline) {
+                    statusElement.innerHTML = '<i class="fas fa-wifi"></i> Online';
+                    statusElement.style.background = '#d1fae5';
+                    statusElement.style.color = '#065f46';
+                } else {
+                    statusElement.innerHTML = '<i class="fas fa-wifi-slash"></i> Offline';
+                    statusElement.style.background = '#fef3c7';
+                    statusElement.style.color = '#92400e';
+                }
+            }
+        }
+
+        // Monitorar mudanças de conexão
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+    </script>
+</body>
+</html>

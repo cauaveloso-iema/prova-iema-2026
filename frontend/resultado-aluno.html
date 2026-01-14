@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minha Nota - Sistema de Provas</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .nota-container {
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .nota-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: 4px solid #e2e8f0;
+            transition: all 0.3s;
+        }
+        
+        .nota-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        
+        .nota-valor {
+            font-size: 4rem;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        
+        .nota-A { color: #10b981; }
+        .nota-B { color: #3b82f6; }
+        .nota-C { color: #f59e0b; }
+        .nota-D { color: #ef4444; }
+        
+        .nota-conceito {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            border-radius: 50px;
+            display: inline-block;
+        }
+        
+        .conceito-A { background: #d1fae5; color: #065f46; }
+        .conceito-B { background: #dbeafe; color: #1e40af; }
+        .conceito-C { background: #fef3c7; color: #92400e; }
+        .conceito-D { background: #fee2e2; color: #991b1b; }
+        
+        .prova-info {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 15px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .btn-voltar {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 30px;
+            background: #4f46e5;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+        
+        .btn-voltar:hover {
+            background: #4338ca;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px;
+        }
+        
+        .loading-spinner {
+            font-size: 3rem;
+            color: #4f46e5;
+            margin-bottom: 20px;
+        }
+        
+        .error-message {
+            text-align: center;
+            padding: 40px;
+            color: #7f1d1d;
+        }
+        
+        .sem-nota {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+        
+        .sem-nota i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #f59e0b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-chart-line"></i> Minha Nota</h1>
+            <p id="provaTitulo">Carregando informações da prova...</p>
+        </div>
+        
+        <!-- Conteúdo principal -->
+        <div id="conteudoPrincipal">
+            <!-- Loading -->
+            <div id="loading" class="loading">
+                <i class="fas fa-spinner fa-spin loading-spinner"></i>
+                <p>Carregando sua nota...</p>
+            </div>
+            
+            <!-- Nota -->
+            <div id="notaContainer" style="display: none;">
+                <!-- Aqui será mostrada a nota do aluno -->
+            </div>
+            
+            <!-- Sem nota -->
+            <div id="semNotaContainer" class="sem-nota" style="display: none;">
+                <i class="fas fa-hourglass-half"></i>
+                <h2>Aguardando Correção</h2>
+                <p>Sua prova ainda está sendo corrigida pelo professor.</p>
+                <p style="margin-top: 15px; font-size: 0.9rem; color: #9ca3af;">
+                    <i class="fas fa-info-circle"></i> Você será notificado quando sua nota for liberada.
+                </p>
+            </div>
+            
+            <!-- Erro -->
+            <div id="errorContainer" class="error-message" style="display: none;">
+                <!-- Mensagem de erro será exibida aqui -->
+            </div>
+        </div>
+        
+        <!-- Botão voltar -->
+        <div style="text-align: center; padding: 30px;">
+            <a href="aluno.html" class="btn-voltar">
+                <i class="fas fa-arrow-left"></i> Voltar ao Painel
+            </a>
+        </div>
+    </div>
+    
+    <script>
+        // Configuração da API
+        const API_BASE_URL = 'http://localhost:3000/api';
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('📊 Página de nota do aluno - Inicializando...');
+            
+            // Obter ID da prova da URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const provaId = urlParams.get('provaId');
+            
+            if (!provaId) {
+                mostrarErro('ID da prova não encontrado na URL');
+                return;
+            }
+            
+            // Verificar autenticação e carregar nota
+            await verificarAutenticacaoECarregarNota(provaId);
+        });
+        
+        // Verificar autenticação e carregar nota
+        async function verificarAutenticacaoECarregarNota(provaId) {
+            const token = localStorage.getItem('auth_token');
+            
+            if (!token) {
+                mostrarErro('Usuário não autenticado. Faça login novamente.');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 3000);
+                return;
+            }
+            
+            try {
+                // Verificar se o usuário é aluno
+                const response = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Erro na autenticação');
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.user.role === 'aluno') {
+                    // Carregar nota da prova
+                    await carregarNotaProva(provaId);
+                } else {
+                    mostrarErro('Acesso negado. Apenas alunos podem ver esta página.');
+                }
+                
+            } catch (error) {
+                console.error('Erro na autenticação:', error);
+                mostrarErro('Erro na autenticação. Faça login novamente.');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 3000);
+            }
+        }
+        
+        // Carregar nota da prova
+        async function carregarNotaProva(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log(`📊 Carregando nota da prova ${provaId}...`);
+                
+                const response = await fetch(`${API_BASE_URL}/aluno/provas/${provaId}/resultado`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Esconder loading
+                    document.getElementById('loading').style.display = 'none';
+                    
+                    if (data.status === 'corrigida' && data.nota !== null) {
+                        // Mostrar nota do aluno
+                        mostrarNotaAluno(data);
+                    } else if (data.status === 'pendente') {
+                        // Mostrar mensagem de aguardando correção
+                        document.getElementById('semNotaContainer').style.display = 'block';
+                        document.getElementById('provaTitulo').textContent = data.prova?.titulo || 'Prova';
+                    } else {
+                        mostrarErro('Nota não disponível para esta prova.');
+                    }
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar nota');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar nota:', error);
+                mostrarErro(`Erro ao carregar sua nota: ${error.message}`);
+            }
+        }
+        
+        // Mostrar nota do aluno
+        function mostrarNotaAluno(dados) {
+            const nota = dados.nota;
+            const acertos = dados.acertos;
+            const total = dados.total;
+            const porcentagem = dados.porcentagem;
+            const tempoGasto = dados.tempoGasto;
+            const dataEntrega = dados.dataEntrega;
+            
+            // Determinar conceito baseado na nota
+            let conceito, notaClass, conceitoClass;
+            
+            if (nota >= 9.0) {
+                conceito = "Excelente (A)";
+                notaClass = "nota-A";
+                conceitoClass = "conceito-A";
+            } else if (nota >= 7.0) {
+                conceito = "Bom (B)";
+                notaClass = "nota-B";
+                conceitoClass = "conceito-B";
+            } else if (nota >= 5.0) {
+                conceito = "Regular (C)";
+                notaClass = "nota-C";
+                conceitoClass = "conceito-C";
+            } else {
+                conceito = "Insuficiente (D)";
+                notaClass = "nota-D";
+                conceitoClass = "conceito-D";
+            }
+            
+            // Formatar data
+            const dataFormatada = dataEntrega ? 
+                new Date(dataEntrega).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : '--';
+            
+            // Formatar tempo gasto
+            const tempoFormatado = tempoGasto ? 
+                `${Math.floor(tempoGasto / 60)}:${(tempoGasto % 60).toString().padStart(2, '0')} min` : 
+                '--';
+            
+            // Atualizar título da prova
+            document.getElementById('provaTitulo').textContent = dados.prova?.titulo || 'Prova';
+            
+            // Criar HTML da nota
+            const notaHTML = `
+                <div class="nota-container">
+                    <div class="nota-card">
+                        <h2>Sua Nota</h2>
+                        <div class="nota-valor ${notaClass}">${nota.toFixed(1)}</div>
+                        <div class="nota-conceito ${conceitoClass}">${conceito}</div>
+                        
+                        <div class="prova-info">
+                            <h3><i class="fas fa-info-circle"></i> Detalhes da Prova</h3>
+                            
+                            ${acertos !== undefined && total !== undefined ? `
+                            <div class="info-item">
+                                <span>Acertos:</span>
+                                <span><strong>${acertos}/${total}</strong> (${porcentagem}%)</span>
+                            </div>
+                            ` : ''}
+                            
+                            <div class="info-item">
+                                <span>Tempo gasto:</span>
+                                <span>${tempoFormatado}</span>
+                            </div>
+                            
+                            <div class="info-item">
+                                <span>Data de realização:</span>
+                                <span>${dataFormatada}</span>
+                            </div>
+                            
+                            <div class="info-item">
+                                <span>Status:</span>
+                                <span style="color: #10b981; font-weight: 600;">
+                                    <i class="fas fa-check-circle"></i> Nota Liberada
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 30px; padding: 15px; background: #f0fdf4; border-radius: 10px; border-left: 4px solid #10b981;">
+                            <h4><i class="fas fa-lightbulb"></i> Observações:</h4>
+                            <p style="margin-top: 10px; color: #065f46;">
+                                Sua nota já foi liberada pelo professor e está disponível em seu histórico.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Inserir no container
+            document.getElementById('notaContainer').innerHTML = notaHTML;
+            document.getElementById('notaContainer').style.display = 'block';
+        }
+        
+        // Mostrar mensagem de erro
+        function mostrarErro(mensagem) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('errorContainer').innerHTML = `
+                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 20px;"></i>
+                <h2>Erro</h2>
+                <p>${mensagem}</p>
+                <button onclick="window.history.back()" style="margin-top: 20px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </button>
+            `;
+            document.getElementById('errorContainer').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

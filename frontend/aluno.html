@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Aluno - Sistema de Provas</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .aluno-header {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .aluno-info {
+            flex: 1;
+        }
+        
+        .aluno-info h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.8rem;
+        }
+        
+        .aluno-details {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .btn-entrar-turma {
+            background: white;
+            color: #10b981;
+            border: 2px solid #10b981;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        
+        .btn-entrar-turma:hover {
+            background: #10b981;
+            color: white;
+            transform: translateY(-2px);
+        }
+        
+        .prova-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+            border-left: 4px solid;
+            transition: transform 0.3s;
+        }
+        
+        .prova-card:hover {
+            transform: translateY(-3px);
+        }
+        
+        .prova-card.pendente {
+            border-left-color: #f59e0b;
+        }
+        
+        .prova-card.concluida {
+            border-left-color: #6b7280;
+        }
+        
+        .prova-card.ativa {
+            border-left-color: #10b981;
+        }
+        
+        .prova-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .prova-titulo {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin: 0;
+        }
+        
+        .prova-status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-pendente {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-concluida {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        .status-ativa {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .prova-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+        
+        .prova-info-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .prova-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn-iniciar-prova {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.3s;
+        }
+        
+        .btn-iniciar-prova:hover {
+            background: #059669;
+        }
+        
+        .btn-ver-resultado {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.3s;
+        }
+        
+        .btn-ver-resultado:hover {
+            background: #3730a3;
+        }
+        
+        .btn-sair-prova {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.3s;
+        }
+        
+        .btn-sair-prova:hover {
+            background: #dc2626;
+        }
+        
+        .turma-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 3px solid #4f46e5;
+        }
+        
+        .turma-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .turma-codigo {
+            background: #f3f4f6;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-weight: 600;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+        }
+        
+        .btn-logout {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 100;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 30px;
+        }
+        
+        .loading i {
+            font-size: 2rem;
+            color: #4f46e5;
+        }
+    </style>
+</head>
+<body>
+    <!-- Botão de Logout -->
+    <button class="btn-logout" id="btnLogout">
+        <i class="fas fa-sign-out-alt"></i> Sair
+    </button>
+    
+    <div class="container">
+        <!-- Header do Aluno -->
+        <div class="aluno-header">
+            <div class="aluno-info">
+                <h1><i class="fas fa-user-graduate"></i> Painel do Aluno</h1>
+                <div class="aluno-details" id="alunoDetails">
+                    <p>Carregando informações...</p>
+                </div>
+            </div>
+            <button class="btn-entrar-turma" id="btnEntrarTurma">
+                <i class="fas fa-plus-circle"></i> Entrar em Turma
+            </button>
+        </div>
+        
+        <!-- Provas Pendentes -->
+        <div class="card">
+            <div class="card-header">
+                <h2><i class="fas fa-clock"></i> Provas Pendentes</h2>
+            </div>
+            <div class="card-body">
+                <div id="provasPendentes">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando provas pendentes...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Provas Concluídas -->
+        <div class="card" style="margin-top: 30px;">
+            <div class="card-header">
+                <h2><i class="fas fa-check-circle"></i> Provas Concluídas</h2>
+            </div>
+            <div class="card-body">
+                <div id="provasConcluidas">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando provas concluídas...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Turmas -->
+        <div class="card" style="margin-top: 30px; margin-bottom: 50px;">
+            <div class="card-header">
+                <h2><i class="fas fa-school"></i> Minhas Turmas</h2>
+            </div>
+            <div class="card-body">
+                <div id="turmasAluno">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando suas turmas...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Entrar na Turma -->
+    <div class="modal" id="modalEntrarTurma">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-sign-in-alt"></i> Entrar em uma Turma</h3>
+                <button class="modal-close" onclick="fecharModal('modalEntrarTurma')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="codigoTurma">Código da Turma</label>
+                <input type="text" id="codigoTurma" class="form-control" placeholder="Ex: ABC123" style="text-transform: uppercase;">
+                <small style="color: #6b7280; display: block; margin-top: 5px;">Pergunte ao professor pelo código da turma</small>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-iniciar-prova" style="flex: 1;" onclick="entrarNaTurma()">
+                    <i class="fas fa-check"></i> Entrar
+                </button>
+                <button class="btn-sair-prova" style="flex: 1;" onclick="fecharModal('modalEntrarTurma')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Iniciar Prova -->
+    <div class="modal" id="modalIniciarProva">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-play-circle"></i> Iniciar Prova</h3>
+                <button class="modal-close" onclick="fecharModal('modalIniciarProva')">&times;</button>
+            </div>
+            <div id="modalProvaInfo">
+                <!-- Informações da prova serão inseridas aqui -->
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-iniciar-prova" style="flex: 1;" onclick="iniciarProvaSelecionada()">
+                    <i class="fas fa-play"></i> Iniciar Prova
+                </button>
+                <button class="btn-sair-prova" style="flex: 1;" onclick="fecharModal('modalIniciarProva')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Configuração da API
+        const API_BASE_URL = 'http://localhost:3000/api';
+        
+        // Variáveis globais
+        let usuario = null;
+        let provasPendentes = [];
+        let provasConcluidas = [];
+        let turmas = [];
+        let provaSelecionada = null;
+        
+        // Funções do modal
+        function mostrarModal(id) {
+            document.getElementById(id).style.display = 'flex';
+        }
+        
+        function fecharModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+        
+        // Carregar dados do aluno
+        async function carregarDadosAluno() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                
+                // Buscar dados atualizados do usuário
+                const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (userResponse.status === 401) {
+                    localStorage.clear();
+                    window.location.href = 'login.html';
+                    return;
+                }
+                
+                const userData = await userResponse.json();
+                
+                if (userData.success) {
+                    usuario = userData.user;
+                    localStorage.setItem('user_data', JSON.stringify(usuario));
+                    
+                    if (usuario.role !== 'aluno') {
+                        alert('Apenas alunos podem acessar esta página');
+                        window.location.href = usuario.role === 'professor' ? 'index.html' : 'login.html';
+                        return;
+                    }
+                    
+                    // Atualizar informações do aluno
+                    document.getElementById('alunoDetails').innerHTML = `
+                        <p><strong>${usuario.nome}</strong></p>
+                        <p>${usuario.curso ? usuario.curso + ' | ' : ''}${usuario.matricula || 'Sem matrícula'}</p>
+                        <p>${usuario.email}</p>
+                    `;
+                    
+                    // Carregar provas pendentes e turmas
+                    await carregarProvasPendentes();
+                    await carregarTurmasAluno();
+                    
+                } else {
+                    throw new Error(userData.error || 'Erro ao carregar dados do usuário');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar dados do aluno:', error);
+                mostrarErro('Erro ao carregar dados. Verifique sua conexão.');
+            }
+        }
+        
+        // Carregar provas pendentes do aluno - ROTA NOVA
+        async function carregarProvasPendentes() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_BASE_URL}/aluno/provas/pendentes`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    provasPendentes = data.provas || [];
+                    
+                    // Atualizar interface
+                    atualizarListaProvas('provasPendentes', provasPendentes, 'pendente');
+                    
+                    // Carregar provas concluídas também
+                    await carregarProvasConcluidas();
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar provas pendentes');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar provas pendentes:', error);
+                document.getElementById('provasPendentes').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Erro ao carregar provas</h3>
+                        <p>${error.message || 'Tente recarregar a página'}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Carregar provas concluídas
+        async function carregarProvasConcluidas() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_BASE_URL}/aluno/provas`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('📊 Dados recebidos da API:', data);
+                
+                if (data.success) {
+                    // Filtrar apenas as concluídas
+                    provasConcluidas = (data.provas || []).filter(p => {
+                        console.log(`Prova: ${p.titulo}, Status: ${p.status}, Nota: ${p.nota}, StatusCorrecao: ${p.statusCorrecao}`);
+                        return p.status === 'concluida';
+                    });
+                    
+                    console.log(`✅ ${provasConcluidas.length} provas concluídas encontradas`);
+                    
+                    // Atualizar interface
+                    atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar provas concluídas:', error);
+                document.getElementById('provasConcluidas').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Erro ao carregar provas concluídas</h3>
+                        <p>Tente recarregar a página</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Nova função para carregar provas aguardando correção
+        async function carregarProvasAguardandoCorrecao() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_BASE_URL}/aluno/provas`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Filtrar provas concluídas mas sem nota liberada
+                    const provasAguardando = (data.provas || []).filter(prova => {
+                        return prova.status === 'concluida' && 
+                            (prova.nota === null || prova.nota === undefined) &&
+                            prova.statusCorrecao !== 'corrigida';
+                    });
+                    
+                    if (provasAguardando.length > 0) {
+                        const container = document.getElementById('provasConcluidas');
+                        if (container) {
+                            // Adicionar seção de provas aguardando correção
+                            container.insertAdjacentHTML('beforeend', `
+                                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                                    <h3 style="color: #6b7280; margin-bottom: 15px;">
+                                        <i class="fas fa-clock"></i> Aguardando Correção
+                                    </h3>
+                                    ${provasAguardando.map(prova => `
+                                        <div class="prova-card concluida" style="opacity: 0.7;">
+                                            <div class="prova-header">
+                                                <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'}</h4>
+                                                <span class="prova-status status-pendente">
+                                                    AGUARDANDO
+                                                </span>
+                                            </div>
+                                            <div class="prova-info">
+                                                <div class="prova-info-item">
+                                                    <i class="fas fa-book"></i>
+                                                    <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                                                </div>
+                                                <div class="prova-info-item">
+                                                    <i class="fas fa-graduation-cap"></i>
+                                                    <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                                                </div>
+                                                <div class="prova-info-item">
+                                                    <i class="fas fa-question-circle"></i>
+                                                    <span>${prova.quantidadeQuestoes || '?'} questões</span>
+                                                </div>
+                                            </div>
+                                            <div class="prova-actions">
+                                                <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
+                                                    <i class="fas fa-hourglass-half"></i> Aguardando Correção
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao carregar provas aguardando correção:', error);
+            }
+        }
+        
+        // Atualizar lista de provas na interface
+        function atualizarListaProvas(elementId, provas, tipo) {
+            const container = document.getElementById(elementId);
+            
+            if (!provas || provas.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-${tipo === 'pendente' ? 'check-circle' : 'file'}"></i>
+                        <h3>${tipo === 'pendente' ? 'Nenhuma prova pendente' : 'Nenhuma prova concluída'}</h3>
+                        <p>${tipo === 'pendente' ? 'Todas as provas foram concluídas' : 'Realize suas primeiras provas'}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = provas.map(prova => {
+                const dataLimite = prova.dataLimite ? 
+                    new Date(prova.dataLimite).toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                    }) : 'Sem data limite';
+                
+                const tempoRestante = prova.dataLimite ? 
+                    Math.floor((new Date(prova.dataLimite) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                
+                const tempoAlerta = tempoRestante !== null && tempoRestante <= 3 ? 
+                    `⏰ <span style="color: #dc2626;">(Faltam ${tempoRestante} dias)</span>` : '';
+                
+                return `
+                <div class="prova-card ${tipo}">
+                    <div class="prova-header">
+                        <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'} ${tempoAlerta}</h4>
+                        <span class="prova-status status-${tipo}">
+                            ${tipo === 'pendente' ? 'PENDENTE' : 'CONCLUÍDA'}
+                        </span>
+                    </div>
+                    <div class="prova-info">
+                        <div class="prova-info-item">
+                            <i class="fas fa-book"></i>
+                            <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                        </div>
+                        <div class="prova-info-item">
+                            <i class="fas fa-graduation-cap"></i>
+                            <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                        </div>
+                        <div class="prova-info-item">
+                            <i class="fas fa-question-circle"></i>
+                            <span>${prova.quantidadeQuestoes || '?'} questões</span>
+                        </div>
+                        ${prova.duracao ? `
+                        <div class="prova-info-item">
+                            <i class="fas fa-clock"></i>
+                            <span>${prova.duracao} min</span>
+                        </div>
+                        ` : ''}
+                        ${prova.dataLimite ? `
+                        <div class="prova-info-item">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Até ${dataLimite}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="prova-actions">
+                        ${tipo === 'pendente' ? `
+                        <button class="btn-iniciar-prova" onclick="selecionarProva('${prova._id}')">
+                            <i class="fas fa-play"></i> Iniciar Prova
+                        </button>
+                        ` : `
+                        <button class="btn-ver-resultado" onclick="verResultado('${prova._id || prova.id}')">
+                            <i class="fas fa-star"></i> Ver Nota
+                        </button>
+                        `}
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+        
+        // Carregar turmas do aluno
+        async function carregarTurmasAluno() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_BASE_URL}/turmas`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    turmas = data.turmas || [];
+                    atualizarListaTurmas();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar turmas:', error);
+                document.getElementById('turmasAluno').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Erro ao carregar turmas</h3>
+                        <p>Tente recarregar a página</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Atualizar lista de turmas
+        function atualizarListaTurmas() {
+            const container = document.getElementById('turmasAluno');
+            
+            if (!turmas || turmas.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-users-slash"></i>
+                        <h3>Nenhuma turma</h3>
+                        <p>Entre em uma turma usando o código</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = turmas.map(turma => `
+                <div class="turma-card">
+                    <div class="turma-info">
+                        <div>
+                            <h4 style="margin: 0 0 5px 0;">${turma.nome}</h4>
+                            <p style="margin: 0; color: #6b7280; font-size: 0.9rem;">
+                                ${turma.disciplina} • ${turma.totalProvas || 0} provas • ${turma.totalAlunos || 0} alunos
+                            </p>
+                        </div>
+                        <div class="turma-codigo">${turma.codigo}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Entrar em uma turma
+        async function entrarNaTurma() {
+            const codigo = document.getElementById('codigoTurma').value.trim().toUpperCase();
+            
+            if (!codigo) {
+                alert('Digite o código da turma');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_BASE_URL}/turmas/entrar`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ codigo })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Entrou na turma com sucesso!');
+                    fecharModal('modalEntrarTurma');
+                    document.getElementById('codigoTurma').value = '';
+                    // Recarregar turmas e provas
+                    await carregarTurmasAluno();
+                    await carregarProvasPendentes();
+                } else {
+                    alert('❌ Erro: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Erro ao entrar na turma:', error);
+                alert('❌ Erro de conexão');
+            }
+        }
+        
+        // Selecionar prova para iniciar
+        function selecionarProva(provaId) {
+            provaSelecionada = provasPendentes.find(p => p._id === provaId);
+            
+            if (!provaSelecionada) {
+                alert('Prova não encontrada');
+                return;
+            }
+            
+            const dataLimite = provaSelecionada.dataLimite ? 
+                new Date(provaSelecionada.dataLimite).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : 'Sem data limite';
+            
+            document.getElementById('modalProvaInfo').innerHTML = `
+                <h4>${provaSelecionada.titulo || 'Prova sem título'}</h4>
+                <p><strong>Conteúdo:</strong> ${provaSelecionada.conteudo || 'Não especificado'}</p>
+                
+                <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <p><i class="fas fa-info-circle"></i> <strong>Informações da Prova:</strong></p>
+                    <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                        <li><strong>Quantidade de questões:</strong> ${provaSelecionada.quantidadeQuestoes || '?'}</li>
+                        <li><strong>Duração:</strong> ${provaSelecionada.duracao || 'Não especificada'}</li>
+                        <li><strong>Data limite:</strong> ${dataLimite}</li>
+                        <li><strong>Turma:</strong> ${provaSelecionada.turma?.nome || provaSelecionada.turma?.disciplina || 'Não especificada'}</li>
+                        <li><strong>Professor:</strong> ${provaSelecionada.professor || 'Não especificado'}</li>
+                    </ul>
+                </div>
+                
+                <p><i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong></p>
+                <ul style="margin: 10px 0 0 0; padding-left: 20px; color: #6b7280;">
+                    <li>A prova começará assim que você clicar em "Iniciar Prova"</li>
+                    <li>O tempo será contado a partir do início da prova</li>
+                    <li>Não recarregue a página durante a prova</li>
+                    <li>Após finalizar, não será possível retornar</li>
+                </ul>
+            `;
+            
+            mostrarModal('modalIniciarProva');
+        }
+        
+        // Função para iniciar prova selecionada (chamada pelo modal)
+        function iniciarProvaSelecionada() {
+            if (!provaSelecionada) {
+                alert('Nenhuma prova selecionada');
+                return;
+            }
+            
+            console.log('🔄 Iniciando prova selecionada:', provaSelecionada._id);
+            
+            // Fechar modal
+            fecharModal('modalIniciarProva');
+            
+            // Chamar função principal para iniciar prova
+            iniciarProva(provaSelecionada._id);
+        }
+    
+        // Função principal para iniciar prova - VERSÃO CORRIGIDA
+        async function iniciarProva(provaId) {
+        console.log('🚀 Iniciando prova com ID:', provaId);
+        
+        try {
+            // 1. Verificar se está autenticado
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+            alert('Você precisa estar logado para acessar a prova');
+            window.location.href = '/login.html';
+            return;
+            }
+            
+            // 2. Verificar dados do usuário
+            const userData = localStorage.getItem('user_data');
+            if (!userData) {
+            alert('Dados do usuário não encontrados');
+            window.location.href = '/login.html';
+            return;
+            }
+            
+            const usuario = JSON.parse(userData);
+            if (usuario.role !== 'aluno') {
+            alert('Apenas alunos podem acessar provas');
+            window.location.href = usuario.role === 'professor' ? '/index.html' : '/login.html';
+            return;
+            }
+            
+            // 3. Limpar tokens antigos de prova
+            localStorage.removeItem('provaToken');
+            localStorage.removeItem('provaAtual');
+            localStorage.removeItem('provaData');
+            
+            console.log('🔄 Solicitando acesso à prova...');
+            
+            // 4. Mostrar loading
+            mostrarLoading('Validando acesso à prova...');
+            
+            // 5. Chamar endpoint de acesso
+            const response = await fetch(`${API_BASE_URL}/provas/${provaId}/acesso`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+            });
+            
+            const data = await response.json();
+            
+            // 6. Verificar resposta
+            if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao acessar a prova');
+            }
+            
+            console.log('✅ Acesso autorizado:', data);
+            
+            // 7. Armazenar tokens corretamente
+            if (data.provaToken) {
+            localStorage.setItem('provaToken', data.provaToken);
+            localStorage.setItem('provaAtual', provaId);
+            
+            // Armazenar dados da prova para usar na página de realização
+            if (data.prova) {
+                localStorage.setItem('provaData', JSON.stringify(data.prova));
+            }
+            }
+            
+            // 8. Redirecionar
+            if (data.redirectTo) {
+            console.log('🔄 Redirecionando para:', data.redirectTo);
+            window.location.href = data.redirectTo;
+            } else if (data.provaToken) {
+            window.location.href = `/realizar-prova.html?token=${data.provaToken}`;
+            } else {
+            throw new Error('Não foi possível redirecionar para a prova');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao iniciar prova:', error);
+            esconderLoading();
+            
+            // Mensagens de erro amigáveis
+            let mensagem = 'Erro ao acessar a prova. ';
+            
+            if (error.message.includes('401') || error.message.includes('token')) {
+            mensagem += 'Sua sessão expirou. Faça login novamente.';
+            localStorage.clear();
+            setTimeout(() => {
+                window.location.href = '/login.html';
+            }, 2000);
+            } else if (error.message.includes('403')) {
+            mensagem += 'Você não tem permissão para acessar esta prova.';
+            } else if (error.message.includes('404')) {
+            mensagem += 'Prova não encontrada.';
+            } else if (error.message.includes('já realizou')) {
+            mensagem += 'Você já completou esta prova.';
+            } else if (error.message.includes('data limite')) {
+            mensagem += 'O prazo para esta prova já expirou.';
+            } else {
+            mensagem += error.message || 'Tente novamente.';
+            }
+            
+            alert(mensagem);
+        }
+        }
+
+        // Adicionar esta função no início do código
+        function verificarAutenticacao() {
+        const token = localStorage.getItem('auth_token');
+        const userData = localStorage.getItem('user_data');
+        
+        if (!token || !userData) {
+            window.location.href = '/login.html';
+            return false;
+        }
+        
+        try {
+            const user = JSON.parse(userData);
+            if (user.role !== 'aluno') {
+            window.location.href = user.role === 'professor' ? '/index.html' : '/login.html';
+            return false;
+            }
+            return true;
+        } catch (e) {
+            window.location.href = '/login.html';
+            return false;
+        }
+        }
+
+        // Modificar o carregarDadosAluno para usar verificação
+        async function carregarDadosAluno() {
+        // Verificar autenticação primeiro
+        if (!verificarAutenticacao()) {
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            const userData = localStorage.getItem('user_data');
+            
+            // Usar dados do localStorage primeiro (mais rápido)
+            if (userData) {
+            usuario = JSON.parse(userData);
+            atualizarInfoAluno(usuario);
+            }
+            
+            // Buscar dados atualizados da API
+            const response = await fetch(`${API_BASE_URL}/auth/me`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+            });
+            
+            if (response.status === 401) {
+            localStorage.clear();
+            window.location.href = '/login.html';
+            return;
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+            usuario = data.user;
+            localStorage.setItem('user_data', JSON.stringify(usuario));
+            atualizarInfoAluno(usuario);
+            
+            // Carregar dados das provas e turmas
+            await carregarProvasPendentes();
+            await carregarTurmasAluno();
+            } else {
+            throw new Error(data.error || 'Erro ao carregar dados');
+            }
+            
+        } catch (error) {
+            console.error('Erro ao carregar dados:', error);
+            mostrarErro('Erro ao carregar dados. Tente recarregar a página.');
+        }
+        }
+
+        function atualizarInfoAluno(user) {
+        document.getElementById('alunoDetails').innerHTML = `
+            <p><strong>${user.nome}</strong></p>
+            <p>${user.curso ? user.curso + ' | ' : ''}${user.matricula || 'Sem matrícula'}</p>
+            <p>${user.email}</p>
+        `;
+        }
+        
+        // Ver resultado da prova
+        function verResultado(provaId) {
+            console.log('🔍 Prova ID recebido:', provaId);
+            
+            if (!provaId || provaId === 'undefined' || provaId === 'null') {
+                alert('Erro: ID da prova não encontrado. Tente recarregar a página.');
+                return;
+            }
+            
+            // Verificar se é um ObjectId válido (24 caracteres hex)
+            if (provaId.length !== 24 || !/^[0-9a-fA-F]{24}$/.test(provaId)) {
+                console.error('❌ ID da prova inválido:', provaId);
+                alert('ID da prova inválido. Contate o administrador.');
+                return;
+            }
+            
+            // Redirecionar para página de resultados do ALUNO
+            window.location.href = `resultado-aluno.html?provaId=${provaId}`;
+        }
+                        
+        // Logout
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+        
+        // Mostrar erro
+        function mostrarErro(mensagem) {
+            const alerta = document.createElement('div');
+            alerta.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #ef4444;
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                z-index: 1000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            `;
+            alerta.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${mensagem}`;
+            document.body.appendChild(alerta);
+            
+            setTimeout(() => {
+                alerta.remove();
+            }, 5000);
+        }
+        
+        // Funções de loading
+        function mostrarLoading(mensagem) {
+            // Criar ou mostrar div de loading
+            let loadingDiv = document.getElementById('loading-overlay');
+            
+            if (!loadingDiv) {
+                loadingDiv = document.createElement('div');
+                loadingDiv.id = 'loading-overlay';
+                loadingDiv.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 9999;
+                    color: white;
+                    font-size: 18px;
+                `;
+                document.body.appendChild(loadingDiv);
+            }
+            
+            loadingDiv.innerHTML = `
+                <div style="text-align: center; background: white; padding: 30px; border-radius: 10px; color: #333;">
+                    <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
+                    <h3 style="margin: 10px 0;">${mensagem}</h3>
+                </div>
+            `;
+            
+            // Adicionar animação
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            loadingDiv.style.display = 'flex';
+        }
+        
+        function esconderLoading() {
+            const loadingDiv = document.getElementById('loading-overlay');
+            if (loadingDiv) {
+                loadingDiv.style.display = 'none';
+            }
+        }
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configurar botões
+            document.getElementById('btnEntrarTurma').addEventListener('click', () => {
+                mostrarModal('modalEntrarTurma');
+            });
+            
+            document.getElementById('btnLogout').addEventListener('click', logout);
+            
+            // Fechar modal ao clicar fora
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            });
+            
+            // Carregar dados do aluno
+            carregarDadosAluno();
+        });
+    </script>
+</body>
+</html>
