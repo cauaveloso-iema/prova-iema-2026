@@ -8,6 +8,3 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # REMOVA esta linha ↓
-      # - key: PORT
-      #   value: 10000
