@@ -1,17 +1,31 @@
-# Configurações sensíveis
+# Crie/Atualize o .gitignore
+cat > .gitignore << 'EOF'
+# Environment
 .env
 .env.local
-.env.development
-.env.production
-.env.test
+.env.*.local
 
-# Backup e logs
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
 backups/
 *.log
 logs/
 
-# Outros
-node_modules/
-.DS_Store
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# System
+.DS_Store
+Thumbs.db
+
+# Optional
+*.env.backup
+EOF
