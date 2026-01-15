@@ -186,25 +186,104 @@ app.use(session({
 }));
 
 // ============ CONEXÃO COM MONGODB ============
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000, // Timeout após 5 segundos
-  socketTimeoutMS: 45000, // Fecha sockets após 45s de inatividade
-})
-.then(() => console.log('✅ MongoDB Atlas conectado com sucesso'))
-.catch(err => {
-  console.error('❌ Erro ao conectar com MongoDB Atlas:', err);
-  console.log('⚠️  Tentando conexão local como fallback...');
+// ============ CONEXÃO COM MONGODB (ATUALIZADA - SOLUÇÃO DEFINITIVA) ============
+
+const connectToDatabase = async () => {
+  // Verificar ambiente
+  const ENV = process.env.NODE_ENV || 'development';
+  const IS_PRODUCTION = ENV === 'production';
+  const IS_DEVELOPMENT = ENV === 'development';
   
-  // Fallback para MongoDB local (se necessário)
-  mongoose.connect('mongodb://localhost:27017/provas_online', {
+  console.log('='.repeat(60));
+  console.log(`🚀 AMBIENTE DETECTADO: ${ENV.toUpperCase()}`);
+  
+  let connectionUri;
+  let databaseType = 'Desconhecido';
+  
+  // DECISÃO: Qual banco usar?
+  if (IS_PRODUCTION) {
+    // 1. PRODUÇÃO NO RENDER: Usa MongoDB Atlas
+    connectionUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
+    databaseType = 'MongoDB Atlas (NUVEM)';
+    console.log('🌐 PRODUÇÃO: Conectando ao MongoDB Atlas');
+  } else if (IS_DEVELOPMENT) {
+    // 2. DESENVOLVIMENTO LOCAL: Tenta MongoDB Local primeiro
+    connectionUri = process.env.MONGODB_LOCAL_URI || 'mongodb://localhost:27017/provas_online_local';
+    databaseType = 'MongoDB Local';
+    console.log('💻 DESENVOLVIMENTO: Conectando ao MongoDB Local');
+  } else {
+    // 3. FALLBACK: Usa o padrão do .env
+    connectionUri = process.env.MONGODB_URI;
+    databaseType = 'Configuração padrão';
+    console.log('⚙️  Usando configuração padrão do .env');
+  }
+  
+  // Mostrar URI de forma segura (esconde senha)
+  const safeUri = connectionUri ? connectionUri.replace(/\/\/[^@]+@/, '//***@') : 'Não configurada';
+  console.log(`🗄️  URI: ${safeUri}`);
+  console.log(`📊 Tipo: ${databaseType}`);
+  console.log('='.repeat(60));
+  
+  // Configurações de conexão
+  const options = {
     useNewUrlParser: true,
-    useUnifiedTopology: true
-  })
-  .then(() => console.log('✅ MongoDB local conectado (fallback)'))
-  .catch(fallbackErr => console.error('❌ Erro no fallback:', fallbackErr));
-});
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 10000,
+    maxPoolSize: 10,
+    retryWrites: true,
+    w: 'majority'
+  };
+  
+  // Tentar conexão principal
+  try {
+    console.log('🔄 Tentando conexão...');
+    await mongoose.connect(connectionUri, options);
+    
+    // Verificar conexão bem-sucedida
+    const db = mongoose.connection.db;
+    const host = mongoose.connection.host;
+    const isAtlas = host.includes('mongodb.net');
+    
+    console.log('='.repeat(60));
+    console.log('✅ CONEXÃO ESTABELECIDA COM SUCESSO!');
+    console.log(`📁 Banco: ${db.databaseName}`);
+    console.log(`📍 Host: ${host}`);
+    console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
+    console.log('='.repeat(60));
+    
+  } catch (error) {
+    console.error('❌ ERRO na conexão principal:', error.message);
+    
+    // ESTRATÉGIA DE FALLBACK INTELIGENTE
+    if (IS_DEVELOPMENT) {
+      console.log('🔄 DESENVOLVIMENTO: Tentando fallback para Atlas...');
+      try {
+        // Se local falhou, tenta Atlas como fallback
+        const fallbackUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
+        await mongoose.connect(fallbackUri, options);
+        console.log('✅ Fallback para Atlas bem-sucedido');
+      } catch (fallbackError) {
+        console.error('❌ Todos os fallbacks falharam:', fallbackError.message);
+        console.log('💡 SOLUÇÃO:');
+        console.log('   1. Inicie o MongoDB local: mongod');
+        console.log('   2. Ou verifique sua conexão com a internet');
+        throw fallbackError;
+      }
+    } else if (IS_PRODUCTION) {
+      console.error('❌ PRODUÇÃO: Conexão com Atlas falhou!');
+      console.log('💡 Verifique:');
+      console.log('   1. A URI do Atlas no .env');
+      console.log('   2. A conexão com a internet');
+      console.log('   3. O IP no MongoDB Atlas (adicione 0.0.0.0/0 temporariamente)');
+      throw error;
+    }
+  }
+};
+
+// Conectar ao banco de dados
+connectToDatabase();
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO ============
 const authenticateToken = (req, res, next) => {
