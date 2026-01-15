@@ -3529,11 +3529,12 @@ app.get('*', (req, res) => {
 });
 
 // ============ INICIAR SERVIDOR ============
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '200.137.137.70/32', () => {
   console.log('='.repeat(50));
   console.log(`🚀 SISTEMA DE PROVAS ONLINE - PRODUÇÃO`);
   console.log(`📡 Servidor rodando na porta: ${PORT}`);
   console.log(`🌐 URL: https://prova-iema-2026.onrender.com`);
+  console.log('Servidor Local:http://localhost:3000/login.html');
   console.log(`🗄️  Banco de Dados: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
   console.log(`🔐 Autenticação: ${process.env.JWT_SECRET ? '✅ Configurada' : '⚠️  Configurar JWT_SECRET'}`);
   console.log(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
