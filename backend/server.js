@@ -3529,7 +3529,7 @@ app.get('*', (req, res) => {
 });
 
 // ============ INICIAR SERVIDOR ============
-app.listen(PORT, '200.137.137.70', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(50));
   console.log(`🚀 SISTEMA DE PROVAS ONLINE - PRODUÇÃO`);
   console.log(`📡 Servidor rodando na porta: ${PORT}`);
