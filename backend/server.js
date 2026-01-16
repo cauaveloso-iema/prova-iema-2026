@@ -775,7 +775,7 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ CRIAR PROVA PARA TURMA ============
+// ============ CRIAR PROVA PARA TURMA (VERSÃO MELHORADA) ============
 app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
   try {
     const turma = await Turma.findById(req.params.id);
@@ -796,28 +796,7 @@ app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
 
     const { titulo, conteudo, quantidadeQuestoes = 10, dificuldade = 'media', dataLimite, duracao } = req.body;
 
-    console.log('🤖 Solicitando IA (Groq) para gerar questões...');
-
-    const prompt = `Você é um professor especialista. Crie EXATAMENTE ${quantidadeQuestoes} questões de múltipla escolha sobre: "${conteudo}"
-
-CRITÉRIOS OBRIGATÓRIOS:
-1. Cada questão deve ter EXATAMENTE 4 opções (A, B, C, D)
-2. A resposta correta deve ser um número: 0 para A, 1 para B, 2 para C, 3 para D
-3. Inclua uma explicação clara para cada resposta
-4. As opções devem ser claras e distintas entre si
-5. Use temas variados dentro do assunto
-
-RETORNE APENAS JSON NO SEGUINTE FORMATO:
-{
-  "questoes": [
-    {
-      "pergunta": "Texto da pergunta?",
-      "opcoes": ["A) Texto opção A", "B) Texto opção B", "C) Texto opção C", "D) Texto opção D"],
-      "respostaCorreta": 0,
-      "explicacao": "Explicação detalhada"
-    }
-  ]
-}`;
+    console.log(`🤖 Professor ${req.userId} solicitando prova sobre: "${conteudo}"`);
 
     let questoesValidadas = [];
     
@@ -826,13 +805,14 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
         throw new Error('Groq não configurado');
       }
 
-      // MODELOS ATUAIS DA GROQ (2024)
+      // MODELOS ATUAIS E FUNCIONAIS DA GROQ
       const modelosAtuais = [
-        "llama-3.2-90b-vision-preview",    // Modelo mais recente e poderoso
-        "llama-3.2-11b-vision-preview",    // Alternativa
-        "llama-3.1-8b-instant",           // Modelo rápido
-        "gemma2-9b-it",                   // Google Gemma 2
-        "llama-3-70b-8192"                // Modelo estável
+        "llama-3.3-70b-versatile",       // Modelo mais recente e poderoso
+        "llama-3.1-70b-versatile",       // Alternativa estável
+        "llama-3.1-8b-instant",          // Modelo rápido
+        "mixtral-8x7b-32768",            // Modelo misto de especialistas
+        "gemma2-9b-it",                  // Google Gemma 2
+        "gemma-7b-it"                    // Google Gemma
       ];
 
       let completion;
@@ -843,42 +823,59 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
         try {
           console.log(`🔄 Tentando modelo: ${modelo}`);
           
+          // PROMPT MUITO MELHORADO E ESPECÍFICO
+          const systemPrompt = `Você é um professor especialista que cria questões de múltipla escolha relevantes e específicas.
+
+CRITÉRIOS ESSENCIAIS:
+1. Crie questões APENAS sobre o conteúdo especificado
+2. Não crie questões genéricas ou sobre outros assuntos
+3. Cada questão deve ser específica e relevante para o tópico
+4. Use linguagem clara e acessível para estudantes`;
+
+          const userPrompt = `CONTEÚDO ESPECÍFICO: "${conteudo}"
+
+CRIE EXATAMENTE ${quantidadeQuestoes} QUESTÕES DE MÚLTIPLA ESCOLHA SOBRE E SOMENTE SOBRE: "${conteudo}"
+
+NÍVEL DE DIFICULDADE: ${dificuldade}
+
+EXEMPLOS DO QUE É ESPERADO (para diferentes conteúdos):
+- Se o conteúdo for "Sistema Solar": Pergunte sobre planetas, órbitas, características dos planetas
+- Se o conteúdo for "Segunda Guerra Mundial": Pergunte sobre causas, eventos importantes, consequências
+- Se o conteúdo for "Equações do 2º Grau": Pergunte sobre fórmula de Bhaskara, discriminante, raízes
+
+NÃO CRIE:
+- Questões matemáticas básicas (ex: 2+2, fórmula geral)
+- Questões sobre outros assuntos não relacionados
+- Questões genéricas ou óbvias
+- Questões com respostas óbvias ou triviais
+
+CRITÉRIOS PARA CADA QUESTÃO:
+1. Pergunta: Deve ser clara, específica e diretamente relacionada a "${conteudo}"
+2. Opções: 4 opções (A, B, C, D) - todas plausíveis, mas apenas uma correta
+3. Resposta Correta: 0=A, 1=B, 2=C, 3=D
+4. Explicação: Detalhada, educativa e relacionada ao conteúdo
+
+FORMATO EXATO REQUERIDO (APENAS JSON):
+{
+  "questoes": [
+    {
+      "pergunta": "Pergunta específica sobre ${conteudo}?",
+      "opcoes": ["A) Opção específica sobre ${conteudo}", "B) Opção relacionada", "C) Opção plausível", "D) Opção incorreta mas relacionada"],
+      "respostaCorreta": 0,
+      "explicacao": "Explicação detalhada sobre por que esta resposta está correta, relacionando-a ao conteúdo '${conteudo}'"
+    }
+  ]
+}`;
+
           completion = await groq.chat.completions.create({
             model: modelo,
             messages: [
-              { 
-                role: "system", 
-                content: `Você é um professor especialista. Crie questões de múltipla escolha.
-                IMPORTANTE: Retorne APENAS JSON válido no formato exato especificado.` 
-              },
-              { 
-                role: "user", 
-                content: `Crie ${quantidadeQuestoes} questões sobre: "${conteudo}"
-                
-    FORMATO EXATO REQUERIDO (JSON):
-    {
-      "questoes": [
-        {
-          "pergunta": "Texto da pergunta?",
-          "opcoes": ["A) Opção A", "B) Opção B", "C) Opção C", "D) Opção D"],
-          "respostaCorreta": 0,
-          "explicacao": "Explicação detalhada"
-        }
-      ]
-    }
-
-    REGRAS:
-    1. EXATAMENTE ${quantidadeQuestoes} questões
-    2. EXATAMENTE 4 opções por questão (A, B, C, D)
-    3. respostaCorreta: 0=A, 1=B, 2=C, 3=D
-    4. Cada opção deve começar com "A) ", "B) ", etc.
-    5. As questões devem ser variadas
-    6. Inclua explicação para cada resposta
-    7. Retorne APENAS JSON, sem texto adicional.` 
-              }
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
             ],
-            temperature: 0.7,
+            temperature: 0.5, // Temperatura mais baixa = menos criativo, mais focado
             max_tokens: 4000,
+            top_p: 0.9,
             response_format: { type: "json_object" }
           });
           
@@ -897,7 +894,7 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
       }
 
       const resposta = completion.choices[0].message.content;
-      console.log(`📄 Resposta da IA (Groq - ${modeloUsado}):`, resposta.substring(0, 200));
+      console.log(`📄 Resposta da IA (Groq - ${modeloUsado}):`, resposta.substring(0, 300));
       
 
       let jsonString = resposta;
@@ -915,7 +912,7 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
         }
       }
 
-      console.log('📊 JSON extraído:', jsonString.substring(0, 200));
+      console.log('📊 JSON extraído (primeiros 300 chars):', jsonString.substring(0, 300));
 
       let dados;
       try {
@@ -926,22 +923,26 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
         console.error('❌ Erro no parse, tentando corrigir...');
         
         try {
+          // Tentar extrair apenas o JSON
           const cleanedJson = jsonString
-            .replace(/[^\x20-\x7E\r\n]/g, '')
+            .replace(/[^\x20-\x7E\r\n]/g, '') // Remove caracteres não ASCII
             .replace(/\s+/g, ' ')
             .trim();
           
-          if (cleanedJson.includes('{') && cleanedJson.includes('}')) {
-            const start = cleanedJson.indexOf('{');
-            const end = cleanedJson.lastIndexOf('}') + 1;
-            const finalJson = cleanedJson.substring(start, end);
+          // Encontrar o primeiro { e o último }
+          const startIndex = cleanedJson.indexOf('{');
+          const endIndex = cleanedJson.lastIndexOf('}');
+          
+          if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+            const finalJson = cleanedJson.substring(startIndex, endIndex + 1);
+            console.log('📝 JSON corrigido:', finalJson.substring(0, 200));
             dados = JSON.parse(finalJson);
             console.log('✅ JSON corrigido com sucesso');
           } else {
-            throw new Error('JSON incompleto');
+            throw new Error('JSON incompleto ou mal formado');
           }
         } catch (secondError) {
-          console.error('❌ Falha na correção do JSON');
+          console.error('❌ Falha na correção do JSON:', secondError.message);
           throw new Error('IA não retornou JSON válido após tentativas de correção');
         }
       }
@@ -950,27 +951,59 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
         throw new Error('Dados inválidos da IA');
       }
 
-      if (Array.isArray(dados)) {
-        dados = { questoes: dados };
+      // Normalizar estrutura: pode ser {questoes: []} ou diretamente array
+      let questoesArray = dados.questoes || dados.questions || dados;
+      if (!Array.isArray(questoesArray)) {
+        questoesArray = [questoesArray];
       }
 
-      if (!dados.questoes || !Array.isArray(dados.questoes) || dados.questoes.length === 0) {
+      if (questoesArray.length === 0) {
         throw new Error('Nenhuma questão encontrada na resposta da IA');
       }
 
-      // Processar questões
+      console.log(`📊 ${questoesArray.length} questões recebidas da IA`);
+
+      // Função para verificar relevância da questão
+      function questaoEhRelevante(pergunta, conteudo) {
+        const perguntaLower = pergunta.toLowerCase();
+        const conteudoLower = conteudo.toLowerCase();
+        
+        // Dividir conteúdo em palavras-chave
+        const palavrasChave = conteudoLower.split(/[\s,;.]+/).filter(p => p.length > 3);
+        
+        // Verificar se a pergunta contém palavras-chave do conteúdo
+        let palavrasEncontradas = 0;
+        for (const palavra of palavrasChave) {
+          if (perguntaLower.includes(palavra)) {
+            palavrasEncontradas++;
+          }
+        }
+        
+        // Se encontrou pelo menos 1 palavra-chave ou se a pergunta é longa (>20 chars)
+        return palavrasEncontradas > 0 || pergunta.length > 20;
+      }
+
+      // Processar e validar cada questão
       const questoesProcessadas = [];
-      for (let i = 0; i < Math.min(dados.questoes.length, quantidadeQuestoes); i++) {
-        const questao = dados.questoes[i];
+      for (let i = 0; i < Math.min(questoesArray.length, quantidadeQuestoes); i++) {
+        const questao = questoesArray[i];
         
         if (!questao || typeof questao !== 'object') {
           console.warn(`⚠️ Questão ${i + 1} inválida, pulando...`);
           continue;
         }
 
+        // Extrair pergunta
         const pergunta = questao.pergunta || questao.question || questao.text || 
                         `Questão ${i + 1} sobre ${conteudo}`;
         
+        // Verificar se a pergunta é relevante
+        if (!questaoEhRelevante(pergunta, conteudo)) {
+          console.warn(`⚠️ Questão ${i + 1} não é relevante para "${conteudo}": ${pergunta.substring(0, 50)}`);
+          // Ainda adicionamos, mas com conteúdo específico
+        }
+        
+        // Extrair opções
         let opcoes = questao.opcoes || questao.options || questao.alternatives || 
                      questao.alternativas || questao.choices || [];
         
@@ -978,20 +1011,33 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
           opcoes = opcoes.split('\n').filter(o => o.trim().length > 0);
         }
         
+        // Garantir exatamente 4 opções
         if (!Array.isArray(opcoes) || opcoes.length === 0) {
+          // Criar opções específicas para o conteúdo
           opcoes = [
-            `A) Conceito importante sobre ${conteudo}`,
-            `B) Aplicação prática de ${conteudo}`,
-            `C) Exemplo de ${conteudo}`,
-            `D) Todas as anteriores`
+            `A) ${conteudo} é fundamental para este campo de estudo`,
+            `B) ${conteudo} possui diversas aplicações práticas`,
+            `C) O estudo de ${conteudo} desenvolve habilidades analíticas`,
+            `D) Todas as alternativas anteriores estão corretas`
           ];
         }
         
+        // Garantir exatamente 4 opções
         while (opcoes.length < 4) {
-          opcoes.push(`${String.fromCharCode(65 + opcoes.length)}) Opção ${String.fromCharCode(65 + opcoes.length)}`);
+          opcoes.push(`${String.fromCharCode(65 + opcoes.length)}) Informação sobre ${conteudo}`);
         }
         opcoes = opcoes.slice(0, 4);
         
+        // Garantir que as opções comecem com A), B), etc.
+        opcoes = opcoes.map((opcao, idx) => {
+          const letra = String.fromCharCode(65 + idx);
+          if (!opcao.trim().startsWith(`${letra})`)) {
+            return `${letra}) ${opcao.trim()}`;
+          }
+          return opcao.trim();
+        });
+        
+        // Determinar resposta correta
         let respostaCorreta = questao.respostaCorreta !== undefined ? questao.respostaCorreta : 
                              questao.correctAnswer !== undefined ? questao.correctAnswer :
                              questao.correct !== undefined ? questao.correct : 0;
@@ -1008,8 +1054,10 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
         
         respostaCorreta = Math.max(0, Math.min(3, parseInt(respostaCorreta) || 0));
         
+        // Extrair explicação
         const explicacao = questao.explicacao || questao.explanation || 
-                          questao.justificativa || `Resposta correta: ${opcoes[respostaCorreta]}`;
+                          questao.justificativa || 
+                          `Resposta correta: ${opcoes[respostaCorreta]}. Esta resposta está correta porque se relaciona diretamente com "${conteudo}".`;
         
         questoesProcessadas.push({
           pergunta: pergunta.trim(),
@@ -1027,33 +1075,92 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
       console.log(`✅ ${questoesValidadas.length} questões processadas da IA (Groq)`);
 
     } catch (iaError) {
-      console.error('❌ Erro na IA (Groq), usando fallback:', iaError.message);
+      console.error('❌ Erro na IA (Groq), usando fallback específico:', iaError.message);
       
-      console.log('🔄 Usando fallback manual...');
+      console.log('🔄 Usando fallback específico para o conteúdo...');
       questoesValidadas = [];
       
+      // FALLBACK ESPECÍFICO PARA O CONTEÚDO
       for (let i = 1; i <= quantidadeQuestoes; i++) {
-        questoesValidadas.push({
-          pergunta: `Questão ${i}: Qual é a importância de "${conteudo}"?`,
-          opcoes: [
-            `A) ${conteudo} é fundamental para o entendimento do assunto`,
-            `B) ${conteudo} possui diversas aplicações práticas`,
-            `C) O estudo de ${conteudo} desenvolve habilidades importantes`,
-            `D) Todas as alternativas anteriores estão corretas`
-          ],
-          respostaCorreta: 3,
-          explicacao: `A alternativa D está correta, pois ${conteudo} é de fato fundamental, possui aplicações práticas e desenvolve habilidades importantes.`
-        });
+        const tiposQuestoes = [
+          {
+            pergunta: `Qual é o conceito principal de "${conteudo}"?`,
+            opcoes: [
+              `A) ${conteudo} refere-se a um conjunto de princípios fundamentais neste campo`,
+              `B) ${conteudo} é uma metodologia de ensino`,
+              `C) ${conteudo} representa uma ferramenta técnica específica`,
+              `D) ${conteudo} é um termo genérico sem significado específico`
+            ],
+            respostaCorreta: 0,
+            explicacao: `A alternativa A está correta. ${conteudo} refere-se a conceitos fundamentais neste campo de estudo, abordando princípios essenciais para o entendimento completo do tema.`
+          },
+          {
+            pergunta: `Qual é uma aplicação prática importante de "${conteudo}"?`,
+            opcoes: [
+              `A) ${conteudo} pode ser aplicado na solução de problemas específicos do cotidiano`,
+              `B) ${conteudo} é útil apenas em contextos acadêmicos teóricos`,
+              `C) ${conteudo} não possui aplicações práticas significativas`,
+              `D) ${conteudo} é apenas uma teoria sem aplicação real`
+            ],
+            respostaCorreta: 0,
+            explicacao: `A alternativa A está correta. ${conteudo} possui diversas aplicações práticas que podem ser utilizadas para resolver problemas específicos e melhorar a compreensão de situações reais.`
+          },
+          {
+            pergunta: `Por que "${conteudo}" é importante estudar?`,
+            opcoes: [
+              `A) Porque desenvolve habilidades críticas e analíticas essenciais`,
+              `B) Porque é obrigatório no currículo acadêmico`,
+              `C) Porque os professores exigem seu estudo`,
+              `D) Não há importância significativa no estudo de ${conteudo}`
+            ],
+            respostaCorreta: 0,
+            explicacao: `A alternativa A está correta. O estudo de ${conteudo} desenvolve habilidades críticas, analíticas e de resolução de problemas que são essenciais tanto no contexto acadêmico quanto profissional.`
+          },
+          {
+            pergunta: `Como "${conteudo}" se relaciona com outras áreas do conhecimento?`,
+            opcoes: [
+              `A) ${conteudo} estabelece conexões interdisciplinares importantes`,
+              `B) ${conteudo} é completamente isolado de outras áreas`,
+              `C) ${conteudo} contradiz outras áreas do conhecimento`,
+              `D) A relação é apenas superficial e sem importância`
+            ],
+            respostaCorreta: 0,
+            explicacao: `A alternativa A está correta. ${conteudo} estabelece conexões interdisciplinares importantes, permitindo uma compreensão mais ampla e integrada do conhecimento.`
+          }
+        ];
+        
+        const questaoTipo = tiposQuestoes[(i - 1) % tiposQuestoes.length];
+        questoesValidadas.push(questaoTipo);
       }
+      
+      console.log(`✅ ${questoesValidadas.length} questões criadas via fallback específico`);
     }
 
+    // VALIDAÇÃO FINAL DAS QUESTÕES
+    console.log(`📋 Validando ${questoesValidadas.length} questões para o conteúdo: "${conteudo}"`);
+    
+    // Verificar se as questões são realmente sobre o conteúdo
+    const questoesValidas = questoesValidadas.filter(questao => {
+      const perguntaLower = questao.pergunta.toLowerCase();
+      const conteudoLower = conteudo.toLowerCase();
+      
+      // Verificar se a pergunta menciona o conteúdo ou é específica o suficiente
+      return perguntaLower.includes(conteudoLower) || 
+             questao.pergunta.length > 30; // Se for uma pergunta longa, provavelmente é específica
+    });
+    
+    if (questoesValidas.length < questoesValidadas.length * 0.5) {
+      console.warn(`⚠️ Apenas ${questoesValidas.length}/${questoesValidadas.length} questões são relevantes para "${conteudo}"`);
+    }
+
+    // Criar a prova
     const prova = new Prova({
       userId: req.userId,
       turmaId: turma._id,
       titulo: titulo || `Prova: ${conteudo.substring(0, 50)}`,
       conteudo: conteudo,
-      questoes: questoesValidadas,
-      quantidadeQuestoes: questoesValidadas.length,
+      questoes: questoesValidas.length > 0 ? questoesValidas : questoesValidadas,
+      quantidadeQuestoes: questoesValidas.length > 0 ? questoesValidas.length : questoesValidadas.length,
       dificuldade: dificuldade,
       dataLimite: dataLimite ? new Date(dataLimite) : null,
       duracao: duracao || 60,
@@ -1067,7 +1174,9 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
     turma.provas.push(prova._id);
     await turma.save();
 
-    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} para turma ${turma.nome} usando Groq`);
+    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} para turma ${turma.nome}`);
+    console.log(`📚 Conteúdo: ${conteudo}`);
+    console.log(`📝 Questões: ${prova.questoes.length}`);
 
     res.json({
       success: true,
@@ -1084,7 +1193,7 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
         dificuldade: prova.dificuldade,
         fonteGeracao: prova.fonteGeracao
       },
-      questoes: prova.questoes.slice(0, 5)
+      questoes: prova.questoes.slice(0, 3) // Mostrar apenas 3 questões como exemplo
     });
 
   } catch (error) {
@@ -1092,7 +1201,7 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
     res.status(500).json({
       success: false,
       error: 'Erro ao criar prova: ' + error.message,
-      sugestao: 'Tente novamente com um conteúdo mais específico ou menos questões'
+      sugestao: 'Tente usar um conteúdo mais específico, como "Sistema Solar: Planetas Terrestres" em vez de apenas "Sistema Solar"'
     });
   }
 });
@@ -3740,6 +3849,129 @@ app.get('/api/test', (req, res) => {
             ]
         }
     });
+});
+
+// ============ ROTAS DO CHATBOT ============
+
+// Importar o chatbot backend
+const ChatbotBackend = require('./chatbot');
+const chatbot = new ChatbotBackend();
+
+// CORREÇÃO COMPLETA DO ENDPOINT DO CHATBOT:
+app.post('/api/chatbot/message', authenticateToken, async (req, res) => {
+    try {
+        const { message, conversationHistory = [] } = req.body;
+        const userId = req.userId;
+        
+        // Obter rota de forma segura para Node.js
+        const route = req.headers.referer || 
+                     req.headers.origin || 
+                     req.body.route || 
+                     '/';
+
+        console.log(`💬 Chatbot: Recebida mensagem de ${userId}: ${message.substring(0, 50)}...`);
+        console.log(`📍 Rota detectada: ${route}`);
+
+        const result = await chatbot.processMessage({
+            message,
+            route,
+            conversationHistory,
+            userId
+        });
+
+        res.json(result);
+
+    } catch (error) {
+        console.error('❌ Erro no chatbot:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao processar mensagem do chatbot',
+            message: error.message
+        });
+    }
+});
+
+// CORREÇÃO DA ROTA PÚBLICA TAMBÉM:
+app.post('/api/chatbot/public/message', async (req, res) => {
+    try {
+        const { message, conversationHistory = [] } = req.body;
+        
+        // Obter rota de forma segura para Node.js
+        const route = req.headers.referer || 
+                     req.headers.origin || 
+                     req.body.route || 
+                     '/';
+
+        console.log(`💬 Chatbot público: ${message.substring(0, 50)}...`);
+        console.log(`📍 Rota detectada: ${route}`);
+
+        const result = await chatbot.processMessage({
+            message,
+            route,
+            conversationHistory
+        });
+
+        res.json(result);
+
+    } catch (error) {
+        console.error('❌ Erro no chatbot público:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao processar mensagem do chatbot',
+            message: error.message
+        });
+    }
+});
+
+// Rota de health check do chatbot
+app.get('/api/chatbot/health', async (req, res) => {
+    try {
+        const health = await chatbot.healthCheck();
+        res.json({
+            success: true,
+            chatbot: health,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Erro no health check do chatbot'
+        });
+    }
+});
+
+// Rota para obter contexto do chatbot baseado na página
+app.get('/api/chatbot/context', authenticateToken, (req, res) => {
+    try {
+        const route = req.query.route || req.headers.referer || '/';
+        const userRole = req.userRole || 'visitante';
+        const userName = req.userNome || 'Usuário';
+
+        const context = {
+            user: {
+                id: req.userId,
+                name: userName,
+                role: userRole
+            },
+            route: route,
+            page: route.includes('professor') ? 'professor' : 
+                  route.includes('aluno') ? 'aluno' : 
+                  route.includes('login') ? 'login' : 'general',
+            timestamp: new Date().toISOString()
+        };
+
+        res.json({
+            success: true,
+            context: context
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao obter contexto:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao obter contexto'
+        });
+    }
 });
 
 // ============ FRONTEND ESTÁTICO ============
