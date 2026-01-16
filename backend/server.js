@@ -185,37 +185,45 @@ app.use(session({
   }
 }));
 
-// ============ CONEXÃO COM MONGODB ============
-// ============ CONEXÃO COM MONGODB (ATUALIZADA) ============
+// ============ CONEXÃO COM MONGODB (ATUALIZADA - SOLUÇÃO DEFINITIVA) ============
 
-// Função para conectar ao banco correto baseado no ambiente
 const connectToDatabase = async () => {
+  // Verificar ambiente
   const ENV = process.env.NODE_ENV || 'development';
   const IS_PRODUCTION = ENV === 'production';
-  const IS_LOCAL = ENV === 'development' || ENV === 'local';
+  const IS_DEVELOPMENT = ENV === 'development';
   
-  console.log(`🔧 AMBIENTE: ${ENV.toUpperCase()}`);
+  console.log('='.repeat(60));
+  console.log(`🚀 AMBIENTE DETECTADO: ${ENV.toUpperCase()}`);
   
   let connectionUri;
+  let databaseType = 'Desconhecido';
   
+  // DECISÃO: Qual banco usar?
   if (IS_PRODUCTION) {
-    // PRODUÇÃO: Conecta ao MongoDB Atlas (nuvem)
-    connectionUri = process.env.MONGODB_ATLAS_URI;
-    console.log('🌐 PRODUÇÃO: Conectando ao MongoDB Atlas (nuvem)');
-  } else if (IS_LOCAL) {
-    // DESENVOLVIMENTO: Conecta ao MongoDB Local
-    connectionUri = process.env.MONGODB_LOCAL_URI || 'mongodb://localhost:27017/provas_online';
+    // 1. PRODUÇÃO NO RENDER: Usa MongoDB Atlas
+    connectionUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
+    databaseType = 'MongoDB Atlas (NUVEM)';
+    console.log('🌐 PRODUÇÃO: Conectando ao MongoDB Atlas');
+  } else if (IS_DEVELOPMENT) {
+    // 2. DESENVOLVIMENTO LOCAL: Tenta MongoDB Local primeiro
+    connectionUri = process.env.MONGODB_LOCAL_URI || 'mongodb://localhost:27017/provas_online_local';
+    databaseType = 'MongoDB Local';
     console.log('💻 DESENVOLVIMENTO: Conectando ao MongoDB Local');
   } else {
-    // FALLBACK: Usa configuração padrão
-    connectionUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/provas_online';
-    console.log('⚙️  Usando configuração padrão');
+    // 3. FALLBACK: Usa o padrão do .env
+    connectionUri = process.env.MONGODB_URI;
+    databaseType = 'Configuração padrão';
+    console.log('⚙️  Usando configuração padrão do .env');
   }
   
-  // Mostrar URI (ocultando senha para segurança)
+  // Mostrar URI de forma segura (esconde senha)
   const safeUri = connectionUri ? connectionUri.replace(/\/\/[^@]+@/, '//***@') : 'Não configurada';
-  console.log(`🗄️  Conectando em: ${safeUri}`);
+  console.log(`🗄️  URI: ${safeUri}`);
+  console.log(`📊 Tipo: ${databaseType}`);
+  console.log('='.repeat(60));
   
+  // Configurações de conexão
   const options = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -227,54 +235,55 @@ const connectToDatabase = async () => {
     w: 'majority'
   };
   
+  // Tentar conexão principal
   try {
+    console.log('🔄 Tentando conexão...');
     await mongoose.connect(connectionUri, options);
-    console.log('✅ Conexão com MongoDB estabelecida com sucesso!');
     
-    // Verificar qual banco está conectado
+    // Verificar conexão bem-sucedida
     const db = mongoose.connection.db;
-    const stats = await db.stats();
     const host = mongoose.connection.host;
-    
-    console.log(`📊 Banco: ${db.databaseName}`);
-    console.log(`📍 Host: ${host}`);
-    console.log(`📈 Coleções: ${stats.collections}`);
-    console.log(`📄 Documentos: ${stats.objects}`);
-    
-    // Verificar se é Atlas ou Local
     const isAtlas = host.includes('mongodb.net');
-    console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (nuvem)' : 'MongoDB Local'}`);
     
-  } catch (err) {
-    console.error('❌ ERRO CRÍTICO ao conectar com MongoDB:', err.message);
+    console.log('='.repeat(60));
+    console.log('✅ CONEXÃO ESTABELECIDA COM SUCESSO!');
+    console.log(`📁 Banco: ${db.databaseName}`);
+    console.log(`📍 Host: ${host}`);
+    console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
+    console.log('='.repeat(60));
     
-    if (IS_PRODUCTION) {
-      console.log('⚠️  Falha ao conectar ao Atlas, tentando fallback local...');
-      // Tentar fallback para local em produção (apenas para emergência)
+  } catch (error) {
+    console.error('❌ ERRO na conexão principal:', error.message);
+    
+    // ESTRATÉGIA DE FALLBACK INTELIGENTE
+    if (IS_DEVELOPMENT) {
+      console.log('🔄 DESENVOLVIMENTO: Tentando fallback para Atlas...');
       try {
-        const fallbackUri = process.env.MONGODB_LOCAL_URI || 'mongodb://localhost:27017/provas_online';
+        // Se local falhou, tenta Atlas como fallback
+        const fallbackUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
         await mongoose.connect(fallbackUri, options);
-        console.log('✅ Fallback local bem-sucedido');
-      } catch (fallbackErr) {
-        console.error('❌ Fallback também falhou:', fallbackErr.message);
-        throw fallbackErr;
+        console.log('✅ Fallback para Atlas bem-sucedido');
+      } catch (fallbackError) {
+        console.error('❌ Todos os fallbacks falharam:', fallbackError.message);
+        console.log('💡 SOLUÇÃO:');
+        console.log('   1. Inicie o MongoDB local: mongod');
+        console.log('   2. Ou verifique sua conexão com a internet');
+        throw fallbackError;
       }
-    } else {
-      console.log('⚠️  Tentando conexão local padrão...');
-      try {
-        const defaultUri = 'mongodb://localhost:27017/provas_online';
-        await mongoose.connect(defaultUri, options);
-        console.log('✅ Conexão local padrão bem-sucedida');
-      } catch (defaultErr) {
-        console.error('❌ Todas as tentativas falharam:', defaultErr.message);
-        throw defaultErr;
-      }
+    } else if (IS_PRODUCTION) {
+      console.error('❌ PRODUÇÃO: Conexão com Atlas falhou!');
+      console.log('💡 Verifique:');
+      console.log('   1. A URI do Atlas no .env');
+      console.log('   2. A conexão com a internet');
+      console.log('   3. O IP no MongoDB Atlas (adicione 0.0.0.0/0 temporariamente)');
+      throw error;
     }
   }
 };
 
-// Chamar a função de conexão
+// Conectar ao banco de dados
 connectToDatabase();
+
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO ============
 const authenticateToken = (req, res, next) => {
