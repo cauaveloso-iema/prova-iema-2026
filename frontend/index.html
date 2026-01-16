@@ -1092,6 +1092,16 @@
         }
     </style>
 </head>
+<!-- Incluir Font Awesome para ícones -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- Incluir o chatbot -->
+<script src="js/chatbot-frontend.js"></script>
+
+<!-- Opcional: Botão para abrir chatbot manualmente -->
+<button onclick="window.chatbot.open()" style="position: fixed; bottom: 90px; right: 20px; z-index: 9998; background: #10b981; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer;">
+    <i class="fas fa-robot"></i> Assistente
+</button>
 <body>
     <!-- Loading overlay -->
     <div id="loading-overlay">

@@ -287,6 +287,23 @@
         }
     </style>
 </head>
+<!-- Incluir Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- Incluir o chatbot -->
+<script src="js/chatbot-frontend.js"></script>
+
+<!-- Opcional: Ação específica para alunos -->
+<script>
+// Exemplo: Mostrar mensagem especial quando o aluno carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        if (window.chatbot) {
+            window.chatbot.sendSystemMessage("💡 Dica: Você pode usar o assistente para tirar dúvidas sobre suas provas!");
+        }
+    }, 3000);
+});
+</script>
 <body>
     <!-- Botão de Logout -->
     <button class="btn-logout" id="btnLogout">
