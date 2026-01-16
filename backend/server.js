@@ -186,25 +186,95 @@ app.use(session({
 }));
 
 // ============ CONEXÃO COM MONGODB ============
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000, // Timeout após 5 segundos
-  socketTimeoutMS: 45000, // Fecha sockets após 45s de inatividade
-})
-.then(() => console.log('✅ MongoDB Atlas conectado com sucesso'))
-.catch(err => {
-  console.error('❌ Erro ao conectar com MongoDB Atlas:', err);
-  console.log('⚠️  Tentando conexão local como fallback...');
+// ============ CONEXÃO COM MONGODB (ATUALIZADA) ============
+
+// Função para conectar ao banco correto baseado no ambiente
+const connectToDatabase = async () => {
+  const ENV = process.env.NODE_ENV || 'development';
+  const IS_PRODUCTION = ENV === 'production';
+  const IS_LOCAL = ENV === 'development' || ENV === 'local';
   
-  // Fallback para MongoDB local (se necessário)
-  mongoose.connect('mongodb://localhost:27017/provas_online', {
+  console.log(`🔧 AMBIENTE: ${ENV.toUpperCase()}`);
+  
+  let connectionUri;
+  
+  if (IS_PRODUCTION) {
+    // PRODUÇÃO: Conecta ao MongoDB Atlas (nuvem)
+    connectionUri = process.env.MONGODB_ATLAS_URI;
+    console.log('🌐 PRODUÇÃO: Conectando ao MongoDB Atlas (nuvem)');
+  } else if (IS_LOCAL) {
+    // DESENVOLVIMENTO: Conecta ao MongoDB Local
+    connectionUri = process.env.MONGODB_LOCAL_URI || 'mongodb://localhost:27017/provas_online';
+    console.log('💻 DESENVOLVIMENTO: Conectando ao MongoDB Local');
+  } else {
+    // FALLBACK: Usa configuração padrão
+    connectionUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/provas_online';
+    console.log('⚙️  Usando configuração padrão');
+  }
+  
+  // Mostrar URI (ocultando senha para segurança)
+  const safeUri = connectionUri ? connectionUri.replace(/\/\/[^@]+@/, '//***@') : 'Não configurada';
+  console.log(`🗄️  Conectando em: ${safeUri}`);
+  
+  const options = {
     useNewUrlParser: true,
-    useUnifiedTopology: true
-  })
-  .then(() => console.log('✅ MongoDB local conectado (fallback)'))
-  .catch(fallbackErr => console.error('❌ Erro no fallback:', fallbackErr));
-});
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 10000,
+    maxPoolSize: 10,
+    retryWrites: true,
+    w: 'majority'
+  };
+  
+  try {
+    await mongoose.connect(connectionUri, options);
+    console.log('✅ Conexão com MongoDB estabelecida com sucesso!');
+    
+    // Verificar qual banco está conectado
+    const db = mongoose.connection.db;
+    const stats = await db.stats();
+    const host = mongoose.connection.host;
+    
+    console.log(`📊 Banco: ${db.databaseName}`);
+    console.log(`📍 Host: ${host}`);
+    console.log(`📈 Coleções: ${stats.collections}`);
+    console.log(`📄 Documentos: ${stats.objects}`);
+    
+    // Verificar se é Atlas ou Local
+    const isAtlas = host.includes('mongodb.net');
+    console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (nuvem)' : 'MongoDB Local'}`);
+    
+  } catch (err) {
+    console.error('❌ ERRO CRÍTICO ao conectar com MongoDB:', err.message);
+    
+    if (IS_PRODUCTION) {
+      console.log('⚠️  Falha ao conectar ao Atlas, tentando fallback local...');
+      // Tentar fallback para local em produção (apenas para emergência)
+      try {
+        const fallbackUri = process.env.MONGODB_LOCAL_URI || 'mongodb://localhost:27017/provas_online';
+        await mongoose.connect(fallbackUri, options);
+        console.log('✅ Fallback local bem-sucedido');
+      } catch (fallbackErr) {
+        console.error('❌ Fallback também falhou:', fallbackErr.message);
+        throw fallbackErr;
+      }
+    } else {
+      console.log('⚠️  Tentando conexão local padrão...');
+      try {
+        const defaultUri = 'mongodb://localhost:27017/provas_online';
+        await mongoose.connect(defaultUri, options);
+        console.log('✅ Conexão local padrão bem-sucedida');
+      } catch (defaultErr) {
+        console.error('❌ Todas as tentativas falharam:', defaultErr.message);
+        throw defaultErr;
+      }
+    }
+  }
+};
+
+// Chamar a função de conexão
+connectToDatabase();
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO ============
 const authenticateToken = (req, res, next) => {
