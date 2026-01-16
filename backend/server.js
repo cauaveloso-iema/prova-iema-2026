@@ -134,18 +134,91 @@ ProvaRealizadaSchema.index({ provaId: 1, alunoId: 1 }, { unique: true });
 const ProvaRealizada = mongoose.model('ProvaRealizada', ProvaRealizadaSchema);
 
 // Configuração OpenRouter
-const OpenAI = require('openai');
-let openai;
-if (process.env.OPENROUTER_API_KEY) {
-  openai = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: process.env.OPENROUTER_API_KEY,
-    defaultHeaders: {
-      "HTTP-Referer": "http://localhost:3000",
-      "X-Title": "Sistema de Provas Online"
-    }
+//const OpenAI = require('openai');
+//let openai;
+//if (process.env.OPENROUTER_API_KEY) {
+//  openai = new OpenAI({
+//    baseURL: "https://openrouter.ai/api/v1",
+//    apiKey: process.env.OPENROUTER_API_KEY,
+//    defaultHeaders: {
+//      "HTTP-Referer": "http://localhost:3000",
+//      "X-Title": "Sistema de Provas Online"
+//    }
+//  });
+//}
+
+// ADICIONE ESTA CONFIGURAÇÃO DA GROQ:
+const Groq = require("groq-sdk");
+
+let groq;
+if (process.env.GROQ_API_KEY) {
+  groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY,
   });
+  console.log('✅ Groq configurado com sucesso');
+} else {
+  console.warn('⚠️  Groq API key não configurada');
 }
+
+// Adicione esta função para testar modelos
+async function testarModelosDisponiveis() {
+  const modelosParaTestar = [
+    "llama-3.2-90b-vision-preview",    // Modelo mais recente
+    "llama-3.2-11b-vision-preview",
+    "llama-3.2-3b-preview",
+    "llama-3.1-8b-instant",
+    "llama-3.1-70b-versatile",
+    "llama-3-70b-8192",
+    "llama-3-8b-8192",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
+    "gemma-7b-it"
+  ];
+
+  console.log('🔍 Testando modelos disponíveis na Groq...');
+  
+  const modelosFuncionais = [];
+  
+  for (const modelo of modelosParaTestar) {
+    try {
+      console.log(`  Testando: ${modelo}`);
+      
+      const completion = await groq.chat.completions.create({
+        model: modelo,
+        messages: [{ role: "user", content: "Teste" }],
+        max_tokens: 1
+      });
+      
+      modelosFuncionais.push(modelo);
+      console.log(`  ✅ ${modelo} - Disponível`);
+      
+    } catch (error) {
+      if (error.message.includes('decommissioned')) {
+        console.log(`  ❌ ${modelo} - Descontinuado`);
+      } else if (error.message.includes('not found')) {
+        console.log(`  ❌ ${modelo} - Não encontrado`);
+      } else {
+        console.log(`  ⚠️  ${modelo} - Erro: ${error.message.substring(0, 50)}`);
+      }
+    }
+    
+    // Pequena pausa entre testes
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  console.log('='.repeat(50));
+  console.log('📊 MODELOS DISPONÍVEIS:');
+  modelosFuncionais.forEach(modelo => console.log(`  • ${modelo}`));
+  console.log('='.repeat(50));
+  
+  return modelosFuncionais;
+}
+
+// Chame esta função no startup do servidor
+if (groq) {
+  setTimeout(() => testarModelosDisponiveis(), 2000);
+}
+
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -723,7 +796,7 @@ app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
 
     const { titulo, conteudo, quantidadeQuestoes = 10, dificuldade = 'media', dataLimite, duracao } = req.body;
 
-    console.log('🤖 Solicitando IA para gerar questões...');
+    console.log('🤖 Solicitando IA (Groq) para gerar questões...');
 
     const prompt = `Você é um professor especialista. Crie EXATAMENTE ${quantidadeQuestoes} questões de múltipla escolha sobre: "${conteudo}"
 
@@ -749,21 +822,87 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
     let questoesValidadas = [];
     
     try {
-      const completion = await openai.chat.completions.create({
-        model: "mistralai/mistral-7b-instruct:free",
-        messages: [
-          { role: "system", content: "Você é um professor especialista. Sempre retorne JSON válido." },
-          { role: "user", content: prompt }
-        ],
-        max_tokens: 3000,
-        temperature: 0.7
-      });
+      if (!groq) {
+        throw new Error('Groq não configurado');
+      }
+
+      // MODELOS ATUAIS DA GROQ (2024)
+      const modelosAtuais = [
+        "llama-3.2-90b-vision-preview",    // Modelo mais recente e poderoso
+        "llama-3.2-11b-vision-preview",    // Alternativa
+        "llama-3.1-8b-instant",           // Modelo rápido
+        "gemma2-9b-it",                   // Google Gemma 2
+        "llama-3-70b-8192"                // Modelo estável
+      ];
+
+      let completion;
+      let modeloUsado = '';
+      
+      // Tentar cada modelo até um funcionar
+      for (const modelo of modelosAtuais) {
+        try {
+          console.log(`🔄 Tentando modelo: ${modelo}`);
+          
+          completion = await groq.chat.completions.create({
+            model: modelo,
+            messages: [
+              { 
+                role: "system", 
+                content: `Você é um professor especialista. Crie questões de múltipla escolha.
+                IMPORTANTE: Retorne APENAS JSON válido no formato exato especificado.` 
+              },
+              { 
+                role: "user", 
+                content: `Crie ${quantidadeQuestoes} questões sobre: "${conteudo}"
+                
+    FORMATO EXATO REQUERIDO (JSON):
+    {
+      "questoes": [
+        {
+          "pergunta": "Texto da pergunta?",
+          "opcoes": ["A) Opção A", "B) Opção B", "C) Opção C", "D) Opção D"],
+          "respostaCorreta": 0,
+          "explicacao": "Explicação detalhada"
+        }
+      ]
+    }
+
+    REGRAS:
+    1. EXATAMENTE ${quantidadeQuestoes} questões
+    2. EXATAMENTE 4 opções por questão (A, B, C, D)
+    3. respostaCorreta: 0=A, 1=B, 2=C, 3=D
+    4. Cada opção deve começar com "A) ", "B) ", etc.
+    5. As questões devem ser variadas
+    6. Inclua explicação para cada resposta
+    7. Retorne APENAS JSON, sem texto adicional.` 
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 4000,
+            response_format: { type: "json_object" }
+          });
+          
+          modeloUsado = modelo;
+          console.log(`✅ Modelo ${modelo} funcionou!`);
+          break; // Sai do loop se funcionou
+          
+        } catch (modeloError) {
+          console.log(`❌ Modelo ${modelo} falhou: ${modeloError.message.substring(0, 100)}`);
+          continue; // Tenta próximo modelo
+        }
+      }
+      
+      if (!completion) {
+        throw new Error('Todos os modelos falharam');
+      }
 
       const resposta = completion.choices[0].message.content;
-      console.log('📄 Resposta da IA:', resposta.substring(0, 300));
+      console.log(`📄 Resposta da IA (Groq - ${modeloUsado}):`, resposta.substring(0, 200));
+      
 
       let jsonString = resposta;
       
+      // Extrair JSON da resposta
       const codeMatch = resposta.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (codeMatch && codeMatch[1]) {
         jsonString = codeMatch[1].trim();
@@ -780,6 +919,7 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
 
       let dados;
       try {
+        // Limpar caracteres não visíveis
         jsonString = jsonString.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
         dados = JSON.parse(jsonString);
       } catch (parseError) {
@@ -818,6 +958,7 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
         throw new Error('Nenhuma questão encontrada na resposta da IA');
       }
 
+      // Processar questões
       const questoesProcessadas = [];
       for (let i = 0; i < Math.min(dados.questoes.length, quantidadeQuestoes); i++) {
         const questao = dados.questoes[i];
@@ -883,10 +1024,10 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
       }
 
       questoesValidadas = questoesProcessadas;
-      console.log(`✅ ${questoesValidadas.length} questões processadas da IA`);
+      console.log(`✅ ${questoesValidadas.length} questões processadas da IA (Groq)`);
 
     } catch (iaError) {
-      console.error('❌ Erro na IA, usando fallback:', iaError.message);
+      console.error('❌ Erro na IA (Groq), usando fallback:', iaError.message);
       
       console.log('🔄 Usando fallback manual...');
       questoesValidadas = [];
@@ -918,7 +1059,7 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
       duracao: duracao || 60,
       status: 'ativa',
       alunosAtribuidos: turma.alunos,
-      fonteGeracao: questoesValidadas.length > 0 ? 'IA com fallback' : 'Fallback manual'
+      fonteGeracao: questoesValidadas.length > 0 ? 'Groq AI' : 'Fallback manual'
     });
 
     await prova.save();
@@ -926,7 +1067,7 @@ RETORNE APENAS JSON NO SEGUINTE FORMATO:
     turma.provas.push(prova._id);
     await turma.save();
 
-    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} para turma ${turma.nome}`);
+    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} para turma ${turma.nome} usando Groq`);
 
     res.json({
       success: true,
