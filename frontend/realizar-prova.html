@@ -1113,7 +1113,7 @@
                     
                     if (!token || !provaId) return;
                     
-                    await fetch('http://localhost:3000/api/monitor/inicio', {
+                    await fetch(`${API_BASE_URL}/monitor/inicio`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -1632,7 +1632,7 @@ Boa prova! 🎯
                         throw new Error('Token de autenticação não encontrado');
                     }
                     
-                    const response = await fetch('http://localhost:3000/api/provas/offline/save', {
+                    const response = await fetch(`${API_BASE_URL}/provas/offline/save`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${authToken}`,
