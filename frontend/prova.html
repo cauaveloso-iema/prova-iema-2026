@@ -368,8 +368,35 @@
     
     <script>
         // Configurações globais
-        const API_BASE_URL = '/api';  // 👈 MUDAR ISSO
-        
+        // ============ DETECTAR AMBIENTE DINAMICAMENTE ============
+        const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1';
+        const IS_RENDER = window.location.hostname.includes('render.com') || 
+                        window.location.hostname.includes('sistema-avaliativo');
+
+        // URL base da API - AUTO-DETECTADA
+        let API_BASE_URL;
+
+        if (IS_LOCALHOST) {
+            // Desenvolvimento local
+            API_BASE_URL = 'http://localhost:3000/api';
+            console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
+        } else if (IS_RENDER) {
+            // Produção no Render
+            API_BASE_URL = window.location.origin + '/api';
+            console.log('🚀 Modo: PRODUÇÃO (Render)');
+        } else {
+            // Fallback
+            API_BASE_URL = '/api';
+            console.log('⚙️ Modo: FALLBACK');
+        }
+
+        // Para debugging
+        console.log('📡 Host:', window.location.hostname);
+        console.log('🌐 API URL:', API_BASE_URL);
+
+        // Exportar para uso global
+        window.API_BASE_URL = API_BASE_URL;
         // Variáveis da prova
         let prova = null;
         let questaoAtual = 0;
