@@ -177,6 +177,11 @@
             <div id="notaContainer" style="display: none;">
                 <!-- Aqui será mostrada a nota do aluno -->
             </div>
+
+            <!-- Nova seção para correção da prova -->
+            <div id="correcaoContainer" class="correcao-container" style="display: none;">
+                <!-- Conteúdo da correção será carregado aqui -->
+            </div>
             
             <!-- Sem nota -->
             <div id="semNotaContainer" class="sem-nota" style="display: none;">
@@ -234,24 +239,51 @@
         // Exportar para uso global
         window.API_BASE_URL = API_BASE_URL;
 
+        // Variáveis globais
+        let provaIdAtual = null;
+        let correcaoExpandida = false;
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('📊 Página de nota do aluno - Inicializando...');
             
+            // Mostrar informações de debug
+            console.log('🌐 URL atual:', window.location.href);
+            console.log('🏷️ User Agent:', navigator.userAgent);
+            
             // Obter ID da prova da URL
             const urlParams = new URLSearchParams(window.location.search);
-            const provaId = urlParams.get('provaId');
+            provaIdAtual = urlParams.get('provaId');
             
-            if (!provaId) {
-                mostrarErro('ID da prova não encontrado na URL');
+            if (!provaIdAtual) {
+                mostrarErro('ID da prova não encontrado na URL. Verifique se você acessou a página corretamente.');
+                return;
+            }
+            
+            console.log('📝 Prova ID:', provaIdAtual);
+            
+            // Testar conexão com API
+            try {
+                const apiOk = await testarConexaoAPI();
+                if (!apiOk) {
+                    mostrarErro(
+                        'Não foi possível conectar ao servidor. Verifique:<br>' +
+                        '1. Se o servidor está rodando<br>' +
+                        '2. Sua conexão com a internet<br>' +
+                        '3. Se não há bloqueios de firewall'
+                    );
+                    return;
+                }
+            } catch (error) {
+                console.error('Erro no teste de API:', error);
+                mostrarErro('Erro ao testar conexão com o servidor');
                 return;
             }
             
             // Verificar autenticação e carregar nota
-            await verificarAutenticacaoECarregarNota(provaId);
+            await verificarAutenticacaoECarregarNota(provaIdAtual);
         });
-        
+
         // Verificar autenticação e carregar nota
         async function verificarAutenticacaoECarregarNota(provaId) {
             const token = localStorage.getItem('auth_token');
@@ -276,6 +308,12 @@
                     throw new Error('Erro na autenticação');
                 }
                 
+                // Verificar se a resposta é JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Resposta inválida do servidor');
+                }
+                
                 const data = await response.json();
                 
                 if (data.success && data.user.role === 'aluno') {
@@ -287,13 +325,228 @@
                 
             } catch (error) {
                 console.error('Erro na autenticação:', error);
-                mostrarErro('Erro na autenticação. Faça login novamente.');
+                
+                // Verificar tipo específico de erro
+                if (error.message.includes('JSON') || error.message.includes('parse')) {
+                    mostrarErro('Erro no formato dos dados. Tente novamente mais tarde.');
+                } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    mostrarErro('Erro de conexão. Verifique sua internet e tente novamente.');
+                } else {
+                    mostrarErro('Erro na autenticação. Faça login novamente.');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 3000);
+                }
+            }
+        }
+
+        // Atualize a função carregarNotaProva para usar fetchComTratamento:
+        async function carregarNotaProva(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log(`📊 Carregando nota da prova ${provaId}...`);
+                
+                const data = await fetchComTratamento(`${API_BASE_URL}/aluno/provas/${provaId}/resultado`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (data.success) {
+                    // Esconder loading
+                    document.getElementById('loading').style.display = 'none';
+                    
+                    if (data.status === 'corrigida' && data.nota !== null && data.nota !== undefined) {
+                        // Mostrar nota do aluno
+                        mostrarNotaAluno(data, provaId);
+                    } else if (data.status === 'pendente') {
+                        // Mostrar mensagem de aguardando correção
+                        document.getElementById('semNotaContainer').style.display = 'block';
+                        if (data.prova && data.prova.titulo) {
+                            document.getElementById('provaTitulo').textContent = data.prova.titulo;
+                        }
+                    } else {
+                        mostrarErro('Nota não disponível para esta prova.');
+                    }
+                    
+                } else {
+                    throw new Error(data.error || data.message || 'Erro ao carregar nota');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar nota:', error);
+                mostrarErro(`Erro ao carregar sua nota: ${error.message}`);
+            }
+        }
+
+        // Atualize a verificação de autenticação:
+        async function verificarAutenticacaoECarregarNota(provaId) {
+            const token = localStorage.getItem('auth_token');
+            
+            if (!token) {
+                mostrarErro('Usuário não autenticado. Faça login novamente.');
                 setTimeout(() => {
                     window.location.href = 'login.html';
                 }, 3000);
+                return;
+            }
+            
+            try {
+                // Verificar se o usuário é aluno
+                const data = await fetchComTratamento('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (data.success && data.user.role === 'aluno') {
+                    // Carregar nota da prova
+                    await carregarNotaProva(provaId);
+                } else {
+                    mostrarErro('Acesso negado. Apenas alunos podem ver esta página.');
+                }
+                
+            } catch (error) {
+                console.error('Erro na autenticação:', error);
+                
+                // Tratamento específico de erros
+                if (error.message.includes('HTTP 401') || error.message.includes('HTTP 403')) {
+                    mostrarErro('Sessão expirada. Faça login novamente.');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 3000);
+                } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    mostrarErro('Erro de conexão. Verifique sua internet.');
+                } else {
+                    mostrarErro('Erro na autenticação: ' + error.message);
+                }
             }
         }
-        
+
+        // Função auxiliar para fetch com tratamento de erros robusto
+        async function fetchComTratamento(url, options = {}) {
+            try {
+                console.log(`🔍 Fetch para: ${url}`);
+                
+                // Adicionar timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos
+                
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                console.log(`📡 Resposta status: ${response.status}`);
+                
+                // Verificar status HTTP
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erro HTTP:', response.status, errorText.substring(0, 200));
+                    
+                    // Verificar se é HTML (página de erro)
+                    if (errorText.includes('<!DOCTYPE') || errorText.includes('<html')) {
+                        throw new Error(`Servidor retornou página HTML (erro ${response.status}). Verifique se a API está funcionando.`);
+                    }
+                    
+                    let errorMessage = `Erro ${response.status}`;
+                    try {
+                        // Tentar parsear como JSON
+                        const errorJson = JSON.parse(errorText);
+                        errorMessage = errorJson.error || errorJson.message || errorText.substring(0, 100);
+                    } catch {
+                        errorMessage = errorText.substring(0, 100);
+                    }
+                    
+                    throw new Error(errorMessage);
+                }
+                
+                // Verificar tipo de conteúdo
+                const contentType = response.headers.get('content-type') || '';
+                console.log('Content-Type:', contentType);
+                
+                if (!contentType.includes('application/json')) {
+                    // Se não for JSON, ler como texto
+                    const textResponse = await response.text();
+                    
+                    // Verificar se é HTML
+                    if (textResponse.trim().startsWith('<!DOCTYPE') || textResponse.trim().startsWith('<html')) {
+                        throw new Error('Servidor retornou HTML em vez de JSON. Verifique a rota da API.');
+                    }
+                    
+                    // Tentar converter para JSON (caso seja JSON sem header correto)
+                    try {
+                        const jsonData = JSON.parse(textResponse);
+                        return jsonData;
+                    } catch (parseError) {
+                        console.error('Texto recebido:', textResponse.substring(0, 200));
+                        throw new Error('Resposta não é JSON válido');
+                    }
+                }
+                
+                // É JSON, parsear normalmente
+                return await response.json();
+                
+            } catch (error) {
+                console.error('Erro no fetch:', error);
+                
+                // Melhorar mensagens de erro
+                if (error.name === 'AbortError') {
+                    throw new Error('Timeout: O servidor não respondeu em 10 segundos');
+                } else if (error.message.includes('Failed to fetch')) {
+                    throw new Error('Erro de conexão. Verifique sua internet e se o servidor está rodando.');
+                } else if (error.message.includes('NetworkError')) {
+                    throw new Error('Erro de rede. Verifique sua conexão.');
+                }
+                
+                throw error;
+            }
+        }
+        // Função para testar a conexão com a API
+        async function testarConexaoAPI() {
+            try {
+                console.log('🔍 Testando conexão com a API...');
+                
+                // Teste mais simples e direto
+                const testResponse = await fetch(`${API_BASE_URL}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                }).catch(() => null);
+                
+                if (!testResponse) {
+                    console.warn('❌ API não responde');
+                    return false;
+                }
+                
+                console.log('Status do teste:', testResponse.status);
+                
+                // Tentar diferentes endpoints de teste
+                const endpoints = ['/health', '/status', '/', '/api'];
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        const test = await fetch(`${API_BASE_URL}${endpoint}`);
+                        if (test.ok) {
+                            console.log(`✅ API responde em ${endpoint}`);
+                            return true;
+                        }
+                    } catch {
+                        continue;
+                    }
+                }
+                
+                return false;
+                
+            } catch (error) {
+                console.error('Erro no teste de API:', error);
+                return false;
+            }
+        }
         // Carregar nota da prova
         async function carregarNotaProva(provaId) {
             try {
@@ -307,29 +560,60 @@
                     }
                 });
                 
+                // Verificar se a resposta está ok
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    const errorText = await response.text();
+                    console.error('Erro HTTP:', response.status, errorText);
+                    
+                    // Tentar entender o tipo de erro
+                    if (response.status === 404) {
+                        throw new Error('Prova não encontrada ou você ainda não realizou esta prova.');
+                    } else if (response.status === 401 || response.status === 403) {
+                        throw new Error('Sessão expirada. Faça login novamente.');
+                        setTimeout(() => {
+                            window.location.href = 'login.html';
+                        }, 3000);
+                        return;
+                    } else {
+                        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+                    }
                 }
                 
-                const data = await response.json();
+                // Tentar parsear como JSON
+                let data;
+                try {
+                    const responseText = await response.text();
+                    console.log('Resposta bruta:', responseText.substring(0, 200)); // Log para debug
+                    
+                    if (!responseText.trim()) {
+                        throw new Error('Resposta vazia do servidor');
+                    }
+                    
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('Erro ao parsear JSON:', parseError);
+                    throw new Error('Resposta inválida do servidor. Formato de dados incorreto.');
+                }
                 
                 if (data.success) {
                     // Esconder loading
                     document.getElementById('loading').style.display = 'none';
                     
-                    if (data.status === 'corrigida' && data.nota !== null) {
+                    if (data.status === 'corrigida' && data.nota !== null && data.nota !== undefined) {
                         // Mostrar nota do aluno
-                        mostrarNotaAluno(data);
+                        mostrarNotaAluno(data, provaId);
                     } else if (data.status === 'pendente') {
                         // Mostrar mensagem de aguardando correção
                         document.getElementById('semNotaContainer').style.display = 'block';
-                        document.getElementById('provaTitulo').textContent = data.prova?.titulo || 'Prova';
+                        if (data.prova && data.prova.titulo) {
+                            document.getElementById('provaTitulo').textContent = data.prova.titulo;
+                        }
                     } else {
                         mostrarErro('Nota não disponível para esta prova.');
                     }
                     
                 } else {
-                    throw new Error(data.error || 'Erro ao carregar nota');
+                    throw new Error(data.error || data.message || 'Erro ao carregar nota');
                 }
                 
             } catch (error) {
@@ -337,9 +621,9 @@
                 mostrarErro(`Erro ao carregar sua nota: ${error.message}`);
             }
         }
-        
+
         // Mostrar nota do aluno
-        function mostrarNotaAluno(dados) {
+        function mostrarNotaAluno(dados, provaId) {
             const nota = dados.nota;
             const acertos = dados.acertos;
             const total = dados.total;
@@ -422,11 +706,10 @@
                             </div>
                         </div>
                         
-                        <div style="margin-top: 30px; padding: 15px; background: #f0fdf4; border-radius: 10px; border-left: 4px solid #10b981;">
-                            <h4><i class="fas fa-lightbulb"></i> Observações:</h4>
-                            <p style="margin-top: 10px; color: #065f46;">
-                                Sua nota já foi liberada pelo professor e está disponível em seu histórico.
-                            </p>
+                        <div style="margin-top: 20px; text-align: center;">
+                            <button onclick="carregarCorrecaoProva('${provaId}')" class="btn-ver-correcao">
+                                <i class="fas fa-file-check"></i> Ver Correção da Prova
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -435,21 +718,421 @@
             // Inserir no container
             document.getElementById('notaContainer').innerHTML = notaHTML;
             document.getElementById('notaContainer').style.display = 'block';
+            
+            // Se já houver dados de correção, carregar automaticamente
+            if (dados.resultadoDetalhado || dados.respostas) {
+                setTimeout(() => {
+                    carregarCorrecaoProva(provaId);
+                }, 1000);
+            }
         }
-        
+
         // Mostrar mensagem de erro
-        function mostrarErro(mensagem) {
+        function mostrarErro(mensagem, debugInfo = null) {
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('errorContainer').innerHTML = `
-                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 20px;"></i>
-                <h2>Erro</h2>
-                <p>${mensagem}</p>
-                <button onclick="window.history.back()" style="margin-top: 20px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                    <i class="fas fa-arrow-left"></i> Voltar
-                </button>
+            document.getElementById('notaContainer').style.display = 'none';
+            document.getElementById('semNotaContainer').style.display = 'none';
+            
+            let debugHTML = '';
+            if (debugInfo) {
+                debugHTML = `
+                    <div class="debug-info" style="text-align: left;">
+                        <button class="debug-toggle" onclick="toggleDebugInfo()">
+                            <i class="fas fa-chevron-down"></i> Mostrar detalhes técnicos
+                        </button>
+                        <div id="debugContent" class="debug-content" style="display: none; margin-top: 10px;">
+                            <pre style="background: #f3f4f6; padding: 10px; border-radius: 5px; font-size: 12px; overflow: auto;">${JSON.stringify(debugInfo, null, 2)}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Adicionar informações de URL atual
+            const currentUrl = window.location.href;
+            
+            const errorHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: #ef4444; margin-bottom: 20px;"></i>
+                    <h2 style="color: #7f1d1d; margin-bottom: 15px;">Ops! Algo deu errado</h2>
+                    <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 10px; padding: 20px; margin-bottom: 20px; display: inline-block; text-align: left; max-width: 600px;">
+                        <p style="color: #7f1d1d; margin-bottom: 10px;">${mensagem}</p>
+                        <hr style="margin: 15px 0; border-color: #fca5a5;">
+                        <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 5px;">
+                            <strong>URL atual:</strong><br>
+                            <code style="background: #f3f4f6; padding: 2px 5px; border-radius: 3px; font-size: 0.85rem; word-break: break-all;">${currentUrl}</code>
+                        </p>
+                        <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 5px;">
+                            <strong>API URL:</strong><br>
+                            <code style="background: #f3f4f6; padding: 2px 5px; border-radius: 3px; font-size: 0.85rem;">${API_BASE_URL}</code>
+                        </p>
+                        <p style="color: #6b7280; font-size: 0.9rem;">
+                            <strong>Prova ID:</strong> ${provaIdAtual || 'Não encontrado'}
+                        </p>
+                    </div>
+                    
+                    ${debugHTML}
+                    
+                    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 30px; flex-wrap: wrap;">
+                        <button onclick="window.history.back()" class="btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </button>
+                        <button onclick="location.reload()" style="padding: 12px 24px; background: #f59e0b; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-redo"></i> Tentar Novamente
+                        </button>
+                        <a href="aluno.html" style="padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-home"></i> Painel do Aluno
+                        </a>
+                    </div>
+                </div>
             `;
+            
+            document.getElementById('errorContainer').innerHTML = errorHTML;
             document.getElementById('errorContainer').style.display = 'block';
         }
+
+        // Função para mostrar/ocultar debug info
+        function toggleDebugInfo() {
+            const debugContent = document.getElementById('debugContent');
+            const toggleBtn = document.querySelector('.debug-toggle i');
+            
+            if (debugContent.style.display === 'none') {
+                debugContent.style.display = 'block';
+                toggleBtn.className = 'fas fa-chevron-up';
+                document.querySelector('.debug-toggle').innerHTML = '<i class="fas fa-chevron-up"></i> Ocultar detalhes técnicos';
+            } else {
+                debugContent.style.display = 'none';
+                toggleBtn.className = 'fas fa-chevron-down';
+                document.querySelector('.debug-toggle').innerHTML = '<i class="fas fa-chevron-down"></i> Mostrar detalhes técnicos';
+            }
+        }
+
+        // Função para mostrar/ocultar debug info
+        function toggleDebugInfo() {
+            const debugContent = document.getElementById('debugContent');
+            const toggleBtn = document.querySelector('.debug-toggle');
+            
+            if (debugContent.classList.contains('show')) {
+                debugContent.classList.remove('show');
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Mostrar detalhes';
+            } else {
+                debugContent.classList.add('show');
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Ocultar detalhes';
+            }
+        }
+            
+            // Coletar informações de debug
+            const debugInfo = {
+                timestamp: new Date().toISOString(),
+                provaId: provaIdAtual,
+                apiUrl: API_BASE_URL,
+                error: error.message,
+                errorType: error.name,
+                stack: error.stack
+            };
+            
+            mostrarErro(`Erro ao carregar sua nota: ${error.message}`, debugInfo);
+
+        // Função para carregar a correção da prova
+        async function carregarCorrecaoProva(provaIdParam = null) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const provaId = provaIdParam || provaIdAtual;
+                
+                if (!provaId) {
+                    mostrarErro('ID da prova não disponível');
+                    return;
+                }
+                
+                // Se já estiver expandida, apenas mostrar/ocultar
+                if (correcaoExpandida) {
+                    const content = document.getElementById('correcaoContent');
+                    const toggleBtn = document.querySelector('.btn-ver-correcao');
+                    
+                    if (content.style.display === 'none') {
+                        content.style.display = 'block';
+                        if (toggleBtn) {
+                            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Ocultar Correção';
+                            toggleBtn.classList.add('expanded');
+                        }
+                    } else {
+                        content.style.display = 'none';
+                        if (toggleBtn) {
+                            toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Ver Correção Completa';
+                            toggleBtn.classList.remove('expanded');
+                        }
+                    }
+                    return;
+                }
+                
+                // Mostrar loading na correção
+                document.getElementById('correcaoContainer').innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4f46e5; margin-bottom: 15px;"></i>
+                        <p>Carregando correção da prova...</p>
+                    </div>
+                `;
+                document.getElementById('correcaoContainer').style.display = 'block';
+                
+                // Tentar buscar correção detalhada
+                const response = await fetch(`${API_BASE_URL}/aluno/provas/${provaId}/correcao-detalhada`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    // Se não houver rota específica, buscar dados combinados
+                    await carregarCorrecaoAlternativa(provaId);
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarCorrecaoProva(data);
+                    correcaoExpandida = true;
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar correção');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar correção:', error);
+                document.getElementById('correcaoContainer').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #6b7280;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 2rem; margin-bottom: 15px;"></i>
+                        <p>Correção detalhada não disponível.</p>
+                        <p style="font-size: 0.9rem;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Função alternativa para carregar correção
+        async function carregarCorrecaoAlternativa(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Buscar gabarito da prova
+                const respostaProva = await fetch(`${API_BASE_URL}/provas/${provaId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!respostaProva.ok) {
+                    throw new Error('Não foi possível carregar o gabarito');
+                }
+                
+                const dadosProva = await respostaProva.json();
+                
+                if (!dadosProva.success) {
+                    throw new Error(dadosProva.error || 'Erro ao carregar gabarito');
+                }
+                
+                // Buscar respostas do aluno
+                const respostaAluno = await fetch(`${API_BASE_URL}/aluno/provas/${provaId}/resultado`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const dadosAluno = await respostaAluno.json();
+                
+                if (!dadosAluno.success) {
+                    throw new Error(dadosAluno.error || 'Erro ao carregar respostas');
+                }
+                
+                // Combinar dados para criar a correção
+                const correcaoData = {
+                    success: true,
+                    prova: dadosProva.prova,
+                    questoes: dadosProva.questoes,
+                    respostasAluno: dadosAluno.respostas || [],
+                    resultadoDetalhado: dadosAluno.resultadoDetalhado || [],
+                    nota: dadosAluno.nota,
+                    acertos: dadosAluno.acertos,
+                    total: dadosAluno.total
+                };
+                
+                mostrarCorrecaoProva(correcaoData);
+                correcaoExpandida = true;
+                
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        // Função para mostrar a correção da prova
+        function mostrarCorrecaoProva(dados) {
+            const prova = dados.prova;
+            const questoes = dados.questoes || dados.gabarito;
+            const respostasAluno = dados.respostasAluno;
+            const resultadoDetalhado = dados.resultadoDetalhado;
+            const nota = dados.nota;
+            const acertos = dados.acertos;
+            const total = dados.total;
+            
+            // Calcular estatísticas
+            const totalQuestoes = questoes.length;
+            const acertosCalculados = acertos || 0;
+            const porcentagemAcertos = ((acertosCalculados / totalQuestoes) * 100).toFixed(1);
+            
+            // Gerar HTML da correção
+            let correcaoHTML = `
+                <div class="correcao-header">
+                    <h3><i class="fas fa-file-check"></i> Correção da Prova</h3>
+                    <button onclick="toggleCorrecao()" class="correcao-toggle">
+                        <i class="fas fa-chevron-up"></i> Ocultar
+                    </button>
+                </div>
+                
+                <div id="correcaoContent" class="correcao-content show">
+                    <div class="correcao-stats">
+                        <div class="stat-item">
+                            <div class="stat-number">${acertosCalculados}/${totalQuestoes}</div>
+                            <div class="stat-label">Acertos/Total</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${porcentagemAcertos}%</div>
+                            <div class="stat-label">Taxa de Acerto</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${nota ? nota.toFixed(1) : '--'}</div>
+                            <div class="stat-label">Nota Final</div>
+                        </div>
+                    </div>
+                    
+                    <h3 style="color: #4b5563; margin: 25px 0 15px 0;">
+                        <i class="fas fa-list-check"></i> Questões Corrigidas
+                    </h3>
+            `;
+            
+            // Processar cada questão
+            questoes.forEach((questao, index) => {
+                const numero = index + 1;
+                let respostaAluno = null;
+                let respostaCorreta = null;
+                let isCorreta = false;
+                let explicacao = questao.explicacao;
+                
+                // Determinar resposta do aluno
+                if (resultadoDetalhado && resultadoDetalhado[index]) {
+                    respostaAluno = resultadoDetalhado[index].respostaAluno;
+                    respostaCorreta = resultadoDetalhado[index].respostaCorreta;
+                    isCorreta = resultadoDetalhado[index].correto || false;
+                } else if (respostasAluno && respostasAluno[index]) {
+                    respostaAluno = respostasAluno[index];
+                    respostaCorreta = String.fromCharCode(65 + questao.respostaCorreta);
+                    isCorreta = respostaAluno.toUpperCase() === respostaCorreta;
+                } else {
+                    respostaAluno = 'Não respondida';
+                    respostaCorreta = String.fromCharCode(65 + questao.respostaCorreta);
+                    isCorreta = false;
+                }
+                
+                // Obter texto das respostas
+                const textoRespostaAluno = obterTextoResposta(respostaAluno, questao.opcoes);
+                const textoRespostaCorreta = questao.opcoes[questao.respostaCorreta];
+                
+                correcaoHTML += `
+                    <div class="questao-corrigida ${isCorreta ? 'correta' : 'incorreta'}">
+                        <div class="questao-header">
+                            <div class="questao-numero">
+                                <i class="fas ${isCorreta ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                                Questão ${numero}
+                            </div>
+                            <div class="questao-status ${isCorreta ? 'status-correta' : 'status-incorreta'}">
+                                ${isCorreta ? 'Correta' : 'Incorreta'}
+                            </div>
+                        </div>
+                        
+                        <div class="pergunta-corrigida">${questao.pergunta}</div>
+                        
+                        <div class="respostas-comparacao">
+                            <div class="resposta-box aluno">
+                                <h4><i class="fas fa-user-graduate"></i> Sua Resposta</h4>
+                                <div class="resposta-texto aluno">
+                                    ${textoRespostaAluno}
+                                </div>
+                                <small style="color: #6b7280;">Letra: ${respostaAluno}</small>
+                            </div>
+                            
+                            <div class="resposta-box ${isCorreta ? 'correta' : ''}">
+                                <h4><i class="fas fa-check-circle"></i> Resposta Correta</h4>
+                                <div class="resposta-texto ${isCorreta ? 'correta' : ''}">
+                                    ${textoRespostaCorreta}
+                                </div>
+                                <small style="color: #6b7280;">Letra: ${respostaCorreta}</small>
+                            </div>
+                        </div>
+                        
+                        ${explicacao ? `
+                        <div class="explicacao-professor">
+                            <h4><i class="fas fa-lightbulb"></i> Explicação do Professor</h4>
+                            <p class="explicacao-texto">${explicacao}</p>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            // Adicionar mensagem do professor (se houver)
+            if (dados.mensagemProfessor) {
+                correcaoHTML += `
+                    <div class="mensagem-professor">
+                        <h4><i class="fas fa-comment-medical"></i> Comentário do Professor</h4>
+                        <p class="mensagem-texto">${dados.mensagemProfessor}</p>
+                    </div>
+                `;
+            }
+            
+            correcaoHTML += `
+                </div>
+            `;
+            
+            // Inserir no container
+            document.getElementById('correcaoContainer').innerHTML = correcaoHTML;
+            document.getElementById('correcaoContainer').style.display = 'block';
+            
+            // Atualizar botão
+            const toggleBtn = document.querySelector('.btn-ver-correcao');
+            if (toggleBtn) {
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Ocultar Correção';
+                toggleBtn.classList.add('expanded');
+            }
+        }
+
+        // Função auxiliar para obter texto da resposta
+        function obterTextoResposta(letra, opcoes) {
+            if (!letra || letra === 'Não respondida') {
+                return 'Não respondida';
+            }
+            
+            const indice = letra.toUpperCase().charCodeAt(0) - 65;
+            if (opcoes && opcoes[indice]) {
+                return opcoes[indice];
+            }
+            
+            return `Opção ${letra} (não encontrada)`;
+        }
+
+        // Função para alternar visibilidade da correção
+        function toggleCorrecao() {
+            const content = document.getElementById('correcaoContent');
+            const toggleBtn = document.querySelector('.correcao-toggle');
+            
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Mostrar';
+            } else {
+                content.classList.add('show');
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Ocultar';
+            }
+        }
+
+        // Exportar funções para uso global
+        window.carregarCorrecaoProva = carregarCorrecaoProva;
+        window.toggleCorrecao = toggleCorrecao;
     </script>
 </body>
 </html>

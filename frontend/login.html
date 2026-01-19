@@ -268,6 +268,46 @@
         .whatsapp-contact i {
             font-size: 1.2rem;
         }
+        
+        /* Estilo específico para campos de CPF */
+        .cpf-field {
+            position: relative;
+        }
+        
+        .cpf-field .form-control {
+            padding-right: 40px;
+        }
+        
+        .cpf-field .valid-icon {
+            position: absolute;
+            right: 15px;
+            top: 42px;
+            font-size: 1.2rem;
+            display: none;
+        }
+        
+        .cpf-field .valid-icon.valid {
+            display: inline;
+            color: #10b981;
+        }
+        
+        .cpf-field .valid-icon.invalid {
+            display: inline;
+            color: #ef4444;
+        }
+        
+        /* Estilo para o campo de login que aceita email ou CPF */
+        .login-identifier-field {
+            position: relative;
+        }
+        
+        .login-type-hint {
+            display: block;
+            margin-top: 5px;
+            font-size: 0.85rem;
+            color: #6b7280;
+            font-style: italic;
+        }
     </style>
 </head>
 <!-- Incluir Font Awesome -->
@@ -294,9 +334,15 @@
         <!-- Conteúdo Login -->
         <div id="login-tab" class="tab-content active">
             <form id="loginForm">
-                <div class="form-group">
-                    <label for="loginEmail"><i class="fas fa-envelope"></i> Email</label>
-                    <input type="email" id="loginEmail" class="form-control" required placeholder="seu@email.com">
+                <div class="form-group login-identifier-field">
+                    <label for="loginIdentifier">
+                        <i class="fas fa-user-circle"></i> Email ou CPF
+                    </label>
+                    <input type="text" id="loginIdentifier" class="form-control" required 
+                           placeholder="Digite seu email ou CPF">
+                    <small class="login-type-hint">
+                        Você pode usar seu email cadastrado ou CPF (formato: 000.000.000-00)
+                    </small>
                 </div>
                 
                 <div class="form-group">
@@ -340,6 +386,19 @@
                     <input type="text" id="registerNome" class="form-control" required placeholder="Seu nome completo">
                 </div>
                 
+                <!-- CAMPO CPF ADICIONADO (OBRIGATÓRIO) -->
+                <div class="form-group cpf-field">
+                    <label for="registerCPF"><i class="fas fa-id-card"></i> CPF <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
+                    <input type="text" id="registerCPF" class="form-control" required 
+                           placeholder="000.000.000-00" 
+                           maxlength="14"
+                           oninput="formatarCPF(this)">
+                    <span id="cpfIcon" class="valid-icon"></span>
+                    <small style="display: block; margin-top: 5px; color: #6b7280;">
+                        Digite apenas números. O formato será aplicado automaticamente.
+                    </small>
+                </div>
+                
                 <div class="form-group">
                     <label for="registerEmail"><i class="fas fa-envelope"></i> Email</label>
                     <input type="email" id="registerEmail" class="form-control" required placeholder="seu@email.com">
@@ -347,9 +406,22 @@
                 
                 <!-- Campos para Aluno -->
                 <div id="alunoFields" class="role-fields active">
+                    <!-- CURSO OBRIGATÓRIO - SELECIONÁVEL -->
                     <div class="form-group">
-                        <label for="registerCurso"><i class="fas fa-graduation-cap"></i> Curso (opcional)</label>
-                        <input type="text" id="registerCurso" class="form-control" placeholder="Ex: Engenharia, Medicina, Direito">
+                        <label for="registerCurso"><i class="fas fa-graduation-cap"></i> Curso <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
+                        <select id="registerCurso" class="form-control" required>
+                            <option value="">Selecione seu curso técnico</option>
+                            <option value="TÉCNICO EM EVENTOS">TÉCNICO EM EVENTOS</option>
+                            <option value="TÉCNICO EM REDES DE COMPUTADORES">TÉCNICO EM REDES DE COMPUTADORES</option>
+                            <option value="TÉCNICO EM ÁUDIO E VÍDEO">TÉCNICO EM ÁUDIO E VÍDEO</option>
+                            <option value="TÉCNICO EM GUIA DE TURISMO">TÉCNICO EM GUIA DE TURISMO</option>
+                            <option value="TÉCNICO EM MARKETING">TÉCNICO EM MARKETING</option>
+                            <option value="TÉCNICO EM GASTRONOMIA">TÉCNICO EM GASTRONOMIA</option>
+                            <option value="TÉCNICO EM PUBLICIDADE">TÉCNICO EM PUBLICIDADE</option>
+                            <option value="TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS">TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS</option>
+                            <option value="TÉCNICO EM SERVIÇOS JURÍDICOS">TÉCNICO EM SERVIÇOS JURÍDICOS</option>
+                            <option value="TÉCNICO EM MEIO AMBIENTE">TÉCNICO EM MEIO AMBIENTE</option>
+                        </select>
                     </div>
                     
                     <div class="form-group">
@@ -447,11 +519,15 @@
                 document.getElementById('professorFields').classList.remove('active');
                 // Não tornar eixo obrigatório para alunos
                 document.getElementById('registerEixo').removeAttribute('required');
+                // Tornar curso obrigatório apenas para alunos
+                document.getElementById('registerCurso').setAttribute('required', 'true');
             } else {
                 document.getElementById('alunoFields').classList.remove('active');
                 document.getElementById('professorFields').classList.add('active');
                 // Eixo obrigatório apenas para professores
                 document.getElementById('registerEixo').setAttribute('required', 'true');
+                // Curso não obrigatório para professores
+                document.getElementById('registerCurso').removeAttribute('required');
             }
         }
         
@@ -465,14 +541,92 @@
             alerta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
         
+        // FUNÇÃO PARA FORMATAR CPF
+        function formatarCPF(input) {
+            // Remove tudo que não é número
+            let cpf = input.value.replace(/\D/g, '');
+            
+            // Limita a 11 dígitos
+            cpf = cpf.substring(0, 11);
+            
+            // Aplica a formatação
+            if (cpf.length > 9) {
+                cpf = cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+            } else if (cpf.length > 6) {
+                cpf = cpf.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+            } else if (cpf.length > 3) {
+                cpf = cpf.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+            }
+            
+            input.value = cpf;
+        }
+        
+        // FUNÇÃO PARA VALIDAR CPF
+        function validarCPF(cpf) {
+            // Remove caracteres não numéricos
+            cpf = cpf.replace(/\D/g, '');
+            
+            // CPF deve ter 11 dígitos
+            if (cpf.length !== 11) return false;
+            
+            // Verifica se todos os dígitos são iguais (CPF inválido)
+            if (/^(\d)\1+$/.test(cpf)) return false;
+            
+            // Validação dos dígitos verificadores
+            let soma = 0;
+            let resto;
+            
+            for (let i = 1; i <= 9; i++) {
+                soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
+            }
+            
+            resto = (soma * 10) % 11;
+            if ((resto === 10) || (resto === 11)) resto = 0;
+            if (resto !== parseInt(cpf.substring(9, 10))) return false;
+            
+            soma = 0;
+            for (let i = 1; i <= 10; i++) {
+                soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
+            }
+            
+            resto = (soma * 10) % 11;
+            if ((resto === 10) || (resto === 11)) resto = 0;
+            if (resto !== parseInt(cpf.substring(10, 11))) return false;
+            
+            return true;
+        }
+        
+        // FUNÇÃO PARA DETECTAR SE É EMAIL OU CPF
+        function detectarTipoIdentificador(identificador) {
+            identificador = identificador.trim();
+            
+            // Se tem @, é email
+            if (identificador.includes('@')) {
+                return 'email';
+            }
+            
+            // Se tem apenas números e tem 11 dígitos (com ou sem formatação), é CPF
+            const apenasNumeros = identificador.replace(/\D/g, '');
+            if (apenasNumeros.length === 11) {
+                return 'cpf';
+            }
+            
+            // Se não for claro, tenta adivinhar
+            if (identificador.match(/[a-zA-Z]/)) {
+                return 'email'; // Tem letras, provavelmente email
+            }
+            
+            return 'cpf'; // Caso padrão
+        }
+        
         // Configuração do formulário de login
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const email = document.getElementById('loginEmail').value.trim();
+            const identificador = document.getElementById('loginIdentifier').value.trim();
             const senha = document.getElementById('loginPassword').value;
             
-            if (!email || !senha) {
+            if (!identificador || !senha) {
                 mostrarAlerta('Preencha todos os campos');
                 return;
             }
@@ -483,10 +637,21 @@
             btn.disabled = true;
             
             try {
+                // Detectar se é email ou CPF
+                const tipo = detectarTipoIdentificador(identificador);
+                let dadosLogin = { password: senha };
+                
+                if (tipo === 'email') {
+                    dadosLogin.email = identificador.toLowerCase();
+                } else {
+                    // É CPF - remover formatação
+                    dadosLogin.cpf = identificador.replace(/\D/g, '');
+                }
+                
                 const resposta = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email, password: senha})
+                    body: JSON.stringify(dadosLogin)
                 });
                 
                 const dados = await resposta.json();
@@ -523,15 +688,39 @@
             // Coletar dados básicos
             const role = document.getElementById('registerRole').value;
             const nome = document.getElementById('registerNome').value.trim();
+            const cpf = document.getElementById('registerCPF').value;
             const email = document.getElementById('registerEmail').value.trim();
+            const curso = document.getElementById('registerCurso').value;
+            const periodo = document.getElementById('registerPeriodo').value.trim();
             const matricula = document.getElementById('registerMatricula').value.trim();
             const senha = document.getElementById('registerPassword').value;
             const confirmarSenha = document.getElementById('registerConfirmPassword').value;
             
             // Validações básicas
-            if (!nome || !email || !senha || !confirmarSenha) {
+            if (!nome || !cpf || !email || !senha || !confirmarSenha) {
                 mostrarAlerta('Preencha todos os campos obrigatórios');
                 return;
+            }
+            
+            // Validar CPF
+            if (!validarCPF(cpf)) {
+                mostrarAlerta('CPF inválido. Digite um CPF válido');
+                return;
+            }
+            
+            // Validação específica para alunos
+            if (role === 'aluno' && !curso) {
+                mostrarAlerta('Selecione um curso');
+                return;
+            }
+            
+            // Validação específica para professores
+            if (role === 'professor') {
+                const eixo = document.getElementById('registerEixo').value;
+                if (!eixo) {
+                    mostrarAlerta('Professores devem selecionar um eixo');
+                    return;
+                }
             }
             
             if (senha.length < 6) {
@@ -547,6 +736,7 @@
             // Preparar objeto de dados
             const dadosCadastro = {
                 nome: nome,
+                cpf: cpf.replace(/\D/g, ''), // Remove formatação
                 email: email,
                 password: senha,
                 role: role,
@@ -555,18 +745,15 @@
             
             // Adicionar dados específicos por role
             if (role === 'aluno') {
-                dadosCadastro.curso = document.getElementById('registerCurso').value.trim() || undefined;
-                dadosCadastro.periodo = document.getElementById('registerPeriodo').value.trim() || undefined;
+                dadosCadastro.curso = curso;
+                dadosCadastro.periodo = periodo || undefined;
                 // Alunos não enviam eixo
             } else if (role === 'professor') {
                 const eixo = document.getElementById('registerEixo').value;
-                if (!eixo) {
-                    mostrarAlerta('Professores devem selecionar um eixo');
-                    return;
-                }
                 dadosCadastro.eixo = eixo;
                 dadosCadastro.departamento = document.getElementById('registerDepartamento').value.trim() || undefined;
                 dadosCadastro.titulacao = document.getElementById('registerTitulacao').value.trim() || undefined;
+                // Professores não enviam curso
             }
             
             // Remover campos undefined

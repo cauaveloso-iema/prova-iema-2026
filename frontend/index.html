@@ -1035,6 +1035,27 @@
             }
         }
         
+        /* ===== ESTILOS PARA BOTÃO EXCLUIR ===== */
+        @media (max-width: 768px) {
+            .prova-actions {
+                flex-direction: column !important;
+            }
+            
+            .prova-actions button {
+                width: 100% !important;
+                margin-bottom: 8px;
+            }
+        }
+
+        .btn-excluir-prova:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%) !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3) !important;
+        }
+
+        .btn-excluir-prova:active {
+            transform: translateY(0) !important;
+        }
         /* ===== UTILITÁRIOS ===== */
         .progress-bar {
             height: 8px;
@@ -1636,6 +1657,21 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal de Prova Corrigida -->
+<div class="modal" id="modalProvaCorrigida">
+    <div class="modal-content modal-prova-corrigida">
+        <div class="modal-header">
+            <h3 style="margin: 0; color: var(--gray-800); display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-file-check" style="color: #f59e0b;"></i> Prova Corrigida
+            </h3>
+            <button class="modal-close" onclick="fecharModal('modalProvaCorrigida')">&times;</button>
+        </div>
+        <div id="provaCorrigidaConteudo" class="prova-corrigida-container">
+            <!-- Conteúdo será preenchido via JavaScript -->
+        </div>
+    </div>
+</div>
     
     <!-- JavaScript -->
     <script>
@@ -1661,7 +1697,497 @@
         let turmasProfessor = [];
         let provaGerada = null;
         let turmaParaExcluir = null;
-        
+
+        // ============ FUNÇÕES PARA PROVA CORRIGIDA ============
+
+        // Variáveis globais
+        let provaParaCorrigir = null;
+        let alunoParaCorrigir = null;
+        let gabaritoProva = null;
+        let respostasAluno = null;
+
+        // Função para gerar prova corrigida
+        window.gerarProvaCorrigida = async function(provaId, alunoId, alunoNome) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log(`📝 Gerando prova corrigida: Prova ${provaId}, Aluno ${alunoNome}`);
+                
+                // Mostrar loading
+                const modalContent = `
+                    <div style="padding: 40px; text-align: center;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #f59e0b; margin-bottom: 15px;"></i>
+                        <h3 style="color: #4b5563; margin-bottom: 10px;">Gerando Prova Corrigida...</h3>
+                        <p style="color: #6b7280;">Buscando gabarito e respostas do aluno...</p>
+                    </div>
+                `;
+                
+                // Criar ou atualizar modal
+                let modal = document.getElementById('modalProvaCorrigida');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.id = 'modalProvaCorrigida';
+                    modal.innerHTML = `
+                        <div class="modal-content modal-prova-corrigida">
+                            <div class="modal-header">
+                                <h3 style="margin: 0; color: var(--gray-800); display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-file-check" style="color: #f59e0b;"></i> Prova Corrigida
+                                </h3>
+                                <button class="modal-close" onclick="fecharModal('modalProvaCorrigida')">&times;</button>
+                            </div>
+                            <div id="provaCorrigidaConteudo" class="prova-corrigida-container">
+                                ${modalContent}
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                } else {
+                    document.getElementById('provaCorrigidaConteudo').innerHTML = modalContent;
+                }
+                
+                modal.style.display = 'flex';
+                
+                // Salvar referências
+                provaParaCorrigir = provaId;
+                alunoParaCorrigir = alunoId;
+                
+                // 1. Buscar gabarito da prova
+                const respostaProva = await fetch(`/api/provas/${provaId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!respostaProva.ok) {
+                    throw new Error(`Erro ${respostaProva.status}: Não foi possível carregar a prova`);
+                }
+                
+                const dadosProva = await respostaProva.json();
+                
+                if (!dadosProva.success) {
+                    throw new Error(dadosProva.error || 'Erro ao carregar dados da prova');
+                }
+                
+                gabaritoProva = {
+                    titulo: dadosProva.prova.titulo,
+                    questoes: dadosProva.questoes.map((q, index) => ({
+                        numero: index + 1,
+                        pergunta: q.pergunta,
+                        opcoes: q.opcoes,
+                        respostaCorreta: q.respostaCorreta,
+                        respostaCorretaLetra: String.fromCharCode(65 + q.respostaCorreta),
+                        explicacao: q.explicacao
+                    }))
+                };
+                
+                // 2. Buscar respostas do aluno
+                let respostasEncontradas = null;
+                
+                // Tentar buscar na coleção Resultado
+                const respostaResultado = await fetch(`/api/provas/${provaId}/resultados?alunoId=${alunoId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (respostaResultado.ok) {
+                    const dadosResultado = await respostaResultado.json();
+                    if (dadosResultado.success && dadosResultado.resultados && dadosResultado.resultados.length > 0) {
+                        const resultadoAluno = dadosResultado.resultados.find(r => 
+                            r.alunoId === alunoId || (r.userId && r.userId.toString() === alunoId)
+                        );
+                        
+                        if (resultadoAluno && resultadoAluno.respostas) {
+                            respostasEncontradas = resultadoAluno.respostas;
+                        }
+                    }
+                }
+                
+                // Se não encontrou, tentar buscar na coleção ProvaRealizada
+                if (!respostasEncontradas) {
+                    try {
+                        const respostaProvaRealizada = await fetch(`/api/provas/${provaId}/correcao`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        
+                        if (respostaProvaRealizada.ok) {
+                            const dadosCorrecao = await respostaProvaRealizada.json();
+                            if (dadosCorrecao.success && dadosCorrecao.alunos) {
+                                const provaAluno = dadosCorrecao.alunos.find(a => a.alunoId === alunoId);
+                                if (provaAluno && provaAluno.respostas) {
+                                    respostasEncontradas = provaAluno.respostas;
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('Não foi possível buscar na rota de correção:', error.message);
+                    }
+                }
+                
+                // 3. Gerar a prova corrigida
+                if (!respostasEncontradas) {
+                    throw new Error('Não foi possível encontrar as respostas do aluno');
+                }
+                
+                respostasAluno = respostasEncontradas;
+                
+                // 4. Criar HTML da prova corrigida
+                const provaCorrigidaHTML = criarHTMLProvaCorrigida(gabaritoProva, respostasAluno, alunoNome);
+                
+                // 5. Atualizar modal com a prova corrigida
+                document.getElementById('provaCorrigidaConteudo').innerHTML = provaCorrigidaHTML;
+                
+                console.log('✅ Prova corrigida gerada com sucesso');
+                
+            } catch (error) {
+                console.error('❌ Erro ao gerar prova corrigida:', error);
+                
+                const errorHTML = `
+                    <div style="padding: 40px; text-align: center;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444; margin-bottom: 15px;"></i>
+                        <h3 style="color: #7f1d1d; margin-bottom: 10px;">Erro ao Gerar Prova Corrigida</h3>
+                        <p style="color: #6b7280; margin-bottom: 20px;">${error.message}</p>
+                        <div style="display: flex; gap: 10px; justify-content: center;">
+                            <button onclick="fecharModal('modalProvaCorrigida')" style="padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                Fechar
+                            </button>
+                            <button onclick="gerarProvaCorrigida('${provaParaCorrigir}', '${alunoParaCorrigir}', '${alunoNome || 'Aluno'}')" style="padding: 10px 20px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                Tentar Novamente
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('provaCorrigidaConteudo').innerHTML = errorHTML;
+            }
+        };
+
+        // Função para criar HTML da prova corrigida
+        function criarHTMLProvaCorrigida(gabarito, respostas, alunoNome) {
+            let acertos = 0;
+            const questoesCorrigidas = [];
+            
+            // Processar cada questão
+            gabarito.questoes.forEach((questao, index) => {
+                const respostaAluno = respostas[index];
+                const respostaAlunoLetra = respostaAluno ? respostaAluno.toUpperCase().trim() : null;
+                const respostaCorretaLetra = questao.respostaCorretaLetra;
+                const isCorreta = respostaAlunoLetra === respostaCorretaLetra;
+                
+                if (isCorreta) acertos++;
+                
+                // Obter texto da resposta do aluno
+                let textoRespostaAluno = 'Não respondida';
+                if (respostaAlunoLetra) {
+                    const indiceResposta = respostaAlunoLetra.charCodeAt(0) - 65;
+                    if (questao.opcoes[indiceResposta]) {
+                        textoRespostaAluno = questao.opcoes[indiceResposta];
+                    } else {
+                        textoRespostaAluno = `Opção ${respostaAlunoLetra} (não encontrada)`;
+                    }
+                }
+                
+                // Obter texto da resposta correta
+                const textoRespostaCorreta = questao.opcoes[questao.respostaCorreta];
+                
+                questoesCorrigidas.push({
+                    numero: questao.numero,
+                    pergunta: questao.pergunta,
+                    respostaAluno: respostaAlunoLetra,
+                    textoRespostaAluno: textoRespostaAluno,
+                    respostaCorreta: respostaCorretaLetra,
+                    textoRespostaCorreta: textoRespostaCorreta,
+                    isCorreta: isCorreta,
+                    explicacao: questao.explicacao
+                });
+            });
+            
+            const totalQuestoes = gabarito.questoes.length;
+            const porcentagemAcertos = ((acertos / totalQuestoes) * 100).toFixed(1);
+            const notaCalculada = ((acertos / totalQuestoes) * 10).toFixed(1);
+            
+            // Gerar HTML
+            let html = `
+                <div class="correcao-stats">
+                    <div class="stat-item">
+                        <div class="stat-number">${alunoNome.split(' ')[0]}</div>
+                        <div class="stat-label">Aluno</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${acertos}/${totalQuestoes}</div>
+                        <div class="stat-label">Acertos</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${porcentagemAcertos}%</div>
+                        <div class="stat-label">Taxa de Acerto</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${notaCalculada}</div>
+                        <div class="stat-label">Nota Calculada</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #4b5563; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-list-check"></i> Correção Detalhada (${totalQuestoes} questões)
+                    </h4>
+                    <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 20px;">
+                        Comparação entre as respostas do aluno e o gabarito oficial da prova.
+                    </p>
+                </div>
+                
+                <div id="questoesCorrigidas">
+            `;
+            
+            // Adicionar cada questão corrigida
+            questoesCorrigidas.forEach(q => {
+                html += `
+                    <div class="resposta-item ${q.isCorreta ? 'correta' : 'incorreta'}">
+                        <div class="questao-numero">
+                            <i class="fas ${q.isCorreta ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                            Questão ${q.numero}
+                            <span class="badge-correcao ${q.isCorreta ? 'badge-corrigido' : 'badge-erro'}" style="margin-left: auto;">
+                                ${q.isCorreta ? 'Correta' : 'Incorreta'}
+                            </span>
+                        </div>
+                        
+                        <div class="pergunta">${q.pergunta}</div>
+                        
+                        <div class="resposta-detalhes">
+                            <div class="resposta-info">
+                                <h5><i class="fas fa-user-graduate"></i> Resposta do Aluno</h5>
+                                <div class="resposta-texto aluno">${q.textoRespostaAluno}</div>
+                                <small style="color: #6b7280;">Opção selecionada: ${q.respostaAluno || 'Não respondida'}</small>
+                            </div>
+                            
+                            <div class="resposta-info">
+                                <h5><i class="fas fa-check-circle"></i> Resposta Correta</h5>
+                                <div class="resposta-texto ${q.isCorreta ? 'correta' : 'incorreta'}">${q.textoRespostaCorreta}</div>
+                                <small style="color: #6b7280;">Opção correta: ${q.respostaCorreta}</small>
+                            </div>
+                        </div>
+                        
+                        ${q.explicacao ? `
+                        <div class="explicacao">
+                            <h6><i class="fas fa-lightbulb"></i> Explicação</h6>
+                            <p>${q.explicacao}</p>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            html += `
+                </div>
+                
+                <div class="correcao-actions">
+                    <button class="btn-imprimir-correcao" onclick="imprimirProvaCorrigida()">
+                        <i class="fas fa-print"></i> Imprimir Correção
+                    </button>
+                    <button class="btn-enviar-correcao" onclick="enviarProvaCorrigida()">
+                        <i class="fas fa-paper-plane"></i> Enviar para Aluno
+                    </button>
+                </div>
+            `;
+            
+            return html;
+        }
+
+        // Função para enviar prova corrigida para o aluno
+        async function enviarProvaCorrigida() {
+            if (!provaParaCorrigir || !alunoParaCorrigir) {
+                mostrarAlerta('alertMinhasProvas', '❌ Nenhum aluno selecionado para enviar a correção', 'error');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                const confirmacao = confirm('Enviar esta correção para o aluno? O aluno poderá visualizar a prova corrigida.');
+                
+                if (!confirmacao) return;
+                
+                // Calcular nota final (com base no gabarito e respostas)
+                let nota = 0;
+                if (gabaritoProva && respostasAluno) {
+                    let acertos = 0;
+                    gabaritoProva.questoes.forEach((questao, index) => {
+                        const respostaAluno = respostasAluno[index];
+                        const respostaCorretaLetra = String.fromCharCode(65 + questao.respostaCorreta);
+                        
+                        if (respostaAluno && respostaAluno.toUpperCase().trim() === respostaCorretaLetra) {
+                            acertos++;
+                        }
+                    });
+                    
+                    nota = (acertos / gabaritoProva.questoes.length) * 10;
+                }
+                
+                // Enviar correção (liberar nota)
+                const resposta = await fetch(`/api/professor/provas/${provaParaCorrigir}/corrigir`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        alunoId: alunoParaCorrigir,
+                        nota: nota.toFixed(2),
+                        liberarNota: true
+                    })
+                });
+                
+                const dados = await resposta.json();
+                
+                if (dados.success) {
+                    mostrarAlerta('alertMinhasProvas', `✅ Prova corrigida enviada para o aluno! Nota: ${nota.toFixed(2)}`, 'success');
+                    fecharModal('modalProvaCorrigida');
+                    
+                    // Recarregar a lista de provas após 2 segundos
+                    setTimeout(() => {
+                        carregarProvasProfessor();
+                    }, 2000);
+                } else {
+                    throw new Error(dados.error || 'Erro ao enviar correção');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao enviar prova corrigida:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro ao enviar correção: ${error.message}`, 'error');
+            }
+        }
+
+        // Função para imprimir a prova corrigida
+        function imprimirProvaCorrigida() {
+            const modal = document.getElementById('modalProvaCorrigida');
+            if (!modal) return;
+            
+            const printContent = document.getElementById('provaCorrigidaConteudo').innerHTML;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Prova Corrigida - Sistema de Provas</title>
+                    <style>
+                        @media print {
+                            body { 
+                                margin: 0; 
+                                padding: 20px; 
+                                font-family: Arial, sans-serif; 
+                                font-size: 12px;
+                            }
+                            .no-print { display: none !important; }
+                            .correcao-actions, .correcao-stats { 
+                                background: #f8f9fa !important; 
+                                color: #000 !important; 
+                                padding: 15px;
+                                border: 1px solid #ddd;
+                                margin-bottom: 15px;
+                            }
+                            .resposta-item { 
+                                page-break-inside: avoid; 
+                                border: 1px solid #ddd !important; 
+                                margin-bottom: 10px;
+                                padding: 10px;
+                                background: #fff !important;
+                            }
+                            .resposta-item.correta { border-left: 3px solid #28a745 !important; }
+                            .resposta-item.incorreta { border-left: 3px solid #dc3545 !important; }
+                            .badge-correcao { 
+                                display: inline-block;
+                                padding: 2px 8px;
+                                border-radius: 10px;
+                                font-size: 10px;
+                                margin-left: 10px;
+                            }
+                            .badge-corrigido { background: #d4edda !important; color: #155724 !important; }
+                            .badge-erro { background: #f8d7da !important; color: #721c24 !important; }
+                            h3, h4, h5 { color: #000 !important; }
+                            .explicacao { background: #f8f9fa !important; padding: 8px; }
+                        }
+                        body { font-family: Arial, sans-serif; }
+                        .header-print { 
+                            text-align: center; 
+                            margin-bottom: 20px; 
+                            border-bottom: 2px solid #000; 
+                            padding-bottom: 15px;
+                        }
+                        .info-aluno { 
+                            display: flex; 
+                            justify-content: space-between; 
+                            margin-bottom: 15px;
+                        }
+                        .questao-corrigida { margin-bottom: 15px; }
+                        .resposta-comparacao { 
+                            display: grid; 
+                            grid-template-columns: 1fr 1fr; 
+                            gap: 15px; 
+                            margin-top: 10px;
+                        }
+                        @media (max-width: 768px) {
+                            .resposta-comparacao { grid-template-columns: 1fr; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header-print">
+                        <h1>PROVA CORRIGIDA</h1>
+                        <h2>${gabaritoProva?.titulo || 'Prova'}</h2>
+                        <p>Sistema de Provas Online - ${new Date().toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    
+                    ${printContent}
+                    
+                    <div style="text-align: center; margin-top: 30px; font-size: 10px; color: #666;">
+                        Sistema de Provas - Corrigido em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.onafterprint = function() {
+                    printWindow.close();
+                };
+            }, 500);
+        }
+
+        // Função para buscar resultados de uma prova específica (rota auxiliar)
+        async function buscarResultadosProva(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const response = await fetch(`/api/provas/${provaId}/resultados`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    return data.resultados || [];
+                } else {
+                    throw new Error(data.error || 'Erro ao buscar resultados');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao buscar resultados:', error);
+                return [];
+            }
+        }
         // ============ FUNÇÕES PARA RESULTADOS GERAIS ============
 
         // Variáveis globais para resultados
@@ -1746,45 +2272,236 @@
             }
         }
         
+        // Função para abrir modal de seleção de aluno para correção
+        async function abrirProvaCorrigida(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log(`📝 Abrindo prova corrigida para prova ${provaId}`);
+                
+                // Buscar resultados da prova
+                const response = await fetch(`/api/provas/${provaId}/resultados`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao buscar resultados');
+                }
+                
+                const resultados = data.resultados || [];
+                
+                if (resultados.length === 0) {
+                    mostrarAlerta('alertMinhasProvas', '❌ Nenhum aluno realizou esta prova ainda', 'info');
+                    return;
+                }
+                
+                // Criar modal de seleção
+                let modal = document.getElementById('modalSelecionarAluno');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.id = 'modalSelecionarAluno';
+                    modal.innerHTML = `
+                        <div class="modal-content" style="max-width: 600px;">
+                            <div class="modal-header">
+                                <h3 style="margin: 0; color: var(--gray-800); display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-user-check"></i> Selecionar Aluno para Correção
+                                </h3>
+                                <button class="modal-close" onclick="fecharModal('modalSelecionarAluno')">&times;</button>
+                            </div>
+                            <div id="listaAlunosCorrecao" style="max-height: 400px; overflow-y: auto; padding: 20px;">
+                                <!-- Lista será preenchida -->
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                }
+                
+                // Preencher lista de alunos
+                const listaHTML = resultados.map(aluno => {
+                    const nota = aluno.nota !== null && aluno.nota !== undefined ? aluno.nota.toFixed(1) : 'Não corrigida';
+                    const status = aluno.notaLiberada ? 'Nota liberada' : 'Aguardando correção';
+                    const statusClass = aluno.notaLiberada ? 'badge-corrigido' : 'badge-pendente';
+                    
+                    return `
+                        <div style="padding: 15px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 600; color: #1f2937; margin-bottom: 5px;">${aluno.alunoNome}</div>
+                                <div style="font-size: 0.85rem; color: #6b7280;">
+                                    ${aluno.alunoEmail || ''}
+                                    ${aluno.alunoMatricula ? ` • Matrícula: ${aluno.alunoMatricula}` : ''}
+                                </div>
+                                <div style="margin-top: 8px;">
+                                    <span class="badge-correcao ${statusClass}" style="font-size: 0.8rem;">${status}</span>
+                                    ${aluno.nota !== null ? `<span style="margin-left: 10px; font-weight: 600; color: ${aluno.nota >= 7 ? '#10b981' : aluno.nota >= 5 ? '#f59e0b' : '#ef4444'}">Nota: ${nota}</span>` : ''}
+                                </div>
+                            </div>
+                            <div>
+                                <button onclick="gerarProvaCorrigida('${provaId}', '${aluno.alunoId}', '${aluno.alunoNome.replace(/'/g, "\\'")}')" 
+                                        style="padding: 8px 16px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                                    <i class="fas fa-file-check"></i> Ver Correção
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                document.getElementById('listaAlunosCorrecao').innerHTML = listaHTML || '<p style="text-align: center; color: #6b7280; padding: 40px;">Nenhum aluno encontrado</p>';
+                
+                mostrarModal('modalSelecionarAluno');
+                
+            } catch (error) {
+                console.error('❌ Erro ao abrir prova corrigida:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+            }
+        }
         // ============ FUNÇÕES PARA LIBERAR NOTAS ============
         // Função para liberar TODAS as notas de uma prova
         async function liberarTodasNotas(provaId, provaTitulo) {
-        try {
-            const token = localStorage.getItem('auth_token');
-            
-            const confirmacao = confirm(`Tem certeza que deseja liberar TODAS as notas da prova "${provaTitulo}"?\n\n⚠️ Esta ação irá:\n• Tornar as notas visíveis para todos os alunos\n• Não poderá ser desfeita`);
-            
-            if (!confirmacao) return;
-            
-            // Mostrar loading
-            mostrarAlerta('alertMinhasProvas', '🔧 Liberando notas para todos os alunos...', 'info');
-            
-            const response = await fetch(`/api/provas/${provaId}/liberar-notas-todos`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const confirmacao = confirm(`Deseja liberar TODAS as notas da prova "${provaTitulo}"?\n\nEsta ação também enviará a prova corrigida para cada aluno.`);
+                
+                if (!confirmacao) return;
+                
+                // Mostrar loading
+                mostrarAlerta('alertMinhasProvas', '🔧 Liberando notas e enviando correções...', 'info');
+                
+                const response = await fetch(`/api/provas/${provaId}/liberar-notas-todos`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarAlerta('alertMinhasProvas', `✅ ${data.message} (Correções enviadas)`, 'success');
+                    
+                    // Recarregar a lista de provas após 2 segundos
+                    setTimeout(() => {
+                        carregarProvasProfessor();
+                    }, 2000);
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao liberar notas');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao liberar notas:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-            mostrarAlerta('alertMinhasProvas', `✅ ${data.message}`, 'success');
-            
-            // Recarregar a lista de provas após 2 segundos
-            setTimeout(() => {
-                carregarProvasProfessor();
-            }, 2000);
-            
-            } else {
-            throw new Error(data.error || 'Erro ao liberar notas');
-            }
-            
-        } catch (error) {
-            console.error('❌ Erro ao liberar notas:', error);
-            mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
         }
+        // ============ FUNÇÕES PARA EXCLUIR PROVA ============
+
+        let provaParaExcluir = null;
+
+        // Função para solicitar exclusão de prova
+        window.solicitarExclusaoProva = function(provaId, provaTitulo) {
+            provaParaExcluir = provaId;
+            
+            // Criar modal dinamicamente se não existir
+            let modal = document.getElementById('modalExcluirProva');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.id = 'modalExcluirProva';
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header">
+                            <h3 style="margin: 0; color: var(--gray-800);">
+                                <i class="fas fa-exclamation-triangle"></i> Excluir Prova
+                            </h3>
+                            <button class="modal-close" onclick="fecharModal('modalExcluirProva')">&times;</button>
+                        </div>
+                        <div id="modalExcluirProvaConteudo" style="margin: 1.5rem 0; line-height: 1.6;">
+                            <!-- Conteúdo será preenchido via JS -->
+                        </div>
+                        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                            <button class="btn btn-danger" onclick="confirmarExclusaoProva()" style="flex: 1;">
+                                <i class="fas fa-trash"></i> Excluir Prova
+                            </button>
+                            <button class="btn" onclick="fecharModal('modalExcluirProva')" style="flex: 1; background: var(--gray-200); color: var(--gray-700);">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            // Preencher conteúdo do modal
+            document.getElementById('modalExcluirProvaConteudo').innerHTML = `
+                <p>Tem certeza que deseja excluir a prova <strong>"${provaTitulo}"</strong>?</p>
+                <div style="margin-top: 15px; padding: 15px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444;">
+                    <i class="fas fa-exclamation-circle" style="color: #ef4444; margin-right: 10px;"></i>
+                    <div style="display: inline-block; vertical-align: middle;">
+                        <strong style="color: #7f1d1d;">Atenção:</strong> Esta ação não pode ser desfeita.
+                        <ul style="margin: 10px 0 0 20px; color: #7f1d1d;">
+                            <li>Todos os dados da prova serão permanentemente removidos</li>
+                            <li>Os resultados dos alunos serão perdidos</li>
+                            <li>As questões associadas serão excluídas</li>
+                            <li>Os alunos não poderão mais acessar esta prova</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            
+            mostrarModal('modalExcluirProva');
+        };
+
+        // Função para confirmar exclusão de prova
+        async function confirmarExclusaoProva() {
+            if (!provaParaExcluir) {
+                mostrarAlerta('alertMinhasProvas', '❌ Nenhuma prova selecionada para exclusão', 'error');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Mostrar loading
+                mostrarAlerta('alertMinhasProvas', '🗑️ Excluindo prova...', 'info');
+                
+                const response = await fetch(`/api/professor/provas/${provaParaExcluir}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarAlerta('alertMinhasProvas', `✅ ${data.message || 'Prova excluída com sucesso!'}`, 'success');
+                    fecharModal('modalExcluirProva');
+                    
+                    // Recarregar a lista de provas após 2 segundos
+                    setTimeout(() => {
+                        carregarProvasProfessor();
+                    }, 2000);
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao excluir prova');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao excluir prova:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+            }
+            
+            provaParaExcluir = null;
         }
 
         // Função para liberar nota de UM aluno específico
@@ -2749,72 +3466,91 @@
                 const totalAlunos = prova.totalAlunos || prova.totalAlunosTurma || 0;
                 
                 return `
-                    <div class="prova-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid ${dificuldadeColor};">
-                        <div class="prova-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
-                            <div>
-                                <h3 class="prova-titulo" style="font-size: 1.2rem; font-weight: 600; color: #1f2937; margin: 0;">
-                                    ${prova.titulo || 'Sem título'}
-                                </h3>
-                                <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
-                                    ${prova.conteudo ? (prova.conteudo.length > 100 ? prova.conteudo.substring(0, 100) + '...' : prova.conteudo) : 'Sem conteúdo'}
-                                </p>
+                        <div class="prova-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid ${dificuldadeColor};">
+                            <div class="prova-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                                <div>
+                                    <h3 class="prova-titulo" style="font-size: 1.2rem; font-weight: 600; color: #1f2937; margin: 0;">
+                                        ${prova.titulo || 'Sem título'}
+                                    </h3>
+                                    <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
+                                        ${prova.conteudo ? (prova.conteudo.length > 100 ? prova.conteudo.substring(0, 100) + '...' : prova.conteudo) : 'Sem conteúdo'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span class="prova-status ${statusClass}" style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: ${statusClass === 'status-ativa' ? '#d1fae5' : statusClass === 'status-concluida' ? '#fef3c7' : '#f3f4f6'}; color: ${statusClass === 'status-ativa' ? '#065f46' : statusClass === 'status-concluida' ? '#92400e' : '#6b7280'}">
+                                        <i class="fas ${statusIcon}"></i> ${statusText}
+                                    </span>
+                                </div>
                             </div>
-                            <div>
-                                <span class="prova-status ${statusClass}" style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: ${statusClass === 'status-ativa' ? '#d1fae5' : statusClass === 'status-concluida' ? '#fef3c7' : '#f3f4f6'}; color: ${statusClass === 'status-ativa' ? '#065f46' : statusClass === 'status-concluida' ? '#92400e' : '#6b7280'}">
-                                    <i class="fas ${statusIcon}"></i> ${statusText}
-                                </span>
+                            
+                            <div class="prova-info" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; font-size: 0.9rem; color: #6b7280;">
+                                <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-question-circle"></i>
+                                    <span><strong>${prova.quantidadeQuestoes || 0}</strong> questões</span>
+                                </div>
+                                <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-school"></i>
+                                    <span>${nomeTurma}</span>
+                                </div>
+                                <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-users"></i>
+                                    <span><strong>${alunosRealizaram}/${totalAlunos}</strong> alunos</span>
+                                </div>
+                                <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-chart-line"></i>
+                                    <span>Média: <strong>${mediaNotas}</strong></span>
+                                </div>
+                            </div>
+                            
+                            <div class="prova-datas" style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6b7280; margin-bottom: 15px;">
+                                <div>
+                                    <i class="fas fa-calendar-plus"></i> Criada: ${dataCriacao}
+                                </div>
+                                <div>
+                                    <i class="fas fa-calendar-times"></i> Limite: ${dataLimite}
+                                </div>
+                            </div>
+                            
+                            <div class="prova-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                                <button class="btn-ver-prova" onclick="verResultadosProva('${prova.id}')" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                                    <i class="fas fa-chart-bar"></i> Ver Resultados
+                                </button>
+                                <button class="btn-visualizar-prova" onclick="visualizarProva('${prova.id}')" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                                    <i class="fas fa-eye"></i> Visualizar
+                                </button>
+                                ${prova.codigo ? `
+                                <button class="btn-compartilhar-prova" onclick="compartilharProva('${prova.codigo}')" style="background: #8b5cf6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                                    <i class="fas fa-share-alt"></i> Código: ${prova.codigo}
+                                </button>
+                                ` : ''}
+                                <!-- BOTÃO PARA LIBERAR TODAS AS NOTAS -->
+                                ${prova.alunosRealizaram > 0 ? `
+                                <button class="btn-liberar-notas" onclick="liberarTodasNotas('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                                    <i class="fas fa-unlock"></i> Liberar Notas
+                                </button>
+                                ` : ''}
+                                ${prova.alunosRealizaram > 0 ? `
+                                <button class="btn-prova-corrigida" onclick="abrirProvaCorrigida('${prova.id}')" style="background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                                    <i class="fas fa-file-check"></i> Prova Corrigida
+                                </button>
+                                ` : ''}
+                                <!-- BOTÃO NOVO: EXCLUIR PROVA -->
+                                <button class="btn-excluir-prova" onclick="solicitarExclusaoProva('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+                                    <i class="fas fa-trash"></i> Excluir
+                                </button>
                             </div>
                         </div>
-                        
-                        <div class="prova-info" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; font-size: 0.9rem; color: #6b7280;">
-                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
-                                <i class="fas fa-question-circle"></i>
-                                <span><strong>${prova.quantidadeQuestoes || 0}</strong> questões</span>
-                            </div>
-                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
-                                <i class="fas fa-school"></i>
-                                <span>${nomeTurma}</span>
-                            </div>
-                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
-                                <i class="fas fa-users"></i>
-                                <span><strong>${alunosRealizaram}/${totalAlunos}</strong> alunos</span>
-                            </div>
-                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
-                                <i class="fas fa-chart-line"></i>
-                                <span>Média: <strong>${mediaNotas}</strong></span>
-                            </div>
-                        </div>
-                        
-                        <div class="prova-datas" style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6b7280; margin-bottom: 15px;">
-                            <div>
-                                <i class="fas fa-calendar-plus"></i> Criada: ${dataCriacao}
-                            </div>
-                            <div>
-                                <i class="fas fa-calendar-times"></i> Limite: ${dataLimite}
-                            </div>
-                        </div>
-                        
-                        <div class="prova-actions" style="display: flex; gap: 10px; margin-top: 15px;">
-                        <button class="btn-ver-prova" onclick="verResultadosProva('${prova.id}')" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                            <i class="fas fa-chart-bar"></i> Ver Resultados
-                        </button>
-                        <button class="btn-visualizar-prova" onclick="visualizarProva('${prova.id}')" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                            <i class="fas fa-eye"></i> Visualizar
-                        </button>
-                        ${prova.codigo ? `
-                        <button class="btn-compartilhar-prova" onclick="compartilharProva('${prova.codigo}')" style="background: #8b5cf6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                            <i class="fas fa-share-alt"></i> Código: ${prova.codigo}
-                        </button>
-                        ` : ''}
-                        <!-- BOTÃO PARA LIBERAR TODAS AS NOTAS -->
-                        ${prova.alunosRealizaram > 0 ? `
-                        <button class="btn-liberar-notas" onclick="liberarTodasNotas('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                            <i class="fas fa-unlock"></i> Liberar Notas
-                        </button>
-                        ` : ''}
-                        </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
+            
+            // Tornar os botões responsivos em telas menores
+            const cards = document.querySelectorAll('.prova-card');
+            cards.forEach(card => {
+                const actions = card.querySelector('.prova-actions');
+                if (actions && window.innerWidth < 768) {
+                    actions.style.flexDirection = 'column';
+                }
+            });
         }
 
         // Adicionar funções auxiliares
@@ -3499,23 +4235,109 @@
             mostrarModal('modalExcluirTurma');
         }
         
-        // Confirmar exclusão de turma
-        async function confirmarExclusaoTurma() {
-            if (!turmaParaExcluir) return;
-            
-            const resultado = await excluirTurma(turmaParaExcluir);
-            
-            if (resultado.success) {
-                mostrarAlerta('alertMinhasTurmas', resultado.mensagem, 'success');
-                fecharModal('modalExcluirTurma');
+        // Função para testar a rota de exclusão
+        async function testarRotaExclusao() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const testeId = 'teste'; // ID de teste
                 
-                // Recarregar lista de turmas
-                await carregarTurmasProfessor();
-            } else {
-                mostrarAlerta('alertMinhasTurmas', resultado.error, 'error');
+                console.log('🔍 Testando rota de exclusão...');
+                
+                const response = await fetch(`/api/professor/provas/${testeId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('Status da resposta:', response.status);
+                console.log('Headers:', Object.fromEntries(response.headers.entries()));
+                
+                const text = await response.text();
+                console.log('Conteúdo da resposta:', text);
+                
+                // Tentar parsear como JSON
+                try {
+                    const json = JSON.parse(text);
+                    console.log('JSON parseado:', json);
+                } catch (e) {
+                    console.log('Resposta não é JSON válido:', e.message);
+                }
+                
+            } catch (error) {
+                console.error('Erro no teste:', error);
+            }
+        }        
+
+        // Função para confirmar exclusão de prova
+        async function confirmarExclusaoProva() {
+            if (!provaParaExcluir) {
+                mostrarAlerta('alertMinhasProvas', '❌ Nenhuma prova selecionada para exclusão', 'error');
+                return;
             }
             
-            turmaParaExcluir = null;
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Mostrar loading
+                mostrarAlerta('alertMinhasProvas', '🗑️ Excluindo prova...', 'info');
+                
+                const response = await fetch(`/api/professor/provas/${provaParaExcluir}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                // Verificar se a resposta é JSON
+                const contentType = response.headers.get('content-type');
+                let data;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    // Se não for JSON, tentar ler como texto
+                    const text = await response.text();
+                    console.log('Resposta não-JSON:', text);
+                    
+                    if (response.ok) {
+                        // Se a resposta for bem-sucedida mas não é JSON
+                        data = { success: true, message: 'Prova excluída com sucesso!' };
+                    } else {
+                        throw new Error(`Erro ${response.status}: ${text || 'Erro desconhecido'}`);
+                    }
+                }
+                
+                if (data.success) {
+                    mostrarAlerta('alertMinhasProvas', `✅ ${data.message || 'Prova excluída com sucesso!'}`, 'success');
+                    fecharModal('modalExcluirProva');
+                    
+                    // Recarregar a lista de provas após 2 segundos
+                    setTimeout(() => {
+                        carregarProvasProfessor();
+                    }, 2000);
+                    
+                } else {
+                    throw new Error(data.error || data.message || 'Erro ao excluir prova');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao excluir prova:', error);
+                
+                // Mostrar erro específico
+                let mensagemErro = `❌ Erro: ${error.message}`;
+                
+                // Verificar se é erro de rede
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    mensagemErro = '❌ Erro de conexão com o servidor. Verifique sua internet.';
+                }
+                
+                mostrarAlerta('alertMinhasProvas', mensagemErro, 'error');
+            }
+            
+            provaParaExcluir = null;
         }
         
         // Funções do modal
