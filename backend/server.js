@@ -1423,6 +1423,96 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
   }
 });
 
+// ============ ROTA PARA ALUNO VER CORREÇÃO DETALHADA ============
+app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, async (req, res) => {
+    try {
+        const provaId = req.params.provaId;
+        const alunoId = req.userId;
+        
+        if (req.userRole !== 'aluno') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas alunos podem acessar esta rota'
+            });
+        }
+        
+        console.log(`📝 Aluno ${alunoId} solicitando correção da prova ${provaId}`);
+        
+        // Buscar prova
+        const prova = await Prova.findById(provaId)
+            .select('titulo conteudo questoes');
+        
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+        
+        // Buscar resultado do aluno
+        const resultado = await Resultado.findOne({
+            provaId: provaId,
+            userId: alunoId
+        });
+        
+        // Buscar prova realizada
+        const provaRealizada = await ProvaRealizada.findOne({
+            provaId: provaId,
+            alunoId: alunoId
+        });
+        
+        if (!resultado && !provaRealizada) {
+            return res.status(404).json({
+                success: false,
+                error: 'Você ainda não realizou esta prova'
+            });
+        }
+        
+        // Verificar se a nota foi liberada
+        const notaLiberada = (resultado && resultado.notaLiberada) || 
+                            (provaRealizada && provaRealizada.notaLiberada);
+        
+        if (!notaLiberada) {
+            return res.status(403).json({
+                success: false,
+                error: 'A correção ainda não foi liberada pelo professor'
+            });
+        }
+        
+        // Preparar dados da correção
+        const correcaoData = {
+            success: true,
+            prova: {
+                id: prova._id,
+                titulo: prova.titulo,
+                conteudo: prova.conteudo
+            },
+            questoes: prova.questoes.map(q => ({
+                pergunta: q.pergunta,
+                opcoes: q.opcoes,
+                respostaCorreta: q.respostaCorreta,
+                explicacao: q.explicacao
+            })),
+            nota: resultado ? resultado.nota : provaRealizada.nota,
+            acertos: resultado ? resultado.acertos : null,
+            total: resultado ? resultado.total : prova.questoes.length,
+            respostasAluno: resultado ? resultado.respostas : provaRealizada.respostas,
+            resultadoDetalhado: resultado ? resultado.resultadoDetalhado : provaRealizada.resultadoDetalhado,
+            notaLiberada: true,
+            dataCorrecao: new Date().toISOString()
+        };
+        
+        res.json(correcaoData);
+        
+    } catch (error) {
+        console.error('Erro ao buscar correção detalhada:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao buscar correção: ' + error.message
+        });
+    }
+});
+
 // ============ ROTA PARA PROFESSOR VER SUAS PROVAS ============
 app.get('/api/professor/provas', authenticateToken, async (req, res) => {
     try {
@@ -3253,6 +3343,90 @@ app.post('/api/provas/:provaId/liberar-notas-todos', authenticateToken, async (r
     });
   }
 });
+
+// ============ ROTA PARA EXCLUIR PROVA (NOVA) ============
+app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res) => {
+    try {
+        const provaId = req.params.provaId;
+        const professorId = req.userId;
+        
+        console.log(`🗑️ Professor ${professorId} tentando excluir prova ${provaId}`);
+        
+        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas professores podem excluir provas'
+            });
+        }
+        
+        // Buscar a prova
+        const prova = await Prova.findById(provaId);
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+        
+        // Verificar se é o professor da prova
+        if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Você não é o professor desta prova'
+            });
+        }
+        
+        // Verificar se há resultados associados
+        const totalResultados = await Resultado.countDocuments({ provaId: provaId });
+        const totalProvasRealizadas = await ProvaRealizada.countDocuments({ provaId: provaId });
+        
+        console.log(`📊 Prova "${prova.titulo}" tem ${totalResultados} resultados e ${totalProvasRealizadas} provas realizadas`);
+        
+        // Remover todos os resultados associados
+        if (totalResultados > 0) {
+            await Resultado.deleteMany({ provaId: provaId });
+            console.log(`✅ ${totalResultados} resultados excluídos`);
+        }
+        
+        // Remover todas as provas realizadas associadas
+        if (totalProvasRealizadas > 0) {
+            await ProvaRealizada.deleteMany({ provaId: provaId });
+            console.log(`✅ ${totalProvasRealizadas} provas realizadas excluídas`);
+        }
+        
+        // Remover a prova das turmas
+        if (prova.turmaId) {
+            await Turma.updateOne(
+                { _id: prova.turmaId },
+                { $pull: { provas: provaId } }
+            );
+            console.log(`✅ Prova removida da turma ${prova.turmaId}`);
+        }
+        
+        // Excluir a prova
+        await Prova.deleteOne({ _id: provaId });
+        
+        console.log(`✅ Prova ${provaId} excluída com sucesso`);
+        
+        res.json({
+            success: true,
+            message: `Prova "${prova.titulo}" excluída com sucesso!`,
+            estatisticas: {
+                provaExcluida: prova.titulo,
+                resultadosExcluidos: totalResultados,
+                provasRealizadasExcluidas: totalProvasRealizadas
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir prova:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao excluir prova: ' + error.message
+        });
+    }
+});
+
 
 
 // ============ ROTAS DE MONITORAMENTO ============
