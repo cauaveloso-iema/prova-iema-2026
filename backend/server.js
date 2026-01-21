@@ -1601,6 +1601,96 @@ app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, asyn
     }
 });
 
+// ============ ROTA PARA ALUNO VER CORREÇÃO DETALHADA ============
+app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, async (req, res) => {
+    try {
+        const provaId = req.params.provaId;
+        const alunoId = req.userId;
+        
+        if (req.userRole !== 'aluno') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas alunos podem acessar esta rota'
+            });
+        }
+        
+        console.log(`📝 Aluno ${alunoId} solicitando correção da prova ${provaId}`);
+        
+        // Buscar prova
+        const prova = await Prova.findById(provaId)
+            .select('titulo conteudo questoes');
+        
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+        
+        // Buscar resultado do aluno
+        const resultado = await Resultado.findOne({
+            provaId: provaId,
+            userId: alunoId
+        });
+        
+        // Buscar prova realizada
+        const provaRealizada = await ProvaRealizada.findOne({
+            provaId: provaId,
+            alunoId: alunoId
+        });
+        
+        if (!resultado && !provaRealizada) {
+            return res.status(404).json({
+                success: false,
+                error: 'Você ainda não realizou esta prova'
+            });
+        }
+        
+        // Verificar se a nota foi liberada
+        const notaLiberada = (resultado && resultado.notaLiberada) || 
+                            (provaRealizada && provaRealizada.notaLiberada);
+        
+        if (!notaLiberada) {
+            return res.status(403).json({
+                success: false,
+                error: 'A correção ainda não foi liberada pelo professor'
+            });
+        }
+        
+        // Preparar dados da correção
+        const correcaoData = {
+            success: true,
+            prova: {
+                id: prova._id,
+                titulo: prova.titulo,
+                conteudo: prova.conteudo
+            },
+            questoes: prova.questoes.map(q => ({
+                pergunta: q.pergunta,
+                opcoes: q.opcoes,
+                respostaCorreta: q.respostaCorreta,
+                explicacao: q.explicacao
+            })),
+            nota: resultado ? resultado.nota : provaRealizada.nota,
+            acertos: resultado ? resultado.acertos : null,
+            total: resultado ? resultado.total : prova.questoes.length,
+            respostasAluno: resultado ? resultado.respostas : provaRealizada.respostas,
+            resultadoDetalhado: resultado ? resultado.resultadoDetalhado : provaRealizada.resultadoDetalhado,
+            notaLiberada: true,
+            dataCorrecao: new Date().toISOString()
+        };
+        
+        res.json(correcaoData);
+        
+    } catch (error) {
+        console.error('Erro ao buscar correção detalhada:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao buscar correção: ' + error.message
+        });
+    }
+});
+
 // ============ ROTA PARA PROFESSOR VER SUAS PROVAS ============
 app.get('/api/professor/provas', authenticateToken, async (req, res) => {
     try {
