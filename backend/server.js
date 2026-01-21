@@ -1352,75 +1352,253 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
 });
 
 // ============ ROTA PARA ALUNO VER PROVAS PENDENTES ============
+// ============ ROTA PARA ALUNO VER PROVAS PENDENTES - VERSÃO CORRIGIDA ============
 app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
-  try {
-    if (req.userRole !== 'aluno') {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Apenas alunos podem acessar esta rota' 
-      });
-    }
-    
-    const alunoId = req.userId;
-    
-    const turmas = await Turma.find({ alunos: alunoId });
-    const turmaIds = turmas.map(t => t._id);
-    
-    console.log(`📚 Aluno ${alunoId} está em ${turmas.length} turmas`);
-    
-    const provas = await Prova.find({
-      turmaId: { $in: turmaIds },
-      status: 'ativa',
-      dataLimite: { $gt: new Date() }
-    })
-    .populate('turmaId', 'nome disciplina')
-    .populate('userId', 'nome')
-    .sort({ createdAt: -1 });
-    
-    console.log(`📝 Encontradas ${provas.length} provas ativas`);
-    
-    const provasPendentes = [];
-    
-    for (const prova of provas) {
-      const provaRealizada = await ProvaRealizada.findOne({
-        provaId: prova._id,
-        alunoId: alunoId
-      });
-      
-      if (!provaRealizada) {
-        provasPendentes.push({
-          _id: prova._id,
-          titulo: prova.titulo,
-          conteudo: prova.conteudo,
-          duracao: prova.duracao,
-          dataLimite: prova.dataLimite,
-          quantidadeQuestoes: prova.quantidadeQuestoes,
-          dificuldade: prova.dificuldade,
-          turma: prova.turmaId ? {
-            id: prova.turmaId._id,
-            nome: prova.turmaId.nome,
-            disciplina: prova.turmaId.disciplina
-          } : null,
-          professor: prova.userId ? prova.userId.nome : 'Professor',
-          codigo: prova.codigo
+    try {
+        if (req.userRole !== 'aluno') {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Apenas alunos podem acessar esta rota' 
+            });
+        }
+        
+        const alunoId = req.userId;
+        
+        const turmas = await Turma.find({ alunos: alunoId });
+        const turmaIds = turmas.map(t => t._id);
+        
+        // Buscar todas as provas ativas das turmas do aluno
+        const provas = await Prova.find({
+            turmaId: { $in: turmaIds },
+            status: 'ativa'
+        })
+        .populate('turmaId', 'nome disciplina')
+        .populate('userId', 'nome')
+        .sort({ createdAt: -1 });
+        
+        const provasPendentes = [];
+        const hoje = new Date();
+        
+        // Configurar hoje como INÍCIO DO DIA (00:00:00) para comparação correta
+        const hojeInicioDia = new Date(hoje);
+        hojeInicioDia.setHours(0, 0, 0, 0);
+        
+        console.log(`📅 Verificação de datas - Hoje início do dia: ${hojeInicioDia.toISOString()}`);
+        
+        for (const prova of provas) {
+            // Verificar se o aluno já realizou esta prova
+            const provaRealizada = await ProvaRealizada.findOne({
+                provaId: prova._id,
+                alunoId: alunoId
+            });
+            
+            const resultado = await Resultado.findOne({
+                provaId: prova._id,
+                userId: alunoId
+            });
+            
+            if (!provaRealizada && !resultado) {
+                // CORREÇÃO PRINCIPAL: Verificar se a prova está disponível (considerando DATA LIMITE COMO FIM DO DIA)
+                let disponivel = true;
+                
+                if (prova.dataLimite) {
+                    const dataLimite = new Date(prova.dataLimite);
+                    
+                    // CORREÇÃO: Configurar dataLimite como FIM DO DIA (23:59:59.999)
+                    const dataLimiteFimDia = new Date(dataLimite);
+                    dataLimiteFimDia.setHours(23, 59, 59, 999);
+                    
+                    // CORREÇÃO: Verificar se hoje (considerando início do dia) está ANTES ou NO MESMO DIA
+                    // Usamos hojeInicioDia para que se a data limite for hoje, ainda esteja disponível
+                    disponivel = hoje <= dataLimiteFimDia;
+                    
+                    // Log para debugging
+                    console.log(`📅 Verificando prova "${prova.titulo}":`);
+                    console.log(`   Hoje: ${hoje.toISOString()}`);
+                    console.log(`   Hoje (início dia): ${hojeInicioDia.toISOString()}`);
+                    console.log(`   Limite original: ${dataLimite.toISOString()}`);
+                    console.log(`   Limite (fim do dia): ${dataLimiteFimDia.toISOString()}`);
+                    console.log(`   Disponivel? ${disponivel} (hoje ${hoje.toISOString()} <= limite ${dataLimiteFimDia.toISOString()})`);
+                    
+                    // Calcular dias restantes para debug
+                    const diffMs = dataLimiteFimDia - hoje;
+                    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                    console.log(`   Diferença em dias: ${diffDias} dias`);
+                    
+                    // Se a prova não estiver disponível, logar o motivo
+                    if (!disponivel) {
+                        console.log(`   ❌ Prova "${prova.titulo}" NÃO está disponível`);
+                        console.log(`       Data limite: ${dataLimite.toLocaleDateString('pt-BR')}`);
+                        console.log(`       Hoje: ${hoje.toLocaleDateString('pt-BR')}`);
+                    }
+                }
+                
+                if (disponivel) {
+                    // Calcular dias restantes para a interface
+                    let diasRestantes = null;
+                    if (prova.dataLimite) {
+                        const dataLimite = new Date(prova.dataLimite);
+                        const dataLimiteFimDia = new Date(dataLimite);
+                        dataLimiteFimDia.setHours(23, 59, 59, 999);
+                        
+                        const diffMs = dataLimiteFimDia - hoje;
+                        diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                        
+                        // Se for negativo (já passou), ajustar para 0
+                        if (diasRestantes < 0) diasRestantes = 0;
+                    }
+                    
+                    provasPendentes.push({
+                        _id: prova._id,
+                        titulo: prova.titulo,
+                        conteudo: prova.conteudo,
+                        duracao: prova.duracao,
+                        dataLimite: prova.dataLimite,
+                        quantidadeQuestoes: prova.quantidadeQuestoes,
+                        dificuldade: prova.dificuldade,
+                        turma: prova.turmaId ? {
+                            id: prova.turmaId._id,
+                            nome: prova.turmaId.nome,
+                            disciplina: prova.turmaId.disciplina
+                        } : null,
+                        professor: prova.userId ? prova.userId.nome : 'Professor',
+                        codigo: prova.codigo,
+                        // Adicionar informação de urgência com cálculo correto
+                        diasRestantes: diasRestantes,
+                        // Adicionar flags para a interface
+                        expiraHoje: diasRestantes === 0,
+                        disponivelAte: prova.dataLimite ? 
+                            new Date(prova.dataLimite).setHours(23, 59, 59, 999) : 
+                            null
+                    });
+                }
+            }
+        }
+        
+        // Log para debugging
+        console.log(`📊 Total de provas encontradas: ${provas.length}`);
+        console.log(`📚 Provas pendentes (dentro do prazo): ${provasPendentes.length}`);
+        
+        if (provasPendentes.length > 0) {
+            provasPendentes.forEach((prova, index) => {
+                console.log(`   ${index + 1}. ${prova.titulo}`);
+                console.log(`      Data limite: ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleString('pt-BR') : 'Sem data'}`);
+                console.log(`      Dias restantes: ${prova.diasRestantes}`);
+                console.log(`      Expira hoje? ${prova.expiraHoje}`);
+            });
+        } else if (provas.length > 0) {
+            console.log(`   ℹ️  Nenhuma prova pendente encontrada. Motivos possíveis:`);
+            console.log(`      • Todas as provas já foram realizadas`);
+            console.log(`      • Todas as provas expiraram`);
+            console.log(`      • O aluno não está em turmas com provas ativas`);
+        }
+        
+        res.json({ 
+            success: true, 
+            provas: provasPendentes,
+            count: provasPendentes.length,
+            hoje: hoje.toISOString(),
+            hojeInicioDia: hojeInicioDia.toISOString(),
+            mensagem: `Encontradas ${provasPendentes.length} provas pendentes`
         });
-      }
+        
+    } catch (error) {
+        console.error('Erro ao listar provas pendentes:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao listar provas pendentes: ' + error.message
+        });
     }
-    
-    console.log(`✅ ${provasPendentes.length} provas pendentes para o aluno`);
-    
-    res.json({ 
-      success: true, 
-      provas: provasPendentes 
-    });
-    
-  } catch (error) {
-    console.error('Erro ao listar provas pendentes:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Erro ao listar provas pendentes' 
-    });
-  }
+});
+
+// ============ ROTA PARA ALUNO VER CORREÇÃO DETALHADA ============
+app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, async (req, res) => {
+    try {
+        const provaId = req.params.provaId;
+        const alunoId = req.userId;
+        
+        if (req.userRole !== 'aluno') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas alunos podem acessar esta rota'
+            });
+        }
+        
+        console.log(`📝 Aluno ${alunoId} solicitando correção da prova ${provaId}`);
+        
+        // Buscar prova
+        const prova = await Prova.findById(provaId)
+            .select('titulo conteudo questoes');
+        
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+        
+        // Buscar resultado do aluno
+        const resultado = await Resultado.findOne({
+            provaId: provaId,
+            userId: alunoId
+        });
+        
+        // Buscar prova realizada
+        const provaRealizada = await ProvaRealizada.findOne({
+            provaId: provaId,
+            alunoId: alunoId
+        });
+        
+        if (!resultado && !provaRealizada) {
+            return res.status(404).json({
+                success: false,
+                error: 'Você ainda não realizou esta prova'
+            });
+        }
+        
+        // Verificar se a nota foi liberada
+        const notaLiberada = (resultado && resultado.notaLiberada) || 
+                            (provaRealizada && provaRealizada.notaLiberada);
+        
+        if (!notaLiberada) {
+            return res.status(403).json({
+                success: false,
+                error: 'A correção ainda não foi liberada pelo professor'
+            });
+        }
+        
+        // Preparar dados da correção
+        const correcaoData = {
+            success: true,
+            prova: {
+                id: prova._id,
+                titulo: prova.titulo,
+                conteudo: prova.conteudo
+            },
+            questoes: prova.questoes.map(q => ({
+                pergunta: q.pergunta,
+                opcoes: q.opcoes,
+                respostaCorreta: q.respostaCorreta,
+                explicacao: q.explicacao
+            })),
+            nota: resultado ? resultado.nota : provaRealizada.nota,
+            acertos: resultado ? resultado.acertos : null,
+            total: resultado ? resultado.total : prova.questoes.length,
+            respostasAluno: resultado ? resultado.respostas : provaRealizada.respostas,
+            resultadoDetalhado: resultado ? resultado.resultadoDetalhado : provaRealizada.resultadoDetalhado,
+            notaLiberada: true,
+            dataCorrecao: new Date().toISOString()
+        };
+        
+        res.json(correcaoData);
+        
+    } catch (error) {
+        console.error('Erro ao buscar correção detalhada:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao buscar correção: ' + error.message
+        });
+    }
 });
 
 // ============ ROTA PARA PROFESSOR VER SUAS PROVAS ============
@@ -1934,6 +2112,7 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
 
 // ============ ROTA PARA ALUNO VER SUAS PROVAS ============
 // ROTA PARA ALUNO VER SUAS PROVAS - VERIFIQUE SE ESTÁ RETORNANDO O ID CORRETAMENTE
+// ROTA PARA ALUNO VER SUAS PROVAS - VERIFIQUE SE ESTÁ RETORNANDO O ID CORRETAMENTE
 app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
     try {
         if (req.userRole !== 'aluno') {
@@ -1966,25 +2145,34 @@ app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
                     alunoId: req.userId
                 });
 
+                // Alteração: MOSTRAR APENAS SE O ALUNO JÁ REALIZOU A PROVA
                 const realizada = !!resultado || !!provaRealizada;
+                
+                if (!realizada) {
+                    return null; // Não mostrar provas não realizadas
+                }
                 
                 // Verificar se a nota está liberada
                 let nota = null;
                 let statusCorrecao = 'pendente';
+                let statusExibicao = 'aguardando_correcao';
                 
                 if (resultado && resultado.notaLiberada && resultado.nota !== null) {
                     nota = resultado.nota;
                     statusCorrecao = 'corrigida';
+                    statusExibicao = 'concluida';
                 } else if (provaRealizada && provaRealizada.notaLiberada && provaRealizada.nota !== null) {
                     nota = provaRealizada.nota;
                     statusCorrecao = 'corrigida';
+                    statusExibicao = 'concluida';
                 } else if (resultado || provaRealizada) {
                     statusCorrecao = 'aguardando_correcao';
+                    statusExibicao = 'aguardando_correcao';
                 }
 
                 return {
-                    id: prova._id, // ← GARANTIR QUE ESTÁ RETORNANDO ._id
-                    _id: prova._id, // ← TAMBÉM RETORNAR _id PARA COMPATIBILIDADE
+                    id: prova._id,
+                    _id: prova._id,
                     titulo: prova.titulo,
                     conteudo: prova.conteudo,
                     turma: prova.turmaId ? {
@@ -1995,7 +2183,7 @@ app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
                     dificuldade: prova.dificuldade,
                     dataLimite: prova.dataLimite,
                     duracao: prova.duracao,
-                    status: realizada ? (statusCorrecao === 'corrigida' ? 'concluida' : 'aguardando_correcao') : 'pendente',
+                    status: statusExibicao, // Usar status de exibição específico
                     nota: nota,
                     statusCorrecao: statusCorrecao,
                     professor: prova.userId ? prova.userId.nome : 'Professor'
@@ -2003,9 +2191,12 @@ app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
             })
         );
 
+        // Filtrar provas não nulas (apenas as realizadas)
+        const provasFiltradas = provasComStatus.filter(prova => prova !== null);
+
         res.json({
             success: true,
-            provas: provasComStatus
+            provas: provasFiltradas
         });
 
     } catch (error) {
@@ -2019,6 +2210,7 @@ app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
 
 
 // ============ ROTA PARA VALIDAR ACESSO À PROVA ============
+// ============ ROTA PARA VALIDAR ACESSO À PROVA (VERSÃO CORRIGIDA) ============
 app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.id;
@@ -2041,6 +2233,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
     
+    // Verificar se o aluno está na turma da prova
     if (prova.turmaId) {
       const turma = await Turma.findById(prova.turmaId);
       
@@ -2063,6 +2256,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       }
     }
     
+    // Verificar se o aluno já realizou esta prova
     const provaRealizada = await ProvaRealizada.findOne({
       provaId: provaId,
       alunoId: alunoId
@@ -2075,13 +2269,68 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
     
-    if (prova.dataLimite && new Date() > prova.dataLimite) {
-      return res.status(400).json({
-        success: false,
-        error: 'A data limite para esta prova já expirou'
-      });
+    // CORREÇÃO: Verificação de data limite - considerar FIM DO DIA da data limite
+    if (prova.dataLimite) {
+      const hoje = new Date();
+      const dataLimite = new Date(prova.dataLimite);
+      
+      // CORREÇÃO PRINCIPAL: 
+      // Criar uma cópia da data limite e ajustar para FIM DO DIA (23:59:59.999)
+      const dataLimiteFimDia = new Date(dataLimite);
+      dataLimiteFimDia.setHours(23, 59, 59, 999);
+      
+      console.log(`📅 COMPARAÇÃO DE DATAS (DEBUG):`);
+      console.log(`   Aluno: ${alunoId}`);
+      console.log(`   Prova: ${prova.titulo}`);
+      console.log(`   Data limite original: ${dataLimite.toISOString()}`);
+      console.log(`   Data limite (fim do dia): ${dataLimiteFimDia.toISOString()}`);
+      console.log(`   Hoje: ${hoje.toISOString()}`);
+      console.log(`   Horário atual (local): ${hoje.toLocaleString('pt-BR')}`);
+      console.log(`   Verificação: Hoje (${hoje.toISOString()}) > Data limite fim do dia (${dataLimiteFimDia.toISOString()})? ${hoje > dataLimiteFimDia}`);
+      
+      // Verificar se HOJE já passou do FIM DO DIA da data limite
+      if (hoje > dataLimiteFimDia) {
+        const dataFormatada = dataLimite.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        
+        // Calcular dias/horas restantes (apenas para logging)
+        const diffMs = dataLimiteFimDia - hoje;
+        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffHoras = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        
+        console.log(`   ❌ Prova expirada em: ${dataFormatada}`);
+        console.log(`   ⏰ Dias restantes (negativo): ${diffDias}`);
+        console.log(`   ⏰ Horas restantes (negativo): ${diffHoras}`);
+        
+        return res.status(400).json({
+          success: false,
+          error: `📅 A data limite para esta prova era ${dataFormatada}`
+        });
+      } else {
+        // Ainda dentro do prazo
+        const diffMs = dataLimiteFimDia - hoje;
+        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffHoras = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        
+        console.log(`   ✅ Prova ainda disponível!`);
+        console.log(`   ⏰ Dias restantes: ${diffDias}`);
+        console.log(`   ⏰ Horas restantes: ${diffHoras}`);
+        
+        // Se expira hoje, mostrar alerta especial
+        if (diffDias === 0) {
+          console.log(`   ⚠️ ATENÇÃO: Prova expira HOJE às 23:59!`);
+        }
+      }
+    } else {
+      console.log(`   ✅ Prova sem data limite - sempre disponível`);
     }
     
+    // Verificar se a prova está ativa
     if (prova.status !== 'ativa') {
       return res.status(400).json({
         success: false,
@@ -2089,17 +2338,31 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
     
+    // Gerar token específico para a prova
     const provaToken = jwt.sign(
       {
         alunoId: alunoId,
         provaId: provaId,
         access: 'prova',
-        exp: Math.floor(Date.now() / 1000) + (60 * 60)
+        exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hora de validade
       },
       process.env.JWT_SECRET
     );
     
     console.log(`✅ Token gerado para aluno ${alunoId}`);
+    console.log(`📋 Dados da prova disponível:`);
+    console.log(`   - Título: ${prova.titulo}`);
+    console.log(`   - Duração: ${prova.duracao} minutos`);
+    console.log(`   - Questões: ${prova.questoes.length}`);
+    console.log(`   - Data limite: ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleString('pt-BR') : 'Sem data'}`);
+    
+    // Calcular tempo restante em minutos
+    let tempoRestanteMinutos = null;
+    if (prova.dataLimite) {
+      const dataLimiteFimDia = new Date(prova.dataLimite);
+      dataLimiteFimDia.setHours(23, 59, 59, 999);
+      tempoRestanteMinutos = Math.floor((dataLimiteFimDia - new Date()) / (1000 * 60));
+    }
     
     res.json({
       success: true,
@@ -2108,16 +2371,37 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
         id: prova._id,
         titulo: prova.titulo,
         duracao: prova.duracao,
-        quantidadeQuestoes: prova.questoes.length
+        quantidadeQuestoes: prova.questoes.length,
+        dataLimite: prova.dataLimite,
+        tempoRestanteMinutos: tempoRestanteMinutos > 0 ? tempoRestanteMinutos : null
       },
       redirectTo: `/realizar-prova.html?token=${provaToken}`
     });
     
   } catch (error) {
     console.error('❌ Erro ao validar acesso à prova:', error);
-    res.status(500).json({
+    
+    // Mensagens de erro específicas
+    let mensagemErro = 'Erro interno do servidor';
+    let statusCode = 500;
+    
+    if (error.name === 'CastError') {
+      mensagemErro = 'ID da prova inválido';
+      statusCode = 400;
+    } else if (error.name === 'JsonWebTokenError') {
+      mensagemErro = 'Erro ao gerar token de acesso';
+      statusCode = 500;
+    } else if (error.message.includes('E11000')) {
+      mensagemErro = 'Erro de duplicação no banco de dados';
+      statusCode = 409;
+    } else if (error.message.includes('timeout')) {
+      mensagemErro = 'Timeout na conexão com o banco de dados';
+      statusCode = 504;
+    }
+    
+    res.status(statusCode).json({
       success: false,
-      error: 'Erro interno do servidor: ' + error.message
+      error: mensagemErro + ': ' + error.message
     });
   }
 });
@@ -3253,6 +3537,90 @@ app.post('/api/provas/:provaId/liberar-notas-todos', authenticateToken, async (r
     });
   }
 });
+
+// ============ ROTA PARA EXCLUIR PROVA (NOVA) ============
+app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res) => {
+    try {
+        const provaId = req.params.provaId;
+        const professorId = req.userId;
+        
+        console.log(`🗑️ Professor ${professorId} tentando excluir prova ${provaId}`);
+        
+        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas professores podem excluir provas'
+            });
+        }
+        
+        // Buscar a prova
+        const prova = await Prova.findById(provaId);
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+        
+        // Verificar se é o professor da prova
+        if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Você não é o professor desta prova'
+            });
+        }
+        
+        // Verificar se há resultados associados
+        const totalResultados = await Resultado.countDocuments({ provaId: provaId });
+        const totalProvasRealizadas = await ProvaRealizada.countDocuments({ provaId: provaId });
+        
+        console.log(`📊 Prova "${prova.titulo}" tem ${totalResultados} resultados e ${totalProvasRealizadas} provas realizadas`);
+        
+        // Remover todos os resultados associados
+        if (totalResultados > 0) {
+            await Resultado.deleteMany({ provaId: provaId });
+            console.log(`✅ ${totalResultados} resultados excluídos`);
+        }
+        
+        // Remover todas as provas realizadas associadas
+        if (totalProvasRealizadas > 0) {
+            await ProvaRealizada.deleteMany({ provaId: provaId });
+            console.log(`✅ ${totalProvasRealizadas} provas realizadas excluídas`);
+        }
+        
+        // Remover a prova das turmas
+        if (prova.turmaId) {
+            await Turma.updateOne(
+                { _id: prova.turmaId },
+                { $pull: { provas: provaId } }
+            );
+            console.log(`✅ Prova removida da turma ${prova.turmaId}`);
+        }
+        
+        // Excluir a prova
+        await Prova.deleteOne({ _id: provaId });
+        
+        console.log(`✅ Prova ${provaId} excluída com sucesso`);
+        
+        res.json({
+            success: true,
+            message: `Prova "${prova.titulo}" excluída com sucesso!`,
+            estatisticas: {
+                provaExcluida: prova.titulo,
+                resultadosExcluidos: totalResultados,
+                provasRealizadasExcluidas: totalProvasRealizadas
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir prova:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao excluir prova: ' + error.message
+        });
+    }
+});
+
 
 
 // ============ ROTAS DE MONITORAMENTO ============

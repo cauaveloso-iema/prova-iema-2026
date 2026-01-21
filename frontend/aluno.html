@@ -566,13 +566,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('📊 Dados recebidos da API:', data);
                 
                 if (data.success) {
-                    // Filtrar apenas as concluídas
+                    // Filtrar apenas as concluídas (incluindo aguardando correção)
                     provasConcluidas = (data.provas || []).filter(p => {
-                        console.log(`Prova: ${p.titulo}, Status: ${p.status}, Nota: ${p.nota}, StatusCorrecao: ${p.statusCorrecao}`);
-                        return p.status === 'concluida';
+                        console.log(`Prova: ${p.titulo}, Status: ${p.status}`);
+                        return p.status === 'concluida' || p.status === 'aguardando_correcao';
                     });
                     
-                    console.log(`✅ ${provasConcluidas.length} provas concluídas encontradas`);
+                    console.log(`✅ ${provasConcluidas.length} provas realizadas encontradas`);
                     
                     // Atualizar interface
                     atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
@@ -582,7 +582,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('provasConcluidas').innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <h3>Erro ao carregar provas concluídas</h3>
+                        <h3>Erro ao carregar provas realizadas</h3>
                         <p>Tente recarregar a página</p>
                     </div>
                 `;
@@ -657,7 +657,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Atualizar lista de provas na interface
+        // Atualizar lista de provas na interface - VERSÃO CORRIGIDA COM LÓGICA DE DATA
         function atualizarListaProvas(elementId, provas, tipo) {
             const container = document.getElementById(elementId);
             
@@ -666,7 +666,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="empty-state">
                         <i class="fas fa-${tipo === 'pendente' ? 'check-circle' : 'file'}"></i>
                         <h3>${tipo === 'pendente' ? 'Nenhuma prova pendente' : 'Nenhuma prova concluída'}</h3>
-                        <p>${tipo === 'pendente' ? 'Todas as provas foram concluídas' : 'Realize suas primeiras provas'}</p>
+                        <p>${tipo === 'pendente' ? 'Todas as provas foram concluídas' : 'Você ainda não realizou nenhuma prova'}</p>
                     </div>
                 `;
                 return;
@@ -680,19 +680,110 @@ document.addEventListener('DOMContentLoaded', function() {
                         year: 'numeric'
                     }) : 'Sem data limite';
                 
-                const tempoRestante = prova.dataLimite ? 
-                    Math.floor((new Date(prova.dataLimite) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                // LÓGICA CORRIGIDA PARA CALCULAR TEMPO RESTANTE
+                let tempoInfo = '';
+                if (prova.dataLimite) {
+                    const dataLimiteObj = new Date(prova.dataLimite);
+                    const hoje = new Date();
+                    
+                    // Resetar horas para comparar apenas datas
+                    const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+                    const dataLimiteSemHora = new Date(dataLimiteObj.getFullYear(), dataLimiteObj.getMonth(), dataLimiteObj.getDate());
+                    
+                    // Calcular diferença em dias
+                    const diffMs = dataLimiteSemHora - hojeSemHora;
+                    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDias === 0) {
+                        // Se a data limite é HOJE
+                        tempoInfo = `⏰ <span style="color: #dc2626; font-weight: bold;">HOJE</span>`;
+                    } else if (diffDias === 1) {
+                        // Amanhã
+                        tempoInfo = `⏰ <span style="color: #f59e0b;">Amanhã</span>`;
+                    } else if (diffDias > 1 && diffDias <= 7) {
+                        // Esta semana
+                        tempoInfo = `⏰ <span style="color: #f59e0b;">Faltam ${diffDias} dias</span>`;
+                    } else if (diffDias > 7) {
+                        // Mais de uma semana
+                        tempoInfo = `⏰ <span style="color: #10b981;">Faltam ${diffDias} dias</span>`;
+                    } else if (diffDias < 0) {
+                        // Data limite já passou (não deveria aparecer, mas trata caso)
+                        tempoInfo = `⏰ <span style="color: #6b7280;">Prazo expirado</span>`;
+                    }
+                }
                 
-                const tempoAlerta = tempoRestante !== null && tempoRestante <= 3 ? 
-                    `⏰ <span style="color: #dc2626;">(Faltam ${tempoRestante} dias)</span>` : '';
+                // Determinar classe e status com base no tipo e status da prova
+                let statusClass = 'pendente';
+                let statusText = 'PENDENTE';
+                let statusColor = '#f59e0b';
+                
+                if (tipo === 'concluida') {
+                    if (prova.status === 'aguardando_correcao') {
+                        statusClass = 'pendente';
+                        statusText = 'AGUARDANDO CORREÇÃO';
+                        statusColor = '#f59e0b';
+                    } else if (prova.status === 'concluida') {
+                        statusClass = 'concluida';
+                        statusText = 'CONCLUÍDA';
+                        statusColor = '#6b7280';
+                    }
+                }
+                
+                // BOTÃO DE AÇÃO - CORREÇÃO PRINCIPAL
+                let botaoAcao = '';
+                
+                if (tipo === 'pendente') {
+                    // Verificar se a prova ainda está disponível (não expirou)
+                    const hoje = new Date();
+                    const dataLimiteObj = prova.dataLimite ? new Date(prova.dataLimite) : null;
+                    const provaExpirada = dataLimiteObj && hoje > dataLimiteObj;
+                    
+                    if (provaExpirada) {
+                        botaoAcao = `
+                            <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
+                                <i class="fas fa-clock"></i> Prazo Expirado
+                            </button>
+                        `;
+                    } else {
+                        botaoAcao = `
+                            <button class="btn-iniciar-prova" onclick="selecionarProva('${prova._id}')">
+                                <i class="fas fa-play"></i> Realizar Prova
+                            </button>
+                        `;
+                    }
+                } else if (tipo === 'concluida') {
+                    // Para provas concluídas
+                    if (prova.status === 'aguardando_correcao') {
+                        botaoAcao = `
+                            <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
+                                <i class="fas fa-hourglass-half"></i> Aguardando Correção
+                            </button>
+                        `;
+                    } else if (prova.nota !== null && prova.nota !== undefined) {
+                        botaoAcao = `
+                            <button class="btn-ver-resultado" onclick="verResultado('${prova._id || prova.id}')">
+                                <i class="fas fa-star"></i> Ver Nota: ${prova.nota.toFixed(1)}
+                            </button>
+                        `;
+                    } else {
+                        botaoAcao = `
+                            <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
+                                <i class="fas fa-hourglass-half"></i> Sem nota disponível
+                            </button>
+                        `;
+                    }
+                }
                 
                 return `
-                <div class="prova-card ${tipo}">
+                <div class="prova-card ${tipo}" style="border-left-color: ${statusColor};">
                     <div class="prova-header">
-                        <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'} ${tempoAlerta}</h4>
-                        <span class="prova-status status-${tipo}">
-                            ${tipo === 'pendente' ? 'PENDENTE' : 'CONCLUÍDA'}
-                        </span>
+                        <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'}</h4>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            ${tempoInfo ? `<span style="font-size: 0.8rem; font-weight: 600;">${tempoInfo}</span>` : ''}
+                            <span class="prova-status status-${statusClass}" style="background: ${statusClass === 'pendente' ? '#fef3c7' : '#f3f4f6'}; color: ${statusClass === 'pendente' ? '#92400e' : '#374151'}">
+                                ${statusText}
+                            </span>
+                        </div>
                     </div>
                     <div class="prova-info">
                         <div class="prova-info-item">
@@ -721,20 +812,45 @@ document.addEventListener('DOMContentLoaded', function() {
                         ` : ''}
                     </div>
                     <div class="prova-actions">
-                        ${tipo === 'pendente' ? `
-                        <button class="btn-iniciar-prova" onclick="selecionarProva('${prova._id}')">
-                            <i class="fas fa-play"></i> Iniciar Prova
-                        </button>
-                        ` : `
-                        <button class="btn-ver-resultado" onclick="verResultado('${prova._id || prova.id}')">
-                            <i class="fas fa-star"></i> Ver Nota
-                        </button>
-                        `}
+                        ${botaoAcao}
                     </div>
                 </div>
                 `;
             }).join('');
         }
+
+        // LOCALIZAR ESTA FUNÇÃO e MODIFICAR a lógica de comparação:
+
+        function verificarDatasProvasPendentes() {
+            const hoje = new Date();
+            
+            provasPendentes.forEach(prova => {
+                if (prova.dataLimite) {
+                    const dataLimite = new Date(prova.dataLimite);
+                    
+                    // CORREÇÃO: Criar data limite como FIM DO DIA (23:59:59.999)
+                    const dataLimiteFimDia = new Date(dataLimite);
+                    dataLimiteFimDia.setHours(23, 59, 59, 999);
+                    
+                    // CORREÇÃO: Comparar com FIM DO DIA
+                    const diffMs = dataLimiteFimDia - hoje;
+                    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                    
+                    console.log(`📅 Verificação: ${prova.titulo}`);
+                    console.log(`   Hoje: ${hoje.toISOString()}`);
+                    console.log(`   Limite original: ${dataLimite.toISOString()}`);
+                    console.log(`   Limite fim do dia: ${dataLimiteFimDia.toISOString()}`);
+                    console.log(`   Diferença em dias: ${diffDias}`);
+                    
+                    if (diffDias < 0) {
+                        console.log(`⚠️ Prova "${prova.titulo}" expirou (data limite: ${dataLimite.toLocaleDateString('pt-BR')})`);
+                    }
+                }
+            });
+        }
+
+        // Chamar esta função periodicamente (a cada minuto)
+        setInterval(verificarDatasProvasPendentes, 60000); // 60 segundos
         
         // Carregar turmas do aluno
         async function carregarTurmasAluno() {
@@ -832,12 +948,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Selecionar prova para iniciar
+        // No modal de iniciar prova, adicione uma verificação
         function selecionarProva(provaId) {
             provaSelecionada = provasPendentes.find(p => p._id === provaId);
             
             if (!provaSelecionada) {
                 alert('Prova não encontrada');
+                return;
+            }
+            
+            // Verificar se a prova já expirou
+            const hoje = new Date();
+            const dataLimiteObj = provaSelecionada.dataLimite ? new Date(provaSelecionada.dataLimite) : null;
+            
+            if (dataLimiteObj && hoje > dataLimiteObj) {
+                alert('⚠️ Esta prova já passou do prazo de entrega. Você não pode mais realizá-la.');
                 return;
             }
             
@@ -850,8 +975,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     minute: '2-digit'
                 }) : 'Sem data limite';
             
+            // Calcular se é HOJE
+            let alertaData = '';
+            if (dataLimiteObj) {
+                const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+                const dataLimiteSemHora = new Date(dataLimiteObj.getFullYear(), dataLimiteObj.getMonth(), dataLimiteObj.getDate());
+                const diffMs = dataLimiteSemHora - hojeSemHora;
+                const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                
+                if (diffDias === 0) {
+                    alertaData = `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; margin: 10px 0; border-radius: 4px;">
+                        <strong><i class="fas fa-exclamation-triangle"></i> ATENÇÃO:</strong> A data limite é <strong>HOJE!</strong>
+                    </div>`;
+                }
+            }
+            
             document.getElementById('modalProvaInfo').innerHTML = `
                 <h4>${provaSelecionada.titulo || 'Prova sem título'}</h4>
+                ${alertaData}
                 <p><strong>Conteúdo:</strong> ${provaSelecionada.conteudo || 'Não especificado'}</p>
                 
                 <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 15px 0;">
@@ -871,6 +1012,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <li>O tempo será contado a partir do início da prova</li>
                     <li>Não recarregue a página durante a prova</li>
                     <li>Após finalizar, não será possível retornar</li>
+                    ${alertaData ? '<li><strong>Esta prova precisa ser entregue HOJE!</strong></li>' : ''}
                 </ul>
             `;
             
@@ -1096,10 +1238,73 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Redirecionar para página de resultados do ALUNO
-            window.location.href = `resultado-aluno.html?provaId=${provaId}`;
+            // Primeiro verificar se já pode ver o resultado
+            const token = localStorage.getItem('auth_token');
+            
+            // Verificar status da prova
+            fetch(`${API_BASE_URL}/aluno/provas/${provaId}/resultado`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.status === 'corrigida' && data.nota !== null) {
+                        // Redirecionar para página de resultados
+                        window.location.href = `resultado-aluno.html?provaId=${provaId}`;
+                    } else if (data.status === 'pendente') {
+                        // Mostrar mensagem amigável
+                        alert('⌛ Sua prova ainda está sendo corrigida pelo professor. Você receberá uma notificação quando a correção estiver disponível.');
+                    } else {
+                        alert('ℹ️ ' + (data.mensagem || 'Status da prova não disponível.'));
+                    }
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao verificar status:', error);
+                alert('Erro ao verificar status da prova. Tente novamente.');
+            });
         }
+        // Função para verificar atualizações de status periodicamente
+        function verificarAtualizacoesStatus() {
+            if (!usuario || usuario.role !== 'aluno') return;
+            
+            const token = localStorage.getItem('auth_token');
+            if (!token) return;
+            
+            // Verificar a cada 30 segundos
+            setInterval(() => {
+                fetch(`${API_BASE_URL}/aluno/provas`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const provasAtualizadas = data.provas || [];
+                        const temNovaCorrecao = provasAtualizadas.some(p => 
+                            (p.status === 'concluida' && p.nota !== null) || 
+                            p.status === 'concluida'
+                        );
                         
+                        if (temNovaCorrecao) {
+                            console.log('🔄 Nova correção disponível, atualizando lista...');
+                            carregarProvasConcluidas();
+                            
+                            // Mostrar notificação se a página está em foco
+                            if (!document.hidden) {
+                                console.log('📬 Nova correção disponível!');
+                            }
+                        }
+                    }
+                })
+                .catch(error => console.error('Erro ao verificar atualizações:', error));
+            }, 30000); // 30 segundos
+        }  
         // Logout
         function logout() {
             localStorage.clear();
@@ -1199,7 +1404,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             // Carregar dados do aluno
-            carregarDadosAluno();
+            carregarDadosAluno().then(() => {
+                // Iniciar verificação periódica de atualizações
+                verificarAtualizacoesStatus();
+            });
         });
     </script>
 </body>
