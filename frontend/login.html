@@ -644,9 +644,12 @@
                 if (tipo === 'email') {
                     dadosLogin.email = identificador.toLowerCase();
                 } else {
-                    // É CPF - remover formatação
-                    dadosLogin.cpf = identificador.replace(/\D/g, '');
+                    // É CPF - remover formatação e enviar
+                    const cpfNumeros = identificador.replace(/\D/g, '');
+                    dadosLogin.cpf = cpfNumeros;
                 }
+                
+                console.log('📤 Enviando dados de login:', dadosLogin);
                 
                 const resposta = await fetch('/api/auth/login', {
                     method: 'POST',

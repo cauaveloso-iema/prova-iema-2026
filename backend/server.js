@@ -406,19 +406,73 @@ const validateInputs = (validations) => {
 app.post('/api/auth/register', [
   check('nome').not().isEmpty().withMessage('Nome é obrigatório'),
   check('email').isEmail().withMessage('Email inválido'),
+  check('cpf').custom((value) => {
+    if (!value) {
+      throw new Error('CPF é obrigatório');
+    }
+    
+    // Função para validar CPF
+    function validarCPF(cpf) {
+      cpf = cpf.replace(/\D/g, '');
+      
+      if (cpf.length !== 11) return false;
+      if (/^(\d)\1+$/.test(cpf)) return false;
+      
+      let soma = 0;
+      let resto;
+      
+      for (let i = 1; i <= 9; i++) {
+        soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
+      }
+      
+      resto = (soma * 10) % 11;
+      if ((resto === 10) || (resto === 11)) resto = 0;
+      if (resto !== parseInt(cpf.substring(9, 10))) return false;
+      
+      soma = 0;
+      for (let i = 1; i <= 10; i++) {
+        soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
+      }
+      
+      resto = (soma * 10) % 11;
+      if ((resto === 10) || (resto === 11)) resto = 0;
+      if (resto !== parseInt(cpf.substring(10, 11))) return false;
+      
+      return true;
+    }
+    
+    if (!validarCPF(value)) {
+      throw new Error('CPF inválido');
+    }
+    
+    return true;
+  }).withMessage('CPF inválido'),
   check('password').isLength({ min: 6 }).withMessage('Senha deve ter no mínimo 6 caracteres'),
   check('role').isIn(['aluno', 'professor']).withMessage('Role inválida')
 ], async (req, res) => {
   try {
-    const { nome, email, password, matricula, role, eixo, curso, periodo, departamento, titulacao } = req.body;
+    const { nome, email, password, cpf, matricula, role, eixo, curso, periodo, departamento, titulacao } = req.body;
     
-    console.log('📝 Dados recebidos no registro:', req.body);
+    console.log('📝 Dados recebidos no registro:', { nome, email, cpf, role });
     
+    // VALIDAÇÃO DE CPF FORMATADO
+    const cpfNumeros = cpf.replace(/\D/g, '');
+    
+    // Verificar email duplicado
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         success: false,
         error: 'Email já cadastrado'
+      });
+    }
+    
+    // Verificar CPF duplicado
+    const existingCPF = await User.findOne({ cpf: cpfNumeros });
+    if (existingCPF) {
+      return res.status(400).json({
+        success: false,
+        error: 'CPF já cadastrado'
       });
     }
     
@@ -441,10 +495,12 @@ app.post('/api/auth/register', [
       }
     }
     
+    // CRIAR USUÁRIO COM CPF
     const user = new User({
       nome,
       email,
       password,
+      cpf: cpfNumeros, // Salvar apenas números
       matricula: matricula || undefined,
       role,
       eixo: role === 'professor' ? eixo : null,
@@ -455,13 +511,15 @@ app.post('/api/auth/register', [
     });
     
     await user.save();
+    console.log('✅ Usuário criado com CPF:', user.cpf);
     
     const token = jwt.sign(
       { 
         id: user._id, 
         role: user.role,
         eixo: user.eixo,
-        nome: user.nome 
+        nome: user.nome,
+        cpf: user.cpf
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
@@ -474,6 +532,7 @@ app.post('/api/auth/register', [
         id: user._id,
         nome: user.nome,
         email: user.email,
+        cpf: user.cpf,
         role: user.role,
         eixo: user.eixo,
         matricula: user.matricula,
@@ -531,23 +590,42 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', [
-  check('email').isEmail().withMessage('Email inválido'),
-  check('password').not().isEmpty().withMessage('Senha é obrigatória')
-], async (req, res) => {
+// Substitua a rota POST /api/auth/login atual por esta versão melhorada:
+app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, cpf } = req.body;
     
-    const user = await User.findOne({ email }).select('+password');
+    console.log('🔐 Tentativa de login:', { email, cpf: cpf ? '***' : 'não informado' });
     
-    if (!user) {
-      return res.status(401).json({
+    let user;
+    let loginIdentifier;
+    
+    // Verificar se está tentando login com email ou CPF
+    if (email) {
+      // Login com email
+      user = await User.findOne({ email }).select('+password');
+      loginIdentifier = email;
+    } else if (cpf) {
+      // Login com CPF
+      const cpfNumeros = cpf.replace(/\D/g, '');
+      user = await User.findOne({ cpf: cpfNumeros }).select('+password');
+      loginIdentifier = cpf;
+    } else {
+      return res.status(400).json({
         success: false,
-        error: 'Email ou senha incorretos'
+        error: 'Email ou CPF é obrigatório'
       });
     }
     
-    if (user.isLocked()) {
+    if (!user) {
+      console.log('❌ Usuário não encontrado:', loginIdentifier);
+      return res.status(401).json({
+        success: false,
+        error: 'Email/CPF ou senha incorretos'
+      });
+    }
+    
+    if (user.isLocked && user.isLocked()) {
       return res.status(423).json({
         success: false,
         error: 'Conta bloqueada. Tente novamente em 15 minutos.'
@@ -557,15 +635,21 @@ app.post('/api/auth/login', [
     const isMatch = await user.comparePassword(password);
     
     if (!isMatch) {
-      await user.incLoginAttempts();
+      if (user.incLoginAttempts) {
+        await user.incLoginAttempts();
+      }
+      console.log('❌ Senha incorreta para:', loginIdentifier);
       return res.status(401).json({
         success: false,
-        error: 'Email ou senha incorretos'
+        error: 'Email/CPF ou senha incorretos'
       });
     }
     
-    user.loginAttempts = 0;
-    user.lockUntil = undefined;
+    if (user.loginAttempts !== undefined) {
+      user.loginAttempts = 0;
+      user.lockUntil = undefined;
+    }
+    
     user.lastLogin = new Date();
     await user.save();
     
@@ -574,11 +658,14 @@ app.post('/api/auth/login', [
         id: user._id, 
         role: user.role,
         eixo: user.eixo,
-        nome: user.nome 
+        nome: user.nome,
+        cpf: user.cpf
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
+    
+    console.log('✅ Login bem-sucedido:', user.email);
     
     res.json({
       success: true,
@@ -587,6 +674,7 @@ app.post('/api/auth/login', [
         id: user._id,
         nome: user.nome,
         email: user.email,
+        cpf: user.cpf,
         role: user.role,
         eixo: user.eixo,
         matricula: user.matricula,
@@ -602,7 +690,7 @@ app.post('/api/auth/login', [
     console.error('Erro no login:', error);
     res.status(500).json({
       success: false,
-      error: 'Erro no servidor'
+      error: 'Erro no servidor: ' + error.message
     });
   }
 });
