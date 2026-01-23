@@ -452,9 +452,17 @@
                     </div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="registerMatricula"><i class="fas fa-id-card"></i> Matrícula (opcional)</label>
-                    <input type="text" id="registerMatricula" class="form-control" placeholder="Sua matrícula">
+                <div class="form-group matricula-field" id="matriculaField">
+                    <label for="registerMatricula">
+                        <i class="fas fa-id-card"></i> 
+                        Matrícula 
+                        <span class="required-badge" id="matriculaRequired">*</span>
+                        <span class="hint-text" id="matriculaHint"></span>
+                    </label>
+                    <input type="text" id="registerMatricula" class="form-control" 
+                        placeholder="Para professores: digite sua matrícula (CPF)">
+                    <small id="matriculaDescription" class="hint-text">
+                    </small>
                 </div>
                 
                 <div class="form-group">
@@ -513,6 +521,9 @@
             // Atualizar campo hidden
             document.getElementById('registerRole').value = role;
             
+            // Atualizar campo matrícula
+            atualizarCampoMatricula(role);
+            
             // Mostrar/ocultar campos específicos
             if (role === 'aluno') {
                 document.getElementById('alunoFields').classList.add('active');
@@ -528,6 +539,41 @@
                 document.getElementById('registerEixo').setAttribute('required', 'true');
                 // Curso não obrigatório para professores
                 document.getElementById('registerCurso').removeAttribute('required');
+            }
+        }
+
+        // Função para atualizar o campo matrícula baseado no role
+        function atualizarCampoMatricula(role) {
+            const matriculaField = document.getElementById('matriculaField');
+            const matriculaInput = document.getElementById('registerMatricula');
+            const requiredBadge = document.getElementById('matriculaRequired');
+            const hintText = document.getElementById('matriculaHint');
+            const descriptionText = document.getElementById('matriculaDescription');
+            
+            if (role === 'professor') {
+                // Tornar obrigatório para professores
+                matriculaInput.required = true;
+                requiredBadge.style.display = 'inline';
+                hintText.style.display = 'inline';
+                descriptionText.style.display = 'block';
+                matriculaField.classList.add('required');
+                
+                // Atualizar placeholder e dicas
+                matriculaInput.placeholder = "Digite sua matrícula";
+                
+                console.log('📝 Matrícula obrigatória para professores');
+            } else {
+                // Opcional para alunos
+                matriculaInput.required = false;
+                requiredBadge.style.display = 'none';
+                hintText.style.display = 'none';
+                descriptionText.style.display = 'none';
+                matriculaField.classList.remove('required');
+                
+                // Atualizar placeholder
+                matriculaInput.placeholder = "Sua matrícula (opcional)";
+                
+                console.log('📝 Matrícula opcional para alunos');
             }
         }
         
@@ -711,19 +757,45 @@
                 return;
             }
             
-            // Validação específica para alunos
-            if (role === 'aluno' && !curso) {
-                mostrarAlerta('Selecione um curso');
-                return;
-            }
-            
-            // Validação específica para professores
+            // VALIDAÇÃO ESPECÍFICA PARA PROFESSORES
             if (role === 'professor') {
                 const eixo = document.getElementById('registerEixo').value;
+                
+                // Validar eixo
                 if (!eixo) {
                     mostrarAlerta('Professores devem selecionar um eixo');
                     return;
                 }
+                
+                // VALIDAÇÃO DA MATRÍCULA PARA PROFESSORES
+                if (!matricula || matricula.trim() === '') {
+                    mostrarAlerta('Para cadastro como professor, a matrícula é obrigatória');
+                    return;
+                }
+                
+                // Validar se a matrícula (CPF) está na lista de professores autorizados
+                const cpfNumeros = cpf.replace(/\D/g, '');
+                const matriculaNumeros = matricula.replace(/\D/g, '');
+                
+                console.log('🔍 Verificando autorização de professor:');
+                console.log('   CPF cadastrado:', cpfNumeros);
+                console.log('   Matrícula informada:', matriculaNumeros);
+                
+                // IMPORTANTE: Verificar se o CPF e a matrícula coincidem
+                if (cpfNumeros !== matriculaNumeros) {
+                    mostrarAlerta('Para professores, a matrícula deve ser exatamente o mesmo número do CPF');
+                    return;
+                }
+                
+                // Verificar se o CPF está na lista de professores autorizados
+                // Esta verificação será feita no backend
+                console.log('✅ CPF do professor validado localmente:', cpfNumeros);
+            }
+            
+            // Validação específica para alunos
+            if (role === 'aluno' && !curso) {
+                mostrarAlerta('Selecione um curso');
+                return;
             }
             
             if (senha.length < 6) {
@@ -736,7 +808,7 @@
                 return;
             }
             
-            // Preparar objeto de dados
+            // Preparar objeto de dados (mantenha o restante igual)
             const dadosCadastro = {
                 nome: nome,
                 cpf: cpf.replace(/\D/g, ''), // Remove formatação

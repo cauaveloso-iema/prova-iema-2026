@@ -9,6 +9,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
+const cpfsAutorizados = require('./cpfs-autorizados.js');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // Logo após require('dotenv')
@@ -487,12 +488,45 @@ app.post('/api/auth/register', [
     }
     
     if (role === 'professor') {
-      if (!eixo || !['natureza', 'humanas'].includes(eixo)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Professores devem escolher um eixo válido (natureza ou humanas)'
-        });
-      }
+        if (!eixo || !['natureza', 'humanas'].includes(eixo)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Professores devem escolher um eixo válido (natureza ou humanas)'
+            });
+        }
+        
+        // VALIDAÇÃO DA MATRÍCULA PARA PROFESSORES (OBRIGATÓRIA)
+        if (!matricula) {
+            return res.status(400).json({
+                success: false,
+                error: 'Matrícula é obrigatória para professores'
+            });
+        }
+        
+        // Verificar se a matrícula é igual ao CPF
+        const matriculaNumeros = matricula.replace(/\D/g, '');
+        if (cpfNumeros !== matriculaNumeros) {
+            return res.status(400).json({
+                success: false,
+                error: 'A matrícula do professor deve ser exatamente o mesmo número do CPF'
+            });
+        }
+        
+        // VALIDAÇÃO DE CPF AUTORIZADO PARA PROFESSORES
+        const cpfAutorizado = cpfsAutorizados.CPFS_PROFESSORES_AUTORIZADOS || 
+                            cpfsAutorizados.PROFESSORES_AUTORIZADOS?.map(p => p.cpf) || [];
+        
+        console.log('🔍 Verificando CPF de professor:', cpfNumeros);
+        console.log('📋 Lista de CPFs autorizados:', cpfAutorizado);
+        
+        if (!cpfAutorizado.includes(cpfNumeros)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Matrícula não autorizada para cadastro como professor. Entre em contato com a administração.'
+            });
+        }
+        
+        console.log('✅ CPF autorizado para professor:', cpfNumeros);
     }
     
     // CRIAR USUÁRIO COM CPF

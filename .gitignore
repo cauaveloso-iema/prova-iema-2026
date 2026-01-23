@@ -1,5 +1,3 @@
-# Crie/Atualize o .gitignore
-cat > .gitignore << 'EOF'
 # Environment
 .env
 .env.local
@@ -28,4 +26,11 @@ Thumbs.db
 
 # Optional
 *.env.backup
-EOF
+
+# ARQUIVOS CONFIDENCIAIS - CPFs DOS PROFESSORES (ADICIONE ESTAS LINHAS)
+backend/cpfs-autorizados.js
+cpf-professores.js
+cpf-autorizados.js
+professores.json
+dados-confidenciais/
+config/private/
