@@ -11,7 +11,8 @@ const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const professorAuth = require('./security/professor-auth');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-require('./render-fix');  // Fix para Render
+require('./email-service-hybrid');  // Fix para Render
+
 // Logo após require('dotenv')
 console.log('📁 Diretório atual:', __dirname);
 console.log('🔍 Procurando .env em:', path.join(__dirname, '..', '.env'));
@@ -24,7 +25,7 @@ const Prova = require('./models/Prova');
 const Turma = require('./models/Turma');
 
 // IMPORTE O EMAIL SERVICE (ADICIONE AQUI)
-const EmailService = require('./email-service');
+const EmailService = require('./email-service-hybrid'); 
 const emailService = new EmailService()
 
 // NÃO importar Resultado ou ProvaRealizada se forem criados inline
