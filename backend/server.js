@@ -22,8 +22,12 @@ console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Co
 const User = require('./models/User');
 const Prova = require('./models/Prova');
 const Turma = require('./models/Turma');
-// NÃO importar Resultado ou ProvaRealizada se forem criados inline
 
+// IMPORTE O EMAIL SERVICE (ADICIONE AQUI)
+const EmailService = require('./email-service');
+const emailService = new EmailService()
+
+// NÃO importar Resultado ou ProvaRealizada se forem criados inline
 // ============ CRIAR MODELOS INLINE ============
 
 // 1. CRIAR MODELO Resultado inline (ATUALIZADO)
@@ -4378,22 +4382,8 @@ app.get('/api/provas/offline/pending', authenticateToken, async (req, res) => {
     }
 });
 
-// ============ ROTAS DE RECUPERAÇÃO DE SENHA ============
-
-// Configuração do email (se você quiser enviar emails reais)
-const nodemailer = require('nodemailer');
-
-// Configurar transporte de email (usando Gmail como exemplo)
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-});
-
-// Alternativa: Email de teste (não requer configuração real)
-// Armazenar códigos temporariamente em memória (em produção, use Redis)
+// ============ ROTAS DE RECUPERAÇÃO DE SENHA (VERSÃO ATUALIZADA COM BREVO) ============
+// Armazenar códigos temporariamente (em produção, use Redis)
 const resetCodes = new Map();
 
 // Rota para solicitar recuperação de senha
@@ -4408,7 +4398,11 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
             });
         }
         
-        console.log('🔐 Solicitação de recuperação para:', identifier);
+        console.log('\n📨 ===== NOVA SOLICITAÇÃO DE RECUPERAÇÃO =====');
+        console.log('📧 Identificador recebido:', identifier);
+        console.log('🕒 Hora:', new Date().toLocaleString('pt-BR'));
+        console.log('🌐 IP:', req.ip);
+        console.log('==============================================\n');
         
         let user;
         
@@ -4422,13 +4416,19 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
             user = await User.findOne({ cpf: cpfNumeros });
         }
         
+        // Por segurança, sempre retornar sucesso mesmo se usuário não existir
         if (!user) {
-            // Por segurança, não revelar se o usuário existe ou não
+            console.log('⚠️  Usuário não encontrado (retornando sucesso por segurança)');
             return res.json({
                 success: true,
                 message: 'Se o email/CPF estiver cadastrado, você receberá um código de recuperação'
             });
         }
+        
+        console.log('🎯 Usuário encontrado:');
+        console.log('   Email:', user.email);
+        console.log('   Nome:', user.nome);
+        console.log('   ID:', user._id);
         
         // Gerar código de 6 dígitos
         const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -4436,82 +4436,80 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
             { 
                 userId: user._id,
                 code: code,
-                type: 'password_reset'
+                type: 'password_reset',
+                timestamp: Date.now()
             },
             process.env.JWT_SECRET,
             { expiresIn: '15m' } // Código válido por 15 minutos
         );
         
+        console.log('🔐 Código gerado:', code);
+        console.log('🔑 Token gerado:', token.substring(0, 50) + '...');
+        
         // Armazenar código temporariamente
         resetCodes.set(user._id.toString(), {
             code: code,
             expiresAt: Date.now() + (15 * 60 * 1000), // 15 minutos
-            token: token
+            token: token,
+            attempts: 0,
+            maxAttempts: 5
         });
         
         // Limpar códigos expirados
         cleanupExpiredCodes();
         
-        console.log(`📧 Código gerado para ${user.email}: ${code}`);
+        // ENVIAR EMAIL COM O NOVO SERVIÇO
+        console.log('\n🚀 Enviando email via:', process.env.EMAIL_SERVICE || 'Brevo');
+        const emailResult = await emailService.sendPasswordResetEmail(
+            user.email,
+            user.nome,
+            code
+        );
         
-        // Em produção, enviar email real
-        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-            try {
-                await transporter.sendMail({
-                    from: process.env.EMAIL_USER,
-                    to: user.email,
-                    subject: 'Código de Recuperação de Senha - Sistema de Provas',
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #4f46e5;">Recuperação de Senha</h2>
-                            <p>Olá ${user.nome},</p>
-                            <p>Você solicitou a recuperação da sua senha no Sistema de Provas.</p>
-                            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
-                                <h3 style="margin: 0; color: #111827;">Seu código de verificação:</h3>
-                                <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4f46e5; margin: 15px 0;">
-                                    ${code}
-                                </div>
-                                <p style="color: #6b7280; font-size: 14px;">
-                                    Este código é válido por 15 minutos
-                                </p>
-                            </div>
-                            <p style="color: #6b7280; font-size: 14px;">
-                                Se você não solicitou esta recuperação, ignore este email.
-                            </p>
-                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                            <p style="color: #9ca3af; font-size: 12px;">
-                                Sistema de Provas Online © ${new Date().getFullYear()}
-                            </p>
-                        </div>
-                    `
-                });
-                
-                console.log(`✅ Email enviado para ${user.email}`);
-            } catch (emailError) {
-                console.error('❌ Erro ao enviar email:', emailError);
-                // Continuar mesmo se o email falhar (para desenvolvimento)
+        console.log('\n📊 RESULTADO DO ENVIO:');
+        console.log('Sucesso:', emailResult.success ? '✅' : '❌');
+        console.log('Serviço:', emailResult.service);
+        console.log('ID:', emailResult.messageId);
+        
+        // Preparar resposta
+        const response = {
+            success: true,
+            message: 'Código de recuperação enviado para seu email!',
+            data: {
+                email: user.email,
+                expiresIn: 900, // 15 minutos em segundos
+                token: token
+            },
+            emailSent: emailResult.success
+        };
+        
+        // Em desenvolvimento ou se email falhou, incluir código para testes
+        if (process.env.NODE_ENV !== 'production' || !emailResult.success) {
+            console.log('\n🔓 [MODO DEV/TESTE] Para testes, use este código:');
+            console.log('📧 Email:', user.email);
+            console.log('🔢 Código:', code);
+            console.log('⏰ Validade: 15 minutos');
+            console.log('💡 Use este código na página de recuperação');
+            
+            // Incluir código na resposta apenas em desenvolvimento
+            if (process.env.NODE_ENV !== 'production') {
+                response.devMode = true;
+                response.devCode = code;
+                response.message = 'Modo desenvolvimento: Use o código abaixo';
             }
         }
         
-        // Para desenvolvimento, retornar o código diretamente
-        const devMode = process.env.NODE_ENV !== 'production';
+        console.log('\n✅ Solicitação processada com sucesso!');
+        console.log('==============================================\n');
         
-        res.json({
-            success: true,
-            message: devMode ? 
-                'Código gerado (em produção, seria enviado por email)' : 
-                'Código de recuperação enviado para seu email',
-            data: devMode ? { 
-                code: code,
-                email: user.email,
-                token: token 
-            } : null,
-            expiresIn: 900, // 15 minutos em segundos
-            token: token
-        });
+        res.json(response);
         
     } catch (error) {
-        console.error('Erro na solicitação de recuperação:', error);
+        console.error('\n🔥 ERRO CRÍTICO NA RECUPERAÇÃO:');
+        console.error('Mensagem:', error.message);
+        console.error('Stack:', error.stack);
+        console.error('====================================\n');
+        
         res.status(500).json({
             success: false,
             error: 'Erro ao processar solicitação de recuperação'
@@ -4531,7 +4529,11 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
             });
         }
         
-        console.log('🔍 Verificando código:', { identifier, code });
+        console.log('\n🔍 ===== VERIFICAÇÃO DE CÓDIGO =====');
+        console.log('📧 Identificador:', identifier);
+        console.log('🔢 Código recebido:', code);
+        console.log('🕒 Hora:', new Date().toLocaleString('pt-BR'));
+        console.log('====================================\n');
         
         let user;
         
@@ -4544,34 +4546,58 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
         }
         
         if (!user) {
+            console.log('❌ Usuário não encontrado');
             return res.status(404).json({
                 success: false,
                 error: 'Usuário não encontrado'
             });
         }
         
+        console.log('👤 Usuário encontrado:', user.email);
+        
         // Verificar código
         const resetData = resetCodes.get(user._id.toString());
         
         if (!resetData) {
+            console.log('❌ Código não encontrado para este usuário');
             return res.status(400).json({
                 success: false,
-                error: 'Código não encontrado ou expirado'
+                error: 'Código não encontrado. Solicite um novo código.'
             });
         }
         
+        // Verificar tentativas
+        if (resetData.attempts >= resetData.maxAttempts) {
+            console.log(`❌ Muitas tentativas (${resetData.attempts}/${resetData.maxAttempts})`);
+            resetCodes.delete(user._id.toString());
+            return res.status(429).json({
+                success: false,
+                error: 'Muitas tentativas. Solicite um novo código.'
+            });
+        }
+        
+        // Verificar expiração
         if (resetData.expiresAt < Date.now()) {
+            console.log('❌ Código expirado');
             resetCodes.delete(user._id.toString());
             return res.status(400).json({
                 success: false,
-                error: 'Código expirado'
+                error: 'Código expirado. Solicite um novo código.'
             });
         }
         
+        // Verificar código
         if (resetData.code !== code) {
+            resetData.attempts += 1;
+            resetCodes.set(user._id.toString(), resetData);
+            
+            const attemptsLeft = resetData.maxAttempts - resetData.attempts;
+            console.log(`❌ Código inválido. Tentativas: ${resetData.attempts}/${resetData.maxAttempts}`);
+            
             return res.status(400).json({
                 success: false,
-                error: 'Código inválido'
+                error: `Código inválido. ${attemptsLeft} tentativa(s) restante(s).`,
+                attemptsLeft: attemptsLeft
             });
         }
         
@@ -4580,12 +4606,14 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
             try {
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
                 if (decoded.userId !== user._id.toString() || decoded.code !== code) {
+                    console.log('❌ Token JWT inválido');
                     return res.status(400).json({
                         success: false,
                         error: 'Token inválido'
                     });
                 }
             } catch (jwtError) {
+                console.log('❌ Token JWT expirado ou inválido:', jwtError.message);
                 return res.status(400).json({
                     success: false,
                     error: 'Token inválido ou expirado'
@@ -4598,15 +4626,24 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
             { 
                 userId: user._id,
                 verified: true,
-                type: 'password_reset_confirmation'
+                codeVerified: true,
+                type: 'password_reset_confirmation',
+                timestamp: Date.now()
             },
             process.env.JWT_SECRET,
             { expiresIn: '30m' } // Válido por 30 minutos
         );
         
+        // Marcar código como usado
+        resetCodes.delete(user._id.toString());
+        
+        console.log('✅ Código verificado com sucesso!');
+        console.log('🔑 Novo token gerado:', resetToken.substring(0, 50) + '...');
+        console.log('====================================\n');
+        
         res.json({
             success: true,
-            message: 'Código verificado com sucesso',
+            message: 'Código verificado com sucesso!',
             data: {
                 token: resetToken,
                 userId: user._id,
@@ -4615,7 +4652,11 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Erro na verificação do código:', error);
+        console.error('\n🔥 ERRO NA VERIFICAÇÃO DO CÓDIGO:');
+        console.error('Mensagem:', error.message);
+        console.error('Stack:', error.stack);
+        console.error('====================================\n');
+        
         res.status(500).json({
             success: false,
             error: 'Erro ao verificar código'
@@ -4642,7 +4683,10 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
             });
         }
         
-        console.log('🔄 Redefinindo senha para:', identifier);
+        console.log('\n🔄 ===== REDEFINIÇÃO DE SENHA =====');
+        console.log('📧 Identificador:', identifier);
+        console.log('🕒 Hora:', new Date().toLocaleString('pt-BR'));
+        console.log('====================================\n');
         
         let user;
         
@@ -4655,23 +4699,35 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
         }
         
         if (!user) {
+            console.log('❌ Usuário não encontrado');
             return res.status(404).json({
                 success: false,
                 error: 'Usuário não encontrado'
             });
         }
         
+        console.log('👤 Usuário encontrado:', user.email);
+        
         // Verificar token se fornecido
         if (token) {
             try {
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
                 if (decoded.userId !== user._id.toString()) {
+                    console.log('❌ Token JWT não pertence ao usuário');
                     return res.status(400).json({
                         success: false,
                         error: 'Token inválido'
                     });
                 }
+                if (!decoded.codeVerified) {
+                    console.log('❌ Código não foi verificado');
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Código não verificado'
+                    });
+                }
             } catch (jwtError) {
+                console.log('❌ Token JWT expirado ou inválido:', jwtError.message);
                 return res.status(400).json({
                     success: false,
                     error: 'Token inválido ou expirado'
@@ -4679,49 +4735,37 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
             }
         }
         
+        // Verificar se a nova senha é igual à antiga
+        const isSamePassword = await user.comparePassword(newPassword);
+        if (isSamePassword) {
+            console.log('❌ Nova senha é igual à senha atual');
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha não pode ser igual à senha atual'
+            });
+        }
+        
         // Atualizar senha
         user.password = newPassword;
+        user.passwordChangedAt = new Date();
         await user.save();
         
-        // Remover códigos de recuperação
-        resetCodes.delete(user._id.toString());
-        
-        // Limpar sessões do usuário (opcional)
-        // Aqui você pode invalidar tokens JWT existentes se quiser
-        
-        console.log(`✅ Senha redefinida para ${user.email}`);
+        console.log(`✅ Senha atualizada para ${user.email}`);
         
         // Enviar email de confirmação
-        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-            try {
-                await transporter.sendMail({
-                    from: process.env.EMAIL_USER,
-                    to: user.email,
-                    subject: 'Senha Alterada - Sistema de Provas',
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #4f46e5;">Senha Alterada com Sucesso</h2>
-                            <p>Olá ${user.nome},</p>
-                            <p>Sua senha foi alterada com sucesso no Sistema de Provas.</p>
-                            <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                                <p style="color: #065f46; margin: 0;">
-                                    <strong>Data da alteração:</strong> ${new Date().toLocaleString('pt-BR')}
-                                </p>
-                            </div>
-                            <p style="color: #6b7280;">
-                                Se você não realizou esta alteração, entre em contato imediatamente com o suporte.
-                            </p>
-                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                            <p style="color: #9ca3af; font-size: 12px;">
-                                Sistema de Provas Online © ${new Date().getFullYear()}
-                            </p>
-                        </div>
-                    `
-                });
-            } catch (emailError) {
-                console.error('❌ Erro ao enviar email de confirmação:', emailError);
-            }
+        try {
+            await emailService.sendPasswordChangedEmail(user.email, user.nome);
+            console.log('📧 Email de confirmação enviado');
+        } catch (emailError) {
+            console.error('⚠️  Erro ao enviar email de confirmação:', emailError.message);
+            // Não falhar o processo se o email falhar
         }
+        
+        // Invalidar todos os tokens JWT do usuário (opcional)
+        // Em produção, você pode querer adicionar o token a uma blacklist
+        
+        console.log('\n✅ Senha redefinida com sucesso!');
+        console.log('====================================\n');
         
         res.json({
             success: true,
@@ -4734,7 +4778,11 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Erro ao redefinir senha:', error);
+        console.error('\n🔥 ERRO AO REDEFINIR SENHA:');
+        console.error('Mensagem:', error.message);
+        console.error('Stack:', error.stack);
+        console.error('====================================\n');
+        
         res.status(500).json({
             success: false,
             error: 'Erro ao redefinir senha'
@@ -4745,15 +4793,22 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
 // Função para limpar códigos expirados
 function cleanupExpiredCodes() {
     const now = Date.now();
+    let cleaned = 0;
+    
     for (const [userId, data] of resetCodes.entries()) {
         if (data.expiresAt < now) {
             resetCodes.delete(userId);
+            cleaned++;
         }
+    }
+    
+    if (cleaned > 0) {
+        console.log(`🧹 Limpeza: ${cleaned} códigos expirados removidos`);
     }
 }
 
-// Executar limpeza a cada hora
-setInterval(cleanupExpiredCodes, 60 * 60 * 1000);
+// Executar limpeza a cada 30 minutos
+setInterval(cleanupExpiredCodes, 30 * 60 * 1000);
 
 // ============ ROTA PARA VERIFICAR BANCO ATLAS ============
 app.get('/api/database-info', async (req, res) => {

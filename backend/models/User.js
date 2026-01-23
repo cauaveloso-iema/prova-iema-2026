@@ -135,10 +135,30 @@ UserSchema.pre('save', async function(next) {
   }
 });
 
-// Método para comparar senha
+// ====== CORREÇÃO AQUI ======
+// Método para comparar senha - UserSchema (com U maiúsculo)
 UserSchema.methods.comparePassword = async function(candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+    try {
+        // Verificar se candidatePassword é válido
+        if (!candidatePassword || typeof candidatePassword !== 'string') {
+            console.error('❌ comparePassword: candidatePassword inválido:', candidatePassword);
+            return false;
+        }
+        
+        // Verificar se this.password existe
+        if (!this.password) {
+            console.error('❌ comparePassword: this.password não existe');
+            return false;
+        }
+        
+        // Comparar senhas
+        return await bcrypt.compare(candidatePassword, this.password);
+    } catch (error) {
+        console.error('❌ Erro em comparePassword:', error);
+        return false;
+    }
 };
+// ===========================
 
 // Verificar se conta está bloqueada
 UserSchema.methods.isLocked = function() {
