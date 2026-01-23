@@ -2678,3 +2678,7 @@ code {
         display: block;
     }
 
+.recovery-tab.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

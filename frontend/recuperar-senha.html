@@ -72,6 +72,11 @@
             background: white;
         }
         
+        .recovery-tab.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
         .tab-content {
             padding: 30px;
             display: none;
@@ -224,7 +229,6 @@
             color: #4b5563;
         }
         
-        /* CÓDIGO ATUALIZADO - Campos de código menores e mais elegantes */
         .code-inputs {
             display: flex;
             gap: 8px;
@@ -256,7 +260,6 @@
             background: #f0fdf4;
         }
         
-        /* Para telas menores */
         @media (max-width: 480px) {
             .code-input {
                 width: 40px;
@@ -314,22 +317,6 @@
             cursor: not-allowed;
             background: none;
         }
-        
-        /* Estilo para mostrar qual campo está ativo */
-        .code-input:focus::placeholder {
-            color: transparent;
-        }
-        
-        /* Adicionar animação suave para preenchimento */
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-        
-        .code-input.filled {
-            animation: pulse 0.3s ease;
-        }
     </style>
 </head>
 <body>
@@ -341,9 +328,9 @@
         
         <!-- Tabs de recuperação -->
         <div class="recovery-tabs">
-            <div class="recovery-tab active" onclick="mostrarEmailTab()">1. Email</div>
-            <div class="recovery-tab" onclick="mostrarCodigoTab()">2. Código</div>
-            <div class="recovery-tab" onclick="mostrarNovaSenhaTab()">3. Nova Senha</div>
+            <div class="recovery-tab active" onclick="mostrarEmailTab()" id="tab-email">1. Email</div>
+            <div class="recovery-tab disabled" onclick="mostrarCodigoTab()" id="tab-codigo">2. Código</div>
+            <div class="recovery-tab disabled" onclick="mostrarNovaSenhaTab()" id="tab-senha">3. Nova Senha</div>
         </div>
         
         <!-- Alertas -->
@@ -457,14 +444,39 @@
     </div>
     
     <script>
-        // Variáveis globais
+        // Variáveis globais - ADICIONANDO CONTROLE DE ETAPAS
         let countdownInterval;
         let canResend = false;
         let userEmail = '';
         let recoveryData = null;
+        let etapasConcluidas = {
+            emailEnviado: false,
+            codigoVerificado: false
+        };
         
-        // Mostrar tab de email
+        // ADICIONANDO: Função para atualizar estado das tabs
+        function atualizarEstadoTabs() {
+            const tabCodigo = document.getElementById('tab-codigo');
+            const tabSenha = document.getElementById('tab-senha');
+            
+            // Tab de código só fica ativa se email foi enviado
+            if (etapasConcluidas.emailEnviado) {
+                tabCodigo.classList.remove('disabled');
+            } else {
+                tabCodigo.classList.add('disabled');
+            }
+            
+            // Tab de senha só fica ativa se código foi verificado
+            if (etapasConcluidas.codigoVerificado) {
+                tabSenha.classList.remove('disabled');
+            } else {
+                tabSenha.classList.add('disabled');
+            }
+        }
+        
+        // Mostrar tab de email - MODIFICADA
         function mostrarEmailTab() {
+            // Sempre pode voltar para email
             document.getElementById('code-tab').classList.remove('active');
             document.getElementById('password-tab').classList.remove('active');
             document.getElementById('email-tab').classList.add('active');
@@ -477,8 +489,14 @@
             document.getElementById('alert').style.display = 'none';
         }
         
-        // Mostrar tab de código
+        // Mostrar tab de código - MODIFICADA
         function mostrarCodigoTab() {
+            // Verifica se pode acessar esta tab
+            if (!etapasConcluidas.emailEnviado) {
+                mostrarAlerta('Primeiro envie o código de verificação pelo email', 'error');
+                return;
+            }
+            
             document.getElementById('email-tab').classList.remove('active');
             document.getElementById('password-tab').classList.remove('active');
             document.getElementById('code-tab').classList.add('active');
@@ -489,8 +507,14 @@
             document.querySelector('.recovery-tab:nth-child(2)').classList.add('active');
         }
         
-        // Mostrar tab de nova senha
+        // Mostrar tab de nova senha - MODIFICADA
         function mostrarNovaSenhaTab() {
+            // Verifica se pode acessar esta tab
+            if (!etapasConcluidas.codigoVerificado) {
+                mostrarAlerta('Primeiro verifique o código enviado para seu email', 'error');
+                return;
+            }
+            
             document.getElementById('email-tab').classList.remove('active');
             document.getElementById('code-tab').classList.remove('active');
             document.getElementById('password-tab').classList.add('active');
@@ -654,7 +678,7 @@
             }, 100);
         }
         
-        // Formulário de email
+        // Formulário de email - MODIFICADO
         document.getElementById('emailForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -682,6 +706,10 @@
                 if (data.success) {
                     mostrarAlerta('✅ Código enviado para seu email!', 'success');
                     recoveryData = data.data;
+                    
+                    // ADICIONAR: Marcar etapa de email como concluída
+                    etapasConcluidas.emailEnviado = true;
+                    atualizarEstadoTabs();
                     
                     // Habilitar reenvio após 60 segundos
                     setTimeout(() => {
@@ -716,7 +744,7 @@
             });
         });
         
-        // Formulário de código
+        // Formulário de código - MODIFICADO
         document.getElementById('codeForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -748,6 +776,10 @@
                     mostrarAlerta('✅ Código verificado com sucesso!', 'success');
                     recoveryData = data.data;
                     
+                    // ADICIONAR: Marcar etapa de código como concluída
+                    etapasConcluidas.codigoVerificado = true;
+                    atualizarEstadoTabs();
+                    
                     // Mostrar tab de nova senha
                     setTimeout(() => {
                         mostrarNovaSenhaTab();
@@ -776,7 +808,7 @@
             });
         });
         
-        // Formulário de nova senha
+        // Formulário de nova senha (mantido igual)
         document.getElementById('passwordForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -835,9 +867,12 @@
             });
         });
         
-        // Inicialização
+        // Inicialização - ADICIONADO
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🔐 Sistema de recuperação de senha carregado!');
+            
+            // Inicializar estado das tabs
+            atualizarEstadoTabs();
             
             // Verificar se há parâmetros na URL
             const urlParams = new URLSearchParams(window.location.search);
@@ -850,6 +885,9 @@
                 document.getElementById('recoveryEmail').value = email;
                 
                 // Ir direto para a tab de nova senha
+                etapasConcluidas.emailEnviado = true;
+                etapasConcluidas.codigoVerificado = true;
+                atualizarEstadoTabs();
                 mostrarNovaSenhaTab();
                 mostrarAlerta('Token de recuperação detectado. Crie sua nova senha.', 'info');
             }
