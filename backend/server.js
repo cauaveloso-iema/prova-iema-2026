@@ -11,7 +11,7 @@ const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const professorAuth = require('./security/professor-auth');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-
+require('./render-fix');  // Fix para Render
 // Logo após require('dotenv')
 console.log('📁 Diretório atual:', __dirname);
 console.log('🔍 Procurando .env em:', path.join(__dirname, '..', '.env'));
