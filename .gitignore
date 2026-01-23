@@ -27,10 +27,19 @@ Thumbs.db
 # Optional
 *.env.backup
 
-# ARQUIVOS CONFIDENCIAIS - CPFs DOS PROFESSORES (ADICIONE ESTAS LINHAS)
+# DADOS SENSÍVEIS - NUNCA COMMITAR
 backend/matriculas-autorizados.js
-cpf-professores.js
-cpf-autorizados.js
-professores.json
-dados-confidenciais/
-config/private/
+backend/security/config/
+security-keys-backup.txt
+*.key
+*.enc
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.*.local
+
+# Scripts temporários
+scripts/temp-*.js
+
+# O resto do seu .gitignore atual continua...

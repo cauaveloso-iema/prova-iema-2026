@@ -9,7 +9,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
-const matriculaAutorizadas = require('./matriculas-autorizados.js');
+const professorAuth = require('./security/professor-auth');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // Logo após require('dotenv')
@@ -515,9 +515,9 @@ app.post('/api/auth/register', [
         
         // VALIDAÇÃO DE MATRÍCULA AUTORIZADA PARA PROFESSORES
         console.log('🔍 Verificando matrícula de professor:', matriculaNumeros);
-        console.log('📋 Lista de matrículas autorizadas:', matriculaAutorizadas.MATRICULAS_PROFESSORES_AUTORIZADOS);
+        console.log('📋 Sistema de autorização:', professorAuth.getStats());
         
-        if (!matriculaAutorizadas.verificarMatriculaAutorizada(matriculaNumeros)) {
+        if (!professorAuth.isProfessorAuthorized(matriculaNumeros)) {
             return res.status(403).json({
                 success: false,
                 error: 'Matrícula não autorizada para cadastro como professor. Entre em contato com a administração.'
