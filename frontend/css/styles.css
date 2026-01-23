@@ -2467,11 +2467,7 @@ code {
     }
 }
 
-<<<<<<< HEAD
-<style>
-    /* Adicione estas regras no CSS existente */
-    
-    .prova-card.aguardando-correcao {
+.prova-card.aguardando-correcao {
         border-left-color: #f59e0b !important;
         opacity: 0.9;
     }
@@ -2499,6 +2495,186 @@ code {
         background: #d1fae5 !important;
         color: #065f46 !important;
     }
-</style>
-=======
->>>>>>> d7626f2ad300c13254db0060bce2b3fdc55f1036
+
+    /* Estilo para o campo de matrícula */
+    .matricula-field {
+        position: relative;
+    }
+
+    .matricula-field .form-control {
+        font-family: 'Courier New', monospace;
+        font-size: 1.1rem;
+        letter-spacing: 1px;
+    }
+
+    .matricula-field .hint-text {
+        color: #6b7280;
+        font-size: 0.85rem;
+        margin-top: 5px;
+        display: block;
+    }
+
+    .required-badge {
+        color: #ef4444;
+        font-size: 0.9em;
+        margin-left: 5px;
+    }
+
+    /* Feedback visual para matrícula */
+    .matricula-field.required .form-control {
+        border-color: #4f46e5;
+        background-color: #f5f3ff;
+    }
+
+    /* Ícone de validação */
+    .validation-icon {
+        position: absolute;
+        right: 15px;
+        top: 42px;
+        font-size: 1.2rem;
+        display: none;
+    }
+
+    .validation-icon.valid {
+        display: inline;
+        color: #10b981;
+    }
+
+    .validation-icon.invalid {
+        display: inline;
+        color: #ef4444;
+    }
+
+    /* Estilo para os campos de professor/aluno */
+    .role-fields {
+        display: none;
+        margin-top: 15px;
+        padding: 15px;
+        background: #f9fafb;
+        border-radius: 8px;
+        border: 2px solid #e5e7eb;
+    }
+
+    .role-fields.active {
+        display: block;
+        animation: fadeIn 0.3s ease;
+    }
+
+    /* Estilo específico para campo de telefone */
+.telefone-field {
+    position: relative;
+}
+
+.telefone-field .form-control {
+    padding-right: 40px;
+}
+
+.telefone-field .valid-icon {
+    position: absolute;
+    right: 15px;
+    top: 42px;
+    font-size: 1.2rem;
+    display: none;
+}
+
+.telefone-field .valid-icon.valid {
+    display: inline;
+    color: #10b981;
+}
+
+.telefone-field .valid-icon.invalid {
+    display: inline;
+    color: #ef4444;
+}
+
+
+    /* ESTILOS PARA O CAMPO DE MATRÍCULA */
+    .matricula-field {
+        margin-bottom: 20px;
+    }
+
+    .matricula-field label {
+        display: block;
+        margin-bottom: 8px;
+        color: #4b5563;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .matricula-field .hint-text {
+        font-size: 0.85rem;
+        color: #6b7280;
+        font-style: italic;
+        display: none;
+    }
+
+    .matricula-field.required .hint-text {
+        display: inline;
+    }
+
+    .matricula-field .required-badge {
+        color: #ef4444;
+        font-size: 0.9em;
+        margin-left: 2px;
+    }
+
+    .matricula-field .validation-icon {
+        position: absolute;
+        right: 15px;
+        top: 42px;
+        font-size: 1.2rem;
+        display: none;
+    }
+
+    .matricula-field .validation-icon.valid {
+        display: inline;
+        color: #10b981;
+    }
+
+    .matricula-field .validation-icon.invalid {
+        display: inline;
+        color: #ef4444;
+    }
+
+    /* Garantir que o input de matrícula tenha a mesma aparência */
+    #registerMatricula {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.3s;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #registerMatricula:focus {
+        outline: none;
+        border-color: #4f46e5;
+    }
+
+    /* Ajustar posicionamento do ícone de validação */
+    .matricula-field {
+        position: relative;
+    }
+
+    #matriculaIcon {
+        position: absolute;
+        right: 15px;
+        top: 42px;
+        font-size: 1.2rem;
+        display: none;
+    }
+
+    #matriculaDescription {
+        margin-top: 5px;
+        font-size: 0.85rem;
+        color: #6b7280;
+        display: none;
+    }
+
+    .matricula-field.required #matriculaDescription {
+        display: block;
+    }
+

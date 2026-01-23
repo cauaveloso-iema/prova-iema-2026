@@ -452,10 +452,46 @@ app.post('/api/auth/register', [
   check('role').isIn(['aluno', 'professor']).withMessage('Role inválida')
 ], async (req, res) => {
   try {
-    const { nome, email, password, cpf, matricula, role, eixo, curso, periodo, departamento, titulacao } = req.body;
+    const { nome, email, password, cpf, telefone, matricula, role, eixo, curso, periodo, departamento, titulacao } = req.body;
     
+    // Validar email institucional
+    if (!email || !email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
+        return res.status(400).json({
+            success: false,
+            error: 'Somente emails institucionais (@iemasaoluiscentro.net) são permitidos'
+        });
+    }
+
+    // Converter para lowercase
+    const emailLower = email.toLowerCase().trim();
+
     console.log('📝 Dados recebidos no registro:', { nome, email, cpf, role });
     
+    // Validar telefone
+    if (!telefone) {
+        return res.status(400).json({
+            success: false,
+            error: 'Telefone é obrigatório'
+        });
+    }
+
+    // Validar formato do telefone
+    const telefoneNumeros = telefone.replace(/\D/g, '');
+    if (telefoneNumeros.length < 10 || telefoneNumeros.length > 11) {
+        return res.status(400).json({
+            success: false,
+            error: 'Telefone inválido. Deve ter 10 ou 11 dígitos (com DDD)'
+        });
+    }
+
+    // Verificar telefone duplicado
+    const existingTelefone = await User.findOne({ telefone: telefoneNumeros });
+    if (existingTelefone) {
+        return res.status(400).json({
+            success: false,
+            error: 'Telefone já cadastrado'
+        });
+    }
     // VALIDAÇÃO DE CPF FORMATADO
     const cpfNumeros = cpf.replace(/\D/g, '');
     
@@ -533,6 +569,7 @@ app.post('/api/auth/register', [
       email,
       password,
       cpf: cpfNumeros, // Salvar apenas números
+      telefone: telefoneNumeros, // Salvar apenas números
       matricula: matricula || undefined,
       role,
       eixo: role === 'professor' ? eixo : null,
@@ -4340,6 +4377,383 @@ app.get('/api/provas/offline/pending', authenticateToken, async (req, res) => {
         });
     }
 });
+
+// ============ ROTAS DE RECUPERAÇÃO DE SENHA ============
+
+// Configuração do email (se você quiser enviar emails reais)
+const nodemailer = require('nodemailer');
+
+// Configurar transporte de email (usando Gmail como exemplo)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
+// Alternativa: Email de teste (não requer configuração real)
+// Armazenar códigos temporariamente em memória (em produção, use Redis)
+const resetCodes = new Map();
+
+// Rota para solicitar recuperação de senha
+app.post('/api/auth/reset-password/request', async (req, res) => {
+    try {
+        const { identifier } = req.body;
+        
+        if (!identifier) {
+            return res.status(400).json({
+                success: false,
+                error: 'Email ou CPF é obrigatório'
+            });
+        }
+        
+        console.log('🔐 Solicitação de recuperação para:', identifier);
+        
+        let user;
+        
+        // Verificar se é email ou CPF
+        if (identifier.includes('@')) {
+            // Buscar por email
+            user = await User.findOne({ email: identifier.toLowerCase() });
+        } else {
+            // Buscar por CPF (remover formatação)
+            const cpfNumeros = identifier.replace(/\D/g, '');
+            user = await User.findOne({ cpf: cpfNumeros });
+        }
+        
+        if (!user) {
+            // Por segurança, não revelar se o usuário existe ou não
+            return res.json({
+                success: true,
+                message: 'Se o email/CPF estiver cadastrado, você receberá um código de recuperação'
+            });
+        }
+        
+        // Gerar código de 6 dígitos
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const token = jwt.sign(
+            { 
+                userId: user._id,
+                code: code,
+                type: 'password_reset'
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '15m' } // Código válido por 15 minutos
+        );
+        
+        // Armazenar código temporariamente
+        resetCodes.set(user._id.toString(), {
+            code: code,
+            expiresAt: Date.now() + (15 * 60 * 1000), // 15 minutos
+            token: token
+        });
+        
+        // Limpar códigos expirados
+        cleanupExpiredCodes();
+        
+        console.log(`📧 Código gerado para ${user.email}: ${code}`);
+        
+        // Em produção, enviar email real
+        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            try {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: user.email,
+                    subject: 'Código de Recuperação de Senha - Sistema de Provas',
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #4f46e5;">Recuperação de Senha</h2>
+                            <p>Olá ${user.nome},</p>
+                            <p>Você solicitou a recuperação da sua senha no Sistema de Provas.</p>
+                            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                                <h3 style="margin: 0; color: #111827;">Seu código de verificação:</h3>
+                                <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4f46e5; margin: 15px 0;">
+                                    ${code}
+                                </div>
+                                <p style="color: #6b7280; font-size: 14px;">
+                                    Este código é válido por 15 minutos
+                                </p>
+                            </div>
+                            <p style="color: #6b7280; font-size: 14px;">
+                                Se você não solicitou esta recuperação, ignore este email.
+                            </p>
+                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                            <p style="color: #9ca3af; font-size: 12px;">
+                                Sistema de Provas Online © ${new Date().getFullYear()}
+                            </p>
+                        </div>
+                    `
+                });
+                
+                console.log(`✅ Email enviado para ${user.email}`);
+            } catch (emailError) {
+                console.error('❌ Erro ao enviar email:', emailError);
+                // Continuar mesmo se o email falhar (para desenvolvimento)
+            }
+        }
+        
+        // Para desenvolvimento, retornar o código diretamente
+        const devMode = process.env.NODE_ENV !== 'production';
+        
+        res.json({
+            success: true,
+            message: devMode ? 
+                'Código gerado (em produção, seria enviado por email)' : 
+                'Código de recuperação enviado para seu email',
+            data: devMode ? { 
+                code: code,
+                email: user.email,
+                token: token 
+            } : null,
+            expiresIn: 900, // 15 minutos em segundos
+            token: token
+        });
+        
+    } catch (error) {
+        console.error('Erro na solicitação de recuperação:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao processar solicitação de recuperação'
+        });
+    }
+});
+
+// Rota para verificar código
+app.post('/api/auth/reset-password/verify', async (req, res) => {
+    try {
+        const { identifier, code, token } = req.body;
+        
+        if (!identifier || !code) {
+            return res.status(400).json({
+                success: false,
+                error: 'Código de verificação é obrigatório'
+            });
+        }
+        
+        console.log('🔍 Verificando código:', { identifier, code });
+        
+        let user;
+        
+        // Buscar usuário
+        if (identifier.includes('@')) {
+            user = await User.findOne({ email: identifier.toLowerCase() });
+        } else {
+            const cpfNumeros = identifier.replace(/\D/g, '');
+            user = await User.findOne({ cpf: cpfNumeros });
+        }
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Verificar código
+        const resetData = resetCodes.get(user._id.toString());
+        
+        if (!resetData) {
+            return res.status(400).json({
+                success: false,
+                error: 'Código não encontrado ou expirado'
+            });
+        }
+        
+        if (resetData.expiresAt < Date.now()) {
+            resetCodes.delete(user._id.toString());
+            return res.status(400).json({
+                success: false,
+                error: 'Código expirado'
+            });
+        }
+        
+        if (resetData.code !== code) {
+            return res.status(400).json({
+                success: false,
+                error: 'Código inválido'
+            });
+        }
+        
+        // Verificar token JWT se fornecido
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                if (decoded.userId !== user._id.toString() || decoded.code !== code) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Token inválido'
+                    });
+                }
+            } catch (jwtError) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Token inválido ou expirado'
+                });
+            }
+        }
+        
+        // Gerar novo token para a próxima etapa
+        const resetToken = jwt.sign(
+            { 
+                userId: user._id,
+                verified: true,
+                type: 'password_reset_confirmation'
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '30m' } // Válido por 30 minutos
+        );
+        
+        res.json({
+            success: true,
+            message: 'Código verificado com sucesso',
+            data: {
+                token: resetToken,
+                userId: user._id,
+                email: user.email
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erro na verificação do código:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao verificar código'
+        });
+    }
+});
+
+// Rota para redefinir senha
+app.post('/api/auth/reset-password/confirm', async (req, res) => {
+    try {
+        const { identifier, newPassword, token } = req.body;
+        
+        if (!identifier || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nova senha é obrigatória'
+            });
+        }
+        
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'A senha deve ter no mínimo 6 caracteres'
+            });
+        }
+        
+        console.log('🔄 Redefinindo senha para:', identifier);
+        
+        let user;
+        
+        // Buscar usuário
+        if (identifier.includes('@')) {
+            user = await User.findOne({ email: identifier.toLowerCase() });
+        } else {
+            const cpfNumeros = identifier.replace(/\D/g, '');
+            user = await User.findOne({ cpf: cpfNumeros });
+        }
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Verificar token se fornecido
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                if (decoded.userId !== user._id.toString()) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Token inválido'
+                    });
+                }
+            } catch (jwtError) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Token inválido ou expirado'
+                });
+            }
+        }
+        
+        // Atualizar senha
+        user.password = newPassword;
+        await user.save();
+        
+        // Remover códigos de recuperação
+        resetCodes.delete(user._id.toString());
+        
+        // Limpar sessões do usuário (opcional)
+        // Aqui você pode invalidar tokens JWT existentes se quiser
+        
+        console.log(`✅ Senha redefinida para ${user.email}`);
+        
+        // Enviar email de confirmação
+        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            try {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: user.email,
+                    subject: 'Senha Alterada - Sistema de Provas',
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #4f46e5;">Senha Alterada com Sucesso</h2>
+                            <p>Olá ${user.nome},</p>
+                            <p>Sua senha foi alterada com sucesso no Sistema de Provas.</p>
+                            <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                                <p style="color: #065f46; margin: 0;">
+                                    <strong>Data da alteração:</strong> ${new Date().toLocaleString('pt-BR')}
+                                </p>
+                            </div>
+                            <p style="color: #6b7280;">
+                                Se você não realizou esta alteração, entre em contato imediatamente com o suporte.
+                            </p>
+                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                            <p style="color: #9ca3af; font-size: 12px;">
+                                Sistema de Provas Online © ${new Date().getFullYear()}
+                            </p>
+                        </div>
+                    `
+                });
+            } catch (emailError) {
+                console.error('❌ Erro ao enviar email de confirmação:', emailError);
+            }
+        }
+        
+        res.json({
+            success: true,
+            message: 'Senha redefinida com sucesso!',
+            data: {
+                userId: user._id,
+                email: user.email,
+                timestamp: new Date().toISOString()
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erro ao redefinir senha:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao redefinir senha'
+        });
+    }
+});
+
+// Função para limpar códigos expirados
+function cleanupExpiredCodes() {
+    const now = Date.now();
+    for (const [userId, data] of resetCodes.entries()) {
+        if (data.expiresAt < now) {
+            resetCodes.delete(userId);
+        }
+    }
+}
+
+// Executar limpeza a cada hora
+setInterval(cleanupExpiredCodes, 60 * 60 * 1000);
 
 // ============ ROTA PARA VERIFICAR BANCO ATLAS ============
 app.get('/api/database-info', async (req, res) => {

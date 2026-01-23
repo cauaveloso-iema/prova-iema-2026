@@ -12,22 +12,42 @@ const UserSchema = new mongoose.Schema({
     required: [true, 'Email é obrigatório'],
     unique: true,
     lowercase: true,
-    trim: true
-  },
-  // ADICIONE ESTE CAMPO CPF
-  cpf: {
-    type: String,
-    unique: true,
-    sparse: true, // Permite null, mas mantém único para valores não-nulos
     trim: true,
     validate: {
       validator: function(v) {
-        // Validação opcional - só valida se CPF for fornecido
-        if (!v) return true; // Permite null/vazio
+        // VALIDAÇÃO: Deve terminar com @iemasaoluiscentro.net
+        return v.endsWith('@iemasaoluiscentro.net');
+      },
+      message: 'Email deve ser institucional (@iemasaoluiscentro.net)'
+    }
+  },
+  // CAMPO CPF
+  cpf: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true;
         const cpfNumeros = v.replace(/\D/g, '');
         return cpfNumeros.length === 11;
       },
       message: 'CPF deve ter 11 dígitos'
+    }
+  },
+  // CAMPO TELEFONE
+  telefone: {
+    type: String,
+    required: [true, 'Telefone é obrigatório'],
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return false;
+        const telefoneNumeros = v.replace(/\D/g, '');
+        return telefoneNumeros.length === 10 || telefoneNumeros.length === 11;
+      },
+      message: 'Telefone inválido. Deve ter 10 ou 11 dígitos (com DDD)'
     }
   },
   password: {
@@ -49,7 +69,7 @@ const UserSchema = new mongoose.Schema({
   matricula: {
     type: String,
     unique: true,
-    sparse: true // Permite null, mas mantém único para valores não-nulos
+    sparse: true
   },
   turmas: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -78,17 +98,32 @@ const UserSchema = new mongoose.Schema({
     default: Date.now
   }
 }, {
-  timestamps: true // Adicione timestamps para created_at e updated_at
+  timestamps: true
 });
 
-// Middleware para formatar CPF antes de salvar (remove formatação)
+// Middleware para formatar CPF e TELEFONE antes de salvar
 UserSchema.pre('save', async function(next) {
-  // Format CPF (remove qualquer caractere não numérico)
+  // Format CPF
   if (this.cpf) {
     this.cpf = this.cpf.replace(/\D/g, '');
   }
   
-  // Criptografar senha antes de salvar
+  // Format Telefone
+  if (this.telefone) {
+    this.telefone = this.telefone.replace(/\D/g, '');
+  }
+  
+  // VALIDAÇÃO: Converter email para lowercase e garantir domínio correto
+  if (this.email) {
+    this.email = this.email.toLowerCase().trim();
+    
+    // Adicionar domínio se não tiver (opcional)
+    if (!this.email.includes('@')) {
+      this.email = this.email + '@iemasaoluiscentro.net';
+    }
+  }
+  
+  // Criptografar senha
   if (!this.isModified('password')) return next();
   
   try {
@@ -112,7 +147,6 @@ UserSchema.methods.isLocked = function() {
 
 // Incrementar tentativas de login
 UserSchema.methods.incLoginAttempts = async function() {
-  // Se o tempo de bloqueio já passou, resetar
   if (this.lockUntil && this.lockUntil < Date.now()) {
     this.loginAttempts = 1;
     this.lockUntil = undefined;
@@ -121,9 +155,8 @@ UserSchema.methods.incLoginAttempts = async function() {
   
   this.loginAttempts += 1;
   
-  // Se excedeu 5 tentativas, bloquear por 15 minutos
   if (this.loginAttempts >= 5) {
-    this.lockUntil = Date.now() + 15 * 60 * 1000; // 15 minutos
+    this.lockUntil = Date.now() + 15 * 60 * 1000;
   }
   
   return await this.save();
@@ -133,6 +166,12 @@ UserSchema.methods.incLoginAttempts = async function() {
 UserSchema.statics.findByCPF = async function(cpf) {
   const cpfNumeros = cpf.replace(/\D/g, '');
   return await this.findOne({ cpf: cpfNumeros });
+};
+
+// Método estático para buscar por Telefone
+UserSchema.statics.findByTelefone = async function(telefone) {
+  const telefoneNumeros = telefone.replace(/\D/g, '');
+  return await this.findOne({ telefone: telefoneNumeros });
 };
 
 // Virtual para CPF formatado
@@ -145,6 +184,21 @@ UserSchema.virtual('cpfFormatado').get(function() {
   return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 });
 
+// Virtual para Telefone formatado
+UserSchema.virtual('telefoneFormatado').get(function() {
+  if (!this.telefone) return '';
+  
+  const telefone = this.telefone.replace(/\D/g, '');
+  
+  if (telefone.length === 10) {
+    return telefone.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+  } else if (telefone.length === 11) {
+    return telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  }
+  
+  return telefone;
+});
+
 // Configurar para incluir virtuais no JSON
 UserSchema.set('toJSON', { virtuals: true });
 UserSchema.set('toObject', { virtuals: true });
@@ -152,6 +206,7 @@ UserSchema.set('toObject', { virtuals: true });
 // Índices para melhor performance
 UserSchema.index({ email: 1 });
 UserSchema.index({ cpf: 1 });
+UserSchema.index({ telefone: 1 });
 UserSchema.index({ matricula: 1 });
 UserSchema.index({ role: 1 });
 

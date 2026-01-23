@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recuperar Senha - Sistema de Provas</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .recovery-container {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        .recovery-header {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+        }
+        
+        .recovery-header h1 {
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+        
+        .recovery-header p {
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }
+        
+        .recovery-tabs {
+            display: flex;
+            background: #f3f4f6;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .recovery-tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6b7280;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .recovery-tab.active {
+            color: #4f46e5;
+            border-bottom-color: #4f46e5;
+            background: white;
+        }
+        
+        .tab-content {
+            padding: 30px;
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4b5563;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+        
+        .btn-recovery {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: transform 0.3s;
+        }
+        
+        .btn-recovery:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-recovery:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .alert {
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+        }
+        
+        .alert-success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #16a34a;
+        }
+        
+        .alert-info {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1d4ed8;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading i {
+            font-size: 2rem;
+            color: #4f46e5;
+            margin-bottom: 10px;
+        }
+        
+        .back-to-login {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .back-to-login a {
+            color: #4f46e5;
+            text-decoration: none;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: color 0.3s;
+        }
+        
+        .back-to-login a:hover {
+            color: #7c3aed;
+        }
+        
+        .recovery-instructions {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4f46e5;
+        }
+        
+        .recovery-instructions p {
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #4b5563;
+        }
+        
+        .recovery-instructions ul {
+            padding-left: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .recovery-instructions li {
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #4b5563;
+        }
+        
+        /* CÓDIGO ATUALIZADO - Campos de código menores e mais elegantes */
+        .code-inputs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        
+        .code-input {
+            width: 45px;
+            height: 55px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            transition: all 0.3s;
+        }
+        
+        .code-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .code-input.filled {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+        
+        /* Para telas menores */
+        @media (max-width: 480px) {
+            .code-input {
+                width: 40px;
+                height: 50px;
+                font-size: 18px;
+            }
+            
+            .code-inputs {
+                gap: 6px;
+            }
+        }
+        
+        .timer {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #6b7280;
+            margin-bottom: 20px;
+            padding: 8px;
+            background: #f9fafb;
+            border-radius: 6px;
+        }
+        
+        .timer.warning {
+            color: #dc2626;
+            font-weight: 600;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+        
+        .resend-link {
+            text-align: center;
+            margin-top: 15px;
+        }
+        
+        .resend-link a {
+            color: #4f46e5;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+        
+        .resend-link a:hover {
+            background: #f5f3ff;
+            text-decoration: none;
+        }
+        
+        .resend-link a:disabled {
+            color: #9ca3af;
+            cursor: not-allowed;
+            background: none;
+        }
+        
+        /* Estilo para mostrar qual campo está ativo */
+        .code-input:focus::placeholder {
+            color: transparent;
+        }
+        
+        /* Adicionar animação suave para preenchimento */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .code-input.filled {
+            animation: pulse 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="recovery-container">
+        <div class="recovery-header">
+            <h1><i class="fas fa-key"></i> Recuperar Senha</h1>
+            <p>Siga os passos para redefinir sua senha</p>
+        </div>
+        
+        <!-- Tabs de recuperação -->
+        <div class="recovery-tabs">
+            <div class="recovery-tab active" onclick="mostrarEmailTab()">1. Email</div>
+            <div class="recovery-tab" onclick="mostrarCodigoTab()">2. Código</div>
+            <div class="recovery-tab" onclick="mostrarNovaSenhaTab()">3. Nova Senha</div>
+        </div>
+        
+        <!-- Alertas -->
+        <div id="alert" class="alert"></div>
+        
+        <!-- Tab 1: Solicitar recuperação por email -->
+        <div id="email-tab" class="tab-content active">
+            <div class="recovery-instructions">
+                <p><strong>Como funciona:</strong></p>
+                <ul>
+                    <li>Digite seu email ou CPF cadastrado</li>
+                    <li>Enviaremos um código de verificação para seu email</li>
+                    <li>Use o código para redefinir sua senha</li>
+                </ul>
+            </div>
+            
+            <form id="emailForm">
+                <div class="form-group">
+                    <label for="recoveryEmail"><i class="fas fa-envelope"></i> Email ou CPF</label>
+                    <input type="text" id="recoveryEmail" class="form-control" required 
+                           placeholder="Digite seu email ou CPF cadastrado">
+                    <small style="display: block; margin-top: 5px; color: #6b7280;">
+                        Digite o email ou CPF usado no cadastro
+                    </small>
+                </div>
+                
+                <button type="submit" class="btn-recovery" id="btnSendCode">
+                    <i class="fas fa-paper-plane"></i> Enviar Código de Verificação
+                </button>
+            </form>
+        </div>
+        
+        <!-- Tab 2: Inserir código de verificação -->
+        <div id="code-tab" class="tab-content">
+            <div class="recovery-instructions">
+                <p><strong>Verificação de email:</strong></p>
+                <p>Enviamos um código de 6 dígitos para o email informado. Digite-o abaixo:</p>
+            </div>
+            
+            <div id="timer" class="timer">
+                Código válido por: <span id="countdown">05:00</span>
+            </div>
+            
+            <form id="codeForm">
+                <div class="code-inputs">
+                    <input type="text" class="code-input" maxlength="1" oninput="moveToNext(this, 1)" onkeyup="handleCodeKeyup(event, 0)">
+                    <input type="text" class="code-input" maxlength="1" oninput="moveToNext(this, 2)" onkeyup="handleCodeKeyup(event, 1)">
+                    <input type="text" class="code-input" maxlength="1" oninput="moveToNext(this, 3)" onkeyup="handleCodeKeyup(event, 2)">
+                    <input type="text" class="code-input" maxlength="1" oninput="moveToNext(this, 4)" onkeyup="handleCodeKeyup(event, 3)">
+                    <input type="text" class="code-input" maxlength="1" oninput="moveToNext(this, 5)" onkeyup="handleCodeKeyup(event, 4)">
+                    <input type="text" class="code-input" maxlength="1" oninput="moveToNext(this, 6)" onkeyup="handleCodeKeyup(event, 5)">
+                </div>
+                
+                <input type="hidden" id="verificationCode">
+                <input type="hidden" id="recoveryToken">
+                
+                <button type="submit" class="btn-recovery" id="btnVerifyCode" disabled>
+                    <i class="fas fa-check-circle"></i> Verificar Código
+                </button>
+            </form>
+            
+            <div class="resend-link">
+                <a href="javascript:void(0)" onclick="resendCode()" id="resendLink">
+                    <i class="fas fa-redo"></i> Reenviar código
+                </a>
+                <small style="display: block; margin-top: 5px; color: #6b7280;">
+                    Não recebeu o código? Aguarde 60 segundos para reenviar
+                </small>
+            </div>
+        </div>
+        
+        <!-- Tab 3: Criar nova senha -->
+        <div id="password-tab" class="tab-content">
+            <div class="recovery-instructions">
+                <p><strong>Crie uma nova senha segura:</strong></p>
+                <ul>
+                    <li>Mínimo de 6 caracteres</li>
+                    <li>Use letras e números</li>
+                    <li>Evite senhas óbvias</li>
+                </ul>
+            </div>
+            
+            <form id="passwordForm">
+                <div class="form-group">
+                    <label for="newPassword"><i class="fas fa-lock"></i> Nova Senha</label>
+                    <input type="password" id="newPassword" class="form-control" required 
+                           placeholder="Mínimo 6 caracteres" minlength="6">
+                    <small style="display: block; margin-top: 5px; color: #6b7280;">
+                        Digite uma senha forte que você não use em outros sites
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmPassword"><i class="fas fa-lock"></i> Confirmar Nova Senha</label>
+                    <input type="password" id="confirmPassword" class="form-control" required 
+                           placeholder="Digite a senha novamente" minlength="6">
+                </div>
+                
+                <button type="submit" class="btn-recovery" id="btnResetPassword">
+                    <i class="fas fa-key"></i> Redefinir Senha
+                </button>
+            </form>
+        </div>
+        
+        <!-- Voltar para login -->
+        <div class="back-to-login">
+            <a href="login.html">
+                <i class="fas fa-arrow-left"></i> Voltar para o login
+            </a>
+        </div>
+    </div>
+    
+    <script>
+        // Variáveis globais
+        let countdownInterval;
+        let canResend = false;
+        let userEmail = '';
+        let recoveryData = null;
+        
+        // Mostrar tab de email
+        function mostrarEmailTab() {
+            document.getElementById('code-tab').classList.remove('active');
+            document.getElementById('password-tab').classList.remove('active');
+            document.getElementById('email-tab').classList.add('active');
+            
+            document.querySelectorAll('.recovery-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector('.recovery-tab:nth-child(1)').classList.add('active');
+            
+            document.getElementById('alert').style.display = 'none';
+        }
+        
+        // Mostrar tab de código
+        function mostrarCodigoTab() {
+            document.getElementById('email-tab').classList.remove('active');
+            document.getElementById('password-tab').classList.remove('active');
+            document.getElementById('code-tab').classList.add('active');
+            
+            document.querySelectorAll('.recovery-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector('.recovery-tab:nth-child(2)').classList.add('active');
+        }
+        
+        // Mostrar tab de nova senha
+        function mostrarNovaSenhaTab() {
+            document.getElementById('email-tab').classList.remove('active');
+            document.getElementById('code-tab').classList.remove('active');
+            document.getElementById('password-tab').classList.add('active');
+            
+            document.querySelectorAll('.recovery-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector('.recovery-tab:nth-child(3)').classList.add('active');
+        }
+        
+        // Mostrar alerta
+        function mostrarAlerta(mensagem, tipo = 'error') {
+            const alerta = document.getElementById('alert');
+            alerta.textContent = mensagem;
+            alerta.className = `alert alert-${tipo}`;
+            alerta.style.display = 'block';
+            
+            alerta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        // Iniciar contador
+        function iniciarContador(segundos = 300) {
+            const countdownElement = document.getElementById('countdown');
+            const timerElement = document.getElementById('timer');
+            const resendLink = document.getElementById('resendLink');
+            
+            clearInterval(countdownInterval);
+            
+            let timeLeft = segundos;
+            
+            countdownInterval = setInterval(() => {
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                
+                countdownElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (timeLeft <= 60) {
+                    timerElement.classList.add('warning');
+                }
+                
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    countdownElement.textContent = 'Expirado';
+                    timerElement.classList.add('warning');
+                    canResend = true;
+                    resendLink.style.color = '#4f46e5';
+                    resendLink.style.cursor = 'pointer';
+                    mostrarAlerta('O código expirou. Clique em "Reenviar código"', 'error');
+                }
+                
+                timeLeft--;
+            }, 1000);
+        }
+        
+        // Reenviar código
+        function resendCode() {
+            if (!canResend) {
+                mostrarAlerta('Aguarde 60 segundos para reenviar o código', 'info');
+                return;
+            }
+            
+            const btn = document.getElementById('btnSendCode');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+            btn.disabled = true;
+            
+            fetch('/api/auth/reset-password/request', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ identifier: userEmail })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('✅ Novo código enviado para seu email!', 'success');
+                    canResend = false;
+                    iniciarContador();
+                    
+                    const resendLink = document.getElementById('resendLink');
+                    resendLink.style.color = '#9ca3af';
+                    resendLink.style.cursor = 'not-allowed';
+                } else {
+                    mostrarAlerta('❌ Erro: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('❌ Erro de conexão com o servidor');
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+        }
+        
+        // Funções para manipulação do código
+        function moveToNext(input, nextIndex) {
+            const value = input.value;
+            
+            // Permitir apenas números
+            input.value = value.replace(/\D/g, '');
+            
+            if (input.value.length === 1 && nextIndex <= 6) {
+                const nextInput = document.querySelector(`.code-input:nth-child(${nextIndex})`);
+                if (nextInput) {
+                    nextInput.focus();
+                }
+            }
+            
+            updateCode();
+        }
+        
+        function handleCodeKeyup(event, currentIndex) {
+            if (event.key === 'Backspace' || event.key === 'Delete') {
+                const currentInput = document.querySelector(`.code-input:nth-child(${currentIndex + 1})`);
+                const prevInput = document.querySelector(`.code-input:nth-child(${currentIndex})`);
+                
+                if (currentInput && currentInput.value === '' && prevInput) {
+                    prevInput.focus();
+                    prevInput.value = '';
+                    prevInput.classList.remove('filled');
+                }
+            } else if (event.key >= '0' && event.key <= '9') {
+                // Auto-foco no próximo campo quando digitar um número
+                const currentInput = document.querySelector(`.code-input:nth-child(${currentIndex + 1})`);
+                if (currentInput && currentInput.value && currentIndex < 5) {
+                    const nextInput = document.querySelector(`.code-input:nth-child(${currentIndex + 2})`);
+                    if (nextInput) {
+                        setTimeout(() => nextInput.focus(), 10);
+                    }
+                }
+            }
+            
+            updateCode();
+        }
+        
+        function updateCode() {
+            const inputs = document.querySelectorAll('.code-input');
+            let code = '';
+            
+            inputs.forEach((input, index) => {
+                code += input.value;
+                if (input.value) {
+                    input.classList.add('filled');
+                } else {
+                    input.classList.remove('filled');
+                }
+            });
+            
+            document.getElementById('verificationCode').value = code;
+            document.getElementById('btnVerifyCode').disabled = code.length !== 6;
+        }
+        
+        // Auto-foco no primeiro campo quando entrar na tab de código
+        function focusFirstCodeInput() {
+            setTimeout(() => {
+                const firstInput = document.querySelector('.code-input:nth-child(1)');
+                if (firstInput) {
+                    firstInput.focus();
+                }
+            }, 100);
+        }
+        
+        // Formulário de email
+        document.getElementById('emailForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const identifier = document.getElementById('recoveryEmail').value.trim();
+            
+            if (!identifier) {
+                mostrarAlerta('Digite seu email ou CPF');
+                return;
+            }
+            
+            const btn = document.getElementById('btnSendCode');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+            btn.disabled = true;
+            
+            userEmail = identifier;
+            
+            fetch('/api/auth/reset-password/request', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ identifier })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('✅ Código enviado para seu email!', 'success');
+                    recoveryData = data.data;
+                    
+                    // Habilitar reenvio após 60 segundos
+                    setTimeout(() => {
+                        canResend = true;
+                        const resendLink = document.getElementById('resendLink');
+                        resendLink.style.color = '#4f46e5';
+                        resendLink.style.cursor = 'pointer';
+                    }, 60000);
+                    
+                    // Mostrar tab de código
+                    setTimeout(() => {
+                        mostrarCodigoTab();
+                        iniciarContador(data.expiresIn || 300);
+                        focusFirstCodeInput();
+                        
+                        // Preencher token se retornado
+                        if (data.token) {
+                            document.getElementById('recoveryToken').value = data.token;
+                        }
+                    }, 1000);
+                } else {
+                    mostrarAlerta('❌ ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('❌ Erro de conexão com o servidor');
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+        });
+        
+        // Formulário de código
+        document.getElementById('codeForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const code = document.getElementById('verificationCode').value;
+            const token = document.getElementById('recoveryToken').value;
+            
+            if (code.length !== 6) {
+                mostrarAlerta('Digite o código completo de 6 dígitos');
+                return;
+            }
+            
+            const btn = document.getElementById('btnVerifyCode');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+            btn.disabled = true;
+            
+            fetch('/api/auth/reset-password/verify', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    identifier: userEmail,
+                    code,
+                    token: token || undefined
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('✅ Código verificado com sucesso!', 'success');
+                    recoveryData = data.data;
+                    
+                    // Mostrar tab de nova senha
+                    setTimeout(() => {
+                        mostrarNovaSenhaTab();
+                    }, 1000);
+                } else {
+                    mostrarAlerta('❌ ' + data.error);
+                    
+                    // Se erro de código inválido, limpar campos
+                    if (data.error.includes('inválido') || data.error.includes('incorreto')) {
+                        document.querySelectorAll('.code-input').forEach(input => {
+                            input.value = '';
+                            input.classList.remove('filled');
+                        });
+                        updateCode();
+                        focusFirstCodeInput();
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('❌ Erro de conexão com o servidor');
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+        });
+        
+        // Formulário de nova senha
+        document.getElementById('passwordForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (!newPassword || !confirmPassword) {
+                mostrarAlerta('Preencha todos os campos');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                mostrarAlerta('A senha deve ter no mínimo 6 caracteres');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                mostrarAlerta('As senhas não coincidem');
+                return;
+            }
+            
+            const btn = document.getElementById('btnResetPassword');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Redefinindo...';
+            btn.disabled = true;
+            
+            fetch('/api/auth/reset-password/confirm', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    identifier: userEmail,
+                    newPassword,
+                    token: recoveryData?.token || document.getElementById('recoveryToken').value
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('✅ Senha redefinida com sucesso!', 'success');
+                    
+                    // Redirecionar para login após 2 segundos
+                    setTimeout(() => {
+                        window.location.href = 'login.html?message=Senha alterada com sucesso! Faça login com sua nova senha.';
+                    }, 2000);
+                } else {
+                    mostrarAlerta('❌ ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('❌ Erro de conexão com o servidor');
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+        });
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔐 Sistema de recuperação de senha carregado!');
+            
+            // Verificar se há parâmetros na URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            const email = urlParams.get('email');
+            
+            if (token && email) {
+                userEmail = email;
+                document.getElementById('recoveryToken').value = token;
+                document.getElementById('recoveryEmail').value = email;
+                
+                // Ir direto para a tab de nova senha
+                mostrarNovaSenhaTab();
+                mostrarAlerta('Token de recuperação detectado. Crie sua nova senha.', 'info');
+            }
+        });
+    </script>
+</body>
+</html>
