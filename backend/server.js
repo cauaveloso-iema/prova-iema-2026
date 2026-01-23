@@ -9,7 +9,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
-const cpfsAutorizados = require('./cpfs-autorizados.js');
+const matriculaAutorizadas = require('./matriculas-autorizados.js');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // Logo após require('dotenv')
@@ -503,30 +503,28 @@ app.post('/api/auth/register', [
             });
         }
         
-        // Verificar se a matrícula é igual ao CPF
+        // Validar formato da matrícula (6 números)
         const matriculaNumeros = matricula.replace(/\D/g, '');
-        if (cpfNumeros !== matriculaNumeros) {
+        
+        if (matriculaNumeros.length !== 6) {
             return res.status(400).json({
                 success: false,
-                error: 'A matrícula do professor deve ser exatamente o mesmo número do CPF'
+                error: 'Matrícula inválida. Deve conter exatamente 6 números'
             });
         }
         
-        // VALIDAÇÃO DE CPF AUTORIZADO PARA PROFESSORES
-        const cpfAutorizado = cpfsAutorizados.CPFS_PROFESSORES_AUTORIZADOS || 
-                            cpfsAutorizados.PROFESSORES_AUTORIZADOS?.map(p => p.cpf) || [];
+        // VALIDAÇÃO DE MATRÍCULA AUTORIZADA PARA PROFESSORES
+        console.log('🔍 Verificando matrícula de professor:', matriculaNumeros);
+        console.log('📋 Lista de matrículas autorizadas:', matriculaAutorizadas.MATRICULAS_PROFESSORES_AUTORIZADOS);
         
-        console.log('🔍 Verificando CPF de professor:', cpfNumeros);
-        console.log('📋 Lista de CPFs autorizados:', cpfAutorizado);
-        
-        if (!cpfAutorizado.includes(cpfNumeros)) {
+        if (!matriculaAutorizadas.verificarMatriculaAutorizada(matriculaNumeros)) {
             return res.status(403).json({
                 success: false,
                 error: 'Matrícula não autorizada para cadastro como professor. Entre em contato com a administração.'
             });
         }
         
-        console.log('✅ CPF autorizado para professor:', cpfNumeros);
+        console.log('✅ Matrícula autorizada para professor:', matriculaNumeros);
     }
     
     // CRIAR USUÁRIO COM CPF

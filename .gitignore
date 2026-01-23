@@ -28,7 +28,7 @@ Thumbs.db
 *.env.backup
 
 # ARQUIVOS CONFIDENCIAIS - CPFs DOS PROFESSORES (ADICIONE ESTAS LINHAS)
-backend/cpfs-autorizados.js
+backend/matriculas-autorizados.js
 cpf-professores.js
 cpf-autorizados.js
 professores.json

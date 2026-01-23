@@ -460,9 +460,11 @@
                         <span class="hint-text" id="matriculaHint"></span>
                     </label>
                     <input type="text" id="registerMatricula" class="form-control" 
-                        placeholder="Para professores: digite sua matrícula (CPF)">
-                    <small id="matriculaDescription" class="hint-text">
-                    </small>
+                        placeholder="Digite sua matrícula"
+                        maxlength="6"
+                        oninput="formatarMatricula(this)">
+                    <div id="matriculaDescription" class="hint-text"></div>
+                    <span id="matriculaIcon" class="validation-icon"></span>
                 </div>
                 
                 <div class="form-group">
@@ -511,6 +513,7 @@
             document.getElementById('alert').style.display = 'none';
         }
         
+        // CORREÇÃO: Adicionar função selecionarRole que estava faltando
         function selecionarRole(role) {
             // Atualizar botões de seleção
             document.querySelectorAll('.role-option').forEach(opt => {
@@ -542,7 +545,7 @@
             }
         }
 
-        // Função para atualizar o campo matrícula baseado no role
+        // CORREÇÃO: Remover a função duplicada e manter apenas esta
         function atualizarCampoMatricula(role) {
             const matriculaField = document.getElementById('matriculaField');
             const matriculaInput = document.getElementById('registerMatricula');
@@ -561,7 +564,14 @@
                 // Atualizar placeholder e dicas
                 matriculaInput.placeholder = "Digite sua matrícula";
                 
-                console.log('📝 Matrícula obrigatória para professores');
+                // Atualizar dicas
+                hintText.textContent = "";
+                descriptionText.innerHTML = `
+                    <span style="color: #666; font-size: 0.9em;">
+                    </span>
+                `;
+                
+                console.log('📝 Matrícula obrigatória para professores (6 números)');
             } else {
                 // Opcional para alunos
                 matriculaInput.required = false;
@@ -575,6 +585,17 @@
                 
                 console.log('📝 Matrícula opcional para alunos');
             }
+        }
+
+        // FUNÇÃO PARA FORMATAR MATRÍCULA (6 DÍGITOS)
+        function formatarMatricula(input) {
+            // Remove tudo que não é número
+            let matricula = input.value.replace(/\D/g, '');
+            
+            // Limita a 6 dígitos
+            matricula = matricula.substring(0, 6);
+            
+            input.value = matricula;
         }
         
         function mostrarAlerta(mensagem, tipo = 'error') {
@@ -773,23 +794,18 @@
                     return;
                 }
                 
-                // Validar se a matrícula (CPF) está na lista de professores autorizados
-                const cpfNumeros = cpf.replace(/\D/g, '');
+                // Validar formato da matrícula (6 números)
                 const matriculaNumeros = matricula.replace(/\D/g, '');
                 
-                console.log('🔍 Verificando autorização de professor:');
-                console.log('   CPF cadastrado:', cpfNumeros);
-                console.log('   Matrícula informada:', matriculaNumeros);
-                
-                // IMPORTANTE: Verificar se o CPF e a matrícula coincidem
-                if (cpfNumeros !== matriculaNumeros) {
-                    mostrarAlerta('Para professores, a matrícula deve ser exatamente o mesmo número do CPF');
+                if (matriculaNumeros.length !== 6) {
+                    mostrarAlerta('Matrícula inválida. Deve conter exatamente 6 números');
                     return;
                 }
                 
-                // Verificar se o CPF está na lista de professores autorizados
+                // Validar se a matrícula está na lista de professores autorizados
                 // Esta verificação será feita no backend
-                console.log('✅ CPF do professor validado localmente:', cpfNumeros);
+                console.log('🔍 Verificando autorização de professor:');
+                console.log('   Matrícula informada:', matriculaNumeros);
             }
             
             // Validação específica para alunos
@@ -904,6 +920,7 @@
                 input.min = hoje;
             });
         });
+
     </script>
 </body>
 </html>
