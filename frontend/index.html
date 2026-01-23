@@ -4215,7 +4215,7 @@
         
         // Solicitar exclusão de turma
         function solicitarExclusaoTurma(turmaId, turmaNome) {
-            turmaParaExcluir = turmaId;
+            turmaParaExcluir = { id: turmaId, nome: turmaNome }; // ALTERAÇÃO AQUI
             
             document.getElementById('modalExcluirConteudo').innerHTML = `
                 <p>Tem certeza que deseja excluir a turma <strong>"${turmaNome}"</strong>?</p>
@@ -4411,7 +4411,90 @@
                 };
             }
         }
-        
+        // Função para confirmar exclusão de turma
+        async function confirmarExclusaoTurma() {
+            if (!turmaParaExcluir) {
+                mostrarAlerta('alertMinhasTurmas', '❌ Nenhuma turma selecionada para exclusão', 'error');
+                fecharModal('modalExcluirTurma');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                const turmaId = turmaParaExcluir.id || turmaParaExcluir;
+                
+                // Mostrar loading no modal
+                document.getElementById('modalExcluirConteudo').innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4f46e5; margin-bottom: 15px;"></i>
+                        <p>Excluindo turma...</p>
+                        <p style="font-size: 0.9rem; color: #6b7280;">Por favor, aguarde.</p>
+                    </div>
+                `;
+                
+                // Desabilitar botões
+                const buttons = document.querySelectorAll('#modalExcluirTurma button');
+                buttons.forEach(btn => btn.disabled = true);
+                
+                const response = await fetch(`/api/turmas/${turmaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                let data;
+                if (response.headers.get('content-type')?.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    data = { success: response.ok, message: text || 'Turma excluída' };
+                }
+                
+                if (data.success) {
+                    // Atualizar interface
+                    mostrarAlerta('alertMinhasTurmas', `✅ ${data.message || 'Turma excluída com sucesso!'}`, 'success');
+                    
+                    // Remover turma da lista local
+                    turmasProfessor = turmasProfessor.filter(t => t.id !== turmaId);
+                    
+                    // Atualizar interface
+                    atualizarListaTurmas();
+                    atualizarEstatisticasTurmas();
+                    atualizarSelectTurmas(); // Atualizar select na aba Nova Prova
+                    
+                    fecharModal('modalExcluirTurma');
+                    
+                } else {
+                    throw new Error(data.error || data.message || `Erro ${response.status}: ${response.statusText}`);
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao excluir turma:', error);
+                
+                // Mostrar erro no modal
+                document.getElementById('modalExcluirConteudo').innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #ef4444; margin-bottom: 15px;"></i>
+                        <h3 style="color: #7f1d1d;">Erro ao excluir turma</h3>
+                        <p style="color: #6b7280;">${error.message}</p>
+                        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+                            <button onclick="confirmarExclusaoTurma()" style="padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                Tentar novamente
+                            </button>
+                            <button onclick="fecharModal('modalExcluirTurma')" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } finally {
+                // Habilitar botões novamente
+                const buttons = document.querySelectorAll('#modalExcluirTurma button');
+                buttons.forEach(btn => btn.disabled = false);
+            }
+        }
         // Mostrar preview das questões (mantido da versão anterior)
         function mostrarPreviewQuestoes(questoes) {
             const previewContainer = document.getElementById('previewQuestoes');
