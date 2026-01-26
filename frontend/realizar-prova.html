@@ -709,509 +709,669 @@
     </div>
 
     <!-- SISTEMA DE MONITORAMENTO COMPLETO - SIMPLIFICADO PARA PERMITIR SCROLL -->
-    <script>
-        // ============ SISTEMA DE FULLSCREEN E BLOQUEIO ============
+// ============ SISTEMA DE MONITORAMENTO COMPLETO - SIMPLIFICADO PARA PERMITIR SCROLL ============
+<script>
+    // ============ SISTEMA DE FULLSCREEN E BLOQUEIO ============
+    
+    function entrarEmFullscreen() {
+        const elem = document.documentElement;
         
-        function entrarEmFullscreen() {
-            const elem = document.documentElement;
-            
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen().catch(err => {
-                    console.log('Erro ao entrar em fullscreen:', err);
-                });
-            } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
-            } else if (elem.msRequestFullscreen) {
-                elem.msRequestFullscreen();
-            }
-            
-            // Forçar retorno ao fullscreen se usuário tentar sair
-            document.addEventListener('fullscreenchange', () => {
-                if (!document.fullscreenElement) {
-                    setTimeout(() => entrarEmFullscreen(), 100);
-                    monitoramento?.registrarTentativaAtalho('Saída do modo tela cheia');
-                }
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen().catch(err => {
+                console.log('Erro ao entrar em fullscreen:', err);
             });
+        } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
         }
         
-        function bloquearTelaCompletamente(tempoSegundos = 30) {
-            const cancelScreen = document.getElementById('cancelMessage');
-            cancelScreen.classList.add('active');
+        // Forçar retorno ao fullscreen se usuário tentar sair
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                setTimeout(() => entrarEmFullscreen(), 100);
+                monitoramento?.registrarTentativaAtalho('Saída do modo tela cheia');
+            }
+        });
+    }
+    
+    function bloquearTelaCompletamente(tempoSegundos = 30) {
+        const cancelScreen = document.getElementById('cancelMessage');
+        if (!cancelScreen) return;
+        
+        cancelScreen.classList.add('active');
+        
+        document.querySelectorAll('.container, #monitorHelp, .monitor-panel').forEach(el => {
+            if (el !== cancelScreen) {
+                el.style.display = 'none';
+            }
+        });
+        
+        document.body.style.overflow = 'hidden';
+        
+        // CORREÇÃO: Sempre começar do valor definido
+        let tempoRestante = tempoSegundos;
+        const timerElement = document.getElementById('unlockTimer');
+        
+        // CORREÇÃO: Atualizar imediatamente o display
+        if (timerElement) {
+            timerElement.textContent = tempoRestante;
+        }
+        
+        // CORREÇÃO: Limpar qualquer timer anterior antes de criar novo
+        if (window.cancelTimer) {
+            clearInterval(window.cancelTimer);
+        }
+        
+        // CORREÇÃO: Criar timer com intervalo fixo de 1 segundo
+        window.cancelTimer = setInterval(() => {
+            tempoRestante--;
             
-            document.querySelectorAll('.container, #monitorHelp, .monitor-panel').forEach(el => {
-                if (el !== cancelScreen) {
-                    el.style.display = 'none';
+            if (timerElement) {
+                timerElement.textContent = tempoRestante;
+            }
+            
+            // CORREÇÃO: Log para debug
+            console.log(`⏳ Cancelamento: ${tempoRestante} segundos restantes`);
+            
+            if (tempoRestante <= 0) {
+                clearInterval(window.cancelTimer);
+                window.cancelTimer = null;
+                
+                // CORREÇÃO: Pequeno delay antes de redirecionar
+                setTimeout(() => {
+                    window.location.href = '/login.html?reason=prova_cancelada';
+                }, 500);
+            }
+        }, 1000); // CORREÇÃO: Intervalo fixo de 1000ms (1 segundo)
+        
+        const blockAllKeys = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        };
+        
+        // CORREÇÃO: Adicionar listeners uma vez só
+        document.addEventListener('keydown', blockAllKeys, true);
+        document.addEventListener('keyup', blockAllKeys, true);
+        document.addEventListener('keypress', blockAllKeys, true);
+        document.addEventListener('click', blockAllKeys, true);
+        document.addEventListener('contextmenu', blockAllKeys, true);
+        
+        // CORREÇÃO: Prevenir navegação
+        window.history.pushState(null, null, window.location.href);
+        window.onpopstate = function() {
+            window.history.go(1);
+        };
+    }
+    
+    // ============ SISTEMA DE SCROLL E NAVEGAÇÃO ============
+    
+    function mostrarIndicadorScroll() {
+        const container = document.getElementById('questoesContainer');
+        const indicador = document.getElementById('scrollIndicator');
+        
+        if (container && indicador) {
+            // Verificar se há conteúdo para rolar
+            setTimeout(() => {
+                const temScroll = container.scrollHeight > container.clientHeight;
+                
+                if (temScroll) {
+                    indicador.style.display = 'flex';
+                    
+                    // Ocultar indicador quando usuário rolar
+                    container.addEventListener('scroll', () => {
+                        if (container.scrollTop > 50) {
+                            indicador.style.opacity = '0';
+                            indicador.style.transition = 'opacity 0.3s';
+                        }
+                    });
+                    
+                    // Remover indicador após 10 segundos
+                    setTimeout(() => {
+                        indicador.style.opacity = '0';
+                        indicador.style.transition = 'opacity 0.5s';
+                        setTimeout(() => indicador.style.display = 'none', 500);
+                    }, 10000);
+                }
+            }, 1000);
+        }
+    }
+    
+    // ============ CLASSE DE MONITORAMENTO (SIMPLIFICADA PARA SCROLL) ============
+    class MonitoramentoProva {
+        constructor() {
+            this.avisos = 0;
+            this.maxAvisos = 3;
+            this.tempoFora = 0;
+            this.maxTempoFora = 5; // CORREÇÃO: Valor fixo de 5 segundos
+            this.isModalOpen = false;
+            this.timerPerdaFoco = null;
+            this.tentativasAtalho = 0;
+            this.maxTentativasAtalho = 5;
+            this.screenshots = 0;
+            this.maxScreenshots = 2;
+            this.capturasAtividades = [];
+            
+            this.init();
+        }
+        
+        init() {
+            setTimeout(() => entrarEmFullscreen(), 500);
+            
+            this.configurarMonitoramento();
+            this.criarPainelMonitoramento();
+            this.atualizarStatus();
+            this.registrarInicioProva();
+            
+            console.log('✅ Sistema de monitoramento iniciado');
+        }
+        
+        configurarMonitoramento() {
+            // 1. Monitorar perda de foco
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    this.registrarPerdaFoco();
+                } else {
+                    this.tempoFora = 0;
                 }
             });
             
-            document.body.style.overflow = 'hidden';
+            // 2. Monitorar saída da janela
+            window.addEventListener('blur', () => {
+                this.registrarPerdaFoco();
+            });
             
-            let tempoRestante = tempoSegundos;
-            const timerElement = document.getElementById('unlockTimer');
+            window.addEventListener('focus', () => {
+                this.tempoFora = 0;
+            });
             
-            const timer = setInterval(() => {
-                tempoRestante--;
-                if (timerElement) {
-                    timerElement.textContent = tempoRestante;
+            // 3. Prevenir saída da página
+            window.addEventListener('beforeunload', (e) => {
+                if (this.avisos < this.maxAvisos) {
+                    e.preventDefault();
+                    e.returnValue = 'Se você sair da página, sua prova será cancelada.';
+                }
+            });
+            
+            // 4. Prevenir teclas de atalho (SEM BLOQUEAR SETAS)
+            document.addEventListener('keydown', (e) => {
+                const teclasBloqueadas = ['F5', 'F11', 'F12', 'Escape', 'PrintScreen'];
+                
+                // PERMITIR TODAS AS TECLAS DE NAVEGAÇÃO E SCROLL
+                const teclasPermitidas = [
+                    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                    'PageUp', 'PageDown', 'Home', 'End', ' ',
+                    'Tab', 'Enter'
+                ];
+                
+                if (teclasPermitidas.includes(e.key)) {
+                    return true; // Permitir tecla
                 }
                 
-                if (tempoRestante <= 0) {
-                    clearInterval(timer);
-                    setTimeout(() => {
-                        window.location.href = '/login.html?reason=prova_cancelada';
-                    }, 1000);
+                if (teclasBloqueadas.includes(e.key)) {
+                    e.preventDefault();
+                    this.registrarTentativaAtalho(`Tecla ${e.key} pressionada`);
+                }
+                
+                // Bloquear combinações de teclas específicas
+                if (e.ctrlKey || e.altKey || e.metaKey) {
+                    if ((e.ctrlKey && (e.key === 'r' || e.key === 'R' || e.key === 'n' || e.key === 't' || e.key === 'w')) ||
+                        (e.ctrlKey && e.shiftKey && (e.key === 'r' || e.key === 'R')) ||
+                        (e.altKey && e.key === 'Tab') ||
+                        (e.altKey && e.key === 'F4')) {
+                        e.preventDefault();
+                        this.registrarTentativaAtalho(`Atalho bloqueado`);
+                    }
+                }
+                
+                if (e.key === 'PrintScreen' || (e.ctrlKey && e.key === 'p')) {
+                    e.preventDefault();
+                    this.registrarScreenshot();
+                }
+                
+                if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+                    e.preventDefault();
+                    this.registrarTentativaAtalho('Tentativa de abrir DevTools');
+                }
+            });
+            
+            // 5. Prevenir clique com botão direito
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                this.registrarTentativaAtalho('Clique direito bloqueado');
+                return false;
+            });
+            
+            // 6. Prevenir seleção de texto (exceto em inputs)
+            document.addEventListener('selectstart', (e) => {
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
+                    e.preventDefault();
+                }
+            });
+            
+            // 7. Prevenir cópia/cola
+            document.addEventListener('copy', (e) => {
+                e.preventDefault();
+                this.registrarTentativaAtalho('Tentativa de cópia bloqueada');
+                return false;
+            });
+            
+            document.addEventListener('cut', (e) => {
+                e.preventDefault();
+                this.registrarTentativaAtalho('Tentativa de recorte bloqueada');
+                return false;
+            });
+            
+            document.addEventListener('paste', (e) => {
+                e.preventDefault();
+                this.registrarTentativaAtalho('Tentativa de colar bloqueada');
+                return false;
+            });
+            
+            // 8. Monitorar fullscreen
+            document.addEventListener('fullscreenchange', () => {
+                if (!document.fullscreenElement) {
+                    this.registrarTentativaAtalho('Saída do modo tela cheia');
+                    setTimeout(() => entrarEmFullscreen(), 100);
+                }
+            });
+            
+            // 9. IMPORTANTE: PERMITIR SCROLL COMPLETAMENTE
+            // Não bloquear eventos de wheel de forma alguma
+            document.addEventListener('wheel', (e) => {
+                // Permitir scroll completamente
+                // Não fazer nada - permitir comportamento padrão
+            }, { passive: true });
+            
+            // Permitir eventos de touch para scroll em dispositivos móveis
+            document.addEventListener('touchstart', () => {}, { passive: true });
+            document.addEventListener('touchmove', () => {}, { passive: true });
+            document.addEventListener('touchend', () => {}, { passive: true });
+        }
+        
+        criarPainelMonitoramento() {
+            const panel = document.createElement('div');
+            panel.id = 'monitorPanel';
+            panel.className = 'monitor-panel';
+            panel.innerHTML = `
+                <div class="panel-header">
+                    <h4><i class="fas fa-shield-alt"></i> Monitoramento</h4>
+                </div>
+                <div class="panel-body">
+                    <div class="metric-row">
+                        <div class="metric">
+                            <div class="metric-label">Avisos</div>
+                            <div class="metric-value" id="warningCount">0/3</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Atalhos</div>
+                            <div class="metric-value" id="shortcutCount">0/5</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Capturas</div>
+                            <div class="metric-value" id="screenshotCount">0/2</div>
+                        </div>
+                    </div>
+                    <div class="status-row">
+                        <div class="status-item" id="statusFocus">
+                            <i class="fas fa-check-circle"></i> Foco OK
+                        </div>
+                        <div class="status-item" id="statusFullscreen">
+                            <i class="fas fa-expand"></i> Tela Cheia
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(panel);
+        }
+        
+        registrarPerdaFoco() {
+            // CORREÇÃO: Só conta se não estiver no modal
+            if (this.isModalOpen) return;
+            
+            this.avisos++;
+            this.atualizarStatus();
+            
+            console.log(`⚠️ Perda de foco registrada: ${this.avisos}/${this.maxAvisos}`);
+            
+            if (this.avisos >= this.maxAvisos) {
+                this.cancelarProva();
+                return;
+            }
+            
+            this.mostrarModalAviso();
+        }
+        
+        registrarTentativaAtalho(tipo) {
+            this.tentativasAtalho++;
+            this.capturasAtividades.push({
+                tipo: 'atalho',
+                descricao: tipo,
+                timestamp: new Date().toISOString()
+            });
+            
+            this.atualizarStatus();
+            
+            console.log(`⌨️ Tentativa de atalho: ${this.tentativasAtalho}/${this.maxTentativasAtalho}`);
+            
+            if (this.tentativasAtalho >= this.maxTentativasAtalho) {
+                this.cancelarProva();
+            }
+        }
+        
+        registrarScreenshot() {
+            this.screenshots++;
+            this.atualizarStatus();
+            
+            console.log(`📸 Captura de tela: ${this.screenshots}/${this.maxScreenshots}`);
+            
+            if (this.screenshots >= this.maxScreenshots) {
+                this.cancelarProva();
+            }
+        }
+        
+        mostrarModalAviso() {
+            if (this.isModalOpen) return;
+            
+            this.isModalOpen = true;
+            const modal = document.getElementById('warningModal');
+            const countdownElement = document.getElementById('countdown');
+            const messageElement = document.getElementById('warningMessage');
+            
+            const messages = [
+                '⚠️ ATENÇÃO: Você saiu da página da prova!',
+                '⚠️ ALERTA: Comportamento suspeito detectado!',
+                '⚠️ ÚLTIMO AVISO: A prova será cancelada!'
+            ];
+            
+            messageElement.textContent = messages[Math.min(this.avisos - 1, messages.length - 1)];
+            modal.classList.add('active');
+            
+            // CORREÇÃO: Sempre começar do 5
+            let countdown = 5;
+            countdownElement.textContent = countdown;
+            countdownElement.classList.add('blink');
+            
+            // CORREÇÃO: Limpar timer anterior se existir
+            if (this.timerPerdaFoco) {
+                clearInterval(this.timerPerdaFoco);
+            }
+            
+            this.timerPerdaFoco = setInterval(() => {
+                countdown--;
+                countdownElement.textContent = countdown;
+                
+                if (countdown <= 0) {
+                    clearInterval(this.timerPerdaFoco);
+                    countdownElement.classList.remove('blink');
+                    this.cancelarProva();
                 }
             }, 1000);
             
-            const blockAllKeys = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            };
+            // CORREÇÃO: Configurar botão de retorno corretamente
+            const btnReturn = document.getElementById('btnReturn');
             
-            document.addEventListener('keydown', blockAllKeys, true);
-            document.addEventListener('keyup', blockAllKeys, true);
-            document.addEventListener('keypress', blockAllKeys, true);
+            // Remover listeners anteriores
+            const newBtnReturn = btnReturn.cloneNode(true);
+            btnReturn.parentNode.replaceChild(newBtnReturn, btnReturn);
             
-            document.addEventListener('click', blockAllKeys, true);
-            document.addEventListener('contextmenu', blockAllKeys, true);
-            
-            window.history.pushState(null, null, window.location.href);
-            window.onpopstate = function() {
-                window.history.go(1);
-            };
-        }
-        
-        // ============ SISTEMA DE SCROLL E NAVEGAÇÃO ============
-        
-        function mostrarIndicadorScroll() {
-            const container = document.getElementById('questoesContainer');
-            const indicador = document.getElementById('scrollIndicator');
-            
-            if (container && indicador) {
-                // Verificar se há conteúdo para rolar
-                setTimeout(() => {
-                    const temScroll = container.scrollHeight > container.clientHeight;
-                    
-                    if (temScroll) {
-                        indicador.style.display = 'flex';
-                        
-                        // Ocultar indicador quando usuário rolar
-                        container.addEventListener('scroll', () => {
-                            if (container.scrollTop > 50) {
-                                indicador.style.opacity = '0';
-                                indicador.style.transition = 'opacity 0.3s';
-                            }
-                        });
-                        
-                        // Remover indicador após 10 segundos
-                        setTimeout(() => {
-                            indicador.style.opacity = '0';
-                            indicador.style.transition = 'opacity 0.5s';
-                            setTimeout(() => indicador.style.display = 'none', 500);
-                        }, 10000);
-                    }
-                }, 1000);
-            }
-        }
-        
-        // ============ CLASSE DE MONITORAMENTO (SIMPLIFICADA PARA SCROLL) ============
-        class MonitoramentoProva {
-            constructor() {
-                this.avisos = 0;
-                this.maxAvisos = 3;
-                this.tempoFora = 0;
-                this.maxTempoFora = 5;
+            document.getElementById('btnReturn').addEventListener('click', () => {
+                if (this.timerPerdaFoco) {
+                    clearInterval(this.timerPerdaFoco);
+                    this.timerPerdaFoco = null;
+                }
+                countdownElement.classList.remove('blink');
+                modal.classList.remove('active');
                 this.isModalOpen = false;
+                entrarEmFullscreen();
+            }, { once: true });
+        }
+        
+        atualizarStatus() {
+            const warningCount = document.getElementById('warningCount');
+            const shortcutCount = document.getElementById('shortcutCount');
+            const screenshotCount = document.getElementById('screenshotCount');
+            
+            if (warningCount) warningCount.textContent = `${this.avisos}/${this.maxAvisos}`;
+            if (shortcutCount) shortcutCount.textContent = `${this.tentativasAtalho}/${this.maxTentativasAtalho}`;
+            if (screenshotCount) screenshotCount.textContent = `${this.screenshots}/${this.maxScreenshots}`;
+            
+            const statusFocus = document.getElementById('statusFocus');
+            if (statusFocus) {
+                if (document.hidden) {
+                    statusFocus.innerHTML = '<i class="fas fa-times-circle"></i> Foco Perdido';
+                    statusFocus.style.background = '#fef3c7';
+                    statusFocus.style.color = '#92400e';
+                } else {
+                    statusFocus.innerHTML = '<i class="fas fa-check-circle"></i> Foco OK';
+                    statusFocus.style.background = '#d1fae5';
+                    statusFocus.style.color = '#065f46';
+                }
+            }
+        }
+        
+        async registrarInicioProva() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const provaId = window.provaData?._id;
+                
+                if (!token || !provaId) return;
+                
+                await fetch(`${API_BASE_URL}/monitor/inicio`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        provaId: provaId,
+                        timestamp: new Date().toISOString(),
+                        userAgent: navigator.userAgent,
+                        screenResolution: `${window.screen.width}x${window.screen.height}`,
+                        iniciouFullscreen: true
+                    })
+                });
+                
+            } catch (error) {
+                console.error('Erro ao registrar início:', error);
+            }
+        }
+        
+        cancelarProva() {
+            console.log('🛑 Cancelando prova...');
+            
+            // CORREÇÃO: Limpar todos os timers
+            if (this.timerPerdaFoco) {
+                clearInterval(this.timerPerdaFoco);
                 this.timerPerdaFoco = null;
-                this.tentativasAtalho = 0;
-                this.maxTentativasAtalho = 5;
-                this.screenshots = 0;
-                this.maxScreenshots = 2;
-                this.capturasAtividades = [];
-                
-                this.init();
             }
             
-            init() {
-                setTimeout(() => entrarEmFullscreen(), 500);
-                
-                this.configurarMonitoramento();
-                this.criarPainelMonitoramento();
-                this.atualizarStatus();
-                this.registrarInicioProva();
-                
-                console.log('✅ Sistema de monitoramento iniciado');
+            // CORREÇÃO: Limpar timer da prova principal
+            if (window.timerInterval) {
+                clearInterval(window.timerInterval);
+                window.timerInterval = null;
             }
             
-            configurarMonitoramento() {
-                // 1. Monitorar perda de foco
-                document.addEventListener('visibilitychange', () => {
-                    if (document.hidden) {
-                        this.registrarPerdaFoco();
-                    } else {
-                        this.tempoFora = 0;
-                    }
-                });
-                
-                // 2. Monitorar saída da janela
-                window.addEventListener('blur', () => {
-                    this.registrarPerdaFoco();
-                });
-                
-                window.addEventListener('focus', () => {
-                    this.tempoFora = 0;
-                });
-                
-                // 3. Prevenir saída da página
-                window.addEventListener('beforeunload', (e) => {
-                    if (this.avisos < this.maxAvisos) {
-                        e.preventDefault();
-                        e.returnValue = 'Se você sair da página, sua prova será cancelada.';
-                    }
-                });
-                
-                // 4. Prevenir teclas de atalho (SEM BLOQUEAR SETAS)
-                document.addEventListener('keydown', (e) => {
-                    const teclasBloqueadas = ['F5', 'F11', 'F12', 'Escape', 'PrintScreen'];
-                    
-                    // PERMITIR TODAS AS TECLAS DE NAVEGAÇÃO E SCROLL
-                    const teclasPermitidas = [
-                        'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-                        'PageUp', 'PageDown', 'Home', 'End', ' ',
-                        'Tab', 'Enter'
-                    ];
-                    
-                    if (teclasPermitidas.includes(e.key)) {
-                        return true; // Permitir tecla
-                    }
-                    
-                    if (teclasBloqueadas.includes(e.key)) {
-                        e.preventDefault();
-                        this.registrarTentativaAtalho(`Tecla ${e.key} pressionada`);
-                    }
-                    
-                    // Bloquear combinações de teclas específicas
-                    if (e.ctrlKey || e.altKey || e.metaKey) {
-                        if ((e.ctrlKey && (e.key === 'r' || e.key === 'R' || e.key === 'n' || e.key === 't' || e.key === 'w')) ||
-                            (e.ctrlKey && e.shiftKey && (e.key === 'r' || e.key === 'R')) ||
-                            (e.altKey && e.key === 'Tab') ||
-                            (e.altKey && e.key === 'F4')) {
-                            e.preventDefault();
-                            this.registrarTentativaAtalho(`Atalho bloqueado`);
-                        }
-                    }
-                    
-                    if (e.key === 'PrintScreen' || (e.ctrlKey && e.key === 'p')) {
-                        e.preventDefault();
-                        this.registrarScreenshot();
-                    }
-                    
-                    if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-                        e.preventDefault();
-                        this.registrarTentativaAtalho('Tentativa de abrir DevTools');
-                    }
-                });
-                
-                // 5. Prevenir clique com botão direito
-                document.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    this.registrarTentativaAtalho('Clique direito bloqueado');
-                    return false;
-                });
-                
-                // 6. Prevenir seleção de texto (exceto em inputs)
-                document.addEventListener('selectstart', (e) => {
-                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
-                        e.preventDefault();
-                    }
-                });
-                
-                // 7. Prevenir cópia/cola
-                document.addEventListener('copy', (e) => {
-                    e.preventDefault();
-                    this.registrarTentativaAtalho('Tentativa de cópia bloqueada');
-                    return false;
-                });
-                
-                document.addEventListener('cut', (e) => {
-                    e.preventDefault();
-                    this.registrarTentativaAtalho('Tentativa de recorte bloqueada');
-                    return false;
-                });
-                
-                document.addEventListener('paste', (e) => {
-                    e.preventDefault();
-                    this.registrarTentativaAtalho('Tentativa de colar bloqueada');
-                    return false;
-                });
-                
-                // 8. Monitorar fullscreen
-                document.addEventListener('fullscreenchange', () => {
-                    if (!document.fullscreenElement) {
-                        this.registrarTentativaAtalho('Saída do modo tela cheia');
-                        setTimeout(() => entrarEmFullscreen(), 100);
-                    }
-                });
-                
-                // 9. IMPORTANTE: PERMITIR SCROLL COMPLETAMENTE
-                // Não bloquear eventos de wheel de forma alguma
-                document.addEventListener('wheel', (e) => {
-                    // Permitir scroll completamente
-                    // Não fazer nada - permitir comportamento padrão
-                }, { passive: true });
-                
-                // Permitir eventos de touch para scroll em dispositivos móveis
-                document.addEventListener('touchstart', () => {}, { passive: true });
-                document.addEventListener('touchmove', () => {}, { passive: true });
-                document.addEventListener('touchend', () => {}, { passive: true });
+            // CORREÇÃO: Limpar timer de cancelamento anterior se existir
+            if (window.cancelTimer) {
+                clearInterval(window.cancelTimer);
+                window.cancelTimer = null;
             }
             
-            criarPainelMonitoramento() {
-                const panel = document.createElement('div');
-                panel.id = 'monitorPanel';
-                panel.className = 'monitor-panel';
-                panel.innerHTML = `
-                    <div class="panel-header">
-                        <h4><i class="fas fa-shield-alt"></i> Monitoramento</h4>
+            const modal = document.getElementById('warningModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+            
+            // CHAMAR FUNÇÃO PARA CANCELAR PROVA NO SERVIDOR
+            this.cancelarProvaNoServidor();
+            
+            const cancelStats = document.getElementById('cancelStats');
+            if (cancelStats) {
+                cancelStats.innerHTML = `
+                    <div class="stat">
+                        <div class="stat-value">${this.avisos}</div>
+                        <div class="stat-label">Avisos</div>
                     </div>
-                    <div class="panel-body">
-                        <div class="metric-row">
-                            <div class="metric">
-                                <div class="metric-label">Avisos</div>
-                                <div class="metric-value" id="warningCount">0/3</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">Atalhos</div>
-                                <div class="metric-value" id="shortcutCount">0/5</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">Capturas</div>
-                                <div class="metric-value" id="screenshotCount">0/2</div>
-                            </div>
-                        </div>
-                        <div class="status-row">
-                            <div class="status-item" id="statusFocus">
-                                <i class="fas fa-check-circle"></i> Foco OK
-                            </div>
-                            <div class="status-item" id="statusFullscreen">
-                                <i class="fas fa-expand"></i> Tela Cheia
-                            </div>
-                        </div>
+                    <div class="stat">
+                        <div class="stat-value">${this.tentativasAtalho}</div>
+                        <div class="stat-label">Atalhos</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${this.screenshots}</div>
+                        <div class="stat-label">Capturas</div>
                     </div>
                 `;
-                
-                document.body.appendChild(panel);
             }
             
-            registrarPerdaFoco() {
-                this.avisos++;
-                this.atualizarStatus();
+            // CORREÇÃO: Sempre chamar com 30 segundos para garantir consistência
+            bloquearTelaCompletamente(30);
+        }
+
+        // NOVA FUNÇÃO: Cancelar prova no servidor
+        async cancelarProvaNoServidor() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const authToken = token; // Usar token de autenticação normal
                 
-                if (this.avisos >= this.maxAvisos) {
-                    this.cancelarProva();
+                if (!prova || !prova._id) {
+                    console.error('❌ Não foi possível identificar a prova para cancelamento');
                     return;
                 }
                 
-                this.mostrarModalAviso();
-            }
-            
-            registrarTentativaAtalho(tipo) {
-                this.tentativasAtalho++;
-                this.capturasAtividades.push({
-                    tipo: 'atalho',
-                    descricao: tipo,
-                    timestamp: new Date().toISOString()
+                console.log(`📤 Enviando cancelamento da prova ${prova._id} para o servidor...`);
+                
+                // Coletar dados para enviar ao servidor
+                const dadosCancelamento = {
+                    provaId: prova._id,
+                    motivo: 'Múltiplas violações das regras da prova',
+                    estatisticas: {
+                        avisos: this.avisos,
+                        tentativasAtalho: this.tentativasAtalho,
+                        capturasTela: this.screenshots,
+                        tempoFora: this.tempoFora,
+                        timestamp: new Date().toISOString()
+                    },
+                    respostasAtuais: respostas, // Enviar respostas já preenchidas
+                    tempoTotal: tempoTotal
+                };
+                
+                // Chamar endpoint de cancelamento
+                const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/cancelar`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dadosCancelamento)
                 });
                 
-                this.atualizarStatus();
+                const data = await response.json();
                 
-                if (this.tentativasAtalho >= this.maxTentativasAtalho) {
-                    this.cancelarProva();
-                }
-            }
-            
-            registrarScreenshot() {
-                this.screenshots++;
-                this.atualizarStatus();
-                
-                if (this.screenshots >= this.maxScreenshots) {
-                    this.cancelarProva();
-                }
-            }
-            
-            mostrarModalAviso() {
-                if (this.isModalOpen) return;
-                
-                this.isModalOpen = true;
-                const modal = document.getElementById('warningModal');
-                const countdownElement = document.getElementById('countdown');
-                const messageElement = document.getElementById('warningMessage');
-                
-                const messages = [
-                    '⚠️ ATENÇÃO: Você saiu da página da prova!',
-                    '⚠️ ALERTA: Comportamento suspeito detectado!',
-                    '⚠️ ÚLTIMO AVISO: A prova será cancelada!'
-                ];
-                
-                messageElement.textContent = messages[Math.min(this.avisos - 1, messages.length - 1)];
-                modal.classList.add('active');
-                
-                let countdown = this.maxTempoFora;
-                countdownElement.textContent = countdown;
-                countdownElement.classList.add('blink');
-                
-                this.timerPerdaFoco = setInterval(() => {
-                    countdown--;
-                    countdownElement.textContent = countdown;
+                if (data.success) {
+                    console.log('✅ Prova cancelada no servidor com sucesso! Nota: 0.0');
                     
-                    if (countdown <= 0) {
-                        clearInterval(this.timerPerdaFoco);
-                        countdownElement.classList.remove('blink');
-                        this.cancelarProva();
-                    }
-                }, 1000);
-                
-                document.getElementById('btnReturn').addEventListener('click', () => {
-                    if (this.timerPerdaFoco) {
-                        clearInterval(this.timerPerdaFoco);
-                    }
-                    countdownElement.classList.remove('blink');
-                    modal.classList.remove('active');
-                    this.isModalOpen = false;
-                    entrarEmFullscreen();
-                }, { once: true });
-            }
-            
-            atualizarStatus() {
-                const warningCount = document.getElementById('warningCount');
-                const shortcutCount = document.getElementById('shortcutCount');
-                const screenshotCount = document.getElementById('screenshotCount');
-                
-                if (warningCount) warningCount.textContent = `${this.avisos}/3`;
-                if (shortcutCount) shortcutCount.textContent = `${this.tentativasAtalho}/5`;
-                if (screenshotCount) screenshotCount.textContent = `${this.screenshots}/2`;
-                
-                const statusFocus = document.getElementById('statusFocus');
-                if (statusFocus) {
-                    if (document.hidden) {
-                        statusFocus.innerHTML = '<i class="fas fa-times-circle"></i> Foco Perdido';
-                        statusFocus.style.background = '#fef3c7';
-                        statusFocus.style.color = '#92400e';
-                    } else {
-                        statusFocus.innerHTML = '<i class="fas fa-check-circle"></i> Foco OK';
-                        statusFocus.style.background = '#d1fae5';
-                        statusFocus.style.color = '#065f46';
-                    }
-                }
-            }
-            
-            async registrarInicioProva() {
-                try {
-                    const token = localStorage.getItem('auth_token');
-                    const provaId = window.provaData?._id;
+                    // Limpar dados locais
+                    localStorage.removeItem(`prova_${prova._id}`);
+                    localStorage.removeItem(`tempo_prova_${prova._id}`);
                     
-                    if (!token || !provaId) return;
+                    // Enviar notificação por email (se configurado)
+                    await this.enviarNotificacaoCancelamento();
                     
-                    await fetch(`${API_BASE_URL}/monitor/inicio`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            provaId: provaId,
-                            timestamp: new Date().toISOString(),
-                            userAgent: navigator.userAgent,
-                            screenResolution: `${window.screen.width}x${window.screen.height}`,
-                            iniciouFullscreen: true
-                        })
-                    });
-                    
-                } catch (error) {
-                    console.error('Erro ao registrar início:', error);
-                }
-            }
-            
-            cancelarProva() {
-                if (this.timerPerdaFoco) {
-                    clearInterval(this.timerPerdaFoco);
+                } else {
+                    console.error('❌ Erro ao cancelar prova no servidor:', data.error);
                 }
                 
-                const modal = document.getElementById('warningModal');
-                if (modal) {
-                    modal.classList.remove('active');
-                }
-                
-                const cancelStats = document.getElementById('cancelStats');
-                if (cancelStats) {
-                    cancelStats.innerHTML = `
-                        <div class="stat">
-                            <div class="stat-value">${this.avisos}</div>
-                            <div class="stat-label">Avisos</div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-value">${this.tentativasAtalho}</div>
-                            <div class="stat-label">Atalhos</div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-value">${this.screenshots}</div>
-                            <div class="stat-label">Capturas</div>
-                        </div>
-                    `;
-                }
-                
-                bloquearTelaCompletamente(30);
+            } catch (error) {
+                console.error('❌ Erro ao comunicar cancelamento com o servidor:', error);
             }
         }
-        
-        // ============ LÓGICA PRINCIPAL DA PROVA ============
-        
-        // ============ DETECTAR AMBIENTE DINAMICAMENTE ============
-        const IS_LOCALHOST = window.location.hostname === 'localhost' || 
-                            window.location.hostname === '127.0.0.1';
-        const IS_RENDER = window.location.hostname.includes('render.com') || 
-                        window.location.hostname.includes('sistema-avaliativo');
 
-        // URL base da API - AUTO-DETECTADA
-        let API_BASE_URL;
-
-        if (IS_LOCALHOST) {
-            // Desenvolvimento local
-            API_BASE_URL = 'http://localhost:3000/api';
-            console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
-        } else if (IS_RENDER) {
-            // Produção no Render
-            API_BASE_URL = window.location.origin + '/api';
-            console.log('🚀 Modo: PRODUÇÃO (Render)');
-        } else {
-            // Fallback
-            API_BASE_URL = '/api';
-            console.log('⚙️ Modo: FALLBACK');
+        // NOVA FUNÇÃO: Enviar notificação por email
+        async enviarNotificacaoCancelamento() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const dadosNotificacao = {
+                    provaId: prova._id,
+                    provaTitulo: prova.titulo,
+                    alunoId: prova ? req.userId : null,
+                    motivo: 'Múltiplas violações das regras da prova',
+                    estatisticas: {
+                        avisos: this.avisos,
+                        tentativasAtalho: this.tentativasAtalho,
+                        capturasTela: this.screenshots
+                    },
+                    timestamp: new Date().toISOString()
+                };
+                
+                // Enviar notificação para o professor
+                const response = await fetch(`${API_BASE_URL}/notificacoes/prova-cancelada`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dadosNotificacao)
+                });
+                
+                console.log('📧 Notificação de cancelamento enviada para o professor');
+                
+            } catch (error) {
+                console.error('❌ Erro ao enviar notificação:', error);
+            }
         }
+    }
+    
+    // ============ LÓGICA PRINCIPAL DA PROVA ============
+    
+    // ============ DETECTAR AMBIENTE DINAMICAMENTE ============
+    const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1';
+    const IS_RENDER = window.location.hostname.includes('render.com') || 
+                    window.location.hostname.includes('sistema-avaliativo');
 
-        // Para debugging
-        console.log('📡 Host:', window.location.hostname);
-        console.log('🌐 API URL:', API_BASE_URL);
+    // URL base da API - AUTO-DETECTADA
+    let API_BASE_URL;
 
-        // Exportar para uso global
-        window.API_BASE_URL = API_BASE_URL;
-        let prova = null;
-        let respostas = {};
-        let tempoInicio = null;
-        let tempoTotal = 0;
-        let timerInterval = null;
-        let monitoramento = null;
+    if (IS_LOCALHOST) {
+        // Desenvolvimento local
+        API_BASE_URL = 'http://localhost:3000/api';
+        console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
+    } else if (IS_RENDER) {
+        // Produção no Render
+        API_BASE_URL = window.location.origin + '/api';
+        console.log('🚀 Modo: PRODUÇÃO (Render)');
+    } else {
+        // Fallback
+        API_BASE_URL = '/api';
+        console.log('⚙️ Modo: FALLBACK');
+    }
+
+    // Para debugging
+    console.log('📡 Host:', window.location.hostname);
+    console.log('🌐 API URL:', API_BASE_URL);
+
+    // Exportar para uso global
+    window.API_BASE_URL = API_BASE_URL;
+    let prova = null;
+    let respostas = {};
+    let tempoInicio = null;
+    let tempoTotal = 0;
+    let timerInterval = null;
+    let monitoramento = null;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('📄 Página de prova carregada');
         
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('📄 Página de prova carregada');
-            
-            // Habilitar scroll imediatamente
-            document.body.style.overflow = 'auto';
-            document.documentElement.style.overflow = 'auto';
-            
-            document.getElementById('monitorHelp').addEventListener('click', () => {
-                alert(`
+        // Habilitar scroll imediatamente
+        document.body.style.overflow = 'auto';
+        document.documentElement.style.overflow = 'auto';
+        
+        document.getElementById('monitorHelp').addEventListener('click', () => {
+            alert(`
 🚫 SISTEMA DE MONITORAMENTO - MODO RESTRITO
 
 ⚠️ ATENÇÃO: Esta prova está em modo de segurança máxima.
@@ -1239,734 +1399,383 @@
 • 2 capturas de tela = PROVA CANCELADA
 
 Boa prova! 🎯
-                `);
+            `);
+        });
+        
+        const token = getTokenFromURL();
+        if (!token) {
+            mostrarErro('Acesso Negado', 'Token de prova não encontrado.');
+            return;
+        }
+        
+        carregarProva(token);
+    });
+    
+    function getTokenFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('token');
+    }
+    
+    async function carregarProva(token) {
+        try {
+            atualizarMensagemLoading('Iniciando prova em modo seguro...');
+            
+            const response = await fetch(`${API_BASE_URL}/provas/dados?token=${encodeURIComponent(token)}`);
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Erro ao carregar prova');
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro na resposta do servidor');
+            }
+            
+            prova = data.prova;
+            console.log('✅ Prova carregada:', prova);
+            
+            // CORREÇÃO: Inicializar monitoramento depois de carregar a prova
+            monitoramento = new MonitoramentoProva();
+            iniciarProvaInterface();
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar prova:', error);
+            mostrarErro('Erro ao Carregar Prova', error.message);
+        }
+    }
+    
+    function iniciarProvaInterface() {
+        document.getElementById('provaTitulo').textContent = prova.titulo;
+        document.getElementById('provaConteudo').textContent = prova.conteudo;
+        document.getElementById('questoesCount').textContent = `${prova.quantidadeQuestoes} questões`;
+        document.getElementById('provaDuracao').textContent = `${prova.duracao} minutos`;
+        
+        renderizarQuestoes();
+        iniciarTimer();
+        
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.getElementById('provaContent').style.display = 'flex';
+        
+        atualizarProgresso();
+        
+        // Habilitar scroll na área de questões
+        const questoesContainer = document.getElementById('questoesContainer');
+        if (questoesContainer) {
+            questoesContainer.style.overflowY = 'auto';
+            questoesContainer.style.overflowX = 'hidden';
+        }
+        
+        // Mostrar indicador de scroll se necessário
+        setTimeout(() => mostrarIndicadorScroll(), 500);
+        
+        console.log('Scroll habilitado - container height:', questoesContainer.scrollHeight, 'client height:', questoesContainer.clientHeight);
+    }
+    
+    function renderizarQuestoes() {
+        const container = document.getElementById('questoesWrapper');
+        
+        if (!prova.questoes || prova.questoes.length === 0) {
+            container.innerHTML = '<div class="questao-card"><p>Nenhuma questão disponível</p></div>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        
+        prova.questoes.forEach((questao, index) => {
+            const questaoDiv = document.createElement('div');
+            questaoDiv.className = 'questao-card';
+            questaoDiv.id = `questao-${index}`;
+            
+            questaoDiv.innerHTML = `
+                <div class="questao-numero">${index + 1}</div>
+                <div class="questao-texto">${questao.pergunta}</div>
+                <div class="opcoes-container" id="opcoes-${index}"></div>
+            `;
+            
+            const opcoesContainer = questaoDiv.querySelector(`#opcoes-${index}`);
+            questao.opcoes.forEach((opcao, opcaoIndex) => {
+                const letra = String.fromCharCode(65 + opcaoIndex);
+                const opcaoDiv = document.createElement('div');
+                opcaoDiv.className = 'opcao';
+                opcaoDiv.id = `opcao-${index}-${opcaoIndex}`;
+                opcaoDiv.onclick = () => selecionarResposta(index, opcaoIndex);
+                
+                opcaoDiv.innerHTML = `
+                    <div class="opcao-letra">${letra}</div>
+                    <div class="opcao-texto">${opcao}</div>
+                `;
+                
+                opcoesContainer.appendChild(opcaoDiv);
             });
             
-            const token = getTokenFromURL();
-            if (!token) {
-                mostrarErro('Acesso Negado', 'Token de prova não encontrado.');
+            container.appendChild(questaoDiv);
+        });
+    }
+    
+    function selecionarResposta(questaoIndex, opcaoIndex) {
+        const letras = ['A', 'B', 'C', 'D'];
+        const resposta = letras[opcaoIndex];
+        
+        respostas[questaoIndex] = resposta;
+        atualizarInterfaceResposta(questaoIndex, opcaoIndex);
+        atualizarProgresso();
+        salvarRespostasLocalmente();
+    }
+    
+    function atualizarInterfaceResposta(questaoIndex, opcaoIndexSelecionado) {
+        const questaoDiv = document.getElementById(`questao-${questaoIndex}`);
+        const todasOpcoes = questaoDiv.querySelectorAll('.opcao');
+        
+        todasOpcoes.forEach(opcao => {
+            opcao.classList.remove('selecionada');
+        });
+        
+        const opcaoSelecionada = document.getElementById(`opcao-${questaoIndex}-${opcaoIndexSelecionado}`);
+        if (opcaoSelecionada) {
+            opcaoSelecionada.classList.add('selecionada');
+        }
+    }
+    
+    // CORREÇÃO COMPLETA DO TIMER DA PROVA
+    function iniciarTimer() {
+        tempoInicio = new Date();
+        
+        // CORREÇÃO: Carregar tempo salvo corretamente
+        const tempoSalvo = localStorage.getItem(`tempo_prova_${prova._id}`);
+        if (tempoSalvo) {
+            try {
+                tempoTotal = parseInt(tempoSalvo);
+                // Ajustar tempo de início para continuar de onde parou
+                const agora = new Date();
+                tempoInicio = new Date(agora.getTime() - (tempoTotal * 1000));
+                console.log(`⏱️ Retomando prova com ${tempoTotal} segundos`);
+            } catch (e) {
+                console.error('Erro ao carregar tempo:', e);
+                tempoTotal = 0;
+            }
+        } else {
+            tempoTotal = 0;
+        }
+        
+        // CORREÇÃO: Limpar timer anterior
+        if (timerInterval) {
+            clearInterval(timerInterval);
+        }
+        
+        timerInterval = setInterval(atualizarTimer, 1000);
+        atualizarTimer();
+    }
+    
+    // CORREÇÃO COMPLETA: Atualizar timer corretamente
+    function atualizarTimer() {
+        if (!tempoInicio) return;
+        
+        const agora = new Date();
+        const diferencaMs = agora.getTime() - tempoInicio.getTime();
+        tempoTotal = Math.floor(diferencaMs / 1000); // Tempo em segundos
+        
+        // Salvar a cada 30 segundos
+        if (tempoTotal % 30 === 0) {
+            localStorage.setItem(`tempo_prova_${prova._id}`, tempoTotal.toString());
+        }
+        
+        const horas = Math.floor(tempoTotal / 3600);
+        const minutos = Math.floor((tempoTotal % 3600) / 60);
+        const segundos = tempoTotal % 60;
+        
+        const timerElement = document.getElementById('contadorTempo');
+        timerElement.textContent = 
+            `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+        
+        // Verificar tempo restante se houver duração
+        if (prova.duracao && prova.duracao > 0) {
+            const duracaoSegundos = prova.duracao * 60;
+            const tempoRestanteSegundos = duracaoSegundos - tempoTotal;
+            
+            if (tempoRestanteSegundos <= 0) {
+                // Tempo esgotado
+                clearInterval(timerInterval);
+                timerElement.textContent = 'TEMPO ESGOTADO';
+                timerElement.style.color = '#dc2626';
+                
+                setTimeout(() => {
+                    alert('⏰ TEMPO ESGOTADO! A prova será finalizada.');
+                    finalizarProva();
+                }, 1000);
                 return;
             }
             
-            carregarProva(token);
-        });
-        
-        function getTokenFromURL() {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('token');
-        }
-        
-        async function carregarProva(token) {
-            try {
-                atualizarMensagemLoading('Iniciando prova em modo seguro...');
-                
-                const response = await fetch(`${API_BASE_URL}/provas/dados?token=${encodeURIComponent(token)}`);
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Erro ao carregar prova');
-                }
-                
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Erro na resposta do servidor');
-                }
-                
-                prova = data.prova;
-                console.log('✅ Prova carregada:', prova);
-                
-                monitoramento = new MonitoramentoProva();
-                setTimeout(() => iniciarProvaInterface(), 100);
-                
-            } catch (error) {
-                console.error('❌ Erro ao carregar prova:', error);
-                mostrarErro('Erro ao Carregar Prova', error.message);
+            // Alerta visual conforme tempo restante
+            if (tempoRestanteSegundos <= 300) { // 5 minutos
+                timerElement.style.color = '#dc2626';
+            } else if (tempoRestanteSegundos <= 600) { // 10 minutos
+                timerElement.style.color = '#f59e0b';
+            }
+            
+            // Alertas sonoros
+            if (tempoRestanteSegundos === 300) {
+                alert('⚠️ ATENÇÃO: Restam 5 minutos!');
+            } else if (tempoRestanteSegundos === 60) {
+                alert('⏰ ÚLTIMO MINUTO!');
             }
         }
+    }
+    
+    function atualizarProgresso() {
+        const total = prova.questoes.length;
+        const respondidas = Object.keys(respostas).length;
+        const porcentagem = total > 0 ? Math.round((respondidas / total) * 100) : 0;
         
-        function iniciarProvaInterface() {
-            document.getElementById('provaTitulo').textContent = prova.titulo;
-            document.getElementById('provaConteudo').textContent = prova.conteudo;
-            document.getElementById('questoesCount').textContent = `${prova.quantidadeQuestoes} questões`;
-            document.getElementById('provaDuracao').textContent = `${prova.duracao} minutos`;
+        document.getElementById('progressoTexto').textContent = 
+            `${respondidas} de ${total} questões respondidas (${porcentagem}%)`;
+    }
+    
+    function salvarRespostasLocalmente() {
+        if (prova && prova._id) {
+            const dados = {
+                respostas: respostas,
+                tempo: tempoTotal,
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem(`prova_${prova._id}`, JSON.stringify(dados));
+        }
+    }
+    
+    async function finalizarProva() {
+        try {
+            // CORREÇÃO: Limpar todos os timers
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
             
-            renderizarQuestoes();
-            iniciarTimer();
+            if (monitoramento && monitoramento.timerPerdaFoco) {
+                clearInterval(monitoramento.timerPerdaFoco);
+                monitoramento.timerPerdaFoco = null;
+            }
+            
+            const totalQuestoes = prova.questoes.length;
+            const respondidas = Object.keys(respostas).length;
+            
+            if (respondidas < totalQuestoes) {
+                if (!confirm(`Você respondeu ${respondidas} de ${totalQuestoes} questões.\nDeseja finalizar mesmo assim?`)) {
+                    // Reativar timer se cancelar
+                    timerInterval = setInterval(atualizarTimer, 1000);
+                    return;
+                }
+            }
+            
+            if (!confirm('Tem certeza que deseja finalizar a prova?\nEsta ação não pode ser desfeita.')) {
+                // Reativar timer se cancelar
+                timerInterval = setInterval(atualizarTimer, 1000);
+                return;
+            }
+            
+            document.getElementById('provaContent').style.display = 'none';
+            document.getElementById('loadingScreen').style.display = 'flex';
+            atualizarMensagemLoading('Enviando respostas...');
+            
+            const respostasArray = [];
+            for (let i = 0; i < totalQuestoes; i++) {
+                respostasArray.push(respostas[i] || null);
+            }
+            
+            // CORREÇÃO: Calcular tempo gasto corretamente
+            const tempoGasto = Math.max(1, Math.ceil(tempoTotal / 60)); // Mínimo 1 minuto
+            const authToken = localStorage.getItem('auth_token');
+            
+            if (!authToken) {
+                throw new Error('Sessão expirada. Faça login novamente.');
+            }
+            
+            const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/responder`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    respostas: respostasArray,
+                    tempoGasto: tempoGasto
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Erro ao enviar respostas');
+            }
+            
+            // Limpar dados locais
+            localStorage.removeItem(`prova_${prova._id}`);
+            localStorage.removeItem(`tempo_prova_${prova._id}`);
+            
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+            
+            alert(
+                `✅ Prova finalizada com sucesso!\n\n` +
+                `📊 Prova: ${prova.titulo}\n` +
+                `📝 Respondidas: ${respondidas}/${totalQuestoes}\n` +
+                `⏱️ Tempo gasto: ${tempoGasto} minutos\n` +
+                `📤 Aguarde a correção do professor.`
+            );
+            
+            // CORREÇÃO: Redirecionar corretamente
+            window.location.href = '/aluno.html?prova_finalizada=true';
+            
+        } catch (error) {
+            console.error('❌ Erro ao finalizar prova:', error);
             
             document.getElementById('loadingScreen').style.display = 'none';
             document.getElementById('provaContent').style.display = 'flex';
             
-            atualizarProgresso();
-            
-            // Habilitar scroll na área de questões
-            const questoesContainer = document.getElementById('questoesContainer');
-            if (questoesContainer) {
-                questoesContainer.style.overflowY = 'auto';
-                questoesContainer.style.overflowX = 'hidden';
+            // Reativar timer
+            if (!timerInterval) {
+                timerInterval = setInterval(atualizarTimer, 1000);
             }
             
-            // Mostrar indicador de scroll se necessário
-            setTimeout(() => mostrarIndicadorScroll(), 500);
-            
-            // Testar scroll
-            console.log('Scroll habilitado - container height:', questoesContainer.scrollHeight, 'client height:', questoesContainer.clientHeight);
+            alert(`Erro: ${error.message}\n\nTente novamente ou contate o professor.`);
         }
-        
-        function renderizarQuestoes() {
-            const container = document.getElementById('questoesWrapper');
-            
-            if (!prova.questoes || prova.questoes.length === 0) {
-                container.innerHTML = '<div class="questao-card"><p>Nenhuma questão disponível</p></div>';
-                return;
-            }
-            
-            container.innerHTML = '';
-            
-            prova.questoes.forEach((questao, index) => {
-                const questaoDiv = document.createElement('div');
-                questaoDiv.className = 'questao-card';
-                questaoDiv.id = `questao-${index}`;
-                
-                questaoDiv.innerHTML = `
-                    <div class="questao-numero">${index + 1}</div>
-                    <div class="questao-texto">${questao.pergunta}</div>
-                    <div class="opcoes-container" id="opcoes-${index}"></div>
-                `;
-                
-                const opcoesContainer = questaoDiv.querySelector(`#opcoes-${index}`);
-                questao.opcoes.forEach((opcao, opcaoIndex) => {
-                    const letra = String.fromCharCode(65 + opcaoIndex);
-                    const opcaoDiv = document.createElement('div');
-                    opcaoDiv.className = 'opcao';
-                    opcaoDiv.id = `opcao-${index}-${opcaoIndex}`;
-                    opcaoDiv.onclick = () => selecionarResposta(index, opcaoIndex);
-                    
-                    opcaoDiv.innerHTML = `
-                        <div class="opcao-letra">${letra}</div>
-                        <div class="opcao-texto">${opcao}</div>
-                    `;
-                    
-                    opcoesContainer.appendChild(opcaoDiv);
-                });
-                
-                container.appendChild(questaoDiv);
-            });
+    }
+    
+    function atualizarMensagemLoading(mensagem) {
+        const elemento = document.getElementById('loadingMessage');
+        if (elemento) {
+            elemento.textContent = mensagem;
         }
-        
-        function selecionarResposta(questaoIndex, opcaoIndex) {
-            const letras = ['A', 'B', 'C', 'D'];
-            const resposta = letras[opcaoIndex];
-            
-            respostas[questaoIndex] = resposta;
-            atualizarInterfaceResposta(questaoIndex, opcaoIndex);
-            atualizarProgresso();
-            salvarRespostasLocalmente();
-        }
-        
-        function atualizarInterfaceResposta(questaoIndex, opcaoIndexSelecionado) {
-            const questaoDiv = document.getElementById(`questao-${questaoIndex}`);
-            const todasOpcoes = questaoDiv.querySelectorAll('.opcao');
-            
-            todasOpcoes.forEach(opcao => {
-                opcao.classList.remove('selecionada');
-            });
-            
-            const opcaoSelecionada = document.getElementById(`opcao-${questaoIndex}-${opcaoIndexSelecionado}`);
-            if (opcaoSelecionada) {
-                opcaoSelecionada.classList.add('selecionada');
-            }
-        }
-        
-        function iniciarTimer() {
-            tempoInicio = new Date();
-            
-            const tempoSalvo = localStorage.getItem(`tempo_prova_${prova._id}`);
-            if (tempoSalvo) {
-                try {
-                    tempoTotal = parseInt(tempoSalvo);
-                } catch (e) {
-                    tempoTotal = 0;
-                }
-            }
-            
-            timerInterval = setInterval(atualizarTimer, 1000);
-            atualizarTimer();
-        }
-        
-        function atualizarTimer() {
-            const agora = new Date();
-            const diferenca = agora - tempoInicio;
-            
-            tempoTotal = Math.floor((diferenca / 1000) + (tempoTotal || 0));
-            
-            if (tempoTotal % 30 === 0) {
-                localStorage.setItem(`tempo_prova_${prova._id}`, tempoTotal);
-            }
-            
-            const horas = Math.floor(tempoTotal / 3600);
-            const minutos = Math.floor((tempoTotal % 3600) / 60);
-            const segundos = tempoTotal % 60;
-            
-            document.getElementById('contadorTempo').textContent = 
-                `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-            
-            if (prova.duracao && prova.duracao > 0) {
-                const tempoRestanteMinutos = (prova.duracao * 60) - tempoTotal;
-                
-                if (tempoRestanteMinutos <= 0) {
-                    clearInterval(timerInterval);
-                    finalizarProva();
-                } else if (tempoRestanteMinutos <= 5) {
-                    document.getElementById('contadorTempo').style.color = '#ef4444';
-                }
-            }
-        }
-        
-        function atualizarProgresso() {
-            const total = prova.questoes.length;
-            const respondidas = Object.keys(respostas).length;
-            const porcentagem = total > 0 ? Math.round((respondidas / total) * 100) : 0;
-            
-            document.getElementById('progressoTexto').textContent = 
-                `${respondidas} de ${total} questões respondidas (${porcentagem}%)`;
-        }
-        
-        function salvarRespostasLocalmente() {
-            if (prova && prova._id) {
-                const dados = {
-                    respostas: respostas,
-                    tempo: tempoTotal,
-                    timestamp: new Date().toISOString()
-                };
-                localStorage.setItem(`prova_${prova._id}`, JSON.stringify(dados));
-            }
-        }
-        
-        async function finalizarProva() {
-            try {
-                if (monitoramento && monitoramento.timerPerdaFoco) {
-                    clearInterval(monitoramento.timerPerdaFoco);
-                }
-                
-                const totalQuestoes = prova.questoes.length;
-                const respondidas = Object.keys(respostas).length;
-                
-                if (respondidas < totalQuestoes) {
-                    if (!confirm(`Você respondeu ${respondidas} de ${totalQuestoes} questões.\nDeseja finalizar mesmo assim?`)) {
-                        return;
-                    }
-                }
-                
-                if (!confirm('Tem certeza que deseja finalizar a prova?\nEsta ação não pode ser desfeita.')) {
-                    return;
-                }
-                
-                if (timerInterval) {
-                    clearInterval(timerInterval);
-                }
-                
-                document.getElementById('provaContent').style.display = 'none';
-                document.getElementById('loadingScreen').style.display = 'flex';
-                atualizarMensagemLoading('Enviando respostas...');
-                
-                const respostasArray = [];
-                for (let i = 0; i < totalQuestoes; i++) {
-                    respostasArray.push(respostas[i] || null);
-                }
-                
-                const tempoGasto = Math.ceil(tempoTotal / 60);
-                const authToken = localStorage.getItem('auth_token');
-                
-                if (!authToken) {
-                    throw new Error('Sessão expirada');
-                }
-                
-                const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/responder`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        respostas: respostasArray,
-                        tempoGasto: tempoGasto
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok || !data.success) {
-                    throw new Error(data.error || 'Erro ao enviar respostas');
-                }
-                
-                localStorage.removeItem(`prova_${prova._id}`);
-                localStorage.removeItem(`tempo_prova_${prova._id}`);
-                
+    }
+    
+    function mostrarErro(titulo, mensagem) {
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.getElementById('errorScreen').style.display = 'flex';
+        document.getElementById('errorTitle').textContent = titulo;
+        document.getElementById('errorMessage').textContent = mensagem;
+    }
+    
+    function voltarAoPainel() {
+        if (Object.keys(respostas).length === 0) {
+            if (confirm('Deseja realmente voltar ao painel?')) {
                 if (document.exitFullscreen) {
                     document.exitFullscreen();
                 }
-                
-                alert(
-                    `✅ Prova finalizada com sucesso!\n\n` +
-                    `⏱️  Tempo gasto: ${tempoGasto} minutos\n` +
-                    `📊 Aguarde a correção do professor.`
-                );
-                
-                window.location.href = '/login.html?prova_finalizada=true';
-                
-            } catch (error) {
-                console.error('❌ Erro ao finalizar prova:', error);
-                
-                document.getElementById('loadingScreen').style.display = 'none';
-                document.getElementById('provaContent').style.display = 'flex';
-                
-                if (timerInterval) {
-                    clearInterval(timerInterval);
-                    timerInterval = setInterval(atualizarTimer, 1000);
-                }
-                
-                alert(`Erro: ${error.message}`);
+                window.location.href = '/aluno.html';
             }
+        } else {
+            alert('Você já começou a prova. Não é possível voltar agora.');
         }
-        
-        function atualizarMensagemLoading(mensagem) {
-            const elemento = document.getElementById('loadingMessage');
-            if (elemento) {
-                elemento.textContent = mensagem;
-            }
+    }
+    
+    window.addEventListener('beforeunload', function(e) {
+        if (prova && Object.keys(respostas).length > 0) {
+            e.preventDefault();
+            e.returnValue = 'Você tem respostas não enviadas. A prova será perdida.';
+            return e.returnValue;
         }
-        
-        function mostrarErro(titulo, mensagem) {
-            document.getElementById('loadingScreen').style.display = 'none';
-            document.getElementById('errorScreen').style.display = 'flex';
-            document.getElementById('errorTitle').textContent = titulo;
-            document.getElementById('errorMessage').textContent = mensagem;
-        }
-        
-        function voltarAoPainel() {
-            if (Object.keys(respostas).length === 0) {
-                if (confirm('Deseja realmente voltar ao painel?')) {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    }
-                    window.location.href = '/aluno.html';
-                }
-            } else {
-                alert('Você já começou a prova. Não é possível voltar agora.');
-            }
-        }
-        
-        window.addEventListener('beforeunload', function(e) {
-            if (prova && Object.keys(respostas).length > 0) {
-                e.preventDefault();
-                e.returnValue = 'Você tem respostas não enviadas. A prova será perdida.';
-                return e.returnValue;
-            }
-        });
-    </script>
-
-    <!-- SISTEMA OFFLINE PARA PROVA - SEPARADO PARA CLAREZA -->
-    <script>
-        // ============ SISTEMA OFFLINE PARA PROVA ============
-
-        class OfflineManager {
-            constructor() {
-                this.isOnline = navigator.onLine;
-                this.init();
-            }
-            
-            init() {
-                // Monitorar conexão
-                window.addEventListener('online', () => this.handleOnline());
-                window.addEventListener('offline', () => this.handleOffline());
-                
-                // Verificar se há dados offline pendentes
-                this.checkPendingSync();
-            }
-            
-            handleOnline() {
-                console.log('✅ Conexão restaurada');
-                this.isOnline = true;
-                this.syncPendingData();
-            }
-            
-            handleOffline() {
-                console.log('⚠️ Conexão perdida - Modo offline ativado');
-                this.isOnline = false;
-                alert('⚠️ Conexão perdida. Suas respostas serão salvas localmente e enviadas quando a conexão voltar.');
-            }
-            
-            async saveProvaOffline(provaId, respostas, tempoGasto) {
-                try {
-                    const offlineData = {
-                        provaId,
-                        respostas,
-                        tempoGasto,
-                        timestamp: new Date().toISOString(),
-                        status: 'pending'
-                    };
-                    
-                    // Salvar no localStorage
-                    localStorage.setItem(`prova_offline_${provaId}`, JSON.stringify(offlineData));
-                    
-                    // Tentar enviar imediatamente se online
-                    if (this.isOnline) {
-                        await this.syncProvaData(offlineData);
-                    } else {
-                        console.log('💾 Prova salva offline:', offlineData);
-                    }
-                    
-                    return offlineData;
-                } catch (error) {
-                    console.error('❌ Erro ao salvar offline:', error);
-                    throw error;
-                }
-            }
-            
-            async syncProvaData(offlineData) {
-                try {
-                    const authToken = localStorage.getItem('auth_token');
-                    
-                    if (!authToken) {
-                        throw new Error('Token de autenticação não encontrado');
-                    }
-                    
-                    const response = await fetch(`${API_BASE_URL}/provas/offline/save`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${authToken}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(offlineData)
-                    });
-                    
-                    if (response.ok) {
-                        const result = await response.json();
-                        console.log('✅ Prova sincronizada com sucesso:', result);
-                        
-                        // Remover do localStorage
-                        localStorage.removeItem(`prova_offline_${offlineData.provaId}`);
-                        
-                        return result;
-                    } else {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Falha ao sincronizar');
-                    }
-                } catch (error) {
-                    console.error('❌ Erro na sincronização:', error);
-                    throw error;
-                }
-            }
-            
-            async syncPendingData() {
-                try {
-                    console.log('🔄 Sincronizando dados pendentes...');
-                    
-                    // Buscar todas as provas offline pendentes
-                    const keys = Object.keys(localStorage);
-                    const offlineKeys = keys.filter(key => key.startsWith('prova_offline_'));
-                    
-                    for (const key of offlineKeys) {
-                        const data = JSON.parse(localStorage.getItem(key));
-                        if (data && data.status === 'pending') {
-                            try {
-                                await this.syncProvaData(data);
-                                console.log(`✅ ${key} sincronizada`);
-                            } catch (error) {
-                                console.error(`❌ Falha ao sincronizar ${key}:`, error);
-                            }
-                        }
-                    }
-                    
-                    console.log('✅ Sincronização completa');
-                } catch (error) {
-                    console.error('❌ Erro na sincronização pendente:', error);
-                }
-            }
-            
-            checkPendingSync() {
-                const keys = Object.keys(localStorage);
-                const offlineKeys = keys.filter(key => key.startsWith('prova_offline_'));
-                
-                if (offlineKeys.length > 0) {
-                    console.log(`📋 ${offlineKeys.length} provas pendentes para sincronização`);
-                    
-                    // Se estiver online, tentar sincronizar
-                    if (this.isOnline) {
-                        this.syncPendingData();
-                    }
-                }
-            }
-            
-            getOfflineProvasCount() {
-                const keys = Object.keys(localStorage);
-                return keys.filter(key => key.startsWith('prova_offline_')).length;
-            }
-            
-            clearOfflineData(provaId) {
-                localStorage.removeItem(`prova_offline_${provaId}`);
-                console.log(`🗑️ Dados offline da prova ${provaId} removidos`);
-            }
-        }
-
-        // Inicializar gerenciador offline
-        let offlineManager;
-
-        // Modificar a função finalizarProva para suporte offline
-        async function finalizarProvaComOffline() {
-            try {
-                const totalQuestoes = prova.questoes.length;
-                const respondidas = Object.keys(respostas).length;
-                
-                if (respondidas < totalQuestoes) {
-                    if (!confirm(`Você respondeu ${respondidas} de ${totalQuestoes} questões.\nDeseja finalizar mesmo assim?`)) {
-                        return;
-                    }
-                }
-                
-                if (!confirm('Tem certeza que deseja finalizar a prova?\nEsta ação não pode ser desfeita.')) {
-                    return;
-                }
-                
-                if (timerInterval) {
-                    clearInterval(timerInterval);
-                }
-                
-                document.getElementById('provaContent').style.display = 'none';
-                document.getElementById('loadingScreen').style.display = 'flex';
-                atualizarMensagemLoading('Salvando respostas...');
-                
-                const respostasArray = [];
-                for (let i = 0; i < totalQuestoes; i++) {
-                    respostasArray.push(respostas[i] || null);
-                }
-                
-                const tempoGasto = Math.ceil(tempoTotal / 60);
-                const authToken = localStorage.getItem('auth_token');
-                
-                // Se não tiver conexão ou token, salvar offline
-                if (!authToken || !offlineManager.isOnline) {
-                    console.log('⚠️ Salvando prova offline...');
-                    
-                    const offlineData = await offlineManager.saveProvaOffline(
-                        prova._id,
-                        respostasArray,
-                        tempoGasto
-                    );
-                    
-                    alert(
-                        `📱 Prova salva offline!\n\n` +
-                        `Suas respostas foram salvas localmente.\n` +
-                        `Elas serão enviadas automaticamente quando a conexão voltar.\n\n` +
-                        `📊 Prova: ${prova.titulo}\n` +
-                        `📝 Respostas: ${respondidas}/${totalQuestoes}\n` +
-                        `⏱️ Tempo: ${tempoGasto} minutos\n\n` +
-                        `⚠️ Não feche esta aba até a sincronização ser concluída.`
-                    );
-                    
-                    // Manter a tela aberta
-                    document.getElementById('loadingScreen').style.display = 'none';
-                    document.getElementById('provaContent').style.display = 'flex';
-                    
-                    // Atualizar botão para mostrar status offline
-                    const btnFinalizar = document.getElementById('btnFinalizarScroll');
-                    if (btnFinalizar) {
-                        btnFinalizar.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Aguardando conexão...';
-                        btnFinalizar.disabled = true;
-                        btnFinalizar.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
-                    }
-                    
-                    // Tentar reconectar a cada 30 segundos
-                    const checkInterval = setInterval(async () => {
-                        if (offlineManager.isOnline && authToken) {
-                            clearInterval(checkInterval);
-                            try {
-                                atualizarMensagemLoading('Enviando prova salva offline...');
-                                await offlineManager.syncPendingData();
-                                
-                                // Restaurar botão
-                                if (btnFinalizar) {
-                                    btnFinalizar.innerHTML = '<i class="fas fa-paper-plane"></i> Prova Enviada!';
-                                    btnFinalizar.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                                }
-                                
-                                alert('✅ Prova enviada com sucesso!');
-                                window.location.href = '/login.html?prova_finalizada=true';
-                            } catch (error) {
-                                alert('❌ Erro ao enviar prova. Tente novamente mais tarde.');
-                                if (btnFinalizar) {
-                                    btnFinalizar.innerHTML = '<i class="fas fa-paper-plane"></i> Tentar Enviar Novamente';
-                                    btnFinalizar.disabled = false;
-                                    btnFinalizar.onclick = () => finalizarProvaComOffline();
-                                }
-                            }
-                        }
-                    }, 30000);
-                    
-                    return;
-                }
-                
-                // Se tiver conexão, enviar normalmente
-                atualizarMensagemLoading('Enviando respostas...');
-                
-                const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/responder`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        respostas: respostasArray,
-                        tempoGasto: tempoGasto
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok || !data.success) {
-                    throw new Error(data.error || 'Erro ao enviar respostas');
-                }
-                
-                // Limpar dados locais
-                localStorage.removeItem(`prova_${prova._id}`);
-                localStorage.removeItem(`tempo_prova_${prova._id}`);
-                
-                // Limpar também dados offline se existirem
-                offlineManager.clearOfflineData(prova._id);
-                
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
-                
-                alert(
-                    `✅ Prova finalizada com sucesso!\n\n` +
-                    `📊 Prova: ${prova.titulo}\n` +
-                    `📝 Respostas: ${respondidas}/${totalQuestoes}\n` +
-                    `⏱️ Tempo gasto: ${tempoGasto} minutos\n` +
-                    `📤 Aguarde a correção do professor.`
-                );
-                
-                window.location.href = '/login.html?prova_finalizada=true';
-                
-            } catch (error) {
-                console.error('❌ Erro ao finalizar prova:', error);
-                
-                document.getElementById('loadingScreen').style.display = 'none';
-                document.getElementById('provaContent').style.display = 'flex';
-                
-                if (timerInterval) {
-                    clearInterval(timerInterval);
-                    timerInterval = setInterval(atualizarTimer, 1000);
-                }
-                
-                const userChoice = confirm(
-                    `Erro: ${error.message}\n\n` +
-                    `📱 Deseja salvar a prova offline?\n` +
-                    `• SIM: Salvar localmente e enviar depois\n` +
-                    `• NÃO: Tentar enviar novamente`
-                );
-                
-                if (userChoice) {
-                    // Tentar salvar offline como fallback
-                    try {
-                        const respostasArray = [];
-                        for (let i = 0; i < prova.questoes.length; i++) {
-                            respostasArray.push(respostas[i] || null);
-                        }
-                        
-                        const tempoGasto = Math.ceil(tempoTotal / 60);
-                        await offlineManager.saveProvaOffline(
-                            prova._id,
-                            respostasArray,
-                            tempoGasto
-                        );
-                        
-                        alert(
-                            '📱 Prova salva offline com sucesso!\n\n' +
-                            'Suas respostas estão seguras no seu dispositivo.\n' +
-                            'Elas serão enviadas automaticamente quando a conexão voltar.'
-                        );
-                    } catch (offlineError) {
-                        alert('❌ Falha crítica! Não foi possível salvar a prova offline.');
-                    }
-                } else {
-                    // Tentar novamente
-                    finalizarProvaComOffline();
-                }
-            }
-        }
-
-        // Substituir a função original de finalizar prova
-        document.getElementById('btnFinalizarScroll').onclick = finalizarProvaComOffline;
-
-        // Inicializar offline manager quando a prova carregar
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(() => {
-                offlineManager = new OfflineManager();
-                
-                // Verificar se há provas offline pendentes e mostrar notificação
-                const offlineCount = offlineManager.getOfflineProvasCount();
-                if (offlineCount > 0) {
-                    console.log(`ℹ️ ${offlineCount} prova(s) offline pendente(s)`);
-                    
-                    // Adicionar notificação visual
-                    const notificacao = document.createElement('div');
-                    notificacao.id = 'offlineNotification';
-                    notificacao.style.cssText = `
-                        position: fixed;
-                        top: 20px;
-                        right: 20px;
-                        background: linear-gradient(135deg, #f59e0b, #d97706);
-                        color: white;
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        z-index: 10000;
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-                        display: flex;
-                        align-items: center;
-                        gap: 10px;
-                        animation: slideIn 0.5s ease;
-                    `;
-                    notificacao.innerHTML = `
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <div>
-                            <strong>${offlineCount} prova(s) offline</strong>
-                            <div style="font-size: 0.8rem;">Serão enviadas automaticamente</div>
-                        </div>
-                    `;
-                    
-                    document.body.appendChild(notificacao);
-                    
-                    // Remover após 5 segundos
-                    setTimeout(() => {
-                        notificacao.style.opacity = '0';
-                        notificacao.style.transition = 'opacity 0.5s';
-                        setTimeout(() => notificacao.remove(), 500);
-                    }, 5000);
-                }
-            }, 1000);
-        });
-
-        // Adicionar indicador de conexão
-        function updateConnectionStatus() {
-            const statusElement = document.getElementById('statusFocus');
-            if (statusElement && offlineManager) {
-                if (offlineManager.isOnline) {
-                    statusElement.innerHTML = '<i class="fas fa-wifi"></i> Online';
-                    statusElement.style.background = '#d1fae5';
-                    statusElement.style.color = '#065f46';
-                } else {
-                    statusElement.innerHTML = '<i class="fas fa-wifi-slash"></i> Offline';
-                    statusElement.style.background = '#fef3c7';
-                    statusElement.style.color = '#92400e';
-                }
-            }
-        }
-
-        // Monitorar mudanças de conexão
-        window.addEventListener('online', updateConnectionStatus);
-        window.addEventListener('offline', updateConnectionStatus);
-    </script>
+    });
+</script>
 </body>
 </html>

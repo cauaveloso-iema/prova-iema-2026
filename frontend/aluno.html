@@ -553,6 +553,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Carregar provas concluídas
+        // Carregar provas concluídas - VERSÃO ATUALIZADA PARA INCLUIR CANCELADAS
         async function carregarProvasConcluidas() {
             try {
                 const token = localStorage.getItem('auth_token');
@@ -566,16 +567,62 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('📊 Dados recebidos da API:', data);
                 
                 if (data.success) {
-                    // Filtrar apenas as concluídas (incluindo aguardando correção)
+                    // Filtrar apenas as concluídas (incluindo aguardando correção E canceladas por violação)
                     provasConcluidas = (data.provas || []).filter(p => {
-                        console.log(`Prova: ${p.titulo}, Status: ${p.status}`);
-                        return p.status === 'concluida' || p.status === 'aguardando_correcao';
+                        console.log(`Prova: ${p.titulo}, Status: ${p.status}, Cancelada: ${p.cancelada}, Violação: ${p.flagViolacao}`);
+                        
+                        // Incluir provas com status de concluída
+                        const statusConcluido = p.status === 'concluida' || 
+                                            p.status === 'finalizada' || 
+                                            p.status === 'corrigida' ||
+                                            p.status === 'aguardando_correcao';
+                        
+                        // ATUALIZAÇÃO: Incluir provas canceladas (por prazo OU por violação)
+                        const provaCancelada = p.cancelada === true || 
+                                            p.motivoCancelamento || 
+                                            p.status === 'cancelada' ||
+                                            p.flagViolacao === true; // NOVO: flag de violação
+                        
+                        return statusConcluido || provaCancelada;
                     });
                     
-                    console.log(`✅ ${provasConcluidas.length} provas realizadas encontradas`);
+                    console.log(`✅ ${provasConcluidas.length} provas realizadas/canceladas encontradas`);
+                    
+                    // Separar provas canceladas das outras para exibição
+                    const provasCanceladas = provasConcluidas.filter(p => 
+                        p.cancelada === true || p.motivoCancelamento || p.flagViolacao === true
+                    );
+                    
+                    const provasNormais = provasConcluidas.filter(p => 
+                        !p.cancelada && !p.motivoCancelamento && p.flagViolacao !== true
+                    );
                     
                     // Atualizar interface
-                    atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
+                    const container = document.getElementById('provasConcluidas');
+                    
+                    if (provasCanceladas.length > 0) {
+                        container.innerHTML = `
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="color: #374151; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e5e7eb;">
+                                    <i class="fas fa-check-circle" style="color: #6b7280;"></i> Provas Concluídas
+                                </h3>
+                                ${provasNormais.map(prova => gerarCardProva(prova, false)).join('')}
+                            </div>
+                            
+                            <div style="margin-top: 30px;">
+                                <h3 style="color: #dc2626; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #fecaca;">
+                                    <i class="fas fa-ban" style="color: #ef4444;"></i> Provas Canceladas
+                                </h3>
+                                ${provasCanceladas.map(prova => gerarCardProva(prova, true)).join('')}
+                            </div>
+                        `;
+                    } else {
+                        // Se não houver provas canceladas, usar a função original
+                        atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
+                    }
+                    
+                    // AINDA CHAMA A FUNÇÃO DE AGUARDANDO CORREÇÃO SEPARADAMENTE
+                    carregarProvasAguardandoCorrecao();
                 }
             } catch (error) {
                 console.error('Erro ao carregar provas concluídas:', error);
@@ -587,6 +634,150 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 `;
             }
+        }
+
+        // Adicione esta função auxiliar para gerar cards de prova (nova)
+        function gerarCardProva(prova, isCancelada) {
+            const dataLimite = prova.dataLimite ? 
+                new Date(prova.dataLimite).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                }) : 'Sem data limite';
+            
+            // Determinar tipo de cancelamento
+            const isCanceladaPorViolacao = prova.flagViolacao === true;
+            const isCanceladaPorPrazo = prova.motivoCancelamento && !prova.flagViolacao;
+            
+            // Texto do status
+            let statusText = 'CONCLUÍDA';
+            let statusColor = '#6b7280';
+            let backgroundColor = '';
+            let borderColor = '#6b7280';
+            
+            if (isCancelada) {
+                if (isCanceladaPorViolacao) {
+                    statusText = 'CANCELADA - VIOLAÇÃO';
+                    statusColor = '#dc2626';
+                    borderColor = '#dc2626';
+                    backgroundColor = '#fef2f2';
+                } else {
+                    statusText = 'CANCELADA';
+                    statusColor = '#ef4444';
+                    borderColor = '#ef4444';
+                    backgroundColor = '#fef2f2';
+                }
+            } else if (prova.status === 'aguardando_correcao') {
+                statusText = 'AGUARDANDO CORREÇÃO';
+                statusColor = '#f59e0b';
+                borderColor = '#f59e0b';
+            }
+            
+            // Texto do motivo se for cancelada
+            let motivoHtml = '';
+            if (isCancelada) {
+                let motivoTexto = prova.motivoCancelamento || 'Prova cancelada pelo sistema';
+                let icone = isCanceladaPorViolacao ? 
+                    '<i class="fas fa-user-slash" style="color: #dc2626;"></i>' : 
+                    '<i class="fas fa-ban" style="color: #ef4444;"></i>';
+                
+                motivoHtml = `
+                    <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border: 1px solid #fecaca;">
+                        <div style="display: flex; align-items: center; gap: 5px; color: ${isCanceladaPorViolacao ? '#dc2626' : '#ef4444'};">
+                            ${icone}
+                            <strong>${isCanceladaPorViolacao ? 'Cancelada por Violação' : 'Cancelada'}</strong>
+                        </div>
+                        <div style="font-size: 0.85rem; margin-top: 5px; color: ${isCanceladaPorViolacao ? '#7f1d1d' : '#991b1b'};">
+                            <strong>Motivo:</strong> ${motivoTexto}
+                        </div>
+                        ${isCanceladaPorViolacao ? `
+                        <div style="font-size: 0.85rem; margin-top: 5px; color: #7f1d1d;">
+                            <strong>Ação:</strong> Prova invalidada devido à violação de regras
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            // Botão de ação
+            let botaoAcao = '';
+            if (isCancelada) {
+                botaoAcao = `
+                    <button class="btn-sair-prova" onclick="verDetalhesCancelamento('${prova._id || prova.id}')">
+                        <i class="fas fa-file-alt"></i> Ver Detalhes
+                    </button>
+                    ${prova.nota !== undefined ? `
+                    <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border-left: 3px solid #ef4444;">
+                        <strong style="color: #ef4444;">Nota: ${prova.nota.toFixed(1)}</strong>
+                    </div>
+                    ` : ''}
+                `;
+            } else if (prova.status === 'aguardando_correcao') {
+                botaoAcao = `
+                    <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
+                        <i class="fas fa-hourglass-half"></i> Aguardando Correção
+                    </button>
+                `;
+            } else if (prova.nota !== null && prova.nota !== undefined) {
+                botaoAcao = `
+                    <button class="btn-ver-resultado" onclick="verResultado('${prova._id || prova.id}')">
+                        <i class="fas fa-star"></i> Ver Nota: ${prova.nota.toFixed(1)}
+                    </button>
+                `;
+            } else {
+                botaoAcao = `
+                    <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
+                        <i class="fas fa-hourglass-half"></i> Sem nota disponível
+                    </button>
+                `;
+            }
+            
+            return `
+            <div class="prova-card ${isCancelada ? 'cancelada' : 'concluida'}" 
+                style="border-left-color: ${borderColor}; ${backgroundColor ? 'background: ' + backgroundColor + ';' : ''}">
+                <div class="prova-header">
+                    <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'}</h4>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span class="prova-status status-${isCancelada ? 'cancelada' : prova.status === 'aguardando_correcao' ? 'pendente' : 'concluida'}" 
+                            style="background: ${isCancelada ? '#fee2e2' : prova.status === 'aguardando_correcao' ? '#fef3c7' : '#f3f4f6'}; 
+                                    color: ${statusColor};
+                                    ${isCancelada ? 'font-weight: bold;' : ''}">
+                            ${statusText}
+                        </span>
+                    </div>
+                </div>
+                <div class="prova-info">
+                    <div class="prova-info-item">
+                        <i class="fas fa-book"></i>
+                        <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                    </div>
+                    <div class="prova-info-item">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                    </div>
+                    <div class="prova-info-item">
+                        <i class="fas fa-question-circle"></i>
+                        <span>${prova.quantidadeQuestoes || '?'} questões</span>
+                    </div>
+                    ${prova.duracao ? `
+                    <div class="prova-info-item">
+                        <i class="fas fa-clock"></i>
+                        <span>${prova.duracao} min</span>
+                    </div>
+                    ` : ''}
+                    ${prova.dataLimite ? `
+                    <div class="prova-info-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Até ${dataLimite}</span>
+                    </div>
+                    ` : ''}
+                </div>
+                <div class="prova-actions">
+                    ${botaoAcao}
+                </div>
+                ${motivoHtml}
+            </div>
+            `;
         }
 
         // Nova função para carregar provas aguardando correção
@@ -657,7 +848,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Atualizar lista de provas na interface - VERSÃO CORRIGIDA COM LÓGICA DE DATA
+        // Atualizar lista de provas na interface - VERSÃO CORRIGIDA COM STATUS CANCELADA
         function atualizarListaProvas(elementId, provas, tipo) {
             const container = document.getElementById(elementId);
             
@@ -712,20 +903,41 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
+                // DETERMINAR SE A PROVA FOI CANCELADA
+                // Verifica se tem campo cancelada: true OU motivoCancelamento
+                const provaCancelada = prova.cancelada === true || prova.motivoCancelamento || 
+                                    prova.status === 'cancelada' || 
+                                    (prova.status === 'finalizada' && prova.nota === 0 && prova.motivoCancelamento);
+                
                 // Determinar classe e status com base no tipo e status da prova
                 let statusClass = 'pendente';
                 let statusText = 'PENDENTE';
                 let statusColor = '#f59e0b';
                 
                 if (tipo === 'concluida') {
-                    if (prova.status === 'aguardando_correcao') {
+                    if (provaCancelada) {
+                        // PROVA CANCELADA - STATUS ESPECIAL
+                        statusClass = 'cancelada';
+                        statusText = 'CANCELADA';
+                        statusColor = '#ef4444';
+                    } else if (prova.status === 'aguardando_correcao') {
                         statusClass = 'pendente';
                         statusText = 'AGUARDANDO CORREÇÃO';
                         statusColor = '#f59e0b';
-                    } else if (prova.status === 'concluida') {
+                    } else if (prova.status === 'concluida' || prova.status === 'finalizada' || prova.status === 'corrigida') {
                         statusClass = 'concluida';
                         statusText = 'CONCLUÍDA';
                         statusColor = '#6b7280';
+                    }
+                } else if (tipo === 'pendente') {
+                    if (provaCancelada) {
+                        statusClass = 'cancelada';
+                        statusText = 'CANCELADA';
+                        statusColor = '#ef4444';
+                    } else {
+                        statusClass = 'pendente';
+                        statusText = 'PENDENTE';
+                        statusColor = '#f59e0b';
                     }
                 }
                 
@@ -738,7 +950,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     const dataLimiteObj = prova.dataLimite ? new Date(prova.dataLimite) : null;
                     const provaExpirada = dataLimiteObj && hoje > dataLimiteObj;
                     
-                    if (provaExpirada) {
+                    // Se a prova foi cancelada
+                    if (provaCancelada) {
+                        botaoAcao = `
+                            <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
+                                <i class="fas fa-ban"></i> Cancelada
+                            </button>
+                        `;
+                    }
+                    // Se a prova expirou mas ainda não foi cancelada
+                    else if (provaExpirada) {
                         botaoAcao = `
                             <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
                                 <i class="fas fa-clock"></i> Prazo Expirado
@@ -753,7 +974,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 } else if (tipo === 'concluida') {
                     // Para provas concluídas
-                    if (prova.status === 'aguardando_correcao') {
+                    if (provaCancelada) {
+                        // PROVA CANCELADA
+                        botaoAcao = `
+                            <button class="btn-sair-prova" onclick="verDetalhesCancelamento('${prova._id || prova.id}')">
+                                <i class="fas fa-file-alt"></i> Ver Detalhes
+                            </button>
+                            ${prova.nota !== undefined ? `
+                            <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border-left: 3px solid #ef4444;">
+                                <strong style="color: #ef4444;">Nota: ${prova.nota.toFixed(1)}</strong>
+                            </div>
+                            ` : ''}
+                        `;
+                    } else if (prova.status === 'aguardando_correcao') {
                         botaoAcao = `
                             <button class="btn-iniciar-prova" style="background: #6b7280;" disabled>
                                 <i class="fas fa-hourglass-half"></i> Aguardando Correção
@@ -774,13 +1007,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
+                // CSS para status cancelada (adicionar no style também)
+                const statusStyles = {
+                    'pendente': { background: '#fef3c7', color: '#92400e' },
+                    'concluida': { background: '#f3f4f6', color: '#374151' },
+                    'cancelada': { background: '#fee2e2', color: '#dc2626' }
+                };
+                
                 return `
-                <div class="prova-card ${tipo}" style="border-left-color: ${statusColor};">
+                <div class="prova-card ${tipo}" style="border-left-color: ${statusColor}; ${provaCancelada ? 'background: #fef2f2;' : ''}">
                     <div class="prova-header">
                         <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'}</h4>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             ${tempoInfo ? `<span style="font-size: 0.8rem; font-weight: 600;">${tempoInfo}</span>` : ''}
-                            <span class="prova-status status-${statusClass}" style="background: ${statusClass === 'pendente' ? '#fef3c7' : '#f3f4f6'}; color: ${statusClass === 'pendente' ? '#92400e' : '#374151'}">
+                            <span class="prova-status status-${statusClass}" 
+                                style="background: ${statusStyles[statusClass].background}; 
+                                        color: ${statusStyles[statusClass].color};
+                                        ${provaCancelada ? 'font-weight: bold;' : ''}">
                                 ${statusText}
                             </span>
                         </div>
@@ -814,9 +1057,180 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="prova-actions">
                         ${botaoAcao}
                     </div>
+                    ${provaCancelada && prova.motivoCancelamento ? `
+                    <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border: 1px solid #fecaca;">
+                        <div style="display: flex; align-items: center; gap: 5px; color: #dc2626;">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <strong>Cancelada Automaticamente</strong>
+                        </div>
+                        <div style="font-size: 0.85rem; margin-top: 5px; color: #7f1d1d;">
+                            <strong>Motivo:</strong> ${prova.motivoCancelamento}
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
                 `;
             }).join('');
+        }
+
+        // Função para verificar e cancelar provas expiradas automaticamente
+        async function verificarECancelarProvasExpiradas() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const userData = localStorage.getItem('user_data');
+                
+                if (!token || !userData) return;
+                
+                const usuario = JSON.parse(userData);
+                if (usuario.role !== 'aluno') return;
+                
+                // Buscar provas pendentes novamente para verificar expiração
+                const response = await fetch(`${API_BASE_URL}/aluno/provas/pendentes`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                if (!data.success) return;
+                
+                const provasPendentes = data.provas || [];
+                const hoje = new Date();
+                
+                // Para cada prova pendente, verificar se expirou
+                for (const prova of provasPendentes) {
+                    // Pular se já está cancelada ou finalizada
+                    if (prova.status === 'cancelada' || prova.status === 'finalizada') continue;
+                    
+                    if (prova.dataLimite) {
+                        const dataLimiteObj = new Date(prova.dataLimite);
+                        const dataLimiteFimDia = new Date(dataLimiteObj);
+                        dataLimiteFimDia.setHours(23, 59, 59, 999);
+                        
+                        // Se a prova expirou (hoje > data limite fim do dia)
+                        if (hoje > dataLimiteFimDia) {
+                            console.log(`⚠️ Prova "${prova.titulo}" expirou! Cancelando automaticamente...`);
+                            
+                            // CORREÇÃO: Garantir que respostas seja array vazio, não string
+                            const respostasCorretas = [];
+                            
+                            // Chamar API para cancelar automaticamente
+                            const cancelResponse = await fetch(`${API_BASE_URL}/provas/${prova._id}/cancelar`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    motivo: 'Prazo de entrega expirado - Cancelamento automático',
+                                    estatisticas: {
+                                        dataExpiracao: dataLimiteObj.toISOString(),
+                                        dataCancelamento: hoje.toISOString(),
+                                        motivo: 'prazo_expirado',
+                                        acao: 'cancelamento_automatico'
+                                    },
+                                    respostasAtuais: respostasCorretas, // ARRAY VAZIO CORRETO
+                                    tempoTotal: 0
+                                })
+                            });
+                            
+                            const cancelData = await cancelResponse.json();
+                            
+                            if (cancelData.success) {
+                                console.log(`✅ Prova cancelada: ${cancelData.message}`);
+                            } else {
+                                console.error(`❌ Falha ao cancelar: ${cancelData.error}`);
+                            }
+                            
+                            // Atualizar a interface após 2 segundos
+                            setTimeout(() => {
+                                carregarProvasPendentes();
+                                carregarProvasConcluidas();
+                            }, 2000);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao verificar provas expiradas:', error);
+            }
+        }
+
+        // Função para ver detalhes do cancelamento
+        async function verDetalhesCancelamento(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_BASE_URL}/aluno/provas/${provaId}/resultado`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Criar modal com detalhes
+                    const modalHTML = `
+                        <div class="modal" id="modalCancelamentoDetalhes" style="display: flex;">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3><i class="fas fa-ban" style="color: #ef4444;"></i> Detalhes do Cancelamento</h3>
+                                    <button class="modal-close" onclick="fecharModal('modalCancelamentoDetalhes')">&times;</button>
+                                </div>
+                                <div style="padding: 20px 0;">
+                                    <h4 style="color: #374151; margin-bottom: 10px;">${data.provaTitulo || 'Prova'}</h4>
+                                    <p style="color: #6b7280; margin-bottom: 20px;">${data.provaConteudo || ''}</p>
+                                    
+                                    <div style="background: #fee2e2; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ef4444;">
+                                        <h5 style="color: #dc2626; margin-top: 0; margin-bottom: 10px;">
+                                            <i class="fas fa-exclamation-triangle"></i> Informações do Cancelamento
+                                        </h5>
+                                        <p style="color: #7f1d1d; margin: 5px 0;">
+                                            <strong>Motivo:</strong> ${data.motivoCancelamento || 'Prazo de entrega expirado'}
+                                        </p>
+                                        ${data.estatisticasCancelamento ? `
+                                        <p style="color: #7f1d1d; margin: 5px 0;">
+                                            <strong>Data do Cancelamento:</strong> ${new Date(data.estatisticasCancelamento.dataCancelamento || new Date()).toLocaleDateString('pt-BR')}
+                                        </p>
+                                        ` : ''}
+                                    </div>
+                                    
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                                        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center;">
+                                            <div style="font-size: 0.9rem; color: #6b7280;">Nota Atribuída</div>
+                                            <div style="font-size: 2rem; font-weight: bold; color: #dc2626;">0.0</div>
+                                        </div>
+                                        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center;">
+                                            <div style="font-size: 0.9rem; color: #6b7280;">Status</div>
+                                            <div style="font-size: 1.1rem; font-weight: bold; color: #dc2626;">CANCELADA</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="color: #6b7280; font-size: 0.9rem; margin-top: 20px;">
+                                        <p><i class="fas fa-info-circle"></i> Esta prova foi cancelada automaticamente pelo sistema devido ao prazo de entrega expirado.</p>
+                                        <p><i class="fas fa-envelope"></i> O professor foi notificado por email sobre este cancelamento.</p>
+                                    </div>
+                                </div>
+                                <button class="btn-sair-prova" style="width: 100%;" onclick="fecharModal('modalCancelamentoDetalhes')">
+                                    <i class="fas fa-times"></i> Fechar
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Adicionar modal ao body
+                    const modalContainer = document.createElement('div');
+                    modalContainer.innerHTML = modalHTML;
+                    document.body.appendChild(modalContainer.firstElementChild);
+                }
+            } catch (error) {
+                console.error('Erro ao buscar detalhes do cancelamento:', error);
+                alert('Não foi possível carregar os detalhes do cancelamento.');
+            }
+        }
+
+        // Adicionar verificação periódica de provas expiradas
+        function iniciarVerificacaoPeriodica() {
+            // Verificar a cada minuto se há provas expiradas
+            setInterval(verificarECancelarProvasExpiradas, 60000); // 60 segundos
+            
+            // Verificar imediatamente ao carregar
+            setTimeout(verificarECancelarProvasExpiradas, 3000);
         }
 
         // LOCALIZAR ESTA FUNÇÃO e MODIFICAR a lógica de comparação:
@@ -1407,6 +1821,7 @@ document.addEventListener('DOMContentLoaded', function() {
             carregarDadosAluno().then(() => {
                 // Iniciar verificação periódica de atualizações
                 verificarAtualizacoesStatus();
+                iniciarVerificacaoPeriodica();
             });
         });
     </script>

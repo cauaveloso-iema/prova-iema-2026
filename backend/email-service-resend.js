@@ -104,6 +104,101 @@ class EmailServiceResend {
             };
         }
     }
+    // Função para enviar email de prova cancelada
+    async sendProvaCanceladaEmail(professorEmail, professorNome, alunoNome, provaTitulo, motivo, estatisticas) {
+        try {
+            console.log(`📧 Enviando email de prova cancelada para ${professorEmail}`);
+            
+            // Formatar estatísticas
+            const estatisticasTexto = estatisticas ? `
+                <h3>Estatísticas da Violação:</h3>
+                <ul>
+                    <li>Avisos: ${estatisticas.avisos || 0}</li>
+                    <li>Tentativas de atalho: ${estatisticas.tentativasAtalho || 0}</li>
+                    <li>Capturas de tela: ${estatisticas.capturasTela || 0}</li>
+                    <li>Tempo fora da página: ${estatisticas.tempoFora || 0} segundos</li>
+                </ul>
+            ` : '';
+            
+            const emailData = {
+                from: 'Sistema de Provas <sistema@seu-dominio.com>',
+                to: professorEmail,
+                subject: `🚫 Prova Cancelada: ${alunoNome} - ${provaTitulo}`,
+                html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <style>
+                            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                            .header { background: #ef4444; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                            .content { background: #f9fafb; padding: 25px; border-radius: 0 0 8px 8px; }
+                            .alert { background: #fee2e2; border: 2px solid #ef4444; padding: 15px; border-radius: 6px; margin: 15px 0; }
+                            .details { background: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }
+                            .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px; text-align: center; }
+                            .button { display: inline-block; background: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>🚫 PROVA CANCELADA</h1>
+                            </div>
+                            
+                            <div class="content">
+                                <p>Prezado(a) Professor(a) <strong>${professorNome}</strong>,</p>
+                                
+                                <div class="alert">
+                                    <h2>⚠️ ATENÇÃO: Prova Cancelada</h2>
+                                    <p>Uma prova foi cancelada automaticamente por violação das regras.</p>
+                                </div>
+                                
+                                <div class="details">
+                                    <h3>📋 Detalhes do Cancelamento</h3>
+                                    <p><strong>Aluno:</strong> ${alunoNome}</p>
+                                    <p><strong>Prova:</strong> ${provaTitulo}</p>
+                                    <p><strong>Data/Hora:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+                                    <p><strong>Motivo:</strong> ${motivo}</p>
+                                    <p><strong>Nota Atribuída:</strong> <span style="color: #ef4444; font-weight: bold;">0.0</span></p>
+                                </div>
+                                
+                                ${estatisticasTexto}
+                                
+                                <div style="margin-top: 25px; text-align: center;">
+                                    <a href="${process.env.FRONTEND_URL || 'https://seu-sistema.com'}/index.html" class="button">
+                                        🔍 Ver Detalhes no Sistema
+                                    </a>
+                                </div>
+                                
+                                <div class="footer">
+                                    <p>Sistema de Provas Online</p>
+                                    <p>Esta é uma mensagem automática. Por favor, não responda este email.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `
+            };
+            
+            // Enviar via Resend
+            const response = await resend.emails.send(emailData);
+            
+            console.log(`✅ Email de cancelamento enviado com sucesso! ID: ${response.id}`);
+            
+            return {
+                success: true,
+                service: 'Resend',
+                messageId: response.id,
+                timestamp: new Date().toISOString()
+            };
+            
+        } catch (error) {
+            console.error('❌ Erro ao enviar email de cancelamento:', error);
+            throw error;
+        }
+    }
     
     getResetPasswordTemplate(name, code) {
         return `
