@@ -552,91 +552,442 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Carregar provas concluídas
-        // Carregar provas concluídas - VERSÃO ATUALIZADA PARA INCLUIR CANCELADAS
+        // Carregar provas concluídas - VERSÃO QUE GARANTE DADOS DO LOG
+
         async function carregarProvasConcluidas() {
             try {
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch(`${API_BASE_URL}/aluno/provas`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
                 const data = await response.json();
-                console.log('📊 Dados recebidos da API:', data);
+                console.log('📊 Dados completos recebidos:', data);
                 
                 if (data.success) {
-                    // Filtrar apenas as concluídas (incluindo aguardando correção E canceladas por violação)
-                    provasConcluidas = (data.provas || []).filter(p => {
-                        console.log(`Prova: ${p.titulo}, Status: ${p.status}, Cancelada: ${p.cancelada}, Violação: ${p.flagViolacao}`);
+                    // Separar provas por status - CORREÇÃO: Lógica simplificada
+                    const provasConcluidasNormais = [];
+                    const provasAguardandoCorrecao = [];
+                    const provasCanceladas = [];
+                    
+                    (data.provas || []).forEach(prova => {
+                        console.log(`Prova ${prova.titulo}:`, {
+                            id: prova._id,
+                            status: prova.status,
+                            dataRealizacao: prova.dataRealizacao,
+                            notaLiberada: prova.notaLiberada,
+                            nota: prova.nota,
+                            finalizada: prova.finalizada
+                        });
                         
-                        // Incluir provas com status de concluída
-                        const statusConcluido = p.status === 'concluida' || 
-                                            p.status === 'finalizada' || 
-                                            p.status === 'corrigida' ||
-                                            p.status === 'aguardando_correcao';
-                        
-                        // ATUALIZAÇÃO: Incluir provas canceladas (por prazo OU por violação)
-                        const provaCancelada = p.cancelada === true || 
-                                            p.motivoCancelamento || 
-                                            p.status === 'cancelada' ||
-                                            p.flagViolacao === true; // NOVO: flag de violação
-                        
-                        return statusConcluido || provaCancelada;
+                        // Se a prova foi cancelada
+                        if (prova.cancelada || prova.status === 'cancelada') {
+                            provasCanceladas.push(prova);
+                        } 
+                        // Se a prova foi realizada (tem dataRealizacao) E tem nota liberada
+                        else if (prova.dataRealizacao && prova.notaLiberada && prova.nota !== null) {
+                            provasConcluidasNormais.push(prova);
+                        }
+                        // Se a prova foi realizada mas NÃO tem nota liberada ainda
+                        else if (prova.dataRealizacao && (!prova.notaLiberada || prova.nota === null)) {
+                            provasAguardandoCorrecao.push(prova);
+                        }
+                        // Se NÃO tem dataRealizacao, NÃO FOI REALIZADA - não mostrar
                     });
                     
-                    console.log(`✅ ${provasConcluidas.length} provas realizadas/canceladas encontradas`);
+                    console.log('📊 Separação das provas:', {
+                        concluidasNormais: provasConcluidasNormais.length,
+                        aguardandoCorrecao: provasAguardandoCorrecao.length,
+                        canceladas: provasCanceladas.length
+                    });
                     
-                    // Separar provas canceladas das outras para exibição
-                    const provasCanceladas = provasConcluidas.filter(p => 
-                        p.cancelada === true || p.motivoCancelamento || p.flagViolacao === true
-                    );
-                    
-                    const provasNormais = provasConcluidas.filter(p => 
-                        !p.cancelada && !p.motivoCancelamento && p.flagViolacao !== true
-                    );
-                    
-                    // Atualizar interface
-                    const container = document.getElementById('provasConcluidas');
-                    
-                    if (provasCanceladas.length > 0) {
-                        container.innerHTML = `
-                            <div style="margin-bottom: 30px;">
-                                <h3 style="color: #374151; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e5e7eb;">
-                                    <i class="fas fa-check-circle" style="color: #6b7280;"></i> Provas Concluídas
-                                </h3>
-                                ${provasNormais.map(prova => gerarCardProva(prova, false)).join('')}
-                            </div>
-                            
-                            <div style="margin-top: 30px;">
-                                <h3 style="color: #dc2626; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #fecaca;">
-                                    <i class="fas fa-ban" style="color: #ef4444;"></i> Provas Canceladas
-                                </h3>
-                                ${provasCanceladas.map(prova => gerarCardProva(prova, true)).join('')}
+                    // Renderizar provas concluídas normais (com nota liberada)
+                    if (provasConcluidasNormais.length > 0) {
+                        atualizarListaProvas('provasConcluidas', provasConcluidasNormais, 'concluida');
+                    } else {
+                        document.getElementById('provasConcluidas').innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-file"></i>
+                                <h3>Nenhuma prova concluída</h3>
+                                <p>Você ainda não concluiu nenhuma prova</p>
                             </div>
                         `;
-                    } else {
-                        // Se não houver provas canceladas, usar a função original
-                        atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
                     }
                     
-                    // AINDA CHAMA A FUNÇÃO DE AGUARDANDO CORREÇÃO SEPARADAMENTE
-                    carregarProvasAguardandoCorrecao();
+                    // Adicionar seção de provas aguardando correção (se houver)
+                    if (provasAguardandoCorrecao.length > 0) {
+                        const container = document.getElementById('provasConcluidas');
+                        
+                        // Se já há conteúdo, adicionar seção separada
+                        if (provasConcluidasNormais.length > 0) {
+                            container.insertAdjacentHTML('beforeend', `
+                                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                                    <h3 style="color: #f59e0b; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-hourglass-half"></i>
+                                        Aguardando Correção
+                                        <span style="background: #fef3c7; color: #f59e0b; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
+                                            ${provasAguardandoCorrecao.length}
+                                        </span>
+                                    </h3>
+                                    <p style="color: #6b7280; margin-bottom: 15px; font-size: 0.9rem;">
+                                        Sua prova já foi enviada e aguarda correção.
+                                    </p>
+                                    <div id="provasAguardandoContainer"></div>
+                                </div>
+                            `);
+                            
+                            // Renderizar provas aguardando correção
+                            const aguardandoContainer = document.getElementById('provasAguardandoContainer');
+                            aguardandoContainer.innerHTML = provasAguardandoCorrecao.map(prova => {
+                                const dataRealizacao = prova.dataRealizacao ? 
+                                    new Date(prova.dataRealizacao).toLocaleDateString('pt-BR') + ' ' + 
+                                    new Date(prova.dataRealizacao).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 
+                                    'Data não informada';
+                                
+                                // Verificar se já passou tempo suficiente para correção
+                                const agora = new Date();
+                                const dataProva = prova.dataRealizacao ? new Date(prova.dataRealizacao) : agora;
+                                const horasPassadas = (agora - dataProva) / (1000 * 60 * 60);
+                                
+                                let mensagemStatus = 'Aguardando correção do professor';
+                                if (horasPassadas > 24) {
+                                    mensagemStatus = 'Aguardando correção - Já faz mais de 24 horas';
+                                } else if (horasPassadas > 12) {
+                                    mensagemStatus = 'Aguardando correção - Já faz mais de 12 horas';
+                                }
+                                
+                                return `
+                                    <div class="prova-card" style="border-left-color: #f59e0b; background: #fef3c7; margin-bottom: 10px;">
+                                        <div class="prova-header">
+                                            <h4 class="prova-titulo">${prova.titulo || 'Prova'}</h4>
+                                            <span class="prova-status" style="background: #fef3c7; color: #f59e0b; border-color: #f59e0b;">
+                                                <i class="fas fa-hourglass-half"></i> AGUARDANDO CORREÇÃO
+                                            </span>
+                                        </div>
+                                        <div class="prova-info">
+                                            <div class="prova-info-item">
+                                                <i class="fas fa-book"></i>
+                                                <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                                            </div>
+                                            <div class="prova-info-item">
+                                                <i class="fas fa-graduation-cap"></i>
+                                                <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                                            </div>
+                                            <div class="prova-info-item">
+                                                <i class="far fa-calendar-alt"></i>
+                                                <span>Realizada em: ${dataRealizacao}</span>
+                                            </div>
+                                        </div>
+                                        <div class="prova-actions">
+                                            <button class="btn-iniciar-prova" style="background: #f59e0b; color: #92400e;" disabled>
+                                                <i class="fas fa-hourglass-half"></i> ${mensagemStatus}
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
+                        } else {
+                            // Se não há provas concluídas, mostrar apenas as aguardando correção
+                            container.innerHTML = `
+                                <div>
+                                    <h3 style="color: #f59e0b; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-hourglass-half"></i>
+                                        Aguardando Correção
+                                        <span style="background: #fef3c7; color: #f59e0b; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
+                                            ${provasAguardandoCorrecao.length}
+                                        </span>
+                                    </h3>
+                                    <p style="color: #6b7280; margin-bottom: 20px; font-size: 0.9rem;">
+                                        Suas provas já foram enviadas e aguardam correção.
+                                    </p>
+                                    ${provasAguardandoCorrecao.map(prova => {
+                                        const dataRealizacao = prova.dataRealizacao ? 
+                                            new Date(prova.dataRealizacao).toLocaleDateString('pt-BR') + ' ' + 
+                                            new Date(prova.dataRealizacao).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 
+                                            'Data não informada';
+                                        
+                                        return `
+                                            <div class="prova-card" style="border-left-color: #f59e0b; background: #fef3c7; margin-bottom: 15px;">
+                                                <div class="prova-header">
+                                                    <h4 class="prova-titulo">${prova.titulo || 'Prova'}</h4>
+                                                    <span class="prova-status" style="background: #fef3c7; color: #f59e0b; border-color: #f59e0b;">
+                                                        <i class="fas fa-hourglass-half"></i> AGUARDANDO
+                                                    </span>
+                                                </div>
+                                                <div class="prova-info">
+                                                    <div class="prova-info-item">
+                                                        <i class="fas fa-book"></i>
+                                                        <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                                                    </div>
+                                                    <div class="prova-info-item">
+                                                        <i class="fas fa-graduation-cap"></i>
+                                                        <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                                                    </div>
+                                                    <div class="prova-info-item">
+                                                        <i class="far fa-calendar-alt"></i>
+                                                        <span>Realizada em: ${dataRealizacao}</span>
+                                                    </div>
+                                                </div>
+                                                <div class="prova-actions">
+                                                    <button class="btn-iniciar-prova" style="background: #f59e0b; color: #92400e;" disabled>
+                                                        <i class="fas fa-hourglass-half"></i> Aguardando correção
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    // Adicionar seção de provas canceladas (se houver)
+                    if (provasCanceladas.length > 0) {
+                        const container = document.getElementById('provasConcluidas');
+                        
+                        // Se já há conteúdo, adicionar seção separada
+                        if (provasConcluidasNormais.length > 0 || provasAguardandoCorrecao.length > 0) {
+                            container.insertAdjacentHTML('beforeend', `
+                                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                                    <h3 style="color: #dc2626; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        Provas Canceladas
+                                        <span style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
+                                            ${provasCanceladas.length}
+                                        </span>
+                                    </h3>
+                                    <p style="color: #6b7280; margin-bottom: 15px; font-size: 0.9rem;">
+                                        As provas abaixo foram canceladas automaticamente pelo sistema.
+                                    </p>
+                                    <div id="provasCanceladasContainer"></div>
+                                </div>
+                            `);
+                            
+                            // Renderizar provas canceladas
+                            const provasCanceladasContainer = document.getElementById('provasCanceladasContainer');
+                            provasCanceladasContainer.innerHTML = provasCanceladas.map(prova => {
+                                const isViolacao = prova.motivoCancelamento?.toLowerCase().includes('violação') ||
+                                                prova.motivoCancelamento?.toLowerCase().includes('violacao') ||
+                                                prova.flagViolacao;
+                                
+                                const config = isViolacao ? {
+                                    cor: '#dc2626',
+                                    corFundo: '#fee2e2',
+                                    icone: 'user-slash',
+                                    texto: 'VIOLAÇÃO DAS REGRAS'
+                                } : {
+                                    cor: '#f59e0b',
+                                    corFundo: '#fef3c7',
+                                    icone: 'clock',
+                                    texto: 'PRAZO EXPIRADO'
+                                };
+                                
+                                return `
+                                    <div class="prova-card" data-prova-id="${prova._id}" style="border-left-color: ${config.cor}; background: ${config.corFundo}; margin-bottom: 10px;">
+                                        <div class="prova-header">
+                                            <h4 class="prova-titulo">${prova.titulo || 'Prova cancelada'}</h4>
+                                            <span class="prova-status" style="background: ${config.corFundo}; color: ${config.cor}; border-color: ${config.cor};">
+                                                <i class="fas fa-${config.icone}"></i> ${config.texto}
+                                            </span>
+                                        </div>
+                                        <div class="prova-info">
+                                            <div class="prova-info-item">
+                                                <i class="fas fa-book"></i>
+                                                <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                                            </div>
+                                            <div class="prova-info-item">
+                                                <i class="fas fa-graduation-cap"></i>
+                                                <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                                            </div>
+                                            <div class="prova-info-item">
+                                                <i class="fas fa-question-circle"></i>
+                                                <span>${prova.quantidadeQuestoes || '?'} questões</span>
+                                            </div>
+                                        </div>
+                                        <div class="prova-actions">
+                                            <button class="btn-sair-prova" onclick="verDetalhesCancelamentoCompleto('${prova._id}')">
+                                                <i class="fas fa-info-circle"></i> Ver Detalhes
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
+                        } else {
+                            // Se não há provas concluídas ou aguardando, mostrar apenas as canceladas
+                            container.innerHTML = `
+                                <div>
+                                    <h3 style="color: #dc2626; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        Provas Canceladas
+                                        <span style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
+                                            ${provasCanceladas.length}
+                                        </span>
+                                    </h3>
+                                    <p style="color: #6b7280; margin-bottom: 20px; font-size: 0.9rem;">
+                                        As provas abaixo foram canceladas automaticamente pelo sistema.
+                                    </p>
+                                    ${provasCanceladas.map(prova => {
+                                        const isViolacao = prova.motivoCancelamento?.toLowerCase().includes('violação') ||
+                                                        prova.motivoCancelamento?.toLowerCase().includes('violacao') ||
+                                                        prova.flagViolacao;
+                                        
+                                        const config = isViolacao ? {
+                                            cor: '#dc2626',
+                                            corFundo: '#fee2e2',
+                                            icone: 'user-slash',
+                                            texto: 'CANCELADA - VIOLAÇÃO'
+                                        } : {
+                                            cor: '#f59e0b',
+                                            corFundo: '#fef3c7',
+                                            icone: 'clock',
+                                            texto: 'CANCELADA - PRAZO'
+                                        };
+                                        
+                                        return `
+                                            <div class="prova-card" data-prova-id="${prova._id}" style="border-left-color: ${config.cor}; background: ${config.corFundo}; margin-bottom: 15px;">
+                                                <div class="prova-header">
+                                                    <h4 class="prova-titulo">${prova.titulo || 'Prova cancelada'}</h4>
+                                                    <span class="prova-status" style="background: ${config.corFundo}; color: ${config.cor}; border-color: ${config.cor};">
+                                                        <i class="fas fa-${config.icone}"></i> ${config.texto}
+                                                    </span>
+                                                </div>
+                                                <div class="prova-info">
+                                                    <div class="prova-info-item">
+                                                        <i class="fas fa-book"></i>
+                                                        <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                                                    </div>
+                                                    <div class="prova-info-item">
+                                                        <i class="fas fa-graduation-cap"></i>
+                                                        <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                                                    </div>
+                                                    <div class="prova-info-item">
+                                                        <i class="fas fa-question-circle"></i>
+                                                        <span>${prova.quantidadeQuestoes || '?'} questões</span>
+                                                    </div>
+                                                </div>
+                                                <div class="prova-actions">
+                                                    <button class="btn-sair-prova" onclick="verDetalhesCancelamentoCompleto('${prova._id}')">
+                                                        <i class="fas fa-info-circle"></i> Ver Detalhes
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    // Para cada prova cancelada, buscar detalhes completos
+                    provasCanceladas.forEach(async (prova) => {
+                        try {
+                            const detalhesResponse = await fetch(`${API_BASE_URL}/aluno/provas/${prova._id}/cancelamento-detailed`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            
+                            const detalhesData = await detalhesResponse.json();
+                            
+                            if (detalhesData.success) {
+                                // Atualizar card com informações detalhadas
+                                atualizarCardProvaCancelada(prova._id, detalhesData);
+                            }
+                        } catch (error) {
+                            console.error(`Erro ao buscar detalhes da prova ${prova._id}:`, error);
+                        }
+                    });
                 }
             } catch (error) {
                 console.error('Erro ao carregar provas concluídas:', error);
                 document.getElementById('provasConcluidas').innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <h3>Erro ao carregar provas realizadas</h3>
+                        <h3>Erro ao carregar provas</h3>
                         <p>Tente recarregar a página</p>
                     </div>
                 `;
             }
         }
 
-        // Adicione esta função auxiliar para gerar cards de prova (nova)
+        // ADICIONE esta função para verificar o status de correção automaticamente
+        async function verificarStatusProva(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_BASE_URL}/aluno/provas/${provaId}/status-correcao`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Atualizar a interface se a correção foi concluída
+                    if (data.notaLiberada) {
+                        // Recarregar a lista para atualizar o status
+                        carregarProvasConcluidas();
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao verificar status da correção:', error);
+            }
+        }
+
+        // Adicione esta função no aluno.html (logo após as variáveis globais)
+        function detectarTipoCancelamento(prova) {
+            console.log('🔍 Analisando tipo de cancelamento:', prova);
+            
+            const motivo = prova.motivoCancelamento || '';
+            const motivoLower = motivo.toLowerCase();
+            
+            // Verificar se tem estatísticas de violação
+            const temEstatisticasViolacao = prova.estatisticasCancelamento && 
+                                        (prova.estatisticasCancelamento.avisos > 0 || 
+                                            prova.estatisticasCancelamento.tentativasAtalho > 0 ||
+                                            prova.estatisticasCancelamento.capturasTela > 0);
+            
+            // Palavras-chave para violação (incluindo variações)
+            const palavrasViolacao = [
+                'violação', 'violacao', 'violou', 'viola', 'regras', 
+                'multiplas', 'múltiplas', 'monitoramento', 'avançar',
+                'trapaça', 'trapaca', 'fraude', 'irregular', 'conjunto de regras'
+            ];
+            
+            let isViolacao = false;
+            
+            // 1. Primeiro verificar pela flag explícita
+            if (prova.flagViolacao === true) {
+                isViolacao = true;
+                console.log('✅ Detectado por flagViolacao: true');
+            }
+            // 2. Verificar por palavras no motivo
+            else if (palavrasViolacao.some(palavra => motivoLower.includes(palavra))) {
+                isViolacao = true;
+                console.log(`✅ Detectado por palavra no motivo: "${motivo}"`);
+            }
+            // 3. Verificar por estatísticas
+            else if (temEstatisticasViolacao) {
+                isViolacao = true;
+                console.log('✅ Detectado por estatísticas de violação');
+            }
+            // 4. Verificar por tipo de cancelamento
+            else if (prova.tipoCancelamento === 'violacao' || prova.status === 'violacao') {
+                isViolacao = true;
+                console.log('✅ Detectado por tipoCancelamento');
+            }
+            // 5. Se tiver estatísticas com avisos, é violação
+            else if (prova.estatisticasCancelamento && prova.estatisticasCancelamento.avisos > 0) {
+                isViolacao = true;
+                console.log('✅ Detectado por avisos > 0');
+            }
+            // 6. Se não for nenhum dos anteriores, é prazo
+            else {
+                isViolacao = false;
+                console.log('📅 Detectado como prazo expirado');
+            }
+            
+            console.log(`🎯 Resultado: ${isViolacao ? 'VIOLAÇÃO' : 'PRAZO EXPIRADO'}`);
+            return isViolacao;
+        }
+
+        // Função para gerar card de prova - VERSÃO COM DADOS DO LOG
         function gerarCardProva(prova, isCancelada) {
             const dataLimite = prova.dataLimite ? 
                 new Date(prova.dataLimite).toLocaleDateString('pt-BR', {
@@ -645,58 +996,50 @@ document.addEventListener('DOMContentLoaded', function() {
                     year: 'numeric'
                 }) : 'Sem data limite';
             
-            // Determinar tipo de cancelamento
-            const isCanceladaPorViolacao = prova.flagViolacao === true;
-            const isCanceladaPorPrazo = prova.motivoCancelamento && !prova.flagViolacao;
-            
-            // Texto do status
-            let statusText = 'CONCLUÍDA';
-            let statusColor = '#6b7280';
-            let backgroundColor = '';
-            let borderColor = '#6b7280';
+            // USAR A NOVA FUNÇÃO DE DETECÇÃO
+            let isViolacao = false;
+            let motivoExibicao = prova.motivoCancelamento || 'Prova cancelada';
             
             if (isCancelada) {
-                if (isCanceladaPorViolacao) {
+                isViolacao = detectarTipoCancelamento(prova);
+                
+                // Ajustar o motivo de exibição baseado no tipo
+                if (isViolacao) {
+                    motivoExibicao = prova.motivoCancelamento || 'Prova cancelada por violação das regras';
+                } else {
+                    motivoExibicao = prova.motivoCancelamento || 'Prazo de entrega expirado';
+                }
+            }
+            
+            // Configurar aparência baseada no tipo
+            let statusText, statusColor, borderColor, backgroundColor, iconeStatus;
+            
+            if (isCancelada) {
+                if (isViolacao) {
                     statusText = 'CANCELADA - VIOLAÇÃO';
                     statusColor = '#dc2626';
                     borderColor = '#dc2626';
                     backgroundColor = '#fef2f2';
+                    iconeStatus = '<i class="fas fa-user-slash"></i>';
                 } else {
-                    statusText = 'CANCELADA';
+                    statusText = 'CANCELADA - PRAZO';
                     statusColor = '#ef4444';
                     borderColor = '#ef4444';
-                    backgroundColor = '#fef2f2';
+                    backgroundColor = '#fff7ed';
+                    iconeStatus = '<i class="fas fa-clock"></i>';
                 }
             } else if (prova.status === 'aguardando_correcao') {
                 statusText = 'AGUARDANDO CORREÇÃO';
                 statusColor = '#f59e0b';
                 borderColor = '#f59e0b';
-            }
-            
-            // Texto do motivo se for cancelada
-            let motivoHtml = '';
-            if (isCancelada) {
-                let motivoTexto = prova.motivoCancelamento || 'Prova cancelada pelo sistema';
-                let icone = isCanceladaPorViolacao ? 
-                    '<i class="fas fa-user-slash" style="color: #dc2626;"></i>' : 
-                    '<i class="fas fa-ban" style="color: #ef4444;"></i>';
-                
-                motivoHtml = `
-                    <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border: 1px solid #fecaca;">
-                        <div style="display: flex; align-items: center; gap: 5px; color: ${isCanceladaPorViolacao ? '#dc2626' : '#ef4444'};">
-                            ${icone}
-                            <strong>${isCanceladaPorViolacao ? 'Cancelada por Violação' : 'Cancelada'}</strong>
-                        </div>
-                        <div style="font-size: 0.85rem; margin-top: 5px; color: ${isCanceladaPorViolacao ? '#7f1d1d' : '#991b1b'};">
-                            <strong>Motivo:</strong> ${motivoTexto}
-                        </div>
-                        ${isCanceladaPorViolacao ? `
-                        <div style="font-size: 0.85rem; margin-top: 5px; color: #7f1d1d;">
-                            <strong>Ação:</strong> Prova invalidada devido à violação de regras
-                        </div>
-                        ` : ''}
-                    </div>
-                `;
+                backgroundColor = '';
+                iconeStatus = '<i class="fas fa-hourglass-half"></i>';
+            } else {
+                statusText = 'CONCLUÍDA';
+                statusColor = '#6b7280';
+                borderColor = '#6b7280';
+                backgroundColor = '';
+                iconeStatus = '<i class="fas fa-check-circle"></i>';
             }
             
             // Botão de ação
@@ -704,13 +1047,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isCancelada) {
                 botaoAcao = `
                     <button class="btn-sair-prova" onclick="verDetalhesCancelamento('${prova._id || prova.id}')">
-                        <i class="fas fa-file-alt"></i> Ver Detalhes
+                        <i class="fas fa-info-circle"></i> Ver Detalhes
                     </button>
-                    ${prova.nota !== undefined ? `
-                    <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border-left: 3px solid #ef4444;">
-                        <strong style="color: #ef4444;">Nota: ${prova.nota.toFixed(1)}</strong>
-                    </div>
-                    ` : ''}
                 `;
             } else if (prova.status === 'aguardando_correcao') {
                 botaoAcao = `
@@ -732,54 +1070,362 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             }
             
+            // Informações da prova
+            const infoItems = [
+                { icon: 'book', text: prova.conteudo || 'Conteúdo não especificado' },
+                { icon: 'graduation-cap', text: prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada' },
+                { icon: 'question-circle', text: `${prova.quantidadeQuestoes || '?'} questões` }
+            ];
+            
+            if (prova.duracao) {
+                infoItems.push({ icon: 'clock', text: `${prova.duracao} min` });
+            }
+            
+            if (prova.dataLimite) {
+                infoItems.push({ icon: 'calendar-alt', text: `Até ${dataLimite}` });
+            }
+            
             return `
             <div class="prova-card ${isCancelada ? 'cancelada' : 'concluida'}" 
                 style="border-left-color: ${borderColor}; ${backgroundColor ? 'background: ' + backgroundColor + ';' : ''}">
                 <div class="prova-header">
                     <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'}</h4>
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="prova-status status-${isCancelada ? 'cancelada' : prova.status === 'aguardando_correcao' ? 'pendente' : 'concluida'}" 
-                            style="background: ${isCancelada ? '#fee2e2' : prova.status === 'aguardando_correcao' ? '#fef3c7' : '#f3f4f6'}; 
+                        <span class="prova-status" 
+                            style="background: ${isCancelada ? (isViolacao ? '#fee2e2' : '#fef3c7') : prova.status === 'aguardando_correcao' ? '#fef3c7' : '#f3f4f6'}; 
                                     color: ${statusColor};
-                                    ${isCancelada ? 'font-weight: bold;' : ''}">
+                                    border: 1px solid ${statusColor}20;
+                                    padding: 5px 12px;
+                                    border-radius: 20px;
+                                    font-size: 0.8rem;
+                                    font-weight: bold;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 5px;">
+                            ${iconeStatus}
                             ${statusText}
                         </span>
                     </div>
                 </div>
                 <div class="prova-info">
-                    <div class="prova-info-item">
-                        <i class="fas fa-book"></i>
-                        <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
-                    </div>
-                    <div class="prova-info-item">
-                        <i class="fas fa-graduation-cap"></i>
-                        <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
-                    </div>
-                    <div class="prova-info-item">
-                        <i class="fas fa-question-circle"></i>
-                        <span>${prova.quantidadeQuestoes || '?'} questões</span>
-                    </div>
-                    ${prova.duracao ? `
-                    <div class="prova-info-item">
-                        <i class="fas fa-clock"></i>
-                        <span>${prova.duracao} min</span>
-                    </div>
-                    ` : ''}
-                    ${prova.dataLimite ? `
-                    <div class="prova-info-item">
-                        <i class="fas fa-calendar-alt"></i>
-                        <span>Até ${dataLimite}</span>
-                    </div>
-                    ` : ''}
+                    ${infoItems.map(item => `
+                        <div class="prova-info-item">
+                            <i class="fas fa-${item.icon}"></i>
+                            <span>${item.text}</span>
+                        </div>
+                    `).join('')}
                 </div>
                 <div class="prova-actions">
                     ${botaoAcao}
                 </div>
-                ${motivoHtml}
+                ${isCancelada ? `
+                <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border: 1px solid #fecaca;">
+                    <div style="display: flex; align-items: center; gap: 5px; color: #dc2626;">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <strong>Prova Cancelada</strong>
+                    </div>
+                    <div style="font-size: 0.85rem; margin-top: 5px; color: #7f1d1d;">
+                        Clique em "Ver Detalhes" para mais informações
+                    </div>
+                </div>
+                ` : ''}
             </div>
             `;
         }
 
+        // Função para mostrar modal com detalhes completos do cancelamento
+        async function verDetalhesCancelamentoCompleto(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Mostrar loading
+                mostrarLoading('Carregando detalhes do cancelamento...');
+                
+                const response = await fetch(`${API_BASE_URL}/aluno/provas/${provaId}/cancelamento-detailed`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                esconderLoading();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao carregar detalhes');
+                }
+                
+                // Criar modal com os detalhes
+                criarModalDetalhesCancelamento(data);
+                
+            } catch (error) {
+                esconderLoading();
+                console.error('Erro ao carregar detalhes:', error);
+                alert('Não foi possível carregar os detalhes do cancelamento: ' + error.message);
+            }
+        }
+
+        // Função para criar o modal com detalhes do cancelamento
+        function criarModalDetalhesCancelamento(dados) {
+            // Configurações baseadas no tipo de cancelamento
+            const tipo = dados.tipoCancelamento;
+            const config = {
+                'violacao': {
+                    titulo: 'CANCELADA - VIOLAÇÃO DAS REGRAS',
+                    cor: '#dc2626',
+                    corFundo: '#fee2e2',
+                    icone: 'user-slash',
+                    mensagemPrincipal: 'Esta prova foi cancelada por violação das regras estabelecidas para realização da avaliação.',
+                    explicacao: 'O sistema de monitoramento detectou comportamentos que violam as regras da prova.'
+                },
+                'prazo': {
+                    titulo: 'CANCELADA - PRAZO EXPIRADO',
+                    cor: '#f59e0b',
+                    corFundo: '#fef3c7',
+                    icone: 'clock',
+                    mensagemPrincipal: 'Esta prova foi cancelada automaticamente por expiração do prazo de entrega.',
+                    explicacao: 'O tempo limite para realização da prova foi excedido.'
+                },
+                'outro': {
+                    titulo: 'PROVA CANCELADA',
+                    cor: '#6b7280',
+                    corFundo: '#f3f4f6',
+                    icone: 'ban',
+                    mensagemPrincipal: 'Esta prova foi cancelada.',
+                    explicacao: 'A prova foi cancelada pelo sistema.'
+                }
+            }[tipo] || config.outro;
+            
+            // Formatar data
+            const dataCancelamento = new Date(dados.cancelamento.data);
+            const dataFormatada = dataCancelamento.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            // Formatar estatísticas do log
+            let estatisticasHTML = '';
+            if (dados.estatisticas) {
+                const stats = dados.estatisticas;
+                
+                estatisticasHTML = `
+                    <div style="margin-top: 20px; border-top: 1px solid ${config.cor}30; padding-top: 15px;">
+                        <h5 style="color: ${config.cor}; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-chart-bar"></i> 
+                            DETALHES DO MONITORAMENTO
+                        </h5>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+                            ${stats.avisos !== undefined ? `
+                            <div style="text-align: center; padding: 10px; background: rgba(255,255,255,0.7); border-radius: 6px; border: 1px solid ${config.cor}30;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: ${config.cor}">${stats.avisos}</div>
+                                <div style="font-size: 0.8rem; color: ${config.cor}">Avisos Recebidos</div>
+                            </div>
+                            ` : ''}
+                            
+                            ${stats.tentativasAtalho !== undefined ? `
+                            <div style="text-align: center; padding: 10px; background: rgba(255,255,255,0.7); border-radius: 6px; border: 1px solid ${config.cor}30;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: ${config.cor}">${stats.tentativasAtalho}</div>
+                                <div style="font-size: 0.8rem; color: ${config.cor}">Tentativas de Atalho</div>
+                            </div>
+                            ` : ''}
+                            
+                            ${stats.capturasTela !== undefined ? `
+                            <div style="text-align: center; padding: 10px; background: rgba(255,255,255,0.7); border-radius: 6px; border: 1px solid ${config.cor}30;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: ${config.cor}">${stats.capturasTela}</div>
+                                <div style="font-size: 0.8rem; color: ${config.cor}">Capturas de Tela</div>
+                            </div>
+                            ` : ''}
+                            
+                            ${stats.tempoFora !== undefined ? `
+                            <div style="text-align: center; padding: 10px; background: rgba(255,255,255,0.7); border-radius: 6px; border: 1px solid ${config.cor}30;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: ${config.cor}">${stats.tempoFora}s</div>
+                                <div style="font-size: 0.8rem; color: ${config.cor}">Tempo Fora da Página</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                        
+                        ${stats.timestamp ? `
+                        <div style="margin-top: 10px; font-size: 0.8rem; color: #6b7280; text-align: center;">
+                            <i class="far fa-clock"></i> 
+                            Registro do sistema: ${new Date(stats.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            // HTML do modal
+            const modalHTML = `
+                <div class="modal" id="modalDetalhesCancelamentoCompleto" style="display: flex;">
+                    <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+                        <!-- Header com cor -->
+                        <div style="background: ${config.corFundo}; padding: 20px; border-radius: 8px 8px 0 0; border-bottom: 3px solid ${config.cor};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="background: ${config.cor}; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                                        <i class="fas fa-${config.icone}"></i>
+                                    </div>
+                                    <h3 style="margin: 0; color: ${config.cor};">
+                                        ${config.titulo}
+                                    </h3>
+                                </div>
+                                <button class="modal-close" onclick="fecharModal('modalDetalhesCancelamentoCompleto')" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: ${config.cor};">&times;</button>
+                            </div>
+                            
+                            <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+                                <div style="flex: 1;">
+                                    <h4 style="margin: 0 0 5px 0; color: #374151;">${dados.prova.titulo}</h4>
+                                    <p style="margin: 0; color: #6b7280; font-size: 0.9rem;">
+                                        <i class="fas fa-book"></i> ${dados.prova.conteudo}
+                                    </p>
+                                </div>
+                                <div style="text-align: center; min-width: 100px;">
+                                    <div style="font-size: 2rem; font-weight: bold; color: ${config.cor}">
+                                        ${dados.cancelamento.nota.toFixed(1)}
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: ${config.cor}">Nota Final</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Conteúdo do modal -->
+                        <div style="padding: 20px;">
+                            <!-- Motivo do cancelamento -->
+                            <div style="background: ${tipo === 'violacao' ? '#fee2e2' : '#fef3c7'}; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid ${config.cor};">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <i class="fas fa-exclamation-circle" style="color: ${config.cor}; font-size: 1.2rem;"></i>
+                                    <h4 style="margin: 0; color: ${config.cor};">Motivo do Cancelamento</h4>
+                                </div>
+                                <p style="margin: 0; color: ${tipo === 'violacao' ? '#7f1d1d' : '#92400e'}; font-size: 1rem; line-height: 1.5;">
+                                    <strong>"${dados.cancelamento.motivo}"</strong>
+                                </p>
+                                <p style="margin: 10px 0 0 0; color: ${tipo === 'violacao' ? '#7f1d1d' : '#92400e'}; font-size: 0.9rem;">
+                                    ${config.explicacao}
+                                </p>
+                            </div>
+                            
+                            <!-- Detalhes -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                                    <h5 style="margin: 0 0 10px 0; color: #374151; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-info-circle" style="color: #6b7280;"></i>
+                                        Informações
+                                    </h5>
+                                    <p style="margin: 8px 0; color: #6b7280; font-size: 0.9rem;">
+                                        <strong><i class="far fa-calendar-alt"></i> Data:</strong><br>
+                                        ${dataFormatada}
+                                    </p>
+                                    <p style="margin: 8px 0; color: #6b7280; font-size: 0.9rem;">
+                                        <strong><i class="fas fa-user-graduate"></i> Aluno:</strong><br>
+                                        ${dados.aluno.nome}
+                                    </p>
+                                </div>
+                                
+                                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                                    <h5 style="margin: 0 0 10px 0; color: #374151; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-chart-line" style="color: #6b7280;"></i>
+                                        Desempenho
+                                    </h5>
+                                    <p style="margin: 8px 0; color: #6b7280; font-size: 0.9rem;">
+                                        <strong><i class="fas fa-stopwatch"></i> Tempo gasto:</strong><br>
+                                        ${Math.floor(dados.cancelamento.tempoGasto / 60)} minutos
+                                    </p>
+                                    <p style="margin: 8px 0; color: #6b7280; font-size: 0.9rem;">
+                                        <strong><i class="fas fa-star" style="color: ${config.cor};"></i> Status final:</strong><br>
+                                        <span style="color: ${config.cor}; font-weight: bold;">${config.titulo}</span>
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <!-- Estatísticas do log (se existirem) -->
+                            ${estatisticasHTML}
+                            
+                            <!-- Notificação ao professor -->
+                            ${dados.professor ? `
+                            <div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #0ea5e9;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <i class="fas fa-bell" style="color: #0ea5e9;"></i>
+                                    <h5 style="margin: 0; color: #0ea5e9;">Notificação enviada</h5>
+                                </div>
+                                <p style="margin: 0; color: #0369a1; font-size: 0.9rem;">
+                                    O professor <strong>${dados.professor.nome}</strong> foi notificado sobre este cancelamento em 
+                                    <strong>${dataFormatada}</strong>
+                                </p>
+                                <p style="margin: 8px 0 0 0; color: #0369a1; font-size: 0.85rem;">
+                                    <i class="fas fa-envelope"></i> ${dados.professor.email}
+                                </p>
+                            </div>
+                            ` : ''}
+                            
+                            <!-- Recomendação -->
+                            <div style="margin-top: 20px; padding: 15px; background: ${tipo === 'violacao' ? '#f0f9ff' : '#fefce8'}; border-radius: 8px; border: 1px dashed ${tipo === 'violacao' ? '#0ea5e9' : '#f59e0b'};">
+                                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                                    <i class="fas fa-lightbulb" style="color: ${tipo === 'violacao' ? '#0ea5e9' : '#f59e0b'}; font-size: 1.2rem; margin-top: 2px;"></i>
+                                    <div>
+                                        <h5 style="margin: 0 0 8px 0; color: ${tipo === 'violacao' ? '#0ea5e0b' : '#92400e'};">
+                                            ${tipo === 'violacao' ? 'Para evitar cancelamentos futuros:' : 'Recomendação:'}
+                                        </h5>
+                                        <p style="margin: 0; color: ${tipo === 'violacao' ? '#0369a1' : '#92400e'}; font-size: 0.9rem;">
+                                            ${dados.recomendacao}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Footer -->
+                        <div style="padding: 15px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 0.8rem; color: #6b7280;">
+                                <i class="fas fa-history"></i> Última atualização: ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                            <button class="btn-sair-prova" onclick="fecharModal('modalDetalhesCancelamentoCompleto')">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Adicionar modal ao body
+            const modalContainer = document.createElement('div');
+            modalContainer.innerHTML = modalHTML;
+            document.body.appendChild(modalContainer.firstElementChild);
+        }
+
+        // Função para atualizar o card da prova com informações do cancelamento
+        function atualizarCardProvaCancelada(provaId, dadosCancelamento) {
+            const card = document.querySelector(`[data-prova-id="${provaId}"]`);
+            
+            if (!card) return;
+            
+            const tipo = dadosCancelamento.tipoCancelamento;
+            const config = {
+                'violacao': {
+                    cor: '#dc2626',
+                    corFundo: '#fee2e2',
+                    icone: 'user-slash',
+                    texto: 'CANCELADA - VIOLAÇÃO'
+                },
+                'prazo': {
+                    cor: '#f59e0b',
+                    corFundo: '#fef3c7',
+                    icone: 'clock',
+                    texto: 'CANCELADA - PRAZO'
+                }
+            }[tipo] || { cor: '#ef4444', corFundo: '#fef2f2', icone: 'ban', texto: 'CANCELADA' };
+            
+            // Atualizar o card
+            const statusDiv = card.querySelector('.prova-status');
+            if (statusDiv) {
+                statusDiv.innerHTML = `
+                    <i class="fas fa-${config.icone}"></i> ${config.texto}
+                `;
+                statusDiv.style.background = config.corFundo;
+                statusDiv.style.color = config.cor;
+                statusDiv.style.borderColor = config.cor;
+            }
+        }
         // Nova função para carregar provas aguardando correção
         async function carregarProvasAguardandoCorrecao() {
             try {
@@ -978,7 +1624,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         // PROVA CANCELADA
                         botaoAcao = `
                             <button class="btn-sair-prova" onclick="verDetalhesCancelamento('${prova._id || prova.id}')">
-                                <i class="fas fa-file-alt"></i> Ver Detalhes
+                                <i class="fas fa-info-circle"></i> Ver Detalhes
                             </button>
                             ${prova.nota !== undefined ? `
                             <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border-left: 3px solid #ef4444;">
@@ -1057,14 +1703,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="prova-actions">
                         ${botaoAcao}
                     </div>
-                    ${provaCancelada && prova.motivoCancelamento ? `
+                    ${provaCancelada ? `
                     <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border: 1px solid #fecaca;">
                         <div style="display: flex; align-items: center; gap: 5px; color: #dc2626;">
                             <i class="fas fa-exclamation-circle"></i>
-                            <strong>Cancelada Automaticamente</strong>
+                            <strong>Prova Cancelada</strong>
                         </div>
                         <div style="font-size: 0.85rem; margin-top: 5px; color: #7f1d1d;">
-                            <strong>Motivo:</strong> ${prova.motivoCancelamento}
+                            Clique em "Ver Detalhes" para mais informações
                         </div>
                     </div>
                     ` : ''}
@@ -1153,10 +1799,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Função para ver detalhes do cancelamento
+        // Função para ver detalhes completos do cancelamento
         async function verDetalhesCancelamento(provaId) {
             try {
                 const token = localStorage.getItem('auth_token');
+                
+                // Buscar dados da prova
                 const response = await fetch(`${API_BASE_URL}/aluno/provas/${provaId}/resultado`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -1164,49 +1812,210 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success) {
+                    console.log('📊 Dados completos recebidos:', data);
+                    
+                    // USAR A NOVA FUNÇÃO DE DETECÇÃO
+                    const isViolacao = detectarTipoCancelamento(data);
+                    let motivoExibicao = data.motivoCancelamento || 'Prova cancelada';
+                    
+                    if (isViolacao) {
+                        motivoExibicao = data.motivoCancelamento || 'Prova cancelada por violação das regras';
+                    } else {
+                        motivoExibicao = data.motivoCancelamento || 'Prazo de entrega expirado';
+                    }
+                    
+                    const tituloCancelamento = isViolacao ? 
+                        'CANCELADA - VIOLAÇÃO DAS REGRAS' : 
+                        'CANCELADA - PRAZO EXPIRADO';
+                    
+                    const corPrincipal = isViolacao ? '#dc2626' : '#ef4444';
+                    const corFundo = isViolacao ? '#fee2e2' : '#fef3c7';
+                    const corTexto = isViolacao ? '#7f1d1d' : '#991b1b';
+                    
+                    // Formatar estatísticas do log
+                    let estatisticasHtml = '';
+                    if (data.estatisticasCancelamento) {
+                        const stats = data.estatisticasCancelamento;
+                        estatisticasHtml = `
+                            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid ${corPrincipal}40;">
+                                <h5 style="color: ${corTexto}; margin-bottom: 10px;">
+                                    <i class="fas fa-chart-bar"></i> DETALHES DO MONITORAMENTO
+                                </h5>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+                                    ${stats.avisos ? `
+                                    <div style="text-align: center; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 6px; border: 1px solid ${corPrincipal}30;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: ${corPrincipal}">
+                                            ${stats.avisos}
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: ${corTexto}">Avisos Recebidos</div>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    ${stats.tentativasAtalho !== undefined ? `
+                                    <div style="text-align: center; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 6px; border: 1px solid ${corPrincipal}30;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: ${corPrincipal}">
+                                            ${stats.tentativasAtalho}
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: ${corTexto}">Tentativas de Atalho</div>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    ${stats.capturasTela !== undefined ? `
+                                    <div style="text-align: center; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 6px; border: 1px solid ${corPrincipal}30;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: ${corPrincipal}">
+                                            ${stats.capturasTela}
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: ${corTexto}">Capturas de Tela</div>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    ${stats.tempoFora !== undefined ? `
+                                    <div style="text-align: center; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 6px; border: 1px solid ${corPrincipal}30;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: ${corPrincipal}">
+                                            ${stats.tempoFora}s
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: ${corTexto}">Tempo Fora da Página</div>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    ${stats.timestamp ? `
+                                    <div style="text-align: center; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 6px; border: 1px solid ${corPrincipal}30;">
+                                        <div style="font-size: 1rem; font-weight: bold; color: ${corPrincipal}">
+                                            ${new Date(stats.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: ${corTexto}">Horário</div>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                                
+                                ${isViolacao ? `
+                                <div style="margin-top: 15px; padding: 10px; background: rgba(220, 38, 38, 0.1); border-radius: 6px; border-left: 3px solid #dc2626;">
+                                    <div style="display: flex; align-items: center; gap: 8px; color: #dc2626; margin-bottom: 5px;">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <strong>ATENÇÃO: VIOLAÇÃO DETECTADA</strong>
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: #7f1d1d;">
+                                        Esta prova foi cancelada automaticamente pelo sistema de monitoramento por violação das regras estabelecidas.
+                                    </div>
+                                </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }
+                    
                     // Criar modal com detalhes
                     const modalHTML = `
-                        <div class="modal" id="modalCancelamentoDetalhes" style="display: flex;">
-                            <div class="modal-content">
+                        <div class="modal" id="modalDetalhesCancelamento" style="display: flex;">
+                            <div class="modal-content" style="max-width: 700px;">
                                 <div class="modal-header">
-                                    <h3><i class="fas fa-ban" style="color: #ef4444;"></i> Detalhes do Cancelamento</h3>
-                                    <button class="modal-close" onclick="fecharModal('modalCancelamentoDetalhes')">&times;</button>
+                                    <h3 style="color: ${corPrincipal};">
+                                        <i class="fas fa-ban"></i> 
+                                        Detalhes do Cancelamento
+                                    </h3>
+                                    <button class="modal-close" onclick="fecharModal('modalDetalhesCancelamento')">&times;</button>
                                 </div>
-                                <div style="padding: 20px 0;">
-                                    <h4 style="color: #374151; margin-bottom: 10px;">${data.provaTitulo || 'Prova'}</h4>
-                                    <p style="color: #6b7280; margin-bottom: 20px;">${data.provaConteudo || ''}</p>
+                                
+                                <div style="padding: 20px;">
+                                    <!-- Informações da prova -->
+                                    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid ${corPrincipal};">
+                                        <h4 style="margin-top: 0; color: #374151; display: flex; align-items: center; gap: 10px;">
+                                            <i class="fas fa-file-alt"></i>
+                                            ${data.prova?.titulo || 'Prova Cancelada'}
+                                        </h4>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                                            <div>
+                                                <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
+                                                    <strong>Conteúdo:</strong> ${data.prova?.conteudo || 'Não especificado'}
+                                                </p>
+                                                ${data.prova?.turma ? `
+                                                <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
+                                                    <strong>Turma:</strong> ${data.prova.turma.nome || data.prova.turma.disciplina}
+                                                </p>
+                                                ` : ''}
+                                            </div>
+                                            <div>
+                                                <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
+                                                    <strong>Data do Cancelamento:</strong><br>
+                                                    ${new Date(data.dataEntrega || Date.now()).toLocaleDateString('pt-BR')} 
+                                                    ${new Date(data.dataEntrega || Date.now()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
                                     
-                                    <div style="background: #fee2e2; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ef4444;">
-                                        <h5 style="color: #dc2626; margin-top: 0; margin-bottom: 10px;">
-                                            <i class="fas fa-exclamation-triangle"></i> Informações do Cancelamento
+                                    <!-- Card de status principal -->
+                                    <div style="background: ${corFundo}; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid ${corPrincipal};">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                            <h4 style="color: ${corPrincipal}; margin: 0; display: flex; align-items: center; gap: 10px;">
+                                                <i class="fas fa-exclamation-triangle"></i>
+                                                ${tituloCancelamento}
+                                            </h4>
+                                            <div style="font-size: 2rem; font-weight: bold; color: ${corPrincipal}">0.0</div>
+                                        </div>
+                                        
+                                        <div style="margin-top: 15px;">
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                                <div>
+                                                    <p style="color: ${corTexto}; margin: 10px 0; font-size: 0.9rem;">
+                                                        <strong><i class="fas fa-exclamation-circle"></i> Motivo:</strong><br>
+                                                        ${motivoExibicao}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p style="color: ${corTexto}; margin: 10px 0; font-size: 0.9rem;">
+                                                        <strong><i class="fas fa-user"></i> Aluno:</strong><br>
+                                                        ${data.alunoNome || 'Não informado'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            
+                                            ${data.professorEmail ? `
+                                            <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.5); border-radius: 6px;">
+                                                <p style="color: ${corTexto}; margin: 5px 0; font-size: 0.9rem;">
+                                                    <strong><i class="fas fa-chalkboard-teacher"></i> Professor Notificado:</strong><br>
+                                                    ${data.professorEmail}
+                                                </p>
+                                            </div>
+                                            ` : ''}
+                                        </div>
+                                        
+                                        ${estatisticasHtml}
+                                    </div>
+                                    
+                                    <!-- Informações importantes -->
+                                    <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                                        <h5 style="color: #374151; margin-top: 0; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fas fa-info-circle"></i> Informações Importantes
                                         </h5>
-                                        <p style="color: #7f1d1d; margin: 5px 0;">
-                                            <strong>Motivo:</strong> ${data.motivoCancelamento || 'Prazo de entrega expirado'}
-                                        </p>
-                                        ${data.estatisticasCancelamento ? `
-                                        <p style="color: #7f1d1d; margin: 5px 0;">
-                                            <strong>Data do Cancelamento:</strong> ${new Date(data.estatisticasCancelamento.dataCancelamento || new Date()).toLocaleDateString('pt-BR')}
-                                        </p>
-                                        ` : ''}
+                                        <ul style="color: #6b7280; margin: 10px 0; padding-left: 20px; font-size: 0.9rem;">
+                                            <li>Esta prova foi cancelada automaticamente pelo sistema</li>
+                                            <li>A nota atribuída é <strong>0.0 (zero)</strong></li>
+                                            <li>O professor responsável foi notificado sobre este cancelamento</li>
+                                            ${isViolacao ? 
+                                                '<li><strong>Violou as regras estabelecidas:</strong> A realização da prova requer atenção e cumprimento das normas</li>' : 
+                                                '<li><strong>Prazo expirado:</strong> O tempo limite para realização da prova foi excedido</li>'
+                                            }
+                                            <li>Em caso de dúvidas, entre em contato com o professor da disciplina</li>
+                                        </ul>
                                     </div>
                                     
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-                                        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center;">
+                                    <!-- Resumo final -->
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e5e7eb;">
+                                        <div>
+                                            <div style="font-size: 0.9rem; color: #6b7280;">Status Final</div>
+                                            <div style="font-size: 1.1rem; font-weight: bold; color: ${corPrincipal}">
+                                                ${tituloCancelamento}
+                                            </div>
+                                        </div>
+                                        <div style="text-align: right;">
                                             <div style="font-size: 0.9rem; color: #6b7280;">Nota Atribuída</div>
-                                            <div style="font-size: 2rem; font-weight: bold; color: #dc2626;">0.0</div>
+                                            <div style="font-size: 2rem; font-weight: bold; color: ${corPrincipal}">0.0</div>
                                         </div>
-                                        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center;">
-                                            <div style="font-size: 0.9rem; color: #6b7280;">Status</div>
-                                            <div style="font-size: 1.1rem; font-weight: bold; color: #dc2626;">CANCELADA</div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div style="color: #6b7280; font-size: 0.9rem; margin-top: 20px;">
-                                        <p><i class="fas fa-info-circle"></i> Esta prova foi cancelada automaticamente pelo sistema devido ao prazo de entrega expirado.</p>
-                                        <p><i class="fas fa-envelope"></i> O professor foi notificado por email sobre este cancelamento.</p>
                                     </div>
                                 </div>
-                                <button class="btn-sair-prova" style="width: 100%;" onclick="fecharModal('modalCancelamentoDetalhes')">
+                                
+                                <button class="btn-sair-prova" style="width: 100%; margin-top: 20px;" 
+                                        onclick="fecharModal('modalDetalhesCancelamento')">
                                     <i class="fas fa-times"></i> Fechar
                                 </button>
                             </div>
@@ -1217,9 +2026,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     const modalContainer = document.createElement('div');
                     modalContainer.innerHTML = modalHTML;
                     document.body.appendChild(modalContainer.firstElementChild);
+                    
+                } else {
+                    throw new Error(data.error || 'Não foi possível carregar os detalhes');
                 }
+                
             } catch (error) {
-                console.error('Erro ao buscar detalhes do cancelamento:', error);
+                console.error('Erro ao buscar detalhes:', error);
                 alert('Não foi possível carregar os detalhes do cancelamento.');
             }
         }

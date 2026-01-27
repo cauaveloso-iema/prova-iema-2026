@@ -270,6 +270,103 @@
             50% { transform: translateX(-50%) translateY(-5px); }
         }
         
+        /* MODAL DE CONFIRMAÇÃO DE SAÍDA */
+        .modal-saida {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 9999;
+            display: none;
+        }
+        
+        .modal-saida.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .modal-saida-content {
+            background: white;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: slideIn 0.4s ease;
+        }
+        
+        .modal-saida-header {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .modal-saida-header h3 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+        
+        .modal-saida-body {
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .modal-saida-body p {
+            margin-bottom: 20px;
+            color: #374151;
+            font-size: 1.1rem;
+        }
+        
+        .modal-saida-footer {
+            padding: 20px;
+            background: #f9fafb;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .btn-saida {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            min-width: 120px;
+            justify-content: center;
+        }
+        
+        .btn-saida:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-saida-cancelar {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+        
+        .btn-saida-cancelar:hover {
+            background: linear-gradient(135deg, #1d4ed8, #1e40af);
+        }
+        
+        .btn-saida-confirmar {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        
+        .btn-saida-confirmar:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+        }
+        
         /* Resto dos estilos mantidos... */
         .loading-screen, .error-screen {
             position: fixed;
@@ -584,6 +681,33 @@
     </style>
 </head>
 <body>
+    <!-- Modal de Confirmação de Saída -->
+    <div id="saidaModal" class="modal-saida">
+        <div class="modal-saida-content">
+            <div class="modal-saida-header">
+                <h3><i class="fas fa-door-open"></i> Sair da Prova?</h3>
+            </div>
+            <div class="modal-saida-body">
+                <p><strong>Atenção!</strong> Ao sair da prova agora:</p>
+                <ul style="text-align: left; margin: 15px 0; padding-left: 20px;">
+                    <li>Todas as suas respostas serão perdidas</li>
+                    <li>A prova será automaticamente cancelada</li>
+                    <li>Você receberá nota zero</li>
+                    <li>O professor será notificado</li>
+                </ul>
+                <p>Tem certeza que deseja sair?</p>
+            </div>
+            <div class="modal-saida-footer">
+                <button id="btnCancelarSaida" class="btn-saida btn-saida-cancelar">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button id="btnConfirmarSaida" class="btn-saida btn-saida-confirmar">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Modal de Aviso -->
     <div id="warningModal" class="modal-warning">
         <div class="modal-content">
@@ -621,7 +745,7 @@
             <h1 style="color: #ef4444; margin-bottom: 20px;">PROVA CANCELADA</h1>
             <div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 10px; margin-bottom: 30px;">
                 <p style="font-size: 1.2rem; margin-bottom: 10px;">
-                    <strong>Motivo:</strong> Múltiplas violações das regras da prova
+                    <strong>Motivo:</strong> <span id="cancelReason">Tentativa de atualizar/recarregar a página</span>
                 </p>
                 <div style="display: flex; justify-content: center; gap: 20px; margin-top: 15px;" id="cancelStats">
                     <!-- Estatísticas serão preenchidas por JS -->
@@ -708,9 +832,8 @@
         </div>
     </div>
 
-    <!-- SISTEMA DE MONITORAMENTO COMPLETO - SIMPLIFICADO PARA PERMITIR SCROLL -->
-// ============ SISTEMA DE MONITORAMENTO COMPLETO - SIMPLIFICADO PARA PERMITIR SCROLL ============
-<script>
+    <script>
+    // ============ SISTEMA DE MONITORAMENTO COMPLETO - COM BLOQUEIO TOTAL DE ATUALIZAÇÃO ============
     // ============ SISTEMA DE FULLSCREEN E BLOQUEIO ============
     
     function entrarEmFullscreen() {
@@ -838,20 +961,534 @@
         }
     }
     
-    // ============ CLASSE DE MONITORAMENTO (SIMPLIFICADA PARA SCROLL) ============
+    // ============ SISTEMA DE BLOQUEIO TOTAL DE ATUALIZAÇÃO ============
+    
+    class BloqueioNavegacao {
+        constructor(monitoramentoRef) {
+            this.monitoramento = monitoramentoRef;
+            this.saidaConfirmada = false;
+            this.refreshTentativas = 0;
+            this.maxRefreshTentativas = 1; // ZERO TOLERÂNCIA PARA REFRESH!
+            this.init();
+        }
+        
+        init() {
+            // 1. BLOQUEAR TOTALMENTE QUALQUER REFRESH - CANCELAR IMEDIATAMENTE
+            this.bloquearRefreshTotalmente();
+            
+            // 2. BLOQUEAR NAVEGAÇÃO PARA TRÁS/FRENTE
+            this.bloquearNavegacaoHistorico();
+            
+            // 3. BLOQUEAR SAÍDA/ABERTURA DE NOVAS ABAS
+            this.bloquearNovasAbas();
+            
+            // 4. BLOQUEAR GESTOS DE SWIPE EM DISPOSITIVOS MÓVEIS
+            this.bloquearGestosMobile();
+            
+            // 5. DETECTAR RELOAD DE QUALQUER MANEIRA
+            this.detectarQualquerReload();
+            
+            console.log('🛡️ Sistema de bloqueio TOTAL de atualização ativado');
+        }
+        
+        bloquearRefreshTotalmente() {
+            // BLOQUEAR COMPLETAMENTE QUALQUER TENTATIVA DE REFRESH
+            
+            // Bloquear F5 - CANCELAR IMEDIATAMENTE
+            document.addEventListener('keydown', (e) => {
+                // Detectar QUALQUER tecla que possa causar refresh
+                const teclasRefresh = ['F5', 'F11', 'F12'];
+                const isRefreshKey = teclasRefresh.includes(e.key);
+                
+                // Detectar combinações de teclas para refresh (SEM CHANCE!)
+                const isCtrlR = (e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R');
+                const isCtrlShiftR = (e.ctrlKey && e.shiftKey && (e.key === 'r' || e.key === 'R'));
+                const isCtrlF5 = (e.ctrlKey && e.key === 'F5');
+                
+                // Detectar tecla R sozinha também (alguns navegadores permitem)
+                const isJustR = (e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey;
+                
+                if (isRefreshKey || isCtrlR || isCtrlShiftR || isCtrlF5 || isJustR) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    this.refreshTentativas++;
+                    console.log(`🚨 Tentativa de refresh BLOQUEADA: ${this.refreshTentativas}`);
+                    
+                    // CANCELAR IMEDIATAMENTE NA PRIMEIRA TENTATIVA
+                    if (this.refreshTentativas >= this.maxRefreshTentativas) {
+                        console.log('💀 CANCELANDO PROVA POR TENTATIVA DE REFRESH');
+                        this.monitoramento?.cancelarProvaPorRefresh('Tentativa de atualizar/recarregar a página');
+                    }
+                    
+                    // Mostrar aviso MESMO na primeira tentativa
+                    this.mostrarAvisoRefreshCritico();
+                    
+                    return false;
+                }
+                
+                // Bloquear Ctrl+W (fechar aba) - AVANÇADO
+                if ((e.ctrlKey && e.key === 'w') || (e.metaKey && e.key === 'w')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.monitoramento?.registrarTentativaAtalho('Tentativa de fechar aba bloqueada');
+                    return false;
+                }
+                
+                // Bloquear Alt+F4 (Windows) e Cmd+Q (Mac) - AVANÇADO
+                if ((e.altKey && e.key === 'F4') || (e.metaKey && e.key === 'q')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.monitoramento?.registrarTentativaAtalho('Tentativa de fechar janela bloqueada');
+                    return false;
+                }
+            }, true);
+            
+            // Bloquear clique direito COMPLETAMENTE
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                this.monitoramento?.registrarTentativaAtalho('Clique direito bloqueado');
+                return false;
+            }, true);
+            
+            // Bloquear arrastar para recarregar
+            document.addEventListener('dragstart', (e) => {
+                if (e.target.tagName === 'A' || e.target.tagName === 'IMG') {
+                    e.preventDefault();
+                    return false;
+                }
+            }, true);
+        }
+        
+        mostrarAvisoRefreshCritico() {
+            // Mostrar aviso visual CRÍTICO
+            const aviso = document.createElement('div');
+            aviso.id = 'avisoRefreshCritico';
+            aviso.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                background: linear-gradient(135deg, #dc2626, #b91c1c);
+                color: white;
+                padding: 20px;
+                text-align: center;
+                font-weight: bold;
+                z-index: 100000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                animation: slideDown 0.3s ease;
+                font-size: 1.1rem;
+            `;
+            
+            aviso.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+                    <i class="fas fa-skull-crossbones" style="font-size: 1.5rem;"></i>
+                    <span>🚫 ATUALIZAÇÃO BLOQUEADA! Qualquer nova tentativa CANCELARÁ a prova!</span>
+                    <i class="fas fa-skull-crossbones" style="font-size: 1.5rem;"></i>
+                </div>
+            `;
+            
+            // Remover avisos anteriores
+            const avisoAntigo = document.getElementById('avisoRefreshCritico');
+            if (avisoAntigo) avisoAntigo.remove();
+            
+            document.body.appendChild(aviso);
+            
+            // Remover após 5 segundos
+            setTimeout(() => {
+                if (aviso.parentNode) {
+                    aviso.style.animation = 'slideUp 0.3s ease';
+                    setTimeout(() => {
+                        if (aviso.parentNode) {
+                            aviso.remove();
+                        }
+                    }, 300);
+                }
+            }, 5000);
+        }
+        
+        bloquearNavegacaoHistorico() {
+            // Impedir COMPLETAMENTE que o usuário vá para frente/trás no histórico
+            
+            // Adicionar estado atual ao histórico
+            window.history.pushState(null, null, window.location.href);
+            
+            // Bloquear COMPLETAMENTE o botão voltar/avançar
+            window.addEventListener('popstate', (e) => {
+                // Impedir navegação
+                window.history.pushState(null, null, window.location.href);
+                
+                console.log('↩️ Navegação no histórico BLOQUEADA');
+                
+                // CANCELAR IMEDIATAMENTE QUALQUER TENTATIVA DE VOLTAR
+                this.refreshTentativas++;
+                
+                if (this.refreshTentativas >= this.maxRefreshTentativas) {
+                    this.monitoramento?.cancelarProvaPorRefresh('Tentativa de navegação (voltar/avançar)');
+                } else {
+                    // Mostrar aviso crítico
+                    this.mostrarAvisoNavegacaoCritica();
+                }
+            });
+            
+            // BLOQUEAR Backspace completamente (exceto em campos de texto)
+            document.addEventListener('keydown', (e) => {
+                // Bloquear Backspace quando não está em campo de texto
+                if (e.key === 'Backspace' && 
+                    !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+                    e.preventDefault();
+                    
+                    this.refreshTentativas++;
+                    console.log(`⌨️ Backspace bloqueado: ${this.refreshTentativas}`);
+                    
+                    if (this.refreshTentativas >= this.maxRefreshTentativas) {
+                        this.monitoramento?.cancelarProvaPorRefresh('Uso de Backspace para navegação');
+                    }
+                }
+                
+                // Bloquear Alt+Esquerda/Direita (navegação histórico)
+                if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                    e.preventDefault();
+                    
+                    this.refreshTentativas++;
+                    console.log(`↔️ Alt+seta bloqueado: ${this.refreshTentativas}`);
+                    
+                    if (this.refreshTentativas >= this.maxRefreshTentativas) {
+                        this.monitoramento?.cancelarProvaPorRefresh('Uso de Alt+setas para navegação');
+                    }
+                }
+                
+                // Bloquear botão Home/End se usado para navegar fora
+                if (e.key === 'Home' || e.key === 'End') {
+                    // Permitir apenas se estiver dentro da prova
+                    const elementoAtivo = document.activeElement;
+                    const emProva = elementoAtivo.closest('.questao-container') || 
+                                   elementoAtivo.closest('.opcao') ||
+                                   elementoAtivo === document.body;
+                    
+                    if (!emProva) {
+                        e.preventDefault();
+                        this.monitoramento?.registrarTentativaAtalho(`Tecla ${e.key} bloqueada fora da prova`);
+                    }
+                }
+            }, true);
+        }
+        
+        mostrarAvisoNavegacaoCritica() {
+            const aviso = document.createElement('div');
+            aviso.id = 'avisoNavegacaoCritica';
+            aviso.style.cssText = `
+                position: fixed;
+                top: 70px;
+                left: 0;
+                width: 100%;
+                background: linear-gradient(135deg, #ea580c, #c2410c);
+                color: white;
+                padding: 15px;
+                text-align: center;
+                font-weight: bold;
+                z-index: 100000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                animation: slideDown 0.3s ease;
+                font-size: 1rem;
+            `;
+            
+            aviso.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>⚠️ Navegação (voltar/avançar) BLOQUEADA! Próxima tentativa = CANCELAMENTO!</span>
+                </div>
+            `;
+            
+            // Remover avisos anteriores
+            const avisoAntigo = document.getElementById('avisoNavegacaoCritica');
+            if (avisoAntigo) avisoAntigo.remove();
+            
+            document.body.appendChild(aviso);
+            
+            setTimeout(() => {
+                if (aviso.parentNode) {
+                    aviso.style.animation = 'slideUp 0.3s ease';
+                    setTimeout(() => {
+                        if (aviso.parentNode) {
+                            aviso.remove();
+                        }
+                    }, 300);
+                }
+            }, 4000);
+        }
+        
+        bloquearNovasAbas() {
+            // Bloquear Ctrl+N, Ctrl+T, etc
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && 
+                    (e.key === 'n' || e.key === 'N' || e.key === 't' || e.key === 'T')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.monitoramento?.registrarTentativaAtalho('Tentativa de abrir nova aba/janela bloqueada');
+                    return false;
+                }
+                
+                // Bloquear Ctrl+Shift+N (janela anônima)
+                if (e.ctrlKey && e.shiftKey && (e.key === 'n' || e.key === 'N')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.monitoramento?.registrarTentativaAtalho('Tentativa de janela anônima bloqueada');
+                    return false;
+                }
+            }, true);
+            
+            // Bloquear clique do meio do mouse em links
+            document.addEventListener('auxclick', (e) => {
+                if (e.button === 1) { // Botão do meio
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.monitoramento?.registrarTentativaAtalho('Clique do meio bloqueado');
+                    return false;
+                }
+            }, true);
+            
+            // Bloquear Ctrl+Click e Shift+Click
+            document.addEventListener('click', (e) => {
+                if (e.ctrlKey || e.metaKey || e.shiftKey) {
+                    if (e.target.tagName === 'A' || e.target.closest('a')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.monitoramento?.registrarTentativaAtalho('Atalho de clique em link bloqueado');
+                        return false;
+                    }
+                }
+            }, true);
+        }
+        
+        bloquearGestosMobile() {
+            // BLOQUEAR COMPLETAMENTE gestos de navegação em mobile
+            
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let isScrolling = false;
+            
+            document.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+                touchStartY = e.changedTouches[0].screenY;
+                isScrolling = false;
+            }, { passive: true });
+            
+            document.addEventListener('touchmove', (e) => {
+                const touchY = e.changedTouches[0].clientY;
+                const touchX = e.changedTouches[0].clientX;
+                
+                // Detectar se é scroll vertical (permitido) ou horizontal (navegação - bloqueado)
+                const diffX = Math.abs(touchX - touchStartX);
+                const diffY = Math.abs(touchY - touchStartY);
+                
+                if (diffY > diffX) {
+                    isScrolling = true; // É scroll vertical - permitir
+                }
+            }, { passive: true });
+            
+            document.addEventListener('touchend', (e) => {
+                const touchEndX = e.changedTouches[0].screenX;
+                const touchEndY = e.changedTouches[0].screenY;
+                
+                const diffX = touchEndX - touchStartX;
+                const diffY = touchEndY - touchStartY;
+                
+                // Se não era scroll e tem movimento horizontal significativo
+                if (!isScrolling && Math.abs(diffX) > 50 && Math.abs(diffY) < 100) {
+                    e.preventDefault();
+                    
+                    this.refreshTentativas++;
+                    console.log(`📱 Swipe horizontal detectado: ${this.refreshTentativas}`);
+                    
+                    if (this.refreshTentativas >= this.maxRefreshTentativas) {
+                        this.monitoramento?.cancelarProvaPorRefresh('Swipe para navegação em dispositivo móvel');
+                    } else {
+                        this.mostrarAvisoSwipeCritico();
+                    }
+                }
+            }, { passive: false });
+            
+            // Detectar e BLOQUEAR pull-to-refresh
+            let lastTouchY = 0;
+            let isPullToRefresh = false;
+            
+            document.addEventListener('touchmove', (e) => {
+                // Se toque começou no topo da tela
+                if (touchStartY < 50) {
+                    const touchY = e.touches[0].clientY;
+                    
+                    // Se usuário puxou para baixo mais de 100px
+                    if (touchY > lastTouchY + 100) {
+                        isPullToRefresh = true;
+                        e.preventDefault(); // BLOQUEAR COMPLETAMENTE
+                    }
+                    lastTouchY = touchY;
+                }
+            }, { passive: false });
+            
+            document.addEventListener('touchend', () => {
+                if (isPullToRefresh) {
+                    this.refreshTentativas++;
+                    isPullToRefresh = false;
+                    
+                    if (this.refreshTentativas >= this.maxRefreshTentativas) {
+                        this.monitoramento?.cancelarProvaPorRefresh('Pull-to-refresh em dispositivo móvel');
+                    }
+                }
+            }, { passive: false });
+        }
+        
+        mostrarAvisoSwipeCritico() {
+            const aviso = document.createElement('div');
+            aviso.id = 'avisoSwipeCritico';
+            aviso.style.cssText = `
+                position: fixed;
+                top: 70px;
+                left: 0;
+                width: 100%;
+                background: linear-gradient(135deg, #d97706, #b45309);
+                color: white;
+                padding: 15px;
+                text-align: center;
+                font-weight: bold;
+                z-index: 100000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                animation: slideDown 0.3s ease;
+                font-size: 1rem;
+            `;
+            
+            aviso.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <i class="fas fa-hand-paper"></i>
+                    <span>🛑 Gestos de navegação BLOQUEADOS! Próxima tentativa cancela a prova!</span>
+                </div>
+            `;
+            
+            // Remover avisos anteriores
+            const avisoAntigo = document.getElementById('avisoSwipeCritico');
+            if (avisoAntigo) avisoAntigo.remove();
+            
+            document.body.appendChild(aviso);
+            
+            setTimeout(() => {
+                if (aviso.parentNode) {
+                    aviso.style.animation = 'slideUp 0.3s ease';
+                    setTimeout(() => {
+                        if (aviso.parentNode) {
+                            aviso.remove();
+                        }
+                    }, 300);
+                }
+            }, 4000);
+        }
+        
+        detectarQualquerReload() {
+            // Detectar QUALQUER tipo de recarregamento
+            
+            // Detectar quando a página é carregada (pode ser um reload)
+            if (performance && performance.getEntriesByType) {
+                const navEntries = performance.getEntriesByType("navigation");
+                if (navEntries.length > 0 && navEntries[0].type === 'reload') {
+                    console.log('🚨 Reload detectado via Performance API');
+                    // Já estamos em um reload - cancelar imediatamente
+                    setTimeout(() => {
+                        this.monitoramento?.cancelarProvaPorRefresh('Recarregamento de página detectado');
+                    }, 100);
+                }
+            }
+            
+            // Monitorar antes de descarregar a página
+            let pageIsBeingUnloaded = false;
+            
+            window.addEventListener('beforeunload', (e) => {
+                if (!this.saidaConfirmada && this.monitoramento) {
+                    pageIsBeingUnloaded = true;
+                    e.preventDefault();
+                    
+                    // Tentativa de sair/recarregar - CANCELAR
+                    this.monitoramento.cancelarProvaPorRefresh('Tentativa de sair/recarregar a página');
+                    
+                    // Manter a página aberta enquanto cancela
+                    return "A prova está sendo cancelada!";
+                }
+            });
+            
+            // Detectar se página foi descarregada (usando Page Visibility API)
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && !pageIsBeingUnloaded) {
+                    // Página ficou oculta de forma suspeita
+                    setTimeout(() => {
+                        if (document.hidden) {
+                            console.log('👻 Página oculta de forma suspeita');
+                            this.monitoramento?.registrarPerdaFoco();
+                        }
+                    }, 1000);
+                }
+            });
+            
+            // Detectar mudanças na URL (hash changes)
+            window.addEventListener('hashchange', () => {
+                console.log('🔗 Hash change detectado');
+                this.monitoramento?.registrarTentativaAtalho('Mudança de hash na URL');
+            });
+        }
+        
+        monitorarSaida() {
+            if (this.saidaConfirmada) return true;
+            
+            // Mostrar modal de confirmação
+            const modal = document.getElementById('saidaModal');
+            if (!modal) return false;
+            
+            modal.classList.add('active');
+            
+            // Configurar botões
+            document.getElementById('btnCancelarSaida').onclick = () => {
+                modal.classList.remove('active');
+            };
+            
+            document.getElementById('btnConfirmarSaida').onclick = () => {
+                this.saidaConfirmada = true;
+                modal.classList.remove('active');
+                this.sairDaProva();
+            };
+            
+            return false;
+        }
+        
+        sairDaProva() {
+            // Marcar prova como cancelada
+            if (monitoramento) {
+                monitoramento.cancelarProva();
+            } else {
+                // Redirecionar para login com motivo
+                window.location.href = '/login.html?reason=prova_abandonada';
+            }
+        }
+        
+        permitirSaida() {
+            this.saidaConfirmada = true;
+        }
+    }
+    
+    // ============ CLASSE DE MONITORAMENTO (COM REGRAS ORIGINAIS) ============
     class MonitoramentoProva {
         constructor() {
+            // REGRAS ORIGINAIS (como estava antes)
             this.avisos = 0;
-            this.maxAvisos = 3;
+            this.maxAvisos = 3; // 3 avisos como antes
             this.tempoFora = 0;
-            this.maxTempoFora = 5; // CORREÇÃO: Valor fixo de 5 segundos
+            this.maxTempoFora = 5; // 5 segundos como antes
             this.isModalOpen = false;
             this.timerPerdaFoco = null;
             this.tentativasAtalho = 0;
-            this.maxTentativasAtalho = 5;
+            this.maxTentativasAtalho = 5; // 5 tentativas como antes
             this.screenshots = 0;
-            this.maxScreenshots = 2;
+            this.maxScreenshots = 2; // 2 capturas como antes
             this.capturasAtividades = [];
+            this.bloqueioNavegacao = null;
+            this.provaCancelada = false;
             
             this.init();
         }
@@ -864,11 +1501,14 @@
             this.atualizarStatus();
             this.registrarInicioProva();
             
-            console.log('✅ Sistema de monitoramento iniciado');
+            // Inicializar sistema de bloqueio de navegação
+            this.bloqueioNavegacao = new BloqueioNavegacao(this);
+            
+            console.log('✅ Sistema de monitoramento iniciado - ATUALIZAÇÃO TOTALMENTE BLOQUEADA');
         }
         
         configurarMonitoramento() {
-            // 1. Monitorar perda de foco
+            // 1. Monitorar perda de foco - REGRA ORIGINAL
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
                     this.registrarPerdaFoco();
@@ -886,15 +1526,23 @@
                 this.tempoFora = 0;
             });
             
-            // 3. Prevenir saída da página
+            // 3. Prevenir saída da página - REGRA ORIGINAL
             window.addEventListener('beforeunload', (e) => {
-                if (this.avisos < this.maxAvisos) {
+                if (this.avisos < this.maxAvisos && !this.bloqueioNavegacao?.saidaConfirmada) {
                     e.preventDefault();
-                    e.returnValue = 'Se você sair da página, sua prova será cancelada.';
+                    
+                    const mensagem = '⚠️ ATENÇÃO: Se você sair agora, sua prova será CANCELADA!';
+                    e.returnValue = mensagem;
+                    
+                    return mensagem;
+                }
+                
+                if (this.bloqueioNavegacao?.saidaConfirmada) {
+                    return;
                 }
             });
             
-            // 4. Prevenir teclas de atalho (SEM BLOQUEAR SETAS)
+            // 4. Prevenir teclas de atalho (SEM BLOQUEAR SETAS) - REGRA ORIGINAL
             document.addEventListener('keydown', (e) => {
                 const teclasBloqueadas = ['F5', 'F11', 'F12', 'Escape', 'PrintScreen'];
                 
@@ -978,10 +1626,8 @@
             });
             
             // 9. IMPORTANTE: PERMITIR SCROLL COMPLETAMENTE
-            // Não bloquear eventos de wheel de forma alguma
             document.addEventListener('wheel', (e) => {
                 // Permitir scroll completamente
-                // Não fazer nada - permitir comportamento padrão
             }, { passive: true });
             
             // Permitir eventos de touch para scroll em dispositivos móveis
@@ -990,46 +1636,9 @@
             document.addEventListener('touchend', () => {}, { passive: true });
         }
         
-        criarPainelMonitoramento() {
-            const panel = document.createElement('div');
-            panel.id = 'monitorPanel';
-            panel.className = 'monitor-panel';
-            panel.innerHTML = `
-                <div class="panel-header">
-                    <h4><i class="fas fa-shield-alt"></i> Monitoramento</h4>
-                </div>
-                <div class="panel-body">
-                    <div class="metric-row">
-                        <div class="metric">
-                            <div class="metric-label">Avisos</div>
-                            <div class="metric-value" id="warningCount">0/3</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Atalhos</div>
-                            <div class="metric-value" id="shortcutCount">0/5</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Capturas</div>
-                            <div class="metric-value" id="screenshotCount">0/2</div>
-                        </div>
-                    </div>
-                    <div class="status-row">
-                        <div class="status-item" id="statusFocus">
-                            <i class="fas fa-check-circle"></i> Foco OK
-                        </div>
-                        <div class="status-item" id="statusFullscreen">
-                            <i class="fas fa-expand"></i> Tela Cheia
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(panel);
-        }
-        
         registrarPerdaFoco() {
-            // CORREÇÃO: Só conta se não estiver no modal
-            if (this.isModalOpen) return;
+            // REGRA ORIGINAL: Só conta se não estiver no modal
+            if (this.isModalOpen || this.provaCancelada) return;
             
             this.avisos++;
             this.atualizarStatus();
@@ -1070,6 +1679,67 @@
             if (this.screenshots >= this.maxScreenshots) {
                 this.cancelarProva();
             }
+        }
+        
+        // FUNÇÃO ESPECIAL PARA CANCELAR POR REFRESH (ZERO TOLERÂNCIA)
+        cancelarProvaPorRefresh(motivo) {
+            if (this.provaCancelada) return;
+            
+            this.provaCancelada = true;
+            console.log(`💀 CANCELAMENTO POR REFRESH: ${motivo}`);
+            
+            // Atualizar motivo na tela
+            const motivoElement = document.getElementById('cancelReason');
+            if (motivoElement) {
+                motivoElement.textContent = motivo;
+            }
+            
+            // Limpar todos os timers
+            if (this.timerPerdaFoco) {
+                clearInterval(this.timerPerdaFoco);
+                this.timerPerdaFoco = null;
+            }
+            
+            if (window.timerInterval) {
+                clearInterval(window.timerInterval);
+                window.timerInterval = null;
+            }
+            
+            // Fechar modais abertos
+            const warningModal = document.getElementById('warningModal');
+            if (warningModal) warningModal.classList.remove('active');
+            
+            const saidaModal = document.getElementById('saidaModal');
+            if (saidaModal) saidaModal.classList.remove('active');
+            
+            // Registrar no servidor
+            this.cancelarProvaNoServidor(motivo);
+            
+            // Mostrar tela de cancelamento
+            const cancelStats = document.getElementById('cancelStats');
+            if (cancelStats) {
+                cancelStats.innerHTML = `
+                    <div class="stat">
+                        <div class="stat-value">${this.avisos}</div>
+                        <div class="stat-label">Avisos</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${this.tentativasAtalho}</div>
+                        <div class="stat-label">Atalhos</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${this.screenshots}</div>
+                        <div class="stat-label">Capturas</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">1</div>
+                        <div class="stat-label">Refresh</div>
+                    </div>
+                `;
+            }
+            
+            // Bloquear tela completamente
+            setTimeout(() => bloquearTelaCompletamente(30), 100);
         }
         
         mostrarModalAviso() {
@@ -1152,6 +1822,46 @@
             }
         }
         
+        criarPainelMonitoramento() {
+            const panel = document.createElement('div');
+            panel.id = 'monitorPanel';
+            panel.className = 'monitor-panel';
+            panel.innerHTML = `
+                <div class="panel-header">
+                    <h4><i class="fas fa-shield-alt"></i> Monitoramento</h4>
+                </div>
+                <div class="panel-body">
+                    <div class="metric-row">
+                        <div class="metric">
+                            <div class="metric-label">Avisos</div>
+                            <div class="metric-value" id="warningCount">0/3</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Atalhos</div>
+                            <div class="metric-value" id="shortcutCount">0/5</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Capturas</div>
+                            <div class="metric-value" id="screenshotCount">0/2</div>
+                        </div>
+                    </div>
+                    <div class="status-row">
+                        <div class="status-item" id="statusFocus">
+                            <i class="fas fa-check-circle"></i> Foco OK
+                        </div>
+                        <div class="status-item" id="statusFullscreen">
+                            <i class="fas fa-expand"></i> Tela Cheia
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 0.7rem; color: #dc2626; text-align: center; font-weight: bold;">
+                        <i class="fas fa-ban"></i> ATUALIZAR = CANCELAMENTO IMEDIATO
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(panel);
+        }
+        
         async registrarInicioProva() {
             try {
                 const token = localStorage.getItem('auth_token');
@@ -1170,7 +1880,8 @@
                         timestamp: new Date().toISOString(),
                         userAgent: navigator.userAgent,
                         screenResolution: `${window.screen.width}x${window.screen.height}`,
-                        iniciouFullscreen: true
+                        iniciouFullscreen: true,
+                        bloqueioRefreshTotal: true
                     })
                 });
                 
@@ -1180,7 +1891,12 @@
         }
         
         cancelarProva() {
-            console.log('🛑 Cancelando prova...');
+            console.log('🛑 Cancelando prova por violação das regras...');
+            
+            // Permitir saída pelo sistema de bloqueio
+            if (this.bloqueioNavegacao) {
+                this.bloqueioNavegacao.permitirSaida();
+            }
             
             // CORREÇÃO: Limpar todos os timers
             if (this.timerPerdaFoco) {
@@ -1203,6 +1919,12 @@
             const modal = document.getElementById('warningModal');
             if (modal) {
                 modal.classList.remove('active');
+            }
+            
+            // Atualizar motivo
+            const motivoElement = document.getElementById('cancelReason');
+            if (motivoElement) {
+                motivoElement.textContent = 'Múltiplas violações das regras da prova';
             }
             
             // CHAMAR FUNÇÃO PARA CANCELAR PROVA NO SERVIDOR
@@ -1230,11 +1952,10 @@
             bloquearTelaCompletamente(30);
         }
 
-        // NOVA FUNÇÃO: Cancelar prova no servidor
         async cancelarProvaNoServidor() {
             try {
                 const token = localStorage.getItem('auth_token');
-                const authToken = token; // Usar token de autenticação normal
+                const authToken = token;
                 
                 if (!prova || !prova._id) {
                     console.error('❌ Não foi possível identificar a prova para cancelamento');
@@ -1243,7 +1964,6 @@
                 
                 console.log(`📤 Enviando cancelamento da prova ${prova._id} para o servidor...`);
                 
-                // Coletar dados para enviar ao servidor
                 const dadosCancelamento = {
                     provaId: prova._id,
                     motivo: 'Múltiplas violações das regras da prova',
@@ -1254,11 +1974,10 @@
                         tempoFora: this.tempoFora,
                         timestamp: new Date().toISOString()
                     },
-                    respostasAtuais: respostas, // Enviar respostas já preenchidas
+                    respostasAtuais: respostas,
                     tempoTotal: tempoTotal
                 };
                 
-                // Chamar endpoint de cancelamento
                 const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/cancelar`, {
                     method: 'POST',
                     headers: {
@@ -1273,11 +1992,9 @@
                 if (data.success) {
                     console.log('✅ Prova cancelada no servidor com sucesso! Nota: 0.0');
                     
-                    // Limpar dados locais
                     localStorage.removeItem(`prova_${prova._id}`);
                     localStorage.removeItem(`tempo_prova_${prova._id}`);
                     
-                    // Enviar notificação por email (se configurado)
                     await this.enviarNotificacaoCancelamento();
                     
                 } else {
@@ -1289,7 +2006,6 @@
             }
         }
 
-        // NOVA FUNÇÃO: Enviar notificação por email
         async enviarNotificacaoCancelamento() {
             try {
                 const token = localStorage.getItem('auth_token');
@@ -1307,7 +2023,6 @@
                     timestamp: new Date().toISOString()
                 };
                 
-                // Enviar notificação para o professor
                 const response = await fetch(`${API_BASE_URL}/notificacoes/prova-cancelada`, {
                     method: 'POST',
                     headers: {
@@ -1364,7 +2079,21 @@
     let monitoramento = null;
     
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('📄 Página de prova carregada');
+        console.log('📄 Página de prova carregada - ATUALIZAÇÃO TOTALMENTE BLOQUEADA');
+        
+        // Adicionar estilos para animações
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideDown {
+                from { transform: translateY(-100%); }
+                to { transform: translateY(0); }
+            }
+            @keyframes slideUp {
+                from { transform: translateY(0); }
+                to { transform: translateY(-100%); }
+            }
+        `;
+        document.head.appendChild(style);
         
         // Habilitar scroll imediatamente
         document.body.style.overflow = 'auto';
@@ -1372,33 +2101,40 @@
         
         document.getElementById('monitorHelp').addEventListener('click', () => {
             alert(`
-🚫 SISTEMA DE MONITORAMENTO - MODO RESTRITO
+🚫 SISTEMA DE MONITORAMENTO - ATUALIZAÇÃO BLOQUEADA
 
-⚠️ ATENÇÃO: Esta prova está em modo de segurança máxima.
+⚠️ REGRAS GERAIS (como antes):
+• 3 perdas de foco = PROVA CANCELADA
+• 5 atalhos bloqueados = PROVA CANCELADA  
+• 2 capturas de tela = PROVA CANCELADA
+• 5 segundos fora da página = AVISO
 
-🔒 RESTRIÇÕES ATIVAS:
-• TELA CHEIA OBRIGATÓRIA
-• Bloqueio de teclas: F5, F11, F12, ESC, PrintScreen
-• Bloqueio de atalhos: Ctrl+R, Ctrl+T, Ctrl+N, Alt+Tab
-• Bloqueio de DevTools
+🔥 REGRA NOVA E CRÍTICA:
+• QUALQUER TENTATIVA DE ATUALIZAR/RECARREGAR = CANCELAMENTO IMEDIATO
+• SEM CHANCES, SEM AVISOS
+• Botão F5, Ctrl+R, Refresh do navegador = CANCELAMENTO
+• Voltar/avançar no histórico = CANCELAMENTO
+• Swipe para navegação em mobile = CANCELAMENTO
+
+🔒 RESTRIÇÕES:
+• Tela cheia obrigatória
 • Sem clique direito
 • Sem cópia/cola
 • Sem captura de tela
-• Monitoramento de foco constante
+• Bloqueio de DevTools
 
 ✅ PERMITIDO:
-• Scroll vertical e horizontal
-• Setas do teclado para navegar
+• Scroll vertical/horizontal
+• Setas para navegar entre questões
 • Mouse para rolar
-• Toque para scroll em dispositivos móveis
-• Tecla Espaço para scroll
+• Toque para scroll (sem gestos de navegação)
 
-📊 LIMITES:
-• 3 perdas de foco = PROVA CANCELADA
-• 5 atalhos bloqueados = PROVA CANCELADA
-• 2 capturas de tela = PROVA CANCELADA
+🎯 LEMBRETE:
+• Você tem até 3 avisos por perda de foco
+• Mas APENAS 1 tentativa de atualizar a página
+• Não tente usar F5, Ctrl+R ou botão de refresh
 
-Boa prova! 🎯
+Boa prova! Não atualize a página! 🚨
             `);
         });
         
@@ -1418,7 +2154,7 @@ Boa prova! 🎯
     
     async function carregarProva(token) {
         try {
-            atualizarMensagemLoading('Iniciando prova em modo seguro...');
+            atualizarMensagemLoading('Iniciando prova...');
             
             const response = await fetch(`${API_BASE_URL}/provas/dados?token=${encodeURIComponent(token)}`);
             
@@ -1436,7 +2172,7 @@ Boa prova! 🎯
             prova = data.prova;
             console.log('✅ Prova carregada:', prova);
             
-            // CORREÇÃO: Inicializar monitoramento depois de carregar a prova
+            // Inicializar monitoramento
             monitoramento = new MonitoramentoProva();
             iniciarProvaInterface();
             
@@ -1645,6 +2381,11 @@ Boa prova! 🎯
     
     async function finalizarProva() {
         try {
+            // Permitir saída pelo sistema de bloqueio
+            if (monitoramento && monitoramento.bloqueioNavegacao) {
+                monitoramento.bloqueioNavegacao.permitirSaida();
+            }
+            
             // CORREÇÃO: Limpar todos os timers
             if (timerInterval) {
                 clearInterval(timerInterval);
@@ -1776,6 +2517,6 @@ Boa prova! 🎯
             return e.returnValue;
         }
     });
-</script>
+    </script>
 </body>
 </html>
