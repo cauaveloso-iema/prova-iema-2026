@@ -14,6 +14,7 @@
             --secondary-dark: #059669;
             --warning: #f59e0b;
             --danger: #ef4444;
+            --danger-dark: #dc2626;
             --light: #f8fafc;
             --dark: #1f2937;
             --gray: #6b7280;
@@ -153,6 +154,11 @@
             color: #d97706;
         }
         
+        .stat-icon.danger {
+            background: linear-gradient(135deg, #fee2e2, #fecaca);
+            color: var(--danger);
+        }
+        
         .stat-icon.info {
             background: linear-gradient(135deg, #dbeafe, #bfdbfe);
             color: #3b82f6;
@@ -244,6 +250,17 @@
             box-shadow: 0 10px 25px rgba(79, 70, 229, 0.1);
             transform: translateY(-3px);
         }
+
+        /* Estilo para alunos com cancelamento */
+        .aluno-card.cancelado {
+            border-color: var(--danger);
+            background: #fef2f2;
+        }
+        
+        .aluno-card.cancelado:hover {
+            border-color: var(--danger-dark);
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.1);
+        }
         
         .aluno-header {
             display: flex;
@@ -265,6 +282,10 @@
             font-weight: bold;
         }
         
+        .aluno-avatar.cancelado {
+            background: linear-gradient(135deg, var(--danger), var(--danger-dark));
+        }
+        
         .nota-badge {
             padding: 8px 15px;
             border-radius: 25px;
@@ -283,6 +304,11 @@
         .nota-pendente {
             background: linear-gradient(135deg, #fef3c7, #fde68a);
             color: #d97706;
+        }
+
+        .nota-cancelada {
+            background: linear-gradient(135deg, #fee2e2, #fecaca);
+            color: var(--danger);
         }
         
         .aluno-info {
@@ -359,6 +385,16 @@
         
         .btn-liberado:hover {
             background: linear-gradient(135deg, var(--secondary-dark), #047857);
+        }
+
+        .btn-cancelamento {
+            background: linear-gradient(135deg, var(--danger), var(--danger-dark));
+            color: white;
+        }
+        
+        .btn-cancelamento:hover {
+            background: linear-gradient(135deg, var(--danger-dark), #b91c1c);
+            transform: translateY(-2px);
         }
         
         /* Botão Liberar Todos */
@@ -565,9 +601,21 @@
             color: white;
         }
         
+        .filter-btn.cancelados.active {
+            background: var(--danger);
+            border-color: var(--danger);
+            color: white;
+        }
+        
         .filter-btn:hover:not(.active) {
             border-color: var(--primary);
             color: var(--primary);
+        }
+
+        .filter-btn.cancelados:hover:not(.active) {
+            border-color: var(--danger);
+            color: var(--danger);
+            background: #fef2f2;
         }
         
         /* Badge Status */
@@ -594,6 +642,191 @@
         .status-reprovado {
             background: #fee2e2;
             color: #991b1b;
+        }
+
+        .status-cancelado {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        /* Modal de Cancelamento */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: #6b7280;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .modal-close:hover {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        /* Estilos específicos para o modal de cancelamento */
+        .cancelamento-violacao {
+            border-left: 5px solid #dc2626;
+        }
+
+        .cancelamento-prazo {
+            border-left: 5px solid #f59e0b;
+        }
+
+        .detalhes-cancelamento {
+            margin-top: 25px;
+        }
+
+        .detalhes-item {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .estatisticas-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .estatistica-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+
+        .estatistica-valor {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .estatistica-label {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .log-detalhado {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 10px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .info-importante {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        /* Timeline de eventos */
+        .timeline {
+            margin: 25px 0;
+            padding-left: 20px;
+            border-left: 3px solid #e5e7eb;
+        }
+
+        .timeline-item {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -27px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+
+        .timeline-item.importante::before {
+            background: #dc2626;
+        }
+
+        .timeline-hora {
+            font-size: 0.85rem;
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .timeline-descricao {
+            margin-top: 5px;
+            color: #374151;
         }
     </style>
 </head>
@@ -629,9 +862,9 @@
                             <i class="fas fa-chart-line"></i>
                             <span>Média: 0.0</span>
                         </div>
-                        <div class="meta-item" id="metaData">
-                            <i class="fas fa-calendar-alt"></i>
-                            <span>Data não disponível</span>
+                        <div class="meta-item" id="metaCancelados">
+                            <i class="fas fa-ban"></i>
+                            <span>0 cancelamentos</span>
                         </div>
                     </div>
                 </div>
@@ -668,11 +901,11 @@
                 </div>
                 
                 <div class="stat-card">
-                    <div class="stat-icon info">
-                        <i class="fas fa-percentage"></i>
+                    <div class="stat-icon danger">
+                        <i class="fas fa-ban"></i>
                     </div>
-                    <div class="stat-value" id="statMedia">0.0</div>
-                    <div class="stat-label">Média geral</div>
+                    <div class="stat-value" id="statCancelados">0</div>
+                    <div class="stat-label">Cancelamentos</div>
                 </div>
                 
                 <div class="stat-card">
@@ -696,6 +929,9 @@
                 </button>
                 <button class="filter-btn" onclick="filtrarAlunos('pendentes')">
                     <i class="fas fa-clock"></i> Pendentes (<span id="countPendentes">0</span>)
+                </button>
+                <button class="filter-btn" onclick="filtrarAlunos('cancelados')">
+                    <i class="fas fa-ban"></i> Cancelados (<span id="countCancelados">0</span>)
                 </button>
                 <button class="filter-btn" onclick="filtrarAlunos('aprovados')">
                     <i class="fas fa-graduation-cap"></i> Aprovados (<span id="countAprovados">0</span>)
@@ -747,6 +983,13 @@
             </button>
         </div>
     </div>
+
+    <!-- Modal para Detalhes do Cancelamento -->
+    <div class="modal" id="modalCancelamento">
+        <div class="modal-content">
+            <!-- Conteúdo será inserido via JavaScript -->
+        </div>
+    </div>
     
     <script>
         // ============ DETECTAR AMBIENTE DINAMICAMENTE ============
@@ -778,24 +1021,182 @@
 
         // Exportar para uso global
         window.API_BASE_URL = API_BASE_URL;
+        
+        // ============ VARIÁVEIS GLOBAIS ============
+        // Mantenha estas linhas como estão
         let dadosProva = null;
         let alunosFiltrados = [];
         let filtroAtual = 'todos';
+        let cancelamentos = [];
+
+        // Adicione estas linhas para sincronização
+        window._debug = {
+            dadosProva: () => dadosProva,
+            alunosFiltrados: () => alunosFiltrados,
+            atualizarDados: (novosDados) => {
+                dadosProva = novosDados;
+                alunosFiltrados = [...novosDados.resultados];
+                window.dadosProva = novosDados;
+                window.alunosFiltrados = [...novosDados.resultados];
+            }
+        };
         
         // Função para voltar ao dashboard
         function voltarParaDashboard() {
-            const abaAnterior = localStorage.getItem('dashboard_aba_anterior') || 'minhas-provas';
-            window.location.href = `professor.html#${abaAnterior}`;
+            window.location.href = 'index.html';
         }
         
-        // Função para filtrar alunos
+        // Função para filtrar alunos (VERSÃO SIMPLIFICADA)
         function filtrarAlunos(tipo) {
             const botoes = document.querySelectorAll('.filter-btn');
             botoes.forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
             
             filtroAtual = tipo;
+            
+            console.log(`🎯 Aplicando filtro: ${tipo}`);
+            
+            // Forçar atualização da lista
             atualizarListaAlunos();
+        }
+
+        // Nova função para atualizar lista com filtro aplicado
+        function atualizarListaAlunosComFiltro(alunosFiltrados) {
+        const container = document.getElementById('alunosGrid');
+        
+        if (!alunosFiltrados || alunosFiltrados.length === 0) {
+            container.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+                <i class="fas fa-search" style="font-size: 3rem; color: var(--gray-light);"></i>
+                <h3 style="color: var(--gray); margin: 15px 0;">Nenhum aluno encontrado</h3>
+                <p style="color: var(--gray);">Tente ajustar os filtros ou a busca.</p>
+            </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = alunosFiltrados.map(aluno => {
+            const nota = aluno.nota !== undefined && aluno.nota !== null ? 
+            parseFloat(aluno.nota).toFixed(1) : 'N/A';
+            
+            const notaLiberada = aluno.notaLiberada || (aluno.status === 'corrigida' && aluno.nota !== null);
+            const porcentagem = aluno.total ? Math.round((aluno.acertos / aluno.total) * 100) : 0;
+            const notaNum = parseFloat(nota);
+            
+            // Verificar se é cancelamento
+            const isCancelado = aluno.cancelada === true;
+            const tipoCancelamento = isCancelado ? detectarTipoCancelamento(aluno) : null;
+            
+            // Determinar status
+            let statusClass = '';
+            let statusText = '';
+            
+            if (isCancelado) {
+            statusClass = 'status-cancelado';
+            statusText = tipoCancelamento === 'violacao' ? 'Cancelado (Violação)' : 'Cancelado (Prazo)';
+            } else if (!aluno.nota && aluno.nota !== 0) {
+            statusClass = 'status-recuperacao';
+            statusText = 'Não fez';
+            } else if (notaNum >= 7) {
+            statusClass = 'status-aprovado';
+            statusText = 'Aprovado';
+            } else if (notaNum >= 5) {
+            statusClass = 'status-recuperacao';
+            statusText = 'Recuperação';
+            } else {
+            statusClass = 'status-reprovado';
+            statusText = 'Reprovado';
+            }
+            
+            // Iniciais para avatar
+            const nome = aluno.alunoNome.split(' ');
+            const iniciais = (nome[0][0] + (nome[1] ? nome[1][0] : nome[0][1] || '')).toUpperCase();
+            
+            // Botão de ação baseado no status
+            let botaoAcao = '';
+            if (isCancelado) {
+            botaoAcao = `
+                <button class="btn-action btn-cancelamento" 
+                        onclick="verCancelamento('${dadosProva.prova.id || dadosProva.prova._id}', '${aluno.alunoId}', '${aluno.alunoNome.replace(/'/g, "\\'")}')">
+                <i class="fas fa-info-circle"></i> Ver Detalhes
+                </button>
+            `;
+            } else if (!notaLiberada && aluno.nota !== null) {
+            botaoAcao = `
+                <button class="btn-action btn-liberar" 
+                        onclick="liberarNotaIndividual('${aluno.alunoId}', '${aluno.alunoNome.replace(/'/g, "\\'")}', ${aluno.nota || 0})">
+                <i class="fas fa-unlock"></i> Liberar Nota
+                </button>
+            `;
+            } else if (notaLiberada) {
+            botaoAcao = `
+                <button class="btn-action btn-liberado" disabled>
+                <i class="fas fa-check-circle"></i> Nota Liberada
+                </button>
+            `;
+            } else {
+            botaoAcao = `
+                <button class="btn-action" disabled style="background: var(--gray-light); color: var(--gray);">
+                <i class="fas fa-ban"></i> Aguardando prova
+                </button>
+            `;
+            }
+            
+            return `
+            <div class="aluno-card ${isCancelado ? 'cancelado' : ''}">
+                <div class="aluno-header">
+                <div class="aluno-avatar ${isCancelado ? 'cancelado' : ''}">
+                    ${iniciais}
+                </div>
+                <div class="nota-badge ${isCancelado ? 'nota-cancelada' : notaLiberada ? 'nota-liberada' : 'nota-pendente'}">
+                    ${nota}
+                    ${isCancelado ? '<i class="fas fa-ban"></i>' : 
+                    notaLiberada ? '<i class="fas fa-check"></i>' : 
+                    '<i class="fas fa-clock"></i>'}
+                </div>
+                </div>
+                
+                <div class="aluno-info">
+                <h3>${aluno.alunoNome}</h3>
+                <p class="aluno-meta">
+                    ${aluno.alunoMatricula || 'Sem matrícula'} • ${aluno.alunoEmail || ''}
+                </p>
+                
+                <span class="status-badge ${statusClass}">
+                    <i class="fas fa-${statusText.includes('Cancelado') ? 'ban' : 
+                                    statusText === 'Aprovado' ? 'check' : 
+                                    statusText === 'Reprovado' ? 'times' : 'exclamation'}"></i>
+                    ${statusText}
+                </span>
+                
+                ${isCancelado ? `
+                <div style="margin-top: 10px; padding: 8px; background: #fef2f2; border-radius: 6px; border: 1px solid #fecaca;">
+                    <p style="margin: 0; color: #dc2626; font-size: 0.9rem;">
+                    <i class="fas fa-exclamation-circle"></i> 
+                    ${aluno.motivoCancelamento || 'Prova cancelada'}
+                    </p>
+                </div>
+                ` : ''}
+                
+                ${!isCancelado && aluno.acertos !== undefined && aluno.total ? `
+                <div style="margin-top: 15px;">
+                    <div class="performance-info">
+                    <span>${aluno.acertos}/${aluno.total} acertos</span>
+                    <span>${porcentagem}%</span>
+                    </div>
+                    <div class="performance-bar">
+                    <div class="performance-fill" style="width: ${porcentagem}%"></div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                <div class="aluno-actions">
+                    ${botaoAcao}
+                </div>
+                </div>
+            </div>
+            `;
+        }).join('');
         }
         
         // Buscar aluno
@@ -817,26 +1218,577 @@
             atualizarListaAlunos();
         }
         
+        // Função para ver detalhes do cancelamento (PARA PROFESSOR)
+        async function verCancelamento(provaId, alunoId, alunoNome) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log(`🔍 Professor solicitando detalhes do cancelamento:`);
+                console.log(`   Prova: ${provaId}`);
+                console.log(`   Aluno: ${alunoNome} (${alunoId})`);
+                
+                // Mostrar loading
+                const modalContent = `
+                <div class="modal-header" style="border-bottom: none;">
+                    <h3><i class="fas fa-spinner fa-spin"></i> Carregando detalhes...</h3>
+                    <button class="modal-close" onclick="fecharModal('modalCancelamento')">&times;</button>
+                </div>
+                <div style="padding: 40px; text-align: center;">
+                    <div class="loading-spinner" style="margin: 0 auto 20px;"></div>
+                    <p>Buscando informações do cancelamento...</p>
+                </div>
+                `;
+                
+                document.getElementById('modalCancelamento').querySelector('.modal-content').innerHTML = modalContent;
+                document.getElementById('modalCancelamento').style.display = 'flex';
+                
+                // USAR A NOVA ROTA DO PROFESSOR (ou a rota modificada)
+                const response = await fetch(`${API_BASE_URL}/professor/provas/${provaId}/cancelamento-detailed?alunoId=${alunoId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao carregar detalhes');
+                }
+                
+                console.log('📊 Dados do cancelamento recebidos:', data);
+                
+                // Renderizar detalhes do cancelamento
+                renderizarDetalhesCancelamentoProfessor(data, alunoNome);
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar cancelamento:', error);
+                
+                const errorContent = `
+                <div class="modal-header" style="border-bottom: none;">
+                    <h3 style="color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> Erro</h3>
+                    <button class="modal-close" onclick="fecharModal('modalCancelamento')">&times;</button>
+                </div>
+                <div style="padding: 30px; text-align: center;">
+                    <i class="fas fa-exclamation-circle" style="font-size: 3rem; color: var(--danger); margin-bottom: 15px;"></i>
+                    <h3 style="color: var(--danger); margin-bottom: 10px;">Erro ao carregar cancelamento</h3>
+                    <p style="color: var(--gray);">${error.message}</p>
+                    <button onclick="fecharModal('modalCancelamento')" style="margin-top: 20px; padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
+                        Fechar
+                    </button>
+                </div>
+                `;
+                
+                document.getElementById('modalCancelamento').querySelector('.modal-content').innerHTML = errorContent;
+            }
+        }
+        
+        // Função para fechar modal
+        function fecharModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Função para imprimir cancelamento
+        function imprimirCancelamento() {
+            const modalContent = document.getElementById('modalCancelamento').querySelector('.modal-content').innerHTML;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Cancelamento da Prova - Sistema de Provas</title>
+                    <style>
+                        @media print {
+                            body { 
+                                margin: 0; 
+                                padding: 20px; 
+                                font-family: Arial, sans-serif; 
+                                font-size: 12px;
+                            }
+                            .no-print { display: none !important; }
+                            h3, h4, h5 { color: #000 !important; }
+                            .info-importante { 
+                                background: #f8f9fa !important; 
+                                border: 1px solid #ddd !important;
+                            }
+                        }
+                        body { font-family: Arial, sans-serif; }
+                        .header-print { 
+                            text-align: center; 
+                            margin-bottom: 20px; 
+                            border-bottom: 2px solid #000; 
+                            padding-bottom: 15px;
+                        }
+                        .estatisticas-grid { 
+                            display: grid; 
+                            grid-template-columns: repeat(4, 1fr); 
+                            gap: 10px; 
+                            margin: 15px 0;
+                        }
+                        .estatistica-item { 
+                            border: 1px solid #ddd; 
+                            padding: 10px; 
+                            text-align: center;
+                        }
+                        .timeline { 
+                            margin: 15px 0; 
+                            padding-left: 20px; 
+                            border-left: 2px solid #ddd;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header-print">
+                        <h1>RELATÓRIO DE CANCELAMENTO DA PROVA</h1>
+                        <p>Sistema de Provas Online - ${new Date().toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    
+                    ${modalContent}
+                    
+                    <div style="text-align: center; margin-top: 30px; font-size: 10px; color: #666;">
+                        Sistema de Provas - Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.onafterprint = function() {
+                    printWindow.close();
+                };
+            }, 500);
+        }
+        // Função para renderizar detalhes do cancelamento (PARA PROFESSOR)
+        function renderizarDetalhesCancelamentoProfessor(dados, alunoNome) {
+            const tipo = dados.tipoCancelamento;
+            const isViolacao = tipo === 'violacao';
+            
+            const config = {
+                titulo: isViolacao ? 'CANCELADA - VIOLAÇÃO DAS REGRAS' : 'CANCELADA - PRAZO EXPIRADO',
+                cor: isViolacao ? '#dc2626' : '#f59e0b',
+                corFundo: isViolacao ? '#fee2e2' : '#fef3c7',
+                icone: isViolacao ? 'user-slash' : 'clock',
+                mensagemPrincipal: isViolacao ? 
+                    'Esta prova foi cancelada por violação das regras estabelecidas para realização da avaliação.' : 
+                    'Esta prova foi cancelada automaticamente por expiração do prazo de entrega.',
+                explicacao: isViolacao ? 
+                    'O sistema de monitoramento detectou comportamentos que violam as regras da prova.' : 
+                    'O tempo limite para realização da prova foi excedido.'
+            };
+            
+            // Formatar datas
+            const dataCancelamento = new Date(dados.cancelamento.data);
+            const dataFormatada = dataCancelamento.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            // Formatar estatísticas
+            let estatisticasHTML = '';
+            if (dados.estatisticas) {
+                const stats = dados.estatisticas;
+                estatisticasHTML = `
+                <div class="detalhes-item">
+                    <h4><i class="fas fa-chart-bar"></i> Estatísticas do Monitoramento</h4>
+                    <div class="estatisticas-grid">
+                        ${stats.avisos !== undefined ? `
+                        <div class="estatistica-item">
+                            <div class="estatistica-valor" style="color: ${config.cor}">${stats.avisos}</div>
+                            <div class="estatistica-label">Avisos Recebidos</div>
+                        </div>
+                        ` : ''}
+                        
+                        ${stats.tentativasAtalho !== undefined ? `
+                        <div class="estatistica-item">
+                            <div class="estatistica-valor" style="color: ${config.cor}">${stats.tentativasAtalho}</div>
+                            <div class="estatistica-label">Tentativas de Atalho</div>
+                        </div>
+                        ` : ''}
+                        
+                        ${stats.capturasTela !== undefined ? `
+                        <div class="estatistica-item">
+                            <div class="estatistica-valor" style="color: ${config.cor}">${stats.capturasTela}</div>
+                            <div class="estatistica-label">Capturas de Tela</div>
+                        </div>
+                        ` : ''}
+                        
+                        ${stats.tempoFora !== undefined ? `
+                        <div class="estatistica-item">
+                            <div class="estatistica-valor" style="color: ${config.cor}">${stats.tempoFora}s</div>
+                            <div class="estatistica-label">Tempo Fora da Página</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${stats.detalhesLog ? `
+                    <div style="margin-top: 15px;">
+                        <h5><i class="fas fa-list-alt"></i> Log Detalhado:</h5>
+                        <div class="log-detalhado">
+                            <pre>${JSON.stringify(stats.detalhesLog, null, 2)}</pre>
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+                `;
+            }
+            
+            // Timeline de eventos
+            let timelineHTML = '';
+            if (dados.cancelamento.historico && dados.cancelamento.historico.length > 0) {
+                timelineHTML = `
+                <div class="detalhes-item">
+                    <h4><i class="fas fa-history"></i> Timeline do Cancelamento</h4>
+                    <div class="timeline">
+                        ${dados.cancelamento.historico.map(evento => {
+                            const dataEvento = new Date(evento.timestamp);
+                            const horaEvento = dataEvento.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            const isImportante = evento.tipo === 'violacao_detectada' || evento.tipo === 'cancelamento';
+                            
+                            return `
+                            <div class="timeline-item ${isImportante ? 'importante' : ''}">
+                                <div class="timeline-hora">${horaEvento}</div>
+                                <div class="timeline-descricao">${evento.descricao}</div>
+                            </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                `;
+            }
+            
+            // Dados das respostas (se disponível)
+            let respostasHTML = '';
+            if (dados.cancelamento.respostas && dados.cancelamento.respostas.length > 0) {
+                respostasHTML = `
+                <div class="detalhes-item">
+                    <h4><i class="fas fa-file-alt"></i> Respostas da Prova</h4>
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                        <p><strong>Total de respostas:</strong> ${dados.cancelamento.respostas.length}</p>
+                        <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                            ${dados.cancelamento.respostas.map((resposta, index) => `
+                            <div style="padding: 5px 0; border-bottom: 1px solid #e5e7eb;">
+                                <strong>Q${index + 1}:</strong> ${resposta || 'Não respondida'}
+                            </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                `;
+            }
+            
+            const modalHTML = `
+                <div class="modal-header ${isViolacao ? 'cancelamento-violacao' : 'cancelamento-prazo'}">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="background: ${config.cor}; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-${config.icone}"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin: 0; color: ${config.cor};">${config.titulo}</h3>
+                            <p style="margin: 5px 0 0 0; font-size: 0.9rem; color: #6b7280;">${dados.prova.titulo}</p>
+                        </div>
+                    </div>
+                    <button class="modal-close" onclick="fecharModal('modalCancelamento')">&times;</button>
+                </div>
+                
+                <div style="padding: 20px;">
+                    <!-- Informações gerais -->
+                    <div style="background: ${config.corFundo}; padding: 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid ${config.cor};">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <div>
+                                <h4 style="margin: 0; color: ${isViolacao ? '#7f1d1d' : '#92400e'};">${alunoNome}</h4>
+                                <p style="margin: 5px 0 0 0; color: ${isViolacao ? '#7f1d1d' : '#92400e'}; font-size: 0.9rem;">
+                                    ${dados.aluno?.matricula ? `Matrícula: ${dados.aluno.matricula}` : ''}
+                                </p>
+                                <p style="margin: 5px 0 0 0; color: ${isViolacao ? '#7f1d1d' : '#92400e'}; font-size: 0.9rem;">
+                                    Email: ${dados.aluno?.email || 'Não informado'}
+                                </p>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 2.5rem; font-weight: bold; color: ${config.cor}">${dados.cancelamento.nota.toFixed(1)}</div>
+                                <div style="font-size: 0.9rem; color: ${config.cor}">Nota Atribuída</div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(0,0,0,0.1);">
+                            <p style="margin: 0; color: ${isViolacao ? '#7f1d1d' : '#92400e'}; font-size: 0.95rem;">
+                                <strong><i class="fas fa-exclamation-circle"></i> Motivo:</strong> ${dados.cancelamento.motivo}
+                            </p>
+                            <p style="margin: 10px 0 0 0; color: ${isViolacao ? '#7f1d1d' : '#92400e'}; font-size: 0.9rem;">
+                                <strong><i class="far fa-calendar-alt"></i> Data/Hora:</strong> ${dataFormatada}
+                            </p>
+                            <p style="margin: 10px 0 0 0; color: ${isViolacao ? '#7f1d1d' : '#92400e'}; font-size: 0.9rem;">
+                                <strong><i class="fas fa-clock"></i> Tempo gasto:</strong> ${Math.floor(dados.cancelamento.tempoGasto / 60)} minutos
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Informações da prova -->
+                    <div class="detalhes-item">
+                        <h4><i class="fas fa-info-circle"></i> Informações da Prova</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                            <div>
+                                <p style="margin: 8px 0; color: #6b7280; font-size: 0.9rem;">
+                                    <strong>Conteúdo:</strong><br>
+                                    ${dados.prova.conteudo || 'Não especificado'}
+                                </p>
+                                <p style="margin: 8px 0; color: #6b7280; font-size: 0.9rem;">
+                                    <strong>Professor:</strong><br>
+                                    ${dados.professor?.nome || 'Não informado'}
+                                </p>
+                            </div>
+                            <div>
+                                <p style="margin: 8px 0; color: #6b7280; font-size: 0.9rem;">
+                                    <strong>Data limite original:</strong><br>
+                                    ${dados.prova.dataLimite ? new Date(dados.prova.dataLimite).toLocaleDateString('pt-BR') : 'Não definida'}
+                                </p>
+                                <p style="margin: 8px 0; color: #6b7280; font-size: 0.9rem;">
+                                    <strong>Status final:</strong><br>
+                                    <span style="color: ${config.cor}; font-weight: bold;">${config.titulo}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${respostasHTML}
+                    ${estatisticasHTML}
+                    ${timelineHTML}
+                    
+                    <!-- Informações importantes -->
+                    <div class="info-importante">
+                        <h5 style="margin: 0 0 10px 0; color: #92400e; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-lightbulb"></i> Informações Importantes
+                        </h5>
+                        <ul style="margin: 0; padding-left: 20px; color: #92400e;">
+                            <li>Esta prova foi cancelada automaticamente pelo sistema</li>
+                            <li>A nota atribuída é <strong>${dados.cancelamento.nota.toFixed(1)}</strong></li>
+                            ${isViolacao ? 
+                                '<li><strong>Violou as regras estabelecidas:</strong> A realização da prova requer atenção e cumprimento das normas</li>' : 
+                                '<li><strong>Prazo expirado:</strong> O tempo limite para realização da prova foi excedido</li>'
+                            }
+                            <li>O aluno foi notificado sobre este cancelamento</li>
+                            <li>Em caso de dúvidas, entre em contato com o aluno ou o coordenador</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Botões de ação -->
+                    <div style="display: flex; gap: 10px; margin-top: 25px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                        <button onclick="imprimirCancelamento()" style="flex: 1; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-print"></i> Imprimir Relatório
+                        </button>
+                        <button onclick="fecharModal('modalCancelamento')" style="flex: 1; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-times"></i> Fechar
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalCancelamento').querySelector('.modal-content').innerHTML = modalHTML;
+        }
+        
+        // Função para fechar modal
+        function fecharModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+        
+        // Função para imprimir cancelamento
+        function imprimirCancelamento() {
+            const modalContent = document.getElementById('modalCancelamento').querySelector('.modal-content').innerHTML;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Cancelamento da Prova - Sistema de Provas</title>
+                    <style>
+                        @media print {
+                            body { 
+                                margin: 0; 
+                                padding: 20px; 
+                                font-family: Arial, sans-serif; 
+                                font-size: 12px;
+                            }
+                            .no-print { display: none !important; }
+                            h3, h4, h5 { color: #000 !important; }
+                            .info-importante { 
+                                background: #f8f9fa !important; 
+                                border: 1px solid #ddd !important;
+                            }
+                        }
+                        body { font-family: Arial, sans-serif; }
+                        .header-print { 
+                            text-align: center; 
+                            margin-bottom: 20px; 
+                            border-bottom: 2px solid #000; 
+                            padding-bottom: 15px;
+                        }
+                        .estatisticas-grid { 
+                            display: grid; 
+                            grid-template-columns: repeat(4, 1fr); 
+                            gap: 10px; 
+                            margin: 15px 0;
+                        }
+                        .estatistica-item { 
+                            border: 1px solid #ddd; 
+                            padding: 10px; 
+                            text-align: center;
+                        }
+                        .timeline { 
+                            margin: 15px 0; 
+                            padding-left: 20px; 
+                            border-left: 2px solid #ddd;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header-print">
+                        <h1>RELATÓRIO DE CANCELAMENTO DA PROVA</h1>
+                        <p>Sistema de Provas Online - ${new Date().toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    
+                    ${modalContent}
+                    
+                    <div style="text-align: center; margin-top: 30px; font-size: 10px; color: #666;">
+                        Sistema de Provas - Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.onafterprint = function() {
+                    printWindow.close();
+                };
+            }, 500);
+        }
+        
+        // Função para detectar se é cancelamento (NOVA)
+        function isCancelamento(aluno) {
+        return aluno.cancelada === true || 
+                aluno.motivoCancelamento || 
+                aluno.flagViolacao === true ||
+                aluno.status === 'cancelada' ||
+                (aluno.nota === 0 && aluno.motivoCancelamento);
+        }
+
+        // Função para detectar tipo de cancelamento (ATUALIZADA)
+        function detectarTipoCancelamento(aluno) {
+        if (!isCancelamento(aluno)) return null;
+        
+        const motivo = aluno.motivoCancelamento || '';
+        const motivoLower = motivo.toLowerCase();
+        
+        // Verificar se tem estatísticas de violação
+        const temEstatisticasViolacao = aluno.estatisticasCancelamento && 
+                                        (aluno.estatisticasCancelamento.avisos > 0 || 
+                                        aluno.estatisticasCancelamento.tentativasAtalho > 0 ||
+                                        aluno.estatisticasCancelamento.capturasTela > 0);
+        
+        // Palavras-chave para violação
+        const palavrasViolacao = [
+            'violação', 'violacao', 'violou', 'viola', 'regras', 
+            'multiplas', 'múltiplas', 'monitoramento', 'avançar',
+            'trapaça', 'trapaca', 'fraude', 'irregular'
+        ];
+        
+        let isViolacao = false;
+        
+        // 1. Verificar pela flag explícita
+        if (aluno.flagViolacao === true) {
+            isViolacao = true;
+        }
+        // 2. Verificar por palavras no motivo
+        else if (palavrasViolacao.some(palavra => motivoLower.includes(palavra))) {
+            isViolacao = true;
+        }
+        // 3. Verificar por estatísticas
+        else if (temEstatisticasViolacao) {
+            isViolacao = true;
+        }
+        // 4. Verificar por tipo de cancelamento
+        else if (aluno.tipoCancelamento === 'violacao' || aluno.status === 'violacao') {
+            isViolacao = true;
+        }
+        // 5. Se tiver nota 0 e motivo de cancelamento, é violação
+        else if (aluno.nota === 0 && aluno.motivoCancelamento) {
+            isViolacao = true;
+        }
+        
+        return isViolacao ? 'violacao' : 'prazo';
+        }
+        
         // Atualizar lista de alunos
         function atualizarListaAlunos() {
-            if (!dadosProva || !alunosFiltrados) return;
+            // Usar variáveis locais que têm os dados
+            const dadosParaUsar = dadosProva || window.dadosProva;
+            const alunosParaFiltrar = alunosFiltrados || window.alunosFiltrados || [];
             
-            let alunosParaExibir = [...alunosFiltrados];
+            if (!dadosParaUsar || !alunosParaFiltrar || alunosParaFiltrar.length === 0) {
+                console.warn('⚠️  Sem dados para atualizar lista');
+                const container = document.getElementById('alunosGrid');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1 / -1;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--gray-light);"></i>
+                            <h3 style="color: var(--gray); margin: 15px 0;">Sem dados disponíveis</h3>
+                            <p style="color: var(--gray);">Recarregue a página.</p>
+                        </div>
+                    `;
+                }
+                return;
+            }
+            
+            console.log('🔄 Atualizando lista com', alunosParaFiltrar.length, 'alunos');
+            
+            let alunosParaExibir = [...alunosParaFiltrar];
             
             // Aplicar filtro
             switch (filtroAtual) {
                 case 'liberados':
-                    alunosParaExibir = alunosParaExibir.filter(aluno => aluno.notaLiberada || (aluno.status === 'corrigida' && aluno.nota !== null));
+                    alunosParaExibir = alunosParaExibir.filter(aluno => 
+                        (aluno.notaLiberada || aluno.status === 'corrigida') && 
+                        aluno.nota !== null &&
+                        aluno.cancelada !== true
+                    );
                     break;
                 case 'pendentes':
-                    alunosParaExibir = alunosParaExibir.filter(aluno => !aluno.notaLiberada && aluno.nota !== null);
+                    alunosParaExibir = alunosParaExibir.filter(aluno => 
+                        !aluno.notaLiberada && 
+                        aluno.nota !== null &&
+                        aluno.cancelada !== true
+                    );
+                    break;
+                case 'cancelados':
+                    alunosParaExibir = alunosParaExibir.filter(aluno => 
+                        aluno.cancelada === true
+                    );
                     break;
                 case 'aprovados':
-                    alunosParaExibir = alunosParaExibir.filter(aluno => aluno.nota >= 7);
+                    alunosParaExibir = alunosParaExibir.filter(aluno => 
+                        aluno.nota >= 7 && 
+                        aluno.cancelada !== true
+                    );
+                    break;
+                case 'todos':
+                default:
+                    // Manter todos
                     break;
             }
             
             const container = document.getElementById('alunosGrid');
+            if (!container) {
+                console.error('❌ Container alunosGrid não encontrado');
+                return;
+            }
             
             if (alunosParaExibir.length === 0) {
                 container.innerHTML = `
@@ -849,6 +1801,7 @@
                 return;
             }
             
+            // Gerar HTML dos cards (código ORIGINAL mantido)
             container.innerHTML = alunosParaExibir.map(aluno => {
                 const nota = aluno.nota !== undefined && aluno.nota !== null ? 
                     parseFloat(aluno.nota).toFixed(1) : 'N/A';
@@ -857,11 +1810,18 @@
                 const porcentagem = aluno.total ? Math.round((aluno.acertos / aluno.total) * 100) : 0;
                 const notaNum = parseFloat(nota);
                 
+                // Verificar se é cancelamento
+                const isCancelado = aluno.cancelada === true;
+                const tipoCancelamento = isCancelado ? detectarTipoCancelamento(aluno) : null;
+                
                 // Determinar status
                 let statusClass = '';
                 let statusText = '';
                 
-                if (!aluno.nota) {
+                if (isCancelado) {
+                    statusClass = 'status-cancelado';
+                    statusText = tipoCancelamento === 'violacao' ? 'Cancelado (Violação)' : 'Cancelado (Prazo)';
+                } else if (!aluno.nota && aluno.nota !== 0) {
                     statusClass = 'status-recuperacao';
                     statusText = 'Não fez';
                 } else if (notaNum >= 7) {
@@ -879,15 +1839,47 @@
                 const nome = aluno.alunoNome.split(' ');
                 const iniciais = (nome[0][0] + (nome[1] ? nome[1][0] : nome[0][1] || '')).toUpperCase();
                 
+                // Botão de ação baseado no status
+                let botaoAcao = '';
+                if (isCancelado) {
+                    botaoAcao = `
+                        <button class="btn-action btn-cancelamento" 
+                                onclick="verCancelamento('${dadosParaUsar.prova.id || dadosParaUsar.prova._id}', '${aluno.alunoId}', '${aluno.alunoNome.replace(/'/g, "\\'")}')">
+                            <i class="fas fa-info-circle"></i> Ver Detalhes
+                        </button>
+                    `;
+                } else if (!notaLiberada && aluno.nota !== null) {
+                    botaoAcao = `
+                        <button class="btn-action btn-liberar" 
+                                onclick="liberarNotaIndividual('${aluno.alunoId}', '${aluno.alunoNome.replace(/'/g, "\\'")}', ${aluno.nota || 0})">
+                            <i class="fas fa-unlock"></i> Liberar Nota
+                        </button>
+                    `;
+                } else if (notaLiberada) {
+                    botaoAcao = `
+                        <button class="btn-action btn-liberado" disabled>
+                            <i class="fas fa-check-circle"></i> Nota Liberada
+                        </button>
+                    `;
+                } else {
+                    botaoAcao = `
+                        <button class="btn-action" disabled style="background: var(--gray-light); color: var(--gray);">
+                            <i class="fas fa-ban"></i> Aguardando prova
+                        </button>
+                    `;
+                }
+                
                 return `
-                    <div class="aluno-card">
+                    <div class="aluno-card ${isCancelado ? 'cancelado' : ''}">
                         <div class="aluno-header">
-                            <div class="aluno-avatar">
+                            <div class="aluno-avatar ${isCancelado ? 'cancelado' : ''}">
                                 ${iniciais}
                             </div>
-                            <div class="nota-badge ${notaLiberada ? 'nota-liberada' : 'nota-pendente'}">
+                            <div class="nota-badge ${isCancelado ? 'nota-cancelada' : notaLiberada ? 'nota-liberada' : 'nota-pendente'}">
                                 ${nota}
-                                ${notaLiberada ? '<i class="fas fa-check"></i>' : '<i class="fas fa-clock"></i>'}
+                                ${isCancelado ? '<i class="fas fa-ban"></i>' : 
+                                notaLiberada ? '<i class="fas fa-check"></i>' : 
+                                '<i class="fas fa-clock"></i>'}
                             </div>
                         </div>
                         
@@ -898,11 +1890,22 @@
                             </p>
                             
                             <span class="status-badge ${statusClass}">
-                                <i class="fas fa-${statusText === 'Aprovado' ? 'check' : statusText === 'Reprovado' ? 'times' : 'exclamation'}"></i>
+                                <i class="fas fa-${statusText.includes('Cancelado') ? 'ban' : 
+                                                statusText === 'Aprovado' ? 'check' : 
+                                                statusText === 'Reprovado' ? 'times' : 'exclamation'}"></i>
                                 ${statusText}
                             </span>
                             
-                            ${aluno.acertos !== undefined && aluno.total ? `
+                            ${isCancelado ? `
+                            <div style="margin-top: 10px; padding: 8px; background: #fef2f2; border-radius: 6px; border: 1px solid #fecaca;">
+                                <p style="margin: 0; color: #dc2626; font-size: 0.9rem;">
+                                    <i class="fas fa-exclamation-circle"></i> 
+                                    ${aluno.motivoCancelamento || 'Prova cancelada'}
+                                </p>
+                            </div>
+                            ` : ''}
+                            
+                            ${!isCancelado && aluno.acertos !== undefined && aluno.total ? `
                             <div style="margin-top: 15px;">
                                 <div class="performance-info">
                                     <span>${aluno.acertos}/${aluno.total} acertos</span>
@@ -915,67 +1918,117 @@
                             ` : ''}
                             
                             <div class="aluno-actions">
-                                ${!notaLiberada && aluno.nota !== null ? `
-                                <button class="btn-action btn-liberar" 
-                                        onclick="liberarNotaIndividual('${aluno.alunoId}', '${aluno.alunoNome.replace(/'/g, "\\'")}', ${aluno.nota || 0})">
-                                    <i class="fas fa-unlock"></i> Liberar Nota
-                                </button>
-                                ` : notaLiberada ? `
-                                <button class="btn-action btn-liberado" disabled>
-                                    <i class="fas fa-check-circle"></i> Nota Liberada
-                                </button>
-                                ` : `
-                                <button class="btn-action" disabled style="background: var(--gray-light); color: var(--gray);">
-                                    <i class="fas fa-ban"></i> Aguardando prova
-                                </button>
-                                `}
+                                ${botaoAcao}
                             </div>
                         </div>
                     </div>
                 `;
             }).join('');
+            
+            console.log(`✅ Lista atualizada: ${alunosParaExibir.length} alunos visíveis`);
         }
         
-        // Atualizar estatísticas
+        // Atualizar estatísticas (VERSÃO CORRIGIDA E SIMPLIFICADA)
         function atualizarEstatisticas(resultados) {
-            if (!resultados || resultados.length === 0) return;
+            // Usar dados locais se não for passado parâmetro
+            const dadosParaCalcular = resultados || dadosProva?.resultados || [];
             
-            const realizados = resultados.filter(a => a.nota !== null).length;
-            const pendentes = resultados.filter(a => a.nota !== null && !a.notaLiberada).length;
+            if (!dadosParaCalcular || dadosParaCalcular.length === 0) {
+                console.warn('⚠️  Nenhum dado para calcular estatísticas');
+                return;
+            }
             
-            // Calcular médias
-            const notas = resultados.filter(a => a.nota !== null).map(a => parseFloat(a.nota));
-            const media = notas.length > 0 ? (notas.reduce((a, b) => a + b, 0) / notas.length).toFixed(1) : '0.0';
-            const melhorNota = notas.length > 0 ? Math.max(...notas).toFixed(1) : '0.0';
+            console.log('🔄 Calculando estatísticas para', dadosParaCalcular.length, 'alunos');
             
-            // Atualizar DOM
-            document.getElementById('statRealizaram').textContent = realizados;
-            document.getElementById('statPendentes').textContent = pendentes;
-            document.getElementById('statMedia').textContent = media;
-            document.getElementById('statMelhorNota').textContent = melhorNota;
+            // 1. Calcular totais
+            const total = dadosParaCalcular.length;
+            const cancelados = dadosParaCalcular.filter(a => a.cancelada === true).length;
+            const liberados = dadosParaCalcular.filter(a => 
+                a.notaLiberada === true && 
+                a.cancelada !== true
+            ).length;
+            const pendentes = dadosParaCalcular.filter(a => 
+                a.notaLiberada !== true && 
+                a.nota !== null && 
+                a.nota !== undefined &&
+                a.cancelada !== true
+            ).length;
             
-            // Atualizar contadores de filtros
-            const total = resultados.length;
-            const liberados = resultados.filter(a => a.notaLiberada || (a.status === 'corrigida' && a.nota !== null)).length;
-            const aprovados = resultados.filter(a => a.nota >= 7).length;
+            // 2. Calcular média (excluindo cancelados)
+            const notasValidas = dadosParaCalcular
+                .filter(a => a.nota !== null && a.nota !== undefined && a.cancelada !== true)
+                .map(a => parseFloat(a.nota));
             
-            document.getElementById('countTodos').textContent = total;
-            document.getElementById('countLiberados').textContent = liberados;
-            document.getElementById('countPendentes').textContent = pendentes;
-            document.getElementById('countAprovados').textContent = aprovados;
+            const media = notasValidas.length > 0 
+                ? (notasValidas.reduce((sum, nota) => sum + nota, 0) / notasValidas.length).toFixed(1)
+                : '0.0';
+                
+            const melhorNota = notasValidas.length > 0 
+                ? Math.max(...notasValidas).toFixed(1)
+                : '0.0';
             
-            // Atualizar botão
+            // 3. Atualizar DOM com verificação de segurança
+            const statRealizaram = document.getElementById('statRealizaram');
+            const statPendentes = document.getElementById('statPendentes');
+            const statCancelados = document.getElementById('statCancelados');
+            const statMedia = document.getElementById('statMedia');
+            const statMelhorNota = document.getElementById('statMelhorNota');
+            
+            if (statRealizaram) statRealizaram.textContent = total;
+            if (statPendentes) statPendentes.textContent = pendentes;
+            if (statCancelados) statCancelados.textContent = cancelados;
+            if (statMedia) statMedia.textContent = media;
+            if (statMelhorNota) statMelhorNota.textContent = melhorNota;
+            
+            // 4. Atualizar contadores de filtros
+            const aprovados = dadosParaCalcular.filter(a => 
+                a.nota >= 7 && 
+                a.cancelada !== true
+            ).length;
+            
+            // Atualizar botões de filtro
+            const countTodos = document.getElementById('countTodos');
+            const countLiberados = document.getElementById('countLiberados');
+            const countPendentes = document.getElementById('countPendentes');
+            const countCancelados = document.getElementById('countCancelados');
+            const countAprovados = document.getElementById('countAprovados');
+            
+            if (countTodos) countTodos.textContent = total;
+            if (countLiberados) countLiberados.textContent = liberados;
+            if (countPendentes) countPendentes.textContent = pendentes;
+            if (countCancelados) countCancelados.textContent = cancelados;
+            if (countAprovados) countAprovados.textContent = aprovados;
+            
+            // 5. Atualizar botão principal
             const btnTexto = document.getElementById('btnLiberarTexto');
             const badge = document.getElementById('badgePendentes');
             
-            if (pendentes > 0) {
-                btnTexto.textContent = 'Liberar Todas as Notas';
-                badge.textContent = pendentes;
-                badge.style.display = 'inline-flex';
-            } else {
-                btnTexto.textContent = 'Todas as notas já foram liberadas';
-                badge.style.display = 'none';
+            if (btnTexto && badge) {
+                if (pendentes > 0) {
+                    btnTexto.textContent = 'Liberar Todas as Notas';
+                    badge.textContent = pendentes;
+                    badge.style.display = 'inline-flex';
+                } else {
+                    btnTexto.textContent = 'Todas as notas já foram liberadas';
+                    badge.style.display = 'none';
+                }
             }
+            
+            // 6. Atualizar meta cancelados
+            const metaCancelados = document.getElementById('metaCancelados');
+            if (metaCancelados) {
+                metaCancelados.querySelector('span').textContent = `${cancelados} cancelamentos`;
+            }
+            
+            console.log('📊 Estatísticas atualizadas:', {
+                total,
+                cancelados,
+                liberados,
+                pendentes,
+                media,
+                melhorNota,
+                aprovados
+            });
         }
         
         async function carregarResultados() {
@@ -1003,7 +2056,18 @@
                 const data = await response.json();
                 
                 if (data.success) {
+                    // ATUALIZAÇÃO CRÍTICA: Armazenar nas DUAS variáveis
                     dadosProva = data;
+                    alunosFiltrados = [...data.resultados];
+                    
+                    // Sincronizar com window para debug
+                    window.dadosProva = data;
+                    window.alunosFiltrados = [...data.resultados];
+                    
+                    console.log('✅ Dados carregados e sincronizados:', {
+                        local: dadosProva.resultados.length,
+                        window: window.dadosProva.resultados.length
+                    });
                     
                     // Esconder loading
                     document.getElementById('loading').style.display = 'none';
@@ -1020,21 +2084,21 @@
                         document.getElementById('provaDescricao').textContent = data.prova.conteudo || 'Prova sem descrição';
                         document.getElementById('metaQuestoes').querySelector('span').textContent = `${data.prova.quantidadeQuestoes} questões`;
                         document.getElementById('metaAlunos').querySelector('span').textContent = `${data.resultados.length} alunos`;
-                        document.getElementById('metaMedia').querySelector('span').textContent = `Média: ${data.estatisticas.mediaNotas || '0.0'}`;
+                        document.getElementById('metaMedia').querySelector('span').textContent = `Média: ${data.estatisticas?.mediaNotas || '0.0'}`;
                         
-                        if (data.prova.dataCriacao) {
-                            const dataCriacao = new Date(data.prova.dataCriacao).toLocaleDateString('pt-BR');
-                            document.getElementById('metaData').querySelector('span').textContent = dataCriacao;
-                        }
+                        // Calcular cancelados para meta
+                        const canceladosCount = data.resultados.filter(a => a.cancelada === true).length;
+                        document.getElementById('metaCancelados').querySelector('span').textContent = `${canceladosCount} cancelamentos`;
                         
                         // Inicializar dados
                         alunosFiltrados = [...data.resultados];
+                        window.alunosFiltrados = [...data.resultados];
                         
-                        // Atualizar estatísticas
-                        atualizarEstatisticas(data.resultados);
-                        
-                        // Atualizar lista
-                        atualizarListaAlunos();
+                        // Atualizar estatísticas com delay para garantir DOM
+                        setTimeout(() => {
+                            atualizarEstatisticas(data.resultados);
+                            atualizarListaAlunos();
+                        }, 100);
                         
                     } else {
                         // Mostrar estado vazio
@@ -1069,7 +2133,11 @@
                 
                 if (!provaId || !dadosProva) return;
                 
-                const pendentes = dadosProva.resultados.filter(a => a.nota !== null && !a.notaLiberada).length;
+                const pendentes = dadosProva.resultados.filter(a => 
+                    a.nota !== null && 
+                    !a.notaLiberada && 
+                    !a.motivoCancelamento
+                ).length;
                 
                 if (pendentes === 0) {
                     mostrarAlerta('Todas as notas já foram liberadas!', 'success');
@@ -1191,6 +2259,12 @@
             
             // Carregar resultados
             carregarResultados();
+            
+            // Tornar funções globais
+            window.filtrarAlunos = filtrarAlunos;
+            window.verCancelamento = verCancelamento;
+            window.fecharModal = fecharModal;
+            window.liberarNotaIndividual = liberarNotaIndividual;
         });
     </script>
 </body>

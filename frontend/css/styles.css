@@ -3041,3 +3041,220 @@ code {
     color: #6b7280;
     margin-top: 5px;
 }
+
+/* Modal de Cancelamento */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    cursor: pointer;
+    color: #6b7280;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.modal-close:hover {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+/* Estilos específicos para o modal de cancelamento */
+.cancelamento-violacao {
+    border-left: 5px solid #dc2626;
+}
+
+.cancelamento-prazo {
+    border-left: 5px solid #f59e0b;
+}
+
+.detalhes-cancelamento {
+    margin-top: 25px;
+}
+
+.detalhes-item {
+    margin-bottom: 20px;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+}
+
+.estatisticas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.estatistica-item {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    border: 1px solid #e5e7eb;
+}
+
+.estatistica-valor {
+    font-size: 1.8rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.estatistica-label {
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.log-detalhado {
+    background: #1f2937;
+    color: #e5e7eb;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 10px;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+    overflow-x: auto;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.info-importante {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+/* Timeline de eventos */
+.timeline {
+    margin: 25px 0;
+    padding-left: 20px;
+    border-left: 3px solid #e5e7eb;
+}
+
+.timeline-item {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -27px;
+    top: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #6b7280;
+}
+
+.timeline-item.importante::before {
+    background: #dc2626;
+}
+
+.timeline-hora {
+    font-size: 0.85rem;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.timeline-descricao {
+    margin-top: 5px;
+    color: #374151;
+}
+
+/* Cores Suaves para Cancelamentos */
+
+/* Violação - Vermelho mais suave */
+.cancelamento-violacao {
+    border-left: 5px solid #e53e3e; /* Vermelho mais suave */
+    background: linear-gradient(135deg, #fff5f5, #fed7d7); /* Gradiente suave */
+}
+
+/* Prazo - Laranja suave */
+.cancelamento-prazo {
+    border-left: 5px solid #ed8936; /* Laranja suave */
+    background: linear-gradient(135deg, #fffaf0, #feebc8); /* Gradiente suave */
+}
+
+/* Badges mais suaves */
+.status-cancelado {
+    background: linear-gradient(135deg, #fff5f5, #fed7d7);
+    color: #c53030; /* Vermelho mais escuro para contraste */
+    border: 1px solid #fed7d7;
+}
+
+.nota-cancelada {
+    background: linear-gradient(135deg, #fff5f5, #fed7d7);
+    color: #c53030;
+    border: 1px solid #fed7d7;
+}
+
+/* Modal header colors - MAIS SUAVE */
+.modal-header.cancelamento-violacao {
+    background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+    border-bottom: 1px solid #fc8181;
+}
+
+.modal-header.cancelamento-prazo {
+    background: linear-gradient(135deg, #fffaf0 0%, #feebc8 100%);
+    border-bottom: 1px solid #fbd38d;
+}

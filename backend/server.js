@@ -1699,95 +1699,6 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
     }
 });
 
-// ============ ROTA PARA ALUNO VER CORREÇÃO DETALHADA ============
-app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, async (req, res) => {
-    try {
-        const provaId = req.params.provaId;
-        const alunoId = req.userId;
-        
-        if (req.userRole !== 'aluno') {
-            return res.status(403).json({
-                success: false,
-                error: 'Apenas alunos podem acessar esta rota'
-            });
-        }
-        
-        console.log(`📝 Aluno ${alunoId} solicitando correção da prova ${provaId}`);
-        
-        // Buscar prova
-        const prova = await Prova.findById(provaId)
-            .select('titulo conteudo questoes');
-        
-        if (!prova) {
-            return res.status(404).json({
-                success: false,
-                error: 'Prova não encontrada'
-            });
-        }
-        
-        // Buscar resultado do aluno
-        const resultado = await Resultado.findOne({
-            provaId: provaId,
-            userId: alunoId
-        });
-        
-        // Buscar prova realizada
-        const provaRealizada = await ProvaRealizada.findOne({
-            provaId: provaId,
-            alunoId: alunoId
-        });
-        
-        if (!resultado && !provaRealizada) {
-            return res.status(404).json({
-                success: false,
-                error: 'Você ainda não realizou esta prova'
-            });
-        }
-        
-        // Verificar se a nota foi liberada
-        const notaLiberada = (resultado && resultado.notaLiberada) || 
-                            (provaRealizada && provaRealizada.notaLiberada);
-        
-        if (!notaLiberada) {
-            return res.status(403).json({
-                success: false,
-                error: 'A correção ainda não foi liberada pelo professor'
-            });
-        }
-        
-        // Preparar dados da correção
-        const correcaoData = {
-            success: true,
-            prova: {
-                id: prova._id,
-                titulo: prova.titulo,
-                conteudo: prova.conteudo
-            },
-            questoes: prova.questoes.map(q => ({
-                pergunta: q.pergunta,
-                opcoes: q.opcoes,
-                respostaCorreta: q.respostaCorreta,
-                explicacao: q.explicacao
-            })),
-            nota: resultado ? resultado.nota : provaRealizada.nota,
-            acertos: resultado ? resultado.acertos : null,
-            total: resultado ? resultado.total : prova.questoes.length,
-            respostasAluno: resultado ? resultado.respostas : provaRealizada.respostas,
-            resultadoDetalhado: resultado ? resultado.resultadoDetalhado : provaRealizada.resultadoDetalhado,
-            notaLiberada: true,
-            dataCorrecao: new Date().toISOString()
-        };
-        
-        res.json(correcaoData);
-        
-    } catch (error) {
-        console.error('Erro ao buscar correção detalhada:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Erro interno ao buscar correção: ' + error.message
-        });
-    }
-});
 
 // ============ ROTA PARA ALUNO VER CORREÇÃO DETALHADA ============
 app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, async (req, res) => {
@@ -2388,7 +2299,6 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ ROTA PARA ALUNO VER SUAS PROVAS - VERSÃO CORRIGIDA (SEM DUPLICAÇÃO) ============
 // ============ ROTA PARA ALUNO VER SUAS PROVAS - VERSÃO CORRIGIDA (COM notaLiberada) ============
 app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
     try {
@@ -2748,6 +2658,199 @@ app.get('/api/aluno/provas/:provaId/cancelamento-detailed', authenticateToken, a
     }
 });
 
+// ============ ROTA PARA DETALHES DE CANCELAMENTO - VISÃO PROFESSOR ============
+app.get('/api/professor/provas/:provaId/cancelamento-detailed', authenticateToken, async (req, res) => {
+    try {
+        const provaId = req.params.provaId;
+        const alunoId = req.query.alunoId; // Professor passa o alunoId como query param
+        
+        if (req.userRole !== 'professor') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas professores podem acessar esta rota'
+            });
+        }
+
+        // Verificar se o professor é dono da prova
+        const prova = await Prova.findById(provaId);
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+
+        if (prova.userId.toString() !== req.userId) {
+            return res.status(403).json({
+                success: false,
+                error: 'Você não tem permissão para acessar os detalhes desta prova'
+            });
+        }
+
+        if (!alunoId) {
+            return res.status(400).json({
+                success: false,
+                error: 'ID do aluno não especificado'
+            });
+        }
+
+        // Buscar em ProvaRealizada
+        const provaRealizada = await ProvaRealizada.findOne({
+            provaId: provaId,
+            alunoId: alunoId,
+            $or: [
+                { status: 'cancelada' },
+                { cancelada: true }
+            ]
+        })
+        .populate('provaId', 'titulo conteudo dataLimite userId')
+        .populate('alunoId', 'nome email matricula');
+
+        // Buscar em Resultado
+        const resultado = await Resultado.findOne({
+            provaId: provaId,
+            userId: alunoId,
+            $or: [
+                { status: 'cancelada' },
+                { cancelada: true }
+            ]
+        })
+        .populate('provaId', 'titulo conteudo dataLimite userId');
+
+        if (!provaRealizada && !resultado) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova cancelada não encontrada para este aluno'
+            });
+        }
+
+        const dadosCancelamento = provaRealizada || resultado;
+        const aluno = provaRealizada?.alunoId || await User.findById(alunoId);
+        
+        // Determinar tipo de cancelamento (USAR A MESMA LÓGICA DO ALUNO)
+        const motivo = dadosCancelamento.motivoCancelamento || '';
+        const motivoLower = motivo.toLowerCase();
+        
+        // DETECÇÃO DE TIPO DE CANCELAMENTO - MESMA LÓGICA DO ALUNO
+        let tipoCancelamento = 'outro';
+        let icone = 'ban';
+        let corPrincipal = '#ef4444';
+        let corFundo = '#fef2f2';
+        let tituloStatus = 'CANCELADA';
+        
+        // Palavras-chave para violação
+        const palavrasViolacao = [
+            'violação', 'violacao', 'violou', 'viola', 'multiplas', 'múltiplas',
+            'regras', 'monitoramento', 'trapaça', 'trapaca', 'fraude'
+        ];
+        
+        const isViolacao = palavrasViolacao.some(palavra => motivoLower.includes(palavra)) ||
+                          dadosCancelamento.flagViolacao ||
+                          (dadosCancelamento.estatisticasCancelamento && 
+                           dadosCancelamento.estatisticasCancelamento.avisos > 0);
+        
+        if (isViolacao) {
+            tipoCancelamento = 'violacao';
+            icone = 'user-slash';
+            corPrincipal = '#dc2626';
+            corFundo = '#fee2e2';
+            tituloStatus = 'CANCELADA - VIOLAÇÃO';
+        } else if (motivoLower.includes('prazo') || motivoLower.includes('expirado') || motivoLower.includes('data limite')) {
+            tipoCancelamento = 'prazo';
+            icone = 'clock';
+            corPrincipal = '#f59e0b';
+            corFundo = '#fef3c7';
+            tituloStatus = 'CANCELADA - PRAZO';
+        }
+
+        // Formatar estatísticas do log
+        let estatisticas = dadosCancelamento.estatisticasCancelamento || {};
+        
+        // Se não tiver estatísticas, extrair do motivo
+        if (!estatisticas.timestamp && dadosCancelamento.createdAt) {
+            estatisticas.timestamp = dadosCancelamento.createdAt;
+        }
+
+        // Buscar professor (o próprio)
+        const professor = await User.findById(req.userId).select('nome email');
+
+        const detalhes = {
+            success: true,
+            tipo: 'cancelada',
+            tipoCancelamento: tipoCancelamento,
+            tituloStatus: tituloStatus,
+            icone: icone,
+            corPrincipal: corPrincipal,
+            corFundo: corFundo,
+            
+            // Dados da prova
+            prova: {
+                id: prova?._id,
+                titulo: prova?.titulo || 'Prova não encontrada',
+                conteudo: prova?.conteudo || 'Conteúdo não especificado',
+                dataLimite: prova?.dataLimite,
+                professorNome: professor?.nome
+            },
+            
+            // Dados do aluno
+            aluno: {
+                id: alunoId,
+                nome: aluno?.nome || 'Aluno',
+                email: aluno?.email || 'Não informado',
+                matricula: aluno?.matricula || 'Não informada'
+            },
+            
+            // Dados do cancelamento
+            cancelamento: {
+                motivo: motivo,
+                data: dadosCancelamento.dataRealizacao || dadosCancelamento.createdAt,
+                nota: dadosCancelamento.nota || 0,
+                tempoGasto: dadosCancelamento.tempoGasto || 0,
+                respostas: dadosCancelamento.respostas || [],
+                historico: dadosCancelamento.historicoEventos || []
+            },
+            
+            // Estatísticas do log
+            estatisticas: estatisticas,
+            
+            // Dados do professor (para quem foi notificado)
+            professor: professor ? {
+                nome: professor.nome,
+                email: professor.email
+            } : null,
+            
+            // Informações técnicas
+            logTimestamp: estatisticas.timestamp || new Date().toISOString(),
+            
+            // Mensagens para o professor
+            mensagem: tipoCancelamento === 'violacao' 
+                ? 'Esta prova foi cancelada por violação das regras estabelecidas para realização da avaliação.' 
+                : 'Esta prova foi cancelada automaticamente por expiração do prazo de entrega.',
+                
+            recomendacao: tipoCancelamento === 'violacao'
+                ? `O aluno ${aluno?.nome || 'não identificado'} violou as regras da prova. Recomende ao aluno que respeite as normas nas próximas avaliações.`
+                : `O aluno ${aluno?.nome || 'não identificado'} não realizou a prova dentro do prazo. Considere ajustar os prazos ou entrar em contato com o aluno.`,
+            
+            // Informações adicionais para professor
+            informacoesTecnicas: {
+                dataRealizacao: dadosCancelamento.dataRealizacao,
+                duracaoProva: prova?.duracao,
+                totalQuestoes: prova?.quantidadeQuestoes,
+                porcentagemRealizada: dadosCancelamento.respostas ? 
+                    Math.round((dadosCancelamento.respostas.filter(r => r !== null && r !== undefined).length / prova?.quantidadeQuestoes) * 100) : 0
+            }
+        };
+
+        res.json(detalhes);
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar detalhes de cancelamento (professor):', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao buscar detalhes do cancelamento: ' + error.message
+        });
+    }
+});
 
 // ============ ROTA PARA VALIDAR ACESSO À PROVA ============
 // ============ ROTA PARA VALIDAR ACESSO À PROVA (VERSÃO CORRIGIDA) ============
@@ -3707,11 +3810,20 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
         tempoGasto: r.tempoGasto,
         dataEntrega: r.createdAt,
         notaLiberada: r.notaLiberada,
+        
+        // CAMPOS DE CANCELAMENTO
+        cancelada: r.cancelada || false,
+        motivoCancelamento: r.motivoCancelamento || null,
+        flagViolacao: r.flagViolacao || false,
+        estatisticasCancelamento: r.estatisticasCancelamento || null,
+        tipoCancelamento: r.motivoCancelamentoTipo || null,
+        status: r.status || 'corrigida',
+        
         tipo: 'resultado'
       });
     });
     
-    // Adicionar resultados do modelo ProvaRealizada (apenas se não existir no Resultado)
+    // Adicionar resultados do modelo ProvaRealizada (INCLUINDO CANCELADOS)
     provasRealizadas.forEach(pr => {
       const jaExiste = resultadosCombinados.some(r => 
         r.alunoId.toString() === pr.alunoId._id.toString()
@@ -3731,6 +3843,14 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
           dataEntrega: pr.dataRealizacao,
           status: pr.status,
           notaLiberada: pr.notaLiberada,
+          
+          // CAMPOS DE CANCELAMENTO
+          cancelada: pr.cancelada || false,
+          motivoCancelamento: pr.motivoCancelamento || null,
+          flagViolacao: pr.flagViolacao || false,
+          estatisticasCancelamento: pr.estatisticasCancelamento || null,
+          tipoCancelamento: pr.motivoCancelamentoTipo || null,
+          
           tipo: 'prova_realizada'
         });
       }
@@ -3739,13 +3859,14 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
     // Estatísticas da prova
     const estatisticas = {
       totalAlunos: resultadosCombinados.length,
-      alunosComNota: resultadosCombinados.filter(r => r.nota !== null && r.nota !== undefined).length,
-      alunosPendentes: resultadosCombinados.filter(r => r.nota === null || r.nota === undefined).length,
+      alunosComNota: resultadosCombinados.filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada).length,
+      alunosPendentes: resultadosCombinados.filter(r => (r.nota === null || r.nota === undefined) && !r.cancelada).length,
+      alunosCancelados: resultadosCombinados.filter(r => r.cancelada).length, // NOVO: contar cancelados
       mediaNotas: resultadosCombinados.length > 0 
         ? resultadosCombinados
-            .filter(r => r.nota !== null && r.nota !== undefined)
+            .filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada) // Excluir cancelados da média
             .reduce((sum, r) => sum + r.nota, 0) / 
-          resultadosCombinados.filter(r => r.nota !== null && r.nota !== undefined).length
+          resultadosCombinados.filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada).length
         : 0
     };
     
@@ -3955,14 +4076,28 @@ app.get('/api/provas/:id/correcao', authenticateToken, async (req, res) => {
       });
     }
 
-    // Buscar todos os alunos que realizaram esta prova
-    const provasRealizadas = await ProvaRealizada.find({ provaId: provaId })
-      .populate('alunoId', 'nome email matricula')
-      .sort({ dataRealizacao: -1 });
+    // Buscar resultados do modelo Resultado (INCLUINDO CANCELADOS)
+    const resultados = await Resultado.find({ 
+      provaId: provaId,
+      $or: [
+        { notaLiberada: { $in: [true, false] } }, // Notas liberadas ou não
+        { cancelada: true } // INCLUIR CANCELADOS
+      ]
+    })
+    .populate('userId', 'nome email matricula')
+    .sort({ createdAt: -1 });
 
-    const resultados = await Resultado.find({ provaId: provaId })
-      .populate('userId', 'nome email matricula')
-      .sort({ createdAt: -1 });
+    // Buscar também do modelo ProvaRealizada (INCLUINDO CANCELADOS)
+    const provasRealizadas = await ProvaRealizada.find({ 
+      provaId: provaId,
+      $or: [
+        { notaLiberada: { $in: [true, false] } },
+        { cancelada: true }, // INCLUIR CANCELADOS
+        { status: 'cancelada' }
+      ]
+    })
+    .populate('alunoId', 'nome email matricula')
+    .sort({ dataRealizacao: -1 });
 
     // Combinar resultados
     const alunosComProva = [];
