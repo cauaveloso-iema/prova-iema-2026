@@ -786,6 +786,23 @@
                 <h1 id="provaTitulo">Título da Prova</h1>
                 <p id="provaConteudo">Conteúdo da prova</p>
                 
+                <div id="infoHorario" style="margin-top: 10px; padding: 8px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.9rem;">
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <i class="far fa-calendar-alt"></i>
+                            <span id="infoData">29/01/2026</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <i class="far fa-clock"></i>
+                            <span id="infoHorarioText">17:30 às 18:00</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <i class="fas fa-hourglass-half"></i>
+                            <span id="infoDuracao">30 minutos</span>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="prova-meta">
                     <div class="meta-left">
                         <div class="meta-item">
@@ -2151,10 +2168,114 @@ Boa prova! Não atualize a página! 🚨
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get('token');
     }
+
+    async function verificarHorarioProva() {
+        try {
+            const token = getTokenFromURL();
+            if (!token) return false;
+            
+            const response = await fetch(`${API_BASE_URL}/provas/dados?token=${encodeURIComponent(token)}`);
+            const data = await response.json();
+            
+            if (!data.success) return false;
+            
+            const prova = data.prova;
+            const agora = new Date();
+            
+            // Verificar horário específico
+            if (prova.horarioInicio && prova.horarioTermino) {
+                const dataHoje = agora.toISOString().split('T')[0];
+                const inicioProva = new Date(`${dataHoje}T${prova.horarioInicio}:00`);
+                const terminoProva = new Date(`${dataHoje}T${prova.horarioTermino}:00`);
+                
+                console.log('⏰ Verificação de horário:');
+                console.log('  Agora:', agora.toLocaleTimeString('pt-BR'));
+                console.log('  Início:', inicioProva.toLocaleTimeString('pt-BR'));
+                console.log('  Término:', terminoProva.toLocaleTimeString('pt-BR'));
+                
+                if (agora < inicioProva) {
+                    const minutosRestantes = Math.floor((inicioProva - agora) / (1000 * 60));
+                    let mensagem = `A prova só estará disponível a partir das ${prova.horarioInicio}`;
+                    
+                    if (minutosRestantes > 0) {
+                        if (minutosRestantes > 60) {
+                            const horas = Math.floor(minutosRestantes / 60);
+                            mensagem += ` (em ${horas} hora${horas > 1 ? 's' : ''})`;
+                        } else {
+                            mensagem += ` (em ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''})`;
+                        }
+                    }
+                    
+                    mostrarErro('Horário Indisponível', mensagem);
+                    return false;
+                }
+                
+                if (agora > terminoProva) {
+                    mostrarErro('Horário Encerrado', 
+                        `O horário para esta prova terminou às ${prova.horarioTermino}`);
+                    return false;
+                }
+                
+                // Calcular e mostrar tempo restante
+                const tempoRestanteMinutos = Math.floor((terminoProva - agora) / (1000 * 60));
+                console.log(`⏱️ Tempo restante: ${tempoRestanteMinutos} minutos`);
+                
+                // Adicionar contador de tempo restante na interface
+                const timerElement = document.getElementById('contadorTempo');
+                if (timerElement && tempoRestanteMinutos > 0) {
+                    // Iniciar contador regressivo do horário
+                    iniciarContadorHorario(tempoRestanteMinutos);
+                }
+            }
+            
+            return true;
+            
+        } catch (error) {
+            console.error('Erro ao verificar horário:', error);
+            return true; // Em caso de erro, permite continuar (fail-safe)
+        }
+    }
+
+    // Função para iniciar contador do horário
+    function iniciarContadorHorario(minutosIniciais) {
+        let minutosRestantes = minutosIniciais;
+        
+        const contadorHorario = setInterval(() => {
+            minutosRestantes--;
+            
+            if (minutosRestantes <= 0) {
+                clearInterval(contadorHorario);
+                // Mostrar aviso de que o horário terminou
+                alert('⏰ O horário da prova terminou! A prova será automaticamente finalizada.');
+                finalizarProva();
+            } else {
+                // Atualizar interface se necessário
+                const tempoElement = document.getElementById('tempoRestanteHorario');
+                if (tempoElement) {
+                    tempoElement.textContent = `Tempo restante: ${minutosRestantes} min`;
+                    
+                    // Alerta visual nos últimos 5 minutos
+                    if (minutosRestantes <= 5) {
+                        tempoElement.style.color = '#dc2626';
+                        tempoElement.style.fontWeight = 'bold';
+                    }
+                }
+            }
+        }, 60000); // Atualizar a cada minuto
+    }
+
     
     async function carregarProva(token) {
         try {
-            atualizarMensagemLoading('Iniciando prova...');
+            atualizarMensagemLoading('Verificando horário da prova...');
+            
+            // Verificar horário primeiro
+            const horarioOk = await verificarHorarioProva();
+            if (!horarioOk) {
+                return; // A função verificarHorarioProva já mostra o erro
+            }
+            
+            atualizarMensagemLoading('Carregando prova...');
             
             const response = await fetch(`${API_BASE_URL}/provas/dados?token=${encodeURIComponent(token)}`);
             
@@ -2186,7 +2307,24 @@ Boa prova! Não atualize a página! 🚨
         document.getElementById('provaTitulo').textContent = prova.titulo;
         document.getElementById('provaConteudo').textContent = prova.conteudo;
         document.getElementById('questoesCount').textContent = `${prova.quantidadeQuestoes} questões`;
-        document.getElementById('provaDuracao').textContent = `${prova.duracao} minutos`;
+        
+        // ATUALIZAR INFORMAÇÕES DE HORÁRIO E DURAÇÃO
+        if (prova.horarioInicio && prova.horarioTermino) {
+            document.getElementById('provaDuracao').textContent = `${prova.duracaoMinutos || 30} minutos`;
+            
+            // Adicionar informações de horário ao header
+            const metaLeft = document.querySelector('.meta-left');
+            if (metaLeft) {
+                metaLeft.innerHTML += `
+                    <div class="meta-item">
+                        <i class="far fa-clock"></i> 
+                        <span>${prova.horarioInicio} - ${prova.horarioTermino}</span>
+                    </div>
+                `;
+            }
+        } else {
+            document.getElementById('provaDuracao').textContent = `${prova.duracaoMinutos || 30} minutos`;
+        }
         
         renderizarQuestoes();
         iniciarTimer();
@@ -2196,17 +2334,27 @@ Boa prova! Não atualize a página! 🚨
         
         atualizarProgresso();
         
-        // Habilitar scroll na área de questões
-        const questoesContainer = document.getElementById('questoesContainer');
-        if (questoesContainer) {
-            questoesContainer.style.overflowY = 'auto';
-            questoesContainer.style.overflowX = 'hidden';
+        // Calcular tempo restante baseado no horário de término
+        if (prova.horarioInicio && prova.horarioTermino) {
+            const agora = new Date();
+            const hoje = agora.toISOString().split('T')[0];
+            const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
+            const tempoRestanteMinutos = Math.floor((terminoProva - agora) / (1000 * 60));
+            
+            console.log(`⏱️ Tempo restante pelo horário: ${tempoRestanteMinutos} minutos`);
+            
+            // Adicionar contador de horário
+            if (tempoRestanteMinutos > 0 && tempoRestanteMinutos <= 120) { // Mostrar apenas se for menos de 2 horas
+                const timerElement = document.getElementById('contadorTempo');
+                if (timerElement) {
+                    // Iniciar contador baseado no horário de término
+                    iniciarContadorHorario(tempoRestanteMinutos);
+                }
+            }
         }
         
-        // Mostrar indicador de scroll se necessário
+        // Mostrar indicador de scroll
         setTimeout(() => mostrarIndicadorScroll(), 500);
-        
-        console.log('Scroll habilitado - container height:', questoesContainer.scrollHeight, 'client height:', questoesContainer.clientHeight);
     }
     
     function renderizarQuestoes() {

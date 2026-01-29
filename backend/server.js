@@ -1011,7 +1011,41 @@ app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
       });
     }
 
-    const { titulo, conteudo, quantidadeQuestoes = 10, dificuldade = 'media', dataLimite, duracao } = req.body;
+    const { titulo, conteudo, quantidadeQuestoes = 10, dificuldade = 'media', dataLimite, horarioInicio, horarioTermino } = req.body;
+
+    // Validar horários
+    if (!horarioInicio || !horarioTermino) {
+      return res.status(400).json({
+        success: false,
+        error: 'Horário de início e término são obrigatórios'
+      });
+    }
+    
+    // Validar formato HH:mm
+    const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(horarioInicio) || !timeRegex.test(horarioTermino)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Formato de horário inválido. Use HH:mm (ex: 08:30)'
+      });
+    }
+    
+    // Calcular duração em minutos (opcional)
+    const calcularDuracaoMinutos = (inicio, termino) => {
+      const [h1, m1] = inicio.split(':').map(Number);
+      const [h2, m2] = termino.split(':').map(Number);
+      return (h2 * 60 + m2) - (h1 * 60 + m1);
+    };
+    
+    const duracaoMinutos = calcularDuracaoMinutos(horarioInicio, horarioTermino);
+    
+    // Verificar se a duração é válida
+    if (duracaoMinutos <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Horário de término deve ser depois do horário de início'
+      });
+    }
 
     console.log(`🤖 Professor ${req.userId} solicitando prova sobre: "${conteudo}"`);
 
@@ -1380,7 +1414,9 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
       quantidadeQuestoes: questoesValidas.length > 0 ? questoesValidas.length : questoesValidadas.length,
       dificuldade: dificuldade,
       dataLimite: dataLimite ? new Date(dataLimite) : null,
-      duracao: duracao || 60,
+      horarioInicio: horarioInicio,
+      horarioTermino: horarioTermino,
+      duracaoMinutos: duracaoMinutos,
       status: 'ativa',
       alunosAtribuidos: turma.alunos,
       fonteGeracao: questoesValidadas.length > 0 ? 'Groq AI' : 'Fallback manual'
@@ -2245,6 +2281,81 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
         error: 'Você já realizou esta prova' 
       });
     }
+
+    // **VERIFICAÇÃO COMPLETA DE DATA E HORÁRIO**
+    const agora = new Date();
+    const hoje = agora.toISOString().split('T')[0];
+    
+    // Verificar DATA (considerando data limite como fim do dia)
+    if (prova.dataLimite) {
+      const dataLimite = new Date(prova.dataLimite);
+      const dataLimiteFimDia = new Date(dataLimite);
+      dataLimiteFimDia.setHours(23, 59, 59, 999);
+      
+      console.log(`📅 Verificando data limite:`);
+      console.log(`   Agora: ${agora.toLocaleString('pt-BR')}`);
+      console.log(`   Data limite (fim do dia): ${dataLimiteFimDia.toLocaleString('pt-BR')}`);
+      
+      if (agora > dataLimiteFimDia) {
+        const dataFormatada = dataLimiteFimDia.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+        
+        return res.status(400).json({ 
+          success: false, 
+          error: `📅 Esta prova só estava disponível até ${dataFormatada}` 
+        });
+      }
+    }
+    
+    // **VERIFICAÇÃO DE HORÁRIO ESPECÍFICO (NOVO)**
+    if (prova.horarioInicio && prova.horarioTermino) {
+      // Obter data atual em string YYYY-MM-DD
+      const dataHoje = agora.toISOString().split('T')[0];
+      
+      // Criar objetos Date com a data de hoje + horários da prova
+      const inicioProva = new Date(`${dataHoje}T${prova.horarioInicio}:00`);
+      const terminoProva = new Date(`${dataHoje}T${prova.horarioTermino}:00`);
+      
+      console.log(`⏰ Verificando horário da prova:`);
+      console.log(`   Agora: ${agora.toLocaleTimeString('pt-BR')}`);
+      console.log(`   Início da prova: ${inicioProva.toLocaleTimeString('pt-BR')}`);
+      console.log(`   Término da prova: ${terminoProva.toLocaleTimeString('pt-BR')}`);
+      console.log(`   Horário permitido: ${prova.horarioInicio} às ${prova.horarioTermino}`);
+      
+      // Verificar se está dentro do horário permitido
+      if (agora < inicioProva) {
+        const minutosRestantes = Math.floor((inicioProva - agora) / (1000 * 60));
+        
+        let mensagem = `🕐 Esta prova só poderá ser realizada a partir das ${prova.horarioInicio}`;
+        if (minutosRestantes > 0) {
+          if (minutosRestantes > 60) {
+            const horas = Math.floor(minutosRestantes / 60);
+            mensagem += ` (em ${horas} hora${horas > 1 ? 's' : ''})`;
+          } else {
+            mensagem += ` (em ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''})`;
+          }
+        }
+        
+        return res.status(400).json({ 
+          success: false, 
+          error: mensagem 
+        });
+      }
+      
+      if (agora > terminoProva) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `⏰ O horário para esta prova terminou às ${prova.horarioTermino}` 
+        });
+      }
+      
+      // Calcular tempo restante para exibição na interface
+      const tempoRestanteMinutos = Math.floor((terminoProva - agora) / (1000 * 60));
+      console.log(`⏱️ Tempo restante: ${tempoRestanteMinutos} minutos`);
+    }
     
     if (prova.turmaId) {
       const turma = await Turma.findById(prova.turmaId);
@@ -2263,27 +2374,28 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
       });
     }
     
-    if (prova.dataLimite && new Date() > prova.dataLimite) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'A data limite para esta prova já expirou' 
-      });
-    }
-    
+    // Preparar dados da prova para o aluno
     const provaParaAluno = {
       _id: prova._id,
       titulo: prova.titulo,
       conteudo: prova.conteudo,
-      duracao: prova.duracao,
+      // **ADICIONAR ESTES CAMPOS:**
+      horarioInicio: prova.horarioInicio,
+      horarioTermino: prova.horarioTermino,
+      duracaoMinutos: prova.duracaoMinutos,
       dataLimite: prova.dataLimite,
-      tempoRestante: prova.dataLimite ? Math.floor((new Date(prova.dataLimite) - new Date()) / 60000) : null,
+      // Calcular tempo restante em minutos
+      tempoRestanteMinutos: prova.horarioTermino ? 
+        Math.floor((new Date(`${hoje}T${prova.horarioTermino}:00`) - agora) / (1000 * 60)) : 
+        null,
       questoes: prova.questoes.map(q => ({
         pergunta: q.pergunta,
         opcoes: q.opcoes
       }))
     };
     
-    console.log(`✅ Prova ${provaId} enviada para aluno ${alunoId} com ${prova.questoes.length} questões`);
+    console.log(`✅ Prova ${provaId} enviada para aluno ${alunoId}`);
+    console.log(`📋 Informações da prova: ${prova.horarioInicio} às ${prova.horarioTermino} (${prova.duracaoMinutos} minutos)`);
     
     res.json({ 
       success: true, 
@@ -2861,13 +2973,6 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
     
     console.log(`🔐 Validando acesso: Aluno ${alunoId} para prova ${provaId}`);
     
-    if (!mongoose.Types.ObjectId.isValid(provaId)) {
-      return res.status(400).json({
-        success: false,
-        error: 'ID da prova inválido'
-      });
-    }
-    
     const prova = await Prova.findById(provaId);
     if (!prova) {
       return res.status(404).json({
@@ -2912,65 +3017,67 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
     
-    // CORREÇÃO: Verificação de data limite - considerar FIM DO DIA da data limite
+    // **VERIFICAÇÃO DE DATA LIMITE**
+    const hoje = new Date();
     if (prova.dataLimite) {
-      const hoje = new Date();
       const dataLimite = new Date(prova.dataLimite);
-      
-      // CORREÇÃO PRINCIPAL: 
-      // Criar uma cópia da data limite e ajustar para FIM DO DIA (23:59:59.999)
       const dataLimiteFimDia = new Date(dataLimite);
       dataLimiteFimDia.setHours(23, 59, 59, 999);
       
-      console.log(`📅 COMPARAÇÃO DE DATAS (DEBUG):`);
-      console.log(`   Aluno: ${alunoId}`);
-      console.log(`   Prova: ${prova.titulo}`);
-      console.log(`   Data limite original: ${dataLimite.toISOString()}`);
-      console.log(`   Data limite (fim do dia): ${dataLimiteFimDia.toISOString()}`);
-      console.log(`   Hoje: ${hoje.toISOString()}`);
-      console.log(`   Horário atual (local): ${hoje.toLocaleString('pt-BR')}`);
-      console.log(`   Verificação: Hoje (${hoje.toISOString()}) > Data limite fim do dia (${dataLimiteFimDia.toISOString()})? ${hoje > dataLimiteFimDia}`);
+      console.log(`📅 COMPARAÇÃO DE DATAS:`);
+      console.log(`   Hoje: ${hoje.toLocaleString('pt-BR')}`);
+      console.log(`   Data limite (fim do dia): ${dataLimiteFimDia.toLocaleString('pt-BR')}`);
       
-      // Verificar se HOJE já passou do FIM DO DIA da data limite
       if (hoje > dataLimiteFimDia) {
-        const dataFormatada = dataLimite.toLocaleDateString('pt-BR', {
+        const dataFormatada = dataLimiteFimDia.toLocaleDateString('pt-BR', {
           day: '2-digit',
           month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
+          year: 'numeric'
         });
-        
-        // Calcular dias/horas restantes (apenas para logging)
-        const diffMs = dataLimiteFimDia - hoje;
-        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const diffHoras = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        
-        console.log(`   ❌ Prova expirada em: ${dataFormatada}`);
-        console.log(`   ⏰ Dias restantes (negativo): ${diffDias}`);
-        console.log(`   ⏰ Horas restantes (negativo): ${diffHoras}`);
         
         return res.status(400).json({
           success: false,
-          error: `📅 A data limite para esta prova era ${dataFormatada}`
+          error: `📅 Esta prova só estava disponível até ${dataFormatada}`
         });
-      } else {
-        // Ainda dentro do prazo
-        const diffMs = dataLimiteFimDia - hoje;
-        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const diffHoras = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        
-        console.log(`   ✅ Prova ainda disponível!`);
-        console.log(`   ⏰ Dias restantes: ${diffDias}`);
-        console.log(`   ⏰ Horas restantes: ${diffHoras}`);
-        
-        // Se expira hoje, mostrar alerta especial
-        if (diffDias === 0) {
-          console.log(`   ⚠️ ATENÇÃO: Prova expira HOJE às 23:59!`);
-        }
       }
-    } else {
-      console.log(`   ✅ Prova sem data limite - sempre disponível`);
+    }
+    
+    // **VERIFICAÇÃO DE HORÁRIO ESPECÍFICO**
+    if (prova.horarioInicio && prova.horarioTermino) {
+      const dataHoje = hoje.toISOString().split('T')[0];
+      const inicioProva = new Date(`${dataHoje}T${prova.horarioInicio}:00`);
+      const terminoProva = new Date(`${dataHoje}T${prova.horarioTermino}:00`);
+      
+      console.log(`⏰ VERIFICAÇÃO DE HORÁRIO:`);
+      console.log(`   Horário atual: ${hoje.toLocaleTimeString('pt-BR')}`);
+      console.log(`   Início permitido: ${inicioProva.toLocaleTimeString('pt-BR')}`);
+      console.log(`   Término permitido: ${terminoProva.toLocaleTimeString('pt-BR')}`);
+      
+      if (hoje < inicioProva) {
+        const minutosRestantes = Math.floor((inicioProva - hoje) / (1000 * 60));
+        let mensagem = `A prova só estará disponível a partir das ${prova.horarioInicio}`;
+        
+        if (minutosRestantes > 0) {
+          if (minutosRestantes > 60) {
+            const horas = Math.floor(minutosRestantes / 60);
+            mensagem += ` (em ${horas} hora${horas > 1 ? 's' : ''})`;
+          } else {
+            mensagem += ` (em ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''})`;
+          }
+        }
+        
+        return res.status(400).json({
+          success: false,
+          error: mensagem
+        });
+      }
+      
+      if (hoje > terminoProva) {
+        return res.status(400).json({
+          success: false,
+          error: `O horário para esta prova terminou às ${prova.horarioTermino}`
+        });
+      }
     }
     
     // Verificar se a prova está ativa
@@ -2992,20 +3099,9 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       process.env.JWT_SECRET
     );
     
-    console.log(`✅ Token gerado para aluno ${alunoId}`);
-    console.log(`📋 Dados da prova disponível:`);
-    console.log(`   - Título: ${prova.titulo}`);
-    console.log(`   - Duração: ${prova.duracao} minutos`);
-    console.log(`   - Questões: ${prova.questoes.length}`);
-    console.log(`   - Data limite: ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleString('pt-BR') : 'Sem data'}`);
-    
-    // Calcular tempo restante em minutos
-    let tempoRestanteMinutos = null;
-    if (prova.dataLimite) {
-      const dataLimiteFimDia = new Date(prova.dataLimite);
-      dataLimiteFimDia.setHours(23, 59, 59, 999);
-      tempoRestanteMinutos = Math.floor((dataLimiteFimDia - new Date()) / (1000 * 60));
-    }
+    console.log(`✅ Acesso autorizado para prova ${prova.titulo}`);
+    console.log(`   Horário: ${prova.horarioInicio} às ${prova.horarioTermino}`);
+    console.log(`   Duração: ${prova.duracaoMinutos} minutos`);
     
     res.json({
       success: true,
@@ -3013,10 +3109,14 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       prova: {
         id: prova._id,
         titulo: prova.titulo,
-        duracao: prova.duracao,
+        duracao: prova.duracaoMinutos,
         quantidadeQuestoes: prova.questoes.length,
         dataLimite: prova.dataLimite,
-        tempoRestanteMinutos: tempoRestanteMinutos > 0 ? tempoRestanteMinutos : null
+        horarioInicio: prova.horarioInicio,
+        horarioTermino: prova.horarioTermino,
+        tempoRestanteMinutos: prova.horarioTermino ? 
+          Math.floor((new Date(`${hoje.toISOString().split('T')[0]}T${prova.horarioTermino}:00`) - hoje) / (1000 * 60)) : 
+          null
       },
       redirectTo: `/realizar-prova.html?token=${provaToken}`
     });
@@ -3937,29 +4037,52 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Função auxiliar para formatar duração
+    function formatarDuracao(minutos) {
+      if (!minutos) return 'Não definida';
+      
+      const horas = Math.floor(minutos / 60);
+      const mins = minutos % 60;
+      
+      let resultado = '';
+      if (horas > 0) {
+        resultado += `${horas}h`;
+      }
+      if (mins > 0) {
+        if (resultado) resultado += ' ';
+        resultado += `${mins}min`;
+      }
+      
+      return resultado || '0min';
+    }
+
     // Preparar dados da prova
     const dadosProva = {
-      id: prova._id,
-      titulo: prova.titulo,
-      conteudo: prova.conteudo,
-      dataCriacao: prova.createdAt,
-      dataLimite: prova.dataLimite,
-      duracao: prova.duracao,
-      dificuldade: prova.dificuldade,
-      quantidadeQuestoes: prova.questoes.length,
-      codigo: prova.codigo,
-      status: prova.status,
-      fonteGeracao: prova.fonteGeracao,
-      turma: prova.turmaId ? {
-        id: prova.turmaId._id,
-        nome: prova.turmaId.nome,
-        disciplina: prova.turmaId.disciplina
-      } : null,
-      professor: prova.userId ? {
-        nome: prova.userId.nome,
-        email: prova.userId.email
-      } : null
-    };
+          id: prova._id,
+          titulo: prova.titulo,
+          conteudo: prova.conteudo,
+          dataCriacao: prova.createdAt,
+          dataLimite: prova.dataLimite,
+          // **ADICIONAR ESTES CAMPOS:**
+          horarioInicio: prova.horarioInicio,
+          horarioTermino: prova.horarioTermino,
+          duracaoFormatada: formatarDuracao(prova.duracaoMinutos),
+          duracaoMinutos: prova.duracaoMinutos,
+          dificuldade: prova.dificuldade,
+          quantidadeQuestoes: prova.questoes.length,
+          codigo: prova.codigo,
+          status: prova.status,
+          fonteGeracao: prova.fonteGeracao,
+          turma: prova.turmaId ? {
+            id: prova.turmaId._id,
+            nome: prova.turmaId.nome,
+            disciplina: prova.turmaId.disciplina
+          } : null,
+          professor: prova.userId ? {
+            nome: prova.userId.nome,
+            email: prova.userId.email
+          } : null
+        };
 
     // Preparar questões
     let questoes = [];

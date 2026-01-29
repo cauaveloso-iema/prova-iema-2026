@@ -20,7 +20,8 @@ const QuestaoSchema = new mongoose.Schema({
     type: String,
     default: ''
   }
-}, { _id: false }); // REMOVA O _id automático das questões
+  // REMOVI: { _id: false } - deixa o mongoose criar _id normalmente
+});
 
 const ProvaSchema = new mongoose.Schema({
   userId: {
@@ -31,7 +32,7 @@ const ProvaSchema = new mongoose.Schema({
   turmaId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Turma',
-    required: false // Alterado para false pois pode ser prova independente
+    required: false
   },
   titulo: {
     type: String,
@@ -59,10 +60,33 @@ const ProvaSchema = new mongoose.Schema({
     type: Date,
     required: false
   },
-  duracao: {
+  horarioInicio: {
+    type: String, // Formato HH:mm (ex: "08:30")
+    required: true,
+    default: "08:00",
+    validate: {
+      validator: function(v) {
+        return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+      },
+      message: props => `${props.value} não é um horário válido! Use HH:mm`
+    }
+  },
+  horarioTermino: {
+    type: String, // Formato HH:mm (ex: "10:00")
+    required: true,
+    default: "09:30",
+    validate: {
+      validator: function(v) {
+        return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+      },
+      message: props => `${props.value} não é um horário válido! Use HH:mm`
+    }
+  },
+  duracaoMinutos: {
     type: Number,
-    default: 60, // minutos
-    min: 5
+    default: 60,
+    min: 10,
+    max: 480 // 8 horas máximo
   },
   codigo: {
     type: String,
@@ -86,14 +110,13 @@ const ProvaSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  dataCriacao: {
-    type: Date,
-    default: Date.now
-  },
-  ultimaAtualizacao: {
-    type: Date,
-    default: Date.now
+  fonteGeracao: {
+    type: String,
+    default: 'manual'
   }
+}, {
+  // ⚠️ MOVER timestamps PARA AQUI, remove os campos manuais
+  timestamps: true // Isso cria automaticamente createdAt e updatedAt
 });
 
 // Gerar código único antes de salvar
@@ -107,10 +130,31 @@ ProvaSchema.pre('save', async function(next) {
     this.codigo = code;
   }
   
-  // Atualizar data de atualização
-  this.ultimaAtualizacao = new Date();
+  // ⚠️ REMOVER: this.ultimaAtualizacao = new Date();
+  // O mongoose já cuida disso com timestamps: true
   
   next();
+});
+
+// Validar que horário de término é depois do início
+ProvaSchema.pre('save', function(next) {
+  if (this.horarioInicio && this.horarioTermino) {
+    const [h1, m1] = this.horarioInicio.split(':').map(Number);
+    const [h2, m2] = this.horarioTermino.split(':').map(Number);
+    
+    const inicioMinutos = h1 * 60 + m1;
+    const terminoMinutos = h2 * 60 + m2;
+    
+    if (terminoMinutos <= inicioMinutos) {
+      next(new Error('Horário de término deve ser depois do horário de início'));
+    } else {
+      // Calcular duração automaticamente
+      this.duracaoMinutos = terminoMinutos - inicioMinutos;
+      next();
+    }
+  } else {
+    next();
+  }
 });
 
 module.exports = mongoose.model('Prova', ProvaSchema);
