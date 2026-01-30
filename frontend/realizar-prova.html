@@ -811,13 +811,14 @@
                         </div>
                         <div class="meta-item">
                             <i class="fas fa-clock"></i> 
-                            <span id="provaDuracao">-- minutos</span>
+                            <span id="provaDuracao">60 minutos</span>
                         </div>
-                    </div>
-                    
-                    <div class="timer-container">
-                        <i class="fas fa-stopwatch"></i>
-                        <span id="contadorTempo">00:00:00</span>
+                        
+                        <!-- CONTADOR -->
+                        <div class="timer-container">
+                            <i class="fas fa-stopwatch"></i>
+                            <span id="contadorTempo">00:00:00</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2264,6 +2265,26 @@ Boa prova! Não atualize a página! 🚨
         }, 60000); // Atualizar a cada minuto
     }
 
+    // ============ FUNÇÃO PARA CORRIGIR HORÁRIOS AUSENTES ============
+    function corrigirHorariosProva(provaObj) {
+        if (!provaObj.horarioInicio || !provaObj.horarioTermino) {
+            const duracao = provaObj.duracaoMinutos || provaObj.duracao || 60;
+            const agora = new Date();
+            
+            const hora = agora.getHours();
+            const minutos = agora.getMinutes();
+            
+            provaObj.horarioInicio = `${hora.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
+            
+            const horaTermino = hora + Math.floor(duracao / 60);
+            const minutoTermino = minutos + (duracao % 60);
+            provaObj.horarioTermino = `${horaTermino.toString().padStart(2, '0')}:${minutoTermino.toString().padStart(2, '0')}`;
+            
+            console.log('✅ Horários corrigidos:', provaObj.horarioInicio, 'às', provaObj.horarioTermino);
+        }
+        return provaObj;
+    }
+
     
     async function carregarProva(token) {
         try {
@@ -2292,10 +2313,17 @@ Boa prova! Não atualize a página! 🚨
             
             prova = data.prova;
             console.log('✅ Prova carregada:', prova);
+
+            if (!prova.horarioInicio || !prova.horarioTermino) {
+                
+                console.log('⚠️  Prova sem horários, corrigindo...');
+                corrigirHorariosProva(prova);
+            }
             
             // Inicializar monitoramento
             monitoramento = new MonitoramentoProva();
             iniciarProvaInterface();
+            
             
         } catch (error) {
             console.error('❌ Erro ao carregar prova:', error);
@@ -2326,9 +2354,12 @@ Boa prova! Não atualize a página! 🚨
             document.getElementById('provaDuracao').textContent = `${prova.duracaoMinutos || 30} minutos`;
         }
         
+
+        atualizarInformacoesHorario();
+        
         renderizarQuestoes();
         iniciarTimer();
-        
+            
         document.getElementById('loadingScreen').style.display = 'none';
         document.getElementById('provaContent').style.display = 'flex';
         
@@ -2355,6 +2386,60 @@ Boa prova! Não atualize a página! 🚨
         
         // Mostrar indicador de scroll
         setTimeout(() => mostrarIndicadorScroll(), 500);
+    }
+
+    // ============ FUNÇÃO PARA ATUALIZAR INFORMAÇÕES DE HORÁRIO ============
+    function atualizarInformacoesHorario() {
+        try {
+            // Elementos do infoHorario
+            const infoDataElement = document.getElementById('infoData');
+            const infoHorarioTextElement = document.getElementById('infoHorarioText');
+            const infoDuracaoElement = document.getElementById('infoDuracao');
+            
+            if (!infoDataElement || !infoHorarioTextElement || !infoDuracaoElement) {
+                console.warn('⚠️ Elementos de informação de horário não encontrados');
+                return;
+            }
+            
+            // 1. Atualizar data (formato DD/MM/AAAA)
+            if (prova.dataLimite) {
+                const dataLimite = new Date(prova.dataLimite);
+                const dataFormatada = dataLimite.toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
+                infoDataElement.textContent = dataFormatada;
+            } else {
+                // Usar data atual se não tiver data limite
+                const hoje = new Date();
+                infoDataElement.textContent = hoje.toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
+            }
+            
+            // 2. Atualizar horário
+            if (prova.horarioInicio && prova.horarioTermino) {
+                infoHorarioTextElement.textContent = `${prova.horarioInicio} às ${prova.horarioTermino}`;
+            } else {
+                infoHorarioTextElement.textContent = 'Horário não definido';
+            }
+            
+            // 3. Atualizar duração (IMPORTANTE!)
+            const duracao = prova.duracaoMinutos || prova.duracao || 30;
+            infoDuracaoElement.textContent = `${duracao} minutos`;
+            
+            console.log('✅ Informações de horário atualizadas:', {
+                data: infoDataElement.textContent,
+                horario: infoHorarioTextElement.textContent,
+                duracao: infoDuracaoElement.textContent
+            });
+            
+        } catch (error) {
+            console.error('❌ Erro ao atualizar informações de horário:', error);
+        }
     }
     
     function renderizarQuestoes() {

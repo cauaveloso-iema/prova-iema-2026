@@ -2559,7 +2559,9 @@ app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
                 quantidadeQuestoes: prova.quantidadeQuestoes,
                 dificuldade: prova.dificuldade,
                 dataLimite: prova.dataLimite,
-                duracao: prova.duracao,
+                duracaoMinutos: prova.duracaoMinutos,
+                horarioInicio: prova.horarioInicio,
+                horarioTermino: prova.duracaoTermino,
                 
                 turma: prova.turmaId ? {
                     nome: prova.turmaId.nome,
@@ -3255,7 +3257,11 @@ app.get('/api/provas/dados', async (req, res) => {
       _id: prova._id,
       titulo: prova.titulo,
       conteudo: prova.conteudo,
-      duracao: prova.duracao,
+      duracao: prova.duracaoMinutos,
+      duracaoMinutos: prova.duracaoMinutos,
+      dataLimite: prova.dataLimite,
+      horarioInicio: prova.horarioInicio,
+      horarioTermino: prova.horarioTermino,
       dataLimite: prova.dataLimite,
       quantidadeQuestoes: prova.quantidadeQuestoes,
       questoes: prova.questoes.map(q => ({

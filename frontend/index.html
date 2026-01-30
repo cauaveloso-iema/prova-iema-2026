@@ -2189,10 +2189,12 @@
             }, 500);
         }
 
-        // Função para buscar resultados de uma prova específica (rota auxiliar)
+        // Função para buscar resultados de uma prova específica (CORRIGIDA)
         async function buscarResultadosProva(provaId) {
             try {
                 const token = localStorage.getItem('auth_token');
+                
+                console.log(`📊 Buscando resultados da prova ${provaId}...`);
                 
                 const response = await fetch(`/api/provas/${provaId}/resultados`, {
                     headers: {
@@ -2207,7 +2209,21 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    return data.resultados || [];
+                    // Filtrar resultados únicos por aluno
+                    const resultadosUnicos = [];
+                    const alunosProcessados = new Set();
+                    
+                    data.resultados.forEach(resultado => {
+                        const alunoId = resultado.alunoId || resultado.userId;
+                        if (alunoId && !alunosProcessados.has(alunoId)) {
+                            alunosProcessados.add(alunoId);
+                            resultadosUnicos.push(resultado);
+                        }
+                    });
+                    
+                    console.log(`📈 Resultados encontrados: ${resultadosUnicos.length} alunos únicos`);
+                    
+                    return resultadosUnicos;
                 } else {
                     throw new Error(data.error || 'Erro ao buscar resultados');
                 }
@@ -2393,17 +2409,29 @@
             }
         }
         // ============ FUNÇÕES PARA LIBERAR NOTAS ============
-        // Função para liberar TODAS as notas de uma prova
+        // Função para liberar TODAS as notas de uma prova (CORRIGIDA)
         async function liberarTodasNotas(provaId, provaTitulo) {
             try {
                 const token = localStorage.getItem('auth_token');
                 
-                const confirmacao = confirm(`Deseja liberar TODAS as notas da prova "${provaTitulo}"?\n\nEsta ação também enviará a prova corrigida para cada aluno.`);
+                // Primeiro buscar resultados para saber quantos alunos realmente fizeram
+                const resultados = await buscarResultadosProva(provaId);
+                
+                if (resultados.length === 0) {
+                    mostrarAlerta('alertMinhasProvas', '❌ Nenhum aluno realizou esta prova ainda', 'info');
+                    return;
+                }
+                
+                const confirmacao = confirm(
+                    `Deseja liberar TODAS as notas da prova "${provaTitulo}"?\n\n` +
+                    `• ${resultados.length} aluno(s) realizaram a prova\n` +
+                    `• Esta ação enviará a prova corrigida para cada aluno`
+                );
                 
                 if (!confirmacao) return;
                 
-                // Mostrar loading
-                mostrarAlerta('alertMinhasProvas', '🔧 Liberando notas e enviando correções...', 'info');
+                // Mostrar loading com contagem correta
+                mostrarAlerta('alertMinhasProvas', `🔧 Liberando notas para ${resultados.length} aluno(s)...`, 'info');
                 
                 const response = await fetch(`/api/provas/${provaId}/liberar-notas-todos`, {
                     method: 'POST',
@@ -2416,7 +2444,12 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    mostrarAlerta('alertMinhasProvas', `✅ ${data.message} (Correções enviadas)`, 'success');
+                    // Usar a contagem correta da resposta do servidor
+                    const alunosProcessados = data.alunosProcessados || resultados.length;
+                    mostrarAlerta('alertMinhasProvas', 
+                        `✅ Notas liberadas para ${alunosProcessados} aluno(s)! (Correções enviadas)`, 
+                        'success'
+                    );
                     
                     // Recarregar a lista de provas após 2 segundos
                     setTimeout(() => {
