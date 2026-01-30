@@ -2339,13 +2339,60 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // No modal de iniciar prova, adicione uma verificação
-        function selecionarProva(provaId) {
+        async function selecionarProva(provaId) {
             provaSelecionada = provasPendentes.find(p => p._id === provaId);
             
             if (!provaSelecionada) {
                 alert('Prova não encontrada');
                 return;
             }
+            
+            // ================================================
+            // NOVO: Buscar dados completos da prova com horários
+            // ================================================
+            try {
+                const token = localStorage.getItem('auth_token');
+                console.log('🔄 Buscando dados completos da prova...');
+                
+                const response = await fetch(`${API_BASE_URL}/provas/${provaId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.success && data.prova) {
+                        // Atualizar a prova no array local com os horários
+                        const index = provasPendentes.findIndex(p => p._id === provaId);
+                        if (index !== -1) {
+                            provasPendentes[index] = {
+                                ...provasPendentes[index],
+                                horarioInicio: data.prova.horarioInicio,
+                                horarioTermino: data.prova.horarioTermino,
+                                duracaoMinutos: data.prova.duracaoMinutos,
+                                duracaoFormatada: data.prova.duracaoFormatada,
+                                dataCriacao: data.prova.dataCriacao,
+                                professor: data.prova.professor || provasPendentes[index].professor
+                            };
+                            
+                            // Atualizar a prova selecionada também
+                            provaSelecionada = provasPendentes[index];
+                            
+                            console.log('✅ Horários carregados:', {
+                                inicio: provaSelecionada.horarioInicio,
+                                termino: provaSelecionada.horarioTermino
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log('⚠️ Não foi possível buscar horários:', error.message);
+                // Continuar normalmente mesmo sem horários
+            }
+            // ================================================
             
             // Verificar se a prova está disponível pelo horário
             if (provaSelecionada.horarioInicio && provaSelecionada.horarioTermino) {
@@ -2410,41 +2457,57 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // ADICIONE INFORMAÇÕES DE HORÁRIO E DURAÇÃO NO MODAL
-            const infoHorarioDuracao = provaSelecionada.horarioInicio && provaSelecionada.horarioTermino ? `
-                <div style="background: linear-gradient(135deg, #f0f9ff, #e0f2fe); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #bae6fd;">
-                    <p style="margin: 0 0 10px 0; color: #0369a1; font-weight: bold; display: flex; align-items: center; gap: 8px;">
-                        <i class="far fa-clock"></i> 
-                        Informações do Horário
-                    </p>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div style="text-align: center;">
-                            <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 5px;">Início</div>
-                            <div style="font-size: 1.2rem; font-weight: bold; color: #10b981;">
-                                ${provaSelecionada.horarioInicio}
-                            </div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 5px;">Término</div>
-                            <div style="font-size: 1.2rem; font-weight: bold; color: #ef4444;">
-                                ${provaSelecionada.horarioTermino}
-                            </div>
-                        </div>
-                    </div>
-                    <div style="text-align: center; margin-top: 10px;">
-                        <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 5px;">Duração Total</div>
-                        <div style="font-size: 1.3rem; font-weight: bold; color: #4f46e5;">
-                            ${provaSelecionada.duracaoMinutos || 30} minutos
-                        </div>
-                    </div>
-                </div>
-            ` : '';
-            
+            // ================================================
+            // ATUALIZADO: HTML do modal com horários
+            // ================================================
             document.getElementById('modalProvaInfo').innerHTML = `
                 <h4>${provaSelecionada.titulo || 'Prova sem título'}</h4>
                 ${alertaData}
                 
-                ${infoHorarioDuracao}
+                <!-- SEÇÃO DE HORÁRIOS (ATUALIZADA) -->
+                ${provaSelecionada.horarioInicio && provaSelecionada.horarioTermino ? `
+                    <div style="background: linear-gradient(135deg, #f0f9ff, #e0f2fe); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #bae6fd;">
+                        <p style="margin: 0 0 10px 0; color: #0369a1; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                            <i class="far fa-clock"></i> 
+                            Horário da Prova
+                        </p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 5px;">Início</div>
+                                <div style="font-size: 1.2rem; font-weight: bold; color: #10b981;">
+                                    ${provaSelecionada.horarioInicio}
+                                </div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 5px;">Término</div>
+                                <div style="font-size: 1.2rem; font-weight: bold; color: #ef4444;">
+                                    ${provaSelecionada.horarioTermino}
+                                </div>
+                            </div>
+                        </div>
+                        <div style="text-align: center; margin-top: 10px;">
+                            <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 5px;">Duração Total</div>
+                            <div style="font-size: 1.3rem; font-weight: bold; color: #4f46e5;">
+                                ${provaSelecionada.duracaoFormatada || (provaSelecionada.duracaoMinutos ? provaSelecionada.duracaoMinutos + ' minutos' : '60 minutos')}
+                            </div>
+                        </div>
+                    </div>
+                ` : `
+                    <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #fbbf24;">
+                        <p style="margin: 0 0 10px 0; color: #92400e; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                            <i class="far fa-clock"></i> 
+                            Horário da Prova
+                        </p>
+                        <div style="text-align: center; padding: 10px;">
+                            <div style="font-size: 1.1rem; font-weight: bold; color: #92400e;">
+                                ⏰ Horário Flexível
+                            </div>
+                            <p style="color: #92400e; margin: 10px 0 0 0; font-size: 0.95rem;">
+                                Esta prova pode ser realizada a qualquer momento até a data limite.
+                            </p>
+                        </div>
+                    </div>
+                `}
                 
                 <p><strong>Conteúdo:</strong> ${provaSelecionada.conteudo || 'Não especificado'}</p>
                 
@@ -2453,8 +2516,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <ul style="margin: 10px 0 0 0; padding-left: 20px;">
                         <li><strong>Quantidade de questões:</strong> ${provaSelecionada.quantidadeQuestoes || '?'}</li>
                         <li><strong>Turma:</strong> ${provaSelecionada.turma?.nome || provaSelecionada.turma?.disciplina || 'Não especificada'}</li>
-                        <li><strong>Professor:</strong> ${provaSelecionada.professor || 'Não especificado'}</li>
+                        <li><strong>Professor:</strong> ${provaSelecionada.professor?.nome || provaSelecionada.professor || 'Não especificado'}</li>
                         <li><strong>Data limite:</strong> ${dataLimite}</li>
+                        ${provaSelecionada.dificuldade ? `<li><strong>Dificuldade:</strong> ${provaSelecionada.dificuldade === 'facil' ? 'Fácil' : provaSelecionada.dificuldade === 'media' ? 'Média' : 'Difícil'}</li>` : ''}
                     </ul>
                 </div>
                 
@@ -2466,7 +2530,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <li>Após finalizar, não será possível retornar</li>
                     ${alertaData ? '<li><strong>Esta prova precisa ser entregue HOJE!</strong></li>' : ''}
                     ${provaSelecionada.horarioInicio ? 
-                        `<li><strong>Horário fixo:</strong> Você só poderá realizar esta prova entre ${provaSelecionada.horarioInicio} e ${provaSelecionada.horarioTermino}</li>` : 
+                        `<li><strong>Horário específico:</strong> Esta prova só pode ser realizada das <strong>${provaSelecionada.horarioInicio}</strong> às <strong>${provaSelecionada.horarioTermino}</strong> (${provaSelecionada.duracaoFormatada || provaSelecionada.duracaoMinutos + ' minutos'})</li>` : 
                         ''}
                 </ul>
             `;
@@ -2865,6 +2929,72 @@ document.addEventListener('DOMContentLoaded', function() {
                 iniciarVerificacaoPeriodica();
             });
         });
+
+        // ============================================================================
+        // PATCH PARA CARREGAR HORÁRIOS EM BACKGROUND
+        // ============================================================================
+
+        (function() {
+            console.log('🔄 Iniciando patch para carregar horários...');
+            
+            // Sobrescrever carregarProvasPendentes para buscar horários após carregar
+            const originalCarregarProvasPendentes = window.carregarProvasPendentes;
+            
+            window.carregarProvasPendentes = async function() {
+                console.log('📥 Carregando provas pendentes com patch de horários...');
+                
+                // Chamar função original
+                await originalCarregarProvasPendentes.apply(this, arguments);
+                
+                // Após carregar, buscar horários em background
+                if (provasPendentes && provasPendentes.length > 0) {
+                    console.log(`🔍 Buscando horários para ${provasPendentes.length} provas...`);
+                    
+                    // Usar setTimeout para não bloquear a interface
+                    setTimeout(async () => {
+                        const token = localStorage.getItem('auth_token');
+                        if (!token) return;
+                        
+                        for (const prova of provasPendentes) {
+                            // Só buscar se não tiver horários ainda
+                            if (!prova.horarioInicio && prova._id) {
+                                try {
+                                    const response = await fetch(`${API_BASE_URL}/provas/${prova._id}`, {
+                                        headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/json'
+                                        }
+                                    });
+                                    
+                                    if (response.ok) {
+                                        const data = await response.json();
+                                        if (data.success && data.prova && data.prova.horarioInicio) {
+                                            // Atualizar a prova com horários
+                                            prova.horarioInicio = data.prova.horarioInicio;
+                                            prova.horarioTermino = data.prova.horarioTermino;
+                                            prova.duracaoMinutos = data.prova.duracaoMinutos;
+                                            prova.duracaoFormatada = data.prova.duracaoFormatada;
+                                            
+                                            console.log(`✅ Horários carregados para: ${prova.titulo.substring(0, 30)}...`);
+                                        }
+                                    }
+                                } catch (error) {
+                                    // Ignorar erros no carregamento em background
+                                }
+                            }
+                        }
+                        
+                        // Se a interface estiver mostrando provas, atualizar
+                        if (document.getElementById('provasPendentes') && document.getElementById('provasPendentes').innerHTML.includes('prova-card')) {
+                            console.log('🔄 Atualizando interface com horários...');
+                            atualizarListaProvas('provasPendentes', provasPendentes, 'pendente');
+                        }
+                    }, 1500); // Delay de 1.5 segundos para não sobrecarregar
+                }
+            };
+            
+            console.log('✅ Patch para horários aplicado com sucesso!');
+        })();
     </script>
 </body>
 </html>
