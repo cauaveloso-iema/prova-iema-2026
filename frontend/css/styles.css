@@ -3354,3 +3354,31 @@ code {
 .meta-item.horario i {
     color: #10b981;
 }
+
+/* Estados do timer */
+.timer-normal {
+    color: #065f46;
+    font-weight: normal;
+}
+
+.timer-warning-low {
+    color: #f59e0b;
+    font-weight: bold;
+}
+
+.timer-warning-medium {
+    color: #ea580c;
+    font-weight: bold;
+}
+
+.timer-warning-high {
+    color: #dc2626;
+    font-weight: bold;
+    animation: pulse 1s infinite;
+}
+
+/* Animações específicas do timer */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

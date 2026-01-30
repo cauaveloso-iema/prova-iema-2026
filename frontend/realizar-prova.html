@@ -2338,7 +2338,9 @@ Boa prova! Não atualize a página! 🚨
         
         // ATUALIZAR INFORMAÇÕES DE HORÁRIO E DURAÇÃO
         if (prova.horarioInicio && prova.horarioTermino) {
-            document.getElementById('provaDuracao').textContent = `${prova.duracaoMinutos || 30} minutos`;
+            // Calcular duração total da prova em minutos
+            const duracaoTotal = calcularDuracaoProva();
+            document.getElementById('provaDuracao').textContent = `${duracaoTotal} minutos`;
             
             // Adicionar informações de horário ao header
             const metaLeft = document.querySelector('.meta-left');
@@ -2349,17 +2351,31 @@ Boa prova! Não atualize a página! 🚨
                         <span>${prova.horarioInicio} - ${prova.horarioTermino}</span>
                     </div>
                 `;
+                
+                // Adicionar tempo restante baseado no horário de término
+                const agora = new Date();
+                const hoje = agora.toISOString().split('T')[0];
+                const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
+                const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
+                
+                if (tempoRestanteMs > 0) {
+                    const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
+                    metaLeft.innerHTML += `
+                        <div class="meta-item" id="tempoRestanteHorario">
+                            <i class="fas fa-hourglass-end"></i> 
+                            <span>Restante: ${formatarMinutosEmHoraMinutos(tempoRestanteMinutos)}</span>
+                        </div>
+                    `;
+                }
             }
         } else {
             document.getElementById('provaDuracao').textContent = `${prova.duracaoMinutos || 30} minutos`;
         }
         
-
         atualizarInformacoesHorario();
-        
         renderizarQuestoes();
         iniciarTimer();
-            
+        
         document.getElementById('loadingScreen').style.display = 'none';
         document.getElementById('provaContent').style.display = 'flex';
         
@@ -2370,22 +2386,51 @@ Boa prova! Não atualize a página! 🚨
             const agora = new Date();
             const hoje = agora.toISOString().split('T')[0];
             const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
-            const tempoRestanteMinutos = Math.floor((terminoProva - agora) / (1000 * 60));
+            const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
             
-            console.log(`⏱️ Tempo restante pelo horário: ${tempoRestanteMinutos} minutos`);
-            
-            // Adicionar contador de horário
-            if (tempoRestanteMinutos > 0 && tempoRestanteMinutos <= 120) { // Mostrar apenas se for menos de 2 horas
-                const timerElement = document.getElementById('contadorTempo');
-                if (timerElement) {
-                    // Iniciar contador baseado no horário de término
-                    iniciarContadorHorario(tempoRestanteMinutos);
-                }
+            if (tempoRestanteMs > 0) {
+                const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
+                
+                console.log(`⏱️ Tempo restante pelo horário: ${tempoRestanteMinutos} minutos (${formatarMinutosEmHoraMinutos(tempoRestanteMinutos)})`);
+                
+                // O timer já está configurado para contar regressivamente baseado no horário
+                // Não precisamos mais da função iniciarContadorHorario separada
             }
         }
         
         // Mostrar indicador de scroll
         setTimeout(() => mostrarIndicadorScroll(), 500);
+    }
+
+    // FUNÇÃO AUXILIAR: Formatar minutos em horas:minutos
+    function formatarMinutosEmHoraMinutos(minutos) {
+        const horas = Math.floor(minutos / 60);
+        const minutosResto = minutos % 60;
+        
+        if (horas > 0) {
+            return `${horas}h ${minutosResto.toString().padStart(2, '0')}min`;
+        } else {
+            return `${minutosResto}min`;
+        }
+    }
+
+    // FUNÇÃO AUXILIAR: Calcular duração total da prova
+    function calcularDuracaoProva() {
+        if (!prova.horarioInicio || !prova.horarioTermino) {
+            return prova.duracaoMinutos || prova.duracao || 60;
+        }
+        
+        try {
+            const hoje = new Date().toISOString().split('T')[0];
+            const inicio = new Date(`${hoje}T${prova.horarioInicio}:00`);
+            const termino = new Date(`${hoje}T${prova.horarioTermino}:00`);
+            
+            const diferencaMs = termino.getTime() - inicio.getTime();
+            return Math.floor(diferencaMs / (1000 * 60));
+        } catch (e) {
+            console.error('Erro ao calcular duração:', e);
+            return prova.duracaoMinutos || prova.duracao || 60;
+        }
     }
 
     // ============ FUNÇÃO PARA ATUALIZAR INFORMAÇÕES DE HORÁRIO ============
@@ -2426,6 +2471,26 @@ Boa prova! Não atualize a página! 🚨
             } else {
                 infoHorarioTextElement.textContent = 'Horário não definido';
             }
+
+            // Calcular e mostrar duração correta
+            const duracaoTotal = calcularDuracaoProva();
+            infoDuracaoElement.textContent = `${duracaoTotal} minutos`;
+            
+            // Adicionar informação de tempo restante baseado no horário de término
+            if (prova.horarioInicio && prova.horarioTermino) {
+                const agora = new Date();
+                const hoje = agora.toISOString().split('T')[0];
+                const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
+                const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
+                
+                if (tempoRestanteMs > 0) {
+                    const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
+                    console.log(`⏱️ Tempo restante do horário: ${tempoRestanteMinutos} minutos`);
+                    
+                    // Salvar tempo restante para uso no timer
+                    prova.tempoRestanteInicial = tempoRestanteMinutos;
+                }
+            }
             
             // 3. Atualizar duração (IMPORTANTE!)
             const duracao = prova.duracaoMinutos || prova.duracao || 30;
@@ -2440,6 +2505,13 @@ Boa prova! Não atualize a página! 🚨
         } catch (error) {
             console.error('❌ Erro ao atualizar informações de horário:', error);
         }
+    }
+
+    // FUNÇÃO AUXILIAR: Formatar minutos em horas:minutos
+    function formatarMinutosEmHoraMinutos(minutos) {
+        const horas = Math.floor(minutos / 60);
+        const minutosResto = minutos % 60;
+        return `${horas}h ${minutosResto}min`;
     }
     
     function renderizarQuestoes() {
@@ -2508,24 +2580,34 @@ Boa prova! Não atualize a página! 🚨
     }
     
     // CORREÇÃO COMPLETA DO TIMER DA PROVA
+    // MODIFICAÇÃO: Iniciar timer baseado no horário de término e tempo de entrada
     function iniciarTimer() {
-        tempoInicio = new Date();
-        
         // CORREÇÃO: Carregar tempo salvo corretamente
         const tempoSalvo = localStorage.getItem(`tempo_prova_${prova._id}`);
+        
+        // Se já temos uma entrada salva, usar ela
         if (tempoSalvo) {
             try {
                 tempoTotal = parseInt(tempoSalvo);
-                // Ajustar tempo de início para continuar de onde parou
                 const agora = new Date();
                 tempoInicio = new Date(agora.getTime() - (tempoTotal * 1000));
-                console.log(`⏱️ Retomando prova com ${tempoTotal} segundos`);
+                console.log(`⏱️ Retomando prova com ${tempoTotal} segundos já gastos`);
             } catch (e) {
                 console.error('Erro ao carregar tempo:', e);
                 tempoTotal = 0;
+                tempoInicio = new Date(); // Começar agora
             }
         } else {
+            // PRIMEIRA VEZ: Registrar horário de entrada
+            tempoInicio = new Date();
             tempoTotal = 0;
+            console.log(`⏱️ Primeira entrada na prova: ${tempoInicio.toLocaleTimeString('pt-BR')}`);
+        }
+        
+        // Salvar entrada inicial
+        if (!tempoSalvo) {
+            localStorage.setItem(`hora_entrada_${prova._id}`, tempoInicio.toISOString());
+            localStorage.setItem(`tempo_prova_${prova._id}`, '0');
         }
         
         // CORREÇÃO: Limpar timer anterior
@@ -2538,6 +2620,7 @@ Boa prova! Não atualize a página! 🚨
     }
     
     // CORREÇÃO COMPLETA: Atualizar timer corretamente
+    // MODIFICAÇÃO: Atualizar timer baseado no tempo máximo
     function atualizarTimer() {
         if (!tempoInicio) return;
         
@@ -2545,50 +2628,78 @@ Boa prova! Não atualize a página! 🚨
         const diferencaMs = agora.getTime() - tempoInicio.getTime();
         tempoTotal = Math.floor(diferencaMs / 1000); // Tempo em segundos
         
-        // Salvar a cada 30 segundos
+        // Salvar progresso a cada 30 segundos
         if (tempoTotal % 30 === 0) {
             localStorage.setItem(`tempo_prova_${prova._id}`, tempoTotal.toString());
         }
         
+        // Formatar tempo decorrido
         const horas = Math.floor(tempoTotal / 3600);
         const minutos = Math.floor((tempoTotal % 3600) / 60);
         const segundos = tempoTotal % 60;
         
         const timerElement = document.getElementById('contadorTempo');
-        timerElement.textContent = 
-            `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
         
-        // Verificar tempo restante se houver duração
-        if (prova.duracao && prova.duracao > 0) {
-            const duracaoSegundos = prova.duracao * 60;
-            const tempoRestanteSegundos = duracaoSegundos - tempoTotal;
+        // CALCULAR TEMPO RESTANTE BASEADO NO HORÁRIO DE TÉRMINO
+        if (prova.horarioTermino) {
+            const hoje = agora.toISOString().split('T')[0];
+            const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
             
-            if (tempoRestanteSegundos <= 0) {
-                // Tempo esgotado
+            // Calcular tempo restante em milissegundos
+            const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
+            
+            if (tempoRestanteMs <= 0) {
+                // TEMPO ESGOTADO PELO HORÁRIO DE TÉRMINO
                 clearInterval(timerInterval);
                 timerElement.textContent = 'TEMPO ESGOTADO';
                 timerElement.style.color = '#dc2626';
                 
                 setTimeout(() => {
-                    alert('⏰ TEMPO ESGOTADO! A prova será finalizada.');
+                    alert('⏰ TEMPO ESGOTADO! O horário da prova terminou.');
                     finalizarProva();
                 }, 1000);
                 return;
             }
             
+            // Converter para minutos e segundos
+            const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
+            const tempoRestanteHoras = Math.floor(tempoRestanteMinutos / 60);
+            const tempoRestanteMinutosResto = tempoRestanteMinutos % 60;
+            const tempoRestanteSegundos = Math.floor((tempoRestanteMs % (1000 * 60)) / 1000);
+            
+            // Mostrar TEMPO RESTANTE no contador
+            timerElement.textContent = 
+                `${tempoRestanteHoras.toString().padStart(2, '0')}:${tempoRestanteMinutosResto.toString().padStart(2, '0')}:${tempoRestanteSegundos.toString().padStart(2, '0')}`;
+            
             // Alerta visual conforme tempo restante
-            if (tempoRestanteSegundos <= 300) { // 5 minutos
+            if (tempoRestanteMinutos <= 5) { // 5 minutos restantes
                 timerElement.style.color = '#dc2626';
-            } else if (tempoRestanteSegundos <= 600) { // 10 minutos
+                timerElement.classList.add('warning-high');
+            } else if (tempoRestanteMinutos <= 10) { // 10 minutos restantes
                 timerElement.style.color = '#f59e0b';
+                timerElement.classList.add('warning-medium');
+            } else if (tempoRestanteMinutos <= 15) { // 15 minutos restantes
+                timerElement.style.color = '#f59e0b';
+                timerElement.classList.add('warning-low');
+            } else {
+                timerElement.style.color = '#065f46'; // Verde para tempo suficiente
+                timerElement.classList.remove('warning-low', 'warning-medium', 'warning-high');
             }
             
             // Alertas sonoros
-            if (tempoRestanteSegundos === 300) {
+            if (tempoRestanteMinutos === 5) {
                 alert('⚠️ ATENÇÃO: Restam 5 minutos!');
-            } else if (tempoRestanteSegundos === 60) {
+            } else if (tempoRestanteMinutos === 1) {
                 alert('⏰ ÚLTIMO MINUTO!');
             }
+            
+            // Mostrar tempo decorrido também (em tooltip ou outro lugar)
+            timerElement.title = `Tempo decorrido: ${horas}h ${minutos}m ${segundos}s`;
+            
+        } else {
+            // Se não tem horário de término, mostrar tempo decorrido
+            timerElement.textContent = 
+                `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
         }
     }
     
