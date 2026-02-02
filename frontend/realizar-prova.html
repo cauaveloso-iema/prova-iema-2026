@@ -823,21 +823,50 @@
                 </div>
             </div>
             
-            <!-- Container das Questões COM SCROLL - ESTRUTURA CORRIGIDA -->
+            <!-- Container das Questões COM PAGINAÇÃO - UMA QUESTÃO POR PÁGINA -->
             <div class="questao-container-wrapper">
                 <div class="questao-container" id="questoesContainer">
-                    <!-- Indicador visual de scroll -->
-                    <div id="scrollIndicator" class="scroll-indicator" style="display: none;">
-                        <i class="fas fa-chevron-down"></i> Role para ver mais questões
+                    <!-- Navegação no topo -->
+                    <div class="navegacao-container">
+                        <button id="btnAnterior" class="btn-navegacao" disabled>
+                            <i class="fas fa-chevron-left"></i> Questão Anterior
+                        </button>
+                        
+                        <div class="contador-questao">
+                            Questão <span id="questaoAtualNumero">1</span> de <span id="totalQuestoes">0</span>
+                        </div>
+                        
+                        <button id="btnProxima" class="btn-navegacao">
+                            Próxima Questão <i class="fas fa-chevron-right"></i>
+                        </button>
                     </div>
                     
-                    <!-- Questões serão inseridas aqui dinamicamente -->
-                    <div id="questoesWrapper" class="questoes-wrapper"></div>
+                    <!-- Container para a questão atual -->
+                    <div id="questaoAtualContainer" class="questao-atual-container">
+                        <!-- A questão será carregada aqui dinamicamente -->
+                    </div>
                     
-                    <!-- Botão Finalizar INSERIDO DENTRO DO CONTAINER DE SCROLL -->
-                    <button onclick="finalizarProva()" class="btn-finalizar" id="btnFinalizarScroll">
-                        <i class="fas fa-paper-plane"></i> Finalizar Prova
-                    </button>
+                    <!-- Navegação na parte inferior -->
+                    <div class="navegacao-container navegacao-inferior">
+                        <button id="btnAnterior2" class="btn-navegacao" disabled>
+                            <i class="fas fa-chevron-left"></i> Questão Anterior
+                        </button>
+                        
+                        <div style="display: flex; gap: 15px;">
+                            <div class="contador-questao">
+                                Questão <span id="questaoAtualNumero2">1</span> de <span id="totalQuestoes2">0</span>
+                            </div>
+                            
+                            <!-- BOTÃO DE FINALIZAR ADICIONADO AQUI -->
+                            <button onclick="finalizarProva()" class="btn-finalizar-prova" id="btnFinalizarPagina">
+                                <i class="fas fa-paper-plane"></i> Finalizar Prova
+                            </button>
+                        </div>
+                        
+                        <button id="btnProxima2" class="btn-navegacao">
+                            Próxima Questão <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -2095,6 +2124,8 @@
     let tempoTotal = 0;
     let timerInterval = null;
     let monitoramento = null;
+    let questaoAtualIndex = 0;
+    let totalQuestoes = 0;
     
     document.addEventListener('DOMContentLoaded', function() {
         console.log('📄 Página de prova carregada - ATUALIZAÇÃO TOTALMENTE BLOQUEADA');
@@ -2372,6 +2403,9 @@ Boa prova! Não atualize a página! 🚨
             document.getElementById('provaDuracao').textContent = `${prova.duracaoMinutos || 30} minutos`;
         }
         
+        questaoAtualIndex = 0;
+        totalQuestoes = prova.questoes.length;
+
         atualizarInformacoesHorario();
         renderizarQuestoes();
         iniciarTimer();
@@ -2513,71 +2547,267 @@ Boa prova! Não atualize a página! 🚨
         const minutosResto = minutos % 60;
         return `${horas}h ${minutosResto}min`;
     }
+
+    function configurarNavegacao() {
+        // Botões Anterior
+        document.getElementById('btnAnterior').onclick = () => irParaQuestaoAnterior();
+        document.getElementById('btnAnterior2').onclick = () => irParaQuestaoAnterior();
+        
+        // Botões Próxima
+        document.getElementById('btnProxima').onclick = () => irParaQuestaoProxima();
+        document.getElementById('btnProxima2').onclick = () => irParaQuestaoProxima();
+        
+        // Adicionar atalhos de teclado
+        document.addEventListener('keydown', (e) => {
+            // Ctrl + Seta Esquerda = Questão anterior
+            if (e.ctrlKey && e.key === 'ArrowLeft') {
+                e.preventDefault();
+                irParaQuestaoAnterior();
+            }
+            
+            // Ctrl + Seta Direita = Próxima questão
+            if (e.ctrlKey && e.key === 'ArrowRight') {
+                e.preventDefault();
+                irParaQuestaoProxima();
+            }
+            
+            // Ctrl + Número = Ir para questão específica
+            if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+                e.preventDefault();
+                const numero = parseInt(e.key);
+                if (numero <= totalQuestoes) {
+                    irParaQuestao(numero - 1);
+                }
+            }
+        });
+    }
     
     function renderizarQuestoes() {
-        const container = document.getElementById('questoesWrapper');
+        totalQuestoes = prova.questoes.length;
         
-        if (!prova.questoes || prova.questoes.length === 0) {
-            container.innerHTML = '<div class="questao-card"><p>Nenhuma questão disponível</p></div>';
+        if (totalQuestoes === 0) {
+            document.getElementById('questaoAtualContainer').innerHTML = 
+                '<div class="questao-card"><p>Nenhuma questão disponível</p></div>';
             return;
         }
         
-        container.innerHTML = '';
+        // Atualizar contadores
+        document.getElementById('totalQuestoes').textContent = totalQuestoes;
+        document.getElementById('totalQuestoes2').textContent = totalQuestoes;
         
-        prova.questoes.forEach((questao, index) => {
-            const questaoDiv = document.createElement('div');
-            questaoDiv.className = 'questao-card';
-            questaoDiv.id = `questao-${index}`;
-            
-            questaoDiv.innerHTML = `
-                <div class="questao-numero">${index + 1}</div>
+        // Criar menu rápido de navegação
+        criarMenuRapidoQuestoes();
+        
+        // Criar botão flutuante de finalizar
+        criarBotaoFinalizarFlutuante();
+        
+        // Carregar a primeira questão
+        carregarQuestaoAtual();
+        
+        // Configurar navegação
+        configurarNavegacao();
+    }
+
+    function criarMenuRapidoQuestoes() {
+        // Remover menu existente
+        const menuExistente = document.getElementById('menuQuestoesRapido');
+        if (menuExistente) menuExistente.remove();
+        
+        const menu = document.createElement('div');
+        menu.id = 'menuQuestoesRapido';
+        menu.className = 'menu-questoes-rapido';
+        
+        let html = '<h4>Questões</h4><div class="questoes-grid">';
+        
+        for (let i = 0; i < totalQuestoes; i++) {
+            const respondida = respostas[i] ? 'respondida' : '';
+            const atual = i === questaoAtualIndex ? 'atual' : '';
+            html += `
+                <button class="btn-questao-rapida ${respondida} ${atual}" 
+                        onclick="irParaQuestao(${i})" 
+                        title="Questão ${i + 1}">
+                    ${i + 1}
+                </button>
+            `;
+        }
+        
+        html += '</div>';
+        menu.innerHTML = html;
+        document.body.appendChild(menu);
+    }
+
+    function carregarQuestaoAtual() {
+        const container = document.getElementById('questaoAtualContainer');
+        const questao = prova.questoes[questaoAtualIndex];
+        
+        // Atualizar contadores
+        document.getElementById('questaoAtualNumero').textContent = questaoAtualIndex + 1;
+        document.getElementById('questaoAtualNumero2').textContent = questaoAtualIndex + 1;
+        
+        // Atualizar menu rápido
+        atualizarMenuRapido();
+        
+        // Atualizar estado dos botões de navegação
+        document.getElementById('btnAnterior').disabled = questaoAtualIndex === 0;
+        document.getElementById('btnAnterior2').disabled = questaoAtualIndex === 0;
+        document.getElementById('btnProxima').disabled = questaoAtualIndex === totalQuestoes - 1;
+        document.getElementById('btnProxima2').disabled = questaoAtualIndex === totalQuestoes - 1;
+        
+        // Renderizar a questão atual
+        let html = `
+            <div class="questao-card" id="questao-atual-card">
+                <div class="questao-numero">${questaoAtualIndex + 1}</div>
                 <div class="questao-texto">${questao.pergunta}</div>
-                <div class="opcoes-container" id="opcoes-${index}"></div>
+                <div class="opcoes-container" id="opcoes-atual"></div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        
+        // Adicionar indicador se já foi respondida
+        if (respostas[questaoAtualIndex]) {
+            const questaoCard = document.getElementById('questao-atual-card');
+            const indicador = document.createElement('div');
+            indicador.className = 'indicador-resposta';
+            indicador.title = 'Questão respondida';
+            indicador.innerHTML = '<i class="fas fa-check"></i>';
+            questaoCard.querySelector('.questao-numero').appendChild(indicador);
+        }
+        
+        // Renderizar opções
+        const opcoesContainer = document.getElementById('opcoes-atual');
+        questao.opcoes.forEach((opcao, opcaoIndex) => {
+            const letra = String.fromCharCode(65 + opcaoIndex);
+            const selecionada = respostas[questaoAtualIndex] === letra ? 'selecionada' : '';
+            
+            const opcaoDiv = document.createElement('div');
+            opcaoDiv.className = `opcao ${selecionada}`;
+            opcaoDiv.id = `opcao-atual-${opcaoIndex}`;
+            opcaoDiv.onclick = () => selecionarRespostaAtual(opcaoIndex);
+            
+            opcaoDiv.innerHTML = `
+                <div class="opcao-letra">${letra}</div>
+                <div class="opcao-texto">${opcao}</div>
             `;
             
-            const opcoesContainer = questaoDiv.querySelector(`#opcoes-${index}`);
-            questao.opcoes.forEach((opcao, opcaoIndex) => {
-                const letra = String.fromCharCode(65 + opcaoIndex);
-                const opcaoDiv = document.createElement('div');
-                opcaoDiv.className = 'opcao';
-                opcaoDiv.id = `opcao-${index}-${opcaoIndex}`;
-                opcaoDiv.onclick = () => selecionarResposta(index, opcaoIndex);
-                
-                opcaoDiv.innerHTML = `
-                    <div class="opcao-letra">${letra}</div>
-                    <div class="opcao-texto">${opcao}</div>
-                `;
-                
-                opcoesContainer.appendChild(opcaoDiv);
-            });
-            
-            container.appendChild(questaoDiv);
+            opcoesContainer.appendChild(opcaoDiv);
         });
+        
+        // Focar na questão
+        setTimeout(() => {
+            container.scrollTop = 0;
+        }, 100);
     }
     
-    function selecionarResposta(questaoIndex, opcaoIndex) {
+    function selecionarRespostaAtual(opcaoIndex) {
         const letras = ['A', 'B', 'C', 'D'];
         const resposta = letras[opcaoIndex];
         
-        respostas[questaoIndex] = resposta;
-        atualizarInterfaceResposta(questaoIndex, opcaoIndex);
-        atualizarProgresso();
-        salvarRespostasLocalmente();
-    }
-    
-    function atualizarInterfaceResposta(questaoIndex, opcaoIndexSelecionado) {
-        const questaoDiv = document.getElementById(`questao-${questaoIndex}`);
-        const todasOpcoes = questaoDiv.querySelectorAll('.opcao');
+        respostas[questaoAtualIndex] = resposta;
         
-        todasOpcoes.forEach(opcao => {
-            opcao.classList.remove('selecionada');
-        });
+        // Atualizar interface
+        const todasOpcoes = document.querySelectorAll('#opcoes-atual .opcao');
+        todasOpcoes.forEach(opcao => opcao.classList.remove('selecionada'));
         
-        const opcaoSelecionada = document.getElementById(`opcao-${questaoIndex}-${opcaoIndexSelecionado}`);
+        const opcaoSelecionada = document.getElementById(`opcao-atual-${opcaoIndex}`);
         if (opcaoSelecionada) {
             opcaoSelecionada.classList.add('selecionada');
+            
+            // Adicionar/atualizar indicador de resposta
+            const questaoCard = document.getElementById('questao-atual-card');
+            let indicador = questaoCard.querySelector('.indicador-resposta');
+            
+            if (!indicador) {
+                indicador = document.createElement('div');
+                indicador.className = 'indicador-resposta';
+                indicador.title = 'Questão respondida';
+                indicador.innerHTML = '<i class="fas fa-check"></i>';
+                questaoCard.querySelector('.questao-numero').appendChild(indicador);
+            }
+        }
+        
+        atualizarProgresso();
+        salvarRespostasLocalmente();
+        atualizarMenuRapido();
+    }
+
+    function criarMenuRapidoQuestoes() {
+        // Remover menu existente
+        const menuExistente = document.getElementById('menuQuestoesRapido');
+        if (menuExistente) menuExistente.remove();
+        
+        const menu = document.createElement('div');
+        menu.id = 'menuQuestoesRapido';
+        menu.className = 'menu-questoes-rapido';
+        
+        let html = '<h4>Questões</h4><div class="questoes-grid">';
+        
+        for (let i = 0; i < totalQuestoes; i++) {
+            const respondida = respostas[i] ? 'respondida' : '';
+            const atual = i === questaoAtualIndex ? 'atual' : '';
+            html += `
+                <button class="btn-questao-rapida ${respondida} ${atual}" 
+                        onclick="irParaQuestao(${i})" 
+                        title="Questão ${i + 1}">
+                    ${i + 1}
+                </button>
+            `;
+        }
+        
+        html += '</div>';
+        
+        // Adicionar botão de finalizar no menu rápido
+        html += `
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                <button onclick="finalizarProva()" 
+                        class="btn-finalizar-prova" 
+                        style="width: 100%; padding: 10px; font-size: 0.9rem;">
+                    <i class="fas fa-paper-plane"></i> Finalizar Prova
+                </button>
+            </div>
+        `;
+        
+        menu.innerHTML = html;
+        document.body.appendChild(menu);
+    }
+
+    function irParaQuestaoAnterior() {
+        if (questaoAtualIndex > 0) {
+            questaoAtualIndex--;
+            carregarQuestaoAtual();
         }
     }
+
+    function irParaQuestaoProxima() {
+        if (questaoAtualIndex < totalQuestoes - 1) {
+            questaoAtualIndex++;
+            carregarQuestaoAtual();
+        }
+    }
+
+    function irParaQuestao(index) {
+        if (index >= 0 && index < totalQuestoes) {
+            questaoAtualIndex = index;
+            carregarQuestaoAtual();
+        }
+    }
+
+    function atualizarMenuRapido() {
+        const botoes = document.querySelectorAll('.btn-questao-rapida');
+        botoes.forEach((btn, index) => {
+            btn.classList.remove('atual');
+            if (respostas[index]) {
+                btn.classList.add('respondida');
+            } else {
+                btn.classList.remove('respondida');
+            }
+            
+            if (index === questaoAtualIndex) {
+                btn.classList.add('atual');
+            }
+        });
+    }
+
     
     // CORREÇÃO COMPLETA DO TIMER DA PROVA
     // MODIFICAÇÃO: Iniciar timer baseado no horário de término e tempo de entrada
@@ -2708,8 +2938,24 @@ Boa prova! Não atualize a página! 🚨
         const respondidas = Object.keys(respostas).length;
         const porcentagem = total > 0 ? Math.round((respondidas / total) * 100) : 0;
         
-        document.getElementById('progressoTexto').textContent = 
-            `${respondidas} de ${total} questões respondidas (${porcentagem}%)`;
+        const textoProgresso = `${respondidas} de ${total} questões respondidas (${porcentagem}%)`;
+        
+        document.getElementById('progressoTexto').innerHTML = `
+            ${textoProgresso} 
+            <span style="color: #4f46e5; font-weight: bold;">• Questão atual: ${questaoAtualIndex + 1}</span>
+            ${respondidas === total ? 
+                '<span style="color: #10b981; margin-left: 10px;"><i class="fas fa-check-circle"></i> Todas respondidas!</span>' : 
+                ''}
+        `;
+        
+        // Atualizar botão de finalizar se todas foram respondidas
+        if (respondidas === total) {
+            const btnFinalizar = document.getElementById('btnFinalizarPagina');
+            if (btnFinalizar) {
+                btnFinalizar.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Prova (Todas respondidas!)';
+                btnFinalizar.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
+            }
+        }
     }
     
     function salvarRespostasLocalmente() {
@@ -2721,6 +2967,20 @@ Boa prova! Não atualize a página! 🚨
             };
             localStorage.setItem(`prova_${prova._id}`, JSON.stringify(dados));
         }
+    }
+
+    function criarBotaoFinalizarFlutuante() {
+        // Remover botão existente se houver
+        const botaoExistente = document.getElementById('btnFinalizarFlutuante');
+        if (botaoExistente) botaoExistente.remove();
+        
+        const botao = document.createElement('button');
+        botao.id = 'btnFinalizarFlutuante';
+        botao.className = 'btn-finalizar-menu';
+        botao.innerHTML = '<i class="fas fa-flag-checkered"></i> Finalizar Prova';
+        botao.onclick = finalizarProva;
+        
+        document.body.appendChild(botao);
     }
     
     async function finalizarProva() {
