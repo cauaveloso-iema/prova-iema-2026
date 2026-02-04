@@ -3951,3 +3951,47 @@ code {
 }
 
 
+/* Adicione ao seu CSS existente */
+.file-preview {
+    background: #f8f9fa;
+    border: 2px solid #f59e0b;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    position: relative;
+}
+
+.file-preview::before {
+    content: '⏳';
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background: #f59e0b;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+}
+
+/* Adicione ao CSS existente */
+.anexos-tabs,
+.anexo-tab,
+.tab-anexo-content,
+.tab-anexo-content * {
+    pointer-events: auto !important;
+}
+
+/* Garantir que os botões de anexos não herdem comportamentos */
+.anexo-tab {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Prevenir que o formulário de anexos seja afetado por outros eventos */
+#secaoAnexos {
+    isolation: isolate;
+}

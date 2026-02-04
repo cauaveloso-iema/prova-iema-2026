@@ -872,45 +872,94 @@ const uploadMultiple = upload.fields([
 
 // ============ FUNÇÃO PARA CARREGAR ANEXOS DE REFERÊNCIA ============
 async function processarAnexosParaIA(anexos) {
-    try {
-        console.log('📎 Processando anexos para IA:', anexos);
+  try {
+    if (!anexos || anexos.length === 0) {
+      return "Nenhum anexo fornecido.";
+    }
+    
+    console.log(`📂 Processando ${anexos.length} anexos para IA...`);
+    
+    let contextoFormatado = `## 📎 INFORMAÇÕES DOS ANEXOS FORNECIDOS:\n\n`;
+    
+    for (let i = 0; i < anexos.length; i++) {
+      const anexo = anexos[i];
+      contextoFormatado += `### ANEXO ${i + 1}: ${anexo.titulo || 'Sem título'}\n`;
+      contextoFormatado += `- **Tipo:** ${anexo.tipo}\n`;
+      
+      if (anexo.tipo === 'texto' && anexo.conteudo) {
+        // Limitar o conteúdo para não exceder tokens
+        const conteudoLimitado = anexo.conteudo.length > 5000 
+          ? anexo.conteudo.substring(0, 5000) + "... [conteúdo truncado]" 
+          : anexo.conteudo;
         
-        let contextoAnexos = '';
+        contextoFormatado += `- **Conteúdo:**\n${conteudoLimitado}\n\n`;
         
-        if (anexos && anexos.length > 0) {
-            contextoAnexos = '\n\nREFERÊNCIAS E ANEXOS FORNECIDOS PELO PROFESSOR:\n';
-            
-            for (const anexo of anexos) {
-                if (anexo.tipo === 'texto') {
-                    contextoAnexos += `\n--- TEXTO: ${anexo.titulo || 'Sem título'} ---\n`;
-                    contextoAnexos += `${anexo.conteudo}\n`;
-                } else if (anexo.tipo === 'link') {
-                    contextoAnexos += `\n--- LINK: ${anexo.titulo || anexo.url} ---\n`;
-                    contextoAnexos += `URL: ${anexo.url}\n`;
-                    if (anexo.descricao) {
-                        contextoAnexos += `Descrição: ${anexo.descricao}\n`;
-                    }
-                } else if (anexo.tipo === 'pdf') {
-                    contextoAnexos += `\n--- PDF: ${anexo.titulo || 'Arquivo PDF'} ---\n`;
-                    contextoAnexos += `Arquivo PDF anexado pelo professor\n`;
-                    if (anexo.descricao) {
-                        contextoAnexos += `Descrição: ${anexo.descricao}\n`;
-                    }
-                } else if (anexo.tipo === 'imagem') {
-                    contextoAnexos += `\n--- IMAGEM: ${anexo.titulo || 'Imagem'} ---\n`;
-                    contextoAnexos += `Imagem anexada pelo professor\n`;
-                    if (anexo.descricao) {
-                        contextoAnexos += `Descrição: ${anexo.descricao}\n`;
-                    }
-                }
-            }
+        // ANALISAR O CONTEÚDO PARA DETECTAR PADRÕES
+        const conteudoLower = conteudoLimitado.toLowerCase();
+        
+        // Detectar se é uma questão de exemplo
+        if (conteudoLower.includes('questão') || 
+            conteudoLower.includes('prova') || 
+            conteudoLower.includes('exercício') ||
+            conteudoLower.includes('enem')) {
+          contextoFormatado += `⚠️ **DETECTADO:** Este anexo parece conter questões/exercícios. Use como referência para o estilo desejado.\n\n`;
         }
         
-        return contextoAnexos;
-    } catch (error) {
-        console.error('❌ Erro ao processar anexos:', error);
-        return '';
+        // Detectar tipo de problema
+        if (conteudoLower.includes('lucro') || 
+            conteudoLower.includes('custo') || 
+            conteudoLower.includes('receita') ||
+            conteudoLower.includes('venda') ||
+            conteudoLower.includes('preço')) {
+          contextoFormatado += `💰 **DETECTADO:** Este anexo envolve problemas financeiros/comerciais. Foque nesse estilo.\n\n`;
+        }
+        
+      } else if (anexo.tipo === 'pdf' || anexo.tipo === 'outro') {
+        contextoFormatado += `- **Arquivo:** ${anexo.nomeArquivo}\n`;
+        contextoFormatado += `- **URL/Referência:** ${anexo.url || 'N/A'}\n`;
+        contextoFormatado += `⚠️ **OBS:** Este é um arquivo ${anexo.tipo.toUpperCase()}. Use o nome/título como referência temática.\n\n`;
+      
+      } else if (anexo.tipo === 'link') {
+        contextoFormatado += `- **Link:** ${anexo.url || anexo.conteudo}\n`;
+        
+        // Extrair domínio para contexto
+        try {
+          const urlObj = new URL(anexo.url);
+          contextoFormatado += `- **Domínio:** ${urlObj.hostname}\n`;
+          
+          // Analisar domínio para contexto
+          if (urlObj.hostname.includes('qconcursos.com') || 
+              urlObj.hostname.includes('enem')) {
+            contextoFormatado += `📚 **DETECTADO:** Site de questões. Gerar questões no estilo ENEM/provas.\n\n`;
+          }
+        } catch (e) {
+          contextoFormatado += `- **Conteúdo do link:** ${anexo.conteudo || 'Link fornecido'}\n\n`;
+        }
+      
+      } else if (anexo.tipo === 'imagem') {
+        contextoFormatado += `- **Imagem:** ${anexo.nomeArquivo}\n`;
+        contextoFormatado += `- **Descrição:** ${anexo.titulo || 'Imagem de referência'}\n\n`;
+      }
+      
+      contextoFormatado += `---\n\n`;
     }
+    
+    // ADICIONAR INSTRUÇÕES CLARAS SOBRE COMO USAR OS ANEXOS
+    contextoFormatado += `## 📝 INSTRUÇÕES PARA USAR OS ANEXOS:\n\n`;
+    contextoFormatado += `1. **ANALISE os anexos acima** - Eles mostram o ESTILO de questão que quero\n`;
+    contextoFormatado += `2. **COPIE a ESTRUTURA** - Use o mesmo formato de problema\n`;
+    contextoFormatado += `3. **USE os CONCEITOS** - Lucro, custo, receita, preço de venda\n`;
+    contextoFormatado += `4. **SIGA o EXEMPLO** - Problema de negócio com duas situações comparadas\n`;
+    contextoFormatado += `5. **NÃO copie exatamente** - Crie variações, mas mantenha o estilo\n\n`;
+    
+    console.log(`✅ Contexto de anexos formatado: ${contextoFormatado.length} caracteres`);
+    
+    return contextoFormatado;
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar anexos para IA:', error);
+    return "Erro ao processar anexos fornecidos.";
+  }
 }
 
 // Rota para upload temporário de arquivos

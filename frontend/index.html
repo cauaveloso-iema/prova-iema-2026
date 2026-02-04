@@ -1366,13 +1366,13 @@
                             
                             <!-- Tabs para diferentes tipos de anexo -->
                             <div class="anexos-tabs">
-                                <button class="anexo-tab active" onclick="mostrarTabAnexo('upload')">
+                                <button type="button" class="anexo-tab active" onclick="mostrarTabAnexo('upload')">
                                     <i class="fas fa-upload"></i> Upload de Arquivos
                                 </button>
-                                <button class="anexo-tab" onclick="mostrarTabAnexo('texto')">
+                                <button type="button" class="anexo-tab" onclick="mostrarTabAnexo('texto')">
                                     <i class="fas fa-file-alt"></i> Texto Direto
                                 </button>
-                                <button class="anexo-tab" onclick="mostrarTabAnexo('link')">
+                                <button type="button" class="anexo-tab" onclick="mostrarTabAnexo('link')">
                                     <i class="fas fa-link"></i> Links
                                 </button>
                             </div>
@@ -1502,6 +1502,9 @@
                                 <div class="anexos-lista-header">
                                     <h4><i class="fas fa-list-check"></i> Materiais Adicionados</h4>
                                     <span id="contadorAnexos" class="anexos-count">0</span>
+                                    <button onclick="limparTodosAnexos()" style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                     <i class="fas fa-trash"></i> Limpar Tudo
+                                 </button>
                                 </div>
                                 
                                 <div id="listaAnexos" class="anexos-lista">
@@ -4398,158 +4401,551 @@
             `).join('');
         }
 
+        // ============ FUNÇÕES PARA ANEXOS (CORRIGIDAS) ============
+
         // Variáveis para anexos
         let anexos = [];
         let arquivosParaUpload = [];
 
-        // Funções para tabs de anexos
-        function mostrarTabAnexo(tab) {
-        // Esconder todas as tabs
-        document.querySelectorAll('.tab-anexo-content').forEach(t => {
-            t.style.display = 'none';
-        });
-        
-        // Remover active de todas as tabs
-        document.querySelectorAll('.result-tabs .result-tab').forEach(t => {
-            t.classList.remove('active');
-        });
-        
-        // Mostrar tab selecionada
-        document.getElementById(`tab-${tab}`).style.display = 'block';
-        
-        // Adicionar active à tab clicada
-        event.target.classList.add('active');
+        // Inicializar tabs de anexos
+        function inicializarTabsAnexos() {
+            const tabs = document.querySelectorAll('.anexo-tab');
+            
+            tabs.forEach(tab => {
+                // Remover qualquer onclick antigo
+                tab.removeAttribute('onclick');
+                
+                // Adicionar novo event listener
+                tab.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const tipo = this.getAttribute('data-tipo');
+                    if (tipo) {
+                        mostrarTipoAnexo(tipo);
+                    }
+                });
+            });
+        }
+
+        // Função para mostrar tipo de anexo
+        function mostrarTipoAnexo(tipo) {
+            console.log(`📎 Mostrando tab de anexos: ${tipo}`);
+            
+            // Remover active de todas as tabs
+            document.querySelectorAll('.anexo-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Esconder todos os conteúdos
+            document.querySelectorAll('.tab-anexo-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Ativar tab clicada
+            const tabAtiva = document.querySelector(`.anexo-tab[data-tipo="${tipo}"]`);
+            if (tabAtiva) {
+                tabAtiva.classList.add('active');
+            }
+            
+            // Mostrar conteúdo correspondente
+            const conteudo = document.getElementById(`tab-${tipo}`);
+            if (conteudo) {
+                conteudo.style.display = 'block';
+            }
+        }
+
+        // Função para mudar tipo de prova (mostrar/ocultar anexos)
+        function mudarTipoProva() {
+            const tipoProva = document.getElementById('tipoProva').value;
+            const secaoAnexos = document.getElementById('secaoAnexos');
+            
+            if (tipoProva === 'enem') {
+                secaoAnexos.style.display = 'block';
+                // Inicializar tabs se ainda não foi
+                setTimeout(inicializarTabsAnexos, 100);
+            } else {
+                secaoAnexos.style.display = 'none';
+                // Limpar anexos se não for ENEM
+                anexos = [];
+                arquivosParaUpload = [];
+                atualizarListaAnexos();
+            }
+        }
+
+        // Função para adicionar texto
+        function adicionarTexto() {
+            const titulo = document.getElementById('textoTitulo').value.trim();
+            const conteudo = document.getElementById('textoConteudo').value.trim();
+            
+            if (!titulo) {
+                mostrarAlerta('alertProva', '⚠️ Digite um título para o texto', 'info');
+                return;
+            }
+            
+            if (!conteudo) {
+                mostrarAlerta('alertProva', '⚠️ Digite o conteúdo do texto', 'info');
+                return;
+            }
+            
+            if (conteudo.length > 10000) {
+                mostrarAlerta('alertProva', '⚠️ O texto é muito longo (máx: 10,000 caracteres)', 'error');
+                return;
+            }
+            
+            const novoAnexo = {
+                tipo: 'texto',
+                titulo: titulo,
+                conteudo: conteudo,
+                descricao: document.getElementById('textoDescricao').value.trim(),
+                data: new Date().toISOString()
+            };
+            
+            anexos.push(novoAnexo);
+            atualizarListaAnexos();
+            
+            // Limpar formulário
+            document.getElementById('textoTitulo').value = '';
+            document.getElementById('textoConteudo').value = '';
+            document.getElementById('textoDescricao').value = '';
+            document.getElementById('charCount').textContent = '10000';
+            
+            mostrarAlerta('alertProva', `✅ Texto "${titulo}" adicionado!`, 'success');
+        }
+
+        // Função para adicionar link
+        function adicionarLink() {
+            const titulo = document.getElementById('linkTitulo').value.trim();
+            const url = document.getElementById('linkURL').value.trim();
+            
+            if (!titulo) {
+                mostrarAlerta('alertProva', '⚠️ Digite um título para o link', 'info');
+                return;
+            }
+            
+            if (!url) {
+                mostrarAlerta('alertProva', '⚠️ Digite a URL do link', 'info');
+                return;
+            }
+            
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                mostrarAlerta('alertProva', '⚠️ Digite uma URL válida (comece com http:// ou https://)', 'error');
+                return;
+            }
+            
+            const novoAnexo = {
+                tipo: 'link',
+                titulo: titulo,
+                url: url,
+                descricao: document.getElementById('linkDescricao').value.trim(),
+                data: new Date().toISOString()
+            };
+            
+            anexos.push(novoAnexo);
+            atualizarListaAnexos();
+            
+            // Limpar formulário
+            document.getElementById('linkTitulo').value = '';
+            document.getElementById('linkURL').value = '';
+            document.getElementById('linkDescricao').value = '';
+            
+            mostrarAlerta('alertProva', `✅ Link "${titulo}" adicionado!`, 'success');
+        }
+
+        // Função para lidar com seleção de arquivos
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                handleFiles(files);
+            }
+        }
+
+        // Função para processar arquivos
+        function handleFiles(files) {
+            Array.from(files).forEach(file => {
+                // Validar tamanho (10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    mostrarAlerta('alertProva', `⚠️ Arquivo "${file.name}" muito grande (máx: 10MB)`, 'error');
+                    return;
+                }
+                
+                // Validar tipo
+                const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'text/plain', 
+                                    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                
+                if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i)) {
+                    mostrarAlerta('alertProva', `⚠️ Tipo de arquivo não permitido: "${file.name}"`, 'error');
+                    return;
+                }
+                
+                // Adicionar à lista de upload
+                arquivosParaUpload.push(file);
+                
+                // Mostrar preview
+                mostrarPreviewArquivo(file);
+            });
+            
+            // Limpar input
+            document.getElementById('fileInput').value = '';
+        }
+
+        // Função para mostrar preview de arquivo
+        function mostrarPreviewArquivo(file) {
+            const listaAnexos = document.getElementById('listaAnexos');
+            const emptyAnexos = document.getElementById('emptyAnexos');
+            
+            if (emptyAnexos) {
+                emptyAnexos.style.display = 'none';
+            }
+            
+            // Determinar ícone
+            let iconClass = 'fa-file';
+            let iconColor = 'other';
+            
+            if (file.type === 'application/pdf') {
+                iconClass = 'fa-file-pdf';
+                iconColor = 'pdf';
+            } else if (file.type.startsWith('image/')) {
+                iconClass = 'fa-file-image';
+                iconColor = 'image';
+            } else if (file.type === 'text/plain') {
+                iconClass = 'fa-file-alt';
+                iconColor = 'text';
+            } else if (file.type.includes('word')) {
+                iconClass = 'fa-file-word';
+                iconColor = 'text';
+            }
+            
+            const fileSize = formatFileSize(file.size);
+            const fileId = 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            
+            const fileHTML = `
+                <div class="file-preview" id="${fileId}">
+                    <div class="file-info">
+                        <div class="file-icon ${iconColor}">
+                            <i class="fas ${iconClass}"></i>
+                        </div>
+                        <div class="file-details">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${fileSize}</div>
+                            <div style="margin-top: 5px; font-size: 0.8rem; color: #6b7280;">
+                                <i class="fas fa-clock"></i> Será enviado ao gerar a prova
+                            </div>
+                        </div>
+                        <button onclick="removerArquivoPreview('${fileId}', '${file.name}')" style="
+                            background: #ef4444; 
+                            color: white; 
+                            border: none; 
+                            width: 30px; 
+                            height: 30px; 
+                            border-radius: 50%; 
+                            cursor: pointer; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center;
+                        ">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            listaAnexos.insertAdjacentHTML('afterbegin', fileHTML);
+            atualizarContadorAnexos();
+        }
+
+        // Função para remover arquivo do preview
+        function removerArquivoPreview(fileId, fileName) {
+            if (confirm(`Remover o arquivo "${fileName}" da lista?`)) {
+                // Remover do DOM
+                const element = document.getElementById(fileId);
+                if (element) {
+                    element.remove();
+                }
+                
+                // Remover da lista de upload
+                arquivosParaUpload = arquivosParaUpload.filter(f => f.name !== fileName);
+                
+                // Atualizar contador
+                atualizarContadorAnexos();
+                
+                // Mostrar empty state se necessário
+                if (arquivosParaUpload.length === 0 && anexos.length === 0) {
+                    const emptyAnexos = document.getElementById('emptyAnexos');
+                    if (emptyAnexos) {
+                        emptyAnexos.style.display = 'block';
+                    }
+                }
+            }
+        }
+
+        // Função para atualizar lista de anexos
+        function atualizarListaAnexos() {
+            const listaAnexos = document.getElementById('listaAnexos');
+            const emptyAnexos = document.getElementById('emptyAnexos');
+            
+            if (anexos.length === 0 && arquivosParaUpload.length === 0) {
+                if (emptyAnexos) {
+                    emptyAnexos.style.display = 'block';
+                }
+                listaAnexos.innerHTML = '';
+                return;
+            }
+            
+            if (emptyAnexos) {
+                emptyAnexos.style.display = 'none';
+            }
+            
+            // Mostrar anexos já adicionados
+            let html = '';
+            
+            anexos.forEach((anexo, index) => {
+                let icon, colorClass, tipoTexto;
+                
+                switch(anexo.tipo) {
+                    case 'texto':
+                        icon = 'fa-file-alt';
+                        colorClass = 'anexo-texto';
+                        tipoTexto = 'Texto';
+                        break;
+                    case 'link':
+                        icon = 'fa-link';
+                        colorClass = 'anexo-link';
+                        tipoTexto = 'Link';
+                        break;
+                    default:
+                        icon = 'fa-file';
+                        colorClass = 'anexo-outro';
+                        tipoTexto = 'Arquivo';
+                }
+                
+                html += `
+                    <div class="anexo-card ${colorClass}">
+                        <div class="anexo-info">
+                            <div class="anexo-titulo">
+                                <i class="fas ${icon}"></i>
+                                ${anexo.titulo}
+                                <span style="font-size: 0.8rem; background: #e5e7eb; padding: 2px 8px; border-radius: 10px; color: #6b7280;">
+                                    ${tipoTexto}
+                                </span>
+                            </div>
+                            
+                            ${anexo.descricao ? `
+                            <div class="anexo-descricao">${anexo.descricao}</div>
+                            ` : ''}
+                            
+                            <div class="anexo-metadata">
+                                ${anexo.url && anexo.tipo === 'link' ? 
+                                    `<span><i class="fas fa-external-link-alt"></i> <a href="${anexo.url}" target="_blank" style="color: #3b82f6;">Abrir link</a></span>` : 
+                                anexo.conteudo ? 
+                                    `<span><i class="fas fa-text-height"></i> ${anexo.conteudo.length} caracteres</span>` : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="anexo-acoes">
+                            <button onclick="removerAnexo(${index})" style="
+                                background: #ef4444; 
+                                color: white; 
+                                border: none; 
+                                width: 32px; 
+                                height: 32px; 
+                                border-radius: 50%; 
+                                cursor: pointer; 
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: center;
+                            ">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            listaAnexos.innerHTML = html;
+            atualizarContadorAnexos();
+        }
+
+        // Função para remover anexo
+        function removerAnexo(index) {
+            if (confirm('Remover este material?')) {
+                anexos.splice(index, 1);
+                atualizarListaAnexos();
+            }
+        }
+
+        // Função para atualizar contador de caracteres
+        function configurarContadorTexto() {
+            const textarea = document.getElementById('textoConteudo');
+            if (textarea) {
+                textarea.addEventListener('input', function() {
+                    const charCount = 10000 - this.value.length;
+                    const charCountElement = document.getElementById('charCount');
+                    if (charCountElement) {
+                        charCountElement.textContent = charCount;
+                        
+                        if (charCount < 0) {
+                            charCountElement.style.color = '#ef4444';
+                        } else if (charCount < 100) {
+                            charCountElement.style.color = '#f59e0b';
+                        } else {
+                            charCountElement.style.color = '#6b7280';
+                        }
+                    }
+                });
+            }
+        }
+
+        // Função para atualizar contador de anexos
+        function atualizarContadorAnexos() {
+            const totalAnexos = anexos.length + arquivosParaUpload.length;
+            const contadorElement = document.getElementById('contadorAnexos');
+            if (contadorElement) {
+                contadorElement.textContent = totalAnexos;
+                
+                if (arquivosParaUpload.length > 0) {
+                    contadorElement.style.background = '#f59e0b';
+                    contadorElement.title = `${arquivosParaUpload.length} arquivo(s) aguardando upload`;
+                } else {
+                    contadorElement.style.background = '';
+                    contadorElement.title = '';
+                }
+            }
+        }
+
+        // Função para formatar tamanho do arquivo
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Função para fazer upload dos arquivos pendentes
+        async function uploadArquivosPendentes() {
+            const resultados = [];
+            
+            for (const file of arquivosParaUpload) {
+                try {
+                    const resultado = await uploadArquivoIndividual(file);
+                    resultados.push(resultado);
+                } catch (error) {
+                    console.error(`Erro ao fazer upload de ${file.name}:`, error);
+                    throw error;
+                }
+            }
+            
+            return resultados;
+        }
+
+        // Função para fazer upload individual
+        async function uploadArquivoIndividual(file) {
+            const formData = new FormData();
+            formData.append('arquivo', file);
+            
+            const token = localStorage.getItem('auth_token');
+            
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 200) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            if (response.success) {
+                                resolve({
+                                    tipo: response.file.tipo || 'arquivo',
+                                    titulo: response.file.nome || file.name,
+                                    nomeArquivo: response.file.nomeArquivo || file.name,
+                                    tamanho: response.file.tamanho || file.size,
+                                    url: response.file.url,
+                                    mimetype: file.type
+                                });
+                            } else {
+                                reject(new Error(response.error || `Erro no upload de ${file.name}`));
+                            }
+                        } catch (e) {
+                            reject(new Error(`Resposta inválida do servidor para ${file.name}`));
+                        }
+                    } else {
+                        reject(new Error(`Erro HTTP ${xhr.status}: ${xhr.statusText}`));
+                    }
+                });
+                
+                xhr.addEventListener('error', () => {
+                    reject(new Error(`Erro de rede ao fazer upload de ${file.name}`));
+                });
+                
+                xhr.open('POST', '/api/upload/temp');
+                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                xhr.send(formData);
+            });
+        }
+
+        // Função para limpar todos os anexos
+        function limparTodosAnexos() {
+            if (confirm('Tem certeza que deseja remover todos os materiais adicionados?')) {
+                anexos = [];
+                arquivosParaUpload = [];
+                
+                const listaAnexos = document.getElementById('listaAnexos');
+                if (listaAnexos) {
+                    listaAnexos.innerHTML = '';
+                }
+                
+                const emptyAnexos = document.getElementById('emptyAnexos');
+                if (emptyAnexos) {
+                    emptyAnexos.style.display = 'block';
+                }
+                
+                // Limpar campos
+                document.getElementById('textoTitulo').value = '';
+                document.getElementById('textoConteudo').value = '';
+                document.getElementById('textoDescricao').value = '';
+                document.getElementById('linkTitulo').value = '';
+                document.getElementById('linkURL').value = '';
+                document.getElementById('linkDescricao').value = '';
+                document.getElementById('fileInput').value = '';
+                
+                atualizarContadorAnexos();
+                mostrarAlerta('alertProva', '✅ Todos os materiais foram removidos', 'success');
+            }
         }
 
         // Drag and drop functions
         function handleDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.add('drop-zone-active');
+            e.preventDefault();
+            e.stopPropagation();
+            const dropZone = document.getElementById('dropZone');
+            if (dropZone) {
+                dropZone.classList.add('drop-zone-active');
+            }
         }
 
         function handleDragLeave(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.remove('drop-zone-active');
+            e.preventDefault();
+            e.stopPropagation();
+            const dropZone = document.getElementById('dropZone');
+            if (dropZone) {
+                dropZone.classList.remove('drop-zone-active');
+            }
         }
 
         function handleDrop(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.remove('drop-zone-active');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFiles(files);
-        }
-        }
-
-        function handleFileSelect(e) {
-        const files = e.target.files;
-        if (files.length > 0) {
-            handleFiles(files);
-        }
-        }
-
-        // Função para processar arquivos selecionados
-        function handleFiles(files) {
-        Array.from(files).forEach(file => {
-            // Validar tamanho (10MB)
-            if (file.size > 10 * 1024 * 1024) {
-            mostrarAlerta('alertProva', `⚠️ Arquivo "${file.name}" muito grande (máx: 10MB)`, 'error');
-            return;
+            e.preventDefault();
+            e.stopPropagation();
+            const dropZone = document.getElementById('dropZone');
+            if (dropZone) {
+                dropZone.classList.remove('drop-zone-active');
             }
             
-            // Validar tipo
-            const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'text/plain', 
-                                'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-            
-            if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i)) {
-            mostrarAlerta('alertProva', `⚠️ Tipo de arquivo não permitido: "${file.name}"`, 'error');
-            return;
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFiles(files);
             }
-            
-            // Adicionar à lista de upload
-            arquivosParaUpload.push(file);
-            
-            // Mostrar preview
-            mostrarPreviewArquivo(file);
-        });
-        
-        // Limpar input
-        document.getElementById('fileInput').value = '';
-        }
-
-        // Função para mostrar preview do arquivo
-        function mostrarPreviewArquivo(file) {
-        const listaAnexos = document.getElementById('listaAnexos');
-        const emptyAnexos = document.getElementById('emptyAnexos');
-        
-        if (emptyAnexos) {
-            emptyAnexos.style.display = 'none';
-        }
-        
-        // Determinar ícone baseado no tipo
-        let iconClass = 'fa-file';
-        let iconColor = 'other';
-        
-        if (file.type === 'application/pdf') {
-            iconClass = 'fa-file-pdf';
-            iconColor = 'pdf';
-        } else if (file.type.startsWith('image/')) {
-            iconClass = 'fa-file-image';
-            iconColor = 'image';
-        } else if (file.type === 'text/plain') {
-            iconClass = 'fa-file-alt';
-            iconColor = 'text';
-        } else if (file.type.includes('word')) {
-            iconClass = 'fa-file-word';
-            iconColor = 'text';
-        }
-        
-        // Format file size
-        const fileSize = formatFileSize(file.size);
-        
-        const fileId = 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        
-        const fileHTML = `
-            <div class="file-preview" id="${fileId}">
-            <div class="file-info">
-                <div class="file-icon ${iconColor}">
-                <i class="fas ${iconClass}"></i>
-                </div>
-                <div class="file-details">
-                <div class="file-name">${file.name}</div>
-                <div class="file-size">${fileSize}</div>
-                <div class="file-progress">
-                    <div style="height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-top: 8px;">
-                    <div id="progress-${fileId}" style="height: 100%; width: 0%; background: #4f46e5; border-radius: 3px; transition: width 0.3s;"></div>
-                    </div>
-                </div>
-                </div>
-                <button onclick="removerArquivoUpload('${fileId}', '${file.name}')" style="
-                background: #ef4444; 
-                color: white; 
-                border: none; 
-                width: 30px; 
-                height: 30px; 
-                border-radius: 50%; 
-                cursor: pointer; 
-                display: flex; 
-                align-items: center; 
-                justify-content: center;
-                ">
-                <i class="fas fa-times"></i>
-                </button>
-            </div>
-            </div>
-        `;
-        
-        listaAnexos.insertAdjacentHTML('afterbegin', fileHTML);
-        
-        // Iniciar upload automático
-        uploadArquivo(file, fileId);
         }
 
         // Função para formatar tamanho do arquivo
@@ -4881,6 +5277,53 @@
             arquivosParaUpload = [];
             atualizarListaAnexos();
         }
+        }
+
+        // ============ FUNÇÃO PARA MOSTRAR TAB DE ANEXOS ============
+        function mostrarTabAnexo(tipo) {
+            console.log(`📎 Mostrando tab de anexos: ${tipo}`);
+            
+            // Remover active de todas as tabs
+            document.querySelectorAll('.anexo-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Esconder todos os conteúdos
+            document.querySelectorAll('.tab-anexo-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Ativar tab clicada
+            const tabAtiva = document.querySelector(`.anexo-tab[onclick*="${tipo}"]`);
+            if (tabAtiva) {
+                tabAtiva.classList.add('active');
+            }
+            
+            // Mostrar conteúdo correspondente
+            const conteudo = document.getElementById(`tab-${tipo}`);
+            if (conteudo) {
+                conteudo.style.display = 'block';
+            }
+        }
+
+        // ============ FUNÇÃO PARA MUDAR TIPO DE PROVA (CORRIGIDA) ============
+        function mudarTipoProva() {
+            const tipoProva = document.getElementById('tipoProva').value;
+            const secaoAnexos = document.getElementById('secaoAnexos');
+            
+            if (tipoProva === 'enem') {
+                secaoAnexos.style.display = 'block';
+                // Inicializar a primeira tab
+                setTimeout(() => {
+                    mostrarTabAnexo('upload');
+                }, 100);
+            } else {
+                secaoAnexos.style.display = 'none';
+                // Limpar anexos se não for ENEM
+                anexos = [];
+                arquivosParaUpload = [];
+                atualizarListaAnexos();
+            }
         }
 
         
@@ -5673,30 +6116,61 @@
                 }
             }
         }
+
+
         
         // Função mostrarTab atualizada
         function mostrarTab(tabId) {
+            // Prevenir comportamento padrão se houver
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            
+            console.log(`📋 Mudando para tab: ${tabId}`);
+            
+            // Esconder todas as tabs de conteúdo
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
             
+            // Mostrar tab selecionada
             const tabElement = document.getElementById(tabId);
             if (tabElement) {
                 tabElement.classList.add('active');
             }
             
-            document.querySelectorAll('.tab').forEach(tab => {
+            // Atualizar tabs de navegação principal
+            document.querySelectorAll('.content-tabs .content-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
             
-            const clickedTab = event.currentTarget;
-            clickedTab.classList.add('active');
+            // Atualizar tabs da sidebar
+            document.querySelectorAll('.sidebar .nav-item').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Ativar tab correspondente na sidebar
+            const sidebarTab = document.querySelector(`.sidebar .nav-item[onclick*="${tabId}"]`);
+            if (sidebarTab) {
+                sidebarTab.classList.add('active');
+            }
+            
+            // Ativar tab correspondente no header
+            const headerTab = document.querySelector(`.content-tabs .content-tab[onclick*="${tabId}"]`);
+            if (headerTab) {
+                headerTab.classList.add('active');
+            }
             
             // Recarregar dados se necessário
             if (tabId === 'turmas') {
-                carregarTurmasProfessor();
+                setTimeout(() => {
+                    carregarTurmasProfessor();
+                }, 100);
             } else if (tabId === 'minhas-provas') {
-                carregarProvasProfessor();
+                setTimeout(() => {
+                    carregarProvasProfessor();
+                }, 100);
             } else if (tabId === 'resultados-gerais') {
                 setTimeout(() => {
                     carregarResultadosGerais();
@@ -5751,7 +6225,7 @@
                 });
             }
 
-            // **ADICIONAR ESTE CÓDIGO (depois da configuração da data):**
+            // Configurar cálculo de duração
             const inicioInput = document.getElementById('horarioInicio');
             const terminoInput = document.getElementById('horarioTermino');
             
@@ -5762,7 +6236,87 @@
                 // Calcular inicial
                 setTimeout(calcularDuracao, 500);
             }
-                
+            
+            // ============ CORREÇÃO CRÍTICA ============
+            // Configurar tabs de anexos para não acionar submit do formulário
+            // Isso resolve o problema das tabs gerarem prova automaticamente
+            setTimeout(() => {
+                const secaoAnexos = document.getElementById('secaoAnexos');
+                if (secaoAnexos) {
+                    console.log('🔧 Corrigindo todos os botões na seção de anexos...');
+                    
+                    // 1. Corrigir tabs
+                    secaoAnexos.querySelectorAll('.anexo-tab').forEach(tab => {
+                        tab.type = 'button';
+                        const onclick = tab.getAttribute('onclick');
+                        if (onclick) {
+                            tab.onclick = null;
+                            tab.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const match = onclick.match(/mostrarTabAnexo\('([^']+)'\)/);
+                                if (match && typeof mostrarTabAnexo === 'function') {
+                                    mostrarTabAnexo(match[1]);
+                                }
+                            });
+                        }
+                    });
+                    
+                    // 2. Corrigir botões dentro das tabs
+                    secaoAnexos.querySelectorAll('button').forEach(btn => {
+                        if (!btn.closest('.anexo-tab')) { // Já corrigimos as tabs acima
+                            btn.type = 'button';
+                            
+                            // Prevenir comportamento padrão
+                            btn.addEventListener('click', function(e) {
+                                e.stopPropagation();
+                                
+                                // Se for botão dentro de form, prevenir submit
+                                if (btn.closest('form')) {
+                                    e.preventDefault();
+                                }
+                            });
+                        }
+                    });
+                    
+                    // 3. Corrigir botões específicos
+                    const btnLimpar = secaoAnexos.querySelector('button[onclick*="limparTodosAnexos"]');
+                    if (btnLimpar) {
+                        btnLimpar.type = 'button';
+                        const limparOnclick = btnLimpar.getAttribute('onclick');
+                        if (limparOnclick) {
+                            btnLimpar.onclick = null;
+                            btnLimpar.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (typeof limparTodosAnexos === 'function') {
+                                    limparTodosAnexos();
+                                }
+                            });
+                        }
+                    }
+                    
+                    // 4. Corrigir botões de adicionar texto/link
+                    const btnAdicionarTexto = secaoAnexos.querySelector('button[onclick*="adicionarTexto"]');
+                    if (btnAdicionarTexto) {
+                        btnAdicionarTexto.type = 'button';
+                        btnAdicionarTexto.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        });
+                    }
+                    
+                    const btnAdicionarLink = secaoAnexos.querySelector('button[onclick*="adicionarLink"]');
+                    if (btnAdicionarLink) {
+                        btnAdicionarLink.type = 'button';
+                        btnAdicionarLink.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        });
+                    }
+                }
+            }, 200);
+                    
             // Configurar formulário de nova prova
             const formNovaProva = document.getElementById('formNovaProva');
             if (formNovaProva) {
@@ -5819,12 +6373,6 @@
                         dataLimiteEnviar = dataLimiteFimDia.toISOString();
                     }
                     
-                    // Aguardar upload de todos os arquivos pendentes
-                    if (arquivosParaUpload.length > 0) {
-                        mostrarAlerta('alertProva', '📤 Aguarde o upload de todos os arquivos...', 'info');
-                        return;
-                    }
-                    
                     // Mostrar loading
                     const btn = document.getElementById('btnGerarProva');
                     const originalText = btn.innerHTML;
@@ -5836,6 +6384,8 @@
                     if (!token) {
                         mostrarAlerta('alertProva', '❌ Sessão expirada. Faça login novamente.', 'error');
                         window.location.href = 'login.html';
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
                         return;
                     }
                     
@@ -5875,9 +6425,7 @@
                             formDataObj.append('horarioTermino', dadosProva.horarioTermino);
                             formDataObj.append('anexosData', JSON.stringify(dadosProva.anexos));
                             
-                            // Adicionar arquivos físicos ao FormData
-                            // Os arquivos já foram enviados via upload separado, então apenas referenciamos
-                            // Se houver arquivos locais ainda não enviados, enviar agora
+                            // Adicionar arquivos físicos pendentes (se ainda houver)
                             const filesToUpload = arquivosParaUpload.filter(file => 
                                 file && file.size > 0
                             );
@@ -5886,7 +6434,7 @@
                                 formDataObj.append('arquivos', file);
                             });
                             
-                            console.log(`📎 Enviando ${filesToUpload.length} arquivos com FormData`);
+                            console.log(`📎 Enviando com FormData (${filesToUpload.length} arquivos + ${anexos.length} anexos)`);
                             
                             // Usar rota com upload de arquivos
                             response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
@@ -5931,9 +6479,11 @@
                             // Mostrar preview das questões
                             if (data.questoes && data.questoes.length > 0) {
                                 mostrarPreviewQuestoes(data.questoes);
+                            } else if (provaGerada.questoes && provaGerada.questoes.length > 0) {
+                                mostrarPreviewQuestoes(provaGerada.questoes);
                             }
                             
-                            // Resetar anexos
+                            // Resetar anexos se for ENEM
                             if (tipoProva === 'enem') {
                                 anexos = [];
                                 arquivosParaUpload = [];
@@ -6076,7 +6626,6 @@
                 });
             }
         });
-
         function calcularDuracao() {
             const inicio = document.getElementById('horarioInicio').value;
             const termino = document.getElementById('horarioTermino').value;
