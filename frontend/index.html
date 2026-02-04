@@ -4299,44 +4299,6 @@
         }
         }
 
-        async function publicarProvaExistente(provaId, provaTitulo) {
-            try {
-                const token = localStorage.getItem('auth_token');
-                const confirmacao = confirm(`Publicar a prova "${provaTitulo}" para os alunos?\n\nEsta prova ficará visível para todos os alunos da turma.`);
-                
-                if (!confirmacao) return;
-                
-                // Mostrar loading
-                mostrarAlerta('alertMinhasProvas', `📤 Publicando "${provaTitulo}"...`, 'info');
-                
-                const response = await fetch(`/api/professor/provas/${provaId}/publicar`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                mostrarAlerta('alertMinhasProvas', `✅ ${data.message}`, 'success');
-                
-                // Recarregar a lista de provas
-                setTimeout(() => {
-                    carregarProvasProfessor();
-                }, 2000);
-                
-                } else {
-                throw new Error(data.error || 'Erro ao publicar prova');
-                }
-                
-            } catch (error) {
-                console.error('❌ Erro ao publicar prova:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
-            }
-            }
-
         // Atualizar select de turmas
         function atualizarSelectTurmas() {
             const selectTurma = document.getElementById('turmaProva');
@@ -5356,168 +5318,358 @@
             
             if (!questoes || questoes.length === 0) {
                 questoesContainer.innerHTML = `
-                    <div class="empty-state" style="text-align: center; padding: 20px; color: #6b7280;">
+                    <div style="text-align: center; padding: 40px; color: #6b7280;">
                         <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i>
                         <p>Não foi possível carregar as questões geradas</p>
                     </div>
                 `;
-            } else {
-                questoesContainer.innerHTML = questoes.map((questao, index) => `
-                    <div class="questao-preview">
-                        <div class="questao-texto">
-                            <strong>Questão ${index + 1}:</strong> ${questao.pergunta || 'Pergunta não disponível'}
-                        </div>
-                        <div class="opcoes-preview">
-                            ${questao.opcoes ? questao.opcoes.map((opcao, opcaoIndex) => `
-                                <div class="opcao-item ${opcaoIndex === questao.respostaCorreta ? 'opcao-correta' : ''}">
-                                    <span>${opcao || 'Opção não disponível'}</span>
-                                    ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle" style="color: #10b981;"></i>' : ''}
+                return;
+            }
+            
+            // Construir o HTML das questões
+            const questoesHTML = questoes.map((questao, index) => {
+                if (questao.tipo === 'enem') {
+                    // Formato ENEM
+                    return `
+                        <div class="questao-preview" style="margin-bottom: 25px; padding: 20px; background: #f0f9ff; border-radius: 10px; border-left: 4px solid #3b82f6;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                                <span style="background: #3b82f6; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 600;">
+                                    ENEM
+                                </span>
+                                <strong style="color: #1e40af;">Questão ${index + 1}</strong>
+                            </div>
+                            
+                            ${questao.contexto ? `
+                            <div class="contexto" style="margin-bottom: 15px; padding: 15px; background: #e0f2fe; border-radius: 8px; font-style: italic;">
+                                <p style="margin: 0; color: #0369a1;">${questao.contexto}</p>
+                            </div>
+                            ` : ''}
+                            
+                            <div class="questao-texto" style="margin-bottom: 15px; font-weight: 600; color: #1e40af;">
+                                ${questao.pergunta}
+                            </div>
+                            
+                            <div class="opcoes-preview">
+                                ${questao.opcoes.map((opcao, opcaoIndex) => `
+                                    <div class="opcao-item ${opcaoIndex === questao.respostaCorreta ? 'opcao-correta' : ''}" 
+                                        style="padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 2px solid ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#d1d5db'}; background: ${opcaoIndex === questao.respostaCorreta ? '#d1fae5' : 'white'};">
+                                        <span>${opcao}</span>
+                                        ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle" style="color: #10b981; float: right;"></i>' : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                            
+                            <div class="explicacao-preview" style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
+                                <strong><i class="fas fa-lightbulb"></i> Explicação:</strong> ${questao.explicacao}
+                                
+                                ${questao.competencia ? `
+                                <div style="margin-top: 10px; font-size: 0.9rem;">
+                                    <strong>Competência:</strong> ${questao.competencia}
                                 </div>
-                            `).join('') : '<p>Opções não disponíveis</p>'}
+                                ` : ''}
+                                
+                                ${questao.habilidade ? `
+                                <div style="margin-top: 5px; font-size: 0.9rem;">
+                                    <strong>Habilidade:</strong> ${questao.habilidade}
+                                </div>
+                                ` : ''}
+                            </div>
                         </div>
-                        ${questao.explicacao ? `
-                        <div class="explicacao-preview">
-                            <strong><i class="fas fa-lightbulb"></i> Explicação:</strong> ${questao.explicacao}
+                    `;
+                } else {
+                    // Formato simples
+                    return `
+                        <div class="questao-preview" style="margin-bottom: 25px; padding: 20px; background: #f9fafb; border-radius: 10px; border-left: 4px solid #10b981;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                                <span style="background: #10b981; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 600;">
+                                    SIMPLES
+                                </span>
+                                <strong style="color: #065f46;">Questão ${index + 1}</strong>
+                            </div>
+                            
+                            <div class="questao-texto" style="margin-bottom: 15px; font-weight: 600; color: #065f46;">
+                                ${questao.pergunta}
+                            </div>
+                            
+                            <div class="opcoes-preview">
+                                ${questao.opcoes.map((opcao, opcaoIndex) => `
+                                    <div class="opcao-item ${opcaoIndex === questao.respostaCorreta ? 'opcao-correta' : ''}" 
+                                        style="padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 2px solid ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#d1d5db'}; background: ${opcaoIndex === questao.respostaCorreta ? '#d1fae5' : 'white'};">
+                                        <span>${opcao}</span>
+                                        ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle" style="color: #10b981; float: right;"></i>' : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                            
+                            <div class="explicacao-preview" style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
+                                <strong><i class="fas fa-lightbulb"></i> Explicação:</strong> ${questao.explicacao}
+                            </div>
                         </div>
-                        ` : ''}
-                    </div>
-                `).join('');
-            }
+                    `;
+                }
+            }).join('');
             
+            // Inserir as questões no container
+            questoesContainer.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: #4b5563; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-check-circle" style="color: #10b981;"></i> 
+                        Questões Geradas
+                        <span style="font-size: 0.9rem; background: #e5e7eb; padding: 2px 10px; border-radius: 12px; color: #6b7280;">
+                            ${questoes.length} questões
+                        </span>
+                    </h3>
+                    <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 20px;">
+                        A prova foi gerada com sucesso! Revise as questões abaixo.
+                    </p>
+                </div>
+                ${questoesHTML}
+            `;
+            
+            // Garantir que o container esteja visível
             previewContainer.style.display = 'block';
-            setTimeout(() => {
-                previewContainer.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
         }
         
-        // Função para publicar prova (substitua a função existente)
+        // Função para publicar prova (CORRIGIDA)
         async function publicarProva() {
-        if (!provaGerada) {
-            mostrarAlerta('alertProva', '⚠️ Nenhuma prova gerada para publicar', 'info');
-            return;
+            if (!provaGerada || !provaGerada.id) {
+                mostrarAlerta('alertProva', '⚠️ Nenhuma prova válida para publicar', 'info');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Mostrar loading
+                const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
+                const originalText = btnPublicar.innerHTML;
+                btnPublicar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publicando...';
+                btnPublicar.disabled = true;
+                
+                console.log('📤 Publicando prova ID:', provaGerada.id);
+                
+                // Chamar API para publicar usando o ID ATUALIZADO
+                const response = await fetch(`/api/professor/provas/${provaGerada.id}/publicar`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarAlerta('alertProva', '✅ Prova publicada com sucesso! Agora está visível para os alunos.', 'success');
+                    
+                    // Resetar formulário
+                    document.getElementById('formNovaProva').reset();
+                    document.getElementById('previewQuestoes').style.display = 'none';
+                    provaGerada = null;
+                    
+                    // Resetar anexos se houver
+                    anexos = [];
+                    arquivosParaUpload = [];
+                    atualizarListaAnexos();
+                    
+                    // Recarregar lista de provas
+                    setTimeout(() => {
+                        carregarProvasProfessor();
+                    }, 2000);
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao publicar prova');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao publicar prova:', error);
+                mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
+            } finally {
+                // Restaurar botão
+                const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
+                if (btnPublicar) {
+                    btnPublicar.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar para a Turma';
+                    btnPublicar.disabled = false;
+                }
+            }
         }
         
-        try {
-            const token = localStorage.getItem('auth_token');
-            
-            // Mostrar loading
-            const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
-            const originalText = btnPublicar.innerHTML;
-            btnPublicar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publicando...';
-            btnPublicar.disabled = true;
-            
-            // Chamar API para publicar
-            const response = await fetch(`/api/professor/provas/${provaGerada.id}/publicar`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-            mostrarAlerta('alertProva', '✅ Prova publicada com sucesso! Agora está visível para os alunos.', 'success');
-            
-            // Resetar formulário
-            document.getElementById('formNovaProva').reset();
-            document.getElementById('previewQuestoes').style.display = 'none';
-            provaGerada = null;
-            
-            // Recarregar lista de provas
-            setTimeout(() => {
-                carregarProvasProfessor();
-            }, 2000);
-            
-            } else {
-            throw new Error(data.error || 'Erro ao publicar prova');
-            }
-            
-        } catch (error) {
-            console.error('❌ Erro ao publicar prova:', error);
-            mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
-        } finally {
-            // Restaurar botão
-            const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
-            if (btnPublicar) {
-            btnPublicar.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar para a Turma';
-            btnPublicar.disabled = false;
-            }
-        }
-        }
-        
-        // Função para regenerar prova (mantido da versão anterior)
+        // Regenerar prova (CORRIGIDO COM ANIMAÇÃO)
         async function regenerarProva() {
             if (!provaGerada) {
                 mostrarAlerta('alertProva', '⚠️ Nenhuma prova para regenerar', 'info');
                 return;
             }
             
-            const horarioInicio = document.getElementById('horarioInicio').value;
-            const horarioTermino = document.getElementById('horarioTermino').value;
-            
-            // Calcular duração automaticamente baseada nos horários
-            const duracaoCalculada = calcularDuracao(); // Usar a função existente
-            
-            const formData = {
-                turmaId: document.getElementById('turmaProva').value,
-                titulo: document.getElementById('tituloProva').value,
-                conteudo: document.getElementById('temaProva').value,
-                tipoProva: document.getElementById('tipoProva').value,
-                quantidadeQuestoes: parseInt(document.getElementById('quantidadeQuestoes').value),
-                dificuldade: document.getElementById('dificuldade').value,
-                dataLimite: document.getElementById('dataLimite').value,
-                horarioInicio: horarioInicio,
-                horarioTermino: horarioTermino,
-                // Adicionar duração calculada automaticamente
-                duracao: duracaoCalculada
-            };
-            
-            if (!formData.turmaId) {
-                mostrarAlerta('alertProva', '⚠️ Selecione uma turma primeiro', 'info');
-                return;
+            // Mostrar loading no preview
+            const questoesPreview = document.getElementById('questoesPreview');
+            if (questoesPreview) {
+                questoesPreview.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4f46e5; margin-bottom: 15px;"></i>
+                        <p style="color: #6b7280;">Regenerando prova com IA...</p>
+                        <p style="font-size: 0.9rem; color: #6b7280;">Por favor, aguarde enquanto criamos novas questões.</p>
+                    </div>
+                `;
             }
             
-            // ADICIONAR ANIMAÇÃO DE LOADING NO BOTÃO "Regenerar Prova"
-            const btnRegenerar = document.querySelector('#previewQuestoes button.btn-danger');
-            const originalTextRegenerar = btnRegenerar.innerHTML;
-            
-            // ADICIONAR CLASSE DE LOADING E MUDAR TEXTO
-            btnRegenerar.classList.add('btn-loading');
-            btnRegenerar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerando...';
-            btnRegenerar.disabled = true;
-            
-            // Desabilitar também o botão de publicar temporariamente
+            // Desabilitar botões do preview
             const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
-            if (btnPublicar) {
-                btnPublicar.disabled = true;
-            }
+            const btnRegenerar = document.querySelector('#previewQuestoes button.btn-danger');
             
-            // ADICIONAR MENSAGEM DE LOADING NO ALERTA
-            mostrarAlerta('alertProva', '🔄 Regenerando prova com IA...', 'info');
+            if (btnPublicar) btnPublicar.disabled = true;
+            if (btnRegenerar) btnRegenerar.disabled = true;
             
             try {
-                // Fazer a requisição de regeneração
-                const resultado = await gerarProvaComIA(formData);
+                const turmaId = document.getElementById('turmaProva').value;
+                const titulo = document.getElementById('tituloProva').value;
+                const tema = document.getElementById('temaProva').value;
+                const quantidadeQuestoes = document.getElementById('quantidadeQuestoes').value;
+                const dificuldade = document.getElementById('dificuldade').value;
+                const dataLimiteInput = document.getElementById('dataLimite').value;
+                const tipoProva = document.getElementById('tipoProva').value;
                 
-                if (resultado.success) {
-                    mostrarAlerta('alertProva', '✅ Prova regenerada com sucesso!', 'success');
-                    mostrarPreviewQuestoes(resultado.data.questoes || []);
-                } else {
-                    mostrarAlerta('alertProva', resultado.error, 'error');
+                if (!turmaId) {
+                    throw new Error('Selecione uma turma primeiro');
                 }
+                
+                // Processar a data limite CORRETAMENTE
+                let dataLimiteEnviar = null;
+                if (dataLimiteInput) {
+                    const partes = dataLimiteInput.split('-');
+                    const ano = parseInt(partes[0]);
+                    const mes = parseInt(partes[1]) - 1;
+                    const dia = parseInt(partes[2]);
+                    
+                    const dataLimiteFimDia = new Date(ano, mes, dia, 23, 59, 59, 999);
+                    dataLimiteEnviar = dataLimiteFimDia.toISOString();
+                }
+                
+                // Preparar dados da prova
+                const dadosProva = {
+                    turmaId: turmaId,
+                    titulo: titulo,
+                    conteudo: tema,
+                    tipoProva: tipoProva,
+                    quantidadeQuestoes: parseInt(quantidadeQuestoes),
+                    dificuldade: dificuldade,
+                    dataLimite: dataLimiteEnviar,
+                    horarioInicio: document.getElementById('horarioInicio').value,
+                    horarioTermino: document.getElementById('horarioTermino').value,
+                    anexos: tipoProva === 'enem' ? anexos : []
+                };
+                
+                console.log('🔄 Dados para regeneração:', dadosProva);
+                
+                const token = localStorage.getItem('auth_token');
+                
+                let response;
+                
+                // Se for prova do tipo ENEM com anexos, usar FormData para upload
+                if (tipoProva === 'enem' && anexos.length > 0) {
+                    const formDataObj = new FormData();
+                    
+                    // Adicionar campos JSON
+                    formDataObj.append('titulo', dadosProva.titulo);
+                    formDataObj.append('conteudo', dadosProva.conteudo);
+                    formDataObj.append('tipoProva', dadosProva.tipoProva);
+                    formDataObj.append('quantidadeQuestoes', dadosProva.quantidadeQuestoes);
+                    formDataObj.append('dificuldade', dadosProva.dificuldade);
+                    formDataObj.append('dataLimite', dadosProva.dataLimite || '');
+                    formDataObj.append('horarioInicio', dadosProva.horarioInicio);
+                    formDataObj.append('horarioTermino', dadosProva.horarioTermino);
+                    formDataObj.append('anexosData', JSON.stringify(dadosProva.anexos));
+                    
+                    response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formDataObj
+                    });
+                } else {
+                    // Para prova simples ou ENEM sem arquivos, usar JSON normal
+                    response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dadosProva)
+                    });
+                }
+                
+                // Verificar resposta
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // ATUALIZAR A VARIÁVEL GLOBAL provaGerada COM OS NOVOS DADOS
+                    provaGerada = {
+                        id: data.provaId || data.prova?.id,
+                        titulo: data.prova?.titulo || titulo,
+                        ...data.prova,
+                        questoes: data.questoes || []
+                    };
+                    
+                    console.log('✅ Prova regenerada:', provaGerada);
+                    
+                    // Mostrar preview das questões
+                    if (data.questoes && data.questoes.length > 0) {
+                        mostrarPreviewQuestoes(data.questoes);
+                    } else if (provaGerada.questoes && provaGerada.questoes.length > 0) {
+                        mostrarPreviewQuestoes(provaGerada.questoes);
+                    }
+                    
+                    // Mostrar mensagem de sucesso
+                    mostrarAlerta('alertProva', '✅ Prova regenerada com sucesso!', 'success');
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao regenerar prova');
+                }
+                
             } catch (error) {
                 console.error('❌ Erro ao regenerar prova:', error);
-                mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
-            } finally {
-                // SEMPRE EXECUTA: restaurar botões
-                btnRegenerar.classList.remove('btn-loading');
-                btnRegenerar.innerHTML = originalTextRegenerar;
-                btnRegenerar.disabled = false;
                 
+                // Mostrar erro no preview
+                const questoesPreview = document.getElementById('questoesPreview');
+                if (questoesPreview) {
+                    questoesPreview.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #ef4444; margin-bottom: 15px;"></i>
+                            <h3 style="color: #7f1d1d;">Erro ao regenerar prova</h3>
+                            <p style="color: #6b7280;">${error.message}</p>
+                            <button onclick="regenerarProva()" style="
+                                margin-top: 15px; 
+                                padding: 10px 20px; 
+                                background: #4f46e5; 
+                                color: white; 
+                                border: none; 
+                                border-radius: 6px; 
+                                cursor: pointer;
+                            ">
+                                <i class="fas fa-redo"></i> Tentar novamente
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
+                
+            } finally {
+                // Reabilitar botões do preview
                 if (btnPublicar) {
                     btnPublicar.disabled = false;
+                    btnPublicar.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar para a Turma';
+                }
+                
+                if (btnRegenerar) {
+                    btnRegenerar.disabled = false;
+                    btnRegenerar.innerHTML = '<i class="fas fa-redo"></i> Regenerar Prova';
                 }
             }
         }
@@ -5693,7 +5845,7 @@
                     const dadosProva = {
                         turmaId: turmaId,
                         titulo: titulo,
-                        conteudo: tema,  // ✅ CORRETO - use 'conteudo' em vez de 'tema'
+                        conteudo: tema,
                         tipoProva: tipoProva,
                         quantidadeQuestoes: parseInt(document.getElementById('quantidadeQuestoes').value),
                         dificuldade: document.getElementById('dificuldade').value,
@@ -5803,108 +5955,6 @@
                 });
             }
             
-            function mostrarPreviewQuestoes(questoes) {
-                const previewContainer = document.getElementById('previewQuestoes');
-                const questoesContainer = document.getElementById('questoesPreview');
-                
-                if (!previewContainer || !questoesContainer) return;
-                
-                if (!questoes || questoes.length === 0) {
-                    questoesContainer.innerHTML = `
-                    <div class="empty-state" style="text-align: center; padding: 20px; color: #6b7280;">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i>
-                        <p>Não foi possível carregar as questões geradas</p>
-                    </div>
-                    `;
-                } else {
-                    questoesContainer.innerHTML = questoes.map((questao, index) => {
-                    if (questao.tipo === 'enem') {
-                        // Formato ENEM
-                        return `
-                        <div class="questao-preview" style="margin-bottom: 25px; padding: 20px; background: #f0f9ff; border-radius: 10px; border-left: 4px solid #3b82f6;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                            <span style="background: #3b82f6; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 600;">
-                                ENEM
-                            </span>
-                            <strong style="color: #1e40af;">Questão ${index + 1}</strong>
-                            </div>
-                            
-                            ${questao.contexto ? `
-                            <div class="contexto" style="margin-bottom: 15px; padding: 15px; background: #e0f2fe; border-radius: 8px; font-style: italic;">
-                            <p style="margin: 0; color: #0369a1;">${questao.contexto}</p>
-                            </div>
-                            ` : ''}
-                            
-                            <div class="questao-texto" style="margin-bottom: 15px; font-weight: 600; color: #1e40af;">
-                            ${questao.pergunta}
-                            </div>
-                            
-                            <div class="opcoes-preview">
-                            ${questao.opcoes.map((opcao, opcaoIndex) => `
-                                <div class="opcao-item ${opcaoIndex === questao.respostaCorreta ? 'opcao-correta' : ''}" 
-                                    style="padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 2px solid ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#d1d5db'}; background: ${opcaoIndex === questao.respostaCorreta ? '#d1fae5' : 'white'};">
-                                <span>${opcao}</span>
-                                ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle" style="color: #10b981; float: right;"></i>' : ''}
-                                </div>
-                            `).join('')}
-                            </div>
-                            
-                            <div class="explicacao-preview" style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
-                            <strong><i class="fas fa-lightbulb"></i> Explicação:</strong> ${questao.explicacao}
-                            
-                            ${questao.competencia ? `
-                            <div style="margin-top: 10px; font-size: 0.9rem;">
-                                <strong>Competência:</strong> ${questao.competencia}
-                            </div>
-                            ` : ''}
-                            
-                            ${questao.habilidade ? `
-                            <div style="margin-top: 5px; font-size: 0.9rem;">
-                                <strong>Habilidade:</strong> ${questao.habilidade}
-                            </div>
-                            ` : ''}
-                            </div>
-                        </div>
-                        `;
-                    } else {
-                        // Formato simples
-                        return `
-                        <div class="questao-preview" style="margin-bottom: 25px; padding: 20px; background: #f9fafb; border-radius: 10px; border-left: 4px solid #10b981;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                            <span style="background: #10b981; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 600;">
-                                SIMPLES
-                            </span>
-                            <strong style="color: #065f46;">Questão ${index + 1}</strong>
-                            </div>
-                            
-                            <div class="questao-texto" style="margin-bottom: 15px; font-weight: 600; color: #065f46;">
-                            ${questao.pergunta}
-                            </div>
-                            
-                            <div class="opcoes-preview">
-                            ${questao.opcoes.map((opcao, opcaoIndex) => `
-                                <div class="opcao-item ${opcaoIndex === questao.respostaCorreta ? 'opcao-correta' : ''}" 
-                                    style="padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 2px solid ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#d1d5db'}; background: ${opcaoIndex === questao.respostaCorreta ? '#d1fae5' : 'white'};">
-                                <span>${opcao}</span>
-                                ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle" style="color: #10b981; float: right;"></i>' : ''}
-                                </div>
-                            `).join('')}
-                            </div>
-                            
-                            <div class="explicacao-preview" style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
-                            <strong><i class="fas fa-lightbulb"></i> Explicação:</strong> ${questao.explicacao}
-                            </div>
-                        </div>
-                        `;
-                    }
-                    }).join('');
-                }
-                
-                previewContainer.style.display = 'block';
-                setTimeout(() => {
-                    previewContainer.scrollIntoView({ behavior: 'smooth' });
-                }, 100);
-                }
             // Configurar formulário de nova turma
             const formNovaTurma = document.getElementById('formNovaTurma');
             if (formNovaTurma) {
