@@ -3578,3 +3578,376 @@ code {
     box-shadow: 0 8px 20px rgba(220, 38, 38, 0.4);
     background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
 }
+
+
+/* ===== ESTILOS PARA SEÇÃO DE ANEXOS ===== */
+.secao-anexos-container {
+    margin-top: 2rem;
+    padding: 0;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    overflow: hidden;
+    background: white;
+    width: 100%;
+    max-width: 1000px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.anexos-header {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    padding: 1.5rem 2rem;
+    text-align: center;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.anexos-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    color: white;
+    font-size: 1.5rem;
+}
+
+.anexos-title h3 {
+    color: #4f46e5;
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.anexos-title p {
+    color: #6b7280;
+    font-size: 0.95rem;
+    max-width: 800px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+.anexos-tabs {
+    display: flex;
+    background: #f8fafc;
+    padding: 0.5rem;
+    margin: 0 auto;
+    border-radius: 12px;
+    max-width: 600px;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.anexo-tab {
+    flex: 1;
+    padding: 0.75rem 1.25rem;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 140px;
+    font-size: 0.9rem;
+}
+
+.anexo-tab:hover {
+    background: #f1f5f9;
+    color: #4f46e5;
+}
+
+.anexo-tab.active {
+    background: white;
+    color: #4f46e5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    font-weight: 600;
+}
+
+.tab-anexo-content {
+    display: none;
+    padding: 2rem;
+    background: #f9fafb;
+}
+
+.tab-anexo-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content-inner {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.tab-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.tab-header h4 {
+    color: #4f46e5;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 1.1rem;
+}
+
+.tab-header p {
+    color: #6b7280;
+    font-size: 0.9rem;
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+.drop-zone {
+    text-align: center;
+    padding: 3rem 2rem;
+    border: 3px dashed #cbd5e1;
+    border-radius: 12px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin: 0 auto;
+    max-width: 600px;
+}
+
+.drop-zone:hover {
+    border-color: #4f46e5;
+    background: #f0f9ff;
+    transform: translateY(-2px);
+}
+
+.drop-zone i {
+    font-size: 3rem;
+    color: #9ca3af;
+    margin-bottom: 1rem;
+    transition: color 0.3s;
+}
+
+.drop-zone:hover i {
+    color: #4f46e5;
+}
+
+.drop-zone h4 {
+    color: #4b5563;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.drop-zone p {
+    color: #6b7280;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+.drop-zone .btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+}
+
+.upload-progress {
+    margin-top: 1.5rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.progress-bar {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4f46e5, #7c3aed);
+    border-radius: 4px;
+    transition: width 0.3s;
+    width: 0%;
+}
+
+.char-count {
+    color: #6b7280;
+    display: block;
+    margin-top: 0.5rem;
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.btn-add {
+    display: block;
+    margin: 1.5rem auto 0;
+    max-width: 300px;
+    width: 100%;
+    padding: 0.875rem;
+}
+
+.anexos-lista-container {
+    margin-top: 2rem;
+    padding: 0 2rem 2rem;
+}
+
+.anexos-lista-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.anexos-lista-header h4 {
+    color: #4f46e5;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1rem;
+}
+
+.anexos-count {
+    background: #4f46e5;
+    color: white;
+    padding: 2px 12px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.anexos-lista {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    min-height: 120px;
+}
+
+.empty-anexos {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #9ca3af;
+}
+
+.empty-anexos i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-anexos h4 {
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.empty-anexos p {
+    color: #9ca3af;
+    font-size: 0.9rem;
+    max-width: 500px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+.anexos-info {
+    margin: 2rem auto;
+    max-width: 800px;
+    border-left-color: #8b5cf6;
+    background: #f8fafc;
+}
+
+.anexos-info h4 {
+    color: #4f46e5;
+}
+
+.anexos-info ul {
+    margin-left: 1.25rem;
+}
+
+.anexos-info li {
+    margin-bottom: 0.5rem;
+    color: #4b5563;
+    line-height: 1.5;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .secao-anexos-container {
+        margin-top: 1.5rem;
+        border-radius: 12px;
+    }
+    
+    .anexos-header {
+        padding: 1.5rem 1rem;
+    }
+    
+    .anexos-title h3 {
+        font-size: 1.3rem;
+    }
+    
+    .anexos-tabs {
+        flex-direction: column;
+        max-width: 100%;
+        padding: 0.5rem;
+    }
+    
+    .anexo-tab {
+        min-width: auto;
+        padding: 0.75rem 1rem;
+        font-size: 0.85rem;
+    }
+    
+    .tab-anexo-content {
+        padding: 1.5rem 1rem;
+    }
+    
+    .drop-zone {
+        padding: 2rem 1rem;
+    }
+    
+    .drop-zone i {
+        font-size: 2.5rem;
+    }
+    
+    .drop-zone h4 {
+        font-size: 1rem;
+    }
+    
+    .anexos-lista-container {
+        padding: 0 1rem 1.5rem;
+    }
+    
+    .anexos-lista {
+        padding: 1rem;
+    }
+    
+    .anexos-info {
+        margin: 1.5rem auto;
+        padding: 1.5rem;
+    }
+}
+
+

@@ -14,7 +14,7 @@ const QuestaoSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0,
-    max: 3
+    max: 4
   },
   explicacao: {
     type: String,
@@ -95,9 +95,20 @@ const ProvaSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['ativa', 'concluida', 'pendente'],
-    default: 'ativa'
+    enum: ['rascunho', 'ativa', 'concluida', 'pendente'],
+    default: 'rascunho' // ALTERADO: inicia como rascunho
   },
+  
+  // === NOVOS CAMPOS PARA CONTROLE DE PUBLICAÇÃO ===
+  publicada: {
+    type: Boolean,
+    default: false // Não publicada por padrão
+  },
+  dataPublicacao: {
+    type: Date,
+    default: null
+  },
+  
   alunosAtribuidos: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -115,8 +126,7 @@ const ProvaSchema = new mongoose.Schema({
     default: 'manual'
   }
 }, {
-  // ⚠️ MOVER timestamps PARA AQUI, remove os campos manuais
-  timestamps: true // Isso cria automaticamente createdAt e updatedAt
+  timestamps: true
 });
 
 // Gerar código único antes de salvar
@@ -129,9 +139,6 @@ ProvaSchema.pre('save', async function(next) {
     }
     this.codigo = code;
   }
-  
-  // ⚠️ REMOVER: this.ultimaAtualizacao = new Date();
-  // O mongoose já cuida disso com timestamps: true
   
   next();
 });

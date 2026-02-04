@@ -12,6 +12,9 @@ const jwt = require('jsonwebtoken');
 const professorAuth = require('./security/professor-auth');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 require('./email-service-resend');  // Fix para Render
+const multer = require('multer');
+const fs = require('fs');
+
 
 // Logo após require('dotenv')
 console.log('📁 Diretório atual:', __dirname);
@@ -824,6 +827,229 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Configurar multer para upload de arquivos
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // Criar diretório de uploads se não existir
+    const uploadDir = path.join(__dirname, '..', 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Gerar nome único para o arquivo
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limite
+  },
+  fileFilter: function (req, file, cb) {
+    // Permitir apenas certos tipos de arquivo
+    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Tipo de arquivo não permitido'));
+    }
+  }
+});
+
+// Middleware para upload múltiplo
+const uploadMultiple = upload.fields([
+  { name: 'arquivos', maxCount: 10 },
+  { name: 'imagens', maxCount: 10 }
+]);
+
+// ============ FUNÇÃO PARA CARREGAR ANEXOS DE REFERÊNCIA ============
+async function processarAnexosParaIA(anexos) {
+    try {
+        console.log('📎 Processando anexos para IA:', anexos);
+        
+        let contextoAnexos = '';
+        
+        if (anexos && anexos.length > 0) {
+            contextoAnexos = '\n\nREFERÊNCIAS E ANEXOS FORNECIDOS PELO PROFESSOR:\n';
+            
+            for (const anexo of anexos) {
+                if (anexo.tipo === 'texto') {
+                    contextoAnexos += `\n--- TEXTO: ${anexo.titulo || 'Sem título'} ---\n`;
+                    contextoAnexos += `${anexo.conteudo}\n`;
+                } else if (anexo.tipo === 'link') {
+                    contextoAnexos += `\n--- LINK: ${anexo.titulo || anexo.url} ---\n`;
+                    contextoAnexos += `URL: ${anexo.url}\n`;
+                    if (anexo.descricao) {
+                        contextoAnexos += `Descrição: ${anexo.descricao}\n`;
+                    }
+                } else if (anexo.tipo === 'pdf') {
+                    contextoAnexos += `\n--- PDF: ${anexo.titulo || 'Arquivo PDF'} ---\n`;
+                    contextoAnexos += `Arquivo PDF anexado pelo professor\n`;
+                    if (anexo.descricao) {
+                        contextoAnexos += `Descrição: ${anexo.descricao}\n`;
+                    }
+                } else if (anexo.tipo === 'imagem') {
+                    contextoAnexos += `\n--- IMAGEM: ${anexo.titulo || 'Imagem'} ---\n`;
+                    contextoAnexos += `Imagem anexada pelo professor\n`;
+                    if (anexo.descricao) {
+                        contextoAnexos += `Descrição: ${anexo.descricao}\n`;
+                    }
+                }
+            }
+        }
+        
+        return contextoAnexos;
+    } catch (error) {
+        console.error('❌ Erro ao processar anexos:', error);
+        return '';
+    }
+}
+
+// Rota para upload temporário de arquivos
+app.post('/api/upload/temp', authenticateToken, upload.single('arquivo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhum arquivo enviado'
+      });
+    }
+
+    const file = req.file;
+    
+    // Criar URL para o arquivo
+    const fileUrl = `/uploads/${file.filename}`;
+    
+    // Determinar tipo do arquivo
+    let fileType = 'outro';
+    const ext = path.extname(file.originalname).toLowerCase();
+    
+    if (['.pdf'].includes(ext)) {
+      fileType = 'pdf';
+    } else if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
+      fileType = 'imagem';
+    } else if (['.txt', '.doc', '.docx'].includes(ext)) {
+      fileType = 'texto';
+    }
+    
+    res.json({
+      success: true,
+      file: {
+        nome: file.originalname,
+        nomeArquivo: file.filename,
+        tamanho: file.size,
+        tipo: fileType,
+        url: fileUrl,
+        mimetype: file.mimetype
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no upload:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao fazer upload do arquivo: ' + error.message
+    });
+  }
+});
+
+// ============ ROTA PARA PUBLICAR PROVA ============
+app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (req, res) => {
+  try {
+    const provaId = req.params.provaId;
+    const professorId = req.userId;
+    
+    console.log(`📤 Professor ${professorId} solicitando publicação da prova ${provaId}`);
+    
+    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Apenas professores podem publicar provas'
+      });
+    }
+    
+    // Buscar a prova
+    const prova = await Prova.findById(provaId);
+    if (!prova) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prova não encontrada'
+      });
+    }
+    
+    // Verificar se é o professor da prova
+    if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Você não é o professor desta prova'
+      });
+    }
+    
+    // Verificar se já está publicada
+    if (prova.publicada) {
+      return res.status(400).json({
+        success: false,
+        error: 'Esta prova já está publicada'
+      });
+    }
+    
+    // Verificar se tem questões
+    if (!prova.questoes || prova.questoes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'A prova não tem questões. Adicione questões antes de publicar.'
+      });
+    }
+    
+    // Publicar a prova
+    prova.publicada = true;
+    prova.status = 'ativa'; // Muda status para ativa
+    prova.dataPublicacao = new Date();
+    
+    await prova.save();
+    
+    console.log(`✅ Prova ${provaId} publicada com sucesso!`);
+    console.log(`   Título: ${prova.titulo}`);
+    console.log(`   Turma: ${prova.turmaId}`);
+    console.log(`   Data de publicação: ${prova.dataPublicacao}`);
+    
+    // Buscar turma para notificar alunos
+    let turma = null;
+    if (prova.turmaId) {
+      turma = await Turma.findById(prova.turmaId);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Prova publicada com sucesso! Agora os alunos podem vê-la.',
+      prova: {
+        id: prova._id,
+        titulo: prova.titulo,
+        codigo: prova.codigo,
+        publicada: prova.publicada,
+        dataPublicacao: prova.dataPublicacao,
+        status: prova.status,
+        alunosNotificados: turma ? turma.alunos.length : 0
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao publicar prova:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao publicar prova: ' + error.message
+    });
+  }
+});
+
 // ============ ROTAS DE TURMA (PROFESSOR) ============
 app.post('/api/turmas', authenticateToken, async (req, res) => {
   try {
@@ -992,8 +1218,8 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ CRIAR PROVA PARA TURMA (VERSÃO MELHORADA) ============
-app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
+// ============ ROTA ATUALIZADA COM CORREÇÃO DE ESCOPO ============
+app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (req, res) => {
   try {
     const turma = await Turma.findById(req.params.id);
 
@@ -1011,7 +1237,79 @@ app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
       });
     }
 
-    const { titulo, conteudo, quantidadeQuestoes = 10, dificuldade = 'media', dataLimite, horarioInicio, horarioTermino } = req.body;
+    const { 
+      titulo, 
+      conteudo, 
+      tipoProva = 'simples',
+      quantidadeQuestoes = 10, 
+      dificuldade = 'media', 
+      dataLimite, 
+      horarioInicio, 
+      horarioTermino,
+      anexosData = '[]'
+    } = req.body;
+
+    // Processar anexos
+    let anexos = [];
+    try {
+      anexos = JSON.parse(anexosData);
+    } catch (error) {
+      console.warn('⚠️ Erro ao parsear anexos:', error);
+    }
+
+    // Processar arquivos enviados
+    if (req.files) {
+      if (req.files.arquivos) {
+        req.files.arquivos.forEach(file => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          let tipo = 'outro';
+          
+          if (['.pdf'].includes(ext)) {
+            tipo = 'pdf';
+          } else if (['.txt', '.doc', '.docx'].includes(ext)) {
+            tipo = 'texto';
+            try {
+              const content = fs.readFileSync(file.path, 'utf8');
+              anexos.push({
+                tipo: 'texto',
+                titulo: file.originalname,
+                conteudo: content.substring(0, 50000),
+                nomeArquivo: file.filename,
+                tamanho: file.size,
+                url: `/uploads/${file.filename}`
+              });
+              return;
+            } catch (e) {
+              console.warn('⚠️ Não foi possível ler arquivo de texto:', e.message);
+            }
+          } else if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
+            tipo = 'imagem';
+          }
+          
+          anexos.push({
+            tipo: tipo,
+            titulo: file.originalname,
+            nomeArquivo: file.filename,
+            tamanho: file.size,
+            url: `/uploads/${file.filename}`,
+            mimetype: file.mimetype
+          });
+        });
+      }
+
+      if (req.files.imagens) {
+        req.files.imagens.forEach(file => {
+          anexos.push({
+            tipo: 'imagem',
+            titulo: file.originalname,
+            nomeArquivo: file.filename,
+            tamanho: file.size,
+            url: `/uploads/${file.filename}`,
+            mimetype: file.mimetype
+          });
+        });
+      }
+    }
 
     // Validar horários
     if (!horarioInicio || !horarioTermino) {
@@ -1020,8 +1318,7 @@ app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
         error: 'Horário de início e término são obrigatórios'
       });
     }
-    
-    // Validar formato HH:mm
+
     const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(horarioInicio) || !timeRegex.test(horarioTermino)) {
       return res.status(400).json({
@@ -1029,17 +1326,15 @@ app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
         error: 'Formato de horário inválido. Use HH:mm (ex: 08:30)'
       });
     }
-    
-    // Calcular duração em minutos (opcional)
+
     const calcularDuracaoMinutos = (inicio, termino) => {
       const [h1, m1] = inicio.split(':').map(Number);
       const [h2, m2] = termino.split(':').map(Number);
       return (h2 * 60 + m2) - (h1 * 60 + m1);
     };
-    
+
     const duracaoMinutos = calcularDuracaoMinutos(horarioInicio, horarioTermino);
-    
-    // Verificar se a duração é válida
+
     if (duracaoMinutos <= 0) {
       return res.status(400).json({
         success: false,
@@ -1047,76 +1342,246 @@ app.post('/api/turmas/:id/prova', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`🤖 Professor ${req.userId} solicitando prova sobre: "${conteudo}"`);
+    console.log(`🤖 Professor ${req.userId} solicitando prova tipo ${tipoProva} sobre: "${conteudo}"`);
+    console.log(`📎 Anexos recebidos: ${anexos.length}`);
 
     let questoesValidadas = [];
+    let areaDetectada = 'geral'; // Definida fora do try-catch
     
+    // BANCO DE EXEMPLOS DE QUESTÕES DESAFIADORAS POR ÁREA (DEFINIDO NO ESCOPO CORRETO)
+    const exemplosPorArea = {
+      matematica: {
+        titulo: "PROBLEMAS DE CONTAGEM E RACIOCÍNIO LÓGICO",
+        exemplo1: {
+          pergunta: "Uma lanchonete tem uma promoção de combo com preço reduzido em que o cliente pode escolher 4 tipos diferentes de sanduíches, 3 tipos de bebida e 2 tipos de sobremesa. Quantos combos diferentes os clientes podem montar?",
+          opcoes: ["A) 30 combos", "B) 22 combos", "C) 34 combos", "D) 24 combos", "E) 25 combos"],
+          respostaCorreta: 3,
+          explicacao: "Pelo Princípio Fundamental da Contagem: 4 × 3 × 2 = 24 combos diferentes.",
+          conceitos: ["Princípio Fundamental da Contagem", "Multiplicação"]
+        },
+        exemplo2: {
+          pergunta: "Em uma sala há 10 homens e 8 mulheres. Quantos grupos de 4 pessoas podem ser formados se cada grupo deve ter pelo menos 2 mulheres?",
+          opcoes: ["A) 1820 grupos", "B) 2100 grupos", "C) 2310 grupos", "D) 2520 grupos", "E) 2730 grupos"],
+          respostaCorreta: 2,
+          explicacao: "Casos: 2 mulheres/2 homens: C(8,2)×C(10,2)=28×45=1260; 3 mulheres/1 homem: C(8,3)×C(10,1)=56×10=560; 4 mulheres: C(8,4)=70. Total: 1260+560+70=1890.",
+          conceitos: ["Combinações", "Casos possíveis"]
+        }
+      },
+      portugues: {
+        titulo: "INTERPRETAÇÃO DE TEXTO E GRAMÁTICA APLICADA",
+        exemplo1: {
+          pergunta: "Leia o trecho: 'O vento sussurrava segredos milenares aos ouvidos das montanhas, que guardavam em seu silêncio a memória dos tempos.' A figura de linguagem predominante no texto é:",
+          opcoes: ["A) Metáfora", "B) Personificação", "C) Hipérbole", "D) Ironia", "E) Eufemismo"],
+          respostaCorreta: 1,
+          explicacao: "Personificação, pois atribui ações humanas (sussurrar, guardar memória) ao vento e às montanhas.",
+          conceitos: ["Figuras de linguagem", "Personificação"]
+        },
+        exemplo2: {
+          pergunta: "Qual alternativa apresenta erro de concordância verbal?",
+          opcoes: [
+            "A) Fazem dois anos que não o vejo.",
+            "B) Haviam muitas pessoas na festa.",
+            "C) É necessário que se faça silêncio.",
+            "D) Choveram pedras durante a tempestade.",
+            "E) Bastam cinco minutos para resolver."
+          ],
+          respostaCorreta: 0,
+          explicacao: "'Fazem dois anos' está incorreto. O verbo 'fazer' (indicando tempo decorrido) é impessoal, deve ser usado no singular: 'Faz dois anos'.",
+          conceitos: ["Concordância verbal", "Verbos impessoais"]
+        }
+      },
+      historia: {
+        titulo: "ANÁLISE HISTÓRICA E INTERPRETAÇÃO DE FONTES",
+        exemplo1: {
+          pergunta: "A Revolução Industrial trouxe mudanças significativas na organização do trabalho. Qual das alternativas melhor descreve uma consequência social desse processo?",
+          opcoes: [
+            "A) Aumento do trabalho artesanal e fortalecimento das guildas.",
+            "B) Surgimento do proletariado urbano e das fábricas.",
+            "C) Redução da migração do campo para a cidade.",
+            "D) Diminuição da jornada de trabalho e aumento dos salários.",
+            "E) Fortalecimento dos laços comunitários tradicionais."
+          ],
+          respostaCorreta: 1,
+          explicacao: "A Revolução Industrial ledo à formação do proletariado urbano (trabalhadores assalariados) e ao sistema fabril, alterando radicalmente as relações de trabalho.",
+          conceitos: ["Revolução Industrial", "Transformações sociais"]
+        }
+      },
+      biologia: {
+        titulo: "PROBLEMAS DE GENÉTICA E ECOLOGIA",
+        exemplo1: {
+          pergunta: "Em uma população, a frequência do alelo dominante A é 0,6 e do alelo recessivo a é 0,4. Considerando o equilíbrio de Hardy-Weinberg, qual a frequência esperada de indivíduos heterozigotos?",
+          opcoes: ["A) 0,16", "B) 0,24", "C) 0,36", "D) 0,48", "E) 0,64"],
+          respostaCorreta: 3,
+          explicacao: "Pela fórmula de Hardy-Weinberg: p² + 2pq + q² = 1. Heterozigotos = 2pq = 2 × 0,6 × 0,4 = 0,48.",
+          conceitos: ["Genética de populações", "Equilíbrio de Hardy-Weinberg"]
+        }
+      },
+      geral: {
+        titulo: "PROBLEMAS DE RACIOCÍNIO LÓGICO E INTERPRETAÇÃO",
+        exemplo1: {
+          pergunta: "Três amigos - Ana, Bruno e Carla - têm idades diferentes. Sabe-se que: 1) Ana é mais velha que Bruno; 2) Carla é mais nova que Ana; 3) Bruno não é o mais novo. Qual a ordem correta das idades, do mais velho para o mais novo?",
+          opcoes: [
+            "A) Ana, Bruno, Carla",
+            "B) Ana, Carla, Bruno",
+            "C) Bruno, Ana, Carla",
+            "D) Carla, Ana, Bruno",
+            "E) Bruno, Carla, Ana"
+          ],
+          respostaCorreta: 0,
+          explicacao: "Das informações: 1) Ana > Bruno; 2) Carla < Ana; 3) Bruno não é o mais novo → Bruno > Carla. Portanto: Ana > Bruno > Carla.",
+          conceitos: ["Raciocínio lógico", "Ordenação"]
+        }
+      }
+    };
+
     try {
       if (!groq) {
         throw new Error('Groq não configurado');
       }
 
-      // MODELOS ATUAIS E FUNCIONAIS DA GROQ
       const modelosAtuais = [
-        "llama-3.3-70b-versatile",       // Modelo mais recente e poderoso
-        "llama-3.1-70b-versatile",       // Alternativa estável
-        "llama-3.1-8b-instant",          // Modelo rápido
-        "mixtral-8x7b-32768",            // Modelo misto de especialistas
-        "gemma2-9b-it",                  // Google Gemma 2
-        "gemma-7b-it"                    // Google Gemma
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768"
       ];
+
+      // Processar anexos para contexto
+      const contextoAnexos = await processarAnexosParaIA(anexos);
+      
+      console.log(`📋 Contexto de anexos gerado: ${contextoAnexos.length} caracteres`);
+
+      // DETECTAR ÁREA DO CONHECIMENTO AUTOMATICAMENTE
+      const detectarArea = (conteudo) => {
+        if (!conteudo || typeof conteudo !== 'string') {
+          console.log('⚠️ Conteúdo vazio para detectar área, usando "geral"');
+          return 'geral';
+        }
+        
+        const conteudoLower = conteudo.toLowerCase();
+        
+        // Palavras-chave para cada área
+        const areas = {
+          matematica: ['matemática', 'matematica', 'cálculo', 'calculo', 'álgebra', 'algebra', 'geometria', 'estatística', 'estatistica', 'número', 'numero', 'equação', 'equacao', 'função', 'funcao', 'trigonometria', 'logaritmo', 'derivada', 'integral', 'probabilidade', 'contagem', 'combinatória', 'combinatoria'],
+          portugues: ['português', 'portugues', 'gramática', 'gramatica', 'literatura', 'redação', 'redacao', 'interpretação', 'interpretacao', 'texto', 'leitura', 'ortografia', 'sintaxe', 'semântica', 'semantica', 'figuras de linguagem', 'gêneros textuais', 'generos textuais', 'coesão', 'coesao', 'coerência', 'coerencia'],
+          historia: ['história', 'historia', 'histórico', 'historico', 'guerra', 'revolução', 'revolucao', 'império', 'imperio', 'idade média', 'idade media', 'renascimento', 'independência', 'independencia', 'revolução industrial', 'revolucao industrial', 'brasil colônia', 'brasil colonia', 'república', 'republica', 'ditadura', 'democracia'],
+          geografia: ['geografia', 'física', 'fisica', 'humana', 'cartografia', 'clima', 'vegetação', 'vegetacao', 'relevo', 'hidrografia', 'população', 'populacao', 'urbanização', 'urbanizacao', 'globalização', 'globalizacao', 'meio ambiente', 'sustentabilidade', 'recursos naturais', 'energia', 'transportes'],
+          biologia: ['biologia', 'célula', 'celula', 'genética', 'genetica', 'evolução', 'evolucao', 'ecologia', 'anatomia', 'fisiologia', 'botânica', 'botanica', 'zoologia', 'microbiologia', 'bioquímica', 'bioquimica', 'DNA', 'RNA', 'fotossíntese', 'fotossintese', 'sistema digestório', 'sistema respiratório'],
+          quimica: ['química', 'quimica', 'átomo', 'atom', 'molécula', 'molecula', 'tabela periódica', 'tabela periodica', 'reação', 'reacao', 'ácido', 'acido', 'base', 'pH', 'orgânica', 'organica', 'inorgânica', 'inorganica', 'estequiometria', 'termoquímica', 'termoquimica', 'eletroquímica', 'eletroquimica'],
+          fisica: ['física', 'fisica', 'mecânica', 'mecanica', 'termodinâmica', 'termodinamica', 'óptica', 'optica', 'eletricidade', 'magnetismo', 'ondas', 'relatividade', 'quantica', 'quântica', 'cinemática', 'cinematica', 'dinâmica', 'dinamica', 'energia', 'trabalho', 'potência', 'potencia', 'calor'],
+          filosofia: ['filosofia', 'ética', 'etica', 'moral', 'epistemologia', 'metafísica', 'metafisica', 'lógica', 'logica', 'razão', 'razao', 'existencialismo', 'estoicismo', 'racionalismo', 'empirismo', 'kant', 'platão', 'platao', 'aristóteles', 'aristoteles', 'sócrates', 'socrates'],
+          sociologia: ['sociologia', 'sociedade', 'cultura', 'ideologia', 'poder', 'estado', 'classes sociais', 'trabalho', 'consumo', 'globalização', 'globalizacao', 'identidade', 'gênero', 'genero', 'etnia', 'raça', 'raca', 'movimentos sociais', 'capitalismo', 'socialismo', 'democracia'],
+          ingles: ['inglês', 'ingles', 'english', 'vocabulary', 'grammar', 'reading', 'writing', 'listening', 'speaking', 'verb', 'tense', 'pronoun', 'adjective', 'adverb', 'preposition', 'conjunction', 'phrasal verb', 'idiom', 'comprehension', 'translation'],
+          artes: ['artes', 'arte', 'música', 'musica', 'teatro', 'dança', 'danca', 'cinema', 'pintura', 'escultura', 'arquitetura', 'fotografia', 'desenho', 'história da arte', 'historia da arte', 'movimentos artísticos', 'movimentos artisticos', 'renascimento', 'barroco', 'modernismo', 'contemporâneo', 'contemporaneo']
+        };
+
+        // Verificar qual área tem mais palavras-chave correspondentes
+        let areaEncontrada = 'geral';
+        let maxMatches = 0;
+
+        for (const [area, palavras] of Object.entries(areas)) {
+          const matches = palavras.filter(palavra => conteudoLower.includes(palavra)).length;
+          if (matches > maxMatches) {
+            maxMatches = matches;
+            areaEncontrada = area;
+          }
+        }
+
+        console.log(`🔍 Área detectada: ${areaEncontrada} (${maxMatches} correspondências)`);
+        return areaEncontrada;
+      };
+
+      // Atribuir valor à variável
+      areaDetectada = detectarArea(conteudo);
 
       let completion;
       let modeloUsado = '';
-      
-      // Tentar cada modelo até um funcionar
+
       for (const modelo of modelosAtuais) {
         try {
           console.log(`🔄 Tentando modelo: ${modelo}`);
           
-          // PROMPT MUITO MELHORADO E ESPECÍFICO
-          const systemPrompt = `Você é um professor especialista que cria questões de múltipla escolha relevantes e específicas.
+          const systemPrompt = `Você é um especialista em criar questões DESAFIADORAS de múltipla escolha para TODAS as áreas do conhecimento.
 
-CRITÉRIOS ESSENCIAIS:
-1. Crie questões APENAS sobre o conteúdo especificado
-2. Não crie questões genéricas ou sobre outros assuntos
-3. Cada questão deve ser específica e relevante para o tópico
-4. Use linguagem clara e acessível para estudantes`;
+SEU OBJETIVO: Criar questões que:
+1. São DESAFIADORAS mas JUSTAS
+2. Exigem RACIOCÍNIO e não apenas memorização
+3. Simulam PROBLEMAS DO MUNDO REAL ou situações complexas
+4. Têm alternativas PLAUSÍVEIS que testam compreensão profunda
+5. São CLARAS e BEM ESTRUTURADAS
 
-          const userPrompt = `CONTEÚDO ESPECÍFICO: "${conteudo}"
-
-CRIE EXATAMENTE ${quantidadeQuestoes} QUESTÕES DE MÚLTIPLA ESCOLHA SOBRE E SOMENTE SOBRE: "${conteudo}"
-
-NÍVEL DE DIFICULDADE: ${dificuldade}
-
-EXEMPLOS DO QUE É ESPERADO (para diferentes conteúdos):
-- Se o conteúdo for "Sistema Solar": Pergunte sobre planetas, órbitas, características dos planetas
-- Se o conteúdo for "Segunda Guerra Mundial": Pergunte sobre causas, eventos importantes, consequências
-- Se o conteúdo for "Equações do 2º Grau": Pergunte sobre fórmula de Bhaskara, discriminante, raízes
-
-NÃO CRIE:
-- Questões matemáticas básicas (ex: 2+2, fórmula geral)
-- Questões sobre outros assuntos não relacionados
-- Questões genéricas ou óbvias
-- Questões com respostas óbvias ou triviais
-
-CRITÉRIOS PARA CADA QUESTÃO:
-1. Pergunta: Deve ser clara, específica e diretamente relacionada a "${conteudo}"
-2. Opções: 4 opções (A, B, C, D) - todas plausíveis, mas apenas uma correta
-3. Resposta Correta: 0=A, 1=B, 2=C, 3=D
-4. Explicação: Detalhada, educativa e relacionada ao conteúdo
-
-FORMATO EXATO REQUERIDO (APENAS JSON):
+FORMATO EXIGIDO (JSON):
 {
   "questoes": [
     {
-      "pergunta": "Pergunta específica sobre ${conteudo}?",
-      "opcoes": ["A) Opção específica sobre ${conteudo}", "B) Opção relacionada", "C) Opção plausível", "D) Opção incorreta mas relacionada"],
-      "respostaCorreta": 0,
-      "explicacao": "Explicação detalhada sobre por que esta resposta está correta, relacionando-a ao conteúdo '${conteudo}'"
+      "pergunta": "Texto COMPLETO da pergunta",
+      "opcoes": [
+        "A) [Alternativa A - distrator plausível]",
+        "B) [Alternativa B - outro distrator]",
+        "C) [Alternativa C - RESPOSTA CORRETA]",
+        "D) [Alternativa D - distrator comum]",
+        "E) [Alternativa E - distrator sutil]"
+      ],
+      "respostaCorreta": 2, // Índice 0-4
+      "explicacao": "Explicação DETALHADA passo a passo",
+      "dificuldade": "facil|media|dificil",
+      "area": "matematica|portugues|historia|ciencias|filosofia|etc",
+      "conceitosEnvolvidos": ["conceito1", "conceito2"],
+      "tipoRaciocinio": "logico|analitico|interpretativo|aplicacao|sintese"
     }
   ]
 }`;
+
+          const exemplos = exemplosPorArea[areaDetectada] || exemplosPorArea.geral;
+          
+          let userPrompt = `CRIE ${quantidadeQuestoes} QUESTÕES DESAFIADORAS SOBRE: "${conteudo}"
+          
+ÁREA DETECTADA: ${areaDetectada.toUpperCase()}
+
+${contextoAnexos}
+
+## EXEMPLOS DE REFERÊNCIA PARA ${areaDetectada.toUpperCase()}:
+
+TÍTULO: ${exemplos.titulo}
+
+EXEMPLO 1:
+${exemplos.exemplo1.pergunta}
+OPÇÕES: ${exemplos.exemplo1.opcoes.join(' | ')}
+RESPOSTA: ${String.fromCharCode(65 + exemplos.exemplo1.respostaCorreta)}
+EXPLICAÇÃO: ${exemplos.exemplo1.explicacao}
+CONCEITOS: ${exemplos.exemplo1.conceitos.join(', ')}
+
+${exemplos.exemplo2 ? `
+EXEMPLO 2:
+${exemplos.exemplo2.pergunta}
+OPÇÕES: ${exemplos.exemplo2.opcoes.join(' | ')}
+RESPOSTA: ${String.fromCharCode(65 + exemplos.exemplo2.respostaCorreta)}
+EXPLICAÇÃO: ${exemplos.exemplo2.explicacao}
+CONCEITOS: ${exemplos.exemplo2.conceitos.join(', ')}
+` : ''}
+
+## DIRETRIZES ESPECÍFICAS:
+
+1. NÍVEL: ${dificuldade.toUpperCase()} - crie questões que realmente correspondam
+
+2. ESTRUTURA:
+   - Pergunta CLARA mas que exija INTERPRETAÇÃO
+   - 5 alternativas, TODAS VEROSSÍMEIS
+   - Resposta correta não óbvia (exija cálculo/raciocínio)
+   - Explicação MOSTRANDO O PROCESSO de resolução
+
+3. USE OS ANEXOS se disponíveis para contextualizar
+
+${tipoProva === 'enem' ? `
+## PARA ENEM (tipoProva = 'enem'):
+
+Adicione estes campos:
+"contexto": "Texto base para a questão",
+"competencia": "Competência do ENEM trabalhada",
+"habilidade": "Habilidade específica"
+` : ''}
+
+Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (área: ${areaDetectada}):`;
 
           completion = await groq.chat.completions.create({
             model: modelo,
@@ -1124,19 +1589,19 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt }
             ],
-            temperature: 0.5, // Temperatura mais baixa = menos criativo, mais focado
-            max_tokens: 4000,
+            temperature: 0.7,
+            max_tokens: 8000,
             top_p: 0.9,
             response_format: { type: "json_object" }
           });
           
           modeloUsado = modelo;
           console.log(`✅ Modelo ${modelo} funcionou!`);
-          break; // Sai do loop se funcionou
+          break;
           
         } catch (modeloError) {
           console.log(`❌ Modelo ${modelo} falhou: ${modeloError.message.substring(0, 100)}`);
-          continue; // Tenta próximo modelo
+          continue;
         }
       }
       
@@ -1146,47 +1611,37 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
 
       const resposta = completion.choices[0].message.content;
       console.log(`📄 Resposta da IA (Groq - ${modeloUsado}):`, resposta.substring(0, 300));
-      
 
       let jsonString = resposta;
       
-      // Extrair JSON da resposta
       const codeMatch = resposta.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (codeMatch && codeMatch[1]) {
         jsonString = codeMatch[1].trim();
-        console.log('✅ JSON encontrado entre ```');
       } else {
         const jsonMatch = resposta.match(/\{[\s\S]*\}/);
         if (jsonMatch && jsonMatch[0]) {
           jsonString = jsonMatch[0].trim();
-          console.log('✅ JSON encontrado entre { }');
         }
       }
 
-      console.log('📊 JSON extraído (primeiros 300 chars):', jsonString.substring(0, 300));
-
       let dados;
       try {
-        // Limpar caracteres não visíveis
         jsonString = jsonString.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
         dados = JSON.parse(jsonString);
       } catch (parseError) {
         console.error('❌ Erro no parse, tentando corrigir...');
         
         try {
-          // Tentar extrair apenas o JSON
           const cleanedJson = jsonString
-            .replace(/[^\x20-\x7E\r\n]/g, '') // Remove caracteres não ASCII
+            .replace(/[^\x20-\x7E\r\n]/g, '')
             .replace(/\s+/g, ' ')
             .trim();
           
-          // Encontrar o primeiro { e o último }
           const startIndex = cleanedJson.indexOf('{');
           const endIndex = cleanedJson.lastIndexOf('}');
           
           if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
             const finalJson = cleanedJson.substring(startIndex, endIndex + 1);
-            console.log('📝 JSON corrigido:', finalJson.substring(0, 200));
             dados = JSON.parse(finalJson);
             console.log('✅ JSON corrigido com sucesso');
           } else {
@@ -1202,7 +1657,6 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
         throw new Error('Dados inválidos da IA');
       }
 
-      // Normalizar estrutura: pode ser {questoes: []} ou diretamente array
       let questoesArray = dados.questoes || dados.questions || dados;
       if (!Array.isArray(questoesArray)) {
         questoesArray = [questoesArray];
@@ -1214,28 +1668,9 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
 
       console.log(`📊 ${questoesArray.length} questões recebidas da IA`);
 
-      // Função para verificar relevância da questão
-      function questaoEhRelevante(pergunta, conteudo) {
-        const perguntaLower = pergunta.toLowerCase();
-        const conteudoLower = conteudo.toLowerCase();
-        
-        // Dividir conteúdo em palavras-chave
-        const palavrasChave = conteudoLower.split(/[\s,;.]+/).filter(p => p.length > 3);
-        
-        // Verificar se a pergunta contém palavras-chave do conteúdo
-        let palavrasEncontradas = 0;
-        for (const palavra of palavrasChave) {
-          if (perguntaLower.includes(palavra)) {
-            palavrasEncontradas++;
-          }
-        }
-        
-        // Se encontrou pelo menos 1 palavra-chave ou se a pergunta é longa (>20 chars)
-        return palavrasEncontradas > 0 || pergunta.length > 20;
-      }
-
-      // Processar e validar cada questão
+      // Processar questões
       const questoesProcessadas = [];
+      
       for (let i = 0; i < Math.min(questoesArray.length, quantidadeQuestoes); i++) {
         const questao = questoesArray[i];
         
@@ -1244,78 +1679,115 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
           continue;
         }
 
-        // Extrair pergunta
-        const pergunta = questao.pergunta || questao.question || questao.text || 
-                        `Questão ${i + 1} sobre ${conteudo}`;
-        
-        // Verificar se a pergunta é relevante
-        if (!questaoEhRelevante(pergunta, conteudo)) {
-          console.warn(`⚠️ Questão ${i + 1} não é relevante para "${conteudo}": ${pergunta.substring(0, 50)}`);
-          // Ainda adicionamos, mas com conteúdo específico
-        }
-        
-        // Extrair opções
-        let opcoes = questao.opcoes || questao.options || questao.alternatives || 
-                     questao.alternativas || questao.choices || [];
-        
-        if (typeof opcoes === 'string') {
-          opcoes = opcoes.split('\n').filter(o => o.trim().length > 0);
-        }
-        
-        // Garantir exatamente 4 opções
-        if (!Array.isArray(opcoes) || opcoes.length === 0) {
-          // Criar opções específicas para o conteúdo
-          opcoes = [
-            `A) ${conteudo} é fundamental para este campo de estudo`,
-            `B) ${conteudo} possui diversas aplicações práticas`,
-            `C) O estudo de ${conteudo} desenvolve habilidades analíticas`,
-            `D) Todas as alternativas anteriores estão corretas`
-          ];
-        }
-        
-        // Garantir exatamente 4 opções
-        while (opcoes.length < 4) {
-          opcoes.push(`${String.fromCharCode(65 + opcoes.length)}) Informação sobre ${conteudo}`);
-        }
-        opcoes = opcoes.slice(0, 4);
-        
-        // Garantir que as opções comecem com A), B), etc.
-        opcoes = opcoes.map((opcao, idx) => {
-          const letra = String.fromCharCode(65 + idx);
-          if (!opcao.trim().startsWith(`${letra})`)) {
-            return `${letra}) ${opcao.trim()}`;
+        if (tipoProva === 'enem') {
+          const contexto = questao.contexto || questao.textoBase || questao.base || '';
+          const enunciado = questao.enunciado || questao.pergunta || questao.question || '';
+          const competencia = questao.competencia || questao.competence || '';
+          const habilidade = questao.habilidade || questao.skill || '';
+          
+          let opcoes = questao.opcoes || questao.options || questao.alternatives || [];
+          
+          if (typeof opcoes === 'string') {
+            opcoes = opcoes.split('\n').filter(o => o.trim().length > 0);
           }
-          return opcao.trim();
-        });
-        
-        // Determinar resposta correta
-        let respostaCorreta = questao.respostaCorreta !== undefined ? questao.respostaCorreta : 
-                             questao.correctAnswer !== undefined ? questao.correctAnswer :
-                             questao.correct !== undefined ? questao.correct : 0;
-        
-        if (typeof respostaCorreta === 'string') {
-          if (/^[0-3]$/.test(respostaCorreta)) {
-            respostaCorreta = parseInt(respostaCorreta);
-          } else if (/^[A-D]$/i.test(respostaCorreta)) {
-            respostaCorreta = respostaCorreta.toUpperCase().charCodeAt(0) - 65;
-          } else {
-            respostaCorreta = 0;
+          
+          while (opcoes.length < 5) {
+            const letra = String.fromCharCode(65 + opcoes.length);
+            opcoes.push(`${letra}) Opção ${letra}`);
           }
+          opcoes = opcoes.slice(0, 5);
+          
+          opcoes = opcoes.map((opcao, idx) => {
+            const letra = String.fromCharCode(65 + idx);
+            if (!opcao.trim().startsWith(`${letra})`)) {
+              return `${letra}) ${opcao.trim()}`;
+            }
+            return opcao.trim();
+          });
+          
+          let respostaCorreta = questao.respostaCorreta !== undefined ? questao.respostaCorreta : 0;
+          
+          if (typeof respostaCorreta === 'string') {
+            if (/^[0-4]$/.test(respostaCorreta)) {
+              respostaCorreta = parseInt(respostaCorreta);
+            } else if (/^[A-E]$/i.test(respostaCorreta)) {
+              respostaCorreta = respostaCorreta.toUpperCase().charCodeAt(0) - 65;
+            } else {
+              respostaCorreta = 0;
+            }
+          }
+          
+          respostaCorreta = Math.max(0, Math.min(4, parseInt(respostaCorreta) || 0));
+          
+          const explicacao = questao.explicacao || questao.explanation || 
+                            `Resposta correta: ${opcoes[respostaCorreta]}.`;
+          
+          questoesProcessadas.push({
+            tipo: 'enem',
+            contexto: contexto.trim(),
+            pergunta: enunciado.trim(),
+            opcoes: opcoes.map(o => o.toString().trim()),
+            respostaCorreta: respostaCorreta,
+            explicacao: explicacao.trim(),
+            competencia: competencia.trim(),
+            habilidade: habilidade.trim(),
+            dificuldade: dificuldade,
+            area: areaDetectada
+          });
+          
+        } else {
+          const pergunta = questao.pergunta || questao.question || questao.text || 
+                          `Questão ${i + 1} sobre ${conteudo}`;
+          
+          let opcoes = questao.opcoes || questao.options || questao.alternatives || [];
+          
+          if (typeof opcoes === 'string') {
+            opcoes = opcoes.split('\n').filter(o => o.trim().length > 0);
+          }
+          
+          while (opcoes.length < 5) {
+            const letra = String.fromCharCode(65 + opcoes.length);
+            opcoes.push(`${letra}) Opção ${letra}`);
+          }
+          opcoes = opcoes.slice(0, 5);
+          
+          opcoes = opcoes.map((opcao, idx) => {
+            const letra = String.fromCharCode(65 + idx);
+            if (!opcao.trim().startsWith(`${letra})`)) {
+              return `${letra}) ${opcao.trim()}`;
+            }
+            return opcao.trim();
+          });
+          
+          let respostaCorreta = questao.respostaCorreta !== undefined ? questao.respostaCorreta : 0;
+          
+          if (typeof respostaCorreta === 'string') {
+            if (/^[0-4]$/.test(respostaCorreta)) {
+              respostaCorreta = parseInt(respostaCorreta);
+            } else if (/^[A-E]$/i.test(respostaCorreta)) {
+              respostaCorreta = respostaCorreta.toUpperCase().charCodeAt(0) - 65;
+            } else {
+              respostaCorreta = 0;
+            }
+          }
+          
+          respostaCorreta = Math.max(0, Math.min(4, parseInt(respostaCorreta) || 0));
+          
+          const explicacao = questao.explicacao || questao.explanation || 
+                            `Resposta correta: ${opcoes[respostaCorreta]}.`;
+          
+          questoesProcessadas.push({
+            tipo: 'simples',
+            pergunta: pergunta.trim(),
+            opcoes: opcoes.map(o => o.toString().trim()),
+            respostaCorreta: respostaCorreta,
+            explicacao: explicacao.trim(),
+            dificuldade: dificuldade,
+            area: questao.area || areaDetectada,
+            conceitos: questao.conceitosEnvolvidos || [conteudo],
+            tipoRaciocinio: questao.tipoRaciocinio || 'analitico'
+          });
         }
-        
-        respostaCorreta = Math.max(0, Math.min(3, parseInt(respostaCorreta) || 0));
-        
-        // Extrair explicação
-        const explicacao = questao.explicacao || questao.explanation || 
-                          questao.justificativa || 
-                          `Resposta correta: ${opcoes[respostaCorreta]}. Esta resposta está correta porque se relaciona diretamente com "${conteudo}".`;
-        
-        questoesProcessadas.push({
-          pergunta: pergunta.trim(),
-          opcoes: opcoes.map(o => o.toString().trim()),
-          respostaCorreta: respostaCorreta,
-          explicacao: explicacao.trim()
-        });
       }
 
       if (questoesProcessadas.length === 0) {
@@ -1326,82 +1798,48 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
       console.log(`✅ ${questoesValidadas.length} questões processadas da IA (Groq)`);
 
     } catch (iaError) {
-      console.error('❌ Erro na IA (Groq), usando fallback específico:', iaError.message);
+      console.error('❌ Erro na IA, usando fallback:', iaError.message);
       
-      console.log('🔄 Usando fallback específico para o conteúdo...');
-      questoesValidadas = [];
+      // FALLBACK SEGURO
+      const areaFallback = areaDetectada && areaDetectada in exemplosPorArea ? areaDetectada : 'geral';
+      const exemplos = exemplosPorArea[areaFallback] || exemplosPorArea.geral;
       
-      // FALLBACK ESPECÍFICO PARA O CONTEÚDO
-      for (let i = 1; i <= quantidadeQuestoes; i++) {
-        const tiposQuestoes = [
-          {
-            pergunta: `Qual é o conceito principal de "${conteudo}"?`,
+      for (let i = 0; i < quantidadeQuestoes; i++) {
+        if (tipoProva === 'enem') {
+          questoesValidadas.push({
+            tipo: 'enem',
+            contexto: `Contexto sobre ${conteudo}: análise e interpretação.`,
+            pergunta: `Com base no contexto, analise a situação sobre ${conteudo}:`,
             opcoes: [
-              `A) ${conteudo} refere-se a um conjunto de princípios fundamentais neste campo`,
-              `B) ${conteudo} é uma metodologia de ensino`,
-              `C) ${conteudo} representa uma ferramenta técnica específica`,
-              `D) ${conteudo} é um termo genérico sem significado específico`
+              "A) Análise superficial",
+              "B) Interpretação incorreta",
+              "C) Análise correta e completa",
+              "D) Conclusão precipitada",
+              "E) Interpretação parcial"
             ],
-            respostaCorreta: 0,
-            explicacao: `A alternativa A está correta. ${conteudo} refere-se a conceitos fundamentais neste campo de estudo, abordando princípios essenciais para o entendimento completo do tema.`
-          },
-          {
-            pergunta: `Qual é uma aplicação prática importante de "${conteudo}"?`,
-            opcoes: [
-              `A) ${conteudo} pode ser aplicado na solução de problemas específicos do cotidiano`,
-              `B) ${conteudo} é útil apenas em contextos acadêmicos teóricos`,
-              `C) ${conteudo} não possui aplicações práticas significativas`,
-              `D) ${conteudo} é apenas uma teoria sem aplicação real`
-            ],
-            respostaCorreta: 0,
-            explicacao: `A alternativa A está correta. ${conteudo} possui diversas aplicações práticas que podem ser utilizadas para resolver problemas específicos e melhorar a compreensão de situações reais.`
-          },
-          {
-            pergunta: `Por que "${conteudo}" é importante estudar?`,
-            opcoes: [
-              `A) Porque desenvolve habilidades críticas e analíticas essenciais`,
-              `B) Porque é obrigatório no currículo acadêmico`,
-              `C) Porque os professores exigem seu estudo`,
-              `D) Não há importância significativa no estudo de ${conteudo}`
-            ],
-            respostaCorreta: 0,
-            explicacao: `A alternativa A está correta. O estudo de ${conteudo} desenvolve habilidades críticas, analíticas e de resolução de problemas que são essenciais tanto no contexto acadêmico quanto profissional.`
-          },
-          {
-            pergunta: `Como "${conteudo}" se relaciona com outras áreas do conhecimento?`,
-            opcoes: [
-              `A) ${conteudo} estabelece conexões interdisciplinares importantes`,
-              `B) ${conteudo} é completamente isolado de outras áreas`,
-              `C) ${conteudo} contradiz outras áreas do conhecimento`,
-              `D) A relação é apenas superficial e sem importância`
-            ],
-            respostaCorreta: 0,
-            explicacao: `A alternativa A está correta. ${conteudo} estabelece conexões interdisciplinares importantes, permitindo uma compreensão mais ampla e integrada do conhecimento.`
-          }
-        ];
-        
-        const questaoTipo = tiposQuestoes[(i - 1) % tiposQuestoes.length];
-        questoesValidadas.push(questaoTipo);
+            respostaCorreta: 2,
+            explicacao: `A alternativa C apresenta a análise mais completa e fundamentada sobre ${conteudo}.`,
+            competencia: "Competência de área específica",
+            habilidade: "Habilidade de análise",
+            dificuldade: dificuldade,
+            area: areaFallback
+          });
+        } else {
+          const exemploBase = exemplos.exemplo1 || exemplosPorArea.geral.exemplo1;
+          questoesValidadas.push({
+            tipo: 'simples',
+            pergunta: `Questão ${i + 1} sobre ${conteudo} (área: ${areaFallback}): ${exemploBase.pergunta}`,
+            opcoes: exemploBase.opcoes,
+            respostaCorreta: exemploBase.respostaCorreta,
+            explicacao: exemploBase.explicacao + ` Aplicado ao tema: ${conteudo}.`,
+            dificuldade: dificuldade,
+            area: areaFallback,
+            conceitos: exemploBase.conceitos || [areaFallback]
+          });
+        }
       }
       
-      console.log(`✅ ${questoesValidadas.length} questões criadas via fallback específico`);
-    }
-
-    // VALIDAÇÃO FINAL DAS QUESTÕES
-    console.log(`📋 Validando ${questoesValidadas.length} questões para o conteúdo: "${conteudo}"`);
-    
-    // Verificar se as questões são realmente sobre o conteúdo
-    const questoesValidas = questoesValidadas.filter(questao => {
-      const perguntaLower = questao.pergunta.toLowerCase();
-      const conteudoLower = conteudo.toLowerCase();
-      
-      // Verificar se a pergunta menciona o conteúdo ou é específica o suficiente
-      return perguntaLower.includes(conteudoLower) || 
-             questao.pergunta.length > 30; // Se for uma pergunta longa, provavelmente é específica
-    });
-    
-    if (questoesValidas.length < questoesValidadas.length * 0.5) {
-      console.warn(`⚠️ Apenas ${questoesValidas.length}/${questoesValidadas.length} questões são relevantes para "${conteudo}"`);
+      console.log(`✅ ${questoesValidadas.length} questões criadas via fallback (área: ${areaFallback})`);
     }
 
     // Criar a prova
@@ -1410,16 +1848,19 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
       turmaId: turma._id,
       titulo: titulo || `Prova: ${conteudo.substring(0, 50)}`,
       conteudo: conteudo,
-      questoes: questoesValidas.length > 0 ? questoesValidas : questoesValidadas,
-      quantidadeQuestoes: questoesValidas.length > 0 ? questoesValidas.length : questoesValidadas.length,
+      tipoProva: tipoProva,
+      anexos: anexos,
+      questoes: questoesValidadas,
+      quantidadeQuestoes: questoesValidadas.length,
       dificuldade: dificuldade,
       dataLimite: dataLimite ? new Date(dataLimite) : null,
       horarioInicio: horarioInicio,
       horarioTermino: horarioTermino,
       duracaoMinutos: duracaoMinutos,
-      status: 'ativa',
+      status: 'rascunho',
       alunosAtribuidos: turma.alunos,
-      fonteGeracao: questoesValidadas.length > 0 ? 'Groq AI' : 'Fallback manual'
+      fonteGeracao: `Groq AI - Área: ${areaDetectada}`,
+      publicada: false
     });
 
     await prova.save();
@@ -1427,34 +1868,33 @@ FORMATO EXATO REQUERIDO (APENAS JSON):
     turma.provas.push(prova._id);
     await turma.save();
 
-    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} para turma ${turma.nome}`);
-    console.log(`📚 Conteúdo: ${conteudo}`);
-    console.log(`📝 Questões: ${prova.questoes.length}`);
+    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} do tipo ${tipoProva} (área: ${areaDetectada}) para turma ${turma.nome}`);
 
     res.json({
       success: true,
       provaId: prova._id,
       codigo: prova.codigo,
-      mensagem: `Prova criada e enviada para ${turma.alunos.length} alunos`,
+      mensagem: `Prova tipo ${tipoProva} (área: ${areaDetectada}) criada e enviada para ${turma.alunos.length} alunos`,
       prova: {
         id: prova._id,
         titulo: prova.titulo,
         codigo: prova.codigo,
+        tipoProva: prova.tipoProva,
+        areaDetectada: areaDetectada,
         quantidadeQuestoes: prova.quantidadeQuestoes,
         dataLimite: prova.dataLimite,
         duracao: prova.duracao,
         dificuldade: prova.dificuldade,
         fonteGeracao: prova.fonteGeracao
       },
-      questoes: prova.questoes.slice(0, 3) // Mostrar apenas 3 questões como exemplo
+      questoes: prova.questoes.slice(0, 3)
     });
 
   } catch (error) {
     console.error('❌ Erro geral ao criar prova:', error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao criar prova: ' + error.message,
-      sugestao: 'Tente usar um conteúdo mais específico, como "Sistema Solar: Planetas Terrestres" em vez de apenas "Sistema Solar"'
+      error: 'Erro ao criar prova: ' + error.message
     });
   }
 });
@@ -1827,90 +2267,149 @@ app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, asyn
 });
 
 // ============ ROTA PARA PROFESSOR VER SUAS PROVAS ============
+// Na rota GET /api/professor/provas
+// Procure por (aproximadamente linha 1700)
+
 app.get('/api/professor/provas', authenticateToken, async (req, res) => {
-    try {
-        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
-            return res.status(403).json({
-                success: false,
-                error: 'Apenas professores podem acessar esta rota'
-            });
-        }
-
-        const professorId = req.userId;
-        
-        console.log(`📋 Buscando provas do professor ${professorId}`);
-
-        const provas = await Prova.find({ userId: professorId })
-            .populate('turmaId', 'nome disciplina')
-            .sort({ createdAt: -1 });
-
-        const provasComEstatisticas = await Promise.all(
-            provas.map(async (prova) => {
-                const resultados = await Resultado.find({ provaId: prova._id });
-                const provasRealizadas = await ProvaRealizada.find({ provaId: prova._id });
-                
-                const totalAlunosRealizaram = [...new Set([
-                    ...resultados.map(r => r.userId.toString()),
-                    ...provasRealizadas.map(pr => pr.alunoId.toString())
-                ])].length;
-
-                let totalNotas = 0;
-                let contador = 0;
-                
-                resultados.forEach(r => {
-                    if (r.nota !== undefined && !isNaN(r.nota)) {
-                        totalNotas += r.nota;
-                        contador++;
-                    }
-                });
-                
-                provasRealizadas.forEach(pr => {
-                    if (pr.nota !== undefined && !isNaN(pr.nota)) {
-                        totalNotas += pr.nota;
-                        contador++;
-                    }
-                });
-                
-                const mediaNotas = contador > 0 ? (totalNotas / contador) : 0;
-
-                return {
-                    id: prova._id,
-                    titulo: prova.titulo,
-                    conteudo: prova.conteudo,
-                    turma: prova.turmaId ? {
-                        id: prova.turmaId._id,
-                        nome: prova.turmaId.nome,
-                        disciplina: prova.turmaId.disciplina
-                    } : 'Sem turma',
-                    quantidadeQuestoes: prova.questoes.length,
-                    dificuldade: prova.dificuldade,
-                    dataCriacao: prova.createdAt,
-                    dataLimite: prova.dataLimite,
-                    duracao: prova.duracao,
-                    status: prova.status,
-                    codigo: prova.codigo,
-                    fonteGeracao: prova.fonteGeracao,
-                    alunosRealizaram: totalAlunosRealizaram,
-                    totalAlunos: prova.turmaId ? await Turma.findById(prova.turmaId).then(t => t ? t.alunos.length : 0) : 0,
-                    mediaNotas: parseFloat(mediaNotas.toFixed(1))
-                };
-            })
-        );
-
-        res.json({
-            success: true,
-            provas: provasComEstatisticas,
-            total: provas.length,
-            mensagem: `${provas.length} provas encontradas`
-        });
-
-    } catch (error) {
-        console.error('Erro ao buscar provas do professor:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Erro interno do servidor: ' + error.message
-        });
+  try {
+    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Apenas professores podem acessar esta rota'
+      });
     }
+
+    const professorId = req.userId;
+    
+    console.log(`📋 Buscando provas do professor ${professorId}`);
+    
+    // FILTRAR: Mostrar apenas provas publicadas por padrão
+    // Mas permitir ver rascunhos se solicitado
+    const mostrarRascunhos = req.query.rascunhos === 'true';
+    
+    let query = { userId: professorId };
+    
+    // Se não pediu rascunhos, mostrar apenas provas publicadas
+    if (!mostrarRascunhos) {
+      query.publicada = true;
+    }
+    
+    // Buscar provas com filtro
+    const provas = await Prova.find(query)
+      .populate('turmaId', 'nome disciplina')
+      .sort({ createdAt: -1 });
+
+    const provasComEstatisticas = await Promise.all(
+      provas.map(async (prova) => {
+        // ... resto do código permanece igual ...
+        // Buscar resultados apenas se a prova for publicada
+        if (prova.publicada) {
+          const resultados = await Resultado.find({ provaId: prova._id });
+          const provasRealizadas = await ProvaRealizada.find({ provaId: prova._id });
+          
+          const totalAlunosRealizaram = [...new Set([
+            ...resultados.map(r => r.userId.toString()),
+            ...provasRealizadas.map(pr => pr.alunoId.toString())
+          ])].length;
+
+          let totalNotas = 0;
+          let contador = 0;
+          
+          resultados.forEach(r => {
+            if (r.nota !== undefined && !isNaN(r.nota)) {
+              totalNotas += r.nota;
+              contador++;
+            }
+          });
+          
+          provasRealizadas.forEach(pr => {
+            if (pr.nota !== undefined && !isNaN(pr.nota)) {
+              totalNotas += pr.nota;
+              contador++;
+            }
+          });
+          
+          const mediaNotas = contador > 0 ? (totalNotas / contador) : 0;
+
+          return {
+            id: prova._id,
+            titulo: prova.titulo,
+            conteudo: prova.conteudo,
+            turma: prova.turmaId ? {
+              id: prova.turmaId._id,
+              nome: prova.turmaId.nome,
+              disciplina: prova.turmaId.disciplina
+            } : null,
+            quantidadeQuestoes: prova.questoes.length,
+            dificuldade: prova.dificuldade,
+            dataCriacao: prova.createdAt,
+            dataLimite: prova.dataLimite,
+            dataPublicacao: prova.dataPublicacao,
+            duracao: prova.duracaoMinutos,
+            status: prova.status,
+            codigo: prova.codigo,
+            fonteGeracao: prova.fonteGeracao,
+            
+            // NOVO: Informações de publicação
+            publicada: prova.publicada,
+            statusPublicacao: prova.publicada ? 'Publicada' : 'Rascunho',
+            
+            alunosRealizaram: totalAlunosRealizaram,
+            totalAlunos: prova.turmaId ? await Turma.findById(prova.turmaId).then(t => t ? t.alunos.length : 0) : 0,
+            mediaNotas: parseFloat(mediaNotas.toFixed(1))
+          };
+        } else {
+          // Para provas não publicadas (rascunhos)
+          return {
+            id: prova._id,
+            titulo: prova.titulo,
+            conteudo: prova.conteudo,
+            turma: prova.turmaId ? {
+              id: prova.turmaId._id,
+              nome: prova.turmaId.nome,
+              disciplina: prova.turmaId.disciplina
+            } : null,
+            quantidadeQuestoes: prova.questoes.length,
+            dificuldade: prova.dificuldade,
+            dataCriacao: prova.createdAt,
+            dataLimite: prova.dataLimite,
+            duracao: prova.duracaoMinutos,
+            status: prova.status,
+            codigo: prova.codigo,
+            fonteGeracao: prova.fonteGeracao,
+            
+            // NOVO: Informações de publicação
+            publicada: prova.publicada,
+            statusPublicacao: 'Rascunho',
+            
+            alunosRealizaram: 0,
+            totalAlunos: prova.turmaId ? await Turma.findById(prova.turmaId).then(t => t ? t.alunos.length : 0) : 0,
+            mediaNotas: 0
+          };
+        }
+      })
+    );
+
+    // Filtrar provas rascunho se não solicitado
+    const provasFiltradas = mostrarRascunhos 
+      ? provasComEstatisticas 
+      : provasComEstatisticas.filter(p => p.publicada);
+
+    res.json({
+      success: true,
+      provas: provasFiltradas,
+      total: provasFiltradas.length,
+      totalRascunhos: provasComEstatisticas.filter(p => !p.publicada).length,
+      mensagem: `Encontradas ${provasFiltradas.length} provas ${mostrarRascunhos ? '(incluindo rascunhos)' : '(apenas publicadas)'}`
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar provas do professor:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor: ' + error.message
+    });
+  }
 });
 
 // ============ ROTA PARA PROFESSOR VER PROVAS PENDENTES DE CORREÇÃO ============
@@ -1928,9 +2427,14 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
     console.log(`📋 Professor ${professorId} solicitando provas pendentes de correção`);
 
     // Buscar todas as provas criadas pelo professor
-    const provas = await Prova.find({ userId: professorId })
-      .populate('turmaId', 'nome disciplina')
-      .sort({ createdAt: -1 });
+    const provas = await Prova.find({
+      turmaId: { $in: turmaIds },
+      status: 'ativa',
+      publicada: true // SÓ MOSTRAR PROVAS PUBLICADAS
+    })
+    .populate('turmaId', 'nome disciplina')
+    .populate('userId', 'nome')
+    .sort({ createdAt: -1 });
 
     if (provas.length === 0) {
       return res.json({

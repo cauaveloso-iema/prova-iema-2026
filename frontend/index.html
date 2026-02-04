@@ -1194,6 +1194,7 @@
             </div>
             
             <!-- Conteúdo da Aba Nova Prova -->
+            <!-- Conteúdo da Aba Nova Prova -->
             <div id="nova-prova" class="tab-content active">
                 <div class="theme-card">
                     <div class="theme-header">
@@ -1273,6 +1274,17 @@
                                 </select>
                             </div>
                             
+                            <!-- Tipo de Prova -->
+                            <div class="form-group">
+                                <label for="tipoProva" class="form-label">
+                                    <i class="fas fa-file-alt"></i> Tipo de Prova
+                                </label>
+                                <select id="tipoProva" class="form-control" required onchange="mudarTipoProva()">
+                                    <option value="simples">Prova Simples (5 alternativas)</option>
+                                    <option value="enem">Formato ENEM (com texto base)</option>
+                                </select>
+                            </div>
+                            
                             <!-- Turma -->
                             <div class="form-group">
                                 <label for="turmaProva" class="form-label">
@@ -1295,48 +1307,222 @@
                                 >
                             </div>
 
-                            <!-- Horarios -->
+                            <!-- Horários -->
                             <div class="form-group">
-                            <label for="horarioInicio" class="form-label">
-                                <i class="fas fa-clock"></i> Horário Início
-                            </label>
-                            <input 
-                                type="time" 
-                                id="horarioInicio" 
-                                class="form-control" 
-                                value="08:00"
-                                required
-                            >
+                                <label for="horarioInicio" class="form-label">
+                                    <i class="fas fa-clock"></i> Horário Início
+                                </label>
+                                <input 
+                                    type="time" 
+                                    id="horarioInicio" 
+                                    class="form-control" 
+                                    value="08:00"
+                                    required
+                                >
                             </div>
 
                             <div class="form-group">
-                            <label for="horarioTermino" class="form-label">
-                                <i class="fas fa-clock"></i> Horário Término
-                            </label>
-                            <input 
-                                type="time" 
-                                id="horarioTermino" 
-                                class="form-control" 
-                                value="09:30"
-                                required
-                            >
+                                <label for="horarioTermino" class="form-label">
+                                    <i class="fas fa-clock"></i> Horário Término
+                                </label>
+                                <input 
+                                    type="time" 
+                                    id="horarioTermino" 
+                                    class="form-control" 
+                                    value="09:30"
+                                    required
+                                >
                             </div>
 
-                            <!-- Manter o campo duracao como display only (opcional) -->
+                            <!-- Duração Calculada -->
                             <div class="form-group" style="grid-column: 1 / -1;">
-                            <label class="form-label">
-                                <i class="fas fa-hourglass-half"></i> Duração Calculada
-                            </label>
-                            <div id="duracaoCalculada" style="
-                                padding: 10px;
-                                background: #f3f4f6;
-                                border-radius: 6px;
-                                font-weight: 600;
-                                color: #4f46e5;
-                                text-align: center;
-                            ">
-                                Calculando...
+                                <label class="form-label">
+                                    <i class="fas fa-hourglass-half"></i> Duração Calculada
+                                </label>
+                                <div id="duracaoCalculada" style="
+                                    padding: 10px;
+                                    background: #f3f4f6;
+                                    border-radius: 6px;
+                                    font-weight: 600;
+                                    color: #4f46e5;
+                                    text-align: center;
+                                ">
+                                    Calculando...
+                                </div>
                             </div>
+                        </div>
+                        
+                        <!-- Seção de Anexos (visível apenas para ENEM) -->
+                        <div id="secaoAnexos" class="secao-anexos-container" style="display: none;">
+                            <div class="anexos-header">
+                                <div class="anexos-icon">
+                                    <i class="fas fa-paperclip"></i>
+                                </div>
+                                <div class="anexos-title">
+                                    <h3>Materiais de Referência</h3>
+                                    <p>Adicione arquivos, textos ou links para a IA usar como base na criação das questões no formato ENEM</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Tabs para diferentes tipos de anexo -->
+                            <div class="anexos-tabs">
+                                <button class="anexo-tab active" onclick="mostrarTabAnexo('upload')">
+                                    <i class="fas fa-upload"></i> Upload de Arquivos
+                                </button>
+                                <button class="anexo-tab" onclick="mostrarTabAnexo('texto')">
+                                    <i class="fas fa-file-alt"></i> Texto Direto
+                                </button>
+                                <button class="anexo-tab" onclick="mostrarTabAnexo('link')">
+                                    <i class="fas fa-link"></i> Links
+                                </button>
+                            </div>
+                            
+                            <!-- Conteúdo das Tabs -->
+                            
+                            <!-- Tab 1: Upload de Arquivos -->
+                            <div id="tab-upload" class="tab-anexo-content active">
+                                <div class="tab-content-inner">
+                                    <div class="tab-header">
+                                        <h4><i class="fas fa-cloud-upload-alt"></i> Enviar Arquivos</h4>
+                                        <p>Envie PDFs, imagens ou documentos. Formatos aceitos: PDF, JPG, PNG, TXT, DOC, DOCX (até 10MB cada)</p>
+                                    </div>
+                                    
+                                    <div class="drop-zone" 
+                                        onclick="document.getElementById('fileInput').click()"
+                                        id="dropZone"
+                                        ondrop="handleDrop(event)"
+                                        ondragover="handleDragOver(event)"
+                                        ondragleave="handleDragLeave(event)">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                        <h4>Arraste e solte arquivos aqui</h4>
+                                        <p>ou clique para selecionar do computador</p>
+                                        <button type="button" class="btn btn-primary">
+                                            <i class="fas fa-folder-open"></i> Selecionar Arquivos
+                                        </button>
+                                    </div>
+                                    
+                                    <input type="file" id="fileInput" multiple style="display: none;" 
+                                        accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx" onchange="handleFileSelect(event)">
+                                    
+                                    <!-- Progresso do upload -->
+                                    <div id="uploadProgress" class="upload-progress" style="display: none;">
+                                        <div class="progress-header">
+                                            <span>Enviando arquivos...</span>
+                                            <span id="uploadPercentage">0%</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div id="uploadBar" class="progress-fill"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab 2: Texto Direto -->
+                            <div id="tab-texto" class="tab-anexo-content">
+                                <div class="tab-content-inner">
+                                    <div class="tab-header">
+                                        <h4><i class="fas fa-file-alt"></i> Adicionar Texto Diretamente</h4>
+                                        <p>Cole textos, artigos ou qualquer conteúdo que deseja usar como referência para as questões</p>
+                                    </div>
+                                    
+                                    <div class="form-grid">
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label class="form-label">
+                                                <i class="fas fa-heading"></i> Título do Texto
+                                            </label>
+                                            <input type="text" id="textoTitulo" class="form-control" placeholder="Ex: Artigo sobre fotossíntese">
+                                        </div>
+                                        
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label class="form-label">
+                                                <i class="fas fa-align-left"></i> Conteúdo
+                                            </label>
+                                            <textarea id="textoConteudo" class="form-control" rows="6" 
+                                                    placeholder="Cole o texto completo aqui..."></textarea>
+                                            <small class="char-count">
+                                                Limite: 10,000 caracteres (restantes: <span id="charCount">10000</span>)
+                                            </small>
+                                        </div>
+                                        
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label class="form-label">
+                                                <i class="fas fa-info-circle"></i> Descrição (opcional)
+                                            </label>
+                                            <textarea id="textoDescricao" class="form-control" rows="2" 
+                                                    placeholder="Descreva brevemente este texto..."></textarea>
+                                        </div>
+                                    </div>
+                                    
+                                    <button type="button" class="btn btn-success btn-add" onclick="adicionarTexto()">
+                                        <i class="fas fa-plus"></i> Adicionar Texto
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab 3: Links -->
+                            <div id="tab-link" class="tab-anexo-content">
+                                <div class="tab-content-inner">
+                                    <div class="tab-header">
+                                        <h4><i class="fas fa-link"></i> Adicionar Links de Referência</h4>
+                                        <p>Adicione URLs de artigos, vídeos, sites ou qualquer recurso online relevante</p>
+                                    </div>
+                                    
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label class="form-label">
+                                                <i class="fas fa-heading"></i> Título
+                                            </label>
+                                            <input type="text" id="linkTitulo" class="form-control" placeholder="Ex: Artigo da NASA sobre Marte">
+                                        </div>
+                                        
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label class="form-label">
+                                                <i class="fas fa-globe"></i> URL
+                                            </label>
+                                            <input type="url" id="linkURL" class="form-control" placeholder="https://exemplo.com/artigo">
+                                        </div>
+                                        
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label class="form-label">
+                                                <i class="fas fa-info-circle"></i> Descrição (opcional)
+                                            </label>
+                                            <textarea id="linkDescricao" class="form-control" rows="2" 
+                                                    placeholder="Descreva o que este link contém..."></textarea>
+                                        </div>
+                                    </div>
+                                    
+                                    <button type="button" class="btn btn-primary btn-add" onclick="adicionarLink()">
+                                        <i class="fas fa-plus"></i> Adicionar Link
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Lista de Anexos Adicionados -->
+                            <div class="anexos-lista-container">
+                                <div class="anexos-lista-header">
+                                    <h4><i class="fas fa-list-check"></i> Materiais Adicionados</h4>
+                                    <span id="contadorAnexos" class="anexos-count">0</span>
+                                </div>
+                                
+                                <div id="listaAnexos" class="anexos-lista">
+                                    <div id="emptyAnexos" class="empty-anexos">
+                                        <i class="fas fa-inbox"></i>
+                                        <h4>Nenhum material adicionado</h4>
+                                        <p>Adicione arquivos, textos ou links para enriquecer sua prova no formato ENEM</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Info Box -->
+                            <div class="info-card anexos-info">
+                                <h4><i class="fas fa-lightbulb"></i> Como a IA usa os materiais</h4>
+                                <ul>
+                                    <li>A IA analisará estes materiais para criar questões contextualizadas</li>
+                                    <li>Arquivos PDF e imagens serão processados por OCR quando necessário</li>
+                                    <li>Textos diretos são usados imediatamente como base para as questões</li>
+                                    <li>Links são visitados pela IA para extrair conteúdo relevante</li>
+                                    <li>Quanto mais materiais relevantes, mais precisas e diversificadas serão as questões</li>
+                                </ul>
                             </div>
                         </div>
                         
@@ -1378,6 +1564,7 @@
                     </div>
                 </div>
             </div>
+
             
             <!-- Aba Nova Turma -->
             <div id="nova-turma" class="tab-content">
@@ -3445,6 +3632,30 @@
             
             if (!listaProvas) return;
             
+            // Botão para mostrar rascunhos
+            const botaoRascunhos = `
+                <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: var(--gray-700);">
+                    <i class="fas fa-file-alt"></i> Minhas Provas
+                </h3>
+                <button onclick="alternarRascunhos()" id="btnToggleRascunhos" style="
+                    padding: 8px 16px;
+                    background: #f3f4f6;
+                    color: #6b7280;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                    font-size: 0.9rem;
+                ">
+                    <i class="fas fa-eye-slash"></i> Mostrar Rascunhos
+                </button>
+                </div>
+            `;
+            
             // Esconder alerta se tiver sucesso
             if (alerta) {
                 alerta.style.display = 'none';
@@ -4042,6 +4253,90 @@
                 });
         };
 
+        // Adicione esta função ao JavaScript
+        let mostrandoRascunhos = false;
+
+        function alternarRascunhos() {
+        mostrandoRascunhos = !mostrandoRascunhos;
+        
+        const btn = document.getElementById('btnToggleRascunhos');
+        if (btn) {
+            if (mostrandoRascunhos) {
+            btn.innerHTML = '<i class="fas fa-eye"></i> Ocultar Rascunhos';
+            btn.style.background = '#dbeafe';
+            btn.style.color = '#1e40af';
+            btn.style.borderColor = '#93c5fd';
+            } else {
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i> Mostrar Rascunhos';
+            btn.style.background = '#f3f4f6';
+            btn.style.color = '#6b7280';
+            btn.style.borderColor = '#d1d5db';
+            }
+        }
+        
+        // Recarregar provas com o filtro correto
+        carregarProvasComFiltro();
+        }
+
+        async function carregarProvasComFiltro() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const url = `/api/professor/provas${mostrandoRascunhos ? '?rascunhos=true' : ''}`;
+            
+            const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+            atualizarListaProvas(data.provas);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar provas:', error);
+        }
+        }
+
+        async function publicarProvaExistente(provaId, provaTitulo) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const confirmacao = confirm(`Publicar a prova "${provaTitulo}" para os alunos?\n\nEsta prova ficará visível para todos os alunos da turma.`);
+                
+                if (!confirmacao) return;
+                
+                // Mostrar loading
+                mostrarAlerta('alertMinhasProvas', `📤 Publicando "${provaTitulo}"...`, 'info');
+                
+                const response = await fetch(`/api/professor/provas/${provaId}/publicar`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                mostrarAlerta('alertMinhasProvas', `✅ ${data.message}`, 'success');
+                
+                // Recarregar a lista de provas
+                setTimeout(() => {
+                    carregarProvasProfessor();
+                }, 2000);
+                
+                } else {
+                throw new Error(data.error || 'Erro ao publicar prova');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao publicar prova:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+            }
+            }
+
         // Atualizar select de turmas
         function atualizarSelectTurmas() {
             const selectTurma = document.getElementById('turmaProva');
@@ -4140,6 +4435,492 @@
                 </div>
             `).join('');
         }
+
+        // Variáveis para anexos
+        let anexos = [];
+        let arquivosParaUpload = [];
+
+        // Funções para tabs de anexos
+        function mostrarTabAnexo(tab) {
+        // Esconder todas as tabs
+        document.querySelectorAll('.tab-anexo-content').forEach(t => {
+            t.style.display = 'none';
+        });
+        
+        // Remover active de todas as tabs
+        document.querySelectorAll('.result-tabs .result-tab').forEach(t => {
+            t.classList.remove('active');
+        });
+        
+        // Mostrar tab selecionada
+        document.getElementById(`tab-${tab}`).style.display = 'block';
+        
+        // Adicionar active à tab clicada
+        event.target.classList.add('active');
+        }
+
+        // Drag and drop functions
+        function handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('dropZone').classList.add('drop-zone-active');
+        }
+
+        function handleDragLeave(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('dropZone').classList.remove('drop-zone-active');
+        }
+
+        function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('dropZone').classList.remove('drop-zone-active');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFiles(files);
+        }
+        }
+
+        function handleFileSelect(e) {
+        const files = e.target.files;
+        if (files.length > 0) {
+            handleFiles(files);
+        }
+        }
+
+        // Função para processar arquivos selecionados
+        function handleFiles(files) {
+        Array.from(files).forEach(file => {
+            // Validar tamanho (10MB)
+            if (file.size > 10 * 1024 * 1024) {
+            mostrarAlerta('alertProva', `⚠️ Arquivo "${file.name}" muito grande (máx: 10MB)`, 'error');
+            return;
+            }
+            
+            // Validar tipo
+            const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'text/plain', 
+                                'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+            
+            if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i)) {
+            mostrarAlerta('alertProva', `⚠️ Tipo de arquivo não permitido: "${file.name}"`, 'error');
+            return;
+            }
+            
+            // Adicionar à lista de upload
+            arquivosParaUpload.push(file);
+            
+            // Mostrar preview
+            mostrarPreviewArquivo(file);
+        });
+        
+        // Limpar input
+        document.getElementById('fileInput').value = '';
+        }
+
+        // Função para mostrar preview do arquivo
+        function mostrarPreviewArquivo(file) {
+        const listaAnexos = document.getElementById('listaAnexos');
+        const emptyAnexos = document.getElementById('emptyAnexos');
+        
+        if (emptyAnexos) {
+            emptyAnexos.style.display = 'none';
+        }
+        
+        // Determinar ícone baseado no tipo
+        let iconClass = 'fa-file';
+        let iconColor = 'other';
+        
+        if (file.type === 'application/pdf') {
+            iconClass = 'fa-file-pdf';
+            iconColor = 'pdf';
+        } else if (file.type.startsWith('image/')) {
+            iconClass = 'fa-file-image';
+            iconColor = 'image';
+        } else if (file.type === 'text/plain') {
+            iconClass = 'fa-file-alt';
+            iconColor = 'text';
+        } else if (file.type.includes('word')) {
+            iconClass = 'fa-file-word';
+            iconColor = 'text';
+        }
+        
+        // Format file size
+        const fileSize = formatFileSize(file.size);
+        
+        const fileId = 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        
+        const fileHTML = `
+            <div class="file-preview" id="${fileId}">
+            <div class="file-info">
+                <div class="file-icon ${iconColor}">
+                <i class="fas ${iconClass}"></i>
+                </div>
+                <div class="file-details">
+                <div class="file-name">${file.name}</div>
+                <div class="file-size">${fileSize}</div>
+                <div class="file-progress">
+                    <div style="height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-top: 8px;">
+                    <div id="progress-${fileId}" style="height: 100%; width: 0%; background: #4f46e5; border-radius: 3px; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+                </div>
+                <button onclick="removerArquivoUpload('${fileId}', '${file.name}')" style="
+                background: #ef4444; 
+                color: white; 
+                border: none; 
+                width: 30px; 
+                height: 30px; 
+                border-radius: 50%; 
+                cursor: pointer; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center;
+                ">
+                <i class="fas fa-times"></i>
+                </button>
+            </div>
+            </div>
+        `;
+        
+        listaAnexos.insertAdjacentHTML('afterbegin', fileHTML);
+        
+        // Iniciar upload automático
+        uploadArquivo(file, fileId);
+        }
+
+        // Função para formatar tamanho do arquivo
+        function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Função para fazer upload do arquivo
+        async function uploadArquivo(file, fileId) {
+        const formData = new FormData();
+        formData.append('arquivo', file);
+        
+        const token = localStorage.getItem('auth_token');
+        
+        try {
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                const progressBar = document.getElementById(`progress-${fileId}`);
+                if (progressBar) {
+                progressBar.style.width = percentComplete + '%';
+                }
+            }
+            });
+            
+            xhr.addEventListener('load', () => {
+            if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                // Adicionar à lista de anexos
+                const anexo = {
+                    tipo: response.file.tipo,
+                    titulo: response.file.nome,
+                    nomeArquivo: response.file.nomeArquivo,
+                    tamanho: response.file.tamanho,
+                    url: response.file.url,
+                    mimetype: file.type,
+                    status: 'uploaded'
+                };
+                
+                if (response.file.tipo === 'texto' && response.file.conteudo) {
+                    anexo.conteudo = response.file.conteudo;
+                }
+                
+                anexos.push(anexo);
+                atualizarContadorAnexos();
+                
+                // Marcar como concluído
+                const progressBar = document.getElementById(`progress-${fileId}`);
+                if (progressBar) {
+                    progressBar.style.background = '#10b981';
+                }
+                
+                // Remover da lista de upload pendente
+                arquivosParaUpload = arquivosParaUpload.filter(f => f.name !== file.name);
+                }
+            }
+            });
+            
+            xhr.addEventListener('error', () => {
+            mostrarAlerta('alertProva', `❌ Erro ao fazer upload de "${file.name}"`, 'error');
+            
+            const progressBar = document.getElementById(`progress-${fileId}`);
+            if (progressBar) {
+                progressBar.style.background = '#ef4444';
+            }
+            });
+            
+            xhr.open('POST', '/api/upload/temp');
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.send(formData);
+            
+        } catch (error) {
+            console.error('Erro no upload:', error);
+            mostrarAlerta('alertProva', `❌ Erro ao fazer upload: ${error.message}`, 'error');
+        }
+        }
+
+        // Função para remover arquivo da lista de upload
+        function removerArquivoUpload(fileId, fileName) {
+        if (confirm(`Remover o arquivo "${fileName}"?`)) {
+            // Remover do DOM
+            const element = document.getElementById(fileId);
+            if (element) {
+            element.remove();
+            }
+            
+            // Remover da lista de upload
+            arquivosParaUpload = arquivosParaUpload.filter(f => f.name !== fileName);
+            
+            // Remover da lista de anexos se já foi feito upload
+            anexos = anexos.filter(a => a.nomeArquivo !== fileName);
+            atualizarContadorAnexos();
+            
+            // Mostrar empty state se necessário
+            if (anexos.length === 0 && arquivosParaUpload.length === 0) {
+            const emptyAnexos = document.getElementById('emptyAnexos');
+            if (emptyAnexos) {
+                emptyAnexos.style.display = 'block';
+            }
+            }
+        }
+        }
+
+        // Função para adicionar texto
+        function adicionarTexto() {
+        const titulo = document.getElementById('textoTitulo').value.trim();
+        const conteudo = document.getElementById('textoConteudo').value.trim();
+        
+        if (!titulo) {
+            mostrarAlerta('alertProva', '⚠️ Digite um título para o texto', 'info');
+            return;
+        }
+        
+        if (!conteudo) {
+            mostrarAlerta('alertProva', '⚠️ Digite o conteúdo do texto', 'info');
+            return;
+        }
+        
+        if (conteudo.length > 10000) {
+            mostrarAlerta('alertProva', '⚠️ O texto é muito longo (máx: 10,000 caracteres)', 'error');
+            return;
+        }
+        
+        const novoAnexo = {
+            tipo: 'texto',
+            titulo: titulo,
+            conteudo: conteudo,
+            descricao: document.getElementById('textoDescricao').value.trim(),
+            data: new Date().toISOString()
+        };
+        
+        anexos.push(novoAnexo);
+        atualizarListaAnexos();
+        
+        // Limpar formulário
+        document.getElementById('textoTitulo').value = '';
+        document.getElementById('textoConteudo').value = '';
+        document.getElementById('textoDescricao').value = '';
+        document.getElementById('charCount').textContent = '10000';
+        
+        mostrarAlerta('alertProva', `✅ Texto "${titulo}" adicionado!`, 'success');
+        }
+
+        // Função para adicionar link
+        function adicionarLink() {
+        const titulo = document.getElementById('linkTitulo').value.trim();
+        const url = document.getElementById('linkURL').value.trim();
+        
+        if (!titulo) {
+            mostrarAlerta('alertProva', '⚠️ Digite um título para o link', 'info');
+            return;
+        }
+        
+        if (!url) {
+            mostrarAlerta('alertProva', '⚠️ Digite a URL do link', 'info');
+            return;
+        }
+        
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            mostrarAlerta('alertProva', '⚠️ Digite uma URL válida (comece com http:// ou https://)', 'error');
+            return;
+        }
+        
+        const novoAnexo = {
+            tipo: 'link',
+            titulo: titulo,
+            url: url,
+            descricao: document.getElementById('linkDescricao').value.trim(),
+            data: new Date().toISOString()
+        };
+        
+        anexos.push(novoAnexo);
+        atualizarListaAnexos();
+        
+        // Limpar formulário
+        document.getElementById('linkTitulo').value = '';
+        document.getElementById('linkURL').value = '';
+        document.getElementById('linkDescricao').value = '';
+        
+        mostrarAlerta('alertProva', `✅ Link "${titulo}" adicionado!`, 'success');
+        }
+
+        // Função para atualizar lista de anexos
+        function atualizarListaAnexos() {
+        const listaAnexos = document.getElementById('listaAnexos');
+        const emptyAnexos = document.getElementById('emptyAnexos');
+        
+        if (anexos.length === 0 && arquivosParaUpload.length === 0) {
+            if (emptyAnexos) {
+            emptyAnexos.style.display = 'block';
+            }
+            listaAnexos.innerHTML = '';
+            return;
+        }
+        
+        if (emptyAnexos) {
+            emptyAnexos.style.display = 'none';
+        }
+        
+        // Separar anexos por tipo para melhor organização
+        let html = '';
+        
+        // Anexos já processados
+        anexos.forEach((anexo, index) => {
+            let icon, colorClass, tipoTexto;
+            
+            switch(anexo.tipo) {
+            case 'texto':
+                icon = 'fa-file-alt';
+                colorClass = 'anexo-texto';
+                tipoTexto = 'Texto';
+                break;
+            case 'link':
+                icon = 'fa-link';
+                colorClass = 'anexo-link';
+                tipoTexto = 'Link';
+                break;
+            case 'pdf':
+                icon = 'fa-file-pdf';
+                colorClass = 'anexo-pdf';
+                tipoTexto = 'PDF';
+                break;
+            case 'imagem':
+                icon = 'fa-file-image';
+                colorClass = 'anexo-imagem';
+                tipoTexto = 'Imagem';
+                break;
+            default:
+                icon = 'fa-file';
+                colorClass = 'anexo-outro';
+                tipoTexto = 'Arquivo';
+            }
+            
+            html += `
+            <div class="anexo-card ${colorClass}">
+                <div class="anexo-info">
+                <div class="anexo-titulo">
+                    <i class="fas ${icon}"></i>
+                    ${anexo.titulo}
+                    <span style="font-size: 0.8rem; background: #e5e7eb; padding: 2px 8px; border-radius: 10px; color: #6b7280;">
+                    ${tipoTexto}
+                    </span>
+                </div>
+                
+                ${anexo.descricao ? `
+                <div class="anexo-descricao">${anexo.descricao}</div>
+                ` : ''}
+                
+                <div class="anexo-metadata">
+                    ${anexo.tamanho ? `<span><i class="fas fa-weight-hanging"></i> ${formatFileSize(anexo.tamanho)}</span>` : ''}
+                    ${anexo.url && anexo.tipo === 'link' ? `<span><i class="fas fa-external-link-alt"></i> <a href="${anexo.url}" target="_blank" style="color: #3b82f6;">Abrir link</a></span>` : ''}
+                    ${anexo.conteudo ? `<span><i class="fas fa-text-height"></i> ${anexo.conteudo.length} caracteres</span>` : ''}
+                </div>
+                </div>
+                
+                <div class="anexo-acoes">
+                <button onclick="removerAnexo(${index})" style="
+                    background: #ef4444; 
+                    color: white; 
+                    border: none; 
+                    width: 32px; 
+                    height: 32px; 
+                    border-radius: 50%; 
+                    cursor: pointer; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center;
+                ">
+                    <i class="fas fa-times"></i>
+                </button>
+                </div>
+            </div>
+            `;
+        });
+        
+        listaAnexos.innerHTML = html;
+        atualizarContadorAnexos();
+        }
+
+        // Função para remover anexo
+        function removerAnexo(index) {
+        if (confirm('Remover este material?')) {
+            anexos.splice(index, 1);
+            atualizarListaAnexos();
+        }
+        }
+
+        // Função para atualizar contador de caracteres
+        document.getElementById('textoConteudo').addEventListener('input', function() {
+        const charCount = 10000 - this.value.length;
+        document.getElementById('charCount').textContent = charCount;
+        
+        if (charCount < 0) {
+            document.getElementById('charCount').style.color = '#ef4444';
+        } else if (charCount < 100) {
+            document.getElementById('charCount').style.color = '#f59e0b';
+        } else {
+            document.getElementById('charCount').style.color = '#6b7280';
+        }
+        });
+
+        // Função para atualizar contador
+        function atualizarContadorAnexos() {
+        const totalAnexos = anexos.length + arquivosParaUpload.length;
+        document.getElementById('contadorAnexos').textContent = totalAnexos;
+        }
+
+        // Atualizar a função mudarTipoProva
+        function mudarTipoProva() {
+        const tipoProva = document.getElementById('tipoProva').value;
+        const secaoAnexos = document.getElementById('secaoAnexos');
+        
+        if (tipoProva === 'enem') {
+            secaoAnexos.style.display = 'block';
+            // Resetar para primeira tab
+            mostrarTabAnexo('upload');
+        } else {
+            secaoAnexos.style.display = 'none';
+            anexos = [];
+            arquivosParaUpload = [];
+            atualizarListaAnexos();
+        }
+        }
+
         
         // Atualizar estatísticas das turmas
         function atualizarEstatisticasTurmas() {
@@ -4411,57 +5192,64 @@
             document.getElementById(id).style.display = 'none';
         }
         
-        // Gerar prova com IA
+        // Função para gerar prova com IA (versão atualizada)
+        // Função para gerar prova com IA (versão atualizada)
         async function gerarProvaComIA(dadosProva) {
             try {
                 const token = localStorage.getItem('auth_token');
                 
-                console.log('🤖 Gerando prova com IA:', dadosProva);
+                console.log('🤖 Enviando dados para gerar prova:', dadosProva);
                 
-                // Montar objeto para enviar ao servidor
-                const dadosEnvio = {
-                    turmaId: dadosProva.turmaId,
-                    titulo: dadosProva.titulo,
-                    conteudo: dadosProva.tema,
-                    quantidadeQuestoes: parseInt(dadosProva.quantidadeQuestoes),
-                    dificuldade: dadosProva.dificuldade,
-                    dataLimite: dadosProva.dataLimite,
-                    horarioInicio: dadosProva.horarioInicio,
-                    horarioTermino: dadosProva.horarioTermino 
-
-                };
+                let response;
                 
-                console.log('📤 Enviando para servidor:', dadosEnvio);
-                
-                const response = await fetch(`/api/turmas/${dadosProva.turmaId}/prova`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(dadosEnvio)
-                });
+                // Determinar qual endpoint usar baseado no tipo de prova e anexos
+                if (dadosProva.tipoProva === 'enem' && dadosProva.anexos && dadosProva.anexos.length > 0) {
+                    // Usar rota com upload para ENEM com anexos
+                    const formDataObj = new FormData();
+                    
+                    // Adicionar todos os campos
+                    for (const key in dadosProva) {
+                        if (key !== 'anexos' && key !== 'turmaId') {
+                            formDataObj.append(key, dadosProva[key]);
+                        }
+                    }
+                    
+                    // Adicionar anexos como JSON
+                    formDataObj.append('anexosData', JSON.stringify(dadosProva.anexos));
+                    
+                    // ALTERAR AQUI - usar prova-v2
+                    response = await fetch(`/api/turmas/${dadosProva.turmaId}/prova-v2`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formDataObj
+                    });
+                } else {
+                    // Usar rota padrão para provas simples ou sem anexos
+                    // ALTERAR AQUI - usar prova-v2
+                    response = await fetch(`/api/turmas/${dadosProva.turmaId}/prova-v2`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dadosProva)
+                    });
+                }
                 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error('❌ Erro na resposta:', errorText);
                     throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
                 }
                 
                 const data = await response.json();
-                console.log('✅ Resposta do servidor:', data);
                 
                 if (data.success) {
-                    // Salvar dados da prova gerada
-                    provaGerada = {
-                        ...data.prova,
-                        questoes: data.questoes || []
-                    };
-                    
                     return { 
                         success: true, 
                         data: data,
-                        mensagem: '✅ Prova gerada com sucesso!' 
+                        mensagem: data.mensagem || '✅ Prova gerada com sucesso!' 
                     };
                 } else {
                     throw new Error(data.error || 'Erro desconhecido');
@@ -4602,37 +5390,88 @@
             }, 100);
         }
         
-        // Publicar prova para a turma (mantido da versão anterior)
+        // Função para publicar prova (substitua a função existente)
         async function publicarProva() {
-            if (!provaGerada) {
-                mostrarAlerta('alertProva', '⚠️ Nenhuma prova gerada para publicar', 'info');
-                return;
+        if (!provaGerada) {
+            mostrarAlerta('alertProva', '⚠️ Nenhuma prova gerada para publicar', 'info');
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Mostrar loading
+            const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
+            const originalText = btnPublicar.innerHTML;
+            btnPublicar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publicando...';
+            btnPublicar.disabled = true;
+            
+            // Chamar API para publicar
+            const response = await fetch(`/api/professor/provas/${provaGerada.id}/publicar`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             }
+            });
             
-            mostrarAlerta('alertProva', '✅ Prova publicada com sucesso! Os alunos já podem visualizá-la.', 'success');
+            const data = await response.json();
             
+            if (data.success) {
+            mostrarAlerta('alertProva', '✅ Prova publicada com sucesso! Agora está visível para os alunos.', 'success');
+            
+            // Resetar formulário
             document.getElementById('formNovaProva').reset();
             document.getElementById('previewQuestoes').style.display = 'none';
             provaGerada = null;
             
-            await carregarTurmasProfessor();
+            // Recarregar lista de provas
+            setTimeout(() => {
+                carregarProvasProfessor();
+            }, 2000);
+            
+            } else {
+            throw new Error(data.error || 'Erro ao publicar prova');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao publicar prova:', error);
+            mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
+        } finally {
+            // Restaurar botão
+            const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
+            if (btnPublicar) {
+            btnPublicar.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar para a Turma';
+            btnPublicar.disabled = false;
+            }
+        }
         }
         
-        // Regenerar prova (mantido da versão anterior)
+        // Função para regenerar prova (mantido da versão anterior)
         async function regenerarProva() {
             if (!provaGerada) {
                 mostrarAlerta('alertProva', '⚠️ Nenhuma prova para regenerar', 'info');
                 return;
             }
             
+            const horarioInicio = document.getElementById('horarioInicio').value;
+            const horarioTermino = document.getElementById('horarioTermino').value;
+            
+            // Calcular duração automaticamente baseada nos horários
+            const duracaoCalculada = calcularDuracao(); // Usar a função existente
+            
             const formData = {
                 turmaId: document.getElementById('turmaProva').value,
                 titulo: document.getElementById('tituloProva').value,
-                tema: document.getElementById('temaProva').value,
-                quantidadeQuestoes: document.getElementById('quantidadeQuestoes').value,
+                conteudo: document.getElementById('temaProva').value,
+                tipoProva: document.getElementById('tipoProva').value,
+                quantidadeQuestoes: parseInt(document.getElementById('quantidadeQuestoes').value),
                 dificuldade: document.getElementById('dificuldade').value,
                 dataLimite: document.getElementById('dataLimite').value,
-                duracao: document.getElementById('duracao').value
+                horarioInicio: horarioInicio,
+                horarioTermino: horarioTermino,
+                // Adicionar duração calculada automaticamente
+                duracao: duracaoCalculada
             };
             
             if (!formData.turmaId) {
@@ -4640,21 +5479,46 @@
                 return;
             }
             
-            const btn = document.getElementById('btnGerarProva');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerando prova...';
-            btn.disabled = true;
+            // ADICIONAR ANIMAÇÃO DE LOADING NO BOTÃO "Regenerar Prova"
+            const btnRegenerar = document.querySelector('#previewQuestoes button.btn-danger');
+            const originalTextRegenerar = btnRegenerar.innerHTML;
             
-            const resultado = await gerarProvaComIA(formData);
+            // ADICIONAR CLASSE DE LOADING E MUDAR TEXTO
+            btnRegenerar.classList.add('btn-loading');
+            btnRegenerar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerando...';
+            btnRegenerar.disabled = true;
             
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+            // Desabilitar também o botão de publicar temporariamente
+            const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
+            if (btnPublicar) {
+                btnPublicar.disabled = true;
+            }
             
-            if (resultado.success) {
-                mostrarAlerta('alertProva', resultado.mensagem, 'success');
-                mostrarPreviewQuestoes(resultado.data.questoes || []);
-            } else {
-                mostrarAlerta('alertProva', resultado.error, 'error');
+            // ADICIONAR MENSAGEM DE LOADING NO ALERTA
+            mostrarAlerta('alertProva', '🔄 Regenerando prova com IA...', 'info');
+            
+            try {
+                // Fazer a requisição de regeneração
+                const resultado = await gerarProvaComIA(formData);
+                
+                if (resultado.success) {
+                    mostrarAlerta('alertProva', '✅ Prova regenerada com sucesso!', 'success');
+                    mostrarPreviewQuestoes(resultado.data.questoes || []);
+                } else {
+                    mostrarAlerta('alertProva', resultado.error, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao regenerar prova:', error);
+                mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
+            } finally {
+                // SEMPRE EXECUTA: restaurar botões
+                btnRegenerar.classList.remove('btn-loading');
+                btnRegenerar.innerHTML = originalTextRegenerar;
+                btnRegenerar.disabled = false;
+                
+                if (btnPublicar) {
+                    btnPublicar.disabled = false;
+                }
             }
         }
         
@@ -4789,29 +5653,24 @@
                         return;
                     }
                     
-                    // CORREÇÃO: Processar a data limite CORRETAMENTE
+                    // Processar a data limite CORRETAMENTE
                     let dataLimiteEnviar = null;
                     const dataLimiteInput = document.getElementById('dataLimite').value;
                     
                     if (dataLimiteInput) {
-                        // Converter a string YYYY-MM-DD para Date
                         const partes = dataLimiteInput.split('-');
                         const ano = parseInt(partes[0]);
-                        const mes = parseInt(partes[1]) - 1; // Mês é 0-indexed
+                        const mes = parseInt(partes[1]) - 1;
                         const dia = parseInt(partes[2]);
                         
-                        // Criar data como FIM DO DIA (23:59:59) no fuso local
                         const dataLimiteFimDia = new Date(ano, mes, dia, 23, 59, 59, 999);
-                        
-                        console.log('📅 Data limite processada:');
-                        console.log('   Input do form:', dataLimiteInput);
-                        console.log('   Ano:', ano, 'Mês:', mes, 'Dia:', dia);
-                        console.log('   Data como fim do dia:', dataLimiteFimDia);
-                        console.log('   ISO:', dataLimiteFimDia.toISOString());
-                        console.log('   Local:', dataLimiteFimDia.toLocaleString('pt-BR'));
-                        
-                        // Enviar como string ISO
                         dataLimiteEnviar = dataLimiteFimDia.toISOString();
+                    }
+                    
+                    // Aguardar upload de todos os arquivos pendentes
+                    if (arquivosParaUpload.length > 0) {
+                        mostrarAlerta('alertProva', '📤 Aguarde o upload de todos os arquivos...', 'info');
+                        return;
                     }
                     
                     // Mostrar loading
@@ -4820,38 +5679,232 @@
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando prova com IA...';
                     btn.disabled = true;
                     
-                    // Coletar dados do formulário
-                    const formData = {
-                        turmaId: document.getElementById('turmaProva').value,
-                        titulo: document.getElementById('tituloProva').value,
-                        tema: document.getElementById('temaProva').value,
-                        quantidadeQuestoes: document.getElementById('quantidadeQuestoes').value,
+                    // Obter token de autenticação
+                    const token = localStorage.getItem('auth_token');
+                    if (!token) {
+                        mostrarAlerta('alertProva', '❌ Sessão expirada. Faça login novamente.', 'error');
+                        window.location.href = 'login.html';
+                        return;
+                    }
+                    
+                    const tipoProva = document.getElementById('tipoProva').value;
+                    
+                    // Preparar dados da prova
+                    const dadosProva = {
+                        turmaId: turmaId,
+                        titulo: titulo,
+                        conteudo: tema,  // ✅ CORRETO - use 'conteudo' em vez de 'tema'
+                        tipoProva: tipoProva,
+                        quantidadeQuestoes: parseInt(document.getElementById('quantidadeQuestoes').value),
                         dificuldade: document.getElementById('dificuldade').value,
                         dataLimite: dataLimiteEnviar,
-                        // **MUDAR AQUI:**
                         horarioInicio: document.getElementById('horarioInicio').value,
-                        horarioTermino: document.getElementById('horarioTermino').value
-                        // REMOVER: duracao: document.getElementById('duracao').value
+                        horarioTermino: document.getElementById('horarioTermino').value,
+                        anexos: tipoProva === 'enem' ? anexos : []
                     };
                     
-                    console.log('📤 Dados enviados para o servidor:', formData);
+                    console.log('📤 Preparando envio da prova:', dadosProva);
                     
-                    // Gerar prova
-                    const resultado = await gerarProvaComIA(formData);
-                    
-                    // Restaurar botão
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                    
-                    if (resultado.success) {
-                        mostrarAlerta('alertProva', resultado.mensagem, 'success');
-                        mostrarPreviewQuestoes(resultado.data.questoes || []);
-                    } else {
-                        mostrarAlerta('alertProva', resultado.error, 'error');
+                    try {
+                        let response;
+                        
+                        // Se for prova do tipo ENEM com anexos, usar FormData para upload
+                        if (tipoProva === 'enem' && anexos.length > 0) {
+                            const formDataObj = new FormData();
+                            
+                            // Adicionar campos JSON
+                            formDataObj.append('titulo', dadosProva.titulo);
+                            formDataObj.append('conteudo', dadosProva.conteudo);
+                            formDataObj.append('tipoProva', dadosProva.tipoProva);
+                            formDataObj.append('quantidadeQuestoes', dadosProva.quantidadeQuestoes);
+                            formDataObj.append('dificuldade', dadosProva.dificuldade);
+                            formDataObj.append('dataLimite', dadosProva.dataLimite || '');
+                            formDataObj.append('horarioInicio', dadosProva.horarioInicio);
+                            formDataObj.append('horarioTermino', dadosProva.horarioTermino);
+                            formDataObj.append('anexosData', JSON.stringify(dadosProva.anexos));
+                            
+                            // Adicionar arquivos físicos ao FormData
+                            // Os arquivos já foram enviados via upload separado, então apenas referenciamos
+                            // Se houver arquivos locais ainda não enviados, enviar agora
+                            const filesToUpload = arquivosParaUpload.filter(file => 
+                                file && file.size > 0
+                            );
+                            
+                            filesToUpload.forEach((file, index) => {
+                                formDataObj.append('arquivos', file);
+                            });
+                            
+                            console.log(`📎 Enviando ${filesToUpload.length} arquivos com FormData`);
+                            
+                            // Usar rota com upload de arquivos
+                            response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                    // Não definir Content-Type para FormData (o browser define automaticamente)
+                                },
+                                body: formDataObj
+                            });
+                        } else {
+                            // Para prova simples ou ENEM sem arquivos, usar JSON normal
+                            response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(dadosProva)
+                            });
+                        }
+                        
+                        // Verificar resposta
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            console.error('❌ Erro na resposta:', errorText);
+                            throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+                        }
+                        
+                        const data = await response.json();
+                        console.log('✅ Resposta do servidor:', data);
+                        
+                        if (data.success) {
+                            mostrarAlerta('alertProva', data.mensagem || '✅ Prova criada com sucesso!', 'success');
+                            
+                            // Salvar dados da prova gerada
+                            provaGerada = {
+                                ...data.prova,
+                                questoes: data.questoes || []
+                            };
+                            
+                            // Mostrar preview das questões
+                            if (data.questoes && data.questoes.length > 0) {
+                                mostrarPreviewQuestoes(data.questoes);
+                            }
+                            
+                            // Resetar anexos
+                            if (tipoProva === 'enem') {
+                                anexos = [];
+                                arquivosParaUpload = [];
+                                atualizarListaAnexos();
+                            }
+                            
+                        } else {
+                            throw new Error(data.error || 'Erro ao criar prova');
+                        }
+                        
+                    } catch (error) {
+                        console.error('❌ Erro ao gerar prova:', error);
+                        mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
+                    } finally {
+                        // Restaurar botão
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
                     }
                 });
             }
             
+            function mostrarPreviewQuestoes(questoes) {
+                const previewContainer = document.getElementById('previewQuestoes');
+                const questoesContainer = document.getElementById('questoesPreview');
+                
+                if (!previewContainer || !questoesContainer) return;
+                
+                if (!questoes || questoes.length === 0) {
+                    questoesContainer.innerHTML = `
+                    <div class="empty-state" style="text-align: center; padding: 20px; color: #6b7280;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <p>Não foi possível carregar as questões geradas</p>
+                    </div>
+                    `;
+                } else {
+                    questoesContainer.innerHTML = questoes.map((questao, index) => {
+                    if (questao.tipo === 'enem') {
+                        // Formato ENEM
+                        return `
+                        <div class="questao-preview" style="margin-bottom: 25px; padding: 20px; background: #f0f9ff; border-radius: 10px; border-left: 4px solid #3b82f6;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <span style="background: #3b82f6; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 600;">
+                                ENEM
+                            </span>
+                            <strong style="color: #1e40af;">Questão ${index + 1}</strong>
+                            </div>
+                            
+                            ${questao.contexto ? `
+                            <div class="contexto" style="margin-bottom: 15px; padding: 15px; background: #e0f2fe; border-radius: 8px; font-style: italic;">
+                            <p style="margin: 0; color: #0369a1;">${questao.contexto}</p>
+                            </div>
+                            ` : ''}
+                            
+                            <div class="questao-texto" style="margin-bottom: 15px; font-weight: 600; color: #1e40af;">
+                            ${questao.pergunta}
+                            </div>
+                            
+                            <div class="opcoes-preview">
+                            ${questao.opcoes.map((opcao, opcaoIndex) => `
+                                <div class="opcao-item ${opcaoIndex === questao.respostaCorreta ? 'opcao-correta' : ''}" 
+                                    style="padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 2px solid ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#d1d5db'}; background: ${opcaoIndex === questao.respostaCorreta ? '#d1fae5' : 'white'};">
+                                <span>${opcao}</span>
+                                ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle" style="color: #10b981; float: right;"></i>' : ''}
+                                </div>
+                            `).join('')}
+                            </div>
+                            
+                            <div class="explicacao-preview" style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
+                            <strong><i class="fas fa-lightbulb"></i> Explicação:</strong> ${questao.explicacao}
+                            
+                            ${questao.competencia ? `
+                            <div style="margin-top: 10px; font-size: 0.9rem;">
+                                <strong>Competência:</strong> ${questao.competencia}
+                            </div>
+                            ` : ''}
+                            
+                            ${questao.habilidade ? `
+                            <div style="margin-top: 5px; font-size: 0.9rem;">
+                                <strong>Habilidade:</strong> ${questao.habilidade}
+                            </div>
+                            ` : ''}
+                            </div>
+                        </div>
+                        `;
+                    } else {
+                        // Formato simples
+                        return `
+                        <div class="questao-preview" style="margin-bottom: 25px; padding: 20px; background: #f9fafb; border-radius: 10px; border-left: 4px solid #10b981;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <span style="background: #10b981; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 600;">
+                                SIMPLES
+                            </span>
+                            <strong style="color: #065f46;">Questão ${index + 1}</strong>
+                            </div>
+                            
+                            <div class="questao-texto" style="margin-bottom: 15px; font-weight: 600; color: #065f46;">
+                            ${questao.pergunta}
+                            </div>
+                            
+                            <div class="opcoes-preview">
+                            ${questao.opcoes.map((opcao, opcaoIndex) => `
+                                <div class="opcao-item ${opcaoIndex === questao.respostaCorreta ? 'opcao-correta' : ''}" 
+                                    style="padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 2px solid ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#d1d5db'}; background: ${opcaoIndex === questao.respostaCorreta ? '#d1fae5' : 'white'};">
+                                <span>${opcao}</span>
+                                ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle" style="color: #10b981; float: right;"></i>' : ''}
+                                </div>
+                            `).join('')}
+                            </div>
+                            
+                            <div class="explicacao-preview" style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
+                            <strong><i class="fas fa-lightbulb"></i> Explicação:</strong> ${questao.explicacao}
+                            </div>
+                        </div>
+                        `;
+                    }
+                    }).join('');
+                }
+                
+                previewContainer.style.display = 'block';
+                setTimeout(() => {
+                    previewContainer.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+                }
             // Configurar formulário de nova turma
             const formNovaTurma = document.getElementById('formNovaTurma');
             if (formNovaTurma) {
