@@ -1916,6 +1916,7 @@
         let turmasProfessor = [];
         let provaGerada = null;
         let turmaParaExcluir = null;
+        let arquivosOriginaisParaRegeneracao = [];
 
         // ============ FUNÇÕES PARA PROVA CORRIGIDA ============
 
@@ -5802,7 +5803,7 @@
                 mostrarAlerta('alertProva', '⚠️ Nenhuma prova válida para publicar', 'info');
                 return;
             }
-            
+
             try {
                 const token = localStorage.getItem('auth_token');
                 
@@ -5831,12 +5832,13 @@
                     // Resetar formulário
                     document.getElementById('formNovaProva').reset();
                     document.getElementById('previewQuestoes').style.display = 'none';
-                    provaGerada = null;
                     
-                    // Resetar anexos se houver
-                    anexos = [];
+                    // LIMPAR ARQUIVOS ORIGINAIS APÓS PUBLICAR
+                    arquivosOriginaisParaRegeneracao = [];
                     arquivosParaUpload = [];
+                    anexos = [];
                     atualizarListaAnexos();
+                    provaGerada = null;
                     
                     // Recarregar lista de provas
                     setTimeout(() => {
@@ -5866,7 +5868,7 @@
                 mostrarAlerta('alertProva', '⚠️ Nenhuma prova para regenerar', 'info');
                 return;
             }
-            
+
             // Mostrar loading no preview
             const questoesPreview = document.getElementById('questoesPreview');
             if (questoesPreview) {
@@ -5878,14 +5880,14 @@
                     </div>
                 `;
             }
-            
+
             // Desabilitar botões do preview
             const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
             const btnRegenerar = document.querySelector('#previewQuestoes button.btn-danger');
-            
+
             if (btnPublicar) btnPublicar.disabled = true;
             if (btnRegenerar) btnRegenerar.disabled = true;
-            
+
             try {
                 const turmaId = document.getElementById('turmaProva').value;
                 const titulo = document.getElementById('tituloProva').value;
@@ -5894,11 +5896,11 @@
                 const dificuldade = document.getElementById('dificuldade').value;
                 const dataLimiteInput = document.getElementById('dataLimite').value;
                 const tipoProva = document.getElementById('tipoProva').value;
-                
+
                 if (!turmaId) {
                     throw new Error('Selecione uma turma primeiro');
                 }
-                
+
                 // Processar a data limite CORRETAMENTE
                 let dataLimiteEnviar = null;
                 if (dataLimiteInput) {
@@ -5910,7 +5912,7 @@
                     const dataLimiteFimDia = new Date(ano, mes, dia, 23, 59, 59, 999);
                     dataLimiteEnviar = dataLimiteFimDia.toISOString();
                 }
-                
+
                 // Preparar dados da prova
                 const dadosProva = {
                     turmaId: turmaId,
@@ -5922,19 +5924,89 @@
                     dataLimite: dataLimiteEnviar,
                     horarioInicio: document.getElementById('horarioInicio').value,
                     horarioTermino: document.getElementById('horarioTermino').value,
-                    anexos: tipoProva === 'enem' ? anexos : []
+                    anexos: tipoProva === 'enem' ? [] : []
                 };
-                
+
                 console.log('🔄 Dados para regeneração:', dadosProva);
-                
+
                 const token = localStorage.getItem('auth_token');
-                
+
                 let response;
-                
+
                 // Se for prova do tipo ENEM com anexos, usar FormData para upload
-                if (tipoProva === 'enem' && anexos.length > 0) {
-                    const formDataObj = new FormData();
+                if (tipoProva === 'enem') {
+                    console.log('🔄 Preparando regeneração para prova ENEM...');
                     
+                    // Verificar quais arquivos temos disponíveis
+                    console.log('📊 Estado dos arquivos para regeneração:');
+                    console.log('   - arquivosOriginaisBackup:', arquivosOriginaisBackup.length);
+                    console.log('   - arquivosParaUpload:', arquivosParaUpload.length);
+                    console.log('   - anexos:', anexos.length);
+                    
+                    let arquivosParaProcessar = [];
+                    let todosAnexos = [];
+                    
+                    // PRIMEIRO: Usar backup de arquivos originais (criado na primeira geração)
+                    if (arquivosOriginaisBackup.length > 0) {
+                        console.log('📁 Usando arquivos do backup original:', arquivosOriginaisBackup.length);
+                        arquivosParaProcessar = [...arquivosOriginaisBackup];
+                    }
+                    // SEGUNDO: Se não tiver backup, usar arquivos atuais
+                    else if (arquivosParaUpload.length > 0) {
+                        console.log('📁 Usando arquivos atuais:', arquivosParaUpload.length);
+                        arquivosParaProcessar = [...arquivosParaUpload];
+                    }
+                    
+                    // Processar arquivos se houver algum
+                    if (arquivosParaProcessar.length > 0) {
+                        console.log('🔧 Processando arquivos para regeneração...');
+                        
+                        // Fazer backup do estado atual
+                        const arquivosAtuaisBackup = [...arquivosParaUpload];
+                        const anexosAtuaisBackup = [...anexos];
+                        
+                        // Substituir temporariamente para processamento
+                        arquivosParaUpload = [...arquivosParaProcessar];
+                        anexos = [];
+                        
+                        try {
+                            todosAnexos = await processarAnexosParaEnvio();
+                            console.log('✅ Arquivos processados para regeneração:', todosAnexos.length);
+                        } catch (error) {
+                            console.error('❌ Erro ao processar arquivos para regeneração:', error);
+                        } finally {
+                            // Restaurar estado original
+                            arquivosParaUpload = [...arquivosAtuaisBackup];
+                            anexos = [...anexosAtuaisBackup];
+                        }
+                    }
+                    
+                    // SE NÃO CONSEGUIU PROCESSAR ARQUIVOS, tentar buscar da prova original
+                    if (todosAnexos.length === 0 && provaGerada && provaGerada.id) {
+                        console.log('🔍 Buscando anexos da prova original ID:', provaGerada.id);
+                        
+                        try {
+                            const responseProva = await fetch(`/api/provas/${provaGerada.id}`, {
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                }
+                            });
+                            
+                            if (responseProva.ok) {
+                                const dataProva = await responseProva.json();
+                                if (dataProva.success && dataProva.prova && dataProva.prova.anexos) {
+                                    todosAnexos = dataProva.prova.anexos;
+                                    console.log('✅ Anexos recuperados da prova original:', todosAnexos.length);
+                                }
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ Não foi possível recuperar anexos da prova original:', error.message);
+                        }
+                    }
+                    
+                    // Preparar FormData
+                    const formDataObj = new FormData();
+
                     // Adicionar campos JSON
                     formDataObj.append('titulo', dadosProva.titulo);
                     formDataObj.append('conteudo', dadosProva.conteudo);
@@ -5944,8 +6016,28 @@
                     formDataObj.append('dataLimite', dadosProva.dataLimite || '');
                     formDataObj.append('horarioInicio', dadosProva.horarioInicio);
                     formDataObj.append('horarioTermino', dadosProva.horarioTermino);
-                    formDataObj.append('anexosData', JSON.stringify(dadosProva.anexos));
                     
+                    // Adicionar anexos como JSON
+                    if (todosAnexos.length > 0) {
+                        formDataObj.append('anexos', JSON.stringify(todosAnexos));
+                        console.log(`📎 Anexos incluídos na regeneração: ${todosAnexos.length}`);
+                    } else {
+                        console.log('ℹ️ Nenhum anexo para enviar na regeneração');
+                        formDataObj.append('anexos', '[]');
+                    }
+                    
+                    // Adicionar arquivos físicos também
+                    arquivosParaProcessar.forEach((file, index) => {
+                        formDataObj.append(`arquivos`, file);
+                    });
+
+                    // Debug do FormData
+                    console.log('📋 Conteúdo do FormData para regeneração:');
+                    for (let pair of formDataObj.entries()) {
+                        console.log(`${pair[0]}: ${typeof pair[1] === 'string' ? pair[1].substring(0, 100) : pair[1].name || 'File'}`);
+                    }
+
+                    // Fazer a requisição
                     response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
                         method: 'POST',
                         headers: {
@@ -5964,15 +6056,15 @@
                         body: JSON.stringify(dadosProva)
                     });
                 }
-                
+
                 // Verificar resposta
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
                 }
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // ATUALIZAR A VARIÁVEL GLOBAL provaGerada COM OS NOVOS DADOS
                     provaGerada = {
@@ -5981,26 +6073,26 @@
                         ...data.prova,
                         questoes: data.questoes || []
                     };
-                    
+
                     console.log('✅ Prova regenerada:', provaGerada);
-                    
+
                     // Mostrar preview das questões
                     if (data.questoes && data.questoes.length > 0) {
                         mostrarPreviewQuestoes(data.questoes);
                     } else if (provaGerada.questoes && provaGerada.questoes.length > 0) {
                         mostrarPreviewQuestoes(provaGerada.questoes);
                     }
-                    
+
                     // Mostrar mensagem de sucesso
                     mostrarAlerta('alertProva', '✅ Prova regenerada com sucesso!', 'success');
-                    
+
                 } else {
                     throw new Error(data.error || 'Erro ao regenerar prova');
                 }
-                
+
             } catch (error) {
                 console.error('❌ Erro ao regenerar prova:', error);
-                
+
                 // Mostrar erro no preview
                 const questoesPreview = document.getElementById('questoesPreview');
                 if (questoesPreview) {
@@ -6023,16 +6115,16 @@
                         </div>
                     `;
                 }
-                
+
                 mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
-                
+
             } finally {
                 // Reabilitar botões do preview
                 if (btnPublicar) {
                     btnPublicar.disabled = false;
                     btnPublicar.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar para a Turma';
                 }
-                
+
                 if (btnRegenerar) {
                     btnRegenerar.disabled = false;
                     btnRegenerar.innerHTML = '<i class="fas fa-redo"></i> Regenerar Prova';
@@ -6335,13 +6427,17 @@
                         
                         // Se for prova do tipo ENEM com anexos, usar FormData para upload
                         if (tipoProva === 'enem') {
-                            // 1. Processar TODOS os anexos
+                            // 1. Fazer backup dos arquivos originais para regeneração
+                            arquivosOriginaisBackup = [...arquivosParaUpload];
+                            console.log('📁 Backup de arquivos criado para regeneração:', arquivosOriginaisBackup.length);
+                            
+                            // 2. Processar TODOS os anexos
                             const todosAnexos = await processarAnexosParaEnvio();
                             
-                            // 2. Criar FormData
+                            // 3. Criar FormData
                             const formDataObj = new FormData();
                             
-                            // 3. Adicionar campos principais
+                            // 4. Adicionar campos principais
                             formDataObj.append('titulo', dadosProva.titulo);
                             formDataObj.append('conteudo', dadosProva.conteudo);
                             formDataObj.append('tipoProva', dadosProva.tipoProva);
@@ -6351,7 +6447,7 @@
                             formDataObj.append('horarioInicio', dadosProva.horarioInicio);
                             formDataObj.append('horarioTermino', dadosProva.horarioTermino);
                             
-                            // 4. Adicionar anexos como JSON (MUITO IMPORTANTE!)
+                            // 5. Adicionar anexos como JSON (MUITO IMPORTANTE!)
                             if (todosAnexos.length > 0) {
                                 formDataObj.append('anexos', JSON.stringify(todosAnexos));
                                 console.log(`📎 Anexos incluídos no FormData: ${todosAnexos.length}`);
@@ -6360,18 +6456,18 @@
                                 formDataObj.append('anexos', '[]');
                             }
                             
-                            // 5. Adicionar arquivos físicos também diretamente
+                            // 6. Adicionar arquivos físicos também diretamente
                             arquivosParaUpload.forEach((file, index) => {
                                 formDataObj.append(`arquivos`, file); // IMPORTANTE: usar nome "arquivos"
                             });
                             
-                            // 6. Debug do FormData
+                            // 7. Debug do FormData
                             console.log('📋 Conteúdo do FormData:');
                             for (let pair of formDataObj.entries()) {
                                 console.log(`${pair[0]}: ${typeof pair[1] === 'string' ? pair[1].substring(0, 100) : pair[1].name || 'File'}`);
                             }
                             
-                            // 7. Fazer a requisição
+                            // 8. Fazer a requisição
                             response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
                                 method: 'POST',
                                 headers: {
@@ -6419,12 +6515,10 @@
                                 mostrarPreviewQuestoes(provaGerada.questoes);
                             }
                             
-                            // Resetar anexos se for ENEM
-                            if (tipoProva === 'enem') {
-                                anexos = [];
-                                arquivosParaUpload = [];
-                                atualizarListaAnexos();
-                            }
+                            // Resetar listas visuais mas manter backup dos arquivos
+                            anexos = [];
+                            // NÃO limpar arquivosParaUpload - manter para regeneração
+                            atualizarListaAnexos();
                             
                         } else {
                             throw new Error(data.error || 'Erro ao criar prova');
