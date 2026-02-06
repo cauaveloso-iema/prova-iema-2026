@@ -4553,12 +4553,15 @@
             mostrarAlerta('alertProva', `✅ Link "${titulo}" adicionado!`, 'success');
         }
 
-        // Função corrigida para lidar com seleção de arquivos
+        // FUNÇÃO CORRIGIDA PARA LIDAR COM MÚLTIPLOS ARQUIVOS
         function handleFileSelect(e) {
             const files = e.target.files;
             if (!files || files.length === 0) return;
             
             console.log(`📁 ${files.length} arquivo(s) selecionado(s)`);
+            
+            // Limpar arquivos anteriores? (opcional - remover se quiser manter)
+            // arquivosParaUpload = []; // Remover esta linha para manter arquivos anteriores
             
             // Adicionar cada arquivo à lista
             for (let i = 0; i < files.length; i++) {
@@ -4580,6 +4583,16 @@
                     continue;
                 }
                 
+                // Verificar se o arquivo já existe na lista
+                const arquivoExistente = arquivosParaUpload.find(f => 
+                    f.name === file.name && f.size === file.size
+                );
+                
+                if (arquivoExistente) {
+                    console.log(`📄 Arquivo duplicado ignorado: ${file.name}`);
+                    continue;
+                }
+                
                 // Adicionar à lista de upload
                 arquivosParaUpload.push(file);
                 console.log(`✅ Arquivo adicionado: ${file.name} (${formatFileSize(file.size)})`);
@@ -4591,8 +4604,11 @@
             // Atualizar contador
             atualizarContadorAnexos();
             
-            // Debug
-            console.log('📊 Estado atual dos arquivos:', arquivosParaUpload);
+            // Debug - mostrar estado atual
+            console.log('📊 Estado atual dos arquivos para upload:', {
+                total: arquivosParaUpload.length,
+                arquivos: arquivosParaUpload.map(f => ({ name: f.name, size: f.size, type: f.type }))
+            });
             
             // Limpar input para permitir selecionar os mesmos arquivos novamente
             e.target.value = '';
@@ -5096,38 +5112,21 @@
         }
         }
 
-        // Função para processar todos os anexos (textos, links e arquivos)
+        // FUNÇÃO CORRIGIDA PARA PROCESSAR MÚLTIPLOS ARQUIVOS
         async function processarAnexosParaEnvio() {
             const todosAnexos = [];
             
-            console.log(`📦 Processando anexos:`);
+            console.log(`📦 Processando anexos para envio:`);
             console.log(`   - Textos/Links: ${anexos.length}`);
             console.log(`   - Arquivos para upload: ${arquivosParaUpload.length}`);
             
             // 1. Adicionar anexos já processados (textos e links)
             anexos.forEach(anexo => {
-                console.log(`   ↳ Anexo: ${anexo.tipo} - "${anexo.titulo}"`);
+                console.log(`   ↳ Anexo já existente: ${anexo.tipo} - "${anexo.titulo}"`);
                 
-                if (anexo.tipo === 'texto') {
-                    todosAnexos.push({
-                        tipo: 'texto',
-                        titulo: anexo.titulo,
-                        conteudo: anexo.conteudo || '',
-                        descricao: anexo.descricao || '',
-                        data: anexo.data || new Date().toISOString()
-                    });
-                } else if (anexo.tipo === 'link') {
-                    todosAnexos.push({
-                        tipo: 'link',
-                        titulo: anexo.titulo,
-                        url: anexo.url || '',
-                        descricao: anexo.descricao || '',
-                        data: anexo.data || new Date().toISOString()
-                    });
-                } else if (anexo.tipo === 'arquivo') {
-                    // Arquivo já processado anteriormente
-                    todosAnexos.push(anexo);
-                }
+                // Copiar anexo existente
+                const anexoCopia = { ...anexo };
+                todosAnexos.push(anexoCopia);
             });
             
             // 2. Fazer upload dos arquivos físicos pendentes
@@ -5140,15 +5139,13 @@
                     return todosAnexos;
                 }
                 
-                for (let i = 0; i < arquivosParaUpload.length; i++) {
-                    const file = arquivosParaUpload[i];
-                    
+                // Criar array de promessas para upload paralelo
+                const uploadPromises = arquivosParaUpload.map(async (file, index) => {
                     try {
-                        console.log(`⬆️ Uploading arquivo ${i + 1}/${arquivosParaUpload.length}: ${file.name}`);
+                        console.log(`⬆️ Uploading arquivo ${index + 1}/${arquivosParaUpload.length}: ${file.name} (${formatFileSize(file.size)})`);
                         
                         const formData = new FormData();
                         formData.append('arquivo', file);
-                        formData.append('nome', file.name);
                         
                         const response = await fetch('/api/upload/temp', {
                             method: 'POST',
@@ -5161,16 +5158,16 @@
                         
                         if (!response.ok) {
                             const errorText = await response.text();
-                            console.error(`❌ Erro no upload de ${file.name}:`, response.status, errorText);
-                            continue;
+                            throw new Error(`HTTP ${response.status}: ${errorText}`);
                         }
                         
                         const result = await response.json();
-                        console.log(`📊 Resposta do upload:`, result);
                         
                         if (result.success && result.file) {
+                            console.log(`✅ Upload concluído: ${file.name}`);
+                            
                             // Adicionar informações do arquivo à lista de anexos
-                            const anexoArquivo = {
+                            return {
                                 tipo: result.file.tipo || 'arquivo',
                                 titulo: result.file.nome || file.name,
                                 nomeArquivo: result.file.nomeArquivo || file.name,
@@ -5179,26 +5176,38 @@
                                 mimetype: file.type,
                                 data: new Date().toISOString()
                             };
-                            
-                            // Se for um PDF ou texto, incluir conteúdo se disponível
-                            if (result.file.conteudo) {
-                                anexoArquivo.conteudo = result.file.conteudo;
-                            }
-                            
-                            todosAnexos.push(anexoArquivo);
-                            console.log(`✅ Arquivo ${file.name} processado e adicionado aos anexos`);
                         } else {
-                            console.error(`❌ Upload falhou para ${file.name}:`, result.error);
+                            throw new Error(result.error || `Upload falhou para ${file.name}`);
                         }
                         
                     } catch (error) {
                         console.error(`❌ Erro ao processar arquivo ${file.name}:`, error);
+                        return null; // Retornar null para falhas, filtrar depois
                     }
+                });
+                
+                // Executar todos os uploads em paralelo
+                try {
+                    const resultados = await Promise.all(uploadPromises);
+                    
+                    // Filtrar resultados nulos (falhas) e adicionar aos anexos
+                    const anexosArquivos = resultados.filter(r => r !== null);
+                    todosAnexos.push(...anexosArquivos);
+                    
+                    console.log(`✅ ${anexosArquivos.length}/${arquivosParaUpload.length} arquivos processados com sucesso`);
+                    
+                } catch (error) {
+                    console.error('❌ Erro geral no upload de arquivos:', error);
                 }
             }
             
             console.log(`📤 Total de anexos para envio: ${todosAnexos.length}`);
-            console.log('📝 Lista completa de anexos:', todosAnexos);
+            console.log('📝 Lista completa de anexos:', todosAnexos.map(a => ({
+                tipo: a.tipo,
+                titulo: a.titulo,
+                tamanho: a.tamanho || 'N/A',
+                url: a.url || 'N/A'
+            })));
             
             return todosAnexos;
         }
@@ -6431,7 +6440,7 @@
                             arquivosOriginaisBackup = [...arquivosParaUpload];
                             console.log('📁 Backup de arquivos criado para regeneração:', arquivosOriginaisBackup.length);
                             
-                            // 2. Processar TODOS os anexos
+                            // 2. Processar TODOS os anexos (incluindo upload de arquivos)
                             const todosAnexos = await processarAnexosParaEnvio();
                             
                             // 3. Criar FormData
@@ -6449,25 +6458,24 @@
                             
                             // 5. Adicionar anexos como JSON (MUITO IMPORTANTE!)
                             if (todosAnexos.length > 0) {
-                                formDataObj.append('anexos', JSON.stringify(todosAnexos));
+                                formDataObj.append('anexosData', JSON.stringify(todosAnexos)); // MUDAR para 'anexosData'
                                 console.log(`📎 Anexos incluídos no FormData: ${todosAnexos.length}`);
                             } else {
                                 console.log('ℹ️ Nenhum anexo para enviar');
-                                formDataObj.append('anexos', '[]');
+                                formDataObj.append('anexosData', '[]');
                             }
                             
-                            // 6. Adicionar arquivos físicos também diretamente
-                            arquivosParaUpload.forEach((file, index) => {
-                                formDataObj.append(`arquivos`, file); // IMPORTANTE: usar nome "arquivos"
-                            });
-                            
-                            // 7. Debug do FormData
+                            // 6. Debug do FormData
                             console.log('📋 Conteúdo do FormData:');
                             for (let pair of formDataObj.entries()) {
-                                console.log(`${pair[0]}: ${typeof pair[1] === 'string' ? pair[1].substring(0, 100) : pair[1].name || 'File'}`);
+                                if (pair[0] === 'anexosData') {
+                                    console.log(`${pair[0]}: JSON com ${JSON.parse(pair[1]).length} anexos`);
+                                } else {
+                                    console.log(`${pair[0]}: ${pair[1]}`);
+                                }
                             }
                             
-                            // 8. Fazer a requisição
+                            // 7. Fazer a requisição
                             response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
                                 method: 'POST',
                                 headers: {
