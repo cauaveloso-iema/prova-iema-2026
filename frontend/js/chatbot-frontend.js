@@ -17,7 +17,8 @@ class SistemaProvasChatbot {
             autoCloseInactive: 600000,
             maxQuickActions: 4,
             analyticsEnabled: true,
-            welcomeDisplayedToday: false
+            welcomeDisplayedToday: false,
+            introductionDisplayed: false
         };
         
         this.inactivityTimer = null;
@@ -28,7 +29,6 @@ class SistemaProvasChatbot {
         
         this.init();
         this.setupEventListeners();
-        this.setupProximityDetection();
         this.loadConversation();
         this.setupAnalytics();
         this.setupPerformanceMonitoring();
@@ -148,17 +148,19 @@ class SistemaProvasChatbot {
 
     updateConnectionStatus() {
         const statusDot = document.querySelector('.status-dot');
-        const statusText = document.querySelector('.chatbot-status span');
+        const statusText = document.querySelector('.status-text');
         
         if (statusDot && statusText) {
             if (this.connectionStatus === 'online') {
                 statusDot.style.background = '#10b981';
                 statusDot.style.boxShadow = '0 0 8px #10b981';
                 statusText.textContent = 'Online';
+                statusText.style.color = '#10b981';
             } else {
                 statusDot.style.background = '#ef4444';
                 statusDot.style.boxShadow = '0 0 8px #ef4444';
                 statusText.textContent = 'Offline';
+                statusText.style.color = '#ef4444';
             }
         }
     }
@@ -196,35 +198,10 @@ class SistemaProvasChatbot {
 
     createChatbotHTML() {
         const userName = this.userData.nome ? this.userData.nome.split(' ')[0] : '';
-        const userRole = this.userData.role || 'visitante';
-        const roleText = userRole === 'professor' ? 'Professor' : 
-                        userRole === 'aluno' ? 'Aluno' : 'Visitante';
         
         const chatbotHTML = `
             <!-- Assistente Virtual Acadêmico -->
             <div class="chatbot-container" id="chatbotContainer">
-                <!-- Sugestão de Acesso -->
-                <div class="chatbot-gesture" id="chatbotGesture">
-                    <div class="gesture-icon">
-                        <i class="fas fa-graduation-cap"></i>
-                    </div>
-                    <div class="gesture-content">
-                        <div class="gesture-header">
-                            <strong>${userName ? `Olá, ${userName}!` : 'Bem-vindo!'}</strong>
-                            <span class="gesture-role">${roleText}</span>
-                        </div>
-                        <p class="gesture-subtitle">Assistente acadêmico disponível para:</p>
-                        <ul class="gesture-features">
-                            <li><i class="fas fa-file-alt"></i> Gestão de provas</li>
-                            <li><i class="fas fa-users"></i> Controle de turmas</li>
-                            <li><i class="fas fa-chart-line"></i> Análise de resultados</li>
-                        </ul>
-                    </div>
-                    <button class="gesture-close" id="closeGesture" aria-label="Ignorar sugestão" title="Fechar">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
                 <!-- Janela do Chat -->
                 <div class="chatbot-window" id="chatbotWindow" role="dialog" 
                     aria-label="Assistente Virtual do Sistema de Provas">
@@ -235,31 +212,21 @@ class SistemaProvasChatbot {
                                     <i class="fas fa-robot"></i>
                                 </div>
                                 <div class="header-info">
-                                    <h3 id="chatbotTitle">Assistente Acadêmico</h3>
-                                    <p class="chatbot-description">Sistema de Provas Inteligente</p>
+                                    <h3 id="chatbotTitle">Assistente</h3>
+                                    <p class="chatbot-subtitle">Sistema de Provas</p>
                                 </div>
                             </div>
                             <div class="chatbot-status">
                                 <div class="status-indicator">
-                                    <span class="status-dot" id="statusDot" aria-label="Status da conexão"></span>
-                                    <span class="status-text" id="statusText">Conectado</span>
+                                    <span class="status-dot" id="statusDot"></span>
+                                    <span class="status-text" id="statusText">Online</span>
                                 </div>
-                                ${userName ? `
-                                    <div class="user-badge" title="${roleText}">
-                                        <i class="fas fa-user"></i>
-                                        <span>${userName}</span>
-                                    </div>
-                                ` : ''}
                             </div>
                         </div>
                         <div class="header-controls">
                             <button class="chatbot-minimize" id="minimizeChatbot" 
                                     aria-label="Minimizar assistente" title="Minimizar">
-                                <i class="fas fa-window-minimize"></i>
-                            </button>
-                            <button class="chatbot-settings" id="chatbotSettings" 
-                                    aria-label="Configurações" title="Configurações">
-                                <i class="fas fa-cog"></i>
+                                <i class="fas fa-minus"></i>
                             </button>
                             <button class="chatbot-close" id="closeChatbot" 
                                     aria-label="Fechar assistente" title="Fechar">
@@ -283,25 +250,18 @@ class SistemaProvasChatbot {
                     <!-- Área de Entrada -->
                     <div class="chatbot-input-area">
                         <div class="input-wrapper">
-                            <input 
-                                type="text" 
+                            <textarea 
                                 id="chatbotInput" 
-                                placeholder="${this.connectionStatus === 'offline' ? 'Conecte-se à internet para enviar mensagens...' : 'Digite sua pergunta sobre provas, turmas ou resultados...'}" 
+                                rows="1"
+                                placeholder="${this.connectionStatus === 'offline' ? 'Conecte-se à internet...' : 'Digite sua mensagem...'}" 
                                 maxlength="${this.config.maxMessageLength}"
                                 aria-label="Campo de entrada de mensagem"
                                 aria-describedby="charCount"
                                 ${this.connectionStatus === 'offline' ? 'disabled' : ''}
-                            >
+                            ></textarea>
                             <div class="input-actions">
-                                <button class="chatbot-attach" id="attachButton" 
-                                        aria-label="Anexar arquivo" title="Anexar arquivo" disabled>
-                                    <i class="fas fa-paperclip"></i>
-                                </button>
-                                <button class="chatbot-voice" id="voiceButton" 
-                                        aria-label="Ativar entrada por voz" title="Voz">
-                                    <i class="fas fa-microphone"></i>
-                                </button>
                                 <button id="sendMessage" 
+                                        class="send-button"
                                         aria-label="Enviar mensagem" 
                                         title="Enviar"
                                         ${this.connectionStatus === 'offline' ? 'disabled' : ''}>
@@ -315,8 +275,8 @@ class SistemaProvasChatbot {
                             </span>
                             <span class="connection-status" id="connectionStatus">
                                 ${this.connectionStatus === 'online' ? 
-                                    '<i class="fas fa-wifi"></i> Online' : 
-                                    '<i class="fas fa-wifi-slash"></i> Offline'}
+                                    '<i class="fas fa-circle" style="color: #10b981; font-size: 8px;"></i>' : 
+                                    '<i class="fas fa-circle" style="color: #ef4444; font-size: 8px;"></i>'}
                             </span>
                         </div>
                     </div>
@@ -350,90 +310,54 @@ class SistemaProvasChatbot {
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                z-index: 9999;
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                z-index: 10000;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
 
             .chatbot-toggle {
-                width: 60px;
-                height: 60px;
+                width: 56px;
+                height: 56px;
                 background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-                border-radius: 50%;
+                border-radius: 16px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 color: white;
-                font-size: 24px;
+                font-size: 22px;
                 cursor: pointer;
-                box-shadow: 0 10px 30px rgba(79, 70, 229, 0.3);
+                box-shadow: 0 6px 20px rgba(79, 70, 229, 0.25);
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 position: relative;
                 border: none;
                 outline: none;
-                z-index: 10000;
-            }
-
-            .chatbot-toggle::before {
-                content: '';
-                position: absolute;
-                top: -2px;
-                left: -2px;
-                right: -2px;
-                bottom: -2px;
-                background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-                border-radius: 50%;
-                z-index: -1;
-                opacity: 0;
-                transition: opacity 0.3s;
-            }
-
-            .chatbot-toggle:hover::before {
-                opacity: 0.4;
-                animation: shimmer 2s infinite;
+                z-index: 10001;
             }
 
             .chatbot-toggle:hover {
-                transform: scale(1.1);
-                box-shadow: 0 15px 40px rgba(79, 70, 229, 0.4);
+                transform: translateY(-2px);
+                box-shadow: 0 10px 25px rgba(79, 70, 229, 0.35);
             }
 
             .chatbot-toggle:active {
-                transform: scale(0.95);
-            }
-
-            .chatbot-toggle.pulsing {
-                animation: pulse 2s infinite;
-            }
-
-            .chatbot-toggle.has-notification::after {
-                content: '';
-                position: absolute;
-                top: 5px;
-                right: 5px;
-                width: 12px;
-                height: 12px;
-                background: #ef4444;
-                border-radius: 50%;
-                border: 2px solid white;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                transform: translateY(0);
             }
 
             .chatbot-toggle.active {
-                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-                transform: rotate(45deg);
+                background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+                transform: translateY(-2px);
             }
 
             .notification-badge {
                 position: absolute;
-                top: -5px;
-                right: -5px;
+                top: -4px;
+                right: -4px;
                 background: #ef4444;
                 color: white;
-                font-size: 11px;
-                font-weight: bold;
+                font-size: 10px;
+                font-weight: 600;
                 min-width: 18px;
                 height: 18px;
-                border-radius: 9px;
+                border-radius: 10px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -442,22 +366,34 @@ class SistemaProvasChatbot {
                 display: none;
             }
 
+            .chatbot-toggle.has-notification::after {
+                content: '';
+                position: absolute;
+                top: 6px;
+                right: 6px;
+                width: 8px;
+                height: 8px;
+                background: #ef4444;
+                border-radius: 50%;
+                border: 2px solid white;
+            }
+
             .chatbot-window {
                 position: absolute;
-                bottom: 70px;
+                bottom: 68px;
                 right: 0;
-                width: 380px;
-                max-width: 90vw;
-                height: 550px;
-                max-height: 70vh;
+                width: 360px;
+                max-width: calc(100vw - 40px);
+                height: 500px;
+                max-height: 65vh;
                 background: white;
                 border-radius: 16px;
-                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+                box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
                 display: none;
                 flex-direction: column;
                 overflow: hidden;
                 animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                border: 1px solid #e9ecef;
+                border: 1px solid #e5e7eb;
             }
 
             .chatbot-window.active {
@@ -471,48 +407,83 @@ class SistemaProvasChatbot {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                border-radius: 16px 16px 0 0;
                 flex-shrink: 0;
+                border-radius: 16px 16px 0 0;
             }
 
             .header-content {
                 display: flex;
                 align-items: center;
                 gap: 12px;
+                flex: 1;
+            }
+
+            .header-brand {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .chatbot-avatar {
+                width: 36px;
+                height: 36px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 16px;
+            }
+
+            .header-info {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
             }
 
             .chatbot-header h3 {
                 margin: 0;
-                font-size: 16px;
+                font-size: 15px;
                 font-weight: 600;
-                display: flex;
-                align-items: center;
-                gap: 8px;
+                line-height: 1.2;
+            }
+
+            .chatbot-subtitle {
+                margin: 0;
+                font-size: 11px;
+                opacity: 0.9;
+                font-weight: 400;
             }
 
             .chatbot-status {
+                margin-left: auto;
+            }
+
+            .status-indicator {
                 display: flex;
                 align-items: center;
                 gap: 6px;
-                font-size: 12px;
-                opacity: 0.9;
-                background: rgba(255, 255, 255, 0.2);
+                font-size: 11px;
+                font-weight: 500;
+                background: rgba(255, 255, 255, 0.15);
                 padding: 4px 8px;
-                border-radius: 12px;
+                border-radius: 10px;
+                backdrop-filter: blur(4px);
             }
 
             .status-dot {
-                width: 8px;
-                height: 8px;
+                width: 6px;
+                height: 6px;
                 border-radius: 50%;
                 background: #10b981;
-                box-shadow: 0 0 8px #10b981;
+                box-shadow: 0 0 6px #10b981;
                 animation: blink 2s infinite;
             }
 
             .header-controls {
                 display: flex;
-                gap: 8px;
+                gap: 4px;
+                margin-left: 10px;
             }
 
             .chatbot-minimize,
@@ -520,13 +491,13 @@ class SistemaProvasChatbot {
                 background: rgba(255, 255, 255, 0.1);
                 border: none;
                 color: white;
-                font-size: 16px;
+                font-size: 13px;
                 cursor: pointer;
-                padding: 6px;
+                padding: 5px;
                 border-radius: 6px;
-                transition: background 0.2s;
-                width: 32px;
-                height: 32px;
+                transition: all 0.2s ease;
+                width: 26px;
+                height: 26px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -535,6 +506,7 @@ class SistemaProvasChatbot {
             .chatbot-minimize:hover,
             .chatbot-close:hover {
                 background: rgba(255, 255, 255, 0.2);
+                transform: translateY(-1px);
             }
 
             .chatbot-messages {
@@ -543,50 +515,48 @@ class SistemaProvasChatbot {
                 overflow-y: auto;
                 display: flex;
                 flex-direction: column;
-                gap: 12px;
-                background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+                gap: 14px;
+                background: #f9fafb;
                 scroll-behavior: smooth;
             }
 
             .message {
                 max-width: 85%;
-                padding: 12px 16px;
-                border-radius: 18px;
-                line-height: 1.5;
+                padding: 10px 14px;
+                border-radius: 16px;
+                line-height: 1.4;
                 word-wrap: break-word;
-                animation: messageAppear 0.3s ease;
+                animation: messageAppear 0.25s ease-out;
                 position: relative;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                font-size: 13px;
             }
 
             .message.bot {
                 align-self: flex-start;
-                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                color: #333;
-                border-bottom-left-radius: 4px;
-                border: 1px solid #e9ecef;
-                box-shadow: 
-                    0 2px 8px rgba(0,0,0,0.1),
-                    inset 0 1px 0 rgba(255,255,255,0.8);
+                background: white;
+                color: #1f2937;
+                border: 1px solid #e5e7eb;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+                border-radius: 16px 16px 16px 4px;
             }
 
             .message.user {
                 align-self: flex-end;
-                background: linear-gradient(135deg, #4f46e5 0%, #5a67d8 100%);
+                background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
                 color: white;
-                border-bottom-right-radius: 4px;
-                box-shadow: 
-                    0 4px 12px rgba(79, 70, 229, 0.3),
-                    inset 0 1px 0 rgba(255,255,255,0.2);
+                box-shadow: 0 2px 8px rgba(79, 70, 229, 0.2);
+                border-radius: 16px 16px 4px 16px;
             }
 
             .message.loading {
                 background: white;
-                padding: 16px;
+                padding: 14px;
+                border: 1px solid #e5e7eb;
+                border-radius: 16px 16px 16px 4px;
                 display: flex;
                 align-items: center;
-                gap: 12px;
-                border: 1px solid #e9ecef;
+                gap: 10px;
+                width: fit-content;
             }
 
             .loading-dots {
@@ -595,8 +565,8 @@ class SistemaProvasChatbot {
             }
 
             .loading-dots span {
-                width: 8px;
-                height: 8px;
+                width: 5px;
+                height: 5px;
                 border-radius: 50%;
                 background: #4f46e5;
                 animation: bounce 1.4s infinite;
@@ -611,49 +581,64 @@ class SistemaProvasChatbot {
             }
 
             .message-time {
-                font-size: 11px;
+                font-size: 10px;
                 opacity: 0.6;
                 margin-top: 4px;
                 text-align: right;
                 display: block;
+                font-weight: 400;
             }
 
-            .chatbot-input {
-                padding: 16px;
-                border-top: 1px solid #e9ecef;
-                display: flex;
-                gap: 8px;
+            .message.user .message-time {
+                color: rgba(255, 255, 255, 0.8);
+            }
+
+            .chatbot-input-area {
+                padding: 16px 20px;
+                border-top: 1px solid #e5e7eb;
                 background: white;
-                position: relative;
                 flex-shrink: 0;
             }
 
-            .chatbot-input input {
-                flex: 1;
-                padding: 12px 16px;
-                border: 2px solid #e9ecef;
-                border-radius: 24px;
-                font-size: 14px;
-                outline: none;
-                transition: all 0.3s;
-                background: #f8f9fa;
+            .input-wrapper {
+                display: flex;
+                align-items: flex-end;
+                gap: 10px;
+                background: #f9fafb;
+                border-radius: 14px;
+                padding: 3px;
+                border: 1px solid #e5e7eb;
+                transition: all 0.3s ease;
             }
 
-            .chatbot-input input:focus {
+            .input-wrapper:focus-within {
                 border-color: #4f46e5;
                 background: white;
-                box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+                box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
             }
 
-            .chatbot-input input:disabled {
-                background: #f3f4f6;
+            .chatbot-input-area textarea {
+                flex: 1;
+                padding: 10px 14px;
+                border: none;
+                background: transparent;
+                font-size: 13px;
+                line-height: 1.4;
+                resize: none;
+                max-height: 80px;
+                outline: none;
+                font-family: inherit;
+            }
+
+            .chatbot-input-area textarea:disabled {
                 cursor: not-allowed;
+                opacity: 0.5;
             }
 
-            .chatbot-input button {
-                width: 44px;
-                height: 44px;
-                border-radius: 50%;
+            .send-button {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
                 background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
                 color: white;
                 border: none;
@@ -661,337 +646,198 @@ class SistemaProvasChatbot {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                transition: all 0.3s;
+                transition: all 0.3s ease;
                 flex-shrink: 0;
+                font-size: 14px;
             }
 
-            .chatbot-input button:hover {
-                transform: scale(1.05);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            .send-button:hover:not(:disabled) {
+                transform: translateY(-1px);
+                box-shadow: 0 3px 8px rgba(79, 70, 229, 0.25);
             }
 
-            .chatbot-input button:disabled {
+            .send-button:active:not(:disabled) {
+                transform: translateY(0);
+            }
+
+            .send-button:disabled {
                 opacity: 0.5;
                 cursor: not-allowed;
-                transform: none !important;
+                background: #9ca3af;
             }
 
-            .chatbot-voice {
-                background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+            .input-footer {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 6px;
+                padding: 0 4px;
             }
 
             .char-count {
-                position: absolute;
-                top: -20px;
-                right: 20px;
-                font-size: 11px;
-                color: #6c757d;
-                background: white;
-                padding: 2px 6px;
-                border-radius: 10px;
-                border: 1px solid #e9ecef;
+                font-size: 10px;
+                color: #6b7280;
+                font-weight: 400;
+            }
+
+            .connection-status {
+                font-size: 10px;
+                color: #6b7280;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                font-weight: 400;
             }
 
             .chatbot-actions {
                 display: flex;
-                gap: 8px;
-                padding: 12px 16px;
-                border-top: 1px solid #e9ecef;
+                flex-wrap: wrap;
+                gap: 6px;
+                padding: 12px 20px;
+                border-top: 1px solid #e5e7eb;
                 background: white;
-                overflow-x: auto;
-                scrollbar-width: none;
                 flex-shrink: 0;
-            }
-
-            .chatbot-actions::-webkit-scrollbar {
-                display: none;
             }
 
             .chatbot-action-btn {
-                padding: 8px 14px;
-                background: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 20px;
-                font-size: 13px;
+                padding: 6px 12px;
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 10px;
+                font-size: 12px;
+                font-weight: 500;
                 white-space: nowrap;
                 cursor: pointer;
-                transition: all 0.3s;
-                flex-shrink: 0;
+                transition: all 0.2s ease;
+                flex: 1;
+                min-width: calc(50% - 3px);
+                text-align: center;
+                color: #4b5563;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
             }
 
-            .chatbot-action-btn:hover {
+            .chatbot-action-btn:hover:not(:disabled) {
                 background: #4f46e5;
                 color: white;
                 border-color: #4f46e5;
                 transform: translateY(-1px);
+                box-shadow: 0 2px 6px rgba(79, 70, 229, 0.2);
             }
 
-            .chatbot-gesture {
-                position: absolute;
-                bottom: 80px;
-                right: 0;
-                background: white;
-                padding: 12px 16px;
-                border-radius: 12px;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-                display: none;
-                align-items: center;
-                gap: 12px;
-                animation: gestureAppear 0.3s ease;
-                max-width: 280px;
-                z-index: 9998;
-                border: 1px solid #e9ecef;
-            }
-
-            .chatbot-gesture.show {
-                display: flex;
-            }
-
-            .gesture-icon {
-                width: 36px;
-                height: 36px;
-                background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-size: 16px;
-                flex-shrink: 0;
-            }
-
-            .gesture-content {
-                flex: 1;
-                font-size: 13px;
-                color: #495057;
-            }
-
-            .gesture-close {
-                background: none;
-                border: none;
-                color: #adb5bd;
-                cursor: pointer;
-                padding: 4px;
-                border-radius: 4px;
-                transition: background 0.2s;
-                flex-shrink: 0;
-            }
-
-            .gesture-close:hover {
-                background: #f8f9fa;
-                color: #495057;
+            .chatbot-action-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
             }
 
             /* Tipos de mensagens */
             .message.system {
-                background: #fff3cd;
-                color: #856404;
-                border: 1px solid #ffeaa7;
                 align-self: center;
-                font-size: 13px;
+                background: #f3f4f6;
+                color: #374151;
+                border: 1px solid #e5e7eb;
+                font-size: 12px;
                 padding: 10px 14px;
-                border-radius: 12px;
+                border-radius: 10px;
                 max-width: 90%;
                 text-align: center;
+                font-weight: 400;
+                width: 100%;
             }
 
             .message.error {
-                background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+                background: #fef2f2;
                 color: #dc2626;
                 border: 1px solid #fecaca;
             }
 
             .message.success {
-                background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-                color: #065f46;
-                border: 1px solid #a7f3d0;
+                background: #f0fdf4;
+                color: #16a34a;
+                border: 1px solid #bbf7d0;
             }
 
             .message.info {
-                background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-                color: #1e40af;
+                background: #eff6ff;
+                color: #2563eb;
                 border: 1px solid #bfdbfe;
             }
 
             .message.warning {
-                background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-                color: #92400e;
+                background: #fffbeb;
+                color: #d97706;
                 border: 1px solid #fde68a;
             }
 
-            /* Animações */
-            @keyframes pulse {
-                0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
-                70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
-                100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
-            }
-
-            @keyframes shimmer {
-                0% { opacity: 0.4; }
-                50% { opacity: 0.6; }
-                100% { opacity: 0.4; }
-            }
-
-            @keyframes slideUp {
-                from { opacity: 0; transform: translateY(20px) scale(0.95); }
-                to { opacity: 1; transform: translateY(0) scale(1); }
-            }
-
-            @keyframes messageAppear {
-                from { opacity: 0; transform: translateY(10px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-
-            @keyframes gestureAppear {
-                from { opacity: 0; transform: translateY(10px) translateX(10px); }
-                to { opacity: 1; transform: translateY(0) translateX(0); }
-            }
-
-            @keyframes blink {
-                0%, 50% { opacity: 1; }
-                51%, 100% { opacity: 0.7; }
-            }
-
-            @keyframes bounce {
-                0%, 60%, 100% { transform: translateY(0); }
-                30% { transform: translateY(-6px); }
-            }
-
-            /* Modo responsivo */
-            @media (max-width: 480px) {
-                .chatbot-container {
-                    bottom: 10px;
-                    right: 10px;
-                }
-
-                .chatbot-window {
-                    width: calc(100vw - 20px);
-                    height: calc(100vh - 80px);
-                    max-height: none;
-                    bottom: 60px;
-                    right: 10px;
-                    border-radius: 12px;
-                }
-
-                .chatbot-header {
-                    padding: 12px 16px;
-                }
-
-                .chatbot-input {
-                    padding: 12px;
-                }
-            }
-
-            /* Scrollbar personalizada */
-            .chatbot-messages::-webkit-scrollbar {
-                width: 8px;
-            }
-
-            .chatbot-messages::-webkit-scrollbar-track {
-                background: #f1f1f1;
-                border-radius: 4px;
-            }
-
-            .chatbot-messages::-webkit-scrollbar-thumb {
-                background: linear-gradient(180deg, #4f46e5 0%, #7c3aed 100%);
-                border-radius: 4px;
-            }
-
-            .chatbot-messages::-webkit-scrollbar-thumb:hover {
-                background: linear-gradient(180deg, #4338ca 0%, #6b46c1 100%);
-            }
-
-            /* Estados de foco para acessibilidade */
-            .chatbot-toggle:focus-visible,
-            .chatbot-action-btn:focus-visible,
-            .chatbot-input button:focus-visible {
-                outline: 3px solid #4f46e5;
-                outline-offset: 2px;
-            }
-
-            .chatbot-input input:focus-visible {
-                outline: none;
-                border-color: #4f46e5;
-                box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
-            }
-
-            /* Feedback visual para mensagens enviadas */
-            .message.sending {
-                opacity: 0.7;
-            }
-
-            .message.sent {
-                animation: messageSent 0.3s ease;
-            }
-
-            @keyframes messageSent {
-                from { transform: scale(0.95); opacity: 0.5; }
-                to { transform: scale(1); opacity: 1; }
-            }
-
-            /* Welcome message professional */
+            /* Welcome message */
             .welcome-message {
-                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+                background: white !important;
                 border: 1px solid #e5e7eb !important;
-                border-left: 4px solid #4f46e5 !important;
-                border-radius: 12px !important;
-                padding: 20px !important;
-                margin-bottom: 20px;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-                animation: professionalEntrance 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                border-radius: 14px !important;
+                padding: 16px !important;
+                margin-bottom: 12px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            }
+
+            /* Introduction message */
+            .introduction-message {
+                background: white !important;
+                border: 1px solid #e5e7eb !important;
+                border-radius: 14px !important;
+                padding: 16px !important;
+                margin-bottom: 12px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+                border-left: 3px solid #4f46e5;
             }
 
             .welcome-header {
                 display: flex;
                 align-items: center;
-                gap: 12px;
-                margin-bottom: 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid #e5e7eb;
+                gap: 10px;
+                margin-bottom: 12px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #f3f4f6;
             }
 
             .welcome-header h4 {
                 margin: 0;
                 color: #1f2937;
-                font-size: 18px;
+                font-size: 14px;
                 font-weight: 600;
             }
 
             .assistance-grid {
                 display: grid;
                 grid-template-columns: 1fr;
-                gap: 12px;
-                margin: 12px 0;
+                gap: 6px;
+                margin: 10px 0;
             }
 
             .assistance-item {
                 display: flex;
                 align-items: flex-start;
-                gap: 12px;
-                padding: 12px;
-                background: rgba(255, 255, 255, 0.8);
+                gap: 10px;
+                padding: 8px 10px;
+                background: #f9fafb;
                 border-radius: 8px;
                 border: 1px solid #e5e7eb;
                 transition: all 0.2s ease;
             }
 
-            .assistance-item:hover {
-                background: white;
-                border-color: #4f46e5;
-                transform: translateY(-2px);
-                box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
-            }
-
             .assistance-icon {
-                font-size: 20px;
+                font-size: 14px;
                 background: #f3f4f6;
-                width: 36px;
-                height: 36px;
-                border-radius: 8px;
+                width: 28px;
+                height: 28px;
+                border-radius: 6px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 flex-shrink: 0;
+                color: #4f46e5;
             }
 
             .assistance-content {
@@ -1001,54 +847,150 @@ class SistemaProvasChatbot {
             .assistance-content strong {
                 display: block;
                 color: #374151;
-                font-size: 14px;
-                margin-bottom: 4px;
+                font-size: 12px;
+                font-weight: 500;
+                margin-bottom: 2px;
             }
 
             .assistance-content p {
                 margin: 0;
                 color: #6b7280;
-                font-size: 12px;
-                line-height: 1.4;
+                font-size: 11px;
+                line-height: 1.3;
+                font-weight: 400;
             }
 
             .quick-suggestions {
                 display: flex;
                 flex-direction: column;
-                gap: 8px;
-                margin-top: 12px;
+                gap: 6px;
+                margin-top: 10px;
             }
 
             .suggestion-btn {
                 background: white;
                 border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 10px 16px;
-                font-size: 14px;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 12px;
                 color: #4b5563;
                 text-align: left;
                 cursor: pointer;
                 transition: all 0.2s ease;
-            }
-
-            .suggestion-btn:hover {
-                background: #f9fafb;
-                border-color: #4f46e5;
-                color: #4f46e5;
-                box-shadow: 0 2px 4px rgba(79, 70, 229, 0.1);
+                font-weight: 400;
             }
 
             .assistant-status {
                 display: flex;
                 align-items: center;
-                margin-top: 16px;
-                padding-top: 16px;
-                border-top: 1px solid #e5e7eb;
+                margin-top: 12px;
+                padding-top: 12px;
+                border-top: 1px solid #f3f4f6;
             }
 
-            @keyframes professionalEntrance {
-                0% { opacity: 0; transform: translateY(20px) scale(0.95); }
-                100% { opacity: 1; transform: translateY(0) scale(1); }
+            /* Animações */
+            @keyframes slideUp {
+                from { 
+                    opacity: 0; 
+                    transform: translateY(15px) scale(0.98); 
+                }
+                to { 
+                    opacity: 1; 
+                    transform: translateY(0) scale(1); 
+                }
+            }
+
+            @keyframes messageAppear {
+                from { 
+                    opacity: 0; 
+                    transform: translateY(6px) scale(0.96); 
+                }
+                to { 
+                    opacity: 1; 
+                    transform: translateY(0) scale(1); 
+                }
+            }
+
+            @keyframes blink {
+                0%, 50% { opacity: 1; }
+                51%, 100% { opacity: 0.7; }
+            }
+
+            @keyframes bounce {
+                0%, 60%, 100% { transform: translateY(0); }
+                30% { transform: translateY(-3px); }
+            }
+
+            /* Modo responsivo */
+            @media (max-width: 480px) {
+                .chatbot-container {
+                    bottom: 16px;
+                    right: 16px;
+                }
+
+                .chatbot-window {
+                    width: calc(100vw - 32px);
+                    height: calc(100vh - 120px);
+                    max-height: none;
+                    bottom: 64px;
+                    right: 16px;
+                    border-radius: 16px;
+                }
+
+                .chatbot-header {
+                    padding: 14px 16px;
+                }
+
+                .chatbot-messages {
+                    padding: 16px;
+                    gap: 12px;
+                }
+
+                .chatbot-input-area {
+                    padding: 12px 16px;
+                }
+
+                .chatbot-actions {
+                    padding: 10px 16px;
+                    gap: 4px;
+                }
+
+                .chatbot-action-btn {
+                    min-width: calc(50% - 2px);
+                    font-size: 11px;
+                    padding: 5px 8px;
+                    height: 30px;
+                }
+            }
+
+            /* Scrollbar personalizada */
+            .chatbot-messages::-webkit-scrollbar {
+                width: 4px;
+            }
+
+            .chatbot-messages::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            .chatbot-messages::-webkit-scrollbar-thumb {
+                background: #d1d5db;
+                border-radius: 2px;
+            }
+
+            .chatbot-messages::-webkit-scrollbar-thumb:hover {
+                background: #9ca3af;
+            }
+
+            /* Estados de foco para acessibilidade */
+            .chatbot-toggle:focus-visible,
+            .chatbot-action-btn:focus-visible,
+            .send-button:focus-visible {
+                outline: 2px solid #4f46e5;
+                outline-offset: 2px;
+            }
+
+            .chatbot-input-area textarea:focus-visible {
+                outline: none;
             }
         `;
         
@@ -1070,33 +1012,30 @@ class SistemaProvasChatbot {
         
         document.getElementById('sendMessage').addEventListener('click', () => this.sendMessage());
         
-        const input = document.getElementById('chatbotInput');
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.sendMessage();
-            }
-        });
-        
-        input.addEventListener('input', () => {
-            const count = input.value.length;
+        const textarea = document.getElementById('chatbotInput');
+        textarea.addEventListener('input', () => {
+            this.adjustTextareaHeight(textarea);
+            
+            const count = textarea.value.length;
             const charCount = document.getElementById('charCount');
             charCount.textContent = `${count}/${this.config.maxMessageLength}`;
             
             if (count > this.config.maxMessageLength * 0.9) {
                 charCount.style.color = '#ef4444';
-                charCount.style.fontWeight = 'bold';
+                charCount.style.fontWeight = '600';
             } else if (count > this.config.maxMessageLength * 0.75) {
                 charCount.style.color = '#f59e0b';
             } else {
-                charCount.style.color = '#6c757d';
-                charCount.style.fontWeight = 'normal';
+                charCount.style.color = '#6b7280';
+                charCount.style.fontWeight = '400';
             }
         });
         
-        document.getElementById('closeGesture').addEventListener('click', () => {
-            document.getElementById('chatbotGesture').classList.remove('show');
-            sessionStorage.setItem('chatbot_gesture_closed', 'true');
+        textarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage();
+            }
         });
         
         const messagesContainer = document.getElementById('chatbotMessages');
@@ -1105,22 +1044,19 @@ class SistemaProvasChatbot {
         });
         observer.observe(messagesContainer, { childList: true, subtree: true });
         
-        document.getElementById('voiceButton').addEventListener('click', () => {
-            if (this.connectionStatus === 'offline') {
-                this.showConnectionMessage('🎤 A funcionalidade de voz requer conexão com a internet.', 'warning');
-            } else {
-                this.addMessage('system', '🎤 Funcionalidade de voz em desenvolvimento! Em breve você poderá falar comigo!', 'info');
-            }
-        });
-        
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isOpen) {
                 this.closeChat();
             }
         });
         
-        input.addEventListener('focus', () => this.resetInactivityTimer());
-        input.addEventListener('blur', () => this.resetInactivityTimer());
+        textarea.addEventListener('focus', () => this.resetInactivityTimer());
+        textarea.addEventListener('blur', () => this.resetInactivityTimer());
+    }
+
+    adjustTextareaHeight(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 80) + 'px';
     }
 
     scrollToBottom(element) {
@@ -1142,46 +1078,6 @@ class SistemaProvasChatbot {
                 }
             }, this.config.autoCloseInactive);
         }
-    }
-
-    setupProximityDetection() {
-        let mouseY = window.innerHeight;
-        const gestureThreshold = 150;
-        const gestureElement = document.getElementById('chatbotGesture');
-        const toggleButton = document.getElementById('chatbotToggle');
-
-        if (sessionStorage.getItem('chatbot_gesture_closed')) {
-            return;
-        }
-
-        document.addEventListener('mousemove', (e) => {
-            mouseY = e.clientY;
-            
-            if (!this.isOpen && !this.isTyping) {
-                const distanceFromBottom = window.innerHeight - mouseY;
-                
-                if (distanceFromBottom < gestureThreshold) {
-                    gestureElement.classList.add('show');
-                    toggleButton.classList.add('pulsing');
-                    
-                    setTimeout(() => {
-                        if (gestureElement.classList.contains('show')) {
-                            gestureElement.classList.remove('show');
-                            toggleButton.classList.remove('pulsing');
-                        }
-                    }, 5000);
-                } else if (distanceFromBottom > gestureThreshold + 50) {
-                    gestureElement.classList.remove('show');
-                    toggleButton.classList.remove('pulsing');
-                }
-            }
-        });
-
-        gestureElement.addEventListener('click', (e) => {
-            if (e.target.closest('.gesture-close')) return;
-            this.toggleChat();
-            gestureElement.classList.remove('show');
-        });
     }
 
     showNotification() {
@@ -1214,16 +1110,13 @@ class SistemaProvasChatbot {
         this.isOpen = !this.isOpen;
         const windowElement = document.getElementById('chatbotWindow');
         const toggleButton = document.getElementById('chatbotToggle');
-        const gestureElement = document.getElementById('chatbotGesture');
         
         if (this.isOpen) {
             windowElement.classList.add('active');
             toggleButton.classList.add('active');
-            toggleButton.classList.remove('pulsing');
-            gestureElement.classList.remove('show');
             
             if (this.connectionStatus === 'offline') {
-                document.getElementById('chatbotInput').setAttribute('placeholder', 'Conecte-se à internet para enviar mensagens...');
+                document.getElementById('chatbotInput').setAttribute('placeholder', 'Conecte-se à internet...');
             } else {
                 document.getElementById('chatbotInput').focus();
             }
@@ -1231,6 +1124,9 @@ class SistemaProvasChatbot {
             this.updateQuickActions();
             this.resetInactivityTimer();
             this.clearNotification();
+            
+            // Mostrar apresentação se for a primeira vez que abre
+            this.showIntroduction();
             
             if (this.config.analyticsEnabled) {
                 console.log('📊 Chatbot: Chat aberto', {
@@ -1331,7 +1227,6 @@ class SistemaProvasChatbot {
                     behavior: 'smooth', 
                     block: 'nearest' 
                 });
-                messageElement.classList.add('sent');
             }
         }, 50);
         
@@ -1350,12 +1245,12 @@ class SistemaProvasChatbot {
             .replace(/[<>]/g, (m) => m === '<' ? '&lt;' : '&gt;')
             .replace(
                 /(https?:\/\/[^\s]+)/g,
-                '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #4f46e5; text-decoration: underline;">$1</a>'
+                '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #4f46e5; text-decoration: none; border-bottom: 1px solid #4f46e5;">$1</a>'
             )
-            .replace(/^[-•]\s+(.*$)/gm, '<div style="display: flex; gap: 8px; align-items: flex-start; margin: 4px 0;"><span style="color: #4f46e5;">•</span><span>$1</span></div>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937;">$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>')
+            .replace(/^[-•]\s+(.*$)/gm, '<div style="display: flex; gap: 6px; align-items: flex-start; margin: 3px 0;"><span style="color: #4f46e5; font-weight: 600;">•</span><span>$1</span></div>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: 600;">$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em style="font-style: italic;">$1</em>')
+            .replace(/`(.*?)`/g, '<code style="background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 12px;">$1</code>')
             .replace(/\n/g, '<br>');
         
         return formatted;
@@ -1375,7 +1270,7 @@ class SistemaProvasChatbot {
                     <span></span>
                     <span></span>
                 </div>
-                <span>Digitando...</span>
+                <span style="font-size: 12px; color: #6b7280;">Digitando...</span>
             </div>
         `;
         
@@ -1412,11 +1307,11 @@ class SistemaProvasChatbot {
             return;
         }
 
-        const inputElement = document.getElementById('chatbotInput');
-        const message = inputElement.value.trim();
+        const textarea = document.getElementById('chatbotInput');
+        const message = textarea.value.trim();
         
         if (!message) {
-            inputElement.focus();
+            textarea.focus();
             return;
         }
         
@@ -1439,10 +1334,11 @@ class SistemaProvasChatbot {
         }
         
         const userMessageId = this.addMessage('user', message);
-        inputElement.value = '';
+        textarea.value = '';
+        textarea.style.height = 'auto';
         document.getElementById('charCount').textContent = `0/${this.config.maxMessageLength}`;
         
-        inputElement.disabled = true;
+        textarea.disabled = true;
         document.getElementById('sendMessage').disabled = true;
         this.isProcessing = true;
         
@@ -1481,15 +1377,16 @@ class SistemaProvasChatbot {
             
             this.addMessage('bot', fallbackMessage, 'error');
         } finally {
-            inputElement.disabled = false;
+            textarea.disabled = false;
             document.getElementById('sendMessage').disabled = false;
             this.isProcessing = false;
-            inputElement.focus();
+            textarea.focus();
             
             if (this.messageQueue.length > 0) {
                 setTimeout(() => {
                     const nextMessage = this.messageQueue.shift();
-                    inputElement.value = nextMessage;
+                    textarea.value = nextMessage;
+                    this.adjustTextareaHeight(textarea);
                     this.sendMessage();
                 }, 1000);
             }
@@ -1593,26 +1490,24 @@ class SistemaProvasChatbot {
         if (!actionsContainer) return;
         
         let actions = [];
-        const maxActions = this.config.maxQuickActions;
+        const maxActions = 4;
         
         switch (this.currentPage) {
             case 'professor':
                 actions = [
                     { text: '📝 Criar prova', query: 'Como criar uma nova prova?' },
-                    { text: '👥 Ver turmas', query: 'Como gerenciar minhas turmas?' },
-                    { text: '📊 Resultados', query: 'Como ver os resultados dos alunos?' },
-                    { text: '🔧 Ajuda', query: 'Preciso de ajuda com o painel do professor' },
+                    { text: '👥 Gerenciar turmas', query: 'Como gerenciar minhas turmas?' },
+                    { text: '📊 Ver resultados', query: 'Como ver os resultados dos alunos?' },
                     { text: '🎯 Dicas', query: 'Dicas para criar boas provas' }
                 ];
                 break;
                 
             case 'aluno':
                 actions = [
-                    { text: '📚 Provas', query: 'Como ver minhas provas pendentes?' },
-                    { text: '🏆 Notas', query: 'Como ver minhas notas?' },
-                    { text: '🎯 Turmas', query: 'Como entrar em uma turma?' },
-                    { text: '❓ Dúvidas', query: 'Tenho dúvidas sobre uma prova' },
-                    { text: '⏱️ Prazos', query: 'Quais são os prazos das provas?' }
+                    { text: '📚 Provas pendentes', query: 'Como ver minhas provas pendentes?' },
+                    { text: '🏆 Minhas notas', query: 'Como ver minhas notas?' },
+                    { text: '🎯 Entrar em turma', query: 'Como entrar em uma turma?' },
+                    { text: '❓ Dúvidas', query: 'Tenho dúvidas sobre uma prova' }
                 ];
                 break;
                 
@@ -1620,9 +1515,9 @@ class SistemaProvasChatbot {
             case 'cadastro':
                 actions = [
                     { text: '🔐 Login', query: 'Estou com problemas para fazer login' },
-                    { text: '📝 Cadastro', query: 'Como criar uma conta?' },
+                    { text: '📝 Criar conta', query: 'Como criar uma conta?' },
                     { text: '🔑 Senha', query: 'Esqueci minha senha' },
-                    { text: '❓ Conta', query: 'Qual a diferença entre conta de aluno e professor?' }
+                    { text: '📞 Contato', query: 'Como entrar em contato com o suporte?' }
                 ];
                 break;
                 
@@ -1640,14 +1535,11 @@ class SistemaProvasChatbot {
                     { text: '🌟 Sistema', query: 'Conte-me sobre o sistema de provas' },
                     { text: '🎓 Alunos', query: 'Como funciona para alunos?' },
                     { text: '👨‍🏫 Professores', query: 'Como funciona para professores?' },
-                    { text: '🚀 Começar', query: 'Como começar a usar o sistema?' },
-                    { text: '📞 Contato', query: 'Como entrar em contato com o suporte?' }
+                    { text: '🚀 Começar', query: 'Como começar a usar o sistema?' }
                 ];
         }
         
-        actions = actions.slice(0, maxActions);
-        
-        actionsContainer.innerHTML = actions.map(action => `
+        actionsContainer.innerHTML = actions.slice(0, maxActions).map(action => `
             <button class="chatbot-action-btn" 
                     onclick="window.chatbot.suggestAction('${action.query.replace(/'/g, "\\'")}')"
                     aria-label="${action.text}"
@@ -1663,13 +1555,107 @@ class SistemaProvasChatbot {
             return;
         }
 
-        const inputElement = document.getElementById('chatbotInput');
-        inputElement.value = actionText;
-        inputElement.focus();
+        const textarea = document.getElementById('chatbotInput');
+        textarea.value = actionText;
+        this.adjustTextareaHeight(textarea);
+        textarea.focus();
         
         setTimeout(() => {
             this.sendMessage();
         }, 100);
+    }
+
+    showIntroduction() {
+        // Verificar se já mostrou a apresentação nesta sessão
+        if (this.config.introductionDisplayed) {
+            return;
+        }
+        
+        // Verificar se já tem alguma mensagem na conversa (exceto welcome)
+        const hasOtherMessages = this.conversation.some(msg => 
+            msg.sender !== 'bot' || (msg.sender === 'bot' && msg.content !== 'Mensagem de boas-vindas')
+        );
+        
+        if (!hasOtherMessages) {
+            const introId = 'intro_' + Date.now();
+            const introHTML = `
+                <div class="message bot introduction-message" id="${introId}" aria-label="Apresentação do assistente">
+                    <div class="welcome-header">
+                        <i class="fas fa-hand-wave" style="color: #4f46e5; font-size: 18px;"></i>
+                        <h4>Olá! Eu sou seu Assistente Virtual</h4>
+                    </div>
+                    
+                    <p style="margin-bottom: 12px; color: #4b5563; font-size: 13px; line-height: 1.4;">
+                        Estou aqui para ajudar você no <strong>Sistema de Provas</strong>. Posso auxiliar com:
+                    </p>
+                    
+                    <div class="assistance-grid">
+                        <div class="assistance-item">
+                            <div class="assistance-icon">
+                                <i class="fas fa-question-circle"></i>
+                            </div>
+                            <div class="assistance-content">
+                                <strong>Tire suas dúvidas</strong>
+                                <p>Sobre login, cadastro ou uso do sistema</p>
+                            </div>
+                        </div>
+                        
+                        <div class="assistance-item">
+                            <div class="assistance-icon">
+                                <i class="fas fa-lightbulb"></i>
+                            </div>
+                            <div class="assistance-content">
+                                <strong>Orientações</strong>
+                                <p>Dicas e melhores práticas</p>
+                            </div>
+                        </div>
+                        
+                        <div class="assistance-item">
+                            <div class="assistance-icon">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                            <div class="assistance-content">
+                                <strong>Ações rápidas</strong>
+                                <p>Use os botões abaixo para facilitar</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p style="margin-top: 12px; color: #6b7280; font-size: 12px; font-style: italic;">
+                        💬 <strong>Como usar:</strong> Digite sua pergunta ou clique em um dos botões abaixo!
+                    </p>
+                </div>
+            `;
+            
+            const messagesContainer = document.getElementById('chatbotMessages');
+            if (messagesContainer) {
+                // Inserir após a mensagem de boas-vindas, se houver
+                const welcomeMessage = messagesContainer.querySelector('.welcome-message');
+                if (welcomeMessage) {
+                    welcomeMessage.insertAdjacentHTML('afterend', introHTML);
+                } else {
+                    messagesContainer.insertAdjacentHTML('beforeend', introHTML);
+                }
+                
+                this.conversation.push({
+                    id: introId,
+                    sender: 'bot',
+                    content: 'Apresentação do assistente',
+                    type: 'system',
+                    time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    timestamp: Date.now()
+                });
+                
+                this.config.introductionDisplayed = true;
+                
+                if (this.config.analyticsEnabled) {
+                    console.log('📊 Chatbot: Apresentação exibida', {
+                        sessionId: this.sessionId,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+        }
     }
 
     showWelcomeMessage() {
@@ -1681,18 +1667,18 @@ class SistemaProvasChatbot {
             const welcomeHTML = `
                 <div class="message bot welcome-message" id="${welcomeId}" aria-label="Mensagem de boas-vindas">
                     <div class="welcome-header">
-                        <i class="fas fa-robot" style="color: #4f46e5; font-size: 24px;"></i>
+                        <i class="fas fa-robot" style="color: #4f46e5; font-size: 18px;"></i>
                         <h4>👋 Olá${this.userData.nome ? `, ${this.userData.nome.split(' ')[0]}` : ''}!</h4>
                     </div>
                     
-                    <p style="margin-bottom: 16px; color: #4b5563;">
+                    <p style="margin-bottom: 12px; color: #4b5563; font-size: 13px; line-height: 1.4;">
                         Seja bem-vindo(a) ao <strong>Sistema de Provas</strong>! Estou aqui para ajudar você com:
                     </p>
                     
                     <div class="assistance-grid">
                         <div class="assistance-item">
                             <div class="assistance-icon">
-                                <i class="fas fa-graduation-cap" style="color: #4f46e5;"></i>
+                                <i class="fas fa-graduation-cap"></i>
                             </div>
                             <div class="assistance-content">
                                 <strong>Provas e Avaliações</strong>
@@ -1702,7 +1688,7 @@ class SistemaProvasChatbot {
                         
                         <div class="assistance-item">
                             <div class="assistance-icon">
-                                <i class="fas fa-users" style="color: #7c3aed;"></i>
+                                <i class="fas fa-users"></i>
                             </div>
                             <div class="assistance-content">
                                 <strong>Turmas e Alunos</strong>
@@ -1712,58 +1698,60 @@ class SistemaProvasChatbot {
                         
                         <div class="assistance-item">
                             <div class="assistance-icon">
-                                <i class="fas fa-chart-bar" style="color: #10b981;"></i>
+                                <i class="fas fa-chart-bar"></i>
                             </div>
                             <div class="assistance-content">
-                                <strong>Resultados e Estatísticas</strong>
-                                <p>Análise de desempenho e relatórios</p>
+                                <strong>Resultados</strong>
+                                <p>Análise de desempenho</p>
                             </div>
                         </div>
                         
                         <div class="assistance-item">
                             <div class="assistance-icon">
-                                <i class="fas fa-life-ring" style="color: #f59e0b;"></i>
+                                <i class="fas fa-life-ring"></i>
                             </div>
                             <div class="assistance-content">
-                                <strong>Suporte Técnico</strong>
-                                <p>Solução de problemas e dúvidas</p>
+                                <strong>Suporte</strong>
+                                <p>Solução de problemas</p>
                             </div>
                         </div>
                     </div>
                     
-                    <p style="margin-top: 16px; color: #6b7280; font-size: 13px;">
-                        💡 <em>Dica: Use os botões abaixo para ações rápidas!</em>
+                    <p style="margin-top: 12px; color: #6b7280; font-size: 12px; font-style: italic;">
+                        💡 Dica: Use os botões abaixo para ações rápidas!
                     </p>
                     
                     <div class="assistant-status">
-                        <span style="font-size: 12px; color: #9ca3af;">
-                            <i class="fas fa-circle" style="color: #10b981; font-size: 8px; margin-right: 6px;"></i>
-                            Assistente virtual online
+                        <span style="font-size: 11px; color: #9ca3af; display: flex; align-items: center; gap: 4px;">
+                            <i class="fas fa-circle" style="color: #10b981; font-size: 7px;"></i>
+                            Assistente online
                         </span>
                     </div>
                 </div>
             `;
             
             const messagesContainer = document.getElementById('chatbotMessages');
-            messagesContainer.insertAdjacentHTML('beforeend', welcomeHTML);
-            
-            this.conversation.push({
-                id: welcomeId,
-                sender: 'bot',
-                content: 'Mensagem de boas-vindas',
-                type: 'system',
-                time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                timestamp: Date.now()
-            });
-            
-            localStorage.setItem('chatbot_last_welcome', today);
-            
-            if (this.config.analyticsEnabled) {
-                console.log('📊 Chatbot: Welcome message exibida', {
-                    sessionId: this.sessionId,
-                    timestamp: new Date().toISOString(),
-                    userHasName: !!this.userData.nome
+            if (messagesContainer) {
+                messagesContainer.insertAdjacentHTML('beforeend', welcomeHTML);
+                
+                this.conversation.push({
+                    id: welcomeId,
+                    sender: 'bot',
+                    content: 'Mensagem de boas-vindas',
+                    type: 'system',
+                    time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    timestamp: Date.now()
                 });
+                
+                localStorage.setItem('chatbot_last_welcome', today);
+                
+                if (this.config.analyticsEnabled) {
+                    console.log('📊 Chatbot: Welcome message exibida', {
+                        sessionId: this.sessionId,
+                        timestamp: new Date().toISOString(),
+                        userHasName: !!this.userData.nome
+                    });
+                }
             }
         }
     }
@@ -1935,7 +1923,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('💡 Dica: Use chatbotDebug(), chatbotExport() ou chatbotClear() para utilitários');
             
             if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                console.log('%c🛠️ Ferramentas de Desenvolvimento:', 'color: #4f46e5; font-weight: bold');
+                console.log('%c🛠️ Ferramentas de Desenvolvimento:', 'color: #4f46e5; font-weight: 600');
                 console.log('%c• window.chatbotDebug() - Ver informações de debug', 'color: #6b7280');
                 console.log('%c• window.chatbotExport() - Exportar conversação', 'color: #6b7280');
                 console.log('%c• window.chatbotClear() - Limpar histórico', 'color: #6b7280');
@@ -1946,7 +1934,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const fallbackHTML = `
                 <button onclick="alert('Chatbot temporariamente indisponível. Tente recarregar a página.')"
-                        style="position:fixed;bottom:20px;right:20px;background:#4f46e5;color:white;border:none;border-radius:50%;width:60px;height:60px;font-size:24px;cursor:pointer;z-index:9999;box-shadow:0 10px 30px rgba(79,70,229,0.3);transition:all 0.3s;">
+                        style="position:fixed;bottom:20px;right:20px;background:#4f46e5;color:white;border:none;border-radius:16px;width:56px;height:56px;font-size:22px;cursor:pointer;z-index:10000;box-shadow:0 6px 20px rgba(79,70,229,0.25);transition:all 0.3s;">
                     <i class="fas fa-robot"></i>
                 </button>
             `;
