@@ -4,8 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Sistema de Provas</title>
-    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Seu CSS principal -->
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Seus estilos inline -->
     <style>
         * {
             margin: 0;
@@ -308,13 +314,42 @@
             color: #6b7280;
             font-style: italic;
         }
+        
+        /* Estilos para o campo de telefone */
+        .telefone-field {
+            position: relative;
+        }
+        
+        .telefone-field .valid-icon {
+            position: absolute;
+            right: 15px;
+            top: 42px;
+            font-size: 1.2rem;
+            display: none;
+        }
+        
+        /* Estilos para campo de matrícula */
+        .matricula-field .validation-icon {
+            position: absolute;
+            right: 15px;
+            top: 42px;
+            font-size: 1.2rem;
+            display: none;
+        }
+        
+        .hint-text {
+            display: block;
+            margin-top: 5px;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        
+        .required-badge {
+            color: #ef4444;
+            font-size: 0.9em;
+        }
     </style>
 </head>
-<!-- Incluir Font Awesome -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<!-- Incluir o chatbot -->
-<script src="js/chatbot-frontend.js"></script>
 <body>
     <div class="login-container">
         <div class="login-header">
@@ -520,6 +555,7 @@
         </div>
     </div>
     
+    <!-- === SEU JAVASCRIPT === -->
     <script>
         // Funções básicas
         function mostrarLogin() {
@@ -982,7 +1018,16 @@
                 input.min = hoje;
             });
         });
-
     </script>
+
+    <!-- VLibras Oficial (PRIMEIRO) -->
+    <script src="js/vlibras-oficial.js"></script>
+    
+    <!-- Sistema de Acessibilidade (SEGUNDO) -->
+    <script src="js/acessibilidade.js"></script>
+    
+    <!-- Chatbot -->
+    <script src="js/chatbot-frontend.js"></script>
+    
 </body>
 </html>
