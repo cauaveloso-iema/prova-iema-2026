@@ -6,7 +6,124 @@
     <title>Realizar Prova - Sistema de Provas</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- ESTILOS DE ACESSIBILIDADE PARA PROVAS -->
     <style>
+        /* ESTILOS DE ACESSIBILIDADE PARA PROVAS */
+        .acessibilidade-btn-prova {
+            position: fixed !important;
+            top: 10px !important;
+            left: 10px !important;
+            background: linear-gradient(135deg, #4f46e5, #3730a3) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 20px !important;
+            padding: 10px 20px !important;
+            font-size: 0.9rem !important;
+            font-weight: 600 !important;
+            cursor: pointer !important;
+            z-index: 9998 !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            transition: all 0.3s !important;
+        }
+
+        .acessibilidade-btn-prova:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2) !important;
+        }
+
+        .acessibilidade-menu-prova {
+            position: fixed !important;
+            top: 60px !important;
+            left: 10px !important;
+            background: white !important;
+            border-radius: 10px !important;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2) !important;
+            padding: 15px !important;
+            z-index: 9999 !important;
+            width: 300px !important;
+            max-height: 80vh !important;
+            overflow-y: auto !important;
+            border: 2px solid #4f46e5 !important;
+        }
+
+        .acessibilidade-menu-prova .menu-btn {
+            width: 100% !important;
+            padding: 10px 15px !important;
+            background: #f8fafc !important;
+            border: 1px solid #e5e7eb !important;
+            border-radius: 8px !important;
+            margin-bottom: 8px !important;
+            text-align: left !important;
+            cursor: pointer !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            transition: all 0.2s !important;
+        }
+
+        .acessibilidade-menu-prova .menu-btn:hover {
+            background: #e0f2fe !important;
+            border-color: #0ea5e9 !important;
+        }
+
+        .acessibilidade-menu-prova .status {
+            margin-left: auto !important;
+            font-size: 0.8rem !important;
+            color: #6b7280 !important;
+        }
+
+        .modal-acessibilidade-prova {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background: rgba(0,0,0,0.8) !important;
+            z-index: 10000 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        .modal-acessibilidade-prova .modal-content {
+            background: white !important;
+            border-radius: 15px !important;
+            padding: 25px !important;
+            max-width: 400px !important;
+            width: 90% !important;
+        }
+
+        /* Classes de alto contraste para provas */
+        .alto-contraste-prova {
+            background: #000 !important;
+            color: #fff !important;
+        }
+
+        .alto-contraste-prova .questao-card {
+            background: #111 !important;
+            color: #fff !important;
+            border-color: #fff !important;
+        }
+
+        .alto-contraste-prova .opcao {
+            background: #222 !important;
+            color: #fff !important;
+            border-color: #fff !important;
+        }
+
+        /* Classes para texto ampliado */
+        .texto-ampliado-prova {
+            font-size: 1.2em !important;
+        }
+
+        .texto-muito-ampliado-prova {
+            font-size: 1.4em !important;
+        }
+
         /* ESTILOS FULLSCREEN COM SCROLL VERTICAL CORRIGIDO */
         * {
             margin: 0;
@@ -698,10 +815,10 @@
                 <p>Tem certeza que deseja sair?</p>
             </div>
             <div class="modal-saida-footer">
-                <button id="btnCancelarSaida" class="btn-saida btn-saida-cancelar">
+                <button id="btnCancelarSaida" class="btn-saida btn-saida-cancelar" data-seguro="true">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
-                <button id="btnConfirmarSaida" class="btn-saida btn-saida-confirmar">
+                <button id="btnConfirmarSaida" class="btn-saida btn-saida-confirmar" data-seguro="true">
                     <i class="fas fa-sign-out-alt"></i> Sair
                 </button>
             </div>
@@ -724,7 +841,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button id="btnReturn" class="btn-return">
+                <button id="btnReturn" class="btn-return" data-seguro="true">
                     <i class="fas fa-arrow-left"></i> Retornar à Prova
                 </button>
             </div>
@@ -774,7 +891,7 @@
             <i class="fas fa-exclamation-triangle"></i>
             <h2 id="errorTitle">Erro ao Carregar Prova</h2>
             <p id="errorMessage">Ocorreu um erro ao carregar a prova.</p>
-            <button onclick="voltarAoPainel()" class="btn-voltar">
+            <button onclick="voltarAoPainel()" class="btn-voltar" data-seguro="true">
                 <i class="fas fa-arrow-left"></i> Voltar ao Painel
             </button>
         </div>
@@ -858,7 +975,7 @@
                             </div>
                             
                             <!-- BOTÃO DE FINALIZAR ADICIONADO AQUI -->
-                            <button onclick="finalizarProva()" class="btn-finalizar-prova" id="btnFinalizarPagina">
+                            <button onclick="finalizarProva()" class="btn-finalizar-prova" id="btnFinalizarPagina" data-seguro="true">
                                 <i class="fas fa-paper-plane"></i> Finalizar Prova
                             </button>
                         </div>
@@ -878,6 +995,13 @@
             </div>
         </div>
     </div>
+
+    <!-- SCRIPTS DE ACESSIBILIDADE (ADICIONADOS NO FINAL) -->
+    <!-- VLibras Oficial (PRIMEIRO) -->
+    <script src="js/vlibras-oficial.js"></script>
+
+    <!-- Sistema de Acessibilidade (SEGUNDO) -->
+    <script src="js/acessibilidade.js"></script>
 
     <script>
     // ============ SISTEMA DE MONITORAMENTO COMPLETO - COM BLOQUEIO TOTAL DE ATUALIZAÇÃO ============
@@ -900,7 +1024,7 @@
         document.addEventListener('fullscreenchange', () => {
             if (!document.fullscreenElement) {
                 setTimeout(() => entrarEmFullscreen(), 100);
-                monitoramento?.registrarTentativaAtalho('Saída do modo tela cheia');
+                if (monitoramento) monitoramento.registrarTentativaAtalho('Saída do modo tela cheia');
             }
         });
     }
@@ -1043,6 +1167,11 @@
             
             // Bloquear F5 - CANCELAR IMEDIATAMENTE
             document.addEventListener('keydown', (e) => {
+                // Verificar se é ação de acessibilidade
+                if (this.verificarElementoSeguro(e.target) || window.acessibilidadeAtiva) {
+                    return; // Permitir ações de acessibilidade
+                }
+                
                 // Detectar QUALQUER tecla que possa causar refresh
                 const teclasRefresh = ['F5', 'F11', 'F12'];
                 const isRefreshKey = teclasRefresh.includes(e.key);
@@ -1093,6 +1222,11 @@
             
             // Bloquear clique direito COMPLETAMENTE
             document.addEventListener('contextmenu', (e) => {
+                // Permitir em elementos seguros
+                if (this.verificarElementoSeguro(e.target)) {
+                    return true;
+                }
+                
                 e.preventDefault();
                 this.monitoramento?.registrarTentativaAtalho('Clique direito bloqueado');
                 return false;
@@ -1100,11 +1234,56 @@
             
             // Bloquear arrastar para recarregar
             document.addEventListener('dragstart', (e) => {
+                // Permitir em elementos seguros
+                if (this.verificarElementoSeguro(e.target)) {
+                    return true;
+                }
+                
                 if (e.target.tagName === 'A' || e.target.tagName === 'IMG') {
                     e.preventDefault();
                     return false;
                 }
             }, true);
+        }
+        
+        verificarElementoSeguro(elemento) {
+            // Verificar se o elemento ou seus pais são considerados seguros
+            let elementoAtual = elemento;
+            
+            while (elementoAtual && elementoAtual !== document) {
+                // Verificar por atributos específicos
+                if (elementoAtual.hasAttribute('data-acessibilidade') ||
+                    elementoAtual.hasAttribute('data-seguro') ||
+                    elementoAtual.hasAttribute('data-ignorar-monitoramento') ||
+                    elementoAtual.hasAttribute('data-vlibras')) {
+                    return true;
+                }
+                
+                // Verificar por classes específicas
+                const classe = elementoAtual.className || '';
+                if (typeof classe === 'string') {
+                    if (classe.includes('acessibilidade') ||
+                        classe.includes('vlibras') ||
+                        classe.includes('modal') ||
+                        classe.includes('dialog') ||
+                        classe.includes('vws')) {
+                        return true;
+                    }
+                }
+                
+                // Verificar por texto do botão
+                if (elementoAtual.tagName === 'BUTTON') {
+                    const texto = elementoAtual.textContent || '';
+                    const textosSeguros = ['OK', 'Confirmar', 'Cancelar', 'Fechar', 'Aceitar', 'Continuar', 'Sim', 'Não'];
+                    if (textosSeguros.some(t => texto.toLowerCase().includes(t.toLowerCase()))) {
+                        return true;
+                    }
+                }
+                
+                elementoAtual = elementoAtual.parentElement;
+            }
+            
+            return false;
         }
         
         mostrarAvisoRefreshCritico() {
@@ -1162,6 +1341,11 @@
             
             // Bloquear COMPLETAMENTE o botão voltar/avançar
             window.addEventListener('popstate', (e) => {
+                // Verificar se é ação de acessibilidade
+                if (window.acessibilidadeAtiva) {
+                    return;
+                }
+                
                 // Impedir navegação
                 window.history.pushState(null, null, window.location.href);
                 
@@ -1180,6 +1364,11 @@
             
             // BLOQUEAR Backspace completamente (exceto em campos de texto)
             document.addEventListener('keydown', (e) => {
+                // Verificar se é ação de acessibilidade
+                if (window.acessibilidadeAtiva) {
+                    return;
+                }
+                
                 // Bloquear Backspace quando não está em campo de texto
                 if (e.key === 'Backspace' && 
                     !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
@@ -1215,7 +1404,7 @@
                     
                     if (!emProva) {
                         e.preventDefault();
-                        this.monitoramento?.registrarTentativaAtalho(`Tecla ${e.key} bloqueada fora da prova`);
+                        this.monitoramento?.registrarTentativaAtalho('Tecla ' + e.key + ' bloqueada fora da prova');
                     }
                 }
             }, true);
@@ -1268,6 +1457,11 @@
         bloquearNovasAbas() {
             // Bloquear Ctrl+N, Ctrl+T, etc
             document.addEventListener('keydown', (e) => {
+                // Verificar se é ação de acessibilidade
+                if (window.acessibilidadeAtiva) {
+                    return;
+                }
+                
                 if ((e.ctrlKey || e.metaKey) && 
                     (e.key === 'n' || e.key === 'N' || e.key === 't' || e.key === 'T')) {
                     e.preventDefault();
@@ -1287,6 +1481,11 @@
             
             // Bloquear clique do meio do mouse em links
             document.addEventListener('auxclick', (e) => {
+                // Verificar se é elemento seguro
+                if (this.verificarElementoSeguro(e.target)) {
+                    return true;
+                }
+                
                 if (e.button === 1) { // Botão do meio
                     e.preventDefault();
                     e.stopPropagation();
@@ -1297,6 +1496,11 @@
             
             // Bloquear Ctrl+Click e Shift+Click
             document.addEventListener('click', (e) => {
+                // Verificar se é elemento seguro
+                if (this.verificarElementoSeguro(e.target)) {
+                    return true;
+                }
+                
                 if (e.ctrlKey || e.metaKey || e.shiftKey) {
                     if (e.target.tagName === 'A' || e.target.closest('a')) {
                         e.preventDefault();
@@ -1316,6 +1520,11 @@
             let isScrolling = false;
             
             document.addEventListener('touchstart', (e) => {
+                // Verificar se é elemento seguro
+                if (this.verificarElementoSeguro(e.target)) {
+                    return;
+                }
+                
                 touchStartX = e.changedTouches[0].screenX;
                 touchStartY = e.changedTouches[0].screenY;
                 isScrolling = false;
@@ -1335,6 +1544,11 @@
             }, { passive: true });
             
             document.addEventListener('touchend', (e) => {
+                // Verificar se é elemento seguro
+                if (this.verificarElementoSeguro(e.target)) {
+                    return;
+                }
+                
                 const touchEndX = e.changedTouches[0].screenX;
                 const touchEndY = e.changedTouches[0].screenY;
                 
@@ -1449,6 +1663,11 @@
             let pageIsBeingUnloaded = false;
             
             window.addEventListener('beforeunload', (e) => {
+                // Permitir descarregamento para acessibilidade
+                if (window.acessibilidadeAtiva) {
+                    return;
+                }
+                
                 if (!this.saidaConfirmada && this.monitoramento) {
                     pageIsBeingUnloaded = true;
                     e.preventDefault();
@@ -1519,20 +1738,20 @@
         }
     }
     
-    // ============ CLASSE DE MONITORAMENTO (COM REGRAS ORIGINAIS) ============
+    // ============ CLASSE DE MONITORAMENTO (COM PROTEÇÃO PARA ACESSIBILIDADE) ============
     class MonitoramentoProva {
         constructor() {
-            // REGRAS ORIGINAIS (como estava antes)
+            // REGRAS ORIGINAIS
             this.avisos = 0;
-            this.maxAvisos = 3; // 3 avisos como antes
+            this.maxAvisos = 3;
             this.tempoFora = 0;
-            this.maxTempoFora = 5; // 5 segundos como antes
+            this.maxTempoFora = 5;
             this.isModalOpen = false;
             this.timerPerdaFoco = null;
             this.tentativasAtalho = 0;
-            this.maxTentativasAtalho = 5; // 5 tentativas como antes
+            this.maxTentativasAtalho = 5;
             this.screenshots = 0;
-            this.maxScreenshots = 2; // 2 capturas como antes
+            this.maxScreenshots = 2;
             this.capturasAtividades = [];
             this.bloqueioNavegacao = null;
             this.provaCancelada = false;
@@ -1551,12 +1770,21 @@
             // Inicializar sistema de bloqueio de navegação
             this.bloqueioNavegacao = new BloqueioNavegacao(this);
             
-            console.log('✅ Sistema de monitoramento iniciado - ATUALIZAÇÃO TOTALMENTE BLOQUEADA');
+            console.log('✅ Sistema de monitoramento iniciado - ACESSIBILIDADE PROTEGIDA');
+            
+            // Marcar elementos seguros automaticamente
+            setTimeout(() => this.marcarElementosSeguros(), 1000);
         }
         
         configurarMonitoramento() {
-            // 1. Monitorar perda de foco - REGRA ORIGINAL
+            // 1. Monitorar perda de foco - PERMITIR para acessibilidade
             document.addEventListener('visibilitychange', () => {
+                // Verificar se acessibilidade está ativa
+                if (window.acessibilidadeAtiva) {
+                    console.log('♿ Perda de foco ignorada (acessibilidade ativa)');
+                    return;
+                }
+                
                 if (document.hidden) {
                     this.registrarPerdaFoco();
                 } else {
@@ -1566,6 +1794,10 @@
             
             // 2. Monitorar saída da janela
             window.addEventListener('blur', () => {
+                if (window.acessibilidadeAtiva) {
+                    console.log('♿ Blur ignorado (acessibilidade ativa)');
+                    return;
+                }
                 this.registrarPerdaFoco();
             });
             
@@ -1573,8 +1805,13 @@
                 this.tempoFora = 0;
             });
             
-            // 3. Prevenir saída da página - REGRA ORIGINAL
+            // 3. Prevenir saída da página - PERMITIR para acessibilidade
             window.addEventListener('beforeunload', (e) => {
+                if (window.acessibilidadeAtiva) {
+                    console.log('♿ Beforeunload permitido (acessibilidade)');
+                    return;
+                }
+                
                 if (this.avisos < this.maxAvisos && !this.bloqueioNavegacao?.saidaConfirmada) {
                     e.preventDefault();
                     
@@ -1589,7 +1826,7 @@
                 }
             });
             
-            // 4. Prevenir teclas de atalho (SEM BLOQUEAR SETAS) - REGRA ORIGINAL
+            // 4. Prevenir teclas de atalho - PERMITIR para acessibilidade
             document.addEventListener('keydown', (e) => {
                 const teclasBloqueadas = ['F5', 'F11', 'F12', 'Escape', 'PrintScreen'];
                 
@@ -1600,13 +1837,22 @@
                     'Tab', 'Enter'
                 ];
                 
+                // Verificar se é elemento seguro ou acessibilidade ativa
+                const elemento = e.target;
+                const isSeguro = this.verificarElementoSeguro(elemento);
+                
+                if (isSeguro || window.acessibilidadeAtiva) {
+                    console.log('♿ Tecla ' + e.key + ' permitida (elemento seguro)');
+                    return true;
+                }
+                
                 if (teclasPermitidas.includes(e.key)) {
-                    return true; // Permitir tecla
+                    return true;
                 }
                 
                 if (teclasBloqueadas.includes(e.key)) {
                     e.preventDefault();
-                    this.registrarTentativaAtalho(`Tecla ${e.key} pressionada`);
+                    this.registrarTentativaAtalho('Tecla ' + e.key + ' pressionada');
                 }
                 
                 // Bloquear combinações de teclas específicas
@@ -1616,7 +1862,7 @@
                         (e.altKey && e.key === 'Tab') ||
                         (e.altKey && e.key === 'F4')) {
                         e.preventDefault();
-                        this.registrarTentativaAtalho(`Atalho bloqueado`);
+                        this.registrarTentativaAtalho('Atalho bloqueado');
                     }
                 }
                 
@@ -1631,34 +1877,59 @@
                 }
             });
             
-            // 5. Prevenir clique com botão direito
+            // 5. Prevenir clique com botão direito - PERMITIR para elementos seguros
             document.addEventListener('contextmenu', (e) => {
+                if (this.verificarElementoSeguro(e.target)) {
+                    console.log('♿ Clique direito permitido (elemento seguro)');
+                    return true;
+                }
+                
                 e.preventDefault();
                 this.registrarTentativaAtalho('Clique direito bloqueado');
                 return false;
             });
             
-            // 6. Prevenir seleção de texto (exceto em inputs)
+            // 6. Prevenir seleção de texto (exceto em inputs) - PERMITIR para elementos seguros
             document.addEventListener('selectstart', (e) => {
+                if (this.verificarElementoSeguro(e.target)) {
+                    console.log('♿ Seleção permitida (elemento seguro)');
+                    return;
+                }
+                
                 if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
                     e.preventDefault();
                 }
             });
             
-            // 7. Prevenir cópia/cola
+            // 7. Prevenir cópia/cola - PERMITIR para elementos seguros
             document.addEventListener('copy', (e) => {
+                if (this.verificarElementoSeguro(e.target)) {
+                    console.log('♿ Cópia permitida (elemento seguro)');
+                    return;
+                }
+                
                 e.preventDefault();
                 this.registrarTentativaAtalho('Tentativa de cópia bloqueada');
                 return false;
             });
             
             document.addEventListener('cut', (e) => {
+                if (this.verificarElementoSeguro(e.target)) {
+                    console.log('♿ Recorte permitido (elemento seguro)');
+                    return;
+                }
+                
                 e.preventDefault();
                 this.registrarTentativaAtalho('Tentativa de recorte bloqueada');
                 return false;
             });
             
             document.addEventListener('paste', (e) => {
+                if (this.verificarElementoSeguro(e.target)) {
+                    console.log('♿ Cola permitida (elemento seguro)');
+                    return;
+                }
+                
                 e.preventDefault();
                 this.registrarTentativaAtalho('Tentativa de colar bloqueada');
                 return false;
@@ -1672,7 +1943,7 @@
                 }
             });
             
-            // 9. IMPORTANTE: PERMITIR SCROLL COMPLETAMENTE
+            // 9. PERMITIR SCROLL COMPLETAMENTE
             document.addEventListener('wheel', (e) => {
                 // Permitir scroll completamente
             }, { passive: true });
@@ -1681,16 +1952,152 @@
             document.addEventListener('touchstart', () => {}, { passive: true });
             document.addEventListener('touchmove', () => {}, { passive: true });
             document.addEventListener('touchend', () => {}, { passive: true });
+            
+            // Configurar variáveis globais para acessibilidade
+            this.configurarVariaveisAcessibilidade();
+        }
+        
+        configurarVariaveisAcessibilidade() {
+            // Criar variáveis globais para controle de acessibilidade
+            if (!window.acessibilidadeAtiva) {
+                window.acessibilidadeAtiva = false;
+            }
+            
+            if (!window.acessibilidadeClicada) {
+                window.acessibilidadeClicada = false;
+            }
+            
+            // Criar função global para ativar acessibilidade temporariamente
+            window.ativarAcessibilidade = function(duracao = 100) {
+                window.acessibilidadeAtiva = true;
+                setTimeout(() => {
+                    window.acessibilidadeAtiva = false;
+                }, duracao);
+            };
+        }
+        
+        verificarElementoSeguro(elemento) {
+            // Verificar se o elemento ou seus pais são considerados seguros
+            let elementoAtual = elemento;
+            
+            while (elementoAtual && elementoAtual !== document) {
+                // Verificar por atributos específicos
+                if (elementoAtual.hasAttribute('data-acessibilidade') ||
+                    elementoAtual.hasAttribute('data-seguro') ||
+                    elementoAtual.hasAttribute('data-ignorar-monitoramento') ||
+                    elementoAtual.hasAttribute('data-vlibras')) {
+                    return true;
+                }
+                
+                // Verificar por classes específicas
+                const classe = elementoAtual.className || '';
+                if (typeof classe === 'string') {
+                    if (classe.includes('acessibilidade') ||
+                        classe.includes('vlibras') ||
+                        classe.includes('modal') ||
+                        classe.includes('dialog') ||
+                        classe.includes('vws') ||
+                        classe.includes('accessibility')) {
+                        return true;
+                    }
+                }
+                
+                // Verificar por texto do botão (botões de confirmação)
+                if (elementoAtual.tagName === 'BUTTON') {
+                    const texto = elementoAtual.textContent || '';
+                    const textosSeguros = ['OK', 'Confirmar', 'Cancelar', 'Fechar', 'Aceitar', 'Continuar', 'Sim', 'Não', 'Voltar'];
+                    if (textosSeguros.some(t => texto.toLowerCase().includes(t.toLowerCase()))) {
+                        return true;
+                    }
+                }
+                
+                // Verificar por role específico
+                const role = elementoAtual.getAttribute('role');
+                if (role === 'dialog' || role === 'alertdialog' || role === 'button') {
+                    return true;
+                }
+                
+                elementoAtual = elementoAtual.parentElement;
+            }
+            
+            return false;
+        }
+        
+        marcarElementosSeguros() {
+            // Marcar automaticamente elementos que devem ser seguros
+            const elementosParaMarcar = [
+                // Botões de confirmação em modais
+                '#btnCancelarSaida',
+                '#btnConfirmarSaida',
+                '#btnReturn',
+                '.btn-voltar',
+                '.btn-finalizar-prova',
+                
+                // Elementos VLibras
+                '.vlibras',
+                '[id*="vlibras"]',
+                '[class*="vws"]',
+                
+                // Elementos de acessibilidade
+                '[data-acessibilidade]',
+                '.acessibilidade-btn',
+                '.acessibilidade-menu'
+            ];
+            
+            elementosParaMarcar.forEach(seletor => {
+                try {
+                    document.querySelectorAll(seletor).forEach(el => {
+                        this.marcarElementoSeguro(el);
+                    });
+                } catch (e) {
+                    console.warn('Seletor inválido:', seletor, e);
+                }
+            });
+            
+            console.log('✅ Elementos seguros marcados automaticamente');
+        }
+        
+        marcarElementoSeguro(elemento) {
+            if (elemento) {
+                elemento.setAttribute('data-seguro', 'true');
+                elemento.setAttribute('data-ignorar-monitoramento', 'true');
+                
+                // Adicionar event listener para cliques
+                elemento.addEventListener('click', (e) => {
+                    window.acessibilidadeAtiva = true;
+                    window.acessibilidadeClicada = true;
+                    
+                    setTimeout(() => {
+                        window.acessibilidadeAtiva = false;
+                        window.acessibilidadeClicada = false;
+                    }, 100);
+                });
+                
+                // Adicionar para outros eventos também
+                ['mousedown', 'mouseup', 'touchstart', 'touchend'].forEach(evento => {
+                    elemento.addEventListener(evento, () => {
+                        window.acessibilidadeClicada = true;
+                        setTimeout(() => {
+                            window.acessibilidadeClicada = false;
+                        }, 100);
+                    });
+                });
+            }
         }
         
         registrarPerdaFoco() {
-            // REGRA ORIGINAL: Só conta se não estiver no modal
+            // Verificar se acessibilidade está ativa
+            if (window.acessibilidadeAtiva || window.acessibilidadeClicada) {
+                console.log('♿ Perda de foco ignorada (acessibilidade)');
+                return;
+            }
+            
             if (this.isModalOpen || this.provaCancelada) return;
             
             this.avisos++;
             this.atualizarStatus();
             
-            console.log(`⚠️ Perda de foco registrada: ${this.avisos}/${this.maxAvisos}`);
+            console.log('⚠️ Perda de foco registrada: ' + this.avisos + '/' + this.maxAvisos);
             
             if (this.avisos >= this.maxAvisos) {
                 this.cancelarProva();
@@ -1701,6 +2108,21 @@
         }
         
         registrarTentativaAtalho(tipo) {
+            // Verificar se é ação de acessibilidade
+            if (window.acessibilidadeAtiva || window.acessibilidadeClicada) {
+                console.log('♿ Ação "' + tipo + '" ignorada (acessibilidade)');
+                window.acessibilidadeAtiva = false;
+                window.acessibilidadeClicada = false;
+                return;
+            }
+            
+            // Verificar elemento ativo
+            const elementoAtivo = document.activeElement;
+            if (elementoAtivo && this.verificarElementoSeguro(elementoAtivo)) {
+                console.log('♿ Ação "' + tipo + '" ignorada (elemento seguro)');
+                return;
+            }
+            
             this.tentativasAtalho++;
             this.capturasAtividades.push({
                 tipo: 'atalho',
@@ -1710,7 +2132,7 @@
             
             this.atualizarStatus();
             
-            console.log(`⌨️ Tentativa de atalho: ${this.tentativasAtalho}/${this.maxTentativasAtalho}`);
+            console.log('⌨️ Tentativa de atalho: ' + this.tentativasAtalho + '/' + this.maxTentativasAtalho);
             
             if (this.tentativasAtalho >= this.maxTentativasAtalho) {
                 this.cancelarProva();
@@ -1718,22 +2140,27 @@
         }
         
         registrarScreenshot() {
+            // Verificar se é ação de acessibilidade
+            if (window.acessibilidadeAtiva) {
+                console.log('♿ Screenshot ignorado (acessibilidade)');
+                return;
+            }
+            
             this.screenshots++;
             this.atualizarStatus();
             
-            console.log(`📸 Captura de tela: ${this.screenshots}/${this.maxScreenshots}`);
+            console.log('📸 Captura de tela: ' + this.screenshots + '/' + this.maxScreenshots);
             
             if (this.screenshots >= this.maxScreenshots) {
                 this.cancelarProva();
             }
         }
         
-        // FUNÇÃO ESPECIAL PARA CANCELAR POR REFRESH (ZERO TOLERÂNCIA)
         cancelarProvaPorRefresh(motivo) {
             if (this.provaCancelada) return;
             
             this.provaCancelada = true;
-            console.log(`💀 CANCELAMENTO POR REFRESH: ${motivo}`);
+            console.log('💀 CANCELAMENTO POR REFRESH: ' + motivo);
             
             // Atualizar motivo na tela
             const motivoElement = document.getElementById('cancelReason');
@@ -1835,6 +2262,10 @@
             btnReturn.parentNode.replaceChild(newBtnReturn, btnReturn);
             
             document.getElementById('btnReturn').addEventListener('click', () => {
+                // Ativar flag de acessibilidade para este clique
+                window.acessibilidadeAtiva = true;
+                window.acessibilidadeClicada = true;
+                
                 if (this.timerPerdaFoco) {
                     clearInterval(this.timerPerdaFoco);
                     this.timerPerdaFoco = null;
@@ -1843,6 +2274,12 @@
                 modal.classList.remove('active');
                 this.isModalOpen = false;
                 entrarEmFullscreen();
+                
+                // Desativar flag após o clique
+                setTimeout(() => {
+                    window.acessibilidadeAtiva = false;
+                    window.acessibilidadeClicada = false;
+                }, 100);
             }, { once: true });
         }
         
@@ -1851,9 +2288,9 @@
             const shortcutCount = document.getElementById('shortcutCount');
             const screenshotCount = document.getElementById('screenshotCount');
             
-            if (warningCount) warningCount.textContent = `${this.avisos}/${this.maxAvisos}`;
-            if (shortcutCount) shortcutCount.textContent = `${this.tentativasAtalho}/${this.maxTentativasAtalho}`;
-            if (screenshotCount) screenshotCount.textContent = `${this.screenshots}/${this.maxScreenshots}`;
+            if (warningCount) warningCount.textContent = this.avisos + '/' + this.maxAvisos;
+            if (shortcutCount) shortcutCount.textContent = this.tentativasAtalho + '/' + this.maxTentativasAtalho;
+            if (screenshotCount) screenshotCount.textContent = this.screenshots + '/' + this.maxScreenshots;
             
             const statusFocus = document.getElementById('statusFocus');
             if (statusFocus) {
@@ -1900,8 +2337,8 @@
                             <i class="fas fa-expand"></i> Tela Cheia
                         </div>
                     </div>
-                    <div style="margin-top: 10px; font-size: 0.7rem; color: #dc2626; text-align: center; font-weight: bold;">
-                        <i class="fas fa-ban"></i> ATUALIZAR = CANCELAMENTO IMEDIATO
+                    <div style="margin-top: 10px; font-size: 0.7rem; color: #10b981; text-align: center; font-weight: bold;">
+                        <i class="fas fa-universal-access"></i> ACESSIBILIDADE ATIVA E PROTEGIDA
                     </div>
                 </div>
             `;
@@ -1916,19 +2353,20 @@
                 
                 if (!token || !provaId) return;
                 
-                await fetch(`${API_BASE_URL}/monitor/inicio`, {
+                await fetch(API_BASE_URL + '/monitor/inicio', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': 'Bearer ' + token,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         provaId: provaId,
                         timestamp: new Date().toISOString(),
                         userAgent: navigator.userAgent,
-                        screenResolution: `${window.screen.width}x${window.screen.height}`,
+                        screenResolution: window.screen.width + 'x' + window.screen.height,
                         iniciouFullscreen: true,
-                        bloqueioRefreshTotal: true
+                        bloqueioRefreshTotal: true,
+                        acessibilidadeAtiva: true
                     })
                 });
                 
@@ -2009,7 +2447,7 @@
                     return;
                 }
                 
-                console.log(`📤 Enviando cancelamento da prova ${prova._id} para o servidor...`);
+                console.log('📤 Enviando cancelamento da prova ' + prova._id + ' para o servidor...');
                 
                 const dadosCancelamento = {
                     provaId: prova._id,
@@ -2025,10 +2463,10 @@
                     tempoTotal: tempoTotal
                 };
                 
-                const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/cancelar`, {
+                const response = await fetch(API_BASE_URL + '/provas/' + prova._id + '/cancelar', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${authToken}`,
+                        'Authorization': 'Bearer ' + authToken,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(dadosCancelamento)
@@ -2039,8 +2477,8 @@
                 if (data.success) {
                     console.log('✅ Prova cancelada no servidor com sucesso! Nota: 0.0');
                     
-                    localStorage.removeItem(`prova_${prova._id}`);
-                    localStorage.removeItem(`tempo_prova_${prova._id}`);
+                    localStorage.removeItem('prova_' + prova._id);
+                    localStorage.removeItem('tempo_prova_' + prova._id);
                     
                     await this.enviarNotificacaoCancelamento();
                     
@@ -2060,7 +2498,7 @@
                 const dadosNotificacao = {
                     provaId: prova._id,
                     provaTitulo: prova.titulo,
-                    alunoId: prova ? req.userId : null,
+                    alunoId: prova ? prova.alunoId : null,
                     motivo: 'Múltiplas violações das regras da prova',
                     estatisticas: {
                         avisos: this.avisos,
@@ -2070,10 +2508,10 @@
                     timestamp: new Date().toISOString()
                 };
                 
-                const response = await fetch(`${API_BASE_URL}/notificacoes/prova-cancelada`, {
+                const response = await fetch(API_BASE_URL + '/notificacoes/prova-cancelada', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': 'Bearer ' + token,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(dadosNotificacao)
@@ -2128,7 +2566,7 @@
     let totalQuestoes = 0;
     
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('📄 Página de prova carregada - ATUALIZAÇÃO TOTALMENTE BLOQUEADA');
+        console.log('📄 Página de prova carregada - ACESSIBILIDADE PROTEGIDA');
         
         // Adicionar estilos para animações
         const style = document.createElement('style');
@@ -2148,43 +2586,40 @@
         document.body.style.overflow = 'auto';
         document.documentElement.style.overflow = 'auto';
         
+        // Configurar botão de ajuda do monitoramento
         document.getElementById('monitorHelp').addEventListener('click', () => {
-            alert(`
-🚫 SISTEMA DE MONITORAMENTO - ATUALIZAÇÃO BLOQUEADA
-
-⚠️ REGRAS GERAIS (como antes):
-• 3 perdas de foco = PROVA CANCELADA
-• 5 atalhos bloqueados = PROVA CANCELADA  
-• 2 capturas de tela = PROVA CANCELADA
-• 5 segundos fora da página = AVISO
-
-🔥 REGRA NOVA E CRÍTICA:
-• QUALQUER TENTATIVA DE ATUALIZAR/RECARREGAR = CANCELAMENTO IMEDIATO
-• SEM CHANCES, SEM AVISOS
-• Botão F5, Ctrl+R, Refresh do navegador = CANCELAMENTO
-• Voltar/avançar no histórico = CANCELAMENTO
-• Swipe para navegação em mobile = CANCELAMENTO
-
-🔒 RESTRIÇÕES:
-• Tela cheia obrigatória
-• Sem clique direito
-• Sem cópia/cola
-• Sem captura de tela
-• Bloqueio de DevTools
-
-✅ PERMITIDO:
-• Scroll vertical/horizontal
-• Setas para navegar entre questões
-• Mouse para rolar
-• Toque para scroll (sem gestos de navegação)
-
-🎯 LEMBRETE:
-• Você tem até 3 avisos por perda de foco
-• Mas APENAS 1 tentativa de atualizar a página
-• Não tente usar F5, Ctrl+R ou botão de refresh
-
-Boa prova! Não atualize a página! 🚨
-            `);
+            // Ativar flag de acessibilidade para este clique
+            window.acessibilidadeAtiva = true;
+            window.acessibilidadeClicada = true;
+            
+            alert(
+                '🚫 SISTEMA DE MONITORAMENTO - ACESSIBILIDADE PROTEGIDA\n\n' +
+                '⚠️ REGRAS GERAIS:\n' +
+                '• 3 perdas de foco = PROVA CANCELADA\n' +
+                '• 5 atalhos bloqueados = PROVA CANCELADA  \n' +
+                '• 2 capturas de tela = PROVA CANCELADA\n\n' +
+                '✅ PERMITIDO (NÃO É INFRAÇÃO):\n' +
+                '• Todas as funções de acessibilidade (VLibras, etc.)\n' +
+                '• Botões: OK, Confirmar, Cancelar, Fechar\n' +
+                '• Teclas de navegação: Tab, Enter, Setas\n' +
+                '• Scroll vertical/horizontal\n' +
+                '• Sistema de acessibilidade completo\n\n' +
+                '🔥 REGRA CRÍTICA:\n' +
+                '• QUALQUER TENTATIVA DE ATUALIZAR/RECARREGAR = CANCELAMENTO IMEDIATO\n' +
+                '• Botão F5, Ctrl+R, Refresh = CANCELAMENTO\n' +
+                '• Voltar/avançar no histórico = CANCELAMENTO\n\n' +
+                '🎯 LEMBRETE:\n' +
+                '• Você pode usar todas as ferramentas de acessibilidade\n' +
+                '• Não tente atualizar a página!\n' +
+                '• Acessibilidade NÃO será tratada como infração\n\n' +
+                'Boa prova! ♿✅'
+            );
+            
+            // Desativar flag após o alert
+            setTimeout(() => {
+                window.acessibilidadeAtiva = false;
+                window.acessibilidadeClicada = false;
+            }, 100);
         });
         
         const token = getTokenFromURL();
@@ -2206,7 +2641,7 @@ Boa prova! Não atualize a página! 🚨
             const token = getTokenFromURL();
             if (!token) return false;
             
-            const response = await fetch(`${API_BASE_URL}/provas/dados?token=${encodeURIComponent(token)}`);
+            const response = await fetch(API_BASE_URL + '/provas/dados?token=' + encodeURIComponent(token));
             const data = await response.json();
             
             if (!data.success) return false;
@@ -2217,8 +2652,8 @@ Boa prova! Não atualize a página! 🚨
             // Verificar horário específico
             if (prova.horarioInicio && prova.horarioTermino) {
                 const dataHoje = agora.toISOString().split('T')[0];
-                const inicioProva = new Date(`${dataHoje}T${prova.horarioInicio}:00`);
-                const terminoProva = new Date(`${dataHoje}T${prova.horarioTermino}:00`);
+                const inicioProva = new Date(dataHoje + 'T' + prova.horarioInicio + ':00');
+                const terminoProva = new Date(dataHoje + 'T' + prova.horarioTermino + ':00');
                 
                 console.log('⏰ Verificação de horário:');
                 console.log('  Agora:', agora.toLocaleTimeString('pt-BR'));
@@ -2227,14 +2662,14 @@ Boa prova! Não atualize a página! 🚨
                 
                 if (agora < inicioProva) {
                     const minutosRestantes = Math.floor((inicioProva - agora) / (1000 * 60));
-                    let mensagem = `A prova só estará disponível a partir das ${prova.horarioInicio}`;
+                    let mensagem = 'A prova só estará disponível a partir das ' + prova.horarioInicio;
                     
                     if (minutosRestantes > 0) {
                         if (minutosRestantes > 60) {
                             const horas = Math.floor(minutosRestantes / 60);
-                            mensagem += ` (em ${horas} hora${horas > 1 ? 's' : ''})`;
+                            mensagem += ' (em ' + horas + ' hora' + (horas > 1 ? 's' : '') + ')';
                         } else {
-                            mensagem += ` (em ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''})`;
+                            mensagem += ' (em ' + minutosRestantes + ' minuto' + (minutosRestantes > 1 ? 's' : '') + ')';
                         }
                     }
                     
@@ -2244,13 +2679,13 @@ Boa prova! Não atualize a página! 🚨
                 
                 if (agora > terminoProva) {
                     mostrarErro('Horário Encerrado', 
-                        `O horário para esta prova terminou às ${prova.horarioTermino}`);
+                        'O horário para esta prova terminou às ' + prova.horarioTermino);
                     return false;
                 }
                 
                 // Calcular e mostrar tempo restante
                 const tempoRestanteMinutos = Math.floor((terminoProva - agora) / (1000 * 60));
-                console.log(`⏱️ Tempo restante: ${tempoRestanteMinutos} minutos`);
+                console.log('⏱️ Tempo restante: ' + tempoRestanteMinutos + ' minutos');
                 
                 // Adicionar contador de tempo restante na interface
                 const timerElement = document.getElementById('contadorTempo');
@@ -2284,7 +2719,7 @@ Boa prova! Não atualize a página! 🚨
                 // Atualizar interface se necessário
                 const tempoElement = document.getElementById('tempoRestanteHorario');
                 if (tempoElement) {
-                    tempoElement.textContent = `Tempo restante: ${minutosRestantes} min`;
+                    tempoElement.textContent = 'Tempo restante: ' + minutosRestantes + ' min';
                     
                     // Alerta visual nos últimos 5 minutos
                     if (minutosRestantes <= 5) {
@@ -2305,11 +2740,11 @@ Boa prova! Não atualize a página! 🚨
             const hora = agora.getHours();
             const minutos = agora.getMinutes();
             
-            provaObj.horarioInicio = `${hora.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
+            provaObj.horarioInicio = hora.toString().padStart(2, '0') + ':' + minutos.toString().padStart(2, '0');
             
             const horaTermino = hora + Math.floor(duracao / 60);
             const minutoTermino = minutos + (duracao % 60);
-            provaObj.horarioTermino = `${horaTermino.toString().padStart(2, '0')}:${minutoTermino.toString().padStart(2, '0')}`;
+            provaObj.horarioTermino = horaTermino.toString().padStart(2, '0') + ':' + minutoTermino.toString().padStart(2, '0');
             
             console.log('✅ Horários corrigidos:', provaObj.horarioInicio, 'às', provaObj.horarioTermino);
         }
@@ -2329,7 +2764,7 @@ Boa prova! Não atualize a página! 🚨
             
             atualizarMensagemLoading('Carregando prova...');
             
-            const response = await fetch(`${API_BASE_URL}/provas/dados?token=${encodeURIComponent(token)}`);
+            const response = await fetch(API_BASE_URL + '/provas/dados?token=' + encodeURIComponent(token));
             
             if (!response.ok) {
                 const error = await response.json();
@@ -2365,13 +2800,13 @@ Boa prova! Não atualize a página! 🚨
     function iniciarProvaInterface() {
         document.getElementById('provaTitulo').textContent = prova.titulo;
         document.getElementById('provaConteudo').textContent = prova.conteudo;
-        document.getElementById('questoesCount').textContent = `${prova.quantidadeQuestoes} questões`;
+        document.getElementById('questoesCount').textContent = prova.quantidadeQuestoes + ' questões';
         
         // ATUALIZAR INFORMAÇÕES DE HORÁRIO E DURAÇÃO
         if (prova.horarioInicio && prova.horarioTermino) {
             // Calcular duração total da prova em minutos
             const duracaoTotal = calcularDuracaoProva();
-            document.getElementById('provaDuracao').textContent = `${duracaoTotal} minutos`;
+            document.getElementById('provaDuracao').textContent = duracaoTotal + ' minutos';
             
             // Adicionar informações de horário ao header
             const metaLeft = document.querySelector('.meta-left');
@@ -2386,7 +2821,7 @@ Boa prova! Não atualize a página! 🚨
                 // Adicionar tempo restante baseado no horário de término
                 const agora = new Date();
                 const hoje = agora.toISOString().split('T')[0];
-                const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
+                const terminoProva = new Date(hoje + 'T' + prova.horarioTermino + ':00');
                 const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
                 
                 if (tempoRestanteMs > 0) {
@@ -2400,7 +2835,7 @@ Boa prova! Não atualize a página! 🚨
                 }
             }
         } else {
-            document.getElementById('provaDuracao').textContent = `${prova.duracaoMinutos || 30} minutos`;
+            document.getElementById('provaDuracao').textContent = (prova.duracaoMinutos || 30) + ' minutos';
         }
         
         questaoAtualIndex = 0;
@@ -2419,13 +2854,13 @@ Boa prova! Não atualize a página! 🚨
         if (prova.horarioInicio && prova.horarioTermino) {
             const agora = new Date();
             const hoje = agora.toISOString().split('T')[0];
-            const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
+            const terminoProva = new Date(hoje + 'T' + prova.horarioTermino + ':00');
             const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
             
             if (tempoRestanteMs > 0) {
                 const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
                 
-                console.log(`⏱️ Tempo restante pelo horário: ${tempoRestanteMinutos} minutos (${formatarMinutosEmHoraMinutos(tempoRestanteMinutos)})`);
+                console.log('⏱️ Tempo restante pelo horário: ' + tempoRestanteMinutos + ' minutos (' + formatarMinutosEmHoraMinutos(tempoRestanteMinutos) + ')');
                 
                 // O timer já está configurado para contar regressivamente baseado no horário
                 // Não precisamos mais da função iniciarContadorHorario separada
@@ -2442,9 +2877,9 @@ Boa prova! Não atualize a página! 🚨
         const minutosResto = minutos % 60;
         
         if (horas > 0) {
-            return `${horas}h ${minutosResto.toString().padStart(2, '0')}min`;
+            return horas + 'h ' + minutosResto.toString().padStart(2, '0') + 'min';
         } else {
-            return `${minutosResto}min`;
+            return minutosResto + 'min';
         }
     }
 
@@ -2456,8 +2891,8 @@ Boa prova! Não atualize a página! 🚨
         
         try {
             const hoje = new Date().toISOString().split('T')[0];
-            const inicio = new Date(`${hoje}T${prova.horarioInicio}:00`);
-            const termino = new Date(`${hoje}T${prova.horarioTermino}:00`);
+            const inicio = new Date(hoje + 'T' + prova.horarioInicio + ':00');
+            const termino = new Date(hoje + 'T' + prova.horarioTermino + ':00');
             
             const diferencaMs = termino.getTime() - inicio.getTime();
             return Math.floor(diferencaMs / (1000 * 60));
@@ -2501,25 +2936,25 @@ Boa prova! Não atualize a página! 🚨
             
             // 2. Atualizar horário
             if (prova.horarioInicio && prova.horarioTermino) {
-                infoHorarioTextElement.textContent = `${prova.horarioInicio} às ${prova.horarioTermino}`;
+                infoHorarioTextElement.textContent = prova.horarioInicio + ' às ' + prova.horarioTermino;
             } else {
                 infoHorarioTextElement.textContent = 'Horário não definido';
             }
 
             // Calcular e mostrar duração correta
             const duracaoTotal = calcularDuracaoProva();
-            infoDuracaoElement.textContent = `${duracaoTotal} minutos`;
+            infoDuracaoElement.textContent = duracaoTotal + ' minutos';
             
             // Adicionar informação de tempo restante baseado no horário de término
             if (prova.horarioInicio && prova.horarioTermino) {
                 const agora = new Date();
                 const hoje = agora.toISOString().split('T')[0];
-                const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
+                const terminoProva = new Date(hoje + 'T' + prova.horarioTermino + ':00');
                 const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
                 
                 if (tempoRestanteMs > 0) {
                     const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
-                    console.log(`⏱️ Tempo restante do horário: ${tempoRestanteMinutos} minutos`);
+                    console.log('⏱️ Tempo restante do horário: ' + tempoRestanteMinutos + ' minutos');
                     
                     // Salvar tempo restante para uso no timer
                     prova.tempoRestanteInicial = tempoRestanteMinutos;
@@ -2528,7 +2963,7 @@ Boa prova! Não atualize a página! 🚨
             
             // 3. Atualizar duração (IMPORTANTE!)
             const duracao = prova.duracaoMinutos || prova.duracao || 30;
-            infoDuracaoElement.textContent = `${duracao} minutos`;
+            infoDuracaoElement.textContent = duracao + ' minutos';
             
             console.log('✅ Informações de horário atualizadas:', {
                 data: infoDataElement.textContent,
@@ -2545,7 +2980,7 @@ Boa prova! Não atualize a página! 🚨
     function formatarMinutosEmHoraMinutos(minutos) {
         const horas = Math.floor(minutos / 60);
         const minutosResto = minutos % 60;
-        return `${horas}h ${minutosResto}min`;
+        return horas + 'h ' + minutosResto + 'min';
     }
 
     function configurarNavegacao() {
@@ -2681,8 +3116,8 @@ Boa prova! Não atualize a página! 🚨
             const selecionada = respostas[questaoAtualIndex] === letra ? 'selecionada' : '';
             
             const opcaoDiv = document.createElement('div');
-            opcaoDiv.className = `opcao ${selecionada}`;
-            opcaoDiv.id = `opcao-atual-${opcaoIndex}`;
+            opcaoDiv.className = 'opcao ' + selecionada;
+            opcaoDiv.id = 'opcao-atual-' + opcaoIndex;
             opcaoDiv.onclick = () => selecionarRespostaAtual(opcaoIndex);
             
             opcaoDiv.innerHTML = `
@@ -2709,7 +3144,7 @@ Boa prova! Não atualize a página! 🚨
         const todasOpcoes = document.querySelectorAll('#opcoes-atual .opcao');
         todasOpcoes.forEach(opcao => opcao.classList.remove('selecionada'));
         
-        const opcaoSelecionada = document.getElementById(`opcao-atual-${opcaoIndex}`);
+        const opcaoSelecionada = document.getElementById('opcao-atual-' + opcaoIndex);
         if (opcaoSelecionada) {
             opcaoSelecionada.classList.add('selecionada');
             
@@ -2813,7 +3248,7 @@ Boa prova! Não atualize a página! 🚨
     // MODIFICAÇÃO: Iniciar timer baseado no horário de término e tempo de entrada
     function iniciarTimer() {
         // CORREÇÃO: Carregar tempo salvo corretamente
-        const tempoSalvo = localStorage.getItem(`tempo_prova_${prova._id}`);
+        const tempoSalvo = localStorage.getItem('tempo_prova_' + prova._id);
         
         // Se já temos uma entrada salva, usar ela
         if (tempoSalvo) {
@@ -2821,7 +3256,7 @@ Boa prova! Não atualize a página! 🚨
                 tempoTotal = parseInt(tempoSalvo);
                 const agora = new Date();
                 tempoInicio = new Date(agora.getTime() - (tempoTotal * 1000));
-                console.log(`⏱️ Retomando prova com ${tempoTotal} segundos já gastos`);
+                console.log('⏱️ Retomando prova com ' + tempoTotal + ' segundos já gastos');
             } catch (e) {
                 console.error('Erro ao carregar tempo:', e);
                 tempoTotal = 0;
@@ -2831,13 +3266,13 @@ Boa prova! Não atualize a página! 🚨
             // PRIMEIRA VEZ: Registrar horário de entrada
             tempoInicio = new Date();
             tempoTotal = 0;
-            console.log(`⏱️ Primeira entrada na prova: ${tempoInicio.toLocaleTimeString('pt-BR')}`);
+            console.log('⏱️ Primeira entrada na prova: ' + tempoInicio.toLocaleTimeString('pt-BR'));
         }
         
         // Salvar entrada inicial
         if (!tempoSalvo) {
-            localStorage.setItem(`hora_entrada_${prova._id}`, tempoInicio.toISOString());
-            localStorage.setItem(`tempo_prova_${prova._id}`, '0');
+            localStorage.setItem('hora_entrada_' + prova._id, tempoInicio.toISOString());
+            localStorage.setItem('tempo_prova_' + prova._id, '0');
         }
         
         // CORREÇÃO: Limpar timer anterior
@@ -2860,7 +3295,7 @@ Boa prova! Não atualize a página! 🚨
         
         // Salvar progresso a cada 30 segundos
         if (tempoTotal % 30 === 0) {
-            localStorage.setItem(`tempo_prova_${prova._id}`, tempoTotal.toString());
+            localStorage.setItem('tempo_prova_' + prova._id, tempoTotal.toString());
         }
         
         // Formatar tempo decorrido
@@ -2873,7 +3308,7 @@ Boa prova! Não atualize a página! 🚨
         // CALCULAR TEMPO RESTANTE BASEADO NO HORÁRIO DE TÉRMINO
         if (prova.horarioTermino) {
             const hoje = agora.toISOString().split('T')[0];
-            const terminoProva = new Date(`${hoje}T${prova.horarioTermino}:00`);
+            const terminoProva = new Date(hoje + 'T' + prova.horarioTermino + ':00');
             
             // Calcular tempo restante em milissegundos
             const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
@@ -2899,7 +3334,9 @@ Boa prova! Não atualize a página! 🚨
             
             // Mostrar TEMPO RESTANTE no contador
             timerElement.textContent = 
-                `${tempoRestanteHoras.toString().padStart(2, '0')}:${tempoRestanteMinutosResto.toString().padStart(2, '0')}:${tempoRestanteSegundos.toString().padStart(2, '0')}`;
+                tempoRestanteHoras.toString().padStart(2, '0') + ':' + 
+                tempoRestanteMinutosResto.toString().padStart(2, '0') + ':' + 
+                tempoRestanteSegundos.toString().padStart(2, '0');
             
             // Alerta visual conforme tempo restante
             if (tempoRestanteMinutos <= 5) { // 5 minutos restantes
@@ -2924,12 +3361,14 @@ Boa prova! Não atualize a página! 🚨
             }
             
             // Mostrar tempo decorrido também (em tooltip ou outro lugar)
-            timerElement.title = `Tempo decorrido: ${horas}h ${minutos}m ${segundos}s`;
+            timerElement.title = 'Tempo decorrido: ' + horas + 'h ' + minutos + 'm ' + segundos + 's';
             
         } else {
             // Se não tem horário de término, mostrar tempo decorrido
             timerElement.textContent = 
-                `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+                horas.toString().padStart(2, '0') + ':' + 
+                minutos.toString().padStart(2, '0') + ':' + 
+                segundos.toString().padStart(2, '0');
         }
     }
     
@@ -2938,15 +3377,14 @@ Boa prova! Não atualize a página! 🚨
         const respondidas = Object.keys(respostas).length;
         const porcentagem = total > 0 ? Math.round((respondidas / total) * 100) : 0;
         
-        const textoProgresso = `${respondidas} de ${total} questões respondidas (${porcentagem}%)`;
+        const textoProgresso = respondidas + ' de ' + total + ' questões respondidas (' + porcentagem + '%)';
         
-        document.getElementById('progressoTexto').innerHTML = `
-            ${textoProgresso} 
-            <span style="color: #4f46e5; font-weight: bold;">• Questão atual: ${questaoAtualIndex + 1}</span>
-            ${respondidas === total ? 
+        document.getElementById('progressoTexto').innerHTML = 
+            textoProgresso + 
+            ' <span style="color: #4f46e5; font-weight: bold;">• Questão atual: ' + (questaoAtualIndex + 1) + '</span>' +
+            (respondidas === total ? 
                 '<span style="color: #10b981; margin-left: 10px;"><i class="fas fa-check-circle"></i> Todas respondidas!</span>' : 
-                ''}
-        `;
+                '');
         
         // Atualizar botão de finalizar se todas foram respondidas
         if (respondidas === total) {
@@ -2965,7 +3403,7 @@ Boa prova! Não atualize a página! 🚨
                 tempo: tempoTotal,
                 timestamp: new Date().toISOString()
             };
-            localStorage.setItem(`prova_${prova._id}`, JSON.stringify(dados));
+            localStorage.setItem('prova_' + prova._id, JSON.stringify(dados));
         }
     }
 
@@ -2984,56 +3422,274 @@ Boa prova! Não atualize a página! 🚨
     }
     
     async function finalizarProva() {
+        // ============ CONFIGURAÇÃO INICIAL ============
+        console.log('🚀 INICIANDO PROCESSO DE FINALIZAÇÃO DA PROVA');
+        
+        // Variáveis de controle
+        let processoCancelado = false;
+        let estadoRestaurado = false;
+        
+        // 1. SALVAR ESTADO ORIGINAL
+        const estadoOriginal = {
+            onbeforeunload: window.onbeforeunload,
+            timerInterval: timerInterval,
+            provaSendoFinalizada: monitoramento ? monitoramento.provaSendoFinalizada : false
+        };
+        
+        // 2. DESATIVAR COMPLETAMENTE TODAS AS PROTEÇÕES
+        // Desativar beforeunload
+        window.onbeforeunload = null;
+        
+        // Marcar que a prova está sendo finalizada
+        if (monitoramento) {
+            monitoramento.provaSendoFinalizada = true;
+            console.log('✅ Monitoramento desativado para finalização');
+        }
+        
+        // Parar todos os timers
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            console.log('⏹️ Timer principal parado');
+        }
+        
+        if (monitoramento && monitoramento.timerPerdaFoco) {
+            clearInterval(monitoramento.timerPerdaFoco);
+            monitoramento.timerPerdaFoco = null;
+        }
+        
+        // 3. CALCULAR ESTATÍSTICAS
+        const totalQuestoes = prova.questoes.length;
+        const respondidas = Object.keys(respostas).length;
+        const porcentagem = totalQuestoes > 0 ? Math.round((respondidas / totalQuestoes) * 100) : 0;
+        
+        console.log(`📊 Estatísticas da prova:`);
+        console.log(`   • Total de questões: ${totalQuestoes}`);
+        console.log(`   • Respondidas: ${respondidas}`);
+        console.log(`   • Porcentagem: ${porcentagem}%`);
+        
+        // ============ FUNÇÃO AUXILIAR PARA RESTAURAR ESTADO ============
+        const restaurarEstado = () => {
+            if (estadoRestaurado) return;
+            
+            estadoRestaurado = true;
+            console.log('🔄 Restaurando estado original...');
+            
+            // Restaurar beforeunload
+            window.onbeforeunload = estadoOriginal.onbeforeunload;
+            
+            // Restaurar monitoramento
+            if (monitoramento) {
+                monitoramento.provaSendoFinalizada = estadoOriginal.provaSendoFinalizada;
+            }
+            
+            // Restaurar timer
+            if (!timerInterval && estadoOriginal.timerInterval) {
+                timerInterval = setInterval(atualizarTimer, 1000);
+                console.log('⏰ Timer restaurado');
+            }
+        };
+        
+        // ============ FUNÇÃO AUXILIAR PARA MOSTRAR CONFIRMAÇÃO SEGURA ============
+        const mostrarConfirmacaoSegura = (mensagem) => {
+            return new Promise((resolve) => {
+                console.log(`❓ Exibindo confirmação: ${mensagem.substring(0, 50)}...`);
+                
+                // Ativar proteção máxima
+                window.acessibilidadeAtiva = true;
+                window.acessibilidadeClicada = true;
+                
+                // Pequena pausa para garantir
+                setTimeout(() => {
+                    try {
+                        const resultado = confirm(mensagem);
+                        
+                        // Pequena pausa após o confirm
+                        setTimeout(() => {
+                            // Desativar proteção
+                            window.acessibilidadeAtiva = false;
+                            window.acessibilidadeClicada = false;
+                            
+                            console.log(`✅ Confirmação: ${resultado ? 'ACEITA' : 'RECUSADA'}`);
+                            resolve(resultado);
+                        }, 150);
+                    } catch (error) {
+                        console.error('❌ Erro na confirmação:', error);
+                        
+                        // Desativar proteção mesmo em caso de erro
+                        window.acessibilidadeAtiva = false;
+                        window.acessibilidadeClicada = false;
+                        
+                        resolve(false); // Em caso de erro, assume recusado
+                    }
+                }, 100);
+            });
+        };
+        
+        // ============ FUNÇÃO AUXILIAR PARA MOSTRAR ALERTA SEGURO ============
+        const mostrarAlertaSeguro = (mensagem) => {
+            return new Promise((resolve) => {
+                console.log(`💡 Exibindo alerta: ${mensagem.substring(0, 50)}...`);
+                
+                // Ativar proteção
+                window.acessibilidadeAtiva = true;
+                window.acessibilidadeClicada = true;
+                
+                // Pequena pausa para garantir
+                setTimeout(() => {
+                    try {
+                        alert(mensagem);
+                        
+                        // Pequena pausa após o alert
+                        setTimeout(() => {
+                            // Desativar proteção
+                            window.acessibilidadeAtiva = false;
+                            window.acessibilidadeClicada = false;
+                            
+                            console.log('✅ Alerta exibido com sucesso');
+                            resolve(true);
+                        }, 150);
+                    } catch (error) {
+                        console.error('❌ Erro no alerta:', error);
+                        
+                        // Desativar proteção mesmo em caso de erro
+                        window.acessibilidadeAtiva = false;
+                        window.acessibilidadeClicada = false;
+                        
+                        resolve(false);
+                    }
+                }, 100);
+            });
+        };
+        
+        // ============ ETAPA 1: CONFIRMAÇÃO DE QUESTÕES PENDENTES ============
         try {
-            // Permitir saída pelo sistema de bloqueio
-            if (monitoramento && monitoramento.bloqueioNavegacao) {
-                monitoramento.bloqueioNavegacao.permitirSaida();
-            }
-            
-            // CORREÇÃO: Limpar todos os timers
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-            }
-            
-            if (monitoramento && monitoramento.timerPerdaFoco) {
-                clearInterval(monitoramento.timerPerdaFoco);
-                monitoramento.timerPerdaFoco = null;
-            }
-            
-            const totalQuestoes = prova.questoes.length;
-            const respondidas = Object.keys(respostas).length;
-            
             if (respondidas < totalQuestoes) {
-                if (!confirm(`Você respondeu ${respondidas} de ${totalQuestoes} questões.\nDeseja finalizar mesmo assim?`)) {
-                    // Reativar timer se cancelar
-                    timerInterval = setInterval(atualizarTimer, 1000);
+                console.log('⚠️  AVISO: Existem questões não respondidas');
+                
+                const mensagemConfirmacao1 = 
+                    `📋 RESUMO DA PROVA\n` +
+                    `────────────────────\n` +
+                    `• Prova: ${prova.titulo}\n` +
+                    `• Total de questões: ${totalQuestoes}\n` +
+                    `• Respondidas: ${respondidas}\n` +
+                    `• Não respondidas: ${totalQuestoes - respondidas}\n` +
+                    `• Conclusão: ${porcentagem}%\n\n` +
+                    `⚠️  Você ainda não respondeu todas as questões!\n\n` +
+                    `Deseja finalizar a prova mesmo assim?`;
+                
+                const confirmarComPendentes = await mostrarConfirmacaoSegura(mensagemConfirmacao1);
+                
+                if (!confirmarComPendentes) {
+                    console.log('↩️  Usuário cancelou: questões pendentes');
+                    processoCancelado = true;
+                    
+                    // Restaurar estado e sair
+                    restaurarEstado();
+                    
+                    // Reexibir conteúdo da prova
+                    document.getElementById('provaContent').style.display = 'flex';
+                    
                     return;
                 }
+                
+                console.log('✅ Usuário confirmou continuar com questões pendentes');
+            } else {
+                console.log('✅ Todas as questões foram respondidas');
             }
+        } catch (error) {
+            console.error('❌ Erro na primeira confirmação:', error);
+            processoCancelado = true;
+            restaurarEstado();
+            return;
+        }
+        
+        // ============ ETAPA 2: CONFIRMAÇÃO FINAL ============
+        try {
+            console.log('🎯 ETAPA 2: Confirmação final');
             
-            if (!confirm('Tem certeza que deseja finalizar a prova?\nEsta ação não pode ser desfeita.')) {
-                // Reativar timer se cancelar
-                timerInterval = setInterval(atualizarTimer, 1000);
+            const mensagemConfirmacao2 = 
+                `🚀 CONFIRMAÇÃO FINAL\n` +
+                `────────────────────\n` +
+                `📝 PROVA: ${prova.titulo}\n` +
+                `✅ STATUS: ${respondidas}/${totalQuestoes} questões respondidas\n` +
+                `⏱️  TEMPO: Aproximadamente ${Math.ceil(tempoTotal / 60)} minutos\n\n` +
+                `⚠️  ATENÇÃO CRÍTICA:\n` +
+                `• Esta ação é IRREVERSÍVEL\n` +
+                `• As respostas serão enviadas para correção\n` +
+                `• Não será possível alterar após confirmação\n\n` +
+                `Tem CERTEZA ABSOLUTA que deseja FINALIZAR a prova agora?`;
+            
+            const confirmacaoFinal = await mostrarConfirmacaoSegura(mensagemConfirmacao2);
+            
+            if (!confirmacaoFinal) {
+                console.log('↩️  Usuário cancelou na confirmação final');
+                processoCancelado = true;
+                
+                // Restaurar estado e sair
+                restaurarEstado();
+                
+                // Reexibir conteúdo da prova
+                document.getElementById('provaContent').style.display = 'flex';
+                
                 return;
             }
             
+            console.log('✅ Confirmação final ACEITA');
+        } catch (error) {
+            console.error('❌ Erro na confirmação final:', error);
+            processoCancelado = true;
+            restaurarEstado();
+            return;
+        }
+        
+        // ============ ETAPA 3: PREPARAÇÃO E ENVIO ============
+        try {
+            console.log('📤 ETAPA 3: Preparação e envio das respostas');
+            
+            // Mostrar tela de carregamento
             document.getElementById('provaContent').style.display = 'none';
             document.getElementById('loadingScreen').style.display = 'flex';
-            atualizarMensagemLoading('Enviando respostas...');
             
+            // Atualizar mensagem de loading
+            atualizarMensagemLoading('Preparando envio das respostas...');
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
+            // 1. Preparar array de respostas
+            atualizarMensagemLoading('Organizando respostas...');
             const respostasArray = [];
             for (let i = 0; i < totalQuestoes; i++) {
                 respostasArray.push(respostas[i] || null);
             }
             
-            // CORREÇÃO: Calcular tempo gasto corretamente
-            const tempoGasto = Math.max(1, Math.ceil(tempoTotal / 60)); // Mínimo 1 minuto
+            console.log(`📦 Respostas preparadas: ${respostasArray.length} itens`);
+            
+            // 2. Calcular tempo gasto
+            const tempoGastoMinutos = Math.max(1, Math.ceil(tempoTotal / 60));
+            console.log(`⏱️ Tempo total gasto: ${tempoGastoMinutos} minutos`);
+            
+            // 3. Verificar token de autenticação
+            atualizarMensagemLoading('Verificando autenticação...');
             const authToken = localStorage.getItem('auth_token');
             
             if (!authToken) {
-                throw new Error('Sessão expirada. Faça login novamente.');
+                throw new Error('Sessão expirada. É necessário fazer login novamente.');
             }
+            
+            console.log('🔑 Token de autenticação encontrado');
+            
+            // 4. Enviar para o servidor
+            atualizarMensagemLoading('Enviando respostas para o servidor...');
+            
+            console.log('🌐 Enviando dados para:', `${API_BASE_URL}/provas/${prova._id}/responder`);
+            
+            const dadosEnvio = {
+                respostas: respostasArray,
+                tempoGasto: tempoGastoMinutos,
+                timestamp: new Date().toISOString(),
+                totalQuestoes: totalQuestoes,
+                respondidas: respondidas
+            };
             
             const response = await fetch(`${API_BASE_URL}/provas/${prova._id}/responder`, {
                 method: 'POST',
@@ -3041,86 +3697,232 @@ Boa prova! Não atualize a página! 🚨
                     'Authorization': `Bearer ${authToken}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    respostas: respostasArray,
-                    tempoGasto: tempoGasto
-                })
+                body: JSON.stringify(dadosEnvio)
             });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Erro HTTP:', response.status, errorText);
+                throw new Error(`Erro ao enviar respostas (${response.status})`);
+            }
             
             const data = await response.json();
             
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Erro ao enviar respostas');
+            if (!data.success) {
+                console.error('❌ Erro na resposta do servidor:', data);
+                throw new Error(data.error || 'Resposta do servidor indica erro');
             }
             
-            // Limpar dados locais
+            console.log('✅ Respostas enviadas com sucesso!');
+            console.log('📊 Resposta do servidor:', data);
+            
+            // 5. Limpar dados locais
+            atualizarMensagemLoading('Finalizando processo...');
+            
             localStorage.removeItem(`prova_${prova._id}`);
             localStorage.removeItem(`tempo_prova_${prova._id}`);
+            localStorage.removeItem(`hora_entrada_${prova._id}`);
             
+            console.log('🗑️ Dados locais removidos');
+            
+            // 6. Sair do modo tela cheia
             if (document.exitFullscreen) {
-                document.exitFullscreen();
+                try {
+                    await document.exitFullscreen();
+                    console.log('🖥️ Modo tela cheia finalizado');
+                } catch (error) {
+                    console.log('⚠️ Não foi possível sair do modo tela cheia:', error);
+                }
             }
             
-            alert(
-                `✅ Prova finalizada com sucesso!\n\n` +
-                `📊 Prova: ${prova.titulo}\n` +
-                `📝 Respondidas: ${respondidas}/${totalQuestoes}\n` +
-                `⏱️ Tempo gasto: ${tempoGasto} minutos\n` +
-                `📤 Aguarde a correção do professor.`
-            );
+            // Pequena pausa final
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // CORREÇÃO: Redirecionar corretamente
-            window.location.href = '/aluno.html?prova_finalizada=true';
+            // 7. Mostrar mensagem de sucesso
+            atualizarMensagemLoading('Prova finalizada com sucesso!');
+            
+            const mensagemSucesso = 
+                `🎉 PROVA FINALIZADA COM SUCESSO!\n\n` +
+                `📋 ${prova.titulo}\n` +
+                `✅ ${respondidas}/${totalQuestoes} questões respondidas\n` +
+                `⏱️ Tempo gasto: ${tempoGastoMinutos} minutos\n` +
+                `📊 Aguarde a correção do professor\n\n` +
+                `Você será redirecionado para o painel em alguns segundos...`;
+            
+            await mostrarAlertaSeguro(mensagemSucesso);
+            
+            console.log('✅ Processo de finalização concluído com sucesso');
             
         } catch (error) {
-            console.error('❌ Erro ao finalizar prova:', error);
+            console.error('❌ ERRO CRÍTICO NO PROCESSO DE FINALIZAÇÃO:', error);
             
+            // Restaurar estado em caso de erro
+            restaurarEstado();
+            
+            // Mostrar conteúdo da prova novamente
             document.getElementById('loadingScreen').style.display = 'none';
             document.getElementById('provaContent').style.display = 'flex';
             
-            // Reativar timer
-            if (!timerInterval) {
-                timerInterval = setInterval(atualizarTimer, 1000);
-            }
+            // Mostrar mensagem de erro
+            const mensagemErro = 
+                `⚠️ ERRO AO FINALIZAR PROVA\n\n` +
+                `Ocorreu um erro durante o processo de finalização:\n\n` +
+                `"${error.message}"\n\n` +
+                `Por favor:\n` +
+                `1. Verifique sua conexão com a internet\n` +
+                `2. Tente finalizar novamente\n` +
+                `3. Se o erro persistir, entre em contato com o professor\n\n` +
+                `Suas respostas foram salvas localmente e podem ser recuperadas.`;
             
-            alert(`Erro: ${error.message}\n\nTente novamente ou contate o professor.`);
+            await mostrarAlertaSeguro(mensagemErro);
+            
+            return; // Não continuar com o redirecionamento
+        }
+        
+        // ============ ETAPA FINAL: REDIRECIONAMENTO ============
+        try {
+            console.log('🔄 Preparando redirecionamento...');
+            
+            // Garantir que o estado foi restaurado antes do redirecionamento
+            restaurarEstado();
+            
+            // Pequeno delay antes do redirecionamento
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // Redirecionar para o painel
+            console.log('🌍 Redirecionando para /aluno.html');
+            window.location.href = '/aluno.html?prova_finalizada=true&prova_id=' + encodeURIComponent(prova._id);
+            
+        } catch (error) {
+            console.error('❌ Erro no redirecionamento:', error);
+            
+            // Em caso de erro no redirecionamento, mostrar mensagem
+            await mostrarAlertaSeguro(
+                '✅ Prova finalizada, mas houve um problema no redirecionamento.\n\n' +
+                'Por favor, clique no botão abaixo para voltar ao painel:\n\n' +
+                '<button onclick="window.location.href=\'/aluno.html\'">Voltar ao Painel</button>'
+            );
         }
     }
-    
-    function atualizarMensagemLoading(mensagem) {
-        const elemento = document.getElementById('loadingMessage');
-        if (elemento) {
-            elemento.textContent = mensagem;
-        }
-    }
-    
-    function mostrarErro(titulo, mensagem) {
-        document.getElementById('loadingScreen').style.display = 'none';
-        document.getElementById('errorScreen').style.display = 'flex';
-        document.getElementById('errorTitle').textContent = titulo;
-        document.getElementById('errorMessage').textContent = mensagem;
-    }
-    
-    function voltarAoPainel() {
-        if (Object.keys(respostas).length === 0) {
-            if (confirm('Deseja realmente voltar ao painel?')) {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
-                window.location.href = '/aluno.html';
+        
+        function atualizarMensagemLoading(mensagem) {
+            const elemento = document.getElementById('loadingMessage');
+            if (elemento) {
+                elemento.textContent = mensagem;
             }
-        } else {
-            alert('Você já começou a prova. Não é possível voltar agora.');
         }
-    }
-    
-    window.addEventListener('beforeunload', function(e) {
-        if (prova && Object.keys(respostas).length > 0) {
-            e.preventDefault();
-            e.returnValue = 'Você tem respostas não enviadas. A prova será perdida.';
-            return e.returnValue;
+        
+        function mostrarErro(titulo, mensagem) {
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('errorScreen').style.display = 'flex';
+            document.getElementById('errorTitle').textContent = titulo;
+            document.getElementById('errorMessage').textContent = mensagem;
         }
-    });
+        
+        function voltarAoPainel() {
+            if (Object.keys(respostas).length === 0) {
+                // Ativar flag de acessibilidade
+                window.acessibilidadeAtiva = true;
+                window.acessibilidadeClicada = true;
+                
+                if (confirm('Deseja realmente voltar ao painel?')) {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                    window.location.href = '/aluno.html';
+                }
+                
+                // Desativar flag
+                window.acessibilidadeAtiva = false;
+                window.acessibilidadeClicada = false;
+            } else {
+                alert('Você já começou a prova. Não é possível voltar agora.');
+            }
+        }
+        
+        window.addEventListener('beforeunload', function(e) {
+            if (prova && Object.keys(respostas).length > 0) {
+                e.preventDefault();
+                e.returnValue = 'Você tem respostas não enviadas. A prova será perdida.';
+                return e.returnValue;
+            }
+        });
+        
+        // ============ INTEGRAÇÃO COM SISTEMA DE ACESSIBILIDADE ============
+        
+        // Sobrescrever funções de alert/confirm para marcar como ações de acessibilidade
+        const alertOriginal = window.alert;
+        window.alert = function(message) {
+            window.acessibilidadeAtiva = true;
+            const resultado = alertOriginal(message);
+            setTimeout(() => { window.acessibilidadeAtiva = false; }, 100);
+            return resultado;
+        };
+        
+        const confirmOriginal = window.confirm;
+        window.confirm = function(message) {
+            window.acessibilidadeAtiva = true;
+            window.acessibilidadeClicada = true;
+            const resultado = confirmOriginal(message);
+            setTimeout(() => { 
+                window.acessibilidadeAtiva = false;
+                window.acessibilidadeClicada = false;
+            }, 100);
+            return resultado;
+        };
+        
+        // Adicionar botão de acessibilidade personalizado
+        setTimeout(() => {
+            const botaoAcessibilidade = document.createElement('button');
+            botaoAcessibilidade.id = 'btnAcessibilidadeProva';
+            botaoAcessibilidade.className = 'acessibilidade-btn-prova';
+            botaoAcessibilidade.innerHTML = '<i class="fas fa-universal-access"></i> Acessibilidade';
+            botaoAcessibilidade.title = 'Ferramentas de acessibilidade para a prova';
+            botaoAcessibilidade.setAttribute('data-acessibilidade', 'true');
+            botaoAcessibilidade.setAttribute('data-seguro', 'true');
+            
+            botaoAcessibilidade.addEventListener('click', function() {
+                // Ativar flag de acessibilidade
+                window.acessibilidadeAtiva = true;
+                window.acessibilidadeClicada = true;
+                
+                alert('♿ SISTEMA DE ACESSIBILIDADE PARA PROVAS\n\n' +
+                      '✅ Todas as ferramentas de acessibilidade estão ativas e protegidas.\n' +
+                      '✅ Nenhuma ação de acessibilidade será tratada como infração.\n' +
+                      '✅ VLibras e outras ferramentas funcionam normalmente.\n' +
+                      '✅ Botões de confirmação estão protegidos.\n\n' +
+                      'Para usar as ferramentas completas, use o botão do VLibras ou o menu de acessibilidade do sistema.');
+                
+                // Desativar flag
+                setTimeout(() => {
+                    window.acessibilidadeAtiva = false;
+                    window.acessibilidadeClicada = false;
+                }, 100);
+            });
+            
+            document.body.appendChild(botaoAcessibilidade);
+            
+            console.log('✅ Botão de acessibilidade para prova adicionado');
+        }, 2000);
+        
+        // Configurar integração automática com elementos VLibras
+        setTimeout(() => {
+            // Marcar elementos VLibras automaticamente
+            const observer = new MutationObserver(() => {
+                document.querySelectorAll('.vlibras, [id*="vlibras"], [class*="vws"]').forEach(el => {
+                    if (monitoramento) {
+                        monitoramento.marcarElementoSeguro(el);
+                    }
+                });
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            
+            console.log('✅ Observador VLibras configurado');
+        }, 3000);
     </script>
 </body>
 </html>
