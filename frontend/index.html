@@ -1125,10 +1125,119 @@
 <!-- Incluir o chatbot -->
 <script src="js/chatbot-frontend.js"></script>
 
-<!-- Opcional: Botão para abrir chatbot manualmente -->
-<button onclick="window.chatbot.open()" style="position: fixed; bottom: 90px; right: 20px; z-index: 9998; background: #10b981; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer;">
-    <i class="fas fa-robot"></i> Assistente
+<!-- Botão Rolar para Baixo (Seta Pulsante) -->
+<button id="btnScrollToBottom" onclick="scrollToBottom()" style="
+    position: fixed;
+    bottom: 50px;
+    right: 100px;
+    z-index: 9999;
+    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    font-size: 20px;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: pulse 2s infinite;
+">
+    <i class="fas fa-arrow-down"></i>
 </button>
+
+<style>
+/* Animação de pulso para a seta */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+    }
+    50% {
+        transform: scale(1.1);
+        box-shadow: 0 8px 25px rgba(79, 70, 229, 0.7);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+    }
+}
+
+#btnScrollToBottom:hover {
+    transform: scale(1.15) !important;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    animation: none !important;
+}
+
+@media (max-width: 768px) {
+    #btnScrollToBottom {
+        bottom: 140px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    #btnScrollToBottom {
+        bottom: 130px;
+        right: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+}
+</style>
+
+<script>
+// Função para rolar suavemente até o final da página
+function scrollToBottom() {
+    const btn = document.getElementById('btnScrollToBottom');
+    
+    // Feedback visual do clique
+    btn.style.transform = 'scale(0.9)';
+    btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+    
+    setTimeout(() => {
+        btn.style.transform = 'scale(1.1)';
+    }, 200);
+    
+    setTimeout(() => {
+        btn.style.transform = 'scale(1)';
+        btn.style.background = 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)';
+    }, 400);
+    
+    // Rolar até o final
+    window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: 'smooth'
+    });
+}
+
+// Mostrar/ocultar botão baseado na posição do scroll
+window.addEventListener('scroll', function() {
+    const btn = document.getElementById('btnScrollToBottom');
+    if (!btn) return;
+    
+    if ((window.innerHeight + window.scrollY) >= document.body.scrollHeight - 100) {
+        btn.style.opacity = '0';
+        btn.style.pointerEvents = 'none';
+        btn.style.transform = 'translateY(20px)';
+    } else {
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+        btn.style.transform = 'translateY(0)';
+    }
+});
+</script>
+
 <body>
     <!-- Loading overlay -->
     <div id="loading-overlay">
