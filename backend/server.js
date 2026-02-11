@@ -466,7 +466,7 @@ const validateInputs = (validations) => {
   };
 };
 
-// ============ ROTAS DE AUTENTICAÇÃO ============
+// ============ ROTA DE REGISTRO COMPLETA COM ACESSIBILIDADE ============
 app.post('/api/auth/register', [
   check('nome').not().isEmpty().withMessage('Nome é obrigatório'),
   check('email').isEmail().withMessage('Email inválido'),
@@ -515,7 +515,26 @@ app.post('/api/auth/register', [
   check('role').isIn(['aluno', 'professor']).withMessage('Role inválida')
 ], async (req, res) => {
   try {
-    const { nome, email, password, cpf, telefone, matricula, role, eixo, curso, periodo, departamento, titulacao } = req.body;
+    const { 
+      nome, 
+      email, 
+      password, 
+      cpf, 
+      telefone, 
+      matricula, 
+      role, 
+      eixo, 
+      curso, 
+      periodo, 
+      departamento, 
+      titulacao,
+      
+      // ========== 🔴 NOVOS CAMPOS DE ACESSIBILIDADE ==========
+      precisaAcessibilidade,
+      condicaoAcessibilidade,
+      outraCondicao
+      
+    } = req.body;
     
     // Validar email institucional
     if (!email || !email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
@@ -528,7 +547,17 @@ app.post('/api/auth/register', [
     // Converter para lowercase
     const emailLower = email.toLowerCase().trim();
 
-    console.log('📝 Dados recebidos no registro:', { nome, email, cpf, role });
+    console.log('📝 Dados recebidos no registro:', { 
+      nome, 
+      email, 
+      cpf: cpf ? '***' : 'não informado',
+      telefone: telefone ? '***' : 'não informado',
+      role,
+      // LOG DOS CAMPOS DE ACESSIBILIDADE
+      precisaAcessibilidade,
+      condicaoAcessibilidade,
+      outraCondicao
+    });
     
     // Validar telefone
     if (!telefone) {
@@ -555,6 +584,7 @@ app.post('/api/auth/register', [
             error: 'Telefone já cadastrado'
         });
     }
+    
     // VALIDAÇÃO DE CPF FORMATADO
     const cpfNumeros = cpf.replace(/\D/g, '');
     
@@ -626,24 +656,38 @@ app.post('/api/auth/register', [
         console.log('✅ Matrícula autorizada para professor:', matriculaNumeros);
     }
     
-    // CRIAR USUÁRIO COM CPF
+    // CRIAR USUÁRIO COM TODOS OS CAMPOS
     const user = new User({
       nome,
       email,
       password,
-      cpf: cpfNumeros, // Salvar apenas números
-      telefone: telefoneNumeros, // Salvar apenas números
+      cpf: cpfNumeros,
+      telefone: telefoneNumeros,
       matricula: matricula || undefined,
       role,
       eixo: role === 'professor' ? eixo : null,
       curso: role === 'aluno' ? curso : undefined,
       periodo: role === 'aluno' ? periodo : undefined,
       departamento: role === 'professor' ? departamento : undefined,
-      titulacao: role === 'professor' ? titulacao : undefined
+      titulacao: role === 'professor' ? titulacao : undefined,
+      
+      // ========== 🔴 NOVOS CAMPOS DE ACESSIBILIDADE ==========
+      // SÓ PARA ALUNOS!
+      precisaAcessibilidade: role === 'aluno' ? (precisaAcessibilidade === true || precisaAcessibilidade === 'true' || precisaAcessibilidade === 'sim') : false,
+      condicaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? condicaoAcessibilidade : null,
+      outraCondicao: role === 'aluno' && precisaAcessibilidade && condicaoAcessibilidade === 'outra' ? outraCondicao : null,
+      dataSolicitacaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? new Date() : null
+      
     });
     
     await user.save();
+    
     console.log('✅ Usuário criado com CPF:', user.cpf);
+    console.log('🎯 Acessibilidade:', {
+      precisa: user.precisaAcessibilidade,
+      condicao: user.condicaoAcessibilidade,
+      outra: user.outraCondicao
+    });
     
     const token = jwt.sign(
       { 
@@ -651,7 +695,10 @@ app.post('/api/auth/register', [
         role: user.role,
         eixo: user.eixo,
         nome: user.nome,
-        cpf: user.cpf
+        cpf: user.cpf,
+        // INCLUIR ACESSIBILIDADE NO TOKEN
+        precisaAcessibilidade: user.precisaAcessibilidade,
+        condicaoAcessibilidade: user.condicaoAcessibilidade
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
@@ -671,7 +718,13 @@ app.post('/api/auth/register', [
         curso: user.curso,
         periodo: user.periodo,
         departamento: user.departamento,
-        titulacao: user.titulacao
+        titulacao: user.titulacao,
+        
+        // ========== 🔴 RETORNAR ACESSIBILIDADE ==========
+        precisaAcessibilidade: user.precisaAcessibilidade,
+        condicaoAcessibilidade: user.condicaoAcessibilidade,
+        outraCondicao: user.outraCondicao
+        
       },
       redirectTo: role === 'professor' ? '/index.html' : '/aluno.html'
     });
@@ -685,9 +738,12 @@ app.post('/api/auth/register', [
   }
 });
 
+// ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO - VERSÃO CORRIGIDA ============
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
+    // 🔥 BUSCAR TODOS OS CAMPOS, INCLUINDO ACESSIBILIDADE
+    const user = await User.findById(req.userId)
+      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade +acessibilidadeAprovadaPor');
     
     if (!user) {
       return res.status(404).json({
@@ -702,6 +758,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         id: user._id,
         nome: user.nome,
         email: user.email,
+        cpf: user.cpf,
         role: user.role,
         eixo: user.eixo,
         matricula: user.matricula,
@@ -709,7 +766,13 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         periodo: user.periodo,
         departamento: user.departamento,
         titulacao: user.titulacao,
-        dataCadastro: user.dataCadastro
+        
+        // 🔥 CAMPOS DE ACESSIBILIDADE - AGORA VÃO APARECER!
+        precisaAcessibilidade: user.precisaAcessibilidade === true,
+        condicaoAcessibilidade: user.condicaoAcessibilidade,
+        outraCondicao: user.outraCondicao,
+        dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade
+        
       }
     });
     
@@ -722,107 +785,156 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-// Substitua a rota POST /api/auth/login atual por esta versão melhorada:
+// ============ ROTA DE LOGIN CORRIGIDA ============
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password, cpf } = req.body;
     
-    console.log('🔐 Tentativa de login:', { email, cpf: cpf ? '***' : 'não informado' });
-    
     let user;
-    let loginIdentifier;
     
-    // Verificar se está tentando login com email ou CPF
     if (email) {
-      // Login com email
       user = await User.findOne({ email }).select('+password');
-      loginIdentifier = email;
     } else if (cpf) {
-      // Login com CPF
       const cpfNumeros = cpf.replace(/\D/g, '');
       user = await User.findOne({ cpf: cpfNumeros }).select('+password');
-      loginIdentifier = cpf;
     } else {
-      return res.status(400).json({
-        success: false,
-        error: 'Email ou CPF é obrigatório'
-      });
+      return res.status(400).json({ success: false, error: 'Email ou CPF é obrigatório' });
     }
     
     if (!user) {
-      console.log('❌ Usuário não encontrado:', loginIdentifier);
-      return res.status(401).json({
-        success: false,
-        error: 'Email/CPF ou senha incorretos'
-      });
-    }
-    
-    if (user.isLocked && user.isLocked()) {
-      return res.status(423).json({
-        success: false,
-        error: 'Conta bloqueada. Tente novamente em 15 minutos.'
-      });
+      return res.status(401).json({ success: false, error: 'Email/CPF ou senha incorretos' });
     }
     
     const isMatch = await user.comparePassword(password);
-    
     if (!isMatch) {
-      if (user.incLoginAttempts) {
-        await user.incLoginAttempts();
-      }
-      console.log('❌ Senha incorreta para:', loginIdentifier);
-      return res.status(401).json({
-        success: false,
-        error: 'Email/CPF ou senha incorretos'
-      });
-    }
-    
-    if (user.loginAttempts !== undefined) {
-      user.loginAttempts = 0;
-      user.lockUntil = undefined;
+      return res.status(401).json({ success: false, error: 'Email/CPF ou senha incorretos' });
     }
     
     user.lastLogin = new Date();
     await user.save();
     
+    // 🔥 BUSCAR USUÁRIO COMPLETO COM TODOS OS CAMPOS
+    const userCompleto = await User.findById(user._id)
+      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade');
+    
+    console.log(`✅ Login bem-sucedido: ${userCompleto.email}`);
+    console.log(`   🎯 precisaAcessibilidade: ${userCompleto.precisaAcessibilidade}`);
+    console.log(`   📋 condicaoAcessibilidade: ${userCompleto.condicaoAcessibilidade}`);
+    
     const token = jwt.sign(
       { 
-        id: user._id, 
-        role: user.role,
-        eixo: user.eixo,
-        nome: user.nome,
-        cpf: user.cpf
+        id: userCompleto._id, 
+        role: userCompleto.role,
+        eixo: userCompleto.eixo,
+        nome: userCompleto.nome,
+        cpf: userCompleto.cpf,
+        
+        // 🔥 INCLUIR ACESSIBILIDADE NO TOKEN
+        precisaAcessibilidade: userCompleto.precisaAcessibilidade === true,
+        condicaoAcessibilidade: userCompleto.condicaoAcessibilidade
+        
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
     
-    console.log('✅ Login bem-sucedido:', user.email);
-    
     res.json({
       success: true,
       token,
       user: {
-        id: user._id,
-        nome: user.nome,
-        email: user.email,
-        cpf: user.cpf,
-        role: user.role,
-        eixo: user.eixo,
-        matricula: user.matricula,
-        curso: user.curso,
-        periodo: user.periodo,
-        departamento: user.departamento,
-        titulacao: user.titulacao
+        id: userCompleto._id,
+        nome: userCompleto.nome,
+        email: userCompleto.email,
+        cpf: userCompleto.cpf,
+        role: userCompleto.role,
+        eixo: userCompleto.eixo,
+        matricula: userCompleto.matricula,
+        curso: userCompleto.curso,
+        periodo: userCompleto.periodo,
+        departamento: userCompleto.departamento,
+        titulacao: userCompleto.titulacao,
+        
+        // 🔥 INCLUIR ACESSIBILIDADE NA RESPOSTA
+        precisaAcessibilidade: userCompleto.precisaAcessibilidade === true,
+        condicaoAcessibilidade: userCompleto.condicaoAcessibilidade,
+        outraCondicao: userCompleto.outraCondicao
+        
       },
-      redirectTo: user.role === 'professor' ? '/index.html' : '/aluno.html'
+      redirectTo: userCompleto.role === 'professor' ? '/index.html' : '/aluno.html'
     });
     
   } catch (error) {
     console.error('Erro no login:', error);
+    res.status(500).json({ success: false, error: 'Erro no servidor: ' + error.message });
+  }
+});
+
+// ============ ROTA PARA ATUALIZAR DADOS DO USUÁRIO ============
+app.put('/api/users/me', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const {
+      precisaAcessibilidade,
+      condicaoAcessibilidade,
+      outraCondicao
+    } = req.body;
+    
+    console.log(`🔄 Atualizando usuário ${userId} com acessibilidade:`, {
+      precisaAcessibilidade,
+      condicaoAcessibilidade,
+      outraCondicao
+    });
+    
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'Usuário não encontrado'
+      });
+    }
+    
+    // Atualizar campos de acessibilidade
+    if (precisaAcessibilidade !== undefined) {
+      user.precisaAcessibilidade = precisaAcessibilidade === true || precisaAcessibilidade === 'true';
+      
+      if (user.precisaAcessibilidade) {
+        user.condicaoAcessibilidade = condicaoAcessibilidade || user.condicaoAcessibilidade;
+        user.outraCondicao = outraCondicao || user.outraCondicao;
+        user.dataSolicitacaoAcessibilidade = user.dataSolicitacaoAcessibilidade || new Date();
+      } else {
+        user.condicaoAcessibilidade = null;
+        user.outraCondicao = null;
+      }
+    }
+    
+    await user.save();
+    
+    console.log('✅ Usuário atualizado com sucesso!');
+    console.log('🎯 Nova configuração de acessibilidade:', {
+      precisa: user.precisaAcessibilidade,
+      condicao: user.condicaoAcessibilidade
+    });
+    
+    res.json({
+      success: true,
+      message: 'Dados atualizados com sucesso',
+      user: {
+        id: user._id,
+        nome: user.nome,
+        email: user.email,
+        role: user.role,
+        precisaAcessibilidade: user.precisaAcessibilidade,
+        condicaoAcessibilidade: user.condicaoAcessibilidade,
+        outraCondicao: user.outraCondicao
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao atualizar usuário:', error);
     res.status(500).json({
       success: false,
-      error: 'Erro no servidor: ' + error.message
+      error: 'Erro ao atualizar usuário: ' + error.message
     });
   }
 });
@@ -1377,7 +1489,7 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ ROTA ATUALIZADA COM CORREÇÃO DE ESCOPO ============
+// ============ ROTA ATUALIZADA COM SUPORTE A PROVA ADAPTADA (3 ALTERNATIVAS) ============
 app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (req, res) => {
   try {
     const turma = await Turma.findById(req.params.id);
@@ -1401,11 +1513,15 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       conteudo, 
       tipoProva = 'simples',
       quantidadeQuestoes = 10, 
-      dificuldade = 'media', 
+      dificuldade = 'media',
+      adaptada,           // <-- NOVO: Flag para prova adaptada
+      alternativas,       // <-- NOVO: Número de alternativas (3)
+      publicoAlvo,        // <-- NOVO: Filtro de público alvo
       dataLimite, 
       horarioInicio, 
       horarioTermino,
-      anexosData = '[]'
+      anexosData = '[]',
+      recursosAcessibilidade // <-- NOVO: Recursos específicos
     } = req.body;
 
     // Processar anexos
@@ -1504,10 +1620,39 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
     console.log(`🤖 Professor ${req.userId} solicitando prova tipo ${tipoProva} sobre: "${conteudo}"`);
     console.log(`📎 Anexos recebidos: ${anexos.length}`);
 
-    let questoesValidadas = [];
-    let areaDetectada = 'geral'; // Definida fora do try-catch
+    // ========== NOVO: LÓGICA PARA PROVA ADAPTADA ==========
+    let alunosDestino = [];
     
-    // BANCO DE EXEMPLOS DE QUESTÕES DESAFIADORAS POR ÁREA (DEFINIDO NO ESCOPO CORRETO)
+    if (tipoProva === 'adaptada' || adaptada === true) {
+      // Buscar APENAS alunos que precisam de acessibilidade nesta turma
+      alunosDestino = await User.find({
+        role: 'aluno',
+        _id: { $in: turma.alunos || [] },
+        precisaAcessibilidade: true
+      }).select('_id nome email matricula precisaAcessibilidade condicaoAcessibilidade');
+      
+      
+      if (alunosDestino.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: '❌ Não há alunos com necessidades de acessibilidade nesta turma. A prova adaptada não pode ser criada.',
+          detalhes: 'Crie uma turma com alunos que selecionaram "Sim" no campo de acessibilidade do cadastro.'
+        });
+      }
+    } else {
+      // Prova normal - enviar para TODOS os alunos
+      alunosDestino = await User.find({
+        role: 'aluno',
+        _id: { $in: turma.alunos || [] }
+      }).select('_id nome email matricula');
+      
+      console.log(`📚 Prova normal - Será enviada para ${alunosDestino.length} aluno(s)`);
+    }
+
+    let questoesValidadas = [];
+    let areaDetectada = 'geral';
+    
+    // BANCO DE EXEMPLOS DE QUESTÕES DESAFIADORAS POR ÁREA
     const exemplosPorArea = {
       matematica: {
         titulo: "PROBLEMAS DE CONTAGEM E RACIOCÍNIO LÓGICO",
@@ -1590,6 +1735,43 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
           explicacao: "Das informações: 1) Ana > Bruno; 2) Carla < Ana; 3) Bruno não é o mais novo → Bruno > Carla. Portanto: Ana > Bruno > Carla.",
           conceitos: ["Raciocínio lógico", "Ordenação"]
         }
+      },
+      // ========== NOVO: EXEMPLOS PARA PROVA ADAPTADA (3 ALTERNATIVAS) ==========
+      adaptada: {
+        titulo: "QUESTÕES ADAPTADAS - ACESSIBILIDADE",
+        exemplo1: {
+          pergunta: "João tem 24 balas e quer dividir igualmente entre seus 3 amigos. Quantas balas cada amigo receberá?",
+          opcoes: [
+            "A) 6 balas",
+            "B) 8 balas",
+            "C) 10 balas"
+          ],
+          respostaCorreta: 1,
+          explicacao: "24 balas ÷ 3 amigos = 8 balas para cada amigo.",
+          conceitos: ["Divisão", "Problemas matemáticos simples"]
+        },
+        exemplo2: {
+          pergunta: "Qual destas palavras é um substantivo?",
+          opcoes: [
+            "A) Correr",
+            "B) Casa",
+            "C) Bonito"
+          ],
+          respostaCorreta: 1,
+          explicacao: "Substantivo é a palavra que dá nome aos seres, objetos, lugares. 'Casa' é um substantivo.",
+          conceitos: ["Classes gramaticais", "Substantivo"]
+        },
+        exemplo3: {
+          pergunta: "Qual é a capital do Brasil?",
+          opcoes: [
+            "A) São Paulo",
+            "B) Rio de Janeiro",
+            "C) Brasília"
+          ],
+          respostaCorreta: 2,
+          explicacao: "Brasília é a capital federal do Brasil desde 1960.",
+          conceitos: ["Geografia", "Capitais brasileiras"]
+        }
       }
     };
 
@@ -1619,7 +1801,6 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
         
         const conteudoLower = conteudo.toLowerCase();
         
-        // Palavras-chave para cada área
         const areas = {
           matematica: ['matemática', 'matematica', 'cálculo', 'calculo', 'álgebra', 'algebra', 'geometria', 'estatística', 'estatistica', 'número', 'numero', 'equação', 'equacao', 'função', 'funcao', 'trigonometria', 'logaritmo', 'derivada', 'integral', 'probabilidade', 'contagem', 'combinatória', 'combinatoria'],
           portugues: ['português', 'portugues', 'gramática', 'gramatica', 'literatura', 'redação', 'redacao', 'interpretação', 'interpretacao', 'texto', 'leitura', 'ortografia', 'sintaxe', 'semântica', 'semantica', 'figuras de linguagem', 'gêneros textuais', 'generos textuais', 'coesão', 'coesao', 'coerência', 'coerencia'],
@@ -1634,7 +1815,6 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
           artes: ['artes', 'arte', 'música', 'musica', 'teatro', 'dança', 'danca', 'cinema', 'pintura', 'escultura', 'arquitetura', 'fotografia', 'desenho', 'história da arte', 'historia da arte', 'movimentos artísticos', 'movimentos artisticos', 'renascimento', 'barroco', 'modernismo', 'contemporâneo', 'contemporaneo']
         };
 
-        // Verificar qual área tem mais palavras-chave correspondentes
         let areaEncontrada = 'geral';
         let maxMatches = 0;
 
@@ -1650,7 +1830,6 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
         return areaEncontrada;
       };
 
-      // Atribuir valor à variável
       areaDetectada = detectarArea(conteudo);
 
       let completion;
@@ -1660,7 +1839,71 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
         try {
           console.log(`🔄 Tentando modelo: ${modelo}`);
           
-          const systemPrompt = `Você é um especialista em criar questões DESAFIADORAS de múltipla escolha para TODAS as áreas do conhecimento.
+          // ========== NOVO: PROMPT DIFERENCIADO PARA PROVA ADAPTADA ==========
+          let systemPrompt;
+          
+          if (tipoProva === 'adaptada' || adaptada === true) {
+            systemPrompt = `Você é um especialista em criar questões ACESSÍVEIS e ADAPTADAS para alunos com necessidades especiais.
+
+REGRAS OBRIGATÓRIAS PARA PROVA ADAPTADA:
+1. CADA questão deve ter EXATAMENTE 3 alternativas (A, B, C)
+2. Linguagem SIMPLES, CLARA e OBJETIVA
+3. Frases CURTAS e diretas (máximo 2 linhas por enunciado)
+4. Evitar palavras difíceis, termos técnicos complexos
+5. Alternativas curtas e de fácil compreensão
+6. Enunciados com VOCABULÁRIO ACESSÍVEL
+7. Evitar pegadinhas e ambiguidades
+8. Explicações DETALHADAS e PASSO A PASSO
+
+FORMATO JSON EXIGIDO:
+{
+  "questoes": [
+    {
+      "pergunta": "Texto curto e claro da pergunta",
+      "opcoes": [
+        "A) Alternativa A - clara e direta",
+        "B) Alternativa B - clara e direta", 
+        "C) Alternativa C - clara e direta (RESPOSTA CORRETA)"
+      ],
+      "respostaCorreta": 2, // Índice 0, 1 ou 2
+      "explicacao": "Explicação PASSO A PASSO, com linguagem simples",
+      "dificuldade": "facil|media|dificil",
+      "area": "área do conhecimento"
+    }
+  ]
+}`;
+          } else if (tipoProva === 'enem') {
+            systemPrompt = `Você é um especialista em criar questões DESAFIADORAS de múltipla escolha no formato ENEM.
+
+SEU OBJETIVO: Criar questões que:
+1. São DESAFIADORAS mas JUSTAS
+2. Exigem RACIOCÍNIO e não apenas memorização
+3. Simulam PROBLEMAS DO MUNDO REAL ou situações complexas
+4. Têm alternativas PLAUSÍVEIS que testam compreensão profunda
+5. São CLARAS e BEM ESTRUTURADAS
+
+FORMATO EXIGIDO (JSON):
+{
+  "questoes": [
+    {
+      "contexto": "Texto base para a questão",
+      "pergunta": "Pergunta clara baseada no contexto",
+      "opcoes": [
+        "A) [Alternativa A]",
+        "B) [Alternativa B]",
+        "C) [Alternativa C - RESPOSTA CORRETA]",
+        "D) [Alternativa D]",
+        "E) [Alternativa E]"
+      ],
+      "respostaCorreta": 2,
+      "explicacao": "Explicação detalhada",
+      "competencia": "Competência do ENEM",
+      "habilidade": "Habilidade específica"
+    }
+  ]
+}`;
+          } else {
+            systemPrompt = `Você é um especialista em criar questões DESAFIADORAS de múltipla escolha para TODAS as áreas do conhecimento.
 
 SEU OBJETIVO: Criar questões que:
 1. São DESAFIADORAS mas JUSTAS
@@ -1681,20 +1924,71 @@ FORMATO EXIGIDO (JSON):
         "D) [Alternativa D - distrator comum]",
         "E) [Alternativa E - distrator sutil]"
       ],
-      "respostaCorreta": 2, // Índice 0-4
+      "respostaCorreta": 2,
       "explicacao": "Explicação DETALHADA passo a passo",
       "dificuldade": "facil|media|dificil",
-      "area": "matematica|portugues|historia|ciencias|filosofia|etc",
-      "conceitosEnvolvidos": ["conceito1", "conceito2"],
-      "tipoRaciocinio": "logico|analitico|interpretativo|aplicacao|sintese"
+      "area": "área do conhecimento",
+      "conceitosEnvolvidos": ["conceito1", "conceito2"]
     }
   ]
 }`;
+          }
 
-          const exemplos = exemplosPorArea[areaDetectada] || exemplosPorArea.geral;
+          let exemplos;
+          if (tipoProva === 'adaptada' || adaptada === true) {
+            exemplos = exemplosPorArea.adaptada || exemplosPorArea.geral;
+          } else {
+            exemplos = exemplosPorArea[areaDetectada] || exemplosPorArea.geral;
+          }
           
-          let userPrompt = `CRIE ${quantidadeQuestoes} QUESTÕES DESAFIADORAS SOBRE: "${conteudo}"
+          let userPrompt = '';
           
+          if (tipoProva === 'adaptada' || adaptada === true) {
+            userPrompt = `CRIE ${quantidadeQuestoes} QUESTÕES ADAPTADAS SOBRE: "${conteudo}"
+            
+ÁREA: ${areaDetectada.toUpperCase()}
+
+## EXEMPLOS DE QUESTÕES ADAPTADAS (3 ALTERNATIVAS):
+
+EXEMPLO 1:
+${exemplos.exemplo1.pergunta}
+OPÇÕES: ${exemplos.exemplo1.opcoes.join(' | ')}
+RESPOSTA CORRETA: ${String.fromCharCode(65 + exemplos.exemplo1.respostaCorreta)}
+EXPLICAÇÃO: ${exemplos.exemplo1.explicacao}
+
+${exemplos.exemplo2 ? `
+EXEMPLO 2:
+${exemplos.exemplo2.pergunta}
+OPÇÕES: ${exemplos.exemplo2.opcoes.join(' | ')}
+RESPOSTA CORRETA: ${String.fromCharCode(65 + exemplos.exemplo2.respostaCorreta)}
+EXPLICAÇÃO: ${exemplos.exemplo2.explicacao}
+` : ''}
+
+## DIRETRIZES OBRIGATÓRIAS:
+1. EXATAMENTE 3 alternativas por questão
+2. Linguagem SIMPLES e ACESSÍVEL
+3. Frases CURTAS (máximo 2 linhas)
+4. Nível de dificuldade: ${dificuldade}
+5. Contexto: ${contextoAnexos}
+
+Agora crie ${quantidadeQuestoes} questões ADAPTADAS sobre "${conteudo}":`;
+          } else if (tipoProva === 'enem') {
+            userPrompt = `CRIE ${quantidadeQuestoes} QUESTÕES NO FORMATO ENEM SOBRE: "${conteudo}"
+            
+ÁREA DETECTADA: ${areaDetectada.toUpperCase()}
+
+${contextoAnexos}
+
+## DIRETRIZES:
+1. Cada questão deve ter um TEXTO BASE (contexto)
+2. 5 alternativas por questão
+3. Incluir COMPETÊNCIA e HABILIDADE do ENEM
+4. Nível de dificuldade: ${dificuldade}
+
+Agora crie ${quantidadeQuestoes} questões ENEM sobre "${conteudo}":`;
+          } else {
+            userPrompt = `CRIE ${quantidadeQuestoes} QUESTÕES DESAFIADORAS SOBRE: "${conteudo}"
+            
 ÁREA DETECTADA: ${areaDetectada.toUpperCase()}
 
 ${contextoAnexos}
@@ -1719,28 +2013,15 @@ EXPLICAÇÃO: ${exemplos.exemplo2.explicacao}
 CONCEITOS: ${exemplos.exemplo2.conceitos.join(', ')}
 ` : ''}
 
-## DIRETRIZES ESPECÍFICAS:
-
-1. NÍVEL: ${dificuldade.toUpperCase()} - crie questões que realmente correspondam
-
-2. ESTRUTURA:
-   - Pergunta CLARA mas que exija INTERPRETAÇÃO
-   - 5 alternativas, TODAS VEROSSÍMEIS
-   - Resposta correta não óbvia (exija cálculo/raciocínio)
-   - Explicação MOSTRANDO O PROCESSO de resolução
-
-3. USE OS ANEXOS se disponíveis para contextualizar
-
-${tipoProva === 'enem' ? `
-## PARA ENEM (tipoProva = 'enem'):
-
-Adicione estes campos:
-"contexto": "Texto base para a questão",
-"competencia": "Competência do ENEM trabalhada",
-"habilidade": "Habilidade específica"
-` : ''}
+## DIRETRIZES:
+1. 5 alternativas por questão
+2. TODAS as alternativas devem ser VEROSSÍMEIS
+3. Resposta correta NÃO ÓBVIA
+4. Explicação MOSTRANDO O PROCESSO
+5. Nível de dificuldade: ${dificuldade}
 
 Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (área: ${areaDetectada}):`;
+          }
 
           completion = await groq.chat.completions.create({
             model: modelo,
@@ -1748,7 +2029,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt }
             ],
-            temperature: 0.7,
+            temperature: tipoProva === 'adaptada' ? 0.5 : 0.7, // Menor temperatura para adaptada (mais consistente)
             max_tokens: 8000,
             top_p: 0.9,
             response_format: { type: "json_object" }
@@ -1838,11 +2119,70 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
           continue;
         }
 
-        if (tipoProva === 'enem') {
+        // ========== PROCESSAMENTO PARA PROVA ADAPTADA ==========
+        if (tipoProva === 'adaptada' || adaptada === true) {
+          const pergunta = questao.pergunta || questao.question || questao.text || 
+                          `Questão ${i + 1} sobre ${conteudo}`;
+          
+          let opcoes = questao.opcoes || questao.options || questao.alternatives || [];
+          
+          if (typeof opcoes === 'string') {
+            opcoes = opcoes.split('\n').filter(o => o.trim().length > 0);
+          }
+          
+          // FORÇAR EXATAMENTE 3 ALTERNATIVAS
+          while (opcoes.length < 3) {
+            const letra = String.fromCharCode(65 + opcoes.length);
+            opcoes.push(`${letra}) Opção ${letra}`);
+          }
+          opcoes = opcoes.slice(0, 3);
+          
+          opcoes = opcoes.map((opcao, idx) => {
+            const letra = String.fromCharCode(65 + idx);
+            if (!opcao.trim().startsWith(`${letra})`)) {
+              return `${letra}) ${opcao.trim()}`;
+            }
+            return opcao.trim();
+          });
+          
+          let respostaCorreta = questao.respostaCorreta !== undefined ? questao.respostaCorreta : 0;
+          
+          if (typeof respostaCorreta === 'string') {
+            if (/^[0-2]$/.test(respostaCorreta)) {
+              respostaCorreta = parseInt(respostaCorreta);
+            } else if (/^[A-C]$/i.test(respostaCorreta)) {
+              respostaCorreta = respostaCorreta.toUpperCase().charCodeAt(0) - 65;
+            } else {
+              respostaCorreta = 0;
+            }
+          }
+          
+          respostaCorreta = Math.max(0, Math.min(2, parseInt(respostaCorreta) || 0));
+          
+          const explicacao = questao.explicacao || questao.explanation || 
+                            `Resposta correta: ${opcoes[respostaCorreta]}.`;
+          
+          questoesProcessadas.push({
+            tipo: 'adaptada',
+            pergunta: pergunta.trim(),
+            opcoes: opcoes.map(o => o.toString().trim()),
+            respostaCorreta: respostaCorreta,
+            explicacao: explicacao.trim(),
+            dificuldade: dificuldade,
+            area: questao.area || areaDetectada,
+            adaptada: true,
+            alternativas: 3,
+            recursosAcessibilidade: recursosAcessibilidade || [
+              'fonte_ampliada',
+              'alto_contraste',
+              'leitor_tela'
+            ]
+          });
+          
+        } else if (tipoProva === 'enem') {
+          // ... código existente para ENEM ...
           const contexto = questao.contexto || questao.textoBase || questao.base || '';
           const enunciado = questao.enunciado || questao.pergunta || questao.question || '';
-          const competencia = questao.competencia || questao.competence || '';
-          const habilidade = questao.habilidade || questao.skill || '';
           
           let opcoes = questao.opcoes || questao.options || questao.alternatives || [];
           
@@ -1888,13 +2228,14 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
             opcoes: opcoes.map(o => o.toString().trim()),
             respostaCorreta: respostaCorreta,
             explicacao: explicacao.trim(),
-            competencia: competencia.trim(),
-            habilidade: habilidade.trim(),
+            competencia: questao.competencia || questao.competence || '',
+            habilidade: questao.habilidade || questao.skill || '',
             dificuldade: dificuldade,
             area: areaDetectada
           });
           
         } else {
+          // PROVA SIMPLES (5 alternativas) - código existente
           const pergunta = questao.pergunta || questao.question || questao.text || 
                           `Questão ${i + 1} sobre ${conteudo}`;
           
@@ -1959,12 +2300,26 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     } catch (iaError) {
       console.error('❌ Erro na IA, usando fallback:', iaError.message);
       
-      // FALLBACK SEGURO
+      // ========== FALLBACK ESPECÍFICO PARA PROVA ADAPTADA ==========
       const areaFallback = areaDetectada && areaDetectada in exemplosPorArea ? areaDetectada : 'geral';
-      const exemplos = exemplosPorArea[areaFallback] || exemplosPorArea.geral;
       
       for (let i = 0; i < quantidadeQuestoes; i++) {
-        if (tipoProva === 'enem') {
+        if (tipoProva === 'adaptada' || adaptada === true) {
+          const exemplosAdaptados = exemplosPorArea.adaptada || exemplosPorArea.geral;
+          const exemploBase = exemplosAdaptados.exemplo1;
+          
+          questoesValidadas.push({
+            tipo: 'adaptada',
+            pergunta: `Questão ${i + 1}: ${exemploBase.pergunta.replace('João', 'Maria').replace('24', '36').replace('3', '4')}`,
+            opcoes: exemploBase.opcoes,
+            respostaCorreta: exemploBase.respostaCorreta,
+            explicacao: exemploBase.explicacao,
+            dificuldade: dificuldade,
+            area: areaFallback,
+            adaptada: true,
+            alternativas: 3
+          });
+        } else if (tipoProva === 'enem') {
           questoesValidadas.push({
             tipo: 'enem',
             contexto: `Contexto sobre ${conteudo}: análise e interpretação.`,
@@ -1984,6 +2339,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
             area: areaFallback
           });
         } else {
+          const exemplos = exemplosPorArea[areaFallback] || exemplosPorArea.geral;
           const exemploBase = exemplos.exemplo1 || exemplosPorArea.geral.exemplo1;
           questoesValidadas.push({
             tipo: 'simples',
@@ -2001,13 +2357,15 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       console.log(`✅ ${questoesValidadas.length} questões criadas via fallback (área: ${areaFallback})`);
     }
 
-    // Criar a prova
+    // ========== CRIAR PROVA COM CAMPOS ESPECÍFICOS ==========
     const prova = new Prova({
       userId: req.userId,
       turmaId: turma._id,
       titulo: titulo || `Prova: ${conteudo.substring(0, 50)}`,
       conteudo: conteudo,
       tipoProva: tipoProva,
+      adaptada: tipoProva === 'adaptada' || adaptada === true, // <-- NOVO
+      alternativas: tipoProva === 'adaptada' || adaptada === true ? 3 : 5, // <-- NOVO
       anexos: anexos,
       questoes: questoesValidadas,
       quantidadeQuestoes: questoesValidadas.length,
@@ -2017,34 +2375,59 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       horarioTermino: horarioTermino,
       duracaoMinutos: duracaoMinutos,
       status: 'rascunho',
-      alunosAtribuidos: turma.alunos,
+      alunosAtribuidos: alunosDestino.map(a => a._id), // <-- NOVO: APENAS ALUNOS ALVO
+      totalAlunosAlvo: alunosDestino.length, // <-- NOVO
+      alunosComAcessibilidade: tipoProva === 'adaptada' ? alunosDestino.length : 0, // <-- NOVO
+      recursosAcessibilidade: recursosAcessibilidade || [
+        'fonte_ampliada',
+        'alto_contraste', 
+        'leitor_tela',
+        'tempo_adicional'
+      ],
       fonteGeracao: `Groq AI - Área: ${areaDetectada}`,
       publicada: false
     });
 
     await prova.save();
 
+    // Adicionar a prova à turma
     turma.provas.push(prova._id);
     await turma.save();
 
-    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} do tipo ${tipoProva} (área: ${areaDetectada}) para turma ${turma.nome}`);
+    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} do tipo ${tipoProva} (área: ${areaDetectada})`);
+    console.log(`🎯 Alunos alvo: ${alunosDestino.length} alunos`);
+
+    // ========== MENSAGEM PERSONALIZADA ==========
+    let mensagemSucesso = '';
+    if (tipoProva === 'adaptada' || adaptada === true) {
+      mensagemSucesso = `✅ Prova ADAPTADA criada com sucesso! 
+        📝 Formato: 3 alternativas por questão
+        👥 Público alvo: ${alunosDestino.length} aluno(s) com necessidades de acessibilidade
+        🎯 Esta prova será visível APENAS para alunos que selecionaram "Sim" no cadastro.`;
+    } else {
+      mensagemSucesso = `✅ Prova tipo ${tipoProva} (área: ${areaDetectada}) criada e enviada para ${alunosDestino.length} alunos`;
+    }
 
     res.json({
       success: true,
       provaId: prova._id,
       codigo: prova.codigo,
-      mensagem: `Prova tipo ${tipoProva} (área: ${areaDetectada}) criada e enviada para ${turma.alunos.length} alunos`,
+      mensagem: mensagemSucesso,
       prova: {
         id: prova._id,
         titulo: prova.titulo,
         codigo: prova.codigo,
         tipoProva: prova.tipoProva,
+        adaptada: prova.adaptada,
+        alternativas: prova.alternativas,
         areaDetectada: areaDetectada,
         quantidadeQuestoes: prova.quantidadeQuestoes,
         dataLimite: prova.dataLimite,
         duracao: prova.duracao,
         dificuldade: prova.dificuldade,
-        fonteGeracao: prova.fonteGeracao
+        fonteGeracao: prova.fonteGeracao,
+        totalAlunosAlvo: alunosDestino.length,
+        alunosComAcessibilidade: prova.alunosComAcessibilidade
       },
       questoes: prova.questoes.slice(0, quantidadeQuestoes)
     });
@@ -2059,7 +2442,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
 });
 
 //===============ROTA PARA UPLOAD DE IMAGENS===============
-// ============ ROTA PARA UPLOAD DE IMAGENS ============
 // Upload de imagens para questões
 app.post('/api/upload/imagem', authenticateToken, async (req, res) => {
     try {
@@ -2307,26 +2689,67 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
         
         const alunoId = req.userId;
         
+        // ========== 🔴 BUSCAR DADOS DO ALUNO DIRETAMENTE DO BANCO ==========
+        const aluno = await User.findById(alunoId).select('precisaAcessibilidade condicaoAcessibilidade role nome email');
+        
+        if (!aluno) {
+            return res.status(404).json({
+                success: false,
+                error: 'Aluno não encontrado'
+            });
+        }
+        
+        // 🔥 PEGAR A FLAG DIRETAMENTE DO BANCO, NÃO DO TOKEN!
+        const precisaAcessibilidade = aluno.precisaAcessibilidade === true;
+        
+        // Buscar turmas do aluno
         const turmas = await Turma.find({ alunos: alunoId });
         const turmaIds = turmas.map(t => t._id);
         
-        // Buscar todas as provas ativas das turmas do aluno
+        if (turmaIds.length === 0) {
+            console.log(`   ⚠️ Aluno não está em nenhuma turma`);
+            return res.json({ 
+                success: true, 
+                provas: [],
+                count: 0,
+                mensagem: 'Você não está matriculado em nenhuma turma'
+            });
+        }
+        
+        // Buscar TODAS as provas ativas das turmas do aluno
         const provas = await Prova.find({
             turmaId: { $in: turmaIds },
-            status: 'ativa'
+            status: 'ativa',
+            publicada: true
         })
         .populate('turmaId', 'nome disciplina')
         .populate('userId', 'nome')
-        .sort({ createdAt: -1 });
+        .select('+tipoProva +adaptada +alternativas +titulo +conteudo +duracaoMinutos +dataLimite +horarioInicio +horarioTermino +quantidadeQuestoes +dificuldade +codigo')
+        .lean();
         
         const provasPendentes = [];
         const hoje = new Date();
         
-        // Configurar hoje como INÍCIO DO DIA (00:00:00) para comparação correta
-        const hojeInicioDia = new Date(hoje);
-        hojeInicioDia.setHours(0, 0, 0, 0);
-                
         for (const prova of provas) {
+            
+            // Detectar se é adaptada
+            const isAdaptada = 
+                prova.tipoProva === 'adaptada' || 
+                prova.adaptada === true || 
+                prova.adaptada === 'true' ||
+                (prova.tipoProva && prova.tipoProva.toLowerCase() === 'adaptada') ||
+                prova.alternativas === 3 ||
+                false;
+            
+            // 🔥 FILTRO USANDO A FLAG DO BANCO DE DADOS
+            if (isAdaptada && !precisaAcessibilidade) {
+                continue;
+            }
+            
+            if (!isAdaptada && precisaAcessibilidade) {
+                continue;
+            }
+            
             // Verificar se o aluno já realizou esta prova
             const provaRealizada = await ProvaRealizada.findOne({
                 provaId: prova._id,
@@ -2339,34 +2762,18 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
             });
             
             if (!provaRealizada && !resultado) {
-                // CORREÇÃO PRINCIPAL: Verificar se a prova está disponível (considerando DATA LIMITE COMO FIM DO DIA)
+                // Verificar disponibilidade por data limite
                 let disponivel = true;
                 
                 if (prova.dataLimite) {
                     const dataLimite = new Date(prova.dataLimite);
-                    
-                    // CORREÇÃO: Configurar dataLimite como FIM DO DIA (23:59:59.999)
                     const dataLimiteFimDia = new Date(dataLimite);
                     dataLimiteFimDia.setHours(23, 59, 59, 999);
-                    
-                    // CORREÇÃO: Verificar se hoje (considerando início do dia) está ANTES ou NO MESMO DIA
-                    // Usamos hojeInicioDia para que se a data limite for hoje, ainda esteja disponível
                     disponivel = hoje <= dataLimiteFimDia;
-                    
-                    // Calcular dias restantes para debug
-                    const diffMs = dataLimiteFimDia - hoje;
-                    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                    
-                    // Se a prova não estiver disponível, logar o motivo
-                    if (!disponivel) {
-                        console.log(`   ❌ Prova "${prova.titulo}" NÃO está disponível`);
-                        console.log(`       Data limite: ${dataLimite.toLocaleDateString('pt-BR')}`);
-                        console.log(`       Hoje: ${hoje.toLocaleDateString('pt-BR')}`);
-                    }
                 }
                 
                 if (disponivel) {
-                    // Calcular dias restantes para a interface
+                    // Calcular dias restantes
                     let diasRestantes = null;
                     if (prova.dataLimite) {
                         const dataLimite = new Date(prova.dataLimite);
@@ -2375,16 +2782,16 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
                         
                         const diffMs = dataLimiteFimDia - hoje;
                         diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-                        
-                        // Se for negativo (já passou), ajustar para 0
                         if (diasRestantes < 0) diasRestantes = 0;
                     }
                     
                     provasPendentes.push({
                         _id: prova._id,
+                        id: prova._id,
                         titulo: prova.titulo,
                         conteudo: prova.conteudo,
                         duracao: prova.duracao,
+                        duracaoMinutos: prova.duracaoMinutos,
                         dataLimite: prova.dataLimite,
                         quantidadeQuestoes: prova.quantidadeQuestoes,
                         dificuldade: prova.dificuldade,
@@ -2395,29 +2802,35 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
                         } : null,
                         professor: prova.userId ? prova.userId.nome : 'Professor',
                         codigo: prova.codigo,
-                        // Adicionar informação de urgência com cálculo correto
+                        
+                        // CAMPOS DE ACESSIBILIDADE
+                        adaptada: isAdaptada,
+                        tipoProva: isAdaptada ? 'adaptada' : (prova.tipoProva || 'simples'),
+                        alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
+                        
                         diasRestantes: diasRestantes,
-                        // Adicionar flags para a interface
-                        expiraHoje: diasRestantes === 0,
-                        disponivelAte: prova.dataLimite ? 
-                            new Date(prova.dataLimite).setHours(23, 59, 59, 999) : 
-                            null
+                        expiraHoje: diasRestantes === 0
                     });
                 }
             }
         }
         
+        // 🔥 INCLUIR DADOS DO ALUNO NA RESPOSTA
         res.json({ 
             success: true, 
             provas: provasPendentes,
             count: provasPendentes.length,
-            hoje: hoje.toISOString(),
-            hojeInicioDia: hojeInicioDia.toISOString(),
+            aluno: {
+                id: aluno._id,
+                nome: aluno.nome,
+                precisaAcessibilidade: precisaAcessibilidade,
+                condicaoAcessibilidade: aluno.condicaoAcessibilidade
+            },
             mensagem: `Encontradas ${provasPendentes.length} provas pendentes`
         });
         
     } catch (error) {
-        console.error('Erro ao listar provas pendentes:', error);
+        console.error('❌ Erro ao listar provas pendentes:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao listar provas pendentes: ' + error.message
@@ -3720,69 +4133,165 @@ app.get('/api/professor/provas/:provaId/cancelamento-detailed', authenticateToke
     }
 });
 
-// ============ ROTA PARA VALIDAR ACESSO À PROVA ============
-// ============ ROTA PARA VALIDAR ACESSO À PROVA (VERSÃO CORRIGIDA) ============
+// ============ ROTA PARA VALIDAR ACESSO À PROVA - VERSÃO COMPLETA E CORRIGIDA ============
 app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.id;
     const alunoId = req.userId;
     
-    console.log(`🔐 Validando acesso: Aluno ${alunoId} para prova ${provaId}`);
+    console.log(`🔐 ===== VALIDANDO ACESSO À PROVA =====`);
+    console.log(`   🆔 Prova ID: ${provaId}`);
+    console.log(`   🆔 Aluno ID: ${alunoId}`);
     
-    const prova = await Prova.findById(provaId);
+    // ========== BUSCAR DADOS DO ALUNO ==========
+    const aluno = await User.findById(alunoId).select('precisaAcessibilidade condicaoAcessibilidade role nome email');
+    
+    if (!aluno) {
+      console.log(`   ❌ Aluno não encontrado`);
+      return res.status(404).json({
+        success: false,
+        error: 'Aluno não encontrado'
+      });
+    }
+    
+    const precisaAcessibilidade = aluno.precisaAcessibilidade === true;
+    
+    console.log(`   👤 Aluno: ${aluno.nome} (${aluno.email})`);
+    console.log(`   🎯 Precisa de acessibilidade: ${precisaAcessibilidade ? 'SIM' : 'NÃO'}`);
+    console.log(`   📋 Condição: ${aluno.condicaoAcessibilidade || 'não especificada'}`);
+    
+    // ========== BUSCAR PROVA COM TODOS OS CAMPOS ==========
+    const prova = await Prova.findById(provaId)
+      .populate('turmaId', 'nome disciplina alunos')
+      .populate('userId', 'nome email')
+      .select('+tipoProva +adaptada +alternativas +titulo +conteudo +duracaoMinutos +dataLimite +horarioInicio +horarioTermino +quantidadeQuestoes +status +publicada');
+    
     if (!prova) {
+      console.log(`   ❌ Prova não encontrada`);
       return res.status(404).json({
         success: false,
         error: 'Prova não encontrada'
       });
     }
     
-    // Verificar se o aluno está na turma da prova
+    // ========== DETECÇÃO ROBUSTA DE PROVA ADAPTADA ==========
+    const isAdaptada = 
+        // 1. Verificar campo tipoProva
+        prova.tipoProva === 'adaptada' || 
+        (prova.tipoProva && prova.tipoProva.toLowerCase() === 'adaptada') ||
+        
+        // 2. Verificar campo adaptada (booleano ou string)
+        prova.adaptada === true || 
+        prova.adaptada === 'true' || 
+        prova.adaptada === 1 ||
+        
+        // 3. Verificar por alternativas
+        prova.alternativas === 3 ||
+        
+        // 4. Fallback
+        false;
+    
+    console.log(`   📋 Prova: "${prova.titulo}"`);
+    console.log(`      ├─ tipoProva: ${prova.tipoProva || 'NÃO DEFINIDO'}`);
+    console.log(`      ├─ adaptada: ${prova.adaptada !== undefined ? prova.adaptada : 'NÃO DEFINIDO'}`);
+    console.log(`      ├─ alternativas: ${prova.alternativas || 'NÃO DEFINIDO'}`);
+    console.log(`      └─ isAdaptada: ${isAdaptada ? 'SIM 🎯' : 'NÃO 📝'}`);
+    
+    // ========== REGRA 1: ALUNO SEM ACESSIBILIDADE NÃO PODE ACESSAR PROVA ADAPTADA ==========
+    if (isAdaptada && !precisaAcessibilidade) {
+      console.log(`   🚫 BLOQUEADO: Aluno SEM acessibilidade tentando acessar prova ADAPTADA`);
+      return res.status(403).json({
+        success: false,
+        error: 'Esta prova é exclusiva para alunos com necessidades de acessibilidade.',
+        codigo: 'ACESSO_NEGADO_ADAPTADA'
+      });
+    }
+    
+    // ========== REGRA 2: ALUNO COM ACESSIBILIDADE SÓ PODE ACESSAR PROVAS ADAPTADAS ==========
+    if (precisaAcessibilidade && !isAdaptada) {
+      console.log(`   🚫 BLOQUEADO: Aluno COM acessibilidade tentando acessar prova NORMAL`);
+      return res.status(403).json({
+        success: false,
+        error: 'Você só pode acessar provas adaptadas. Entre em contato com seu professor.',
+        codigo: 'ACESSO_NEGADO_NORMAL'
+      });
+    }
+    
+    // ========== VERIFICAR SE A PROVA ESTÁ PUBLICADA ==========
+    if (!prova.publicada) {
+      console.log(`   🚫 BLOQUEADO: Prova não foi publicada pelo professor`);
+      return res.status(400).json({
+        success: false,
+        error: 'Esta prova ainda não foi publicada pelo professor.'
+      });
+    }
+    
+    // ========== VERIFICAR SE A PROVA ESTÁ ATIVA ==========
+    if (prova.status !== 'ativa') {
+      console.log(`   🚫 BLOQUEADO: Prova não está ativa (status: ${prova.status})`);
+      return res.status(400).json({
+        success: false,
+        error: 'Esta prova não está disponível no momento.'
+      });
+    }
+    
+    // ========== VERIFICAR SE O ALUNO ESTÁ NA TURMA ==========
     if (prova.turmaId) {
-      const turma = await Turma.findById(prova.turmaId);
+      const turma = prova.turmaId;
       
-      if (!turma) {
-        return res.status(404).json({
-          success: false,
-          error: 'Turma da prova não encontrada'
-        });
-      }
-      
-      const alunoNaTurma = turma.alunos.some(aluno => 
-        aluno.toString() === alunoId.toString()
+      const alunoNaTurma = turma.alunos.some(a => 
+        a.toString() === alunoId.toString()
       );
       
       if (!alunoNaTurma) {
+        console.log(`   🚫 BLOQUEADO: Aluno não está na turma desta prova`);
         return res.status(403).json({
           success: false,
-          error: 'Você não está matriculado na turma desta prova'
+          error: 'Você não está matriculado na turma desta prova.'
         });
       }
+      
+      console.log(`   ✅ Aluno está na turma: ${turma.nome}`);
     }
     
-    // Verificar se o aluno já realizou esta prova
+    // ========== VERIFICAR SE O ALUNO JÁ REALIZOU ESTA PROVA ==========
     const provaRealizada = await ProvaRealizada.findOne({
       provaId: provaId,
       alunoId: alunoId
     });
     
     if (provaRealizada) {
+      console.log(`   🚫 BLOQUEADO: Aluno já realizou esta prova em ${provaRealizada.dataRealizacao}`);
       return res.status(400).json({
         success: false,
-        error: 'Você já realizou esta prova'
+        error: 'Você já realizou esta prova.',
+        dataRealizacao: provaRealizada.dataRealizacao
       });
     }
     
-    // **VERIFICAÇÃO DE DATA LIMITE**
+    const resultado = await Resultado.findOne({
+      provaId: provaId,
+      userId: alunoId
+    });
+    
+    if (resultado) {
+      console.log(`   🚫 BLOQUEADO: Aluno já tem resultado registrado para esta prova`);
+      return res.status(400).json({
+        success: false,
+        error: 'Você já realizou esta prova.'
+      });
+    }
+    
+    // ========== VERIFICAÇÃO DE DATA LIMITE ==========
     const hoje = new Date();
+    
     if (prova.dataLimite) {
       const dataLimite = new Date(prova.dataLimite);
       const dataLimiteFimDia = new Date(dataLimite);
       dataLimiteFimDia.setHours(23, 59, 59, 999);
       
-      console.log(`📅 COMPARAÇÃO DE DATAS:`);
-      console.log(`   Hoje: ${hoje.toLocaleString('pt-BR')}`);
-      console.log(`   Data limite (fim do dia): ${dataLimiteFimDia.toLocaleString('pt-BR')}`);
+      console.log(`   📅 Data limite (fim do dia): ${dataLimiteFimDia.toLocaleString('pt-BR')}`);
+      console.log(`   📅 Data atual: ${hoje.toLocaleString('pt-BR')}`);
       
       if (hoje > dataLimiteFimDia) {
         const dataFormatada = dataLimiteFimDia.toLocaleDateString('pt-BR', {
@@ -3791,23 +4300,23 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
           year: 'numeric'
         });
         
+        console.log(`   🚫 BLOQUEADO: Prova expirada em ${dataFormatada}`);
         return res.status(400).json({
           success: false,
-          error: `📅 Esta prova só estava disponível até ${dataFormatada}`
+          error: `📅 Esta prova só estava disponível até ${dataFormatada}`,
+          codigo: 'PROVA_EXPIRADA'
         });
       }
     }
     
-    // **VERIFICAÇÃO DE HORÁRIO ESPECÍFICO**
+    // ========== VERIFICAÇÃO DE HORÁRIO ESPECÍFICO ==========
     if (prova.horarioInicio && prova.horarioTermino) {
       const dataHoje = hoje.toISOString().split('T')[0];
       const inicioProva = new Date(`${dataHoje}T${prova.horarioInicio}:00`);
       const terminoProva = new Date(`${dataHoje}T${prova.horarioTermino}:00`);
       
-      console.log(`⏰ VERIFICAÇÃO DE HORÁRIO:`);
-      console.log(`   Horário atual: ${hoje.toLocaleTimeString('pt-BR')}`);
-      console.log(`   Início permitido: ${inicioProva.toLocaleTimeString('pt-BR')}`);
-      console.log(`   Término permitido: ${terminoProva.toLocaleTimeString('pt-BR')}`);
+      console.log(`   ⏰ Horário permitido: ${prova.horarioInicio} às ${prova.horarioTermino}`);
+      console.log(`   ⏰ Horário atual: ${hoje.toLocaleTimeString('pt-BR')}`);
       
       if (hoje < inicioProva) {
         const minutosRestantes = Math.floor((inicioProva - hoje) / (1000 * 60));
@@ -3822,85 +4331,122 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
           }
         }
         
+        console.log(`   🚫 BLOQUEADO: Prova ainda não iniciou`);
         return res.status(400).json({
           success: false,
-          error: mensagem
+          error: mensagem,
+          codigo: 'PROVA_NAO_INICIADA',
+          horarioInicio: prova.horarioInicio,
+          minutosRestantes: minutosRestantes
         });
       }
       
       if (hoje > terminoProva) {
+        console.log(`   🚫 BLOQUEADO: Horário da prova já terminou`);
         return res.status(400).json({
           success: false,
-          error: `O horário para esta prova terminou às ${prova.horarioTermino}`
+          error: `O horário para esta prova terminou às ${prova.horarioTermino}`,
+          codigo: 'PROVA_TERMINADA',
+          horarioTermino: prova.horarioTermino
         });
       }
+      
+      // Calcular tempo restante
+      const tempoRestanteMinutos = Math.floor((terminoProva - hoje) / (1000 * 60));
+      console.log(`   ⏱️ Tempo restante: ${tempoRestanteMinutos} minutos`);
     }
     
-    // Verificar se a prova está ativa
-    if (prova.status !== 'ativa') {
-      return res.status(400).json({
-        success: false,
-        error: 'Esta prova não está disponível'
-      });
-    }
-    
-    // Gerar token específico para a prova
+    // ========== GERAR TOKEN ESPECÍFICO PARA A PROVA ==========
     const provaToken = jwt.sign(
       {
         alunoId: alunoId,
         provaId: provaId,
         access: 'prova',
-        exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hora de validade
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hora de validade
+        adaptada: isAdaptada
       },
       process.env.JWT_SECRET
     );
     
-    console.log(`✅ Acesso autorizado para prova ${prova.titulo}`);
-    console.log(`   Horário: ${prova.horarioInicio} às ${prova.horarioTermino}`);
-    console.log(`   Duração: ${prova.duracaoMinutos} minutos`);
+    console.log(`   ✅ ACESSO AUTORIZADO!`);
+    console.log(`   🎟️ Token gerado: ${provaToken.substring(0, 30)}...`);
+    console.log(`   🔗 Redirect: /realizar-prova.html?token=${provaToken.substring(0, 20)}...`);
+    console.log(`🔐 ===== FIM DA VALIDAÇÃO =====\n`);
     
+    // ========== RETORNAR SUCESSO COM DADOS DA PROVA ==========
     res.json({
       success: true,
       provaToken: provaToken,
       prova: {
         id: prova._id,
         titulo: prova.titulo,
-        duracao: prova.duracaoMinutos,
-        quantidadeQuestoes: prova.questoes.length,
+        conteudo: prova.conteudo,
+        duracaoMinutos: prova.duracaoMinutos,
+        quantidadeQuestoes: prova.quantidadeQuestoes,
         dataLimite: prova.dataLimite,
         horarioInicio: prova.horarioInicio,
         horarioTermino: prova.horarioTermino,
+        
+        // ========== CAMPOS DE ACESSIBILIDADE ==========
+        adaptada: isAdaptada,
+        tipoProva: isAdaptada ? 'adaptada' : (prova.tipoProva || 'simples'),
+        alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
+        
+        // ========== TEMPO RESTANTE ==========
         tempoRestanteMinutos: prova.horarioTermino ? 
           Math.floor((new Date(`${hoje.toISOString().split('T')[0]}T${prova.horarioTermino}:00`) - hoje) / (1000 * 60)) : 
-          null
+          null,
+        
+        // ========== INFORMAÇÕES DA TURMA E PROFESSOR ==========
+        turma: prova.turmaId ? {
+          id: prova.turmaId._id,
+          nome: prova.turmaId.nome,
+          disciplina: prova.turmaId.disciplina
+        } : null,
+        professor: prova.userId ? {
+          nome: prova.userId.nome,
+          email: prova.userId.email
+        } : null
+      },
+      aluno: {
+        id: aluno._id,
+        nome: aluno.nome,
+        precisaAcessibilidade: precisaAcessibilidade,
+        condicaoAcessibilidade: aluno.condicaoAcessibilidade
       },
       redirectTo: `/realizar-prova.html?token=${provaToken}`
     });
     
   } catch (error) {
-    console.error('❌ Erro ao validar acesso à prova:', error);
+    console.error('❌ ERRO AO VALIDAR ACESSO À PROVA:');
+    console.error(`   Mensagem: ${error.message}`);
+    console.error(`   Stack: ${error.stack}`);
     
-    // Mensagens de erro específicas
+    // ========== TRATAMENTO DE ERROS ESPECÍFICOS ==========
     let mensagemErro = 'Erro interno do servidor';
     let statusCode = 500;
+    let codigoErro = 'ERRO_INTERNO';
     
     if (error.name === 'CastError') {
-      mensagemErro = 'ID da prova inválido';
+      mensagemErro = 'ID da prova inválido. Formato incorreto.';
       statusCode = 400;
+      codigoErro = 'ID_INVALIDO';
     } else if (error.name === 'JsonWebTokenError') {
-      mensagemErro = 'Erro ao gerar token de acesso';
+      mensagemErro = 'Erro ao gerar token de acesso.';
       statusCode = 500;
-    } else if (error.message.includes('E11000')) {
-      mensagemErro = 'Erro de duplicação no banco de dados';
-      statusCode = 409;
-    } else if (error.message.includes('timeout')) {
-      mensagemErro = 'Timeout na conexão com o banco de dados';
-      statusCode = 504;
+      codigoErro = 'ERRO_TOKEN';
+    } else if (error.message.includes('ECONNREFUSED')) {
+      mensagemErro = 'Erro de conexão com o banco de dados.';
+      statusCode = 503;
+      codigoErro = 'BD_OFFLINE';
     }
     
     res.status(statusCode).json({
       success: false,
-      error: mensagemErro + ': ' + error.message
+      error: mensagemErro,
+      codigo: codigoErro,
+      detalhe: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

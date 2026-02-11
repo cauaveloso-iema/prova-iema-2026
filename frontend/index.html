@@ -1389,7 +1389,7 @@ window.addEventListener('scroll', function() {
                                 </select>
                             </div>
                             
-                            <!-- Tipo de Prova -->
+                            <!-- Tipo de Prova - AGORA COM OPÇÃO ADAPTADA -->
                             <div class="form-group">
                                 <label for="tipoProva" class="form-label">
                                     <i class="fas fa-file-alt"></i> Tipo de Prova
@@ -1397,6 +1397,7 @@ window.addEventListener('scroll', function() {
                                 <select id="tipoProva" class="form-control" required onchange="mudarTipoProva()">
                                     <option value="simples">Prova Simples (5 alternativas)</option>
                                     <option value="enem">Formato ENEM (com texto base)</option>
+                                    <option value="adaptada">🎯 Prova Adaptada - Acessibilidade (3 alternativas)</option>
                                 </select>
                             </div>
                             
@@ -3747,7 +3748,7 @@ window.addEventListener('scroll', function() {
             }
         }
 
-        // Atualizar lista de provas na interface (VERSÃO CORRIGIDA)
+        // ============ FUNÇÃO ATUALIZAR LISTA DE PROVAS - SUA VERSÃO ORIGINAL COM MÍNIMAS ALTERAÇÕES ============
         function atualizarListaProvas(provas) {
             const listaProvas = document.getElementById('listaProvas');
             const alerta = document.getElementById('alertMinhasProvas');
@@ -3757,24 +3758,24 @@ window.addEventListener('scroll', function() {
             // Botão para mostrar rascunhos
             const botaoRascunhos = `
                 <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0; color: var(--gray-700);">
-                    <i class="fas fa-file-alt"></i> Minhas Provas
-                </h3>
-                <button onclick="alternarRascunhos()" id="btnToggleRascunhos" style="
-                    padding: 8px 16px;
-                    background: #f3f4f6;
-                    color: #6b7280;
-                    border: 1px solid #d1d5db;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    display: flex;
-                    align-items: center;
-                    gap: 5px;
-                    font-size: 0.9rem;
-                ">
-                    <i class="fas fa-eye-slash"></i> Mostrar Rascunhos
-                </button>
+                    <h3 style="margin: 0; color: var(--gray-700);">
+                        <i class="fas fa-file-alt"></i> Minhas Provas
+                    </h3>
+                    <button onclick="alternarRascunhos()" id="btnToggleRascunhos" style="
+                        padding: 8px 16px;
+                        background: #f3f4f6;
+                        color: #6b7280;
+                        border: 1px solid #d1d5db;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 5px;
+                        font-size: 0.9rem;
+                    ">
+                        <i class="fas fa-eye-slash"></i> Mostrar Rascunhos
+                    </button>
                 </div>
             `;
             
@@ -3784,7 +3785,7 @@ window.addEventListener('scroll', function() {
             }
             
             if (!provas || provas.length === 0) {
-                listaProvas.innerHTML = `
+                listaProvas.innerHTML = botaoRascunhos + `
                     <div class="empty-state">
                         <i class="fas fa-file-alt" style="font-size: 3rem; margin-bottom: 15px;"></i>
                         <h3>Nenhuma prova criada</h3>
@@ -3794,7 +3795,7 @@ window.addEventListener('scroll', function() {
                 return;
             }
             
-            listaProvas.innerHTML = provas.map(prova => {
+            listaProvas.innerHTML = botaoRascunhos + provas.map(prova => {
                 // Estilo baseado no status
                 let statusClass = 'status-ativa';
                 let statusText = 'Ativa';
@@ -3818,6 +3819,32 @@ window.addEventListener('scroll', function() {
                     dificuldadeColor = '#ef4444'; // vermelho
                 }
                 
+                // ========== 🔴 ADIÇÃO 1: DETECTAR SE É PROVA ADAPTADA ==========
+                const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
+                
+                // ========== 🔴 ADIÇÃO 2: BADGE DE PROVA ADAPTADA ==========
+                let badgeAdaptada = '';
+                if (isAdaptada) {
+                    badgeAdaptada = `
+                        <span style="
+                            background: linear-gradient(135deg, #2563eb, #1e40af);
+                            color: white;
+                            padding: 4px 12px;
+                            border-radius: 20px;
+                            font-size: 0.75rem;
+                            font-weight: 600;
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 6px;
+                            margin-left: 10px;
+                            border: 1px solid rgba(255,255,255,0.2);
+                        ">
+                            <i class="fas fa-universal-access"></i>
+                            Adaptada (3 alternativas)
+                        </span>
+                    `;
+                }
+                
                 // CORREÇÃO: Formatar data corretamente
                 const formatarData = (dataString) => {
                     if (!dataString) return 'Não disponível';
@@ -3833,17 +3860,10 @@ window.addEventListener('scroll', function() {
                 // CORREÇÃO: Extrair nome da turma corretamente
                 const obterNomeTurma = () => {
                     if (!prova.turma) return 'Sem turma';
-                    
-                    // Se for uma string, retorna direto
-                    if (typeof prova.turma === 'string') {
-                        return prova.turma;
-                    }
-                    
-                    // Se for um objeto, tenta pegar o nome
+                    if (typeof prova.turma === 'string') return prova.turma;
                     if (typeof prova.turma === 'object' && prova.turma !== null) {
                         return prova.turma.nome || prova.turma.Nome || 'Turma sem nome';
                     }
-                    
                     return 'Sem turma';
                 };
                 
@@ -3861,82 +3881,222 @@ window.addEventListener('scroll', function() {
                 const totalAlunos = prova.totalAlunos || prova.totalAlunosTurma || 0;
                 
                 return `
-                        <div class="prova-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid ${dificuldadeColor};">
-                            <div class="prova-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
-                                <div>
-                                    <h3 class="prova-titulo" style="font-size: 1.2rem; font-weight: 600; color: #1f2937; margin: 0;">
-                                        ${prova.titulo || 'Sem título'}
-                                    </h3>
-                                    <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
-                                        ${prova.conteudo ? (prova.conteudo.length > 100 ? prova.conteudo.substring(0, 100) + '...' : prova.conteudo) : 'Sem conteúdo'}
-                                    </p>
-                                </div>
-                                <div>
-                                    <span class="prova-status ${statusClass}" style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: ${statusClass === 'status-ativa' ? '#d1fae5' : statusClass === 'status-concluida' ? '#fef3c7' : '#f3f4f6'}; color: ${statusClass === 'status-ativa' ? '#065f46' : statusClass === 'status-concluida' ? '#92400e' : '#6b7280'}">
-                                        <i class="fas ${statusIcon}"></i> ${statusText}
-                                    </span>
-                                </div>
+                    <div class="prova-card" style="
+                        background: white; 
+                        border-radius: 12px; 
+                        padding: 20px; 
+                        margin-bottom: 15px; 
+                        box-shadow: 0 3px 10px rgba(0,0,0,0.08); 
+                        border-left: 4px solid ${dificuldadeColor};
+                        ${isAdaptada ? 'background: linear-gradient(to right, #f0f9ff, white);' : ''}
+                    ">
+                        <div class="prova-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                            <div>
+                                <h3 class="prova-titulo" style="
+                                    font-size: 1.2rem; 
+                                    font-weight: 600; 
+                                    color: ${isAdaptada ? '#1e40af' : '#1f2937'}; 
+                                    margin: 0;
+                                    display: flex;
+                                    align-items: center;
+                                    flex-wrap: wrap;
+                                ">
+                                    ${prova.titulo || 'Sem título'}
+                                    ${badgeAdaptada}
+                                </h3>
+                                <p style="color: #6b7280; margin: 5px 0; font-size: 0.9rem;">
+                                    ${prova.conteudo ? (prova.conteudo.length > 100 ? prova.conteudo.substring(0, 100) + '...' : prova.conteudo) : 'Sem conteúdo'}
+                                </p>
                             </div>
-                            
-                            <div class="prova-info" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; font-size: 0.9rem; color: #6b7280;">
-                                <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
-                                    <i class="fas fa-question-circle"></i>
-                                    <span><strong>${prova.quantidadeQuestoes || 0}</strong> questões</span>
-                                </div>
-                                <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
-                                    <i class="fas fa-school"></i>
-                                    <span>${nomeTurma}</span>
-                                </div>
-                                <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
-                                    <i class="fas fa-users"></i>
-                                    <span><strong>${alunosRealizaram}/${totalAlunos}</strong> alunos</span>
-                                </div>
-                                <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
-                                    <i class="fas fa-chart-line"></i>
-                                    <span>Média: <strong>${mediaNotas}</strong></span>
-                                </div>
-                            </div>
-                            
-                            <div class="prova-datas" style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6b7280; margin-bottom: 15px;">
-                                <div>
-                                    <i class="fas fa-calendar-plus"></i> Criada: ${dataCriacao}
-                                </div>
-                                <div>
-                                    <i class="fas fa-calendar-times"></i> Limite: ${dataLimite}
-                                </div>
-                            </div>
-                            
-                            <div class="prova-actions" style="display: flex; gap: 10px; margin-top: 15px;">
-                                <button class="btn-ver-prova" onclick="verResultadosProva('${prova.id}')" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                                    <i class="fas fa-chart-bar"></i> Ver Resultados
-                                </button>
-                                <button class="btn-visualizar-prova" onclick="visualizarProva('${prova.id}')" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                                    <i class="fas fa-eye"></i> Visualizar
-                                </button>
-                                ${prova.codigo ? `
-                                <button class="btn-compartilhar-prova" onclick="compartilharProva('${prova.codigo}')" style="background: #8b5cf6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                                    <i class="fas fa-share-alt"></i> Código: ${prova.codigo}
-                                </button>
-                                ` : ''}
-                                <!-- BOTÃO PARA LIBERAR TODAS AS NOTAS -->
-                                ${prova.alunosRealizaram > 0 ? `
-                                <button class="btn-liberar-notas" onclick="liberarTodasNotas('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                                    <i class="fas fa-unlock"></i> Liberar Notas
-                                </button>
-                                ` : ''}
-                                ${prova.alunosRealizaram > 0 ? `
-                                <button class="btn-prova-corrigida" onclick="abrirProvaCorrigida('${prova.id}')" style="background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                                    <i class="fas fa-file-check"></i> Prova Corrigida
-                                </button>
-                                ` : ''}
-                                <!-- BOTÃO NOVO: EXCLUIR PROVA -->
-                                <button class="btn-excluir-prova" onclick="solicitarExclusaoProva('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
-                                    <i class="fas fa-trash"></i> Excluir
-                                </button>
+                            <div>
+                                <span class="prova-status ${statusClass}" style="
+                                    display: inline-flex; 
+                                    align-items: center; 
+                                    gap: 5px; 
+                                    padding: 5px 10px; 
+                                    border-radius: 20px; 
+                                    font-size: 0.85rem; 
+                                    font-weight: 600; 
+                                    background: ${statusClass === 'status-ativa' ? '#d1fae5' : 
+                                                statusClass === 'status-concluida' ? '#fef3c7' : 
+                                                '#f3f4f6'}; 
+                                    color: ${statusClass === 'status-ativa' ? '#065f46' : 
+                                            statusClass === 'status-concluida' ? '#92400e' : 
+                                            '#6b7280'};
+                                ">
+                                    <i class="fas ${statusIcon}"></i> ${statusText}
+                                </span>
                             </div>
                         </div>
-                    `;
-                }).join('');
+                        
+                        <div class="prova-info" style="
+                            display: grid; 
+                            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+                            gap: 10px; 
+                            margin-bottom: 15px; 
+                            font-size: 0.9rem; 
+                            color: #6b7280;
+                        ">
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-question-circle"></i>
+                                <span><strong>${prova.quantidadeQuestoes || 0}</strong> questões</span>
+                            </div>
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-school"></i>
+                                <span>${nomeTurma}</span>
+                            </div>
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-users"></i>
+                                <span><strong>${alunosRealizaram}/${totalAlunos}</strong> alunos</span>
+                            </div>
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-chart-line"></i>
+                                <span>Média: <strong>${mediaNotas}</strong></span>
+                            </div>
+                            ${isAdaptada ? `
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-list-ol" style="color: #2563eb;"></i>
+                                <span><strong>3</strong> alternativas</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="prova-datas" style="
+                            display: flex; 
+                            justify-content: space-between; 
+                            font-size: 0.8rem; 
+                            color: #6b7280; 
+                            margin-bottom: 15px;
+                        ">
+                            <div>
+                                <i class="fas fa-calendar-plus"></i> Criada: ${dataCriacao}
+                            </div>
+                            <div>
+                                <i class="fas fa-calendar-times"></i> Limite: ${dataLimite}
+                            </div>
+                        </div>
+                        
+                        <!-- INFORMAÇÃO DE PÚBLICO ALVO - APENAS PARA ADAPTADA -->
+                        ${isAdaptada ? `
+                        <div style="
+                            margin-bottom: 15px;
+                            padding: 12px;
+                            background: #dbeafe;
+                            border-radius: 8px;
+                            font-size: 0.85rem;
+                            color: #1e40af;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            border-left: 3px solid #2563eb;
+                        ">
+                            <i class="fas fa-universal-access"></i>
+                            <span>
+                                <strong>Prova adaptada:</strong> Será enviada apenas para alunos com necessidades de acessibilidade.
+                                ${prova.totalAlunosAlvo ? `${prova.totalAlunosAlvo} aluno(s) nesta turma.` : ''}
+                            </span>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="prova-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                            <button class="btn-ver-prova" onclick="verResultadosProva('${prova.id}')" style="
+                                background: #4f46e5; 
+                                color: white; 
+                                border: none; 
+                                padding: 8px 16px; 
+                                border-radius: 6px; 
+                                cursor: pointer; 
+                                font-weight: 600; 
+                                display: flex; 
+                                align-items: center; 
+                                gap: 5px; 
+                                font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-chart-bar"></i> Ver Resultados
+                            </button>
+                            <button class="btn-visualizar-prova" onclick="visualizarProva('${prova.id}')" style="
+                                background: #10b981; 
+                                color: white; 
+                                border: none; 
+                                padding: 8px 16px; 
+                                border-radius: 6px; 
+                                cursor: pointer; 
+                                font-weight: 600; 
+                                display: flex; 
+                                align-items: center; 
+                                gap: 5px; 
+                                font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-eye"></i> Visualizar
+                            </button>
+                            ${prova.codigo ? `
+                            <button class="btn-compartilhar-prova" onclick="compartilharProva('${prova.codigo}')" style="
+                                background: #8b5cf6; 
+                                color: white; 
+                                border: none; 
+                                padding: 8px 16px; 
+                                border-radius: 6px; 
+                                cursor: pointer; 
+                                font-weight: 600; 
+                                display: flex; 
+                                align-items: center; 
+                                gap: 5px; 
+                                font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-share-alt"></i> Código: ${prova.codigo}
+                            </button>
+                            ` : ''}
+                            ${prova.alunosRealizaram > 0 ? `
+                            <button class="btn-liberar-notas" onclick="liberarTodasNotas('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="
+                                background: #f59e0b; 
+                                color: white; 
+                                border: none; 
+                                padding: 8px 16px; 
+                                border-radius: 6px; 
+                                cursor: pointer; 
+                                font-weight: 600; 
+                                display: flex; 
+                                align-items: center; 
+                                gap: 5px; 
+                                font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-unlock"></i> Liberar Notas
+                            </button>
+                            <button class="btn-prova-corrigida" onclick="abrirProvaCorrigida('${prova.id}')" style="
+                                background: #f59e0b; 
+                                color: white; 
+                                border: none; 
+                                padding: 8px 16px; 
+                                border-radius: 6px; 
+                                cursor: pointer; 
+                                font-weight: 600; 
+                                display: flex; 
+                                align-items: center; 
+                                gap: 5px; 
+                                font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-file-check"></i> Prova Corrigida
+                            </button>
+                            ` : ''}
+                            <button class="btn-excluir-prova" onclick="solicitarExclusaoProva('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="
+                                background: #ef4444; 
+                                color: white; 
+                                border: none; 
+                                padding: 8px 16px; 
+                                border-radius: 6px; 
+                                cursor: pointer; 
+                                font-weight: 600; 
+                                display: flex; 
+                                align-items: center; 
+                                gap: 5px; 
+                                font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-trash"></i> Excluir
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
             
             // Tornar os botões responsivos em telas menores
             const cards = document.querySelectorAll('.prova-card');
@@ -3947,6 +4107,50 @@ window.addEventListener('scroll', function() {
                 }
             });
         }
+
+        // ========== FUNÇÃO PARA FILTRAR APENAS PROVAS ADAPTADAS ==========
+        window.filtrarProvasAdaptadas = function() {
+            const listaProvas = document.getElementById('listaProvas');
+            const cards = document.querySelectorAll('.prova-card, .prova-card-adaptada');
+            let count = 0;
+            
+            cards.forEach(card => {
+                const isAdaptada = card.classList.contains('prova-card-adaptada') || 
+                                card.querySelector('.prova-adaptada-badge');
+                
+                if (isAdaptada) {
+                    card.style.display = 'block';
+                    count++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            
+            if (count === 0) {
+                mostrarAlerta('alertMinhasProvas', '📋 Nenhuma prova adaptada encontrada', 'info');
+            }
+            
+            // Alterar texto do botão
+            const btn = document.getElementById('btnFiltrarAdaptadas');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-universal-access"></i> Mostrando Adaptadas';
+                btn.onclick = mostrarTodasProvas;
+            }
+        };
+
+        // ========== FUNÇÃO PARA MOSTRAR TODAS AS PROVAS ==========
+        window.mostrarTodasProvas = function() {
+            const cards = document.querySelectorAll('.prova-card, .prova-card-adaptada');
+            cards.forEach(card => {
+                card.style.display = 'block';
+            });
+            
+            const btn = document.getElementById('btnFiltrarAdaptadas');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-universal-access"></i> Ver Adaptadas';
+                btn.onclick = filtrarProvasAdaptadas;
+            }
+        };
 
         // Adicionar funções auxiliares
         window.verResultadosProva = function(provaId) {
@@ -4574,21 +4778,40 @@ window.addEventListener('scroll', function() {
             }
         }
 
-        // Função para mudar tipo de prova (mostrar/ocultar anexos)
+        // ============ FUNÇÃO PARA MUDAR TIPO DE PROVA (CORRIGIDA COM ADAPTADA) ============
         function mudarTipoProva() {
             const tipoProva = document.getElementById('tipoProva').value;
             const secaoAnexos = document.getElementById('secaoAnexos');
             
+            // Mostrar/esconder seção de anexos (apenas para ENEM)
             if (tipoProva === 'enem') {
                 secaoAnexos.style.display = 'block';
-                // Inicializar tabs se ainda não foi
-                setTimeout(inicializarTabsAnexos, 100);
+                setTimeout(() => {
+                    if (typeof mostrarTabAnexo === 'function') {
+                        mostrarTabAnexo('upload');
+                    }
+                }, 100);
             } else {
                 secaoAnexos.style.display = 'none';
                 // Limpar anexos se não for ENEM
                 anexos = [];
                 arquivosParaUpload = [];
                 atualizarListaAnexos();
+            }
+            
+            // Mostrar mensagem específica para prova adaptada
+            if (tipoProva === 'adaptada') {
+                mostrarAlerta('alertProva', 
+                    '🎯 Modo Prova Adaptada ativado! As questões terão apenas 3 alternativas e serão enviadas exclusivamente para alunos com necessidades de acessibilidade.', 
+                    'info'
+                );
+                
+                // Opcional: Ajustar dificuldade recomendada
+                const dificuldadeSelect = document.getElementById('dificuldade');
+                if (dificuldadeSelect && dificuldadeSelect.value === 'dificil') {
+                    dificuldadeSelect.value = 'media';
+                    mostrarAlerta('alertProva', 'ℹ️ Dificuldade ajustada para "Médio" (recomendado para prova adaptada)', 'info');
+                }
             }
         }
 
@@ -6546,6 +6769,23 @@ window.addEventListener('scroll', function() {
                         horarioTermino: document.getElementById('horarioTermino').value,
                         anexos: tipoProva === 'enem' ? anexos : []
                     };
+
+                    if (tipoProva === 'adaptada') {
+                        dadosProva.adaptada = true;
+                        dadosProva.alternativas = 3; // Forçar 3 alternativas
+                        dadosProva.formato = 'acessibilidade';
+                        dadosProva.recursosAcessibilidade = [
+                            'fonte_ampliada',
+                            'alto_contraste',
+                            'leitor_tela',
+                            'tempo_adicional'
+                        ];
+                        
+                        // Opcional: Ajustar automaticamente para alunos com acessibilidade
+                        dadosProva.publicoAlvo = 'alunos_acessibilidade';
+                        
+                        console.log('🎯 Prova ADAPTADA configurada com 3 alternativas');
+                    }
                     
                     console.log('📤 Preparando envio da prova:', dadosProva);
                     

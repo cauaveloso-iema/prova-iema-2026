@@ -75,6 +75,42 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Turma'
   }],
+  
+  // ========== 🔴 NOVOS CAMPOS DE ACESSIBILIDADE ==========
+  // Flag que indica se o aluno precisa de acessibilidade
+  precisaAcessibilidade: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Condição específica de acessibilidade
+  condicaoAcessibilidade: {
+    type: String,
+    enum: ['visual', 'auditiva', 'motora', 'intelectual', 'dislexia', 'tdah', 'outra', null],
+    default: null
+  },
+  
+  // Descrição quando a condição for 'outra'
+  outraCondicao: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  
+  // Data que o aluno solicitou acessibilidade (para relatórios)
+  dataSolicitacaoAcessibilidade: {
+    type: Date,
+    default: null
+  },
+  
+  // Quem aprovou a solicitação (admin/professor)
+  acessibilidadeAprovadaPor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  // =======================================================
+  
   // Para alunos
   curso: String,
   periodo: String,
@@ -135,8 +171,7 @@ UserSchema.pre('save', async function(next) {
   }
 });
 
-// ====== CORREÇÃO AQUI ======
-// Método para comparar senha - UserSchema (com U maiúsculo)
+// ====== MÉTODO PARA COMPARAR SENHA ======
 UserSchema.methods.comparePassword = async function(candidatePassword) {
     try {
         // Verificar se candidatePassword é válido
@@ -158,7 +193,6 @@ UserSchema.methods.comparePassword = async function(candidatePassword) {
         return false;
     }
 };
-// ===========================
 
 // Verificar se conta está bloqueada
 UserSchema.methods.isLocked = function() {
@@ -229,5 +263,6 @@ UserSchema.index({ cpf: 1 });
 UserSchema.index({ telefone: 1 });
 UserSchema.index({ matricula: 1 });
 UserSchema.index({ role: 1 });
+UserSchema.index({ precisaAcessibilidade: 1 }); // NOVO ÍNDICE
 
 module.exports = mongoose.model('User', UserSchema);

@@ -17,7 +17,7 @@ const QuestaoSchema = new mongoose.Schema({
     tipo: String,
     tamanho: Number,
     dataUpload: Date
-    }],
+  }],
   respostaCorreta: {
     type: Number,
     required: true,
@@ -28,7 +28,6 @@ const QuestaoSchema = new mongoose.Schema({
     type: String,
     default: ''
   }
-  // REMOVI: { _id: false } - deixa o mongoose criar _id normalmente
 });
 
 const ProvaSchema = new mongoose.Schema({
@@ -59,6 +58,28 @@ const ProvaSchema = new mongoose.Schema({
     min: 1,
     max: 50
   },
+  
+  // ========== 🔴 CAMPOS DE TIPO DE PROVA (ADICIONADOS) ==========
+  tipoProva: {
+    type: String,
+    enum: ['simples', 'enem', 'adaptada'],
+    default: 'simples',
+    required: true
+  },
+  
+  adaptada: {
+    type: Boolean,
+    default: false
+  },
+  
+  alternativas: {
+    type: Number,
+    default: 5,
+    min: 3,
+    max: 5
+  },
+  // ============================================================
+  
   dificuldade: {
     type: String,
     enum: ['facil', 'media', 'dificil'],
@@ -69,7 +90,7 @@ const ProvaSchema = new mongoose.Schema({
     required: false
   },
   horarioInicio: {
-    type: String, // Formato HH:mm (ex: "08:30")
+    type: String,
     required: true,
     default: "08:00",
     validate: {
@@ -80,7 +101,7 @@ const ProvaSchema = new mongoose.Schema({
     }
   },
   horarioTermino: {
-    type: String, // Formato HH:mm (ex: "10:00")
+    type: String,
     required: true,
     default: "09:30",
     validate: {
@@ -94,7 +115,7 @@ const ProvaSchema = new mongoose.Schema({
     type: Number,
     default: 60,
     min: 10,
-    max: 480 // 8 horas máximo
+    max: 480
   },
   codigo: {
     type: String,
@@ -104,23 +125,41 @@ const ProvaSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['rascunho', 'ativa', 'concluida', 'pendente'],
-    default: 'rascunho' // ALTERADO: inicia como rascunho
+    default: 'rascunho'
   },
   
-  // === NOVOS CAMPOS PARA CONTROLE DE PUBLICAÇÃO ===
+  // === CAMPOS PARA CONTROLE DE PUBLICAÇÃO ===
   publicada: {
     type: Boolean,
-    default: false // Não publicada por padrão
+    default: false
   },
   dataPublicacao: {
     type: Date,
     default: null
   },
   
+  // ========== 🔴 CAMPOS DE ATRIBUIÇÃO DE ALUNOS (ADICIONADOS) ==========
   alunosAtribuidos: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  
+  totalAlunosAlvo: {
+    type: Number,
+    default: 0
+  },
+  
+  alunosComAcessibilidade: {
+    type: Number,
+    default: 0
+  },
+  
+  recursosAcessibilidade: [{
+    type: String,
+    enum: ['fonte_ampliada', 'alto_contraste', 'leitor_tela', 'tempo_adicional', 'libras', 'ledor']
+  }],
+  // ================================================================
+  
   totalParticipantes: {
     type: Number,
     default: 0
@@ -148,6 +187,12 @@ ProvaSchema.pre('save', async function(next) {
     this.codigo = code;
   }
   
+  // ========== 🔴 GARANTIR QUE alternativas SEJA 3 PARA PROVA ADAPTADA ==========
+  if (this.tipoProva === 'adaptada' || this.adaptada === true) {
+    this.alternativas = 3;
+    this.adaptada = true;
+  }
+  
   next();
 });
 
@@ -163,7 +208,6 @@ ProvaSchema.pre('save', function(next) {
     if (terminoMinutos <= inicioMinutos) {
       next(new Error('Horário de término deve ser depois do horário de início'));
     } else {
-      // Calcular duração automaticamente
       this.duracaoMinutos = terminoMinutos - inicioMinutos;
       next();
     }
@@ -173,8 +217,6 @@ ProvaSchema.pre('save', function(next) {
 });
 
 // ============ MÉTODOS PARA EDIÇÃO DE QUESTÕES ============
-
-// Método para editar questão existente
 ProvaSchema.methods.editarQuestao = function(questaoId, dadosAtualizados) {
   const questao = this.questoes.id(questaoId);
   if (questao) {
@@ -186,7 +228,6 @@ ProvaSchema.methods.editarQuestao = function(questaoId, dadosAtualizados) {
     if (dadosAtualizados.explicacao !== undefined) {
       questao.explicacao = dadosAtualizados.explicacao;
     }
-    // Marca como editada
     if (!questao.tipo || questao.tipo === 'ia') {
       questao.tipo = 'editada';
     }

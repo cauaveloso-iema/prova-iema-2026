@@ -523,10 +523,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Carregar provas pendentes do aluno - ROTA NOVA
+        // ============ CARREGAR PROVAS PENDENTES DO ALUNO - VERSÃO CORRIGIDA ============
+        // ALUNOS COM ACESSIBILIDADE: Vêem APENAS provas adaptadas
+        // ALUNOS SEM ACESSIBILIDADE: Vêem APENAS provas normais (NUNCA veem adaptadas)
         async function carregarProvasPendentes() {
             try {
                 const token = localStorage.getItem('auth_token');
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                
+                // PEGAR DO LOCALSTORAGE SE O ALUNO PRECISA DE ACESSIBILIDADE
+                const precisaAcessibilidade = userData.precisaAcessibilidade || false;
+                const condicao = userData.condicaoAcessibilidade || '';
+                
+                console.log(`🎯 Aluno - Carregando provas...`);
+                console.log(`   └─ Precisa de acessibilidade: ${precisaAcessibilidade ? 'SIM' : 'NÃO'}`);
+                console.log(`   └─ Condição: ${condicao || 'Não especificada'}`);
+                
                 const response = await fetch(`${API_BASE_URL}/aluno/provas/pendentes`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -536,27 +548,146 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    provasPendentes = data.provas || [];
+                    let todasProvas = data.provas || [];
                     
-                    // Atualizar interface
-                    atualizarListaProvas('provasPendentes', provasPendentes, 'pendente');
+                    // ========== FILTRAGEM POR ACESSIBILIDADE ==========
+                    let provasFiltradas = [];
+                    
+                    if (precisaAcessibilidade) {
+                        // ✅ ALUNO COM ACESSIBILIDADE: Vê APENAS provas adaptadas
+                        provasFiltradas = todasProvas.filter(prova => {
+                            const isAdaptada = prova.adaptada === true || 
+                                            prova.tipoProva === 'adaptada' || 
+                                            prova.adaptada === 'true' ||
+                                            prova.tipoProva?.toLowerCase() === 'adaptada';
+                            
+                            if (isAdaptada) {
+                                console.log(`✅ Prova adaptada encontrada: ${prova.titulo} (ID: ${prova.id})`);
+                                return true;
+                            }
+                            return false;
+                        });
+                        
+                        console.log(`🎯 Aluno com acessibilidade: ${provasFiltradas.length} prova(s) adaptada(s) disponível(is)`);
+                        console.log(`🚫 Provas normais OCULTADAS: ${todasProvas.length - provasFiltradas.length}`);
+                        
+                    } else {
+                        // ✅ ALUNO SEM ACESSIBILIDADE: Vê APENAS provas normais
+                        provasFiltradas = todasProvas.filter(prova => {
+                            const isAdaptada = prova.adaptada === true || 
+                                            prova.tipoProva === 'adaptada' ||
+                                            prova.adaptada === 'true' ||
+                                            prova.tipoProva?.toLowerCase() === 'adaptada';
+                            
+                            return !isAdaptada; // Remove TODAS as adaptadas
+                        });
+                        
+                        console.log(`📚 Aluno sem acessibilidade: ${provasFiltradas.length} prova(s) normal(is) disponível(is)`);
+                        console.log(`🚫 Provas adaptadas OCULTADAS: ${todasProvas.length - provasFiltradas.length}`);
+                    }
+                    
+                    // ========== SE NÃO HOUVER PROVAS ADAPTADAS PARA ALUNO COM ACESSIBILIDADE ==========
+                    if (precisaAcessibilidade && provasFiltradas.length === 0) {
+                        console.log('⚠️ Aluno com acessibilidade - Nenhuma prova adaptada disponível');
+                        
+                        // Mostrar mensagem personalizada
+                        const container = document.getElementById('provasPendentes');
+                        if (container) {
+                            container.innerHTML = `
+                                <div class="empty-state" style="
+                                    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+                                    border-radius: 16px;
+                                    padding: 40px 20px;
+                                    text-align: center;
+                                    border: 2px solid #2563eb;
+                                ">
+                                    <div style="
+                                        width: 80px;
+                                        height: 80px;
+                                        background: #2563eb;
+                                        border-radius: 50%;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        margin: 0 auto 20px;
+                                        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+                                    ">
+                                        <i class="fas fa-universal-access" style="font-size: 40px; color: white;"></i>
+                                    </div>
+                                    <h3 style="color: #1e40af; font-size: 1.5rem; margin-bottom: 10px;">
+                                        Nenhuma Prova Adaptada
+                                    </h3>
+                                    <p style="color: #3b82f6; font-size: 1rem; max-width: 400px; margin: 0 auto;">
+                                        No momento não há provas adaptadas disponíveis para você.
+                                        Aguarde até que seu professor crie uma prova no formato acessível.
+                                    </p>
+                                    <div style="
+                                        margin-top: 25px;
+                                        padding: 15px;
+                                        background: rgba(37, 99, 235, 0.1);
+                                        border-radius: 12px;
+                                        display: inline-block;
+                                    ">
+                                        <span style="display: flex; align-items: center; gap: 10px; color: #1e40af;">
+                                            <i class="fas fa-info-circle"></i>
+                                            Modo Acessibilidade Ativado
+                                        </span>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        // Atualizar variável global com array vazio
+                        provasPendentes = [];
+                        
+                    } else {
+                        // ========== ATUALIZAR VARIÁVEL GLOBAL ==========
+                        provasFiltradas.sort((a, b) => {
+                            // Ordenar por data limite (mais próximas primeiro)
+                            const dataA = a.dataLimite ? new Date(a.dataLimite) : new Date(9999, 11, 31);
+                            const dataB = b.dataLimite ? new Date(b.dataLimite) : new Date(9999, 11, 31);
+                            return dataA - dataB;
+                        });
+                        
+                        provasPendentes = provasFiltradas;
+                        
+                        // ========== ATUALIZAR INTERFACE ==========
+                        atualizarListaProvas('provasPendentes', provasPendentes, 'pendente', precisaAcessibilidade);
+                    }
                     
                     // Carregar provas concluídas também
                     await carregarProvasConcluidas();
+                    
                 } else {
                     throw new Error(data.error || 'Erro ao carregar provas pendentes');
                 }
             } catch (error) {
-                console.error('Erro ao carregar provas pendentes:', error);
-                document.getElementById('provasPendentes').innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <h3>Erro ao carregar provas</h3>
-                        <p>${error.message || 'Tente recarregar a página'}</p>
-                    </div>
-                `;
+                console.error('❌ Erro ao carregar provas pendentes:', error);
+                const container = document.getElementById('provasPendentes');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444; margin-bottom: 15px;"></i>
+                            <h3>Erro ao carregar provas</h3>
+                            <p>${error.message || 'Tente recarregar a página'}</p>
+                            <button onclick="carregarProvasPendentes()" style="
+                                margin-top: 15px;
+                                padding: 10px 20px;
+                                background: #4f46e5;
+                                color: white;
+                                border: none;
+                                border-radius: 6px;
+                                cursor: pointer;
+                            ">
+                                <i class="fas fa-redo"></i> Tentar novamente
+                            </button>
+                        </div>
+                    `;
+                }
             }
         }
+
+
         
         // Carregar provas concluídas - VERSÃO QUE GARANTE DADOS DO LOG
 
@@ -1500,7 +1631,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Atualizar lista de provas na interface - VERSÃO CORRIGIDA COM STATUS CANCELADA
+        // ============ FUNÇÃO PARA ATUALIZAR LISTA DE PROVAS DO ALUNO - VERSÃO CORRIGIDA COM ACESSIBILIDADE ============
         function atualizarListaProvas(elementId, provas, tipo) {
             const container = document.getElementById(elementId);
             
@@ -1516,6 +1647,43 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             container.innerHTML = provas.map(prova => {
+                // ========== 🔴 DETECÇÃO DE PROVA ADAPTADA ==========
+                const isAdaptada = 
+                    prova.adaptada === true || 
+                    prova.adaptada === 'true' || 
+                    prova.tipoProva === 'adaptada' ||
+                    prova.tipoProva?.toLowerCase() === 'adaptada' ||
+                    prova.alternativas === 3 ||
+                    false;
+                
+                const alternativas = isAdaptada ? 3 : (prova.alternativas || 5);
+                
+                // ========== 🔴 BADGE DE PROVA ADAPTADA ==========
+                const badgeAdaptada = isAdaptada ? `
+                    <span style="
+                        background: linear-gradient(135deg, #2563eb, #1e40af);
+                        color: white;
+                        padding: 4px 12px;
+                        border-radius: 20px;
+                        font-size: 0.75rem;
+                        font-weight: 600;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                        margin-left: 10px;
+                        border: 1px solid rgba(255,255,255,0.2);
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                        <i class="fas fa-universal-access"></i>
+                        Adaptada (${alternativas} alternativas)
+                    </span>
+                ` : '';
+                
+                // ========== 🔴 ESTILO DO CARD PARA ADAPTADA ==========
+                const cardStyle = isAdaptada ? 
+                    'border-left: 4px solid #2563eb; background: linear-gradient(to right, #f0f9ff, white);' : 
+                    'border-left: 4px solid #4f46e5; background: white;';
+                
                 const dataLimite = prova.dataLimite ? 
                     new Date(prova.dataLimite).toLocaleDateString('pt-BR', {
                         day: '2-digit',
@@ -1581,14 +1749,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
 
-                
                 // DETERMINAR SE A PROVA ESTÁ DISPONÍVEL PELO HORÁRIO
                 const provaDisponivelPorHorario = !prova.horarioInicio || 
                     (new Date() >= new Date(`${new Date().toISOString().split('T')[0]}T${prova.horarioInicio}:00`) && 
                     new Date() <= new Date(`${new Date().toISOString().split('T')[0]}T${prova.horarioTermino}:00`));
 
                 // DETERMINAR SE A PROVA FOI CANCELADA
-                // Verifica se tem campo cancelada: true OU motivoCancelamento
                 const provaCancelada = prova.cancelada === true || prova.motivoCancelamento || 
                                     prova.status === 'cancelada' || 
                                     (prova.status === 'finalizada' && prova.nota === 0 && prova.motivoCancelamento);
@@ -1600,7 +1766,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (tipo === 'concluida') {
                     if (provaCancelada) {
-                        // PROVA CANCELADA - STATUS ESPECIAL
                         statusClass = 'cancelada';
                         statusText = 'CANCELADA';
                         statusColor = '#ef4444';
@@ -1632,7 +1797,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     const inicioProva = new Date(`${dataHoje}T${prova.horarioInicio}:00`);
                     const terminoProva = new Date(`${dataHoje}T${prova.horarioTermino}:00`);
                     
-                    // Verificar se está dentro do horário
                     if (agora >= inicioProva && agora <= terminoProva) {
                         const minutosRestantes = Math.floor((terminoProva - agora) / (1000 * 60));
                         horarioInfo = `<span style="color: #10b981; font-size: 0.9rem;">
@@ -1652,12 +1816,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                // BOTÃO DE AÇÃO - CORREÇÃO PRINCIPAL
-                // Botão de ação
+                // ========== 🔴 BOTÃO DE AÇÃO COM TEXTO PERSONALIZADO PARA ADAPTADA ==========
                 let botaoAcao = '';
                 
                 if (tipo === 'pendente') {
-                    // Verificar disponibilidade por horário
                     if (!provaDisponivelPorHorario && prova.horarioInicio) {
                         const inicioProva = new Date(`${new Date().toISOString().split('T')[0]}T${prova.horarioInicio}:00`);
                         const minutosRestantes = Math.floor((inicioProva - new Date()) / (1000 * 60));
@@ -1690,16 +1852,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             </button>
                         `;
                     } else {
+                        // ========== 🔴 BOTÃO DIFERENCIADO PARA PROVA ADAPTADA ==========
                         botaoAcao = `
-                            <button class="btn-iniciar-prova" onclick="selecionarProva('${prova._id}')">
-                                <i class="fas fa-play"></i> Realizar Prova
+                            <button class="btn-iniciar-prova" onclick="selecionarProva('${prova._id || prova.id}')" 
+                                style="background: ${isAdaptada ? 'linear-gradient(135deg, #2563eb, #1e40af)' : 'linear-gradient(135deg, #4f46e5, #3730a3)'};">
+                                <i class="fas fa-play"></i> 
+                                ${isAdaptada ? 'Iniciar Prova Adaptada' : 'Realizar Prova'}
                             </button>
                         `;
                     }
                 } else if (tipo === 'concluida') {
-                    // Para provas concluídas
                     if (provaCancelada) {
-                        // PROVA CANCELADA
                         botaoAcao = `
                             <button class="btn-sair-prova" onclick="verDetalhesCancelamento('${prova._id || prova.id}')">
                                 <i class="fas fa-info-circle"></i> Ver Detalhes
@@ -1755,12 +1918,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                             
                             <div style="text-align: center;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px; color: ${horarioColor};">
-                                    <i class="fas fa-${horarioIcon}"></i>
-                                    <strong>Status</strong>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px; color: ${isAdaptada ? '#2563eb' : horarioColor};">
+                                    <i class="fas fa-${isAdaptada ? 'universal-access' : horarioIcon}"></i>
+                                    <strong>${isAdaptada ? 'Acessibilidade' : 'Status'}</strong>
                                 </div>
-                                <div style="font-size: 0.9rem; color: ${horarioColor}; font-weight: 500;">
-                                    ${horarioText}
+                                <div style="font-size: 0.9rem; color: ${isAdaptada ? '#2563eb' : horarioColor}; font-weight: 500;">
+                                    ${isAdaptada ? `${alternativas} alternativas` : horarioText}
                                 </div>
                             </div>
                         </div>
@@ -1768,9 +1931,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 ` : '';
                 
                 return `
-                <div class="prova-card ${tipo}" style="border-left-color: ${statusColor};">
+                <div class="prova-card ${tipo}" style="${cardStyle} border-left-color: ${isAdaptada ? '#2563eb' : statusColor}; ${provaCancelada ? 'background: #fef2f2;' : ''}">
                     <div class="prova-header">
-                        <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'}</h4>
+                        <h4 class="prova-titulo" style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                            ${prova.titulo || 'Prova sem título'}
+                            ${badgeAdaptada}
+                        </h4>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             ${tempoInfo ? `<span style="font-size: 0.8rem; font-weight: 600;">${tempoInfo}</span>` : ''}
                             <span class="prova-status status-${statusClass}" 
@@ -1796,6 +1962,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             <i class="fas fa-question-circle"></i>
                             <span>${prova.quantidadeQuestoes || '?'} questões</span>
                         </div>
+                        ${isAdaptada ? `
+                        <div class="prova-info-item">
+                            <i class="fas fa-list-ol" style="color: #2563eb;"></i>
+                            <span><strong>${alternativas}</strong> alternativas por questão</span>
+                        </div>
+                        ` : ''}
                         ${prova.dataLimite ? `
                         <div class="prova-info-item">
                             <i class="fas fa-calendar-alt"></i>
@@ -1807,69 +1979,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="prova-actions">
                         ${botaoAcao}
                     </div>
-                </div>
-                `;
-                
-                // CSS para status cancelada (adicionar no style também)
-                const statusStyles = {
-                    'pendente': { background: '#fef3c7', color: '#92400e' },
-                    'concluida': { background: '#f3f4f6', color: '#374151' },
-                    'cancelada': { background: '#fee2e2', color: '#dc2626' }
-                };
-                
-                return `
-                <div class="prova-card ${tipo}" style="border-left-color: ${statusColor}; ${provaCancelada ? 'background: #fef2f2;' : ''}">
-                    <div class="prova-header">
-                        <h4 class="prova-titulo">${prova.titulo || 'Prova sem título'}</h4>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            ${tempoInfo ? `<span style="font-size: 0.8rem; font-weight: 600;">${tempoInfo}</span>` : ''}
-                            <span class="prova-status status-${statusClass}" 
-                                style="background: ${statusStyles[statusClass].background}; 
-                                        color: ${statusStyles[statusClass].color};
-                                        ${provaCancelada ? 'font-weight: bold;' : ''}">
-                                ${statusText}
+                    
+                    ${isAdaptada ? `
+                    <div style="margin-top: 15px; padding: 10px; background: #dbeafe; border-radius: 6px; border-left: 3px solid #2563eb;">
+                        <div style="display: flex; align-items: center; gap: 8px; color: #1e40af;">
+                            <i class="fas fa-info-circle"></i>
+                            <span style="font-size: 0.85rem;">
+                                <strong>Prova adaptada exclusiva:</strong> Criada especialmente para alunos com necessidades de acessibilidade. 
+                                Possui ${alternativas} alternativas por questão e recursos visuais otimizados.
                             </span>
                         </div>
                     </div>
-                    ${prova.horarioInicio ? `
-                    <div style="margin-top: 10px; padding: 8px; background: #f0f9ff; border-radius: 6px;">
-                        <div style="display: flex; align-items: center; gap: 8px; color: #0369a1;">
-                            <i class="far fa-clock"></i>
-                            <strong>Horário:</strong> 
-                            ${prova.horarioInicio} às ${prova.horarioTermino} 
-                            (${prova.duracaoMinutos || 30} minutos)
-                        </div>
-                    </div>
                     ` : ''}
-                    <div class="prova-info">
-                        <div class="prova-info-item">
-                            <i class="fas fa-book"></i>
-                            <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
-                        </div>
-                        <div class="prova-info-item">
-                            <i class="fas fa-graduation-cap"></i>
-                            <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
-                        </div>
-                        <div class="prova-info-item">
-                            <i class="fas fa-question-circle"></i>
-                            <span>${prova.quantidadeQuestoes || '?'} questões</span>
-                        </div>
-                        ${prova.duracao ? `
-                        <div class="prova-info-item">
-                            <i class="fas fa-clock"></i>
-                            <span>${prova.duracao} min</span>
-                        </div>
-                        ` : ''}
-                        ${prova.dataLimite ? `
-                        <div class="prova-info-item">
-                            <i class="fas fa-calendar-alt"></i>
-                            <span>Até ${dataLimite}</span>
-                        </div>
-                        ` : ''}
-                    </div>
-                    <div class="prova-actions">
-                        ${botaoAcao}
-                    </div>
+                    
                     ${provaCancelada ? `
                     <div style="margin-top: 10px; padding: 8px; background: #fee2e2; border-radius: 6px; border: 1px solid #fecaca;">
                         <div style="display: flex; align-items: center; gap: 5px; color: #dc2626;">

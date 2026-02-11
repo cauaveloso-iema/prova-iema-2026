@@ -492,6 +492,61 @@
                         <label for="registerPeriodo"><i class="fas fa-calendar-alt"></i> Período (opcional)</label>
                         <input type="text" id="registerPeriodo" class="form-control" placeholder="Ex: 3º período">
                     </div>
+                    
+                    <!-- ========== CAMPO DE ACESSIBILIDADE - SOMENTE PARA ALUNOS ========== -->
+                    <div class="form-group">
+                        <label for="registerAcessibilidade">
+                            <i class="fas fa-universal-access"></i> 
+                            Precisa de acessibilidade para realizar a prova? 
+                            <span style="color: #ef4444; font-size: 0.9em;">*</span>
+                        </label>
+                        <div style="display: flex; gap: 20px; margin-top: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="acessibilidade" id="acessibilidadeSim" value="sim" required>
+                                <span>Sim, preciso de prova adaptada</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="acessibilidade" id="acessibilidadeNao" value="nao" required>
+                                <span>Não, não preciso</span>
+                            </label>
+                        </div>
+                        <small style="display: block; margin-top: 8px; color: #6b7280; font-style: italic;">
+                            <i class="fas fa-info-circle"></i> 
+                            Se você selecionar "Sim", terá acesso a uma versão adaptada da prova com apenas 3 alternativas.
+                        </small>
+                    </div>
+                    
+                    <!-- ========== CAMPO CONDIÇÃO ESPECÍFICA (aparece se selecionar Sim) ========== -->
+                    <div id="condicaoAcessibilidade" style="display: none; margin-top: 10px; margin-bottom: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <div class="form-group">
+                            <label for="registerCondicao">
+                                <i class="fas fa-wheelchair"></i> 
+                                Por favor, especifique sua necessidade de acessibilidade
+                                <span style="color: #ef4444; font-size: 0.9em;">*</span>
+                            </label>
+                            <select id="registerCondicao" class="form-control">
+                                <option value="">Selecione o tipo de adaptação necessária</option>
+                                <option value="visual">Deficiência Visual (fonte ampliada, contraste)</option>
+                                <option value="auditiva">Deficiência Auditiva (Libras, legendas)</option>
+                                <option value="motora">Deficiência Motora (tempo adicional, interface adaptada)</option>
+                                <option value="intelectual">Deficiência Intelectual/Cognitiva</option>
+                                <option value="dislexia">Dislexia ou outra dificuldade de leitura</option>
+                                <option value="tdah">TDAH (Transtorno de Déficit de Atenção)</option>
+                                <option value="outra">Outra condição</option>
+                            </select>
+                            <small style="display: block; margin-top: 5px; color: #6b7280;">
+                                Esta informação será usada para preparar a melhor adaptação para sua prova.
+                            </small>
+                        </div>
+                        <div id="outraCondicaoField" style="display: none; margin-top: 10px;">
+                            <div class="form-group">
+                                <label for="registerOutraCondicao">Qual condição?</label>
+                                <input type="text" id="registerOutraCondicao" class="form-control" placeholder="Descreva sua necessidade">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ========== FIM DOS CAMPOS DE ACESSIBILIDADE ========== -->
+                    
                 </div>
                 
                 <!-- Campos para Professor -->
@@ -641,7 +696,7 @@
             return telefone.length >= 10 && telefone.length <= 11;
         }
 
-        // CORREÇÃO: Remover a função duplicada e manter apenas esta
+        // FUNÇÃO CORRIGIDA - Matrícula OPCIONAL para alunos
         function atualizarCampoMatricula(role) {
             const matriculaField = document.getElementById('matriculaField');
             const matriculaInput = document.getElementById('registerMatricula');
@@ -649,31 +704,40 @@
             const hintText = document.getElementById('matriculaHint');
             const descriptionText = document.getElementById('matriculaDescription');
             
+            if (!matriculaInput || !requiredBadge) return; // Prevenção de erro
+            
             if (role === 'professor') {
-                // Tornar obrigatório para professores
+                // PROFESSOR: Matrícula OBRIGATÓRIA
                 matriculaInput.required = true;
+                matriculaInput.placeholder = "Digite sua matrícula (6 dígitos)";
                 requiredBadge.style.display = 'inline';
-                hintText.style.display = 'inline';
-                descriptionText.style.display = 'block';
-                matriculaField.classList.add('required');
+                requiredBadge.textContent = '*';
+                requiredBadge.style.color = '#ef4444';
                 
-                // Atualizar placeholder e dicas
-                matriculaInput.placeholder = "Digite sua matrícula";
-                hintText.textContent = "";
-                descriptionText.innerHTML = `
-                    <span style="color: #666; font-size: 0.9em;">
-                        Matrícula de 6 dígitos obrigatória para professores
-                    </span>
-                `;
+                if (descriptionText) {
+                    descriptionText.style.display = 'block';
+                    descriptionText.innerHTML = `
+                        <span style="color: #666; font-size: 0.9em;">
+                            Matrícula de 6 dígitos obrigatória para professores
+                        </span>
+                    `;
+                }
                 
             } else {
-                // Opcional para alunos
+                // ALUNO: Matrícula SEMPRE OPCIONAL - NUNCA OBRIGATÓRIA
                 matriculaInput.required = false;
-                requiredBadge.style.display = 'none';
-                hintText.style.display = 'none';
-                descriptionText.style.display = 'none';
-                matriculaField.classList.remove('required');
                 matriculaInput.placeholder = "Sua matrícula (opcional)";
+                requiredBadge.style.display = 'none';
+                
+                if (hintText) {
+                    hintText.style.display = 'none';
+                    hintText.textContent = '';
+                }
+                
+                if (descriptionText) {
+                    descriptionText.style.display = 'none';
+                    descriptionText.innerHTML = '';
+                }
             }
         }
 
@@ -936,6 +1000,32 @@
             if (role === 'aluno') {
                 dadosCadastro.curso = curso;
                 dadosCadastro.periodo = periodo || undefined;
+                
+                // === CORREÇÃO: CAPTURAR CORRETAMENTE OS DADOS DE ACESSIBILIDADE ===
+                
+                // 1. PEGAR O VALOR DO RADIO BUTTON
+                const radioAcessibilidade = document.querySelector('input[name="acessibilidade"]:checked');
+                const precisaAcessibilidade = radioAcessibilidade ? radioAcessibilidade.value === 'sim' : false;
+                
+                console.log(`🎯 ACESSIBILIDADE - Valor bruto do radio:`, radioAcessibilidade?.value);
+                console.log(`🎯 ACESSIBILIDADE - precisaAcessibilidade: ${precisaAcessibilidade}`);
+                
+                // 2. ADICIONAR AO OBJETO DE CADASTRO
+                dadosCadastro.precisaAcessibilidade = precisaAcessibilidade;
+                
+                // 3. SE FOR SIM, CAPTURAR A CONDIÇÃO
+                if (precisaAcessibilidade) {
+                    const condicao = document.getElementById('registerCondicao')?.value;
+                    dadosCadastro.condicaoAcessibilidade = condicao || 'nao_especificada';
+                    
+                    console.log(`🎯 ACESSIBILIDADE - Condição: ${dadosCadastro.condicaoAcessibilidade}`);
+                    
+                    if (condicao === 'outra') {
+                        const outraDescricao = document.getElementById('registerOutraCondicao')?.value.trim();
+                        dadosCadastro.outraCondicao = outraDescricao || 'Não especificada';
+                        console.log(`🎯 ACESSIBILIDADE - Outra descrição: ${dadosCadastro.outraCondicao}`);
+                    }
+                }
                 // Alunos não enviam eixo
             } else if (role === 'professor') {
                 const eixo = document.getElementById('registerEixo').value;
@@ -996,9 +1086,80 @@
                 btn.disabled = false;
             }
         });
+
+        // ========== FUNÇÃO PARA GARANTIR QUE OS CAMPOS DE ACESSIBILIDADE ESTÃO CONFIGURADOS ==========
+        function inicializarCamposAcessibilidade() {
+            console.log('🔧 Inicializando campos de acessibilidade...');
+            
+            const radioSim = document.getElementById('acessibilidadeSim');
+            const radioNao = document.getElementById('acessibilidadeNao');
+            const condicaoDiv = document.getElementById('condicaoAcessibilidade');
+            const selectCondicao = document.getElementById('registerCondicao');
+            const outraCondicaoField = document.getElementById('outraCondicaoField');
+            const registerOutraCondicao = document.getElementById('registerOutraCondicao');
+            
+            if (!radioSim || !radioNao) {
+                console.error('❌ Campos de acessibilidade não encontrados no HTML!');
+                return;
+            }
+            
+            // Remover event listeners antigos e adicionar novos
+            radioSim.removeEventListener('change', handleAcessibilidadeSim);
+            radioNao.removeEventListener('change', handleAcessibilidadeNao);
+            
+            radioSim.addEventListener('change', handleAcessibilidadeSim);
+            radioNao.addEventListener('change', handleAcessibilidadeNao);
+            
+            function handleAcessibilidadeSim() {
+                if (this.checked) {
+                    console.log('✅ Aluno SELECIONOU acessibilidade');
+                    condicaoDiv.style.display = 'block';
+                    selectCondicao.setAttribute('required', 'true');
+                }
+            }
+            
+            function handleAcessibilidadeNao() {
+                if (this.checked) {
+                    console.log('❌ Aluno NÃO selecionou acessibilidade');
+                    condicaoDiv.style.display = 'none';
+                    selectCondicao.removeAttribute('required');
+                    selectCondicao.value = '';
+                    if (registerOutraCondicao) {
+                        registerOutraCondicao.value = '';
+                    }
+                    outraCondicaoField.style.display = 'none';
+                }
+            }
+            
+            // Configurar select de condição
+            if (selectCondicao) {
+                selectCondicao.removeEventListener('change', handleCondicaoChange);
+                selectCondicao.addEventListener('change', handleCondicaoChange);
+                
+                function handleCondicaoChange() {
+                    if (this.value === 'outra') {
+                        outraCondicaoField.style.display = 'block';
+                        if (registerOutraCondicao) {
+                            registerOutraCondicao.setAttribute('required', 'true');
+                        }
+                    } else {
+                        outraCondicaoField.style.display = 'none';
+                        if (registerOutraCondicao) {
+                            registerOutraCondicao.removeAttribute('required');
+                            registerOutraCondicao.value = '';
+                        }
+                    }
+                }
+            }
+            
+            console.log('✅ Campos de acessibilidade inicializados');
+        }
+
+
         
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
+            inicializarCamposAcessibilidade();
             console.log('🚀 Sistema de login/cadastro carregado!');
             
             // Verificar se já está logado
@@ -1010,6 +1171,47 @@
                 // Redirecionar automaticamente
                 const redirectUrl = userData.role === 'professor' ? 'index.html' : 'aluno.html';
                 window.location.href = redirectUrl;
+            }
+
+            const radioSim = document.getElementById('acessibilidadeSim');
+            const radioNao = document.getElementById('acessibilidadeNao');
+            const condicaoDiv = document.getElementById('condicaoAcessibilidade');
+            const selectCondicao = document.getElementById('registerCondicao');
+            const outraCondicaoField = document.getElementById('outraCondicaoField');
+            const registerOutraCondicao = document.getElementById('registerOutraCondicao');
+
+            if (radioSim && radioNao) {
+                radioSim.addEventListener('change', function() {
+                    if (this.checked) {
+                        condicaoDiv.style.display = 'block';
+                        selectCondicao.setAttribute('required', 'true');
+                    }
+                });
+                
+                radioNao.addEventListener('change', function() {
+                    if (this.checked) {
+                        condicaoDiv.style.display = 'none';
+                        selectCondicao.removeAttribute('required');
+                        // Resetar valores
+                        selectCondicao.value = '';
+                        registerOutraCondicao.value = '';
+                        outraCondicaoField.style.display = 'none';
+                    }
+                });
+            }
+
+            // Mostrar campo "Outra condição" quando selecionado
+            if (selectCondicao) {
+                selectCondicao.addEventListener('change', function() {
+                    if (this.value === 'outra') {
+                        outraCondicaoField.style.display = 'block';
+                        registerOutraCondicao.setAttribute('required', 'true');
+                    } else {
+                        outraCondicaoField.style.display = 'none';
+                        registerOutraCondicao.removeAttribute('required');
+                        registerOutraCondicao.value = '';
+                    }
+                });
             }
             
             // Configurar data mínima para inputs date

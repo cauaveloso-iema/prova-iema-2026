@@ -3334,3 +3334,55 @@ code {
     }
 }
 
+/* Garantir que o badge de obrigatório só apareça quando necessário */
+.required-badge {
+    color: #ef4444;
+    font-size: 0.9em;
+    display: none; /* começa escondido */
+}
+
+/* Quando a matrícula for obrigatória, o JavaScript muda para display: inline */
+#matriculaField.required .required-badge {
+    display: inline;
+}
+
+/* ===== ESTILOS PARA PROVA ADAPTADA (3 ALTERNATIVAS) ===== */
+.prova-adaptada-badge {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.prova-adaptada-badge i {
+    font-size: 0.9rem;
+}
+
+/* Card da prova adaptada na listagem */
+.prova-card-adaptada {
+    border-left: 4px solid #2563eb !important;
+    background: linear-gradient(to right, #f0f9ff, white);
+}
+
+.prova-card-adaptada .prova-titulo {
+    color: #1e40af !important;
+}
+
+/* Badge de acessibilidade */
+.acessibilidade-tag {
+    background: rgba(37, 99, 235, 0.1);
+    color: #1e40af;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(37, 99, 235, 0.2);
+}
