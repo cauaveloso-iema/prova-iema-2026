@@ -1010,6 +1010,18 @@ app.post('/api/upload/temp', authenticateToken, upload.single('arquivo'), async 
   }
 });
 
+// Configurar upload de arquivos com express-fileupload
+const fileUpload = require('express-fileupload');
+app.use(fileUpload({
+    useTempFiles: false,
+    createParentPath: true,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB
+    },
+    abortOnLimit: true,
+    responseOnLimit: "Arquivo muito grande. Máximo 10MB."
+}));
+
 // ============ ROTA PARA PUBLICAR PROVA ============
 app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (req, res) => {
   try {
@@ -1097,6 +1109,104 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
       error: 'Erro ao publicar prova: ' + error.message
     });
   }
+});
+
+// ============ ROTA PARA EDITAR QUESTÕES ============
+app.put('/api/provas/:id/questoes', authenticateToken, async (req, res) => {
+  try {
+    const prova = await Prova.findOne({
+      _id: req.params.id,
+      userId: req.userId,  // Corrigido: use req.userId ao invés de req.user._id
+      publicada: false // Só permite editar provas não publicadas
+    });
+    
+    if (!prova) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Prova não encontrada ou já publicada' 
+      });
+    }
+    
+    const { questoes } = req.body;
+    
+    if (!questoes || !Array.isArray(questoes)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Lista de questões inválida' 
+      });
+    }
+    
+    // Validar todas as questões
+    const todasValidas = questoes.every((q, index) => {
+      const temPergunta = q.pergunta && q.pergunta.trim() !== '';
+      const temOpcoes = q.opcoes && Array.isArray(q.opcoes) && q.opcoes.length >= 2;
+      const opcoesPreenchidas = q.opcoes.every(opcao => opcao && opcao.trim() !== '');
+      const respostaValida = q.respostaCorreta !== undefined && 
+                           q.respostaCorreta >= 0 && 
+                           q.respostaCorreta < q.opcoes.length;
+      
+      return temPergunta && temOpcoes && opcoesPreenchidas && respostaValida;
+    });
+    
+    if (!todasValidas) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Uma ou mais questões têm dados inválidos' 
+      });
+    }
+    
+    if (questoes.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'A prova deve ter pelo menos uma questão' 
+      });
+    }
+    
+    // Atualizar questões
+    prova.questoes = questoes; // Corrigido: use prova.questoes diretamente
+    prova.quantidadeQuestoes = questoes.length;
+    prova.updatedAt = new Date();
+    
+    await prova.save();
+    
+    res.json({
+      success: true,
+      mensagem: 'Questões atualizadas com sucesso',
+      prova: {
+        id: prova._id,
+        titulo: prova.titulo,
+        quantidadeQuestoes: prova.quantidadeQuestoes
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao atualizar questões:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro interno ao atualizar questões' 
+    });
+  }
+});
+
+// Rota para limpar imagens não utilizadas
+app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => {
+    try {
+        // Correção: usar req.userRole em vez de req.user.role
+        if (req.userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas administradores podem limpar imagens'
+            });
+        }
+        
+        // ... resto do código
+    } catch (error) {
+        console.error('Erro na limpeza:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro na limpeza de imagens'
+        });
+    }
 });
 
 // ============ ROTAS DE TURMA (PROFESSOR) ============
@@ -1936,7 +2046,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
         dificuldade: prova.dificuldade,
         fonteGeracao: prova.fonteGeracao
       },
-      questoes: prova.questoes.slice(0, 3)
+      questoes: prova.questoes.slice(0, quantidadeQuestoes)
     });
 
   } catch (error) {
@@ -1947,6 +2057,98 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     });
   }
 });
+
+//===============ROTA PARA UPLOAD DE IMAGENS===============
+// ============ ROTA PARA UPLOAD DE IMAGENS ============
+// Upload de imagens para questões
+app.post('/api/upload/imagem', authenticateToken, async (req, res) => {
+    try {
+        // Verificar se é professor - USANDO req.userRole em vez de req.user.role
+        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas professores podem fazer upload de imagens'
+            });
+        }
+        
+        // Verificar se há arquivo
+        if (!req.files || !req.files.imagem) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhuma imagem enviada'
+            });
+        }
+        
+        const imagem = req.files.imagem;
+        
+        // Tipos permitidos
+        const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!tiposPermitidos.includes(imagem.mimetype)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tipo de imagem não suportado. Use JPEG, PNG, GIF ou WebP.'
+            });
+        }
+        
+        // Tamanho máximo: 5MB
+        if (imagem.size > 5 * 1024 * 1024) {
+            return res.status(400).json({
+                success: false,
+                error: 'Imagem muito grande. Máximo 5MB.'
+            });
+        }
+        
+        // Criar pasta de uploads
+        const uploadDir = path.join(__dirname, 'uploads/imagens-questoes');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        
+        // Gerar nome seguro
+        const safeName = imagem.name.replace(/[^a-zA-Z0-9.]/g, '_');
+        const fileName = `questao_img_${Date.now()}_${safeName}`;
+        const filePath = path.join(uploadDir, fileName);
+        
+        // Salvar arquivo
+        await imagem.mv(filePath);
+        
+        const imageUrl = `/uploads/imagens-questoes/${fileName}`;
+        
+        console.log(`✅ Imagem salva: ${imageUrl} por ${req.userId}`);
+        
+        res.json({
+            success: true,
+            url: imageUrl,
+            nome: imagem.name,
+            nomeArquivo: fileName,
+            tipo: imagem.mimetype,
+            tamanho: imagem.size,
+            dataUpload: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro no upload:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao processar imagem'
+        });
+    }
+});
+
+// Função auxiliar para obter dimensões da imagem (opcional)
+async function obterDimensoesImagem(caminhoArquivo) {
+    try {
+        const sizeOf = require('image-size');
+        const dimensions = sizeOf(caminhoArquivo);
+        return {
+            width: dimensions.width,
+            height: dimensions.height
+        };
+    } catch (error) {
+        console.warn('⚠️ Não foi possível obter dimensões da imagem:', error.message);
+        return { width: 0, height: 0 };
+    }
+}
 
 // ============ ROTA PARA ALUNO RESPONDER PROVA (ATUALIZADA) ============
 app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
@@ -2093,7 +2295,6 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ ROTA PARA ALUNO VER PROVAS PENDENTES ============
 // ============ ROTA PARA ALUNO VER PROVAS PENDENTES - VERSÃO CORRIGIDA ============
 app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
     try {
@@ -6509,6 +6710,7 @@ app.get('/api/chatbot/context', authenticateToken, (req, res) => {
 
 // ============ FRONTEND ESTÁTICO ============
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });

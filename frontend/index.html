@@ -1566,6 +1566,9 @@
                             <button class="btn btn-success" onclick="publicarProva()" style="flex: 1;">
                                 <i class="fas fa-paper-plane"></i> Publicar para a Turma
                             </button>
+                            <button class="btn btn-warning" onclick="abrirEdicaoQuestoesPreview()" style="flex: 1; min-width: 200px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;">
+                                <i class="fas fa-edit"></i> Editar Questões (Avançado)
+                            </button>
                             <button class="btn btn-danger" onclick="regenerarProva()" style="flex: 1;">
                                 <i class="fas fa-redo"></i> Regenerar Prova
                             </button>
@@ -6729,6 +6732,1921 @@
         window.solicitarExclusaoTurma = solicitarExclusaoTurma;
         window.confirmarExclusaoTurma = confirmarExclusaoTurma;
         window.fecharModal = fecharModal;
+
+        // ============ EDITOR AVANÇADO DE QUESTÕES ============
+        let questoesParaEditar = [];
+        let editoresAtivos = {}; 
+        let imagensCarregadas = {};
+
+        // Função para abrir edição das questões do preview
+        // ============ ABRIR EDITOR AVANÇADO DE QUESTÕES (COMPLETO) ============
+        async function abrirEdicaoQuestoesPreview() {
+            if (!provaGerada || !provaGerada.questoes || provaGerada.questoes.length === 0) {
+                mostrarAlerta('alertProva', '⚠️ Nenhuma prova gerada para editar', 'info');
+                return;
+            }
+            
+            // VERIFICAR SE A PROVA PODE SER EDITADA
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/provas/${provaGerada.id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.prova.publicada) {
+                        mostrarAlerta('alertProva', 
+                            '❌ Esta prova já foi publicada e não pode ser editada.\n' +
+                            'Crie uma nova prova para fazer alterações.', 
+                            'error');
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.warn('Não foi possível verificar status da prova:', error);
+            }
+            
+            console.log('✅ Abrindo editor avançado de questões...');
+            
+            // Preparar dados para edição - Deep copy para não modificar original
+            questoesParaEditar = JSON.parse(JSON.stringify(provaGerada.questoes));
+            
+            // Garantir que as questões tenham a estrutura correta
+            questoesParaEditar = questoesParaEditar.map((questao, index) => ({
+                ...questao,
+                pergunta: questao.pergunta || '<p>Digite aqui a pergunta da questão...</p>',
+                opcoes: questao.opcoes || [
+                    '<p>Resposta correta</p>',
+                    '<p>Resposta incorreta</p>',
+                    '<p>Resposta incorreta</p>',
+                    '<p>Resposta incorreta</p>',
+                    '<p>Resposta incorreta</p>'
+                ],
+                respostaCorreta: questao.respostaCorreta !== undefined ? questao.respostaCorreta : 0,
+                explicacao: questao.explicacao || '<p>Explique por que esta resposta está correta...</p>',
+                dificuldade: questao.dificuldade || 'media',
+                tags: questao.tags || [],
+                imagens: questao.imagens || [],
+                temLatex: questao.temLatex || false,
+                tipo: questao.tipo || 'manual',
+                _id: questao._id || `temp-${index}`
+            }));
+            
+            console.log('📝 Preparando editor com', questoesParaEditar.length, 'questões');
+            
+            // Criar ou obter modal
+            let modal = document.getElementById('modalEditorAvancado');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.id = 'modalEditorAvancado';
+                document.body.appendChild(modal);
+            }
+            
+            // CONTEÚDO COMPLETO DO MODAL
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 1000px; max-height: 95vh; width: 95%; padding: 0; overflow: hidden;">
+                    <!-- HEADER FIXO -->
+                    <div class="modal-header" style="position: sticky; top: 0; background: white; z-index: 100; border-bottom: 1px solid #e5e7eb; padding: 15px 20px;">
+                        <h3 style="margin: 0; color: var(--gray-800); display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-edit" style="color: #f59e0b;"></i> 
+                            <div>
+                                <div>Editor Avançado de Questões</div>
+                                <div style="font-size: 0.9rem; font-weight: normal; color: #6b7280; margin-top: 5px;">
+                                    "${provaGerada.titulo || 'Prova Gerada'}" • Suporte a imagens, fórmulas e tabelas
+                                </div>
+                            </div>
+                        </h3>
+                        <button class="modal-close" onclick="fecharEditorAvancado()" style="font-size: 1.5rem; background: none; border: none; cursor: pointer;">&times;</button>
+                    </div>
+                    
+                    <div style="padding: 0; height: calc(95vh - 70px); display: flex; flex-direction: column;">
+                        <!-- BARRA DE FERRAMENTAS SUPERIOR -->
+                        <div style="background: #f8fafc; padding: 15px 20px; border-bottom: 1px solid #e5e7eb; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button onclick="adicionarNovaQuestaoEditor()" 
+                                    style="padding: 8px 16px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-plus-circle"></i> Nova Questão
+                            </button>
+                            
+                            <button onclick="visualizarProvaEditada()" 
+                                    style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-eye"></i> Visualizar
+                            </button>
+                            
+                            <div style="margin-left: auto; display: flex; gap: 10px;">
+                                <button onclick="fecharEditorAvancado()" 
+                                        style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                    Cancelar
+                                </button>
+                                <button onclick="salvarQuestoesEditadasAvancado()" 
+                                        style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-save"></i> Salvar Tudo
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- ÁREA DE ALERTA -->
+                        <div id="alertEditorAvancado" class="alert" style="display: none; margin: 0; border-radius: 0;"></div>
+                        
+                        <!-- NAVEGAÇÃO ENTRE QUESTÕES -->
+                        <div style="background: #f1f5f9; padding: 10px 20px; border-bottom: 1px solid #e5e7eb;">
+                            <div style="display: flex; align-items: center; gap: 15px; overflow-x: auto;">
+                                <span style="font-weight: 600; color: #4b5563; white-space: nowrap;">Navegar:</span>
+                                <div id="navegacaoQuestoes" style="display: flex; gap: 5px;">
+                                    <!-- Botões serão gerados dinamicamente -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- CONTAINER PRINCIPAL COM SCROLL -->
+                        <div id="containerEditorQuestoes" style="flex: 1; overflow-y: auto; padding: 20px;">
+                            <!-- Questões serão carregadas aqui -->
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Carregar navegação e primeira questão
+            carregarNavegacaoQuestoes();
+            await carregarQuestoesEditorAvancado();
+            
+            // Mostrar modal
+            modal.style.display = 'flex';
+        }
+
+        // Função para carregar navegação entre questões
+        function carregarNavegacaoQuestoes() {
+            const container = document.getElementById('navegacaoQuestoes');
+            if (!container) return;
+            
+            let html = '';
+            
+            questoesParaEditar.forEach((questao, index) => {
+                const temImagem = questao.imagens && questao.imagens.length > 0;
+                const temLatex = questao.temLatex;
+                
+                html += `
+                    <button onclick="mostrarQuestaoEditor(${index})" 
+                            class="btn-navegacao-questao" 
+                            data-index="${index}"
+                            style="padding: 8px 12px; background: white; border: 2px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-weight: 600; color: #4b5563; min-width: 40px; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                        ${index + 1}
+                        ${temImagem ? '<i class="fas fa-image" style="color: #8b5cf6; font-size: 0.8rem;"></i>' : ''}
+                        ${temLatex ? '<i class="fas fa-square-root-alt" style="color: #ef4444; font-size: 0.8rem;"></i>' : ''}
+                    </button>
+                `;
+            });
+            
+            html += `
+                <button onclick="adicionarNovaQuestaoEditor()" 
+                        style="padding: 8px 12px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                    <i class="fas fa-plus"></i> Nova
+                </button>
+            `;
+            
+            container.innerHTML = html;
+            
+            // Mostrar primeira questão por padrão
+            if (questoesParaEditar.length > 0) {
+                setTimeout(() => mostrarQuestaoEditor(0), 100);
+            }
+        }
+
+        // Função para carregar questões no editor avançado
+        async function carregarQuestoesEditorAvancado() {
+            const container = document.getElementById('containerEditorQuestoes');
+            if (!container) return;
+            
+            if (!questoesParaEditar || questoesParaEditar.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #6b7280;">
+                        <i class="fas fa-question-circle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <p>Nenhuma questão para editar</p>
+                        <button onclick="adicionarNovaQuestaoEditor()" 
+                                style="margin-top: 15px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            Criar Primeira Questão
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #6b7280;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Carregando editor...</p>
+                </div>
+            `;
+            
+            // Carregar primeira questão
+            await mostrarQuestaoEditor(0);
+        }
+
+        // Função para mostrar uma questão específica no editor
+        async function mostrarQuestaoEditor(index) {
+            if (!questoesParaEditar[index]) return;
+            
+            const container = document.getElementById('containerEditorQuestoes');
+            if (!container) return;
+            
+            const questao = questoesParaEditar[index];
+            const questaoId = `questao-${index}`;
+            
+            // Destacar botão de navegação
+            document.querySelectorAll('.btn-navegacao-questao').forEach(btn => {
+                btn.style.background = 'white';
+                btn.style.borderColor = '#e5e7eb';
+                btn.style.color = '#4b5563';
+            });
+            
+            const btnAtivo = document.querySelector(`.btn-navegacao-questao[data-index="${index}"]`);
+            if (btnAtivo) {
+                btnAtivo.style.background = '#4f46e5';
+                btnAtivo.style.borderColor = '#4f46e5';
+                btnAtivo.style.color = 'white';
+            }
+            
+            // HTML da questão
+            const html = `
+                <div id="${questaoId}" class="editor-questao-container" style="max-width: 900px; margin: 0 auto;">
+                    <!-- Cabeçalho da questão -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #e5e7eb;">
+                        <div>
+                            <h3 style="margin: 0; color: #4b5563; display: flex; align-items: center; gap: 10px;">
+                                <span style="background: #4f46e5; color: white; padding: 2px 12px; border-radius: 12px; font-size: 1rem;">
+                                    Questão ${index + 1}
+                                </span>
+                                <span style="font-size: 0.9rem; color: #6b7280;">
+                                    (${index + 1} de ${questoesParaEditar.length})
+                                </span>
+                            </h3>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="removerQuestaoEditor(${index})" 
+                                    style="padding: 8px 12px; background: #fee2e2; color: #dc2626; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-trash"></i> Remover
+                            </button>
+                            
+                            ${index > 0 ? `
+                                <button onclick="moverQuestaoEditor(${index}, 'cima')" 
+                                        style="padding: 8px 12px; background: #e5e7eb; color: #4b5563; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-arrow-up"></i>
+                                </button>
+                            ` : ''}
+                            
+                            ${index < questoesParaEditar.length - 1 ? `
+                                <button onclick="moverQuestaoEditor(${index}, 'baixo')" 
+                                        style="padding: 8px 12px; background: #e5e7eb; color: #4b5563; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-arrow-down"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Seção de Pergunta -->
+                    <div style="margin-bottom: 30px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <label style="font-weight: 700; color: #4b5563; font-size: 1.1rem;">
+                                <i class="fas fa-question-circle"></i> Texto da Pergunta:
+                            </label>
+                            
+                            <div style="display: flex; gap: 10px;">
+                                <button onclick="inserirFormulaMatematica(${index})" 
+                                        style="padding: 6px 12px; background: #fef3c7; color: #92400e; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.85rem;">
+                                    <i class="fas fa-square-root-alt"></i> Fórmula
+                                </button>
+                                
+                                <button onclick="inserirImagemQuestao(${index}, 'pergunta')" 
+                                        style="padding: 6px 12px; background: #e0e7ff; color: #3730a3; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.85rem;">
+                                    <i class="fas fa-image"></i> Imagem
+                                </button>
+                                
+                                <button onclick="inserirTabelaQuestao(${index})" 
+                                        style="padding: 6px 12px; background: #d1fae5; color: #065f46; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.85rem;">
+                                    <i class="fas fa-table"></i> Tabela
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Editor de pergunta -->
+                        <div id="editor-pergunta-${index}" class="editor-ckeditor" style="min-height: 150px; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden;">
+                            ${questao.pergunta || '<p>Digite aqui a pergunta da questão...</p>'}
+                        </div>
+                    </div>
+                    
+                    <!-- Seção de Opções -->
+                    <div style="margin-bottom: 30px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <label style="font-weight: 700; color: #4b5563; font-size: 1.1rem;">
+                                <i class="fas fa-list-ul"></i> Opções de Resposta:
+                            </label>
+                            
+                            <button onclick="adicionarOpcaoAvancada(${index})" 
+                                    style="padding: 8px 16px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-plus"></i> Nova Opção
+                            </button>
+                        </div>
+                        
+                        <div id="container-opcoes-${index}" style="display: flex; flex-direction: column; gap: 15px;">
+                            ${(questao.opcoes || []).map((opcao, opcaoIndex) => `
+                                <div class="opcao-editor" data-opcao-index="${opcaoIndex}" style="border: 2px solid ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#e5e7eb'}; border-radius: 8px; overflow: hidden; background: ${opcaoIndex === questao.respostaCorreta ? '#f0fdf4' : 'white'}; transition: all 0.3s;">
+                                    <!-- Cabeçalho da opção -->
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: ${opcaoIndex === questao.respostaCorreta ? '#d1fae5' : '#f8fafc'}; border-bottom: 1px solid ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#e5e7eb'};">
+                                        <div style="display: flex; align-items: center; gap: 15px;">
+                                            <span style="font-weight: 700; font-size: 1.2rem; color: ${opcaoIndex === questao.respostaCorreta ? '#065f46' : '#4b5563'};">
+                                                ${String.fromCharCode(65 + opcaoIndex)}
+                                            </span>
+                                            
+                                            <div style="display: flex; gap: 8px;">
+                                                <button onclick="marcarOpcaoCorreta(${index}, ${opcaoIndex})" 
+                                                        style="padding: 6px 12px; background: ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#e5e7eb'}; color: ${opcaoIndex === questao.respostaCorreta ? 'white' : '#4b5563'}; border: none; border-radius: 6px; cursor: pointer; font-weight: ${opcaoIndex === questao.respostaCorreta ? 'bold' : 'normal'}; display: flex; align-items: center; gap: 5px;">
+                                                    ${opcaoIndex === questao.respostaCorreta ? '<i class="fas fa-check-circle"></i> Correta' : 'Marcar como correta'}
+                                                </button>
+                                                
+                                                <button onclick="inserirImagemQuestao(${index}, 'opcao', ${opcaoIndex})" 
+                                                        style="padding: 6px 12px; background: #e0e7ff; color: #3730a3; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                                    <i class="fas fa-image"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="display: flex; gap: 8px;">
+                                            ${opcaoIndex >= 2 ? `
+                                                <button onclick="removerOpcaoAvancada(${index}, ${opcaoIndex})" 
+                                                        style="padding: 6px 10px; background: #fee2e2; color: #dc2626; border: none; border-radius: 6px; cursor: pointer;">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Editor da opção -->
+                                    <div id="editor-opcao-${index}-${opcaoIndex}" class="editor-ckeditor-opcao" style="min-height: 100px; padding: 15px;">
+                                        ${opcao || `<p>Texto da opção ${String.fromCharCode(65 + opcaoIndex)}...</p>`}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- Seção de Explicação -->
+                    <div style="margin-bottom: 20px;">
+                        <label style="font-weight: 700; color: #4b5563; font-size: 1.1rem; display: block; margin-bottom: 15px;">
+                            <i class="fas fa-lightbulb"></i> Explicação da Resposta (Opcional):
+                        </label>
+                        
+                        <div id="editor-explicacao-${index}" class="editor-ckeditor" style="min-height: 120px; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden;">
+                            ${questao.explicacao || '<p>Explique por que esta resposta está correta...</p>'}
+                        </div>
+                    </div>
+                    
+                    <!-- Dificuldade e Tags -->
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                            <!-- Dificuldade -->
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4b5563;">
+                                    <i class="fas fa-chart-line"></i> Dificuldade:
+                                </label>
+                                <select id="dificuldade-questao-${index}" class="form-control" style="width: 100%;">
+                                    <option value="facil" ${questao.dificuldade === 'facil' ? 'selected' : ''}>Fácil</option>
+                                    <option value="media" ${!questao.dificuldade || questao.dificuldade === 'media' ? 'selected' : ''}>Médio</option>
+                                    <option value="dificil" ${questao.dificuldade === 'dificil' ? 'selected' : ''}>Difícil</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Tags/Tópicos -->
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4b5563;">
+                                    <i class="fas fa-tags"></i> Tópicos (separados por vírgula):
+                                </label>
+                                <input type="text" 
+                                    id="tags-questao-${index}" 
+                                    class="form-control" 
+                                    value="${questao.tags ? questao.tags.join(', ') : ''}"
+                                    placeholder="Ex: matemática, álgebra, equações">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Galeria de Imagens da Questão -->
+                    ${questao.imagens && questao.imagens.length > 0 ? `
+                        <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                            <h4 style="color: #4b5563; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-images"></i> Imagens desta Questão
+                            </h4>
+                            
+                            <div id="galeria-imagens-${index}" style="display: flex; flex-wrap: wrap; gap: 15px;">
+                                ${questao.imagens.map((img, imgIndex) => `
+                                    <div style="position: relative; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; width: 120px;">
+                                        <img src="${img.url || img}" 
+                                            style="width: 100%; height: 80px; object-fit: cover;">
+                                        <div style="padding: 8px; background: #f8fafc; font-size: 0.8rem; color: #6b7280; word-break: break-all;">
+                                            ${img.nome || `Imagem ${imgIndex + 1}`}
+                                        </div>
+                                        <button onclick="removerImagemQuestao(${index}, ${imgIndex})" 
+                                                style="position: absolute; top: 5px; right: 5px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Navegação inferior -->
+                    <div style="display: flex; justify-content: space-between; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                        ${index > 0 ? `
+                            <button onclick="mostrarQuestaoEditor(${index - 1})" 
+                                    style="padding: 10px 20px; background: #e5e7eb; color: #4b5563; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-arrow-left"></i> Questão Anterior
+                            </button>
+                        ` : '<div></div>'}
+                        
+                        ${index < questoesParaEditar.length - 1 ? `
+                            <button onclick="mostrarQuestaoEditor(${index + 1})" 
+                                    style="padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                Próxima Questão <i class="fas fa-arrow-right"></i>
+                            </button>
+                        ` : '<div></div>'}
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            
+            // Inicializar editores CKEditor
+            await inicializarEditoresQuestao(index);
+            
+            // Renderizar MathJax
+            if (typeof MathJax !== 'undefined') {
+                MathJax.typesetPromise();
+            }
+        }
+
+        // Função CORRIGIDA para inicializar editores SIMPLES (sem CKEditor)
+        async function inicializarEditoresQuestao(index) {
+            try {
+                console.log(`🔧 Inicializando editores SIMPLES para questão ${index + 1}`);
+                
+                // Obter a questão atual
+                const questao = questoesParaEditar[index];
+                if (!questao) {
+                    console.error(`Questão ${index} não encontrada`);
+                    return;
+                }
+                
+                // 1. Editor da pergunta (usando contenteditable)
+                const perguntaEditorId = `editor-pergunta-${index}`;
+                const perguntaElement = document.getElementById(perguntaEditorId);
+                
+                if (perguntaElement) {
+                    console.log(`✅ Configurando editor de pergunta: ${perguntaEditorId}`);
+                    
+                    // Tornar editável
+                    perguntaElement.setAttribute('contenteditable', 'true');
+                    perguntaElement.style.cssText = `
+                        min-height: 150px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 8px;
+                        padding: 15px;
+                        background: white;
+                        outline: none;
+                        overflow-y: auto;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        font-size: 1rem;
+                        line-height: 1.5;
+                    `;
+                    
+                    // Adicionar event listeners para formatação básica
+                    perguntaElement.addEventListener('input', function() {
+                        questao.pergunta = this.innerHTML;
+                        console.log(`Pergunta atualizada: ${this.innerHTML.substring(0, 50)}...`);
+                    });
+                    
+                    // Adicionar botões de formatação básica
+                    adicionarBarraFerramentas(perguntaElement, index, 'pergunta');
+                }
+                
+                // 2. Editores das opções
+                const opcoes = questao.opcoes || [];
+                console.log(`🔧 Configurando ${opcoes.length} editores de opção`);
+                
+                for (let opcaoIndex = 0; opcaoIndex < opcoes.length; opcaoIndex++) {
+                    const opcaoEditorId = `editor-opcao-${index}-${opcaoIndex}`;
+                    const opcaoElement = document.getElementById(opcaoEditorId);
+                    
+                    if (opcaoElement) {
+                        // Tornar editável
+                        opcaoElement.setAttribute('contenteditable', 'true');
+                        opcaoElement.style.cssText = `
+                            min-height: 100px;
+                            padding: 15px;
+                            outline: none;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            font-size: 0.95rem;
+                            line-height: 1.5;
+                        `;
+                        
+                        // Adicionar event listener
+                        opcaoElement.addEventListener('input', function() {
+                            if (questao.opcoes && questao.opcoes[opcaoIndex] !== undefined) {
+                                questao.opcoes[opcaoIndex] = this.innerHTML;
+                                console.log(`Opção ${opcaoIndex + 1} atualizada`);
+                            }
+                        });
+                    }
+                }
+                
+                // 3. Editor da explicação
+                const explicacaoEditorId = `editor-explicacao-${index}`;
+                const explicacaoElement = document.getElementById(explicacaoEditorId);
+                
+                if (explicacaoElement) {
+                    // Tornar editável
+                    explicacaoElement.setAttribute('contenteditable', 'true');
+                    explicacaoElement.style.cssText = `
+                        min-height: 120px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 8px;
+                        padding: 15px;
+                        background: white;
+                        outline: none;
+                        overflow-y: auto;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        font-size: 0.95rem;
+                        line-height: 1.5;
+                    `;
+                    
+                    // Adicionar event listener
+                    explicacaoElement.addEventListener('input', function() {
+                        questao.explicacao = this.innerHTML;
+                        console.log(`Explicação atualizada: ${this.innerHTML.substring(0, 50)}...`);
+                    });
+                    
+                    // Adicionar botões de formatação básica
+                    adicionarBarraFerramentas(explicacaoElement, index, 'explicacao');
+                }
+                
+                // 4. Configurar outros controles
+                configurarControlesQuestao(index);
+                
+                console.log(`✅ Editores da questão ${index + 1} configurados com sucesso!`);
+                
+            } catch (error) {
+                console.error('❌ Erro ao inicializar editores SIMPLES:', error);
+                mostrarAlertaEditor('⚠️ Editores configurados em modo básico. Recursos avançados limitados.', 'warning');
+            }
+        }
+
+        // Função auxiliar para adicionar barra de ferramentas básica
+        function adicionarBarraFerramentas(elementoEditor, questaoIndex, tipo) {
+            // Criar barra de ferramentas
+            const toolbarId = `toolbar-${tipo}-${questaoIndex}`;
+            const toolbar = document.createElement('div');
+            toolbar.id = toolbarId;
+            toolbar.style.cssText = `
+                display: flex;
+                gap: 5px;
+                padding: 8px;
+                background: #f8fafc;
+                border-bottom: 1px solid #e5e7eb;
+                border-radius: 8px 8px 0 0;
+                flex-wrap: wrap;
+            `;
+            
+            // Botões básicos de formatação
+            const botoes = [
+                { icon: 'bold', title: 'Negrito', cmd: 'bold' },
+                { icon: 'italic', title: 'Itálico', cmd: 'italic' },
+                { icon: 'underline', title: 'Sublinhado', cmd: 'underline' },
+                { icon: 'list-ul', title: 'Lista', cmd: 'insertUnorderedList' },
+                { icon: 'list-ol', title: 'Lista numerada', cmd: 'insertOrderedList' },
+                { icon: 'link', title: 'Link', cmd: 'createLink' },
+                { icon: 'image', title: 'Imagem', onclick: () => inserirImagemQuestao(questaoIndex, tipo) }
+            ];
+            
+            botoes.forEach(botao => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.title = botao.title;
+                btn.innerHTML = `<i class="fas fa-${botao.icon}"></i>`;
+                btn.style.cssText = `
+                    width: 32px;
+                    height: 32px;
+                    border: 1px solid #d1d5db;
+                    background: white;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #4b5563;
+                    transition: all 0.2s;
+                `;
+                
+                btn.addEventListener('mouseenter', () => {
+                    btn.style.background = '#f3f4f6';
+                });
+                
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.background = 'white';
+                });
+                
+                if (botao.onclick) {
+                    btn.addEventListener('click', botao.onclick);
+                } else {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        elementoEditor.focus();
+                        document.execCommand(botao.cmd, false, null);
+                    });
+                }
+                
+                toolbar.appendChild(btn);
+            });
+            
+            // Inserir barra de ferramentas antes do editor
+            elementoEditor.parentNode.insertBefore(toolbar, elementoEditor);
+            
+            // Adicionar comportamento para mostrar/ocultar formatação
+            elementoEditor.addEventListener('focus', () => {
+                toolbar.style.display = 'flex';
+            });
+            
+            elementoEditor.addEventListener('blur', () => {
+                // Não esconder imediatamente para permitir clicar nos botões
+                setTimeout(() => {
+                    if (!toolbar.contains(document.activeElement) && 
+                        document.activeElement !== elementoEditor) {
+                        toolbar.style.display = 'none';
+                    }
+                }, 200);
+            });
+            
+            // Esconder inicialmente
+            toolbar.style.display = 'none';
+        }
+
+        // Função para configurar outros controles da questão
+        function configurarControlesQuestao(index) {
+            // Configurar dropdown de dificuldade
+            const selectDificuldade = document.getElementById(`dificuldade-questao-${index}`);
+            if (selectDificuldade) {
+                selectDificuldade.addEventListener('change', function() {
+                    if (questoesParaEditar[index]) {
+                        questoesParaEditar[index].dificuldade = this.value;
+                        console.log(`Dificuldade da questão ${index + 1} alterada para: ${this.value}`);
+                    }
+                });
+            }
+            
+            // Configurar input de tags
+            const inputTags = document.getElementById(`tags-questao-${index}`);
+            if (inputTags) {
+                inputTags.addEventListener('input', function() {
+                    if (questoesParaEditar[index]) {
+                        const tags = this.value.split(',').map(tag => tag.trim()).filter(tag => tag);
+                        questoesParaEditar[index].tags = tags;
+                    }
+                });
+            }
+        }
+
+        // ============ DESTRUIR EDITORES DA QUESTÃO (VERSÃO SIMPLES) ============
+        function destruirEditoresQuestao(index) {
+            console.log(`🗑️ Removendo referências da questão ${index + 1}`);
+            
+            // Não precisa fazer nada complexo, apenas limpar referências
+            // Os elementos serão substituídos quando a questão for recarregada
+            
+            // Remover event listeners dos elementos (opcional)
+            const perguntaEditor = document.getElementById(`editor-pergunta-${index}`);
+            if (perguntaEditor) {
+                perguntaEditor.removeEventListener('input', perguntaEditor._listener);
+            }
+            
+            const explicacaoEditor = document.getElementById(`editor-explicacao-${index}`);
+            if (explicacaoEditor) {
+                explicacaoEditor.removeEventListener('input', explicacaoEditor._listener);
+            }
+        }
+        // ============ FUNÇÕES AUXILIARES DO EDITOR ============
+
+        // ============ ADICIONAR NOVA QUESTÃO COM 5 ALTERNATIVAS ============
+        function adicionarNovaQuestaoEditor() {
+            const novaQuestao = {
+                pergunta: '<p>Digite aqui a nova pergunta...</p>',
+                opcoes: [
+                    '<p>Resposta correta</p>',
+                    '<p>Resposta incorreta</p>',
+                    '<p>Resposta incorreta</p>',
+                    '<p>Resposta incorreta</p>',
+                    '<p>Resposta incorreta</p>'  // 5ª alternativa
+                ],
+                respostaCorreta: 0,
+                explicacao: '<p>Explique por que esta resposta está correta...</p>',
+                dificuldade: 'media',
+                tags: [],
+                imagens: [],
+                tipo: 'manual',
+                temLatex: false
+            };
+            
+            questoesParaEditar.push(novaQuestao);
+            
+            // Atualizar navegação
+            carregarNavegacaoQuestoes();
+            
+            // Mostrar nova questão
+            const novoIndex = questoesParaEditar.length - 1;
+            mostrarQuestaoEditor(novoIndex);
+            
+            // Scroll para topo
+            const container = document.getElementById('containerEditorQuestoes');
+            if (container) {
+                container.scrollTop = 0;
+            }
+            
+            console.log('✅ Nova questão adicionada com 5 alternativas');
+        }
+
+        // Função CORRIGIDA para remover questão
+        function removerQuestaoEditor(index) {
+            console.log(`🗑️ Tentando remover questão ${index + 1}...`);
+            
+            // Verificar se temos questões para editar
+            if (!questoesParaEditar || questoesParaEditar.length === 0) {
+                console.error('❌ Não há questões para remover');
+                mostrarAlertaEditor('❌ Não há questões para remover', 'error');
+                return;
+            }
+            
+            // Verificar índice válido
+            if (index < 0 || index >= questoesParaEditar.length) {
+                console.error(`❌ Índice ${index} inválido. Total de questões: ${questoesParaEditar.length}`);
+                mostrarAlertaEditor(`❌ Índice da questão inválido`, 'error');
+                return;
+            }
+            
+            // Verificar se é a última questão
+            if (questoesParaEditar.length <= 1) {
+                mostrarAlertaEditor('❌ A prova deve ter pelo menos uma questão.', 'error');
+                return;
+            }
+            
+            // Usar confirm nativo do navegador (funciona melhor)
+            const confirmacao = window.confirm(`Tem certeza que deseja remover a Questão ${index + 1}?\n\nEsta ação não pode ser desfeita.`);
+            
+            if (!confirmacao) {
+                console.log('❌ Remoção cancelada pelo usuário');
+                return;
+            }
+            
+            console.log(`✅ Confirmado remoção da questão ${index + 1}`);
+            
+            try {
+                // 1. Obter o título da questão para mensagem
+                const questaoRemovida = questoesParaEditar[index];
+                const tituloQuestao = questaoRemovida.pergunta 
+                    ? questaoRemovida.pergunta.replace(/<[^>]*>/g, '').substring(0, 50) + '...'
+                    : `Questão ${index + 1}`;
+                
+                // 2. Limpar editores desta questão ANTES de remover
+                limparEditoresQuestao(index);
+                
+                // 3. Remover questão do array
+                questoesParaEditar.splice(index, 1);
+                console.log(`✅ Questão removida. Restam: ${questoesParaEditar.length} questões`);
+                
+                // 4. Atualizar navegação
+                atualizarNavegacaoQuestoes();
+                
+                // 5. Determinar qual questão mostrar agora
+                let novaQuestaoIndex;
+                if (index > 0) {
+                    // Mostrar questão anterior
+                    novaQuestaoIndex = index - 1;
+                } else if (questoesParaEditar.length > 0) {
+                    // Mostrar primeira questão
+                    novaQuestaoIndex = 0;
+                } else {
+                    // Não há mais questões - fechar modal
+                    mostrarAlertaEditor('❌ Todas as questões foram removidas. Fechando editor...', 'error');
+                    setTimeout(() => {
+                        fecharEditorAvancado();
+                    }, 2000);
+                    return;
+                }
+                
+                // 6. Mostrar a nova questão
+                if (novaQuestaoIndex !== undefined) {
+                    console.log(`🔄 Mostrando questão ${novaQuestaoIndex + 1} após remoção`);
+                    mostrarQuestaoEditor(novaQuestaoIndex);
+                }
+                
+                // 7. Mostrar mensagem de sucesso
+                mostrarAlertaEditor(`✅ Questão removida com sucesso!`, 'success');
+                
+                // 8. Atualizar a prova gerada (se existir)
+                if (window.provaGerada && window.provaGerada.questoes) {
+                    window.provaGerada.questoes = [...questoesParaEditar];
+                    console.log('✅ provaGerada atualizada após remoção');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao remover questão:', error);
+                mostrarAlertaEditor(`❌ Erro ao remover questão: ${error.message}`, 'error');
+            }
+        }
+
+        // Função auxiliar para atualizar navegação
+        function atualizarNavegacaoQuestoes() {
+            console.log('🔄 Atualizando navegação de questões...');
+            
+            const container = document.getElementById('navegacaoQuestoes');
+            if (!container) {
+                console.error('❌ Container de navegação não encontrado');
+                return;
+            }
+            
+            let html = '';
+            
+            questoesParaEditar.forEach((questao, index) => {
+                const temImagem = questao.imagens && questao.imagens.length > 0;
+                const temLatex = questao.temLatex;
+                
+                html += `
+                    <button onclick="mostrarQuestaoEditor(${index})" 
+                            class="btn-navegacao-questao" 
+                            data-index="${index}"
+                            style="padding: 8px 12px; background: white; border: 2px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-weight: 600; color: #4b5563; min-width: 40px; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                        ${index + 1}
+                        ${temImagem ? '<i class="fas fa-image" style="color: #8b5cf6; font-size: 0.8rem;"></i>' : ''}
+                        ${temLatex ? '<i class="fas fa-square-root-alt" style="color: #ef4444; font-size: 0.8rem;"></i>' : ''}
+                    </button>
+                `;
+            });
+            
+            html += `
+                <button onclick="adicionarNovaQuestaoEditor()" 
+                        style="padding: 8px 12px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                    <i class="fas fa-plus"></i> Nova
+                </button>
+            `;
+            
+            container.innerHTML = html;
+            
+            // Destacar botão ativo (se houver)
+            const questaoAtiva = document.querySelector('.editor-questao-container');
+            if (questaoAtiva && questaoAtiva.id) {
+                const match = questaoAtiva.id.match(/questao-(\d+)/);
+                if (match) {
+                    const indexAtivo = parseInt(match[1]);
+                    const btnAtivo = container.querySelector(`[data-index="${indexAtivo}"]`);
+                    if (btnAtivo) {
+                        btnAtivo.style.background = '#4f46e5';
+                        btnAtivo.style.borderColor = '#4f46e5';
+                        btnAtivo.style.color = 'white';
+                    }
+                }
+            }
+            
+            console.log(`✅ Navegação atualizada: ${questoesParaEditar.length} questões`);
+        }
+
+        // Função auxiliar para limpar editores de uma questão
+        function limparEditoresQuestao(index) {
+            console.log(`🧹 Limpando editores da questão ${index + 1}...`);
+            
+            // IDs dos editores a serem limpos
+            const ids = [
+                `editor-pergunta-${index}`,
+                `editor-explicacao-${index}`,
+                `toolbar-pergunta-${index}`,
+                `toolbar-explicacao-${index}`
+            ];
+            
+            // Adicionar editores de opções
+            const questao = questoesParaEditar[index];
+            if (questao && questao.opcoes) {
+                for (let i = 0; i < questao.opcoes.length; i++) {
+                    ids.push(`editor-opcao-${index}-${i}`);
+                }
+            }
+            
+            // Remover elementos
+            ids.forEach(id => {
+                const elemento = document.getElementById(id);
+                if (elemento) {
+                    // Remover event listeners clonando o elemento
+                    const clone = elemento.cloneNode(false);
+                    if (elemento.parentNode) {
+                        elemento.parentNode.replaceChild(clone, elemento);
+                    }
+                    console.log(`  - Limpou: ${id}`);
+                }
+            });
+            
+            // Remover event listeners de controles
+            const controles = [
+                `dificuldade-questao-${index}`,
+                `tags-questao-${index}`
+            ];
+            
+            controles.forEach(id => {
+                const controle = document.getElementById(id);
+                if (controle) {
+                    controle.replaceWith(controle.cloneNode(true));
+                }
+            });
+            
+            console.log(`✅ Editores da questão ${index + 1} limpos`);
+        }
+
+        // Destruir editores de uma questão
+        function destruirEditoresQuestao(index) {
+            // Destruir editor de pergunta
+            if (editoresCKEditor[`pergunta-${index}`]) {
+                editoresCKEditor[`pergunta-${index}`].destroy();
+                delete editoresCKEditor[`pergunta-${index}`];
+            }
+            
+            // Destruir editores de opções
+            const opcoes = questoesParaEditar[index]?.opcoes || [];
+            for (let i = 0; i < opcoes.length; i++) {
+                if (editoresCKEditor[`opcao-${index}-${i}`]) {
+                    editoresCKEditor[`opcao-${index}-${i}`].destroy();
+                    delete editoresCKEditor[`opcao-${index}-${i}`];
+                }
+            }
+            
+            // Destruir editor de explicação
+            if (editoresCKEditor[`explicacao-${index}`]) {
+                editoresCKEditor[`explicacao-${index}`].destroy();
+                delete editoresCKEditor[`explicacao-${index}`];
+            }
+        }
+
+        // Mover questão
+        function moverQuestaoEditor(index, direcao) {
+            if (direcao === 'cima' && index > 0) {
+                // Destruir editores das questões envolvidas
+                destruirEditoresQuestao(index);
+                destruirEditoresQuestao(index - 1);
+                
+                // Trocar posições
+                const temp = questoesParaEditar[index];
+                questoesParaEditar[index] = questoesParaEditar[index - 1];
+                questoesParaEditar[index - 1] = temp;
+                
+                // Atualizar navegação
+                carregarNavegacaoQuestoes();
+                
+                // Mostrar questão movida
+                mostrarQuestaoEditor(index - 1);
+                
+            } else if (direcao === 'baixo' && index < questoesParaEditar.length - 1) {
+                // Destruir editores das questões envolvidas
+                destruirEditoresQuestao(index);
+                destruirEditoresQuestao(index + 1);
+                
+                // Trocar posições
+                const temp = questoesParaEditar[index];
+                questoesParaEditar[index] = questoesParaEditar[index + 1];
+                questoesParaEditar[index + 1] = temp;
+                
+                // Atualizar navegação
+                carregarNavegacaoQuestoes();
+                
+                // Mostrar questão movida
+                mostrarQuestaoEditor(index + 1);
+            }
+        }
+
+        // Marcar opção como correta
+        function marcarOpcaoCorreta(questaoIndex, opcaoIndex) {
+            if (questoesParaEditar[questaoIndex]) {
+                questoesParaEditar[questaoIndex].respostaCorreta = opcaoIndex;
+                
+                // Atualizar visualização
+                const opcaoElement = document.querySelector(`.opcao-editor[data-opcao-index="${opcaoIndex}"]`);
+                if (opcaoElement) {
+                    // Remover destaque de todas as opções
+                    document.querySelectorAll(`#container-opcoes-${questaoIndex} .opcao-editor`).forEach(el => {
+                        el.style.borderColor = '#e5e7eb';
+                        el.style.background = 'white';
+                        el.querySelector('button').style.background = '#e5e7eb';
+                        el.querySelector('button').style.color = '#4b5563';
+                        el.querySelector('button').innerHTML = 'Marcar como correta';
+                    });
+                    
+                    // Destacar opção correta
+                    opcaoElement.style.borderColor = '#10b981';
+                    opcaoElement.style.background = '#f0fdf4';
+                    const btnCorreta = opcaoElement.querySelector('button');
+                    btnCorreta.style.background = '#10b981';
+                    btnCorreta.style.color = 'white';
+                    btnCorreta.innerHTML = '<i class="fas fa-check-circle"></i> Correta';
+                }
+            }
+        }
+
+        // Adicionar nova opção
+        function adicionarOpcaoAvancada(questaoIndex) {
+            if (questoesParaEditar[questaoIndex]) {
+                const numOpcoes = questoesParaEditar[questaoIndex].opcoes.length;
+                if (numOpcoes >= 5) {
+                    mostrarAlertaEditor('❌ Limite de 5 opções por questão.', 'error');
+                    return;
+                }
+                
+                const novaLetra = String.fromCharCode(65 + numOpcoes);
+                questoesParaEditar[questaoIndex].opcoes.push(`<p>Texto da opção ${novaLetra}...</p>`);
+                
+                // Recarregar a questão para atualizar a interface
+                destruirEditoresQuestao(questaoIndex);
+                mostrarQuestaoEditor(questaoIndex);
+            }
+        }
+
+        // Remover opção
+        function removerOpcaoAvancada(questaoIndex, opcaoIndex) {
+            if (questoesParaEditar[questaoIndex] && questoesParaEditar[questaoIndex].opcoes.length > 2) {
+                // Se a opção removida é a correta, ajustar
+                if (opcaoIndex === questoesParaEditar[questaoIndex].respostaCorreta) {
+                    questoesParaEditar[questaoIndex].respostaCorreta = 0;
+                }
+                // Se a opção removida está antes da correta, ajustar índice
+                else if (opcaoIndex < questoesParaEditar[questaoIndex].respostaCorreta) {
+                    questoesParaEditar[questaoIndex].respostaCorreta--;
+                }
+                
+                // Destruir editor desta opção
+                if (editoresCKEditor[`opcao-${questaoIndex}-${opcaoIndex}`]) {
+                    editoresCKEditor[`opcao-${questaoIndex}-${opcaoIndex}`].destroy();
+                    delete editoresCKEditor[`opcao-${questaoIndex}-${opcaoIndex}`];
+                }
+                
+                // Remover opção
+                questoesParaEditar[questaoIndex].opcoes.splice(opcaoIndex, 1);
+                
+                // Recarregar a questão
+                mostrarQuestaoEditor(questaoIndex);
+            }
+        }
+
+        // Inserir fórmula matemática
+        function inserirFormulaMatematica(questaoIndex) {
+            const formula = prompt('Digite a fórmula matemática em LaTeX (ex: \\frac{a}{b} ou x^2 + y^2 = z^2):');
+            if (formula) {
+                const editor = editoresCKEditor[`pergunta-${questaoIndex}`];
+                if (editor) {
+                    editor.model.change(writer => {
+                        const insertPosition = editor.model.document.selection.getFirstPosition();
+                        writer.insertText(`\\(${formula}\\)`, insertPosition);
+                    });
+                }
+            }
+        }
+
+        // ============ INSERIR IMAGEM NA QUESTÃO (CORRIGIDO) ============
+        function inserirImagemQuestao(questaoIndex, tipo, opcaoIndex = null) {
+            console.log(`📸 Inserindo imagem - Questão: ${questaoIndex}, Tipo: ${tipo}, Opção: ${opcaoIndex}`);
+            
+            // Criar input de arquivo
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*,.jpg,.jpeg,.png,.gif,.webp';
+            input.style.display = 'none';
+            document.body.appendChild(input);
+            
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) {
+                    input.remove();
+                    return;
+                }
+                
+                console.log(`📁 Arquivo selecionado: ${file.name} (${file.size} bytes, ${file.type})`);
+                
+                // Validar tamanho (5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    mostrarAlertaEditor('❌ A imagem deve ter no máximo 5MB.', 'error');
+                    input.remove();
+                    return;
+                }
+                
+                // Validar tipo
+                const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                if (!tiposPermitidos.includes(file.type)) {
+                    mostrarAlertaEditor('❌ Tipo de imagem não suportado. Use JPEG, PNG, GIF ou WebP.', 'error');
+                    input.remove();
+                    return;
+                }
+                
+                try {
+                    // Mostrar loading
+                    mostrarAlertaEditor('📤 Enviando imagem...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    if (!token) {
+                        throw new Error('Token de autenticação não encontrado');
+                    }
+                    
+                    // Criar FormData
+                    const formData = new FormData();
+                    formData.append('imagem', file);
+                    
+                    console.log('📤 Enviando para /api/upload/imagem...');
+                    
+                    // Fazer upload
+                    const response = await fetch('/api/upload/imagem', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('✅ Resposta do upload:', data);
+                    
+                    if (!data.success) {
+                        throw new Error(data.error || 'Erro ao enviar imagem');
+                    }
+                    
+                    // CORREÇÃO: Obter o editor correto
+                    let editorElement;
+                    if (tipo === 'pergunta') {
+                        editorElement = document.getElementById(`editor-pergunta-${questaoIndex}`);
+                    } else if (tipo === 'opcao' && opcaoIndex !== null) {
+                        editorElement = document.getElementById(`editor-opcao-${questaoIndex}-${opcaoIndex}`);
+                    } else if (tipo === 'explicacao') {
+                        editorElement = document.getElementById(`editor-explicacao-${questaoIndex}`);
+                    }
+                    
+                    if (!editorElement) {
+                        throw new Error('Editor não encontrado');
+                    }
+                    
+                    // CORREÇÃO: Inserir imagem no editor sem usar Selection API
+                    // Focar no editor
+                    editorElement.focus();
+                    
+                    // Criar elemento img
+                    const imgElement = document.createElement('img');
+                    imgElement.src = data.url;
+                    imgElement.alt = data.nome;
+                    imgElement.style.maxWidth = '100%';
+                    imgElement.style.maxHeight = '300px';
+                    imgElement.style.display = 'block';
+                    imgElement.style.margin = '10px 0';
+                    imgElement.style.borderRadius = '4px';
+                    imgElement.style.border = '1px solid #e5e7eb';
+                    imgElement.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                    
+                    // CORREÇÃO: Inserir no final do editor
+                    editorElement.appendChild(imgElement);
+                    
+                    // Adicionar quebra de linha
+                    const br = document.createElement('br');
+                    editorElement.appendChild(br);
+                    
+                    // Adicionar à questão no array
+                    const questao = questoesParaEditar[questaoIndex];
+                    if (!questao.imagens) {
+                        questao.imagens = [];
+                    }
+                    
+                    questao.imagens.push({
+                        url: data.url,
+                        nome: data.nome,
+                        nomeArquivo: data.nomeArquivo,
+                        tamanho: data.tamanho,
+                        tipo: data.tipo,
+                        dataUpload: data.dataUpload,
+                        posicao: tipo,
+                        opcaoIndex: opcaoIndex
+                    });
+                    
+                    // Atualizar galeria de imagens
+                    atualizarGaleriaImagens(questaoIndex);
+                    
+                    // Mostrar sucesso
+                    mostrarAlertaEditor('✅ Imagem adicionada com sucesso!', 'success');
+                    
+                } catch (error) {
+                    console.error('❌ Erro no upload:', error);
+                    mostrarAlertaEditor(`❌ Erro: ${error.message}`, 'error');
+                } finally {
+                    // Limpar input
+                    setTimeout(() => {
+                        if (input.parentNode) {
+                            input.remove();
+                        }
+                    }, 100);
+                }
+            };
+            
+            input.click();
+        }
+
+        // Função auxiliar para obter ID do editor
+        function getEditorId(questaoIndex, tipo, opcaoIndex = null) {
+            if (tipo === 'pergunta') {
+                return `editor-pergunta-${questaoIndex}`;
+            } else if (tipo === 'opcao' && opcaoIndex !== null) {
+                return `editor-opcao-${questaoIndex}-${opcaoIndex}`;
+            } else if (tipo === 'explicacao') {
+                return `editor-explicacao-${questaoIndex}`;
+            }
+            return null;
+        }
+
+        // ============ REMOVER IMAGEM DA QUESTÃO (MELHORADA) ============
+        function removerImagemQuestao(questaoIndex, imgIndex) {
+            if (!confirm('🗑️ Remover esta imagem da questão?')) {
+                return;
+            }
+            
+            const questao = questoesParaEditar[questaoIndex];
+            if (!questao || !questao.imagens || !questao.imagens[imgIndex]) {
+                return;
+            }
+            
+            try {
+                const imagemRemovida = questao.imagens[imgIndex];
+                
+                console.log('🗑️ Removendo imagem:', imagemRemovida);
+                
+                // REMOVER DO ARRAY
+                questao.imagens.splice(imgIndex, 1);
+                
+                // REMOVER DO DOM (EDITORES)
+                const editores = [
+                    document.getElementById(`editor-pergunta-${questaoIndex}`),
+                    document.getElementById(`editor-explicacao-${questaoIndex}`)
+                ];
+                
+                // Adicionar editores de opções
+                if (questao.opcoes) {
+                    for (let i = 0; i < questao.opcoes.length; i++) {
+                        const opcaoEditor = document.getElementById(`editor-opcao-${questaoIndex}-${i}`);
+                        if (opcaoEditor) editores.push(opcaoEditor);
+                    }
+                }
+                
+                // Remover todas as imagens com a mesma URL
+                editores.forEach(editor => {
+                    if (editor) {
+                        const imagens = editor.querySelectorAll('img');
+                        imagens.forEach(img => {
+                            if (img.src.includes(imagemRemovida.url) || 
+                                img.src.endsWith(imagemRemovida.nomeArquivo) ||
+                                img.src.includes(imagemRemovida.nome)) {
+                                img.remove();
+                                console.log('✅ Imagem removida do editor');
+                            }
+                        });
+                    }
+                });
+                
+                // ATUALIZAR GALERIA
+                atualizarGaleriaImagens(questaoIndex);
+                
+                // Mostrar mensagem
+                mostrarAlertaEditor('🗑️ Imagem removida com sucesso!', 'success');
+                
+            } catch (error) {
+                console.error('❌ Erro ao remover imagem:', error);
+                mostrarAlertaEditor('❌ Erro ao remover imagem', 'error');
+            }
+        }
+
+        // Modifique a barra de ferramentas para incluir botão de remover imagem
+        function adicionarBarraFerramentas(elementoEditor, questaoIndex, tipo, opcaoIndex = null) {
+            const toolbarId = `toolbar-${tipo}-${questaoIndex}${opcaoIndex !== null ? `-${opcaoIndex}` : ''}`;
+            const toolbar = document.createElement('div');
+            toolbar.id = toolbarId;
+            toolbar.style.cssText = `
+                display: flex;
+                gap: 5px;
+                padding: 8px;
+                background: #f8fafc;
+                border-bottom: 1px solid #e5e7eb;
+                border-radius: 8px 8px 0 0;
+                flex-wrap: wrap;
+            `;
+            
+            // Botões básicos
+            const botoes = [
+                { icon: 'bold', title: 'Negrito', cmd: 'bold' },
+                { icon: 'italic', title: 'Itálico', cmd: 'italic' },
+                { icon: 'underline', title: 'Sublinhado', cmd: 'underline' },
+                { icon: 'list-ul', title: 'Lista', cmd: 'insertUnorderedList' },
+                { icon: 'list-ol', title: 'Lista numerada', cmd: 'insertOrderedList' },
+                { icon: 'image', title: 'Inserir Imagem', onclick: () => inserirImagemQuestao(questaoIndex, tipo, opcaoIndex) }
+            ];
+            
+            botoes.forEach(botao => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.title = botao.title;
+                btn.innerHTML = `<i class="fas fa-${botao.icon}"></i>`;
+                btn.style.cssText = `
+                    width: 32px;
+                    height: 32px;
+                    border: 1px solid #d1d5db;
+                    background: white;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #4b5563;
+                    transition: all 0.2s;
+                `;
+                
+                btn.onmouseenter = () => btn.style.background = '#f3f4f6';
+                btn.onmouseleave = () => btn.style.background = 'white';
+                
+                if (botao.onclick) {
+                    btn.onclick = botao.onclick;
+                } else {
+                    btn.onclick = (e) => {
+                        e.preventDefault();
+                        elementoEditor.focus();
+                        document.execCommand(botao.cmd, false, null);
+                    };
+                }
+                
+                toolbar.appendChild(btn);
+            });
+            
+            // Adicionar antes do editor
+            elementoEditor.parentNode.insertBefore(toolbar, elementoEditor);
+        }
+
+        // ============ ATUALIZAR GALERIA DE IMAGENS (MELHORADA) ============
+        function atualizarGaleriaImagens(questaoIndex) {
+            const questao = questoesParaEditar[questaoIndex];
+            if (!questao) return;
+            
+            // Procurar o container da galeria - pode estar em lugares diferentes
+            let galeria = document.getElementById(`galeria-imagens-${questaoIndex}`);
+            
+            // Se não encontrar, criar um container para galeria
+            if (!galeria) {
+                const container = document.getElementById(`questao-${questaoIndex}`);
+                if (container) {
+                    const divImagens = document.createElement('div');
+                    divImagens.id = `galeria-imagens-${questaoIndex}`;
+                    divImagens.style.cssText = 'display: flex; flex-wrap: wrap; gap: 15px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb;';
+                    
+                    // Adicionar título
+                    const titulo = document.createElement('h4');
+                    titulo.style.cssText = 'color: #4b5563; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; width: 100%;';
+                    titulo.innerHTML = '<i class="fas fa-images"></i> Imagens desta Questão';
+                    
+                    container.appendChild(titulo);
+                    container.appendChild(divImagens);
+                    galeria = divImagens;
+                }
+            }
+            
+            if (!galeria) return;
+            
+            // Se não há imagens, esconder a galeria
+            if (!questao.imagens || questao.imagens.length === 0) {
+                const containerImagens = document.querySelector(`#questao-${questaoIndex} h4`);
+                if (containerImagens) containerImagens.style.display = 'none';
+                galeria.style.display = 'none';
+                galeria.innerHTML = '';
+                return;
+            }
+            
+            // Mostrar galeria
+            galeria.style.display = 'flex';
+            const titulo = document.querySelector(`#questao-${questaoIndex} h4`);
+            if (titulo) titulo.style.display = 'flex';
+            
+            // Gerar HTML das imagens
+            let html = '';
+            questao.imagens.forEach((img, imgIndex) => {
+                const nomeExibicao = img.nome || `Imagem ${imgIndex + 1}`;
+                const nomeTruncado = nomeExibicao.length > 15 ? 
+                    nomeExibicao.substring(0, 15) + '...' : nomeExibicao;
+                
+                // Determinar onde a imagem está inserida
+                let badge = '';
+                if (img.posicao === 'pergunta') badge = '<span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">Pergunta</span>';
+                else if (img.posicao === 'opcao') badge = `<span style="background: #8b5cf6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">Opção ${String.fromCharCode(65 + (img.opcaoIndex || 0))}</span>`;
+                else if (img.posicao === 'explicacao') badge = '<span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">Explicação</span>';
+                
+                html += `
+                    <div style="position: relative; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; width: 140px; background: #f8fafc; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <div style="position: relative; height: 100px; background: #f1f5f9; display: flex; align-items: center; justify-content: center;">
+                            <img src="${img.url}" 
+                                style="max-width: 100%; max-height: 100px; object-fit: contain;"
+                                alt="${nomeExibicao}">
+                        </div>
+                        <div style="padding: 8px;">
+                            <div style="font-size: 0.8rem; color: #4b5563; font-weight: 600; margin-bottom: 4px; word-break: break-all;">
+                                ${nomeTruncado}
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                ${badge}
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="removerImagemQuestao(${questaoIndex}, ${imgIndex})" 
+                                        style="flex: 1; padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                    <i class="fas fa-trash"></i> Remover
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            galeria.innerHTML = html;
+        }
+
+        // Função para remover imagem da questão
+        function removerImagemQuestao(questaoIndex, imgIndex) {
+            if (!confirm('Remover esta imagem da questão?')) {
+                return;
+            }
+            
+            const questao = questoesParaEditar[questaoIndex];
+            if (!questao || !questao.imagens || !questao.imagens[imgIndex]) {
+                return;
+            }
+            
+            // Remover do array
+            const imagemRemovida = questao.imagens.splice(imgIndex, 1)[0];
+            
+            // Tentar remover do DOM também
+            try {
+                // Buscar todas as imagens no conteúdo editável
+                const editores = [
+                    document.getElementById(`editor-pergunta-${questaoIndex}`),
+                    document.getElementById(`editor-explicacao-${questaoIndex}`)
+                ];
+                
+                // Adicionar editores de opções
+                for (let i = 0; i < (questao.opcoes || []).length; i++) {
+                    const opcaoEditor = document.getElementById(`editor-opcao-${questaoIndex}-${i}`);
+                    if (opcaoEditor) editores.push(opcaoEditor);
+                }
+                
+                // Remover imagem com a mesma URL
+                editores.forEach(editor => {
+                    if (editor) {
+                        const imgs = editor.getElementsByTagName('img');
+                        for (let img of imgs) {
+                            if (img.src.includes(imagemRemovida.url) || 
+                                img.src.endsWith(imagemRemovida.url)) {
+                                img.remove();
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.warn('⚠️ Não foi possível remover imagem do DOM:', error);
+            }
+            
+            // Atualizar galeria
+            atualizarGaleriaImagens(questaoIndex);
+            
+            // Mostrar mensagem
+            mostrarAlertaEditor('🗑️ Imagem removida da questão.', 'success');
+        }
+
+        // Inserir tabela
+        function inserirTabelaQuestao(questaoIndex) {
+            const linhas = parseInt(prompt('Número de linhas:', '3')) || 3;
+            const colunas = parseInt(prompt('Número de colunas:', '2')) || 2;
+            
+            const editor = editoresCKEditor[`pergunta-${questaoIndex}`];
+            if (editor) {
+                editor.execute('insertTable', {
+                    rows: linhas,
+                    columns: colunas,
+                    headingRows: 1
+                });
+            }
+        }
+
+        // Visualizar prova editada
+        function visualizarProvaEditada() {
+            // Coletar dados editados temporariamente
+            coletarDadosQuestoesEditadas();
+            
+            // Criar modal de visualização
+            let modal = document.getElementById('modalVisualizacaoEditada');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.id = 'modalVisualizacaoEditada';
+                document.body.appendChild(modal);
+            }
+            
+            // Gerar HTML da visualização
+            let htmlVisualizacao = '<div style="max-width: 800px; margin: 0 auto; padding: 20px;">';
+            htmlVisualizacao += '<h2 style="color: #4b5563; margin-bottom: 20px;">Pré-visualização da Prova Editada</h2>';
+            
+            questoesParaEditar.forEach((questao, index) => {
+                htmlVisualizacao += `
+                    <div style="margin-bottom: 30px; padding: 20px; border: 1px solid #e5e7eb; border-radius: 10px; background: white;">
+                        <h3 style="color: #4b5563; margin-bottom: 15px;">
+                            <span style="background: #4f46e5; color: white; padding: 2px 10px; border-radius: 12px; margin-right: 10px;">
+                                ${index + 1}
+                            </span>
+                            ${questao.pergunta ? questao.pergunta.replace(/<[^>]*>/g, '').substring(0, 100) + '...' : 'Pergunta'}
+                        </h3>
+                        
+                        <div style="margin: 15px 0;">
+                            <strong>Opções:</strong>
+                            <ul style="margin: 10px 0 0 20px;">
+                                ${(questao.opcoes || []).slice(0, 3).map((opcao, opcaoIndex) => `
+                                    <li style="color: ${opcaoIndex === questao.respostaCorreta ? '#10b981' : '#6b7280'};">
+                                        ${String.fromCharCode(65 + opcaoIndex)}: ${opcao ? opcao.replace(/<[^>]*>/g, '').substring(0, 50) + '...' : ''}
+                                        ${opcaoIndex === questao.respostaCorreta ? ' ✓' : ''}
+                                    </li>
+                                `).join('')}
+                                ${(questao.opcoes || []).length > 3 ? '<li>...</li>' : ''}
+                            </ul>
+                        </div>
+                        
+                        ${questao.imagens && questao.imagens.length > 0 ? `
+                            <div style="margin: 10px 0; font-size: 0.9rem; color: #8b5cf6;">
+                                <i class="fas fa-image"></i> ${questao.imagens.length} imagem(ns)
+                            </div>
+                        ` : ''}
+                        
+                        <div style="font-size: 0.9rem; color: #6b7280; margin-top: 10px;">
+                            Dificuldade: <span style="font-weight: 600; color: #4b5563;">${questao.dificuldade || 'Médio'}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            htmlVisualizacao += '</div>';
+            
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+                    <div class="modal-header">
+                        <h3 style="margin: 0; color: var(--gray-800); display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-eye"></i> Visualização da Prova Editada
+                        </h3>
+                        <button class="modal-close" onclick="fecharModal('modalVisualizacaoEditada')">&times;</button>
+                    </div>
+                    ${htmlVisualizacao}
+                    <div style="padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+                        <button onclick="fecharModal('modalVisualizacaoEditada')" 
+                                style="padding: 10px 30px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            Fechar Visualização
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            modal.style.display = 'flex';
+        }
+
+        // Função para coletar dados das questões editadas (versão SIMPLES)
+        function coletarDadosQuestoesEditadas() {
+            console.log('💾 Coletando dados das questões editadas...');
+            
+            questoesParaEditar.forEach((questao, index) => {
+                // Coletar pergunta
+                const perguntaElement = document.getElementById(`editor-pergunta-${index}`);
+                if (perguntaElement) {
+                    questao.pergunta = perguntaElement.innerHTML;
+                }
+                
+                // Coletar opções
+                const opcoes = questao.opcoes || [];
+                for (let opcaoIndex = 0; opcaoIndex < opcoes.length; opcaoIndex++) {
+                    const opcaoElement = document.getElementById(`editor-opcao-${index}-${opcaoIndex}`);
+                    if (opcaoElement) {
+                        questao.opcoes[opcaoIndex] = opcaoElement.innerHTML;
+                    }
+                }
+                
+                // Coletar explicação
+                const explicacaoElement = document.getElementById(`editor-explicacao-${index}`);
+                if (explicacaoElement) {
+                    questao.explicacao = explicacaoElement.innerHTML;
+                }
+                
+                // Coletar dificuldade
+                const selectDificuldade = document.getElementById(`dificuldade-questao-${index}`);
+                if (selectDificuldade) {
+                    questao.dificuldade = selectDificuldade.value;
+                }
+                
+                // Coletar tags
+                const inputTags = document.getElementById(`tags-questao-${index}`);
+                if (inputTags) {
+                    questao.tags = inputTags.value.split(',').map(tag => tag.trim()).filter(tag => tag);
+                }
+                
+                console.log(`✅ Questão ${index + 1} coletada: ${questao.pergunta.substring(0, 50)}...`);
+            });
+        }
+
+        // ============ VERIFICAR SE A PROVA PODE SER EDITADA ============
+        async function verificarProvaEditavel(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const response = await fetch(`/api/provas/${provaId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    return { editavel: false, error: 'Não foi possível verificar a prova' };
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    return {
+                        editavel: !data.prova.publicada, // Só pode editar se NÃO estiver publicada
+                        publicada: data.prova.publicada,
+                        prova: data.prova
+                    };
+                }
+                
+                return { editavel: false, publicada: false };
+                
+            } catch (error) {
+                console.error('Erro ao verificar prova:', error);
+                return { editavel: false, publicada: false, error: error.message };
+            }
+        }
+
+        // ============ DUPLICAR PROVA PARA EDIÇÃO (PROVA JA PUBLICADA) ============
+        async function duplicarProvaParaEdicao(provaId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const response = await fetch(`/api/provas/${provaId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao carregar prova');
+                }
+                
+                const provaOriginal = data.prova;
+                const questoes = data.questoes || [];
+                
+                // Criar nova prova (rascunho)
+                const novaProva = {
+                    turmaId: provaOriginal.turmaId,
+                    titulo: `${provaOriginal.titulo} (cópia)`,
+                    conteudo: provaOriginal.conteudo,
+                    tipoProva: provaOriginal.tipoProva || 'simples',
+                    quantidadeQuestoes: questoes.length,
+                    dificuldade: provaOriginal.dificuldade,
+                    questoesManuais: questoes,
+                    publicada: false
+                };
+                
+                // Criar a prova
+                const createResponse = await fetch(`/api/turmas/${provaOriginal.turmaId}/prova-v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(novaProva)
+                });
+                
+                const result = await createResponse.json();
+                
+                if (result.success) {
+                    mostrarAlerta('alertMinhasProvas', '✅ Cópia da prova criada com sucesso! Agora você pode editá-la.', 'success');
+                    
+                    // Carregar a nova prova
+                    setTimeout(() => {
+                        carregarProvasProfessor();
+                    }, 2000);
+                    
+                    return result.provaId;
+                }
+                
+                throw new Error(result.error || 'Erro ao duplicar prova');
+                
+            } catch (error) {
+                console.error('Erro ao duplicar prova:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro ao duplicar: ${error.message}`, 'error');
+                return null;
+            }
+        }
+
+        // Salvar todas as questões editadas
+        // ============ FUNÇÃO CORRIGIDA PARA SALVAR EDIÇÕES ============
+        async function salvarQuestoesEditadasAvancado() {
+            try {
+                // Coletar dados de todos os editores
+                coletarDadosQuestoesEditadas();
+                
+                // Validar questões
+                for (let i = 0; i < questoesParaEditar.length; i++) {
+                    const questao = questoesParaEditar[i];
+                    
+                    // Validar pergunta
+                    if (!questao.pergunta || questao.pergunta.replace(/<[^>]*>/g, '').trim().length < 5) {
+                        mostrarAlertaEditor(`❌ A questão ${i + 1} precisa de uma pergunta válida (mínimo 5 caracteres).`, 'error');
+                        mostrarQuestaoEditor(i);
+                        return;
+                    }
+                    
+                    // Validar opções
+                    if (!questao.opcoes || questao.opcoes.length < 2) {
+                        mostrarAlertaEditor(`❌ A questão ${i + 1} precisa de pelo menos 2 opções.`, 'error');
+                        mostrarQuestaoEditor(i);
+                        return;
+                    }
+                    
+                    // Validar cada opção
+                    for (let j = 0; j < questao.opcoes.length; j++) {
+                        if (!questao.opcoes[j] || questao.opcoes[j].replace(/<[^>]*>/g, '').trim().length === 0) {
+                            mostrarAlertaEditor(`❌ A opção ${String.fromCharCode(65 + j)} da questão ${i + 1} está vazia.`, 'error');
+                            mostrarQuestaoEditor(i);
+                            return;
+                        }
+                    }
+                    
+                    // Validar resposta correta
+                    if (questao.respostaCorreta < 0 || questao.respostaCorreta >= questao.opcoes.length) {
+                        mostrarAlertaEditor(`❌ A questão ${i + 1} tem uma resposta correta inválida.`, 'error');
+                        mostrarQuestaoEditor(i);
+                        return;
+                    }
+                }
+                
+                // VERIFICAR SE TEM PROVA
+                if (!provaGerada || !provaGerada.id) {
+                    throw new Error('Prova não encontrada para atualização');
+                }
+                
+                // Mostrar loading
+                mostrarAlertaEditor('💾 Salvando alterações no servidor...', 'info');
+                
+                // --- CHAMADA DIRETA PARA A ROTA DO SEU BACKEND ---
+                const token = localStorage.getItem('auth_token');
+                
+                console.log('🔄 Enviando edições para:', `/api/provas/${provaGerada.id}/questoes`);
+                console.log('📝 Questões:', questoesParaEditar.length);
+                
+                const response = await fetch(`/api/provas/${provaGerada.id}/questoes`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        questoes: questoesParaEditar
+                    })
+                });
+                
+                // Processar resposta
+                let data;
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    throw new Error(`Resposta inválida do servidor: ${response.status}`);
+                }
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `Erro ${response.status}: ${response.statusText}`);
+                }
+                
+                if (data.success) {
+                    console.log('✅ Servidor confirmou atualização:', data);
+                    
+                    // --- ATUALIZAR LOCALMENTE ---
+                    provaGerada.questoes = [...questoesParaEditar];
+                    
+                    // Atualizar preview na página principal
+                    mostrarPreviewQuestoes(provaGerada.questoes);
+                    
+                    // Salvar backup para regeneração
+                    arquivosOriginaisBackup = [...arquivosParaUpload];
+                    
+                    // Mostrar sucesso
+                    mostrarAlertaEditor('✅ Questões atualizadas com sucesso no servidor!', 'success');
+                    
+                    // Fechar editor
+                    setTimeout(() => {
+                        fecharEditorAvancado();
+                        mostrarAlerta('alertProva', '✅ Questões editadas com sucesso! A prova foi atualizada.', 'success');
+                    }, 1500);
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao atualizar questões');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao salvar questões:', error);
+                mostrarAlertaEditor(`❌ Erro ao salvar: ${error.message}`, 'error');
+            }
+        }
+
+        // Mostrar alerta no editor
+        function mostrarAlertaEditor(mensagem, tipo = 'info') {
+            const alerta = document.getElementById('alertEditorAvancado');
+            if (alerta) {
+                alerta.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                        <div>${mensagem}</div>
+                    </div>
+                `;
+                alerta.className = `alert alert-${tipo}`;
+                alerta.style.display = 'block';
+                
+                // Auto-esconder para mensagens de sucesso/info
+                if (tipo !== 'error') {
+                    setTimeout(() => {
+                        alerta.style.display = 'none';
+                    }, 3000);
+                }
+            }
+        }
+
+        function processarConteudoQuestao(conteudo) {
+            if (!conteudo) return '';
+            
+            // Processar fórmulas LaTeX
+            let processado = conteudo.replace(/\\\(([^)]+)\\\)/g, '<span class="math-inline">\\($1\\)</span>');
+            processado = processado.replace(/\\\[([^\]]+)\\\]/g, '<div class="math-display">\\[$1\\]</div>');
+            
+            return processado;
+        }
+
+        // Fechar editor avançado
+        // Adicione esta função para fechar o modal corretamente
+        function fecharEditorAvancado() {
+            console.log('🚪 Fechando editor avançado...');
+            
+            // Destruir todos os editores
+            const editores = document.querySelectorAll('[contenteditable="true"]');
+            editores.forEach(editor => {
+                editor.setAttribute('contenteditable', 'false');
+            });
+            
+            // Remover event listeners globais
+            document.removeEventListener('focusin', handleFocusIn);
+            document.removeEventListener('keydown', handleKeyDown);
+            
+            // Fechar modal
+            const modal = document.getElementById('modalEditorAvancado');
+            if (modal) {
+                // Adicionar animação de fade out
+                modal.style.transition = 'opacity 0.2s ease-out';
+                modal.style.opacity = '0';
+                
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                    modal.style.opacity = '1';
+                    modal.style.transition = '';
+                    modal.remove(); // Remover completamente do DOM
+                }, 200);
+            }
+            
+            // Limpar variáveis
+            questoesParaEditar = [];
+            console.log('✅ Editor avançado fechado');
+        }
+
+        // Funções auxiliares para os event listeners
+        function handleFocusIn(e) {
+            // Usada apenas para diagnóstico
+        }
+
+        function handleKeyDown(e) {
+            // Usada apenas para diagnóstico
+        }
+
     </script>
 </body>
 </html>

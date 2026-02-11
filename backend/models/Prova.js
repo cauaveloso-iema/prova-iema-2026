@@ -10,6 +10,14 @@ const QuestaoSchema = new mongoose.Schema({
     type: String,
     required: true
   }],
+  imagens: [{
+    url: String,
+    nome: String,
+    nomeArquivo: String,
+    tipo: String,
+    tamanho: Number,
+    dataUpload: Date
+    }],
   respostaCorreta: {
     type: Number,
     required: true,
@@ -163,5 +171,52 @@ ProvaSchema.pre('save', function(next) {
     next();
   }
 });
+
+// ============ MÉTODOS PARA EDIÇÃO DE QUESTÕES ============
+
+// Método para editar questão existente
+ProvaSchema.methods.editarQuestao = function(questaoId, dadosAtualizados) {
+  const questao = this.questoes.id(questaoId);
+  if (questao) {
+    if (dadosAtualizados.pergunta) questao.pergunta = dadosAtualizados.pergunta;
+    if (dadosAtualizados.opcoes) questao.opcoes = dadosAtualizados.opcoes;
+    if (dadosAtualizados.respostaCorreta !== undefined) {
+      questao.respostaCorreta = dadosAtualizados.respostaCorreta;
+    }
+    if (dadosAtualizados.explicacao !== undefined) {
+      questao.explicacao = dadosAtualizados.explicacao;
+    }
+    // Marca como editada
+    if (!questao.tipo || questao.tipo === 'ia') {
+      questao.tipo = 'editada';
+    }
+  }
+};
+
+// Método para atualizar todas as questões de uma vez
+ProvaSchema.methods.atualizarQuestoes = function(novasQuestoes) {
+  if (Array.isArray(novasQuestoes)) {
+    this.questoes = [];
+    
+    novasQuestoes.forEach((q, index) => {
+      const novaQuestao = {
+        pergunta: q.pergunta,
+        opcoes: q.opcoes,
+        respostaCorreta: q.respostaCorreta,
+        explicacao: q.explicacao || '',
+        tipo: q.tipo || 'editada'
+      };
+      
+      if (q._id) {
+        novaQuestao._id = q._id;
+      }
+      
+      this.questoes.push(novaQuestao);
+    });
+    
+    this.quantidadeQuestoes = this.questoes.length;
+    this.fonteGeracao = 'mista';
+  }
+};
 
 module.exports = mongoose.model('Prova', ProvaSchema);
