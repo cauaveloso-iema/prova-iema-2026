@@ -2571,20 +2571,46 @@ window.addEventListener('scroll', function() {
             document.getElementById(`conteudo-${tabId}`).style.display = 'block';
         };
 
-        // Carregar resultados gerais
+        // ============ FUNÇÃO CORRIGIDA PARA CARREGAR RESULTADOS GERAIS ============
         async function carregarResultadosGerais() {
             try {
                 const token = localStorage.getItem('auth_token');
                 
                 console.log('📊 Carregando resultados gerais...');
                 
-                // Limpar alerta anterior
-                const alerta = document.getElementById('alertResultadosGerais');
-                if (alerta) {
-                    alerta.style.display = 'none';
+                // Verificar se os elementos existem
+                const containerTurmas = document.getElementById('listaTurmasResultados');
+                const containerAlunos = document.getElementById('listaAlunosResultados');
+                const containerDisciplinas = document.getElementById('listaDisciplinasResultados');
+                
+                if (!containerTurmas || !containerAlunos || !containerDisciplinas) {
+                    console.warn('⚠️ Containers de resultados não encontrados no DOM');
+                    return;
                 }
                 
-                // Carregar dados do professor
+                // Mostrar loading em todos os containers
+                containerTurmas.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4f46e5; margin-bottom: 15px;"></i>
+                        <p style="color: #6b7280;">Carregando resultados por turma...</p>
+                    </div>
+                `;
+                
+                containerAlunos.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4f46e5; margin-bottom: 15px;"></i>
+                        <p style="color: #6b7280;">Carregando resultados por aluno...</p>
+                    </div>
+                `;
+                
+                containerDisciplinas.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4f46e5; margin-bottom: 15px;"></i>
+                        <p style="color: #6b7280;">Carregando resultados por disciplina...</p>
+                    </div>
+                `;
+                
+                // Buscar dados da API
                 const response = await fetch('/api/professor/resultados', {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -2592,41 +2618,72 @@ window.addEventListener('scroll', function() {
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`Erro ${response.status}: ${response.statusText}`);
                 }
                 
                 const data = await response.json();
+                console.log('📥 Dados recebidos:', data);
                 
                 if (data.success) {
-                    resultadosGerais = {
-                        turmas: await processarResultadosPorTurma(data.resultados || []),
-                        alunos: await processarResultadosPorAluno(data.resultados || []),
-                        disciplinas: await processarResultadosPorDisciplina(data.resultados || [])
-                    };
-                    
-                    // Atualizar estatísticas gerais
+                    // Atualizar estatísticas
                     atualizarEstatisticasGerais(data.estatisticas || {});
                     
+                    // Processar resultados
+                    const resultados = data.resultados || [];
+                    
+                    // Processar por turma
+                    const resultadosPorTurma = processarResultadosPorTurma(resultados);
+                    atualizarListaTurmasResultados(resultadosPorTurma);
+                    
+                    // Processar por aluno
+                    const resultadosPorAluno = processarResultadosPorAluno(resultados);
+                    atualizarListaAlunosResultados(resultadosPorAluno);
+                    
+                    // Processar por disciplina
+                    const resultadosPorDisciplina = processarResultadosPorDisciplina(resultados);
+                    atualizarListaDisciplinasResultados(resultadosPorDisciplina);
+                    
                     // Preencher filtros
-                    preencherFiltros();
+                    preencherFiltros(resultadosPorTurma, resultadosPorDisciplina);
                     
-                    // Atualizar listas
-                    atualizarListaTurmasResultados();
-                    atualizarListaAlunosResultados();
-                    atualizarListaDisciplinasResultados();
-                    
-                    console.log('✅ Resultados gerais carregados com sucesso');
+                    console.log('✅ Resultados carregados com sucesso');
                     
                 } else {
                     throw new Error(data.error || 'Erro ao carregar resultados');
                 }
                 
             } catch (error) {
-                console.error('Erro ao carregar resultados gerais:', error);
-                mostrarAlerta('alertResultadosGerais', `❌ Erro ao carregar resultados: ${error.message}`, 'error');
+                console.error('❌ Erro ao carregar resultados gerais:', error);
+                
+                // Mostrar erro nos containers
+                const containers = ['listaTurmasResultados', 'listaAlunosResultados', 'listaDisciplinasResultados'];
+                
+                containers.forEach(containerId => {
+                    const container = document.getElementById(containerId);
+                    if (container) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 15px; color: #ef4444;"></i>
+                                <h3 style="color: #7f1d1d;">Erro ao carregar dados</h3>
+                                <p style="color: #6b7280;">${error.message}</p>
+                                <button onclick="carregarResultadosGerais()" style="
+                                    margin-top: 15px;
+                                    padding: 10px 20px;
+                                    background: #4f46e5;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 6px;
+                                    cursor: pointer;
+                                    font-weight: 600;
+                                ">
+                                    <i class="fas fa-redo"></i> Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                    }
+                });
             }
-        }
-        
+        }        
         // Função para abrir modal de seleção de aluno para correção
         async function abrirProvaCorrigida(provaId) {
             try {
@@ -2921,18 +2978,20 @@ window.addEventListener('scroll', function() {
         }
         }
 
-        // Processar resultados por turma
-        async function processarResultadosPorTurma(resultados) {
+        // ============ PROCESSAR RESULTADOS POR TURMA ============
+        function processarResultadosPorTurma(resultados) {
             const turmasMap = new Map();
             
             resultados.forEach(resultado => {
-                const turmaKey = resultado.turmaId || 'sem-turma';
+                const turmaId = resultado.turmaId || 'sem-turma';
+                const turmaNome = resultado.turmaNome || 'Turma sem nome';
+                const turmaDisciplina = resultado.turmaDisciplina || 'Geral';
                 
-                if (!turmasMap.has(turmaKey)) {
-                    turmasMap.set(turmaKey, {
-                        id: resultado.turmaId,
-                        nome: resultado.turmaNome || 'Sem turma',
-                        disciplina: resultado.turmaDisciplina || 'Geral',
+                if (!turmasMap.has(turmaId)) {
+                    turmasMap.set(turmaId, {
+                        id: turmaId,
+                        nome: turmaNome,
+                        disciplina: turmaDisciplina,
                         alunos: new Set(),
                         provas: new Set(),
                         notas: [],
@@ -2941,19 +3000,11 @@ window.addEventListener('scroll', function() {
                     });
                 }
                 
-                const turma = turmasMap.get(turmaKey);
+                const turma = turmasMap.get(turmaId);
                 
-                // Adicionar aluno único
-                if (resultado.alunoId) {
-                    turma.alunos.add(resultado.alunoId);
-                }
+                if (resultado.alunoId) turma.alunos.add(resultado.alunoId);
+                if (resultado.provaId) turma.provas.add(resultado.provaId);
                 
-                // Adicionar prova única
-                if (resultado.provaId) {
-                    turma.provas.add(resultado.provaId);
-                }
-                
-                // Adicionar nota se existir
                 if (resultado.nota !== undefined && resultado.nota !== null) {
                     turma.notas.push(resultado.nota);
                     turma.acertos += resultado.acertos || 0;
@@ -2961,45 +3012,33 @@ window.addEventListener('scroll', function() {
                 }
             });
             
-            // Converter Map para array e calcular médias
-            const turmasArray = Array.from(turmasMap.values()).map(turma => {
-                const mediaNotas = turma.notas.length > 0 
-                    ? turma.notas.reduce((sum, nota) => sum + nota, 0) / turma.notas.length 
-                    : 0;
-                
-                const taxaAcerto = turma.totalQuestoes > 0 
-                    ? (turma.acertos / turma.totalQuestoes) * 100 
-                    : 0;
-                
-                return {
-                    ...turma,
-                    totalAlunos: turma.alunos.size,
-                    totalProvas: turma.provas.size,
-                    mediaNotas: parseFloat(mediaNotas.toFixed(1)),
-                    taxaAcerto: parseFloat(taxaAcerto.toFixed(1)),
-                    alunos: Array.from(turma.alunos),
-                    provas: Array.from(turma.provas)
-                };
-            });
-            
-            return turmasArray;
+            return Array.from(turmasMap.values()).map(turma => ({
+                ...turma,
+                totalAlunos: turma.alunos.size,
+                totalProvas: turma.provas.size,
+                mediaNotas: turma.notas.length > 0 
+                    ? parseFloat((turma.notas.reduce((a, b) => a + b, 0) / turma.notas.length).toFixed(1))
+                    : 0,
+                taxaAcerto: turma.totalQuestoes > 0 
+                    ? parseFloat(((turma.acertos / turma.totalQuestoes) * 100).toFixed(1))
+                    : 0
+            }));
         }
 
-        // Processar resultados por aluno
-        async function processarResultadosPorAluno(resultados) {
+        // ============ PROCESSAR RESULTADOS POR ALUNO ============
+        function processarResultadosPorAluno(resultados) {
             const alunosMap = new Map();
             
             resultados.forEach(resultado => {
-                if (!resultado.alunoId) return;
+                const alunoId = resultado.alunoId || resultado.userId;
+                if (!alunoId) return;
                 
-                const alunoKey = resultado.alunoId;
-                
-                if (!alunosMap.has(alunoKey)) {
-                    alunosMap.set(alunoKey, {
-                        id: resultado.alunoId,
-                        nome: resultado.alunoNome,
-                        matricula: resultado.alunoMatricula,
-                        email: resultado.alunoEmail,
+                if (!alunosMap.has(alunoId)) {
+                    alunosMap.set(alunoId, {
+                        id: alunoId,
+                        nome: resultado.alunoNome || 'Aluno',
+                        matricula: resultado.alunoMatricula || '',
+                        email: resultado.alunoEmail || '',
                         turmas: new Set(),
                         provas: new Set(),
                         notas: [],
@@ -3008,19 +3047,11 @@ window.addEventListener('scroll', function() {
                     });
                 }
                 
-                const aluno = alunosMap.get(alunoKey);
+                const aluno = alunosMap.get(alunoId);
                 
-                // Adicionar turma
-                if (resultado.turmaNome) {
-                    aluno.turmas.add(resultado.turmaNome);
-                }
+                if (resultado.turmaNome) aluno.turmas.add(resultado.turmaNome);
+                if (resultado.provaId) aluno.provas.add(resultado.provaId);
                 
-                // Adicionar prova
-                if (resultado.provaId) {
-                    aluno.provas.add(resultado.provaId);
-                }
-                
-                // Adicionar nota se existir
                 if (resultado.nota !== undefined && resultado.nota !== null) {
                     aluno.notas.push(resultado.nota);
                     aluno.acertos += resultado.acertos || 0;
@@ -3028,47 +3059,21 @@ window.addEventListener('scroll', function() {
                 }
             });
             
-            // Converter Map para array e calcular médias
-            const alunosArray = Array.from(alunosMap.values()).map(aluno => {
-                const mediaNotas = aluno.notas.length > 0 
-                    ? aluno.notas.reduce((sum, nota) => sum + nota, 0) / aluno.notas.length 
-                    : 0;
-                
-                const taxaAcerto = aluno.totalQuestoes > 0 
-                    ? (aluno.acertos / aluno.totalQuestoes) * 100 
-                    : 0;
-                
-                // Calcular tendência
-                let tendencia = 'estavel';
-                if (aluno.notas.length >= 2) {
-                    const notasOrdenadas = [...aluno.notas].sort((a, b) => a - b);
-                    const primeiraMetade = notasOrdenadas.slice(0, Math.floor(notasOrdenadas.length / 2));
-                    const segundaMetade = notasOrdenadas.slice(Math.floor(notasOrdenadas.length / 2));
-                    
-                    const mediaPrimeira = primeiraMetade.reduce((a, b) => a + b, 0) / primeiraMetade.length;
-                    const mediaSegunda = segundaMetade.reduce((a, b) => a + b, 0) / segundaMetade.length;
-                    
-                    if (mediaSegunda > mediaPrimeira + 1) tendencia = 'melhorando';
-                    else if (mediaSegunda < mediaPrimeira - 1) tendencia = 'piorando';
-                }
-                
-                return {
-                    ...aluno,
-                    totalTurmas: aluno.turmas.size,
-                    totalProvas: aluno.provas.size,
-                    mediaNotas: parseFloat(mediaNotas.toFixed(1)),
-                    taxaAcerto: parseFloat(taxaAcerto.toFixed(1)),
-                    tendencia: tendencia,
-                    turmas: Array.from(aluno.turmas),
-                    provas: Array.from(aluno.provas)
-                };
-            });
-            
-            return alunosArray.sort((a, b) => b.mediaNotas - a.mediaNotas);
+            return Array.from(alunosMap.values()).map(aluno => ({
+                ...aluno,
+                totalTurmas: aluno.turmas.size,
+                totalProvas: aluno.provas.size,
+                mediaNotas: aluno.notas.length > 0 
+                    ? parseFloat((aluno.notas.reduce((a, b) => a + b, 0) / aluno.notas.length).toFixed(1))
+                    : 0,
+                taxaAcerto: aluno.totalQuestoes > 0 
+                    ? parseFloat(((aluno.acertos / aluno.totalQuestoes) * 100).toFixed(1))
+                    : 0
+            })).sort((a, b) => b.mediaNotas - a.mediaNotas);
         }
 
-        // Processar resultados por disciplina
-        async function processarResultadosPorDisciplina(resultados) {
+        // ============ PROCESSAR RESULTADOS POR DISCIPLINA ============
+        function processarResultadosPorDisciplina(resultados) {
             const disciplinasMap = new Map();
             
             resultados.forEach(resultado => {
@@ -3088,22 +3093,10 @@ window.addEventListener('scroll', function() {
                 
                 const disc = disciplinasMap.get(disciplina);
                 
-                // Adicionar turma
-                if (resultado.turmaNome) {
-                    disc.turmas.add(resultado.turmaNome);
-                }
+                if (resultado.turmaNome) disc.turmas.add(resultado.turmaNome);
+                if (resultado.alunoId) disc.alunos.add(resultado.alunoId);
+                if (resultado.provaId) disc.provas.add(resultado.provaId);
                 
-                // Adicionar aluno
-                if (resultado.alunoId) {
-                    disc.alunos.add(resultado.alunoId);
-                }
-                
-                // Adicionar prova
-                if (resultado.provaId) {
-                    disc.provas.add(resultado.provaId);
-                }
-                
-                // Adicionar nota se existir
                 if (resultado.nota !== undefined && resultado.nota !== null) {
                     disc.notas.push(resultado.nota);
                     disc.acertos += resultado.acertos || 0;
@@ -3111,95 +3104,93 @@ window.addEventListener('scroll', function() {
                 }
             });
             
-            // Converter Map para array e calcular médias
-            const disciplinasArray = Array.from(disciplinasMap.values()).map(disc => {
-                const mediaNotas = disc.notas.length > 0 
-                    ? disc.notas.reduce((sum, nota) => sum + nota, 0) / disc.notas.length 
-                    : 0;
-                
-                const taxaAcerto = disc.totalQuestoes > 0 
-                    ? (disc.acertos / disc.totalQuestoes) * 100 
-                    : 0;
-                
-                return {
-                    ...disc,
-                    totalTurmas: disc.turmas.size,
-                    totalAlunos: disc.alunos.size,
-                    totalProvas: disc.provas.size,
-                    mediaNotas: parseFloat(mediaNotas.toFixed(1)),
-                    taxaAcerto: parseFloat(taxaAcerto.toFixed(1)),
-                    turmas: Array.from(disc.turmas),
-                    alunos: Array.from(disc.alunos),
-                    provas: Array.from(disc.provas)
-                };
-            });
-            
-            return disciplinasArray.sort((a, b) => b.mediaNotas - a.mediaNotas);
+            return Array.from(disciplinasMap.values()).map(disc => ({
+                ...disc,
+                totalTurmas: disc.turmas.size,
+                totalAlunos: disc.alunos.size,
+                totalProvas: disc.provas.size,
+                mediaNotas: disc.notas.length > 0 
+                    ? parseFloat((disc.notas.reduce((a, b) => a + b, 0) / disc.notas.length).toFixed(1))
+                    : 0,
+                taxaAcerto: disc.totalQuestoes > 0 
+                    ? parseFloat(((disc.acertos / disc.totalQuestoes) * 100).toFixed(1))
+                    : 0
+            })).sort((a, b) => b.mediaNotas - a.mediaNotas);
         }
-
-        // Atualizar estatísticas gerais
+        
+        // ============ ATUALIZAR ESTATÍSTICAS GERAIS ============
         function atualizarEstatisticasGerais(estatisticas) {
-            document.getElementById('statTotalAlunos').textContent = estatisticas.totalAlunos || 0;
-            document.getElementById('statTotalProvas').textContent = estatisticas.totalProvas || 0;
-            document.getElementById('statMediaGeral').textContent = estatisticas.mediaGeral || '0.0';
+            const totalAlunos = document.getElementById('statTotalAlunos');
+            const totalProvas = document.getElementById('statTotalProvas');
+            const mediaGeral = document.getElementById('statMediaGeral');
+            const taxaConclusao = document.getElementById('statTaxaConclusao');
             
-            // Calcular taxa de conclusão
-            const taxaConclusao = estatisticas.totalAlunos > 0 
-                ? Math.round((estatisticas.alunosCompletaram / estatisticas.totalAlunos) * 100) 
-                : 0;
-            document.getElementById('statTaxaConclusao').textContent = taxaConclusao + '%';
+            if (totalAlunos) totalAlunos.textContent = estatisticas.totalAlunos || 0;
+            if (totalProvas) totalProvas.textContent = estatisticas.totalProvas || 0;
+            if (mediaGeral) mediaGeral.textContent = estatisticas.mediaGeral || '0.0';
+            if (taxaConclusao) taxaConclusao.textContent = (estatisticas.taxaConclusao || '0') + '%';
         }
 
-        // Preencher filtros
-        function preencherFiltros() {
+        // ============ PREENCHER FILTROS ============
+        function preencherFiltros(turmas, disciplinas) {
             const filtroTurma = document.getElementById('filtroTurma');
             const filtroDisciplina = document.getElementById('filtroDisciplina');
             
-            if (!filtroTurma || !filtroDisciplina) return;
+            if (filtroTurma) {
+                filtroTurma.innerHTML = '<option value="">Todas as turmas</option>';
+                turmas.forEach(turma => {
+                    const option = document.createElement('option');
+                    option.value = turma.nome;
+                    option.textContent = turma.nome;
+                    filtroTurma.appendChild(option);
+                });
+            }
             
-            // Limpar opções
-            filtroTurma.innerHTML = '<option value="">Todas as turmas</option>';
-            filtroDisciplina.innerHTML = '<option value="">Todas as disciplinas</option>';
-            
-            // Adicionar turmas únicas
-            const turmasUnicas = [...new Set(resultadosGerais.turmas.map(t => t.nome))];
-            turmasUnicas.forEach(turma => {
-                const option = document.createElement('option');
-                option.value = turma;
-                option.textContent = turma;
-                filtroTurma.appendChild(option);
-            });
-            
-            // Adicionar disciplinas únicas
-            const disciplinasUnicas = [...new Set(resultadosGerais.disciplinas.map(d => d.nome))];
-            disciplinasUnicas.forEach(disciplina => {
-                const option = document.createElement('option');
-                option.value = disciplina;
-                option.textContent = disciplina;
-                filtroDisciplina.appendChild(option);
-            });
+            if (filtroDisciplina) {
+                filtroDisciplina.innerHTML = '<option value="">Todas as disciplinas</option>';
+                disciplinas.forEach(disc => {
+                    const option = document.createElement('option');
+                    option.value = disc.nome;
+                    option.textContent = disc.nome;
+                    filtroDisciplina.appendChild(option);
+                });
+            }
         }
 
-        // Atualizar lista de turmas nos resultados
-        function atualizarListaTurmasResultados() {
+        // ============ FUNÇÕES DE FILTRAGEM ============
+        window.filtrarResultados = function() {
+            // Implementar filtragem se necessário
+            console.log('Filtrando resultados...');
+        };
+
+        window.filtrarAlunos = function() {
+            const busca = document.getElementById('buscaAluno')?.value.toLowerCase() || '';
+            const container = document.getElementById('listaAlunosResultados');
+            
+            if (!container) return;
+            
+            // Aqui você implementaria a filtragem baseada na busca
+            console.log('Buscando alunos:', busca);
+        };
+
+        // ============ ATUALIZAR LISTA DE TURMAS NOS RESULTADOS ============
+        function atualizarListaTurmasResultados(turmas) {
             const container = document.getElementById('listaTurmasResultados');
             if (!container) return;
             
-            const turmasFiltradas = filtrarTurmas();
-            
-            if (turmasFiltradas.length === 0) {
+            if (!turmas || turmas.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-school" style="font-size: 3rem; margin-bottom: 15px;"></i>
-                        <h3>Nenhuma turma encontrada</h3>
-                        <p>Não há resultados para as turmas com os filtros selecionados.</p>
+                        <h3>Nenhum resultado encontrado</h3>
+                        <p>Não há dados de desempenho para turmas.</p>
                     </div>
                 `;
                 return;
             }
             
-            container.innerHTML = turmasFiltradas.map(turma => `
-                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5; transition: transform 0.3s;">
+            container.innerHTML = turmas.map(turma => `
+                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
                         <div>
                             <h4 style="margin: 0; color: #1f2937;">${turma.nome}</h4>
@@ -3216,8 +3207,8 @@ window.addEventListener('scroll', function() {
                             <span style="font-size: 0.9rem; color: #6b7280;">Taxa de acerto</span>
                             <span style="font-weight: 600; color: #4f46e5;">${turma.taxaAcerto}%</span>
                         </div>
-                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; margin: 10px 0;">
-                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 5px; width: ${turma.taxaAcerto}%"></div>
+                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden;">
+                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); width: ${turma.taxaAcerto}%"></div>
                         </div>
                     </div>
                     
@@ -3237,41 +3228,33 @@ window.addEventListener('scroll', function() {
                             <div>Desempenho</div>
                         </div>
                     </div>
-                    
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-                        <button onclick="verDetalhesTurma('${turma.id}')" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; width: 100%; justify-content: center;">
-                            <i class="fas fa-chart-bar"></i> Ver Detalhes da Turma
-                        </button>
-                    </div>
                 </div>
             `).join('');
         }
 
-        // Atualizar lista de alunos nos resultados
-        function atualizarListaAlunosResultados() {
+        // ============ ATUALIZAR LISTA DE ALUNOS NOS RESULTADOS ============
+        function atualizarListaAlunosResultados(alunos) {
             const container = document.getElementById('listaAlunosResultados');
             if (!container) return;
             
-            const alunosFiltrados = filtrarAlunosLista();
-            
-            if (alunosFiltrados.length === 0) {
+            if (!alunos || alunos.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-user-graduate" style="font-size: 3rem; margin-bottom: 15px;"></i>
                         <h3>Nenhum aluno encontrado</h3>
-                        <p>Não há resultados para os alunos com os filtros selecionados.</p>
+                        <p>Não há dados de desempenho para alunos.</p>
                     </div>
                 `;
                 return;
             }
             
-            container.innerHTML = alunosFiltrados.map(aluno => `
-                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5; transition: transform 0.3s;">
+            container.innerHTML = alunos.map(aluno => `
+                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
                         <div>
                             <h4 style="margin: 0; color: #1f2937;">${aluno.nome}</h4>
                             <p style="margin: 5px 0; color: #6b7280; font-size: 0.9rem;">
-                                ${aluno.matricula || 'Sem matrícula'} • ${aluno.email || ''}
+                                ${aluno.matricula || ''} ${aluno.email ? '• ' + aluno.email : ''}
                             </p>
                         </div>
                         <div style="text-align: right;">
@@ -3285,12 +3268,12 @@ window.addEventListener('scroll', function() {
                             <span style="font-size: 0.9rem; color: #6b7280;">Taxa de acerto</span>
                             <span style="font-weight: 600; color: #4f46e5;">${aluno.taxaAcerto}%</span>
                         </div>
-                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; margin: 10px 0;">
-                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 5px; width: ${aluno.taxaAcerto}%"></div>
+                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden;">
+                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); width: ${aluno.taxaAcerto}%"></div>
                         </div>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.9rem; color: #6b7280; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.9rem; color: #6b7280;">
                         <div style="text-align: center;">
                             <div style="font-weight: 600; color: #4f46e5;">${aluno.totalTurmas}</div>
                             <div>Turmas</div>
@@ -3300,69 +3283,39 @@ window.addEventListener('scroll', function() {
                             <div>Provas</div>
                         </div>
                         <div style="text-align: center;">
-                            <div style="font-weight: 600; color: ${
-                                aluno.tendencia === 'melhorando' ? '#10b981' : 
-                                aluno.tendencia === 'piorando' ? '#ef4444' : '#6b7280'
-                            }">
-                                <i class="fas fa-${aluno.tendencia === 'melhorando' ? 'arrow-up' : aluno.tendencia === 'piorando' ? 'arrow-down' : 'minus'}"></i>
-                                ${aluno.tendencia === 'melhorando' ? 'Melhorando' : aluno.tendencia === 'piorando' ? 'Piorando' : 'Estável'}
+                            <div style="font-weight: 600; color: ${aluno.mediaNotas >= 7 ? '#10b981' : aluno.mediaNotas >= 5 ? '#f59e0b' : '#ef4444'}">
+                                ${aluno.mediaNotas >= 7 ? 'Bom' : aluno.mediaNotas >= 5 ? 'Médio' : 'Baixo'}
                             </div>
-                            <div>Tendência</div>
+                            <div>Desempenho</div>
                         </div>
-                    </div>
-                    
-                    ${aluno.turmas.length > 0 ? `
-                    <div style="margin-top: 10px;">
-                        <p style="margin: 0 0 5px 0; font-size: 0.9rem; color: #6b7280;">Turmas:</p>
-                        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
-                            ${aluno.turmas.slice(0, 3).map(turma => `
-                                <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; color: #4b5563;">
-                                    ${turma}
-                                </span>
-                            `).join('')}
-                            ${aluno.turmas.length > 3 ? `
-                                <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; color: #4b5563;">
-                                    +${aluno.turmas.length - 3}
-                                </span>
-                            ` : ''}
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-                        <button onclick="verDetalhesAlunoResultado('${aluno.id}')" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; width: 100%; justify-content: center;">
-                            <i class="fas fa-eye"></i> Ver Desempenho Completo
-                        </button>
                     </div>
                 </div>
             `).join('');
         }
 
-        // Atualizar lista de disciplinas nos resultados
-        function atualizarListaDisciplinasResultados() {
+        // ============ ATUALIZAR LISTA DE DISCIPLINAS NOS RESULTADOS ============
+        function atualizarListaDisciplinasResultados(disciplinas) {
             const container = document.getElementById('listaDisciplinasResultados');
             if (!container) return;
             
-            const disciplinasFiltradas = filtrarDisciplinas();
-            
-            if (disciplinasFiltradas.length === 0) {
+            if (!disciplinas || disciplinas.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-book" style="font-size: 3rem; margin-bottom: 15px;"></i>
                         <h3>Nenhuma disciplina encontrada</h3>
-                        <p>Não há resultados para as disciplinas com os filtros selecionados.</p>
+                        <p>Não há dados de desempenho para disciplinas.</p>
                     </div>
                 `;
                 return;
             }
             
-            container.innerHTML = disciplinasFiltradas.map(disciplina => `
-                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5; transition: transform 0.3s;">
+            container.innerHTML = disciplinas.map(disciplina => `
+                <div class="desempenho-card" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.08); border-left: 4px solid #4f46e5;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
                         <div>
                             <h4 style="margin: 0; color: #1f2937;">${disciplina.nome}</h4>
                             <p style="margin: 5px 0; color: #6b7280; font-size: 0.9rem;">
-                                ${disciplina.totalTurmas} turmas • ${disciplina.totalAlunos} alunos
+                                ${disciplina.totalTurmas} turma(s) • ${disciplina.totalAlunos} aluno(s)
                             </p>
                         </div>
                         <div style="text-align: right;">
@@ -3376,8 +3329,8 @@ window.addEventListener('scroll', function() {
                             <span style="font-size: 0.9rem; color: #6b7280;">Taxa de acerto</span>
                             <span style="font-weight: 600; color: #4f46e5;">${disciplina.taxaAcerto}%</span>
                         </div>
-                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; margin: 10px 0;">
-                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 5px; width: ${disciplina.taxaAcerto}%"></div>
+                        <div style="height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden;">
+                            <div style="height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); width: ${disciplina.taxaAcerto}%"></div>
                         </div>
                     </div>
                     
@@ -3387,7 +3340,7 @@ window.addEventListener('scroll', function() {
                             <div>Provas</div>
                         </div>
                         <div style="text-align: center;">
-                            <div style="font-weight: 600; color: #10b981;">${Math.round(disciplina.taxaAcerto)}%</div>
+                            <div style="font-weight: 600; color: #10b981;">${disciplina.taxaAcerto}%</div>
                             <div>Acertos</div>
                         </div>
                         <div style="text-align: center;">
@@ -3396,12 +3349,6 @@ window.addEventListener('scroll', function() {
                             </div>
                             <div>Desempenho</div>
                         </div>
-                    </div>
-                    
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-                        <button onclick="verDetalhesDisciplina('${disciplina.nome}')" style="background: #8b5cf6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; width: 100%; justify-content: center;">
-                            <i class="fas fa-chart-line"></i> Ver Análise da Disciplina
-                        </button>
                     </div>
                 </div>
             `).join('');

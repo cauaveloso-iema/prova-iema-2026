@@ -752,7 +752,6 @@ app.post('/api/auth/register', [
   }
 });
 
-// ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO - VERSÃO CORRIGIDA ============
 // ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO - CORRIGIDA COM TURMA! ============
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
@@ -4613,7 +4612,7 @@ app.get('/api/provas/dados', async (req, res) => {
 
 // ============ ROTAS DE RESULTADOS ============
 
-// ROTA: Resultados do professor
+// ============ ROTA DE RESULTADOS DO PROFESSOR - VERSÃO CORRIGIDA COM SEGURANÇA ============
 app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
   try {
     if (req.userRole !== 'professor' && req.userRole !== 'admin') {
@@ -4625,7 +4624,10 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
 
     const professorId = req.userId;
 
+    console.log(`📊 Professor ${professorId} buscando resultados`);
+
     const provas = await Prova.find({ userId: professorId })
+      .populate('turmaId', 'nome disciplina')
       .sort({ createdAt: -1 });
 
     if (provas.length === 0) {
@@ -4636,7 +4638,8 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
         estatisticas: {
           totalProvas: 0,
           totalAlunos: 0,
-          mediaGeral: 0
+          mediaGeral: 0,
+          taxaConclusao: 0
         }
       });
     }
@@ -4645,81 +4648,126 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     let totalAlunos = 0;
     let somaNotas = 0;
     let contadorNotas = 0;
+    const alunosProcessados = new Set();
 
     for (const prova of provas) {
+      // Buscar resultados do modelo Resultado com .lean() para melhor performance
       const resultadosProva = await Resultado.find({ provaId: prova._id })
         .populate('userId', 'nome email matricula')
-        .sort({ nota: -1 });
+        .lean();
 
+      // Buscar provas realizadas
       const provasRealizadas = await ProvaRealizada.find({ provaId: prova._id })
-        .populate('alunoId', 'nome email matricula');
+        .populate('alunoId', 'nome email matricula')
+        .lean();
 
-      const todosResultados = [];
-
+      // Processar resultados
       resultadosProva.forEach(r => {
-        todosResultados.push({
-          alunoId: r.userId._id,
-          alunoNome: r.userId.nome,
-          alunoEmail: r.userId.email,
-          alunoMatricula: r.userId.matricula,
-          nota: r.nota,
-          acertos: r.acertos,
-          total: r.total,
-          porcentagem: r.porcentagem,
-          tempoGasto: r.tempoGasto,
-          dataEntrega: r.createdAt,
-          tipo: 'resultado'
-        });
-      });
-
-      provasRealizadas.forEach(pr => {
-        const jaExiste = todosResultados.some(r => 
-          r.alunoId.toString() === pr.alunoId._id.toString()
-        );
-        
-        if (!jaExiste && pr.alunoId) {
-          todosResultados.push({
-            alunoId: pr.alunoId._id,
-            alunoNome: pr.alunoId.nome,
-            alunoEmail: pr.alunoId.email,
-            alunoMatricula: pr.alunoId.matricula,
-            nota: pr.nota,
-            tempoGasto: pr.tempoGasto,
-            dataEntrega: pr.dataRealizacao,
-            tipo: 'prova_realizada'
-          });
+        // 🟢🟢🟢 VERIFICAÇÃO CRÍTICA: userId pode ser null! 🟢🟢🟢
+        if (!r.userId) {
+          console.warn(`⚠️ Resultado ${r._id} sem referência de usuário`);
+          return; // Pular este resultado
         }
-      });
 
-      todosResultados.forEach(r => {
+        // Adicionar aluno ao conjunto de processados
+        alunosProcessados.add(r.userId._id.toString());
+
         resultadosCompletos.push({
           provaId: prova._id,
           provaTitulo: prova.titulo,
           provaConteudo: prova.conteudo,
           provaDataLimite: prova.dataLimite,
-          ...r
+          turmaId: prova.turmaId?._id,
+          turmaNome: prova.turmaId?.nome,
+          turmaDisciplina: prova.turmaId?.disciplina,
+          alunoId: r.userId._id,
+          alunoNome: r.userId.nome || 'Aluno',
+          alunoEmail: r.userId.email || '',
+          alunoMatricula: r.userId.matricula || '',
+          nota: r.nota,
+          acertos: r.acertos || 0,
+          total: r.total || 0,
+          porcentagem: r.porcentagem || '0.0',
+          tempoGasto: r.tempoGasto || 0,
+          dataEntrega: r.createdAt,
+          notaLiberada: r.notaLiberada || false,
+          tipo: 'resultado'
         });
 
-        if (r.nota !== undefined && !isNaN(r.nota)) {
+        if (r.nota !== undefined && !isNaN(r.nota) && r.nota !== null) {
           totalAlunos++;
           somaNotas += r.nota;
           contadorNotas++;
         }
       });
+
+      // Processar provas realizadas
+      provasRealizadas.forEach(pr => {
+        // 🟢🟢🟢 VERIFICAÇÃO CRÍTICA: alunoId pode ser null! 🟢🟢🟢
+        if (!pr.alunoId) {
+          console.warn(`⚠️ ProvaRealizada ${pr._id} sem referência de aluno`);
+          return; // Pular este registro
+        }
+
+        // Verificar se já existe no array de resultados
+        const jaExiste = resultadosCompletos.some(r => 
+          r.alunoId?.toString() === pr.alunoId._id.toString() && 
+          r.provaId?.toString() === prova._id.toString()
+        );
+
+        if (!jaExiste) {
+          alunosProcessados.add(pr.alunoId._id.toString());
+
+          resultadosCompletos.push({
+            provaId: prova._id,
+            provaTitulo: prova.titulo,
+            provaConteudo: prova.conteudo,
+            provaDataLimite: prova.dataLimite,
+            turmaId: prova.turmaId?._id,
+            turmaNome: prova.turmaId?.nome,
+            turmaDisciplina: prova.turmaId?.disciplina,
+            alunoId: pr.alunoId._id,
+            alunoNome: pr.alunoId.nome || 'Aluno',
+            alunoEmail: pr.alunoId.email || '',
+            alunoMatricula: pr.alunoId.matricula || '',
+            nota: pr.nota,
+            tempoGasto: pr.tempoGasto || 0,
+            dataEntrega: pr.dataRealizacao,
+            notaLiberada: pr.notaLiberada || false,
+            tipo: 'prova_realizada'
+          });
+
+          if (pr.nota !== undefined && !isNaN(pr.nota) && pr.nota !== null) {
+            totalAlunos++;
+            somaNotas += pr.nota;
+            contadorNotas++;
+          }
+        }
+      });
     }
+
+    // Calcular estatísticas
+    const totalAlunosUnicos = alunosProcessados.size;
+    const mediaGeral = contadorNotas > 0 ? (somaNotas / contadorNotas).toFixed(1) : '0.0';
+    const taxaConclusao = totalAlunosUnicos > 0 
+      ? Math.round((totalAlunos / totalAlunosUnicos) * 100) 
+      : 0;
 
     const estatisticas = {
       totalProvas: provas.length,
-      totalAlunos: totalAlunos,
-      mediaGeral: contadorNotas > 0 ? (somaNotas / contadorNotas).toFixed(1) : 0,
+      totalAlunos: totalAlunosUnicos,
+      mediaGeral: mediaGeral,
+      taxaConclusao: taxaConclusao,
       provas: provas.map(prova => ({
         id: prova._id,
         titulo: prova.titulo,
-        totalQuestoes: prova.questoes.length,
-        dificuldade: prova.dificuldade,
+        totalQuestoes: prova.questoes?.length || 0,
+        dificuldade: prova.dificuldade || 'media',
         dataLimite: prova.dataLimite
       }))
     };
+
+    console.log(`✅ Resultados carregados: ${resultadosCompletos.length} registros`);
 
     res.json({
       success: true,
@@ -4729,10 +4777,13 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar resultados do professor:', error);
+    console.error('❌ Erro ao buscar resultados do professor:', error);
+    console.error('Stack:', error.stack);
+    
     res.status(500).json({
       success: false,
-      error: 'Erro interno ao buscar resultados'
+      error: 'Erro interno ao buscar resultados: ' + error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
