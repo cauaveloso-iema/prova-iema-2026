@@ -525,11 +525,12 @@ app.post('/api/auth/register', [
       role, 
       eixo, 
       curso, 
+      turma,        
       periodo, 
       departamento, 
       titulacao,
       
-      // ========== 🔴 NOVOS CAMPOS DE ACESSIBILIDADE ==========
+      // ========== CAMPOS DE ACESSIBILIDADE ==========
       precisaAcessibilidade,
       condicaoAcessibilidade,
       outraCondicao
@@ -553,7 +554,8 @@ app.post('/api/auth/register', [
       cpf: cpf ? '***' : 'não informado',
       telefone: telefone ? '***' : 'não informado',
       role,
-      // LOG DOS CAMPOS DE ACESSIBILIDADE
+      curso: curso || 'não informado',
+      turma: turma || 'não informado',  
       precisaAcessibilidade,
       condicaoAcessibilidade,
       outraCondicao
@@ -644,7 +646,6 @@ app.post('/api/auth/register', [
         
         // VALIDAÇÃO DE MATRÍCULA AUTORIZADA PARA PROFESSORES
         console.log('🔍 Verificando matrícula de professor:', matriculaNumeros);
-        console.log('📋 Sistema de autorização:', professorAuth.getStats());
         
         if (!professorAuth.isProfessorAuthorized(matriculaNumeros)) {
             return res.status(403).json({
@@ -654,6 +655,23 @@ app.post('/api/auth/register', [
         }
         
         console.log('✅ Matrícula autorizada para professor:', matriculaNumeros);
+    }
+    
+    // Validação para alunos
+    if (role === 'aluno') {
+        if (!curso) {
+            return res.status(400).json({
+                success: false,
+                error: 'Curso é obrigatório para alunos'
+            });
+        }
+        
+        if (!turma) {
+            return res.status(400).json({
+                success: false,
+                error: 'Turma é obrigatória para alunos'
+            });
+        }
     }
     
     // CRIAR USUÁRIO COM TODOS OS CAMPOS
@@ -667,12 +685,12 @@ app.post('/api/auth/register', [
       role,
       eixo: role === 'professor' ? eixo : null,
       curso: role === 'aluno' ? curso : undefined,
+      turma: role === 'aluno' ? turma : null,     
       periodo: role === 'aluno' ? periodo : undefined,
       departamento: role === 'professor' ? departamento : undefined,
       titulacao: role === 'professor' ? titulacao : undefined,
       
-      // ========== 🔴 NOVOS CAMPOS DE ACESSIBILIDADE ==========
-      // SÓ PARA ALUNOS!
+      // ========== CAMPOS DE ACESSIBILIDADE ==========
       precisaAcessibilidade: role === 'aluno' ? (precisaAcessibilidade === true || precisaAcessibilidade === 'true' || precisaAcessibilidade === 'sim') : false,
       condicaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? condicaoAcessibilidade : null,
       outraCondicao: role === 'aluno' && precisaAcessibilidade && condicaoAcessibilidade === 'outra' ? outraCondicao : null,
@@ -682,12 +700,11 @@ app.post('/api/auth/register', [
     
     await user.save();
     
-    console.log('✅ Usuário criado com CPF:', user.cpf);
-    console.log('🎯 Acessibilidade:', {
-      precisa: user.precisaAcessibilidade,
-      condicao: user.condicaoAcessibilidade,
-      outra: user.outraCondicao
-    });
+    console.log('✅ Usuário criado com sucesso!');
+    console.log(`   📚 Curso: ${user.curso}`);
+    console.log(`   🏫 Turma: ${user.turma}`);     
+    console.log(`   🎯 Eixo: ${user.eixo}`);
+    console.log(`   ♿ Acessibilidade: ${user.precisaAcessibilidade ? 'Sim' : 'Não'}`);
     
     const token = jwt.sign(
       { 
@@ -696,7 +713,6 @@ app.post('/api/auth/register', [
         eixo: user.eixo,
         nome: user.nome,
         cpf: user.cpf,
-        // INCLUIR ACESSIBILIDADE NO TOKEN
         precisaAcessibilidade: user.precisaAcessibilidade,
         condicaoAcessibilidade: user.condicaoAcessibilidade
       },
@@ -716,21 +732,19 @@ app.post('/api/auth/register', [
         eixo: user.eixo,
         matricula: user.matricula,
         curso: user.curso,
+        turma: user.turma,           
         periodo: user.periodo,
         departamento: user.departamento,
         titulacao: user.titulacao,
-        
-        // ========== 🔴 RETORNAR ACESSIBILIDADE ==========
         precisaAcessibilidade: user.precisaAcessibilidade,
         condicaoAcessibilidade: user.condicaoAcessibilidade,
         outraCondicao: user.outraCondicao
-        
       },
       redirectTo: role === 'professor' ? '/index.html' : '/aluno.html'
     });
     
   } catch (error) {
-    console.error('Erro no registro:', error);
+    console.error('❌ Erro no registro:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao registrar usuário: ' + error.message
@@ -739,6 +753,7 @@ app.post('/api/auth/register', [
 });
 
 // ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO - VERSÃO CORRIGIDA ============
+// ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO - CORRIGIDA COM TURMA! ============
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     // 🔥 BUSCAR TODOS OS CAMPOS, INCLUINDO ACESSIBILIDADE
@@ -763,16 +778,16 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         eixo: user.eixo,
         matricula: user.matricula,
         curso: user.curso,
+        turma: user.turma,    
         periodo: user.periodo,
         departamento: user.departamento,
         titulacao: user.titulacao,
         
-        // 🔥 CAMPOS DE ACESSIBILIDADE - AGORA VÃO APARECER!
+        // 🔥 CAMPOS DE ACESSIBILIDADE
         precisaAcessibilidade: user.precisaAcessibilidade === true,
         condicaoAcessibilidade: user.condicaoAcessibilidade,
         outraCondicao: user.outraCondicao,
         dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade
-        
       }
     });
     
@@ -785,7 +800,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ ROTA DE LOGIN CORRIGIDA ============
+// ========== ROTA DE LOGIN CORRIGIDA - ADICIONAR TURMA NA RESPOSTA ==========
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password, cpf } = req.body;
@@ -818,8 +833,9 @@ app.post('/api/auth/login', async (req, res) => {
       .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade');
     
     console.log(`✅ Login bem-sucedido: ${userCompleto.email}`);
-    console.log(`   🎯 precisaAcessibilidade: ${userCompleto.precisaAcessibilidade}`);
-    console.log(`   📋 condicaoAcessibilidade: ${userCompleto.condicaoAcessibilidade}`);
+    console.log(`   📚 Curso: ${userCompleto.curso}`);
+    console.log(`   🏫 TURMA: ${userCompleto.turma}`); // <-- VERIFICAR SE ESTÁ VINDO!
+    console.log(`   🎯 Eixo: ${userCompleto.eixo}`);
     
     const token = jwt.sign(
       { 
@@ -828,16 +844,14 @@ app.post('/api/auth/login', async (req, res) => {
         eixo: userCompleto.eixo,
         nome: userCompleto.nome,
         cpf: userCompleto.cpf,
-        
-        // 🔥 INCLUIR ACESSIBILIDADE NO TOKEN
         precisaAcessibilidade: userCompleto.precisaAcessibilidade === true,
         condicaoAcessibilidade: userCompleto.condicaoAcessibilidade
-        
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
     
+    // CORREÇÃO: INCLUIR TURMA NA RESPOSTA!
     res.json({
       success: true,
       token,
@@ -850,15 +864,13 @@ app.post('/api/auth/login', async (req, res) => {
         eixo: userCompleto.eixo,
         matricula: userCompleto.matricula,
         curso: userCompleto.curso,
+        turma: userCompleto.turma,     // <-- ADICIONAR ESTA LINHA!
         periodo: userCompleto.periodo,
         departamento: userCompleto.departamento,
         titulacao: userCompleto.titulacao,
-        
-        // 🔥 INCLUIR ACESSIBILIDADE NA RESPOSTA
         precisaAcessibilidade: userCompleto.precisaAcessibilidade === true,
         condicaoAcessibilidade: userCompleto.condicaoAcessibilidade,
         outraCondicao: userCompleto.outraCondicao
-        
       },
       redirectTo: userCompleto.role === 'professor' ? '/index.html' : '/aluno.html'
     });
@@ -1331,11 +1343,12 @@ app.post('/api/turmas', authenticateToken, async (req, res) => {
       });
     }
 
-    const { nome, disciplina, descricao } = req.body;
+    const { nome, disciplina, eixo, descricao } = req.body;
 
     const turma = new Turma({
       nome,
       disciplina,
+      eixo,
       descricao,
       professorId: req.userId
     });
@@ -1348,6 +1361,7 @@ app.post('/api/turmas', authenticateToken, async (req, res) => {
         id: turma._id,
         nome: turma.nome,
         disciplina: turma.disciplina,
+        eixo: turma.exito,
         codigo: turma.codigo,
         professorId: turma.professorId
       }
@@ -2361,6 +2375,8 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     const prova = new Prova({
       userId: req.userId,
       turmaId: turma._id,
+      eixo: turma.eixo,  // <-- ADICIONE ESTA LINHA!
+      disciplina: turma.disciplina, // <-- ADICIONE SE QUISER
       titulo: titulo || `Prova: ${conteudo.substring(0, 50)}`,
       conteudo: conteudo,
       tipoProva: tipoProva,
@@ -2707,7 +2723,6 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
         const turmaIds = turmas.map(t => t._id);
         
         if (turmaIds.length === 0) {
-            console.log(`   ⚠️ Aluno não está em nenhuma turma`);
             return res.json({ 
                 success: true, 
                 provas: [],
@@ -2789,6 +2804,8 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
                         _id: prova._id,
                         id: prova._id,
                         titulo: prova.titulo,
+                        eixo: prova.eixo,
+                        disciplina: prova.disciplina,
                         conteudo: prova.conteudo,
                         duracao: prova.duracao,
                         duracaoMinutos: prova.duracaoMinutos,
@@ -3722,6 +3739,8 @@ app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
                 _id: prova._id,
                 
                 titulo: prova.titulo,
+                eixo: prova.eixo,
+                disciplina: prova.disciplina,
                 conteudo: prova.conteudo,
                 quantidadeQuestoes: prova.quantidadeQuestoes,
                 dificuldade: prova.dificuldade,

@@ -432,9 +432,9 @@
                 <div class="form-group cpf-field">
                     <label for="registerCPF"><i class="fas fa-id-card"></i> CPF <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
                     <input type="text" id="registerCPF" class="form-control" required 
-                           placeholder="000.000.000-00" 
-                           maxlength="14"
-                           oninput="formatarCPF(this)">
+                        placeholder="000.000.000-00" 
+                        maxlength="14"
+                        oninput="formatarCPF(this)">
                     <span id="cpfIcon" class="valid-icon"></span>
                     <small style="display: block; margin-top: 5px; color: #6b7280;">
                         Digite apenas números. O formato será aplicado automaticamente.
@@ -473,7 +473,7 @@
                     <!-- CURSO OBRIGATÓRIO - SELECIONÁVEL -->
                     <div class="form-group">
                         <label for="registerCurso"><i class="fas fa-graduation-cap"></i> Curso <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
-                        <select id="registerCurso" class="form-control" required>
+                        <select id="registerCurso" class="form-control" required onchange="atualizarTurmasPorCurso()">
                             <option value="">Selecione seu curso técnico</option>
                             <option value="TÉCNICO EM EVENTOS">TÉCNICO EM EVENTOS</option>
                             <option value="TÉCNICO EM REDES DE COMPUTADORES">TÉCNICO EM REDES DE COMPUTADORES</option>
@@ -486,6 +486,17 @@
                             <option value="TÉCNICO EM SERVIÇOS JURÍDICOS">TÉCNICO EM SERVIÇOS JURÍDICOS</option>
                             <option value="TÉCNICO EM MEIO AMBIENTE">TÉCNICO EM MEIO AMBIENTE</option>
                         </select>
+                    </div>
+                    
+                    <!-- TURMA OBRIGATÓRIA - DINÂMICA BASEADA NO CURSO -->
+                    <div class="form-group">
+                        <label for="registerTurma"><i class="fas fa-users"></i> Turma <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
+                        <select id="registerTurma" class="form-control">
+                            <option value="">Primeiro selecione seu curso</option>
+                        </select>
+                        <small style="color: #6b7280; display: block; margin-top: 5px;">
+                            <i class="fas fa-info-circle"></i> Selecione o curso primeiro para ver as turmas disponíveis
+                        </small>
                     </div>
                     
                     <div class="form-group">
@@ -502,11 +513,11 @@
                         </label>
                         <div style="display: flex; gap: 20px; margin-top: 10px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="radio" name="acessibilidade" id="acessibilidadeSim" value="sim" required>
+                               <input type="radio" name="acessibilidade" id="acessibilidadeSim" value="sim">
                                 <span>Sim, preciso de prova adaptada</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="radio" name="acessibilidade" id="acessibilidadeNao" value="nao" required>
+                                <input type="radio" name="acessibilidade" id="acessibilidadeNao" value="nao">
                                 <span>Não, não preciso</span>
                             </label>
                         </div>
@@ -555,8 +566,14 @@
                         <label for="registerEixo"><i class="fas fa-sitemap"></i> Eixo</label>
                         <select id="registerEixo" class="form-control">
                             <option value="">Selecione seu eixo</option>
-                            <option value="natureza">Natureza (Exatas, Biológicas)</option>
+                            <option value="natureza">Natureza e Matemática (Exatas, Biológicas)</option>
                             <option value="humanas">Humanas (Humanidades, Sociais)</option>
+                            <option value="linguagens">Linguagens</option>
+                            <option value="desenvolvimento">Eixo de Informação e Comunicação (Desenvolvimento de Sistemas e Rede de Computadores)</option>
+                            <option value="gestao">Eixo de Gestão e Negócios (Marketing e Serviços Jurídicos)</option>
+                            <option value="producao">Eixo Produção Cultural e Design e (Produção de Áudio e Vídeo e Publicidade)</option>
+                            <option value="turismo">Eixo Turismo, Hospitalidade e Lazer (Eventos, Guia de Turismo e Gastronomia)</option>
+                            <option value="ambiente">Eixo de Ambiente e Saúde (Meio Ambiente)</option>
                         </select>
                     </div>
                     
@@ -612,6 +629,157 @@
     
     <!-- === SEU JAVASCRIPT === -->
     <script>
+
+        // Mapeamento de turmas por curso
+        const TURMAS_POR_CURSO = {
+            "TÉCNICO EM EVENTOS": ["101", "201"],
+            "TÉCNICO EM REDES DE COMPUTADORES": ["103", "203"],
+            "TÉCNICO EM ÁUDIO E VÍDEO": ["105", "205", "305"],
+            "TÉCNICO EM GUIA DE TURISMO": ["106", "206"],
+            "TÉCNICO EM MARKETING": ["300"],
+            "TÉCNICO EM GASTRONOMIA": ["302"],
+            "TÉCNICO EM PUBLICIDADE": ["109","209"],
+            "TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS": ["104","204","304"],
+            "TÉCNICO EM SERVIÇOS JURÍDICOS": ["307"],
+            "TÉCNICO EM MEIO AMBIENTE": ["308"]
+        };
+
+        // Função para atualizar turmas baseado no curso selecionado
+        function atualizarTurmasPorCurso() {
+            const cursoSelect = document.getElementById('registerCurso');
+            const turmaSelect = document.getElementById('registerTurma');
+            const cursoSelecionado = cursoSelect.value;
+            
+            // Limpar turmas atuais
+            turmaSelect.innerHTML = '';
+            
+            if (!cursoSelecionado) {
+                turmaSelect.innerHTML = '<option value="">Primeiro selecione seu curso</option>';
+                return;
+            }
+            
+            // Obter turmas do curso selecionado
+            const turmasDisponiveis = TURMAS_POR_CURSO[cursoSelecionado] || [];
+            
+            if (turmasDisponiveis.length === 0) {
+                turmaSelect.innerHTML = '<option value="">Nenhuma turma disponível</option>';
+                return;
+            }
+            
+            // Adicionar opção padrão
+            turmaSelect.innerHTML = '<option value="">Selecione sua turma</option>';
+            
+            // Adicionar turmas disponíveis
+            turmasDisponiveis.forEach(turma => {
+                const option = document.createElement('option');
+                option.value = turma;
+                option.textContent = `Turma ${turma}`;
+                turmaSelect.appendChild(option);
+            });
+        }
+
+        // Modificar a função de registro para incluir turma
+        async function register(event) {
+            event.preventDefault();
+            
+            const role = document.querySelector('input[name="role"]:checked')?.value;
+            if (!role) {
+                alert('Selecione se você é Aluno ou Professor');
+                return;
+            }
+            
+            const nome = document.getElementById('registerNome').value;
+            const email = document.getElementById('registerEmail').value;
+            const senha = document.getElementById('registerPassword').value; // CORRIGIDO
+            const cpf = document.getElementById('registerCPF').value;
+            const telefone = document.getElementById('registerTelefone').value;
+            
+            let userData = {
+                nome,
+                email,
+                senha,
+                cpf: cpf.replace(/\D/g, ''),
+                telefone: telefone.replace(/\D/g, ''),
+                role
+            };
+            
+            // Dados específicos por role
+            if (role === 'aluno') {
+                const curso = document.getElementById('registerCurso').value;
+                // 🟢🟢🟢 PEGAR O VALOR DA TURMA! 🟢🟢🟢
+                const turma = document.getElementById('registerTurma').value;
+                const matricula = document.getElementById('registerMatricula')?.value || '';
+                
+                if (!curso) {
+                    alert('Selecione seu curso');
+                    return;
+                }
+                
+                // 🟢🟢🟢 VALIDAR SE SELECIONOU TURMA! 🟢🟢🟢
+                if (!turma) {
+                    alert('Selecione sua turma');
+                    return;
+                }
+                
+                // Mapear eixo com base no curso
+                let eixo = '';
+                if (curso.includes('EVENTOS') || curso.includes('GUIA') || curso.includes('GASTRONOMIA')) {
+                    eixo = 'turismo';
+                } else if (curso.includes('REDES') || curso.includes('DESENVOLVIMENTO')) {
+                    eixo = 'desenvolvimento';
+                } else if (curso.includes('MARKETING') || curso.includes('SERVIÇOS JURÍDICOS')) {
+                    eixo = 'gestao';
+                } else if (curso.includes('ÁUDIO') || curso.includes('VÍDEO') || curso.includes('PUBLICIDADE')) {
+                    eixo = 'producao';
+                } else if (curso.includes('MEIO AMBIENTE')) {
+                    eixo = 'ambiente';
+                }
+                
+                userData = {
+                    ...userData,
+                    curso,
+                    turma,      // 🟢🟢🟢 ENVIAR A TURMA! 🟢🟢🟢
+                    matricula,
+                    eixo
+                };
+                
+            } else if (role === 'professor') {
+                const eixo = document.getElementById('registerEixo')?.value;
+                
+                if (!eixo) {
+                    alert('Selecione seu eixo');
+                    return;
+                }
+                
+                userData = {
+                    ...userData,
+                    eixo
+                };
+            }
+            
+            console.log('📤 Enviando dados:', userData); // VERIFICAR SE TURMA APARECE
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(userData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Cadastro realizado com sucesso! Faça login.');
+                    mostrarLogin();
+                } else {
+                    alert('❌ Erro: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Erro no registro:', error);
+                alert('❌ Erro ao conectar com o servidor');
+            }
+        }
+
         // Funções básicas
         function mostrarLogin() {
             document.getElementById('register-tab').classList.remove('active');
@@ -647,17 +815,34 @@
             // Atualizar campo matrícula
             atualizarCampoMatricula(role);
             
-            // Mostrar/ocultar campos específicos
+            // Pegar elementos
+            const turmaSelect = document.getElementById('registerTurma');
+            const radioSim = document.getElementById('acessibilidadeSim');
+            const radioNao = document.getElementById('acessibilidadeNao');
+            
             if (role === 'aluno') {
                 document.getElementById('alunoFields').classList.add('active');
                 document.getElementById('professorFields').classList.remove('active');
+                
+                // ADICIONAR required para ALUNO
+                if (turmaSelect) turmaSelect.setAttribute('required', 'true');
+                if (radioSim) radioSim.setAttribute('required', 'true');
+                if (radioNao) radioNao.setAttribute('required', 'true');
+                
                 // Não tornar eixo obrigatório para alunos
                 document.getElementById('registerEixo').removeAttribute('required');
                 // Tornar curso obrigatório apenas para alunos
                 document.getElementById('registerCurso').setAttribute('required', 'true');
+                
             } else {
                 document.getElementById('alunoFields').classList.remove('active');
                 document.getElementById('professorFields').classList.add('active');
+                
+                // 🟢🟢🟢 REMOVER required para PROFESSOR 🟢🟢🟢
+                if (turmaSelect) turmaSelect.removeAttribute('required');
+                if (radioSim) radioSim.removeAttribute('required');
+                if (radioNao) radioNao.removeAttribute('required');
+                
                 // Eixo obrigatório apenas para professores
                 document.getElementById('registerEixo').setAttribute('required', 'true');
                 // Curso não obrigatório para professores
@@ -883,6 +1068,23 @@
                 if (dados.success) {
                     mostrarAlerta('✅ Login realizado! Redirecionando...', 'success');
                     
+                    //  CORREÇÃO: VERIFICAR E BUSCAR TURMA SE NÃO VIER
+                    if (dados.user.role === 'aluno' && !dados.user.turma) {
+                        console.log('⚠️ Turma não veio no login. Buscando do /me...');
+                        try {
+                            const userResponse = await fetch('/api/auth/me', {
+                                headers: { 'Authorization': `Bearer ${dados.token}` }
+                            });
+                            const userData = await userResponse.json();
+                            if (userData.success && userData.user.turma) {
+                                dados.user.turma = userData.user.turma;
+                                console.log('✅ Turma recuperada:', dados.user.turma);
+                            }
+                        } catch (e) {
+                            console.error('❌ Erro ao buscar /me:', e);
+                        }
+                    }
+                    
                     // Salvar token e dados do usuário
                     localStorage.setItem('auth_token', dados.token);
                     localStorage.setItem('user_data', JSON.stringify(dados.user));
@@ -904,7 +1106,7 @@
                 btn.disabled = false;
             }
         });
-        
+
         // Configuração do formulário de cadastro
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -913,15 +1115,16 @@
             const role = document.getElementById('registerRole').value;
             const nome = document.getElementById('registerNome').value.trim();
             const cpf = document.getElementById('registerCPF').value;
-            const telefone = document.getElementById('registerTelefone').value; // NOVO CAMPO
+            const telefone = document.getElementById('registerTelefone').value;
             const email = document.getElementById('registerEmail').value.trim();
             const curso = document.getElementById('registerCurso').value;
+            const turma = document.getElementById('registerTurma').value;  // 🟢 CAPTURAR AQUI!
             const periodo = document.getElementById('registerPeriodo').value.trim();
             const matricula = document.getElementById('registerMatricula').value.trim();
             const senha = document.getElementById('registerPassword').value;
             const confirmarSenha = document.getElementById('registerConfirmPassword').value;
             
-            // Validações básicas - ADICIONAR TELEFONE
+            // Validações básicas
             if (!nome || !cpf || !telefone || !email || !senha || !confirmarSenha) {
                 mostrarAlerta('Preencha todos os campos obrigatórios');
                 return;
@@ -933,7 +1136,7 @@
                 return;
             }
             
-            // VALIDAR TELEFONE (NOVA VALIDAÇÃO)
+            // VALIDAR TELEFONE
             if (!validarTelefone(telefone)) {
                 mostrarAlerta('Telefone inválido. Digite um telefone válido com DDD');
                 return;
@@ -943,19 +1146,16 @@
             if (role === 'professor') {
                 const eixo = document.getElementById('registerEixo').value;
                 
-                // Validar eixo
                 if (!eixo) {
                     mostrarAlerta('Professores devem selecionar um eixo');
                     return;
                 }
                 
-                // VALIDAÇÃO DA MATRÍCULA PARA PROFESSORES
                 if (!matricula || matricula.trim() === '') {
                     mostrarAlerta('Para cadastro como professor, a matrícula é obrigatória');
                     return;
                 }
                 
-                // Validar formato da matrícula (6 números)
                 const matriculaNumeros = matricula.replace(/\D/g, '');
                 
                 if (matriculaNumeros.length !== 6) {
@@ -963,8 +1163,6 @@
                     return;
                 }
                 
-                // Validar se a matrícula está na lista de professores autorizados
-                // Esta verificação será feita no backend
                 console.log('🔍 Verificando autorização de professor:');
                 console.log('   Matrícula informada:', matriculaNumeros);
             }
@@ -972,6 +1170,12 @@
             // Validação específica para alunos
             if (role === 'aluno' && !curso) {
                 mostrarAlerta('Selecione um curso');
+                return;
+            }
+            
+            // 🟢🟢🟢 VALIDAR TURMA PARA ALUNOS! 🟢🟢🟢
+            if (role === 'aluno' && !turma) {
+                mostrarAlerta('Selecione sua turma');
                 return;
             }
             
@@ -985,54 +1189,52 @@
                 return;
             }
             
-            // Preparar objeto de dados (mantenha o restante igual)
+            // Preparar objeto de dados
             const dadosCadastro = {
-                    nome: nome,
-                    cpf: cpf.replace(/\D/g, ''), // Remove formatação
-                    telefone: telefone.replace(/\D/g, ''), // Remove formatação do telefone
-                    email: email,
-                    password: senha,
-                    role: role,
-                    matricula: matricula || undefined
-                };
+                nome: nome,
+                cpf: cpf.replace(/\D/g, ''),
+                telefone: telefone.replace(/\D/g, ''),
+                email: email,
+                password: senha,
+                role: role,
+                matricula: matricula || undefined
+            };
             
             // Adicionar dados específicos por role
             if (role === 'aluno') {
+                // 🟢🟢🟢 USAR A VARIÁVEL turma CAPTURADA ACIMA! 🟢🟢🟢
+                if (!turma) {
+                    mostrarAlerta('Selecione sua turma');
+                    return;
+                }
+                
                 dadosCadastro.curso = curso;
+                dadosCadastro.turma = turma;  // <-- ENVIAR TURMA!
                 dadosCadastro.periodo = periodo || undefined;
                 
-                // === CORREÇÃO: CAPTURAR CORRETAMENTE OS DADOS DE ACESSIBILIDADE ===
-                
-                // 1. PEGAR O VALOR DO RADIO BUTTON
+                // ACESSIBILIDADE
                 const radioAcessibilidade = document.querySelector('input[name="acessibilidade"]:checked');
                 const precisaAcessibilidade = radioAcessibilidade ? radioAcessibilidade.value === 'sim' : false;
                 
-                console.log(`🎯 ACESSIBILIDADE - Valor bruto do radio:`, radioAcessibilidade?.value);
                 console.log(`🎯 ACESSIBILIDADE - precisaAcessibilidade: ${precisaAcessibilidade}`);
                 
-                // 2. ADICIONAR AO OBJETO DE CADASTRO
                 dadosCadastro.precisaAcessibilidade = precisaAcessibilidade;
                 
-                // 3. SE FOR SIM, CAPTURAR A CONDIÇÃO
                 if (precisaAcessibilidade) {
                     const condicao = document.getElementById('registerCondicao')?.value;
                     dadosCadastro.condicaoAcessibilidade = condicao || 'nao_especificada';
                     
-                    console.log(`🎯 ACESSIBILIDADE - Condição: ${dadosCadastro.condicaoAcessibilidade}`);
-                    
                     if (condicao === 'outra') {
                         const outraDescricao = document.getElementById('registerOutraCondicao')?.value.trim();
                         dadosCadastro.outraCondicao = outraDescricao || 'Não especificada';
-                        console.log(`🎯 ACESSIBILIDADE - Outra descrição: ${dadosCadastro.outraCondicao}`);
                     }
                 }
-                // Alunos não enviam eixo
+                
             } else if (role === 'professor') {
                 const eixo = document.getElementById('registerEixo').value;
                 dadosCadastro.eixo = eixo;
                 dadosCadastro.departamento = document.getElementById('registerDepartamento').value.trim() || undefined;
                 dadosCadastro.titulacao = document.getElementById('registerTitulacao').value.trim() || undefined;
-                // Professores não enviam curso
             }
             
             // Remover campos undefined
@@ -1057,19 +1259,14 @@
                     body: JSON.stringify(dadosCadastro)
                 });
                 
-                console.log('📥 Resposta do servidor:', resposta.status);
-                
-                const dados = await resposta.json().catch(() => ({}));
-                console.log('📊 Dados da resposta:', dados);
+                const dados = await resposta.json();
                 
                 if (dados.success) {
                     mostrarAlerta('✅ Conta criada com sucesso! Redirecionando...', 'success');
                     
-                    // Salvar token e dados do usuário
                     localStorage.setItem('auth_token', dados.token);
                     localStorage.setItem('user_data', JSON.stringify(dados.user));
                     
-                    // Redirecionar baseado no role
                     setTimeout(() => {
                         window.location.href = dados.redirectTo || 
                             (role === 'professor' ? 'index.html' : 'aluno.html');
@@ -1154,6 +1351,42 @@
             
             console.log('✅ Campos de acessibilidade inicializados');
         }
+
+        function forcarCarregamentoDadosAluno() {
+            console.log('🔄 Forçando carregamento dos dados do aluno...');
+            
+            const token = localStorage.getItem('auth_token');
+            if (!token) return;
+            
+            fetch(`${API_BASE_URL}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('✅ Dados atualizados do /me:', data.user);
+                    console.log('   📚 Curso:', data.user.curso);
+                    console.log('   🏫 TURMA:', data.user.turma);
+                    
+                    // SALVAR TURMA NO LOCALSTORAGE!
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    userData.turma = data.user.turma;
+                    userData.curso = data.user.curso;
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    
+                    console.log('✅ Turma salva no localStorage:', data.user.turma);
+                    
+                    // Recarregar provas
+                    if (typeof carregarProvasConcluidas === 'function') {
+                        carregarProvasConcluidas();
+                    }
+                }
+            })
+            .catch(err => console.error('❌ Erro ao carregar /me:', err));
+        }
+
+        // CHAMAR ESTA FUNÇÃO AGORA!
+        forcarCarregamentoDadosAluno();
 
 
         

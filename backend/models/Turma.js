@@ -30,10 +30,10 @@ const TurmaSchema = new mongoose.Schema({
     ref: 'Prova'
   }],
   // NOVO CAMPO: eixo da turma
-  eixo: {
+eixo: {
     type: String,
-    enum: ['natureza', 'humanas', 'geral'],
-    default: 'geral'
+    required: true,
+    enum: ['natureza', 'humanas', 'linguagens', 'desenvolvimento', 'redes', 'turismo', 'gestao', 'producao', 'ambiente']
   },
   dataCriacao: {
     type: Date,

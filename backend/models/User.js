@@ -71,6 +71,10 @@ const UserSchema = new mongoose.Schema({
     unique: true,
     sparse: true
   },
+  turma: {
+    type: String,
+    default: null
+  },
   turmas: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Turma'

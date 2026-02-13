@@ -347,16 +347,88 @@ document.addEventListener('DOMContentLoaded', function() {
         
         <!-- Provas Concluídas -->
         <div class="card" style="margin-top: 30px;">
-            <div class="card-header">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                 <h2><i class="fas fa-check-circle"></i> Provas Concluídas</h2>
+                
+                <!-- FILTRO POR EIXO/DISCIPLINA -->
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="position: relative; min-width: 250px;">
+                        <select id="filtroEixoProvasConcluidas" style="
+                            padding: 10px 35px 10px 15px;
+                            border: 2px solid #e5e7eb;
+                            border-radius: 8px;
+                            font-size: 0.95rem;
+                            background: white url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E') no-repeat right 12px center;
+                            appearance: none;
+                            -webkit-appearance: none;
+                            -moz-appearance: none;
+                            cursor: pointer;
+                            outline: none;
+                            transition: border-color 0.3s;
+                            width: 100%;
+                        ">
+                            <option value="todos">📚 Todas as disciplinas</option>
+                            
+                            <!-- Eixo Natureza e Matemática -->
+                            <option value="natureza" style="font-weight: 600; background: #f0f9ff;">🔬 Natureza e Matemática</option>
+                            <option value="biologia" style="padding-left: 20px;">&nbsp;&nbsp;🌿 Biologia</option>
+                            <option value="fisica" style="padding-left: 20px;">&nbsp;&nbsp;⚛️ Física</option>
+                            <option value="quimica" style="padding-left: 20px;">&nbsp;&nbsp;🧪 Química</option>
+                            <option value="matematica" style="padding-left: 20px;">&nbsp;&nbsp;📐 Matemática</option>
+                            
+                            <!-- Eixo Humanas -->
+                            <option value="humanas" style="font-weight: 600; background: #fef3c7;">🏛️ Humanas</option>
+                            <option value="filosofia" style="padding-left: 20px;">&nbsp;&nbsp;🤔 Filosofia</option>
+                            <option value="sociologia" style="padding-left: 20px;">&nbsp;&nbsp;👥 Sociologia</option>
+                            <option value="geografia" style="padding-left: 20px;">&nbsp;&nbsp;🌍 Geografia</option>
+                            <option value="historia" style="padding-left: 20px;">&nbsp;&nbsp;📜 História</option>
+                            
+                            <!-- Eixo Linguagens -->
+                            <option value="linguagens" style="font-weight: 600; background: #f0fdf4;">🎭 Linguagens</option>
+                            <option value="artes" style="padding-left: 20px;">&nbsp;&nbsp;🎨 Artes</option>
+                            <option value="ingles" style="padding-left: 20px;">&nbsp;&nbsp;🇬🇧 Inglês</option>
+                            <option value="educacao fisica" style="padding-left: 20px;">&nbsp;&nbsp;⚽ Educação Física</option>
+                            <option value="espanhol" style="padding-left: 20px;">&nbsp;&nbsp;🇪🇸 Espanhol</option>
+                            <option value="portugues" style="padding-left: 20px;">&nbsp;&nbsp;📖 Português</option>
+                            
+                            <!-- Eixos Técnicos -->
+                            <option value="desenvolvimento" style="font-weight: 600; background: #f3e8ff;">💻 Desenvolvimento de Sistemas</option>
+                            <option value="gestao" style="font-weight: 600; background: #fef9c3;">📊 Gestão e Negócios</option>
+                            <option value="producao" style="font-weight: 600; background: #ffe4e6;">🎬 Produção Cultural e Design</option>
+                            <option value="turismo" style="font-weight: 600; background: #fff7ed;">✈️ Turismo, Hospitalidade e Lazer</option>
+                            <option value="ambiente" style="font-weight: 600; background: #dcfce7;">🌱 Ambiente e Saúde</option>
+                        </select>
+                        <i class="fas fa-filter" style="position: absolute; left: -25px; top: 50%; transform: translateY(-50%); color: #4f46e5;"></i>
+                    </div>
+                    
+                    <span id="contadorProvasFiltradas" style="
+                        background: #4f46e5;
+                        color: white;
+                        padding: 6px 12px;
+                        border-radius: 20px;
+                        font-size: 0.85rem;
+                        font-weight: 600;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 5px;
+                    ">
+                        <i class="fas fa-file-alt"></i>
+                        <span id="contadorNumerico">0</span> provas
+                    </span>
+                </div>
             </div>
+            
             <div class="card-body">
+                <!-- Container das provas concluídas filtradas -->
                 <div id="provasConcluidas">
                     <div class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Carregando provas concluídas...</p>
                     </div>
                 </div>
+                
+                <!-- Container para backup de todas as provas concluídas -->
+                <div id="backupProvasConcluidas" style="display: none;"></div>
             </div>
         </div>
         
@@ -689,352 +761,109 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
         
-        // Carregar provas concluídas - VERSÃO QUE GARANTE DADOS DO LOG
+        // ========== MAPEAMENTO COMPLETO: CURSO -> TURMAS PERMITIDAS ==========
+        const TURMAS_POR_CURSO = {
+            "TÉCNICO EM EVENTOS": ["101", "201"],
+            "TÉCNICO EM REDES DE COMPUTADORES": ["103", "203"],
+            "TÉCNICO EM ÁUDIO E VÍDEO": ["105", "205", "305"],
+            "TÉCNICO EM GUIA DE TURISMO": ["106", "206"],
+            "TÉCNICO EM MARKETING": ["300"],
+            "TÉCNICO EM GASTRONOMIA": ["302"],
+            "TÉCNICO EM PUBLICIDADE": ["109","209"],
+            "TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS": ["104","204","304"],
+            "TÉCNICO EM SERVIÇOS JURÍDICOS": ["307"],
+            "TÉCNICO EM MEIO AMBIENTE": ["308"]
+        };
 
+        // ========== FUNÇÃO PARA OBTER CURSO PELA TURMA ==========
+        function getCursoPorTurma(turma) {
+            for (const [curso, turmas] of Object.entries(TURMAS_POR_CURSO)) {
+                if (turmas.includes(turma)) {
+                    return curso;
+                }
+            }
+            return null;
+        }
+
+        // ========== FUNÇÃO PARA OBTER EIXO PELA TURMA ==========
+        function getEixoPorTurma(turma) {
+            const curso = getCursoPorTurma(turma);
+            if (!curso) return null;
+            
+            if (curso.includes('EVENTOS') || curso.includes('GUIA') || curso.includes('GASTRONOMIA')) {
+                return 'turismo';
+            } else if (curso.includes('REDES')) {
+                return 'redes';
+            } else if (curso.includes('DESENVOLVIMENTO')) {
+                return 'desenvolvimento';
+            } else if (curso.includes('MARKETING') || curso.includes('SERVIÇOS JURÍDICOS')) {
+                return 'gestao';
+            } else if (curso.includes('ÁUDIO') || curso.includes('VÍDEO') || curso.includes('PUBLICIDADE')) {
+                return 'producao';
+            } else if (curso.includes('MEIO AMBIENTE')) {
+                return 'ambiente';
+            }
+            return null;
+        }
+
+        // ========== VARIÁVEL GLOBAL PARA CONTROLAR O FILTRO ==========
+        let filtroAtivo = 'todos';
+        let eixoAlunoGlobal = '';
+
+        // ========== PROVAS CONCLUÍDAS - VERSÃO ESTÁVEL ==========
         async function carregarProvasConcluidas() {
             try {
                 const token = localStorage.getItem('auth_token');
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                
+                // DADOS DO ALUNO LOGADO
+                const turmaAluno = userData.turma || '';
+                const cursoAluno = userData.curso || '';
+                
+                if (!turmaAluno) {
+                    console.error('❌ Turma do aluno não encontrada!');
+                    return;
+                }
+                
+                // PEGAR INFORMAÇÕES BASEADAS NA TURMA
+                eixoAlunoGlobal = getEixoPorTurma(turmaAluno) || '';
+                
+                console.log('%c🎯 CARREGANDO PROVAS CONCLUÍDAS', 'font-weight:bold; color:blue;');
+                console.log(`   🏫 Turma: ${turmaAluno}`);
+                console.log(`   📚 Curso: ${cursoAluno}`);
+                console.log(`   🎯 Eixo: ${eixoAlunoGlobal}`);
+                
                 const response = await fetch(`${API_BASE_URL}/aluno/provas`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
                 const data = await response.json();
-                console.log('📊 Dados completos recebidos:', data);
                 
                 if (data.success) {
-                    // Separar provas por status - CORREÇÃO: Lógica simplificada
-                    const provasConcluidasNormais = [];
-                    const provasAguardandoCorrecao = [];
-                    const provasCanceladas = [];
-                    
-                    (data.provas || []).forEach(prova => {
-                        console.log(`Prova ${prova.titulo}:`, {
-                            id: prova._id,
-                            status: prova.status,
-                            dataRealizacao: prova.dataRealizacao,
-                            notaLiberada: prova.notaLiberada,
-                            nota: prova.nota,
-                            finalizada: prova.finalizada
-                        });
+                    // FILTRAR APENAS PROVAS DA TURMA DO ALUNO
+                    const provasDaTurma = (data.provas || []).filter(prova => {
+                        if (!prova.dataRealizacao) return false;
                         
-                        // Se a prova foi cancelada
-                        if (prova.cancelada || prova.status === 'cancelada') {
-                            provasCanceladas.push(prova);
-                        } 
-                        // Se a prova foi realizada (tem dataRealizacao) E tem nota liberada
-                        else if (prova.dataRealizacao && prova.notaLiberada && prova.nota !== null) {
-                            provasConcluidasNormais.push(prova);
-                        }
-                        // Se a prova foi realizada mas NÃO tem nota liberada ainda
-                        else if (prova.dataRealizacao && (!prova.notaLiberada || prova.nota === null)) {
-                            provasAguardandoCorrecao.push(prova);
-                        }
-                        // Se NÃO tem dataRealizacao, NÃO FOI REALIZADA - não mostrar
+                        const turmaProva = prova.turma?.codigo || prova.turma?.nome || prova.turmaId || '';
+                        return turmaProva === turmaAluno || 
+                            turmaProva.includes(turmaAluno) ||
+                            prova.turmaId?.includes(turmaAluno);
                     });
                     
-                    console.log('📊 Separação das provas:', {
-                        concluidasNormais: provasConcluidasNormais.length,
-                        aguardandoCorrecao: provasAguardandoCorrecao.length,
-                        canceladas: provasCanceladas.length
-                    });
+                    console.log(`📊 Total de provas na turma ${turmaAluno}: ${provasDaTurma.length}`);
                     
-                    // Renderizar provas concluídas normais (com nota liberada)
-                    if (provasConcluidasNormais.length > 0) {
-                        atualizarListaProvas('provasConcluidas', provasConcluidasNormais, 'concluida');
-                    } else {
-                        document.getElementById('provasConcluidas').innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-file"></i>
-                                <h3>Nenhuma prova concluída</h3>
-                                <p>Você ainda não concluiu nenhuma prova</p>
-                            </div>
-                        `;
-                    }
+                    // GUARDAR BACKUP COMPLETO
+                    window.provasConcluidas = provasDaTurma;
+                    localStorage.setItem('backupProvasConcluidas', JSON.stringify(provasDaTurma));
                     
-                    // Adicionar seção de provas aguardando correção (se houver)
-                    if (provasAguardandoCorrecao.length > 0) {
-                        const container = document.getElementById('provasConcluidas');
-                        
-                        // Se já há conteúdo, adicionar seção separada
-                        if (provasConcluidasNormais.length > 0) {
-                            container.insertAdjacentHTML('beforeend', `
-                                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
-                                    <h3 style="color: #f59e0b; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-                                        <i class="fas fa-hourglass-half"></i>
-                                        Aguardando Correção
-                                        <span style="background: #fef3c7; color: #f59e0b; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
-                                            ${provasAguardandoCorrecao.length}
-                                        </span>
-                                    </h3>
-                                    <p style="color: #6b7280; margin-bottom: 15px; font-size: 0.9rem;">
-                                        Sua prova já foi enviada e aguarda correção.
-                                    </p>
-                                    <div id="provasAguardandoContainer"></div>
-                                </div>
-                            `);
-                            
-                            // Renderizar provas aguardando correção
-                            const aguardandoContainer = document.getElementById('provasAguardandoContainer');
-                            aguardandoContainer.innerHTML = provasAguardandoCorrecao.map(prova => {
-                                const dataRealizacao = prova.dataRealizacao ? 
-                                    new Date(prova.dataRealizacao).toLocaleDateString('pt-BR') + ' ' + 
-                                    new Date(prova.dataRealizacao).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 
-                                    'Data não informada';
-                                
-                                // Verificar se já passou tempo suficiente para correção
-                                const agora = new Date();
-                                const dataProva = prova.dataRealizacao ? new Date(prova.dataRealizacao) : agora;
-                                const horasPassadas = (agora - dataProva) / (1000 * 60 * 60);
-                                
-                                let mensagemStatus = 'Aguardando correção do professor';
-                                if (horasPassadas > 24) {
-                                    mensagemStatus = 'Aguardando correção - Já faz mais de 24 horas';
-                                } else if (horasPassadas > 12) {
-                                    mensagemStatus = 'Aguardando correção - Já faz mais de 12 horas';
-                                }
-                                
-                                return `
-                                    <div class="prova-card" style="border-left-color: #f59e0b; background: #fef3c7; margin-bottom: 10px;">
-                                        <div class="prova-header">
-                                            <h4 class="prova-titulo">${prova.titulo || 'Prova'}</h4>
-                                            <span class="prova-status" style="background: #fef3c7; color: #f59e0b; border-color: #f59e0b;">
-                                                <i class="fas fa-hourglass-half"></i> AGUARDANDO CORREÇÃO
-                                            </span>
-                                        </div>
-                                        <div class="prova-info">
-                                            <div class="prova-info-item">
-                                                <i class="fas fa-book"></i>
-                                                <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
-                                            </div>
-                                            <div class="prova-info-item">
-                                                <i class="fas fa-graduation-cap"></i>
-                                                <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
-                                            </div>
-                                            <div class="prova-info-item">
-                                                <i class="far fa-calendar-alt"></i>
-                                                <span>Realizada em: ${dataRealizacao}</span>
-                                            </div>
-                                        </div>
-                                        <div class="prova-actions">
-                                            <button class="btn-iniciar-prova" style="background: #f59e0b; color: #92400e;" disabled>
-                                                <i class="fas fa-hourglass-half"></i> ${mensagemStatus}
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('');
-                        } else {
-                            // Se não há provas concluídas, mostrar apenas as aguardando correção
-                            container.innerHTML = `
-                                <div>
-                                    <h3 style="color: #f59e0b; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-                                        <i class="fas fa-hourglass-half"></i>
-                                        Aguardando Correção
-                                        <span style="background: #fef3c7; color: #f59e0b; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
-                                            ${provasAguardandoCorrecao.length}
-                                        </span>
-                                    </h3>
-                                    <p style="color: #6b7280; margin-bottom: 20px; font-size: 0.9rem;">
-                                        Suas provas já foram enviadas e aguardam correção.
-                                    </p>
-                                    ${provasAguardandoCorrecao.map(prova => {
-                                        const dataRealizacao = prova.dataRealizacao ? 
-                                            new Date(prova.dataRealizacao).toLocaleDateString('pt-BR') + ' ' + 
-                                            new Date(prova.dataRealizacao).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 
-                                            'Data não informada';
-                                        
-                                        return `
-                                            <div class="prova-card" style="border-left-color: #f59e0b; background: #fef3c7; margin-bottom: 15px;">
-                                                <div class="prova-header">
-                                                    <h4 class="prova-titulo">${prova.titulo || 'Prova'}</h4>
-                                                    <span class="prova-status" style="background: #fef3c7; color: #f59e0b; border-color: #f59e0b;">
-                                                        <i class="fas fa-hourglass-half"></i> AGUARDANDO
-                                                    </span>
-                                                </div>
-                                                <div class="prova-info">
-                                                    <div class="prova-info-item">
-                                                        <i class="fas fa-book"></i>
-                                                        <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
-                                                    </div>
-                                                    <div class="prova-info-item">
-                                                        <i class="fas fa-graduation-cap"></i>
-                                                        <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
-                                                    </div>
-                                                    <div class="prova-info-item">
-                                                        <i class="far fa-calendar-alt"></i>
-                                                        <span>Realizada em: ${dataRealizacao}</span>
-                                                    </div>
-                                                </div>
-                                                <div class="prova-actions">
-                                                    <button class="btn-iniciar-prova" style="background: #f59e0b; color: #92400e;" disabled>
-                                                        <i class="fas fa-hourglass-half"></i> Aguardando correção
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        `;
-                                    }).join('')}
-                                </div>
-                            `;
-                        }
-                    }
+                    // APLICAR FILTRO ATUAL
+                    aplicarFiltroEStatus(provasDaTurma);
                     
-                    // Adicionar seção de provas canceladas (se houver)
-                    if (provasCanceladas.length > 0) {
-                        const container = document.getElementById('provasConcluidas');
-                        
-                        // Se já há conteúdo, adicionar seção separada
-                        if (provasConcluidasNormais.length > 0 || provasAguardandoCorrecao.length > 0) {
-                            container.insertAdjacentHTML('beforeend', `
-                                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
-                                    <h3 style="color: #dc2626; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                        Provas Canceladas
-                                        <span style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
-                                            ${provasCanceladas.length}
-                                        </span>
-                                    </h3>
-                                    <p style="color: #6b7280; margin-bottom: 15px; font-size: 0.9rem;">
-                                        As provas abaixo foram canceladas automaticamente pelo sistema.
-                                    </p>
-                                    <div id="provasCanceladasContainer"></div>
-                                </div>
-                            `);
-                            
-                            // Renderizar provas canceladas
-                            const provasCanceladasContainer = document.getElementById('provasCanceladasContainer');
-                            provasCanceladasContainer.innerHTML = provasCanceladas.map(prova => {
-                                const isViolacao = prova.motivoCancelamento?.toLowerCase().includes('violação') ||
-                                                prova.motivoCancelamento?.toLowerCase().includes('violacao') ||
-                                                prova.flagViolacao;
-                                
-                                const config = isViolacao ? {
-                                    cor: '#dc2626',
-                                    corFundo: '#fee2e2',
-                                    icone: 'user-slash',
-                                    texto: 'VIOLAÇÃO DAS REGRAS'
-                                } : {
-                                    cor: '#f59e0b',
-                                    corFundo: '#fef3c7',
-                                    icone: 'clock',
-                                    texto: 'PRAZO EXPIRADO'
-                                };
-                                
-                                return `
-                                    <div class="prova-card" data-prova-id="${prova._id}" style="border-left-color: ${config.cor}; background: ${config.corFundo}; margin-bottom: 10px;">
-                                        <div class="prova-header">
-                                            <h4 class="prova-titulo">${prova.titulo || 'Prova cancelada'}</h4>
-                                            <span class="prova-status" style="background: ${config.corFundo}; color: ${config.cor}; border-color: ${config.cor};">
-                                                <i class="fas fa-${config.icone}"></i> ${config.texto}
-                                            </span>
-                                        </div>
-                                        <div class="prova-info">
-                                            <div class="prova-info-item">
-                                                <i class="fas fa-book"></i>
-                                                <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
-                                            </div>
-                                            <div class="prova-info-item">
-                                                <i class="fas fa-graduation-cap"></i>
-                                                <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
-                                            </div>
-                                            <div class="prova-info-item">
-                                                <i class="fas fa-question-circle"></i>
-                                                <span>${prova.quantidadeQuestoes || '?'} questões</span>
-                                            </div>
-                                        </div>
-                                        <div class="prova-actions">
-                                            <button class="btn-sair-prova" onclick="verDetalhesCancelamentoCompleto('${prova._id}')">
-                                                <i class="fas fa-info-circle"></i> Ver Detalhes
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('');
-                        } else {
-                            // Se não há provas concluídas ou aguardando, mostrar apenas as canceladas
-                            container.innerHTML = `
-                                <div>
-                                    <h3 style="color: #dc2626; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                        Provas Canceladas
-                                        <span style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
-                                            ${provasCanceladas.length}
-                                        </span>
-                                    </h3>
-                                    <p style="color: #6b7280; margin-bottom: 20px; font-size: 0.9rem;">
-                                        As provas abaixo foram canceladas automaticamente pelo sistema.
-                                    </p>
-                                    ${provasCanceladas.map(prova => {
-                                        const isViolacao = prova.motivoCancelamento?.toLowerCase().includes('violação') ||
-                                                        prova.motivoCancelamento?.toLowerCase().includes('violacao') ||
-                                                        prova.flagViolacao;
-                                        
-                                        const config = isViolacao ? {
-                                            cor: '#dc2626',
-                                            corFundo: '#fee2e2',
-                                            icone: 'user-slash',
-                                            texto: 'CANCELADA - VIOLAÇÃO'
-                                        } : {
-                                            cor: '#f59e0b',
-                                            corFundo: '#fef3c7',
-                                            icone: 'clock',
-                                            texto: 'CANCELADA - PRAZO'
-                                        };
-                                        
-                                        return `
-                                            <div class="prova-card" data-prova-id="${prova._id}" style="border-left-color: ${config.cor}; background: ${config.corFundo}; margin-bottom: 15px;">
-                                                <div class="prova-header">
-                                                    <h4 class="prova-titulo">${prova.titulo || 'Prova cancelada'}</h4>
-                                                    <span class="prova-status" style="background: ${config.corFundo}; color: ${config.cor}; border-color: ${config.cor};">
-                                                        <i class="fas fa-${config.icone}"></i> ${config.texto}
-                                                    </span>
-                                                </div>
-                                                <div class="prova-info">
-                                                    <div class="prova-info-item">
-                                                        <i class="fas fa-book"></i>
-                                                        <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
-                                                    </div>
-                                                    <div class="prova-info-item">
-                                                        <i class="fas fa-graduation-cap"></i>
-                                                        <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
-                                                    </div>
-                                                    <div class="prova-info-item">
-                                                        <i class="fas fa-question-circle"></i>
-                                                        <span>${prova.quantidadeQuestoes || '?'} questões</span>
-                                                    </div>
-                                                </div>
-                                                <div class="prova-actions">
-                                                    <button class="btn-sair-prova" onclick="verDetalhesCancelamentoCompleto('${prova._id}')">
-                                                        <i class="fas fa-info-circle"></i> Ver Detalhes
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        `;
-                                    }).join('')}
-                                </div>
-                            `;
-                        }
-                    }
-                    
-                    // Para cada prova cancelada, buscar detalhes completos
-                    provasCanceladas.forEach(async (prova) => {
-                        try {
-                            const detalhesResponse = await fetch(`${API_BASE_URL}/aluno/provas/${prova._id}/cancelamento-detailed`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            
-                            const detalhesData = await detalhesResponse.json();
-                            
-                            if (detalhesData.success) {
-                                // Atualizar card com informações detalhadas
-                                atualizarCardProvaCancelada(prova._id, detalhesData);
-                            }
-                        } catch (error) {
-                            console.error(`Erro ao buscar detalhes da prova ${prova._id}:`, error);
-                        }
-                    });
+                    // INICIALIZAR FILTRO BASEADO NA TURMA
+                    inicializarFiltroPorTurma(turmaAluno, eixoAlunoGlobal);
                 }
             } catch (error) {
-                console.error('Erro ao carregar provas concluídas:', error);
+                console.error('❌ Erro ao carregar provas concluídas:', error);
                 document.getElementById('provasConcluidas').innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
@@ -1043,6 +872,436 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 `;
             }
+        }
+
+        // ========== FUNÇÃO PARA APLICAR FILTRO E RENDERIZAR ==========
+        function aplicarFiltroEStatus(provas) {
+            const container = document.getElementById('provasConcluidas');
+            if (!container) return;
+            
+            // APLICAR FILTRO ATUAL
+            let provasFiltradas = provas;
+            
+            if (filtroAtivo !== 'todos') {
+                provasFiltradas = provas.filter(prova => {
+                    const conteudo = (prova.conteudo || '').toLowerCase();
+                    const titulo = (prova.titulo || '').toLowerCase();
+                    
+                    // FILTRO POR EIXO
+                    if (filtroAtivo === prova.eixo) {
+                        return true;
+                    }
+                    
+                    // PALAVRAS-CHAVE POR DISCIPLINA
+                    const palavrasChave = {
+                        'biologia': ['biologia', 'bio', 'célula', 'genética', 'evolução'],
+                        'fisica': ['física', 'fisica', 'mecânica', 'termodinâmica', 'óptica'],
+                        'quimica': ['química', 'quimica', 'átomo', 'molécula', 'reação'],
+                        'matematica': ['matemática', 'matematica', 'álgebra', 'geometria', 'cálculo'],
+                        'filosofia': ['filosofia', 'ética', 'moral', 'razão'],
+                        'sociologia': ['sociologia', 'sociedade', 'cultura', 'classes sociais'],
+                        'geografia': ['geografia', 'mapa', 'cartografia', 'clima', 'relevo'],
+                        'historia': ['história', 'historia', 'feudalismo', 'renascimento', 'guerra'],
+                        'artes': ['artes', 'arte', 'música', 'teatro', 'dança'],
+                        'ingles': ['inglês', 'ingles', 'english', 'vocabulary'],
+                        'educacao fisica': ['educação física', 'esportes', 'futebol'],
+                        'espanhol': ['espanhol', 'español'],
+                        'portugues': ['português', 'portugues', 'gramática', 'redação'],
+                        'desenvolvimento': ['programação', 'sistemas', 'banco de dados', 'algoritmo', 'software'],
+                        'redes': ['rede', 'protocolo', 'tcp/ip', 'roteador', 'switch'],
+                        'turismo': ['evento', 'gastronomia', 'turismo', 'guia'],
+                        'gestao': ['marketing', 'jurídico', 'gestão', 'negócios'],
+                        'producao': ['áudio', 'vídeo', 'publicidade', 'design'],
+                        'ambiente': ['ambiente', 'ecologia', 'sustentabilidade', 'reciclagem']
+                    };
+                    
+                    const palavras = palavrasChave[filtroAtivo] || [filtroAtivo];
+                    for (const palavra of palavras) {
+                        if (conteudo.includes(palavra) || titulo.includes(palavra)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+            }
+            
+            // SEPARAR POR STATUS
+            const provasConcluidas = provasFiltradas.filter(p => 
+                !p.cancelada && p.dataRealizacao && p.notaLiberada && p.nota !== null
+            );
+            
+            const provasAguardando = provasFiltradas.filter(p =>
+                !p.cancelada && p.dataRealizacao && (!p.notaLiberada || p.nota === null)
+            );
+            
+            const provasCanceladas = provasFiltradas.filter(p => p.cancelada);
+            
+            // LIMPAR CONTAINER
+            container.innerHTML = '';
+            
+            // RENDERIZAR AGUARDANDO CORREÇÃO (aparecem primeiro)
+            if (provasAguardando.length > 0) {
+                renderizarProvasAguardandoCorrecao(provasAguardando);
+            }
+            
+            // RENDERIZAR CONCLUÍDAS
+            if (provasConcluidas.length > 0) {
+                atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
+            }
+            
+            // RENDERIZAR CANCELADAS
+            if (provasCanceladas.length > 0) {
+                renderizarProvasCanceladas(provasCanceladas);
+            }
+            
+            // MENSAGEM VAZIA
+            if (provasConcluidas.length === 0 && provasAguardando.length === 0 && provasCanceladas.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-file"></i>
+                        <h3>Nenhuma prova encontrada</h3>
+                        <p>Não há provas com o filtro selecionado</p>
+                    </div>
+                `;
+            }
+            
+            // ATUALIZAR CONTADOR
+            const contadorSpan = document.getElementById('contadorNumerico');
+            if (contadorSpan) {
+                contadorSpan.innerText = provasFiltradas.length;
+            }
+        }
+
+        // ========== PROVAS PENDENTES - VERSÃO ESTÁVEL ==========
+        async function carregarProvasPendentes() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                
+                const precisaAcessibilidade = userData.precisaAcessibilidade || false;
+                const turmaAluno = userData.turma || '';
+                
+                if (!turmaAluno) {
+                    console.error('❌ Turma do aluno não encontrada!');
+                    return;
+                }
+                
+                console.log(`🎯 Carregando provas pendentes para turma ${turmaAluno}`);
+                
+                const response = await fetch(`${API_BASE_URL}/aluno/provas/pendentes`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // FILTRAR APENAS PROVAS DA TURMA DO ALUNO
+                    const provasDaTurma = (data.provas || []).filter(prova => {
+                        const turmaProva = prova.turma?.codigo || prova.turma?.nome || prova.turmaId || '';
+                        return turmaProva === turmaAluno || 
+                            turmaProva.includes(turmaAluno) ||
+                            prova.turmaId?.includes(turmaAluno);
+                    });
+                    
+                    // FILTRAR POR ACESSIBILIDADE
+                    let provasFiltradas = provasDaTurma;
+                    
+                    if (precisaAcessibilidade) {
+                        provasFiltradas = provasDaTurma.filter(prova => 
+                            prova.adaptada === true || 
+                            prova.tipoProva === 'adaptada'
+                        );
+                    } else {
+                        provasFiltradas = provasDaTurma.filter(prova => 
+                            !(prova.adaptada === true || prova.tipoProva === 'adaptada')
+                        );
+                    }
+                    
+                    provasPendentes = provasFiltradas;
+                    atualizarListaProvas('provasPendentes', provasPendentes, 'pendente', precisaAcessibilidade);
+                    
+                    await carregarProvasConcluidas();
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar provas pendentes:', error);
+            }
+        }
+
+        // ========== FILTRO INTERATIVO ESTÁVEL ==========
+        function inicializarFiltroPorTurma(turmaAluno, eixoAluno) {
+            console.log(`🔧 Inicializando filtro para turma ${turmaAluno}, eixo ${eixoAluno}`);
+            
+            const filtroSelect = document.getElementById('filtroEixoProvasConcluidas');
+            if (!filtroSelect) return;
+            
+            // RECRIAR SELECT PARA LIMPAR LISTENERS
+            const novoSelect = filtroSelect.cloneNode(true);
+            filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
+            
+            // EIXOS DA BNCC
+            const EIXOS_BNCC = ['natureza', 'humanas', 'linguagens'];
+            const DISCIPLINAS_BNCC = [
+                'biologia', 'fisica', 'quimica', 'matematica',
+                'filosofia', 'sociologia', 'geografia', 'historia',
+                'artes', 'ingles', 'educacao fisica', 'espanhol', 'portugues'
+            ];
+            
+            // ========== OCULTAR EIXOS DE OUTROS CURSOS ==========
+            Array.from(novoSelect.options).forEach(option => {
+                const valor = option.value;
+                
+                // SEMPRE MANTER "Todas as disciplinas"
+                if (valor === 'todos') {
+                    option.style.display = 'block';
+                    return;
+                }
+                
+                // MANTER EIXOS DA BNCC
+                if (EIXOS_BNCC.includes(valor) || DISCIPLINAS_BNCC.includes(valor)) {
+                    option.style.display = 'block';
+                    return;
+                }
+                
+                // MOSTRAR APENAS O EIXO TÉCNICO DO ALUNO
+                if (valor === eixoAluno) {
+                    option.style.display = 'block';
+                    
+                    // PERSONALIZAR TEXTO
+                    const textos = {
+                        'desenvolvimento': '💻 Desenvolvimento de Sistemas',
+                        'redes': '🌐 Redes de Computadores',
+                        'turismo': '✈️ Turismo, Eventos e Gastronomia',
+                        'gestao': '📊 Gestão e Negócios',
+                        'producao': '🎬 Produção Cultural e Design',
+                        'ambiente': '🌱 Ambiente e Saúde'
+                    };
+                    option.textContent = textos[eixoAluno] || option.textContent;
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+            
+            // ========== EVENTO DE MUDANÇA DO FILTRO ==========
+            novoSelect.addEventListener('change', function() {
+                filtroAtivo = this.value;
+                const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
+                aplicarFiltroEStatus(backup);
+            });
+            
+            // ========== GARANTIR QUE O FILTRO INICIAL ESTÁ CORRETO ==========
+            setTimeout(() => {
+                const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
+                aplicarFiltroEStatus(backup);
+            }, 100);
+            
+            console.log(`✅ Filtro inicializado para turma ${turmaAluno} (eixo: ${eixoAluno})`);
+        }
+
+        // ========== RENDERIZAR PROVAS AGUARDANDO CORREÇÃO ==========
+        function renderizarProvasAguardandoCorrecao(provas) {
+            const container = document.getElementById('provasConcluidas');
+            if (!container) return;
+            
+            const aguardandoSection = document.createElement('div');
+            aguardandoSection.className = 'aguardando-correcao-section';
+            aguardandoSection.style.marginTop = '20px';
+            aguardandoSection.style.paddingTop = '15px';
+            aguardandoSection.style.borderTop = '1px solid #e5e7eb';
+            
+            aguardandoSection.innerHTML = `
+                <h3 style="color: #f59e0b; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-hourglass-half"></i>
+                    Aguardando Correção
+                    <span style="background: #fef3c7; color: #f59e0b; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
+                        ${provas.length}
+                    </span>
+                </h3>
+                <div id="provasAguardandoContainer"></div>
+            `;
+            
+            container.appendChild(aguardandoSection);
+            
+            const aguardandoContainer = document.getElementById('provasAguardandoContainer');
+            if (aguardandoContainer) {
+                aguardandoContainer.innerHTML = provas.map(prova => {
+                    const dataRealizacao = prova.dataRealizacao ? 
+                        new Date(prova.dataRealizacao).toLocaleDateString('pt-BR') + ' ' + 
+                        new Date(prova.dataRealizacao).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 
+                        'Data não informada';
+                    
+                    return `
+                        <div class="prova-card" style="border-left-color: #f59e0b; background: #fef3c7; margin-bottom: 10px;">
+                            <div class="prova-header">
+                                <h4 class="prova-titulo">${prova.titulo || 'Prova'}</h4>
+                                <span class="prova-status" style="background: #fef3c7; color: #f59e0b;">
+                                    <i class="fas fa-hourglass-half"></i> AGUARDANDO
+                                </span>
+                            </div>
+                            <div class="prova-info">
+                                <div class="prova-info-item">
+                                    <i class="fas fa-book"></i>
+                                    <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                                </div>
+                                <div class="prova-info-item">
+                                    <i class="fas fa-graduation-cap"></i>
+                                    <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                                </div>
+                                <div class="prova-info-item">
+                                    <i class="far fa-calendar-alt"></i>
+                                    <span>Realizada em: ${dataRealizacao}</span>
+                                </div>
+                            </div>
+                            <div class="prova-actions">
+                                <button class="btn-iniciar-prova" style="background: #f59e0b; color: #92400e;" disabled>
+                                    <i class="fas fa-hourglass-half"></i> Aguardando correção
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // ========== RENDERIZAR PROVAS CANCELADAS ==========
+        function renderizarProvasCanceladas(provas) {
+            const container = document.getElementById('provasConcluidas');
+            if (!container) return;
+            
+            const canceladasSection = document.createElement('div');
+            canceladasSection.className = 'provas-canceladas-section';
+            canceladasSection.style.marginTop = '20px';
+            canceladasSection.style.paddingTop = '15px';
+            canceladasSection.style.borderTop = '1px solid #e5e7eb';
+            
+            canceladasSection.innerHTML = `
+                <h3 style="color: #dc2626; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Provas Canceladas
+                    <span style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
+                        ${provas.length}
+                    </span>
+                </h3>
+                <div id="provasCanceladasContainer"></div>
+            `;
+            
+            container.appendChild(canceladasSection);
+            
+            const canceladasContainer = document.getElementById('provasCanceladasContainer');
+            if (canceladasContainer) {
+                canceladasContainer.innerHTML = provas.map(prova => {
+                    const isViolacao = prova.motivoCancelamento?.toLowerCase().includes('violação') ||
+                                    prova.motivoCancelamento?.toLowerCase().includes('violacao') ||
+                                    prova.flagViolacao;
+                    
+                    const config = isViolacao ? {
+                        cor: '#dc2626',
+                        corFundo: '#fee2e2',
+                        icone: 'user-slash',
+                        texto: 'CANCELADA - VIOLAÇÃO'
+                    } : {
+                        cor: '#f59e0b',
+                        corFundo: '#fef3c7',
+                        icone: 'clock',
+                        texto: 'CANCELADA - PRAZO'
+                    };
+                    
+                    return `
+                        <div class="prova-card" data-prova-id="${prova._id}" style="border-left-color: ${config.cor}; background: ${config.corFundo}; margin-bottom: 10px;">
+                            <div class="prova-header">
+                                <h4 class="prova-titulo">${prova.titulo || 'Prova cancelada'}</h4>
+                                <span class="prova-status" style="background: ${config.corFundo}; color: ${config.cor};">
+                                    <i class="fas fa-${config.icone}"></i> ${config.texto}
+                                </span>
+                            </div>
+                            <div class="prova-info">
+                                <div class="prova-info-item">
+                                    <i class="fas fa-book"></i>
+                                    <span>${prova.conteudo || 'Conteúdo não especificado'}</span>
+                                </div>
+                                <div class="prova-info-item">
+                                    <i class="fas fa-graduation-cap"></i>
+                                    <span>${prova.turma?.nome || prova.turma?.disciplina || 'Turma não especificada'}</span>
+                                </div>
+                                <div class="prova-info-item">
+                                    <i class="fas fa-question-circle"></i>
+                                    <span>${prova.quantidadeQuestoes || '?'} questões</span>
+                                </div>
+                            </div>
+                            <div class="prova-actions">
+                                <button class="btn-sair-prova" onclick="verDetalhesCancelamentoCompleto('${prova._id}')">
+                                    <i class="fas fa-info-circle"></i> Ver Detalhes
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // MODIFICAR a função de entrar na turma para validar o código
+        async function entrarNaTurma() {
+            const codigo = document.getElementById('codigoTurma').value.trim().toUpperCase();
+            
+            if (!codigo) {
+                alert('Digite o código da turma');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const cursoAluno = userData.curso || '';
+                
+                // VALIDAR SE O CÓDIGO DA TURMA É COMPATÍVEL COM O CURSO
+                const turmasPermitidas = TURMAS_POR_CURSO[cursoAluno] || [];
+                
+                if (turmasPermitidas.length > 0 && !turmasPermitidas.includes(codigo)) {
+                    alert(`❌ Você não pode entrar na turma ${codigo}. Seu curso (${cursoAluno}) permite apenas as turmas: ${turmasPermitidas.join(', ')}`);
+                    return;
+                }
+                
+                const response = await fetch(`${API_BASE_URL}/turmas/entrar`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ codigo })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Entrou na turma com sucesso!');
+                    fecharModal('modalEntrarTurma');
+                    document.getElementById('codigoTurma').value = '';
+                    await carregarTurmasAluno();
+                    await carregarProvasPendentes();
+                } else {
+                    alert('❌ Erro: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Erro ao entrar na turma:', error);
+                alert('❌ Erro de conexão');
+            }
+        }
+
+        // ADICIONAR função para exibir informações do curso no painel
+        function atualizarInfoAluno(user) {
+            document.getElementById('alunoDetails').innerHTML = `
+                <p><strong>${user.nome}</strong></p>
+                <p>
+                    <span style="background: #e0f2fe; padding: 3px 10px; border-radius: 15px; font-size: 0.85rem;">
+                        <i class="fas fa-graduation-cap"></i> ${user.curso || 'Curso não definido'}
+                    </span>
+                    <span style="background: #fef3c7; padding: 3px 10px; border-radius: 15px; font-size: 0.85rem; margin-left: 8px;">
+                        <i class="fas fa-users"></i> Turma ${user.turma || 'N/A'}
+                    </span>
+                </p>
+                <p style="margin-top: 8px;">
+                    ${user.email} • ${user.matricula || 'Sem matrícula'}
+                </p>
+            `;
         }
 
         // ADICIONE esta função para verificar o status de correção automaticamente

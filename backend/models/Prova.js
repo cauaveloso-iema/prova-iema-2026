@@ -80,6 +80,16 @@ const ProvaSchema = new mongoose.Schema({
   },
   // ============================================================
   
+  eixo: {
+  type: String,
+  enum: ['natureza', 'humanas', 'linguagens', 'desenvolvimento', 'redes', 'turismo', 'gestao', 'producao', 'ambiente'],
+  required: true
+  },
+  disciplina: {
+  type: String,
+  default: ''
+  },
+  
   dificuldade: {
     type: String,
     enum: ['facil', 'media', 'dificil'],
