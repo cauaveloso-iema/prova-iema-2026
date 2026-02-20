@@ -4612,8 +4612,11 @@ app.get('/api/provas/dados', async (req, res) => {
 
 // ============ ROTAS DE RESULTADOS ============
 
-// ============ ROTA DE RESULTADOS DO PROFESSOR - VERSÃO CORRIGIDA COM SEGURANÇA ============
+// ============ ROTA DE RESULTADOS DO PROFESSOR - VERSÃO ULTRA ROBUSTA ============
 app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
+  // Garantir que sempre retornamos JSON, mesmo em caso de erro
+  res.setHeader('Content-Type', 'application/json');
+  
   try {
     if (req.userRole !== 'professor' && req.userRole !== 'admin') {
       return res.status(403).json({
@@ -4623,14 +4626,14 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     }
 
     const professorId = req.userId;
-
     console.log(`📊 Professor ${professorId} buscando resultados`);
 
+    // Buscar provas do professor
     const provas = await Prova.find({ userId: professorId })
       .populate('turmaId', 'nome disciplina')
-      .sort({ createdAt: -1 });
+      .lean(); // .lean() para melhor performance
 
-    if (provas.length === 0) {
+    if (!provas || provas.length === 0) {
       return res.json({
         success: true,
         mensagem: 'Você ainda não criou nenhuma prova',
@@ -4638,7 +4641,7 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
         estatisticas: {
           totalProvas: 0,
           totalAlunos: 0,
-          mediaGeral: 0,
+          mediaGeral: '0.0',
           taxaConclusao: 0
         }
       });
@@ -4651,37 +4654,44 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     const alunosProcessados = new Set();
 
     for (const prova of provas) {
-      // Buscar resultados do modelo Resultado com .lean() para melhor performance
-      const resultadosProva = await Resultado.find({ provaId: prova._id })
-        .populate('userId', 'nome email matricula')
-        .lean();
+      // Buscar resultados - com tratamento de erro para cada query
+      let resultadosProva = [];
+      try {
+        resultadosProva = await Resultado.find({ provaId: prova._id })
+          .populate('userId', 'nome email matricula')
+          .lean() || [];
+      } catch (e) {
+        console.warn(`⚠️ Erro ao buscar resultados da prova ${prova._id}:`, e.message);
+      }
 
-      // Buscar provas realizadas
-      const provasRealizadas = await ProvaRealizada.find({ provaId: prova._id })
-        .populate('alunoId', 'nome email matricula')
-        .lean();
+      let provasRealizadas = [];
+      try {
+        provasRealizadas = await ProvaRealizada.find({ provaId: prova._id })
+          .populate('alunoId', 'nome email matricula')
+          .lean() || [];
+      } catch (e) {
+        console.warn(`⚠️ Erro ao buscar provas realizadas da prova ${prova._id}:`, e.message);
+      }
 
-      // Processar resultados
+      // Processar resultados com segurança
       resultadosProva.forEach(r => {
-        // 🟢🟢🟢 VERIFICAÇÃO CRÍTICA: userId pode ser null! 🟢🟢🟢
         if (!r.userId) {
           console.warn(`⚠️ Resultado ${r._id} sem referência de usuário`);
-          return; // Pular este resultado
+          return;
         }
 
-        // Adicionar aluno ao conjunto de processados
-        alunosProcessados.add(r.userId._id.toString());
+        alunosProcessados.add(r.userId._id?.toString() || r.userId.toString());
 
         resultadosCompletos.push({
           provaId: prova._id,
-          provaTitulo: prova.titulo,
-          provaConteudo: prova.conteudo,
+          provaTitulo: prova.titulo || 'Sem título',
+          provaConteudo: prova.conteudo || '',
           provaDataLimite: prova.dataLimite,
           turmaId: prova.turmaId?._id,
-          turmaNome: prova.turmaId?.nome,
-          turmaDisciplina: prova.turmaId?.disciplina,
-          alunoId: r.userId._id,
-          alunoNome: r.userId.nome || 'Aluno',
+          turmaNome: prova.turmaId?.nome || 'Turma não especificada',
+          turmaDisciplina: prova.turmaId?.disciplina || '',
+          alunoId: r.userId._id || r.userId,
+          alunoNome: r.userId.nome || 'Aluno não identificado',
           alunoEmail: r.userId.email || '',
           alunoMatricula: r.userId.matricula || '',
           nota: r.nota,
@@ -4694,40 +4704,41 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
           tipo: 'resultado'
         });
 
-        if (r.nota !== undefined && !isNaN(r.nota) && r.nota !== null) {
+        if (r.nota !== undefined && r.nota !== null && !isNaN(r.nota)) {
           totalAlunos++;
           somaNotas += r.nota;
           contadorNotas++;
         }
       });
 
-      // Processar provas realizadas
+      // Processar provas realizadas com segurança
       provasRealizadas.forEach(pr => {
-        // 🟢🟢🟢 VERIFICAÇÃO CRÍTICA: alunoId pode ser null! 🟢🟢🟢
         if (!pr.alunoId) {
           console.warn(`⚠️ ProvaRealizada ${pr._id} sem referência de aluno`);
-          return; // Pular este registro
+          return;
         }
 
-        // Verificar se já existe no array de resultados
+        const alunoId = pr.alunoId._id?.toString() || pr.alunoId.toString();
+        
+        // Verificar duplicata
         const jaExiste = resultadosCompletos.some(r => 
-          r.alunoId?.toString() === pr.alunoId._id.toString() && 
+          r.alunoId?.toString() === alunoId && 
           r.provaId?.toString() === prova._id.toString()
         );
 
         if (!jaExiste) {
-          alunosProcessados.add(pr.alunoId._id.toString());
+          alunosProcessados.add(alunoId);
 
           resultadosCompletos.push({
             provaId: prova._id,
-            provaTitulo: prova.titulo,
-            provaConteudo: prova.conteudo,
+            provaTitulo: prova.titulo || 'Sem título',
+            provaConteudo: prova.conteudo || '',
             provaDataLimite: prova.dataLimite,
             turmaId: prova.turmaId?._id,
-            turmaNome: prova.turmaId?.nome,
-            turmaDisciplina: prova.turmaId?.disciplina,
-            alunoId: pr.alunoId._id,
-            alunoNome: pr.alunoId.nome || 'Aluno',
+            turmaNome: prova.turmaId?.nome || 'Turma não especificada',
+            turmaDisciplina: prova.turmaId?.disciplina || '',
+            alunoId: alunoId,
+            alunoNome: pr.alunoId.nome || 'Aluno não identificado',
             alunoEmail: pr.alunoId.email || '',
             alunoMatricula: pr.alunoId.matricula || '',
             nota: pr.nota,
@@ -4737,7 +4748,7 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
             tipo: 'prova_realizada'
           });
 
-          if (pr.nota !== undefined && !isNaN(pr.nota) && pr.nota !== null) {
+          if (pr.nota !== undefined && pr.nota !== null && !isNaN(pr.nota)) {
             totalAlunos++;
             somaNotas += pr.nota;
             contadorNotas++;
@@ -4746,7 +4757,7 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
       });
     }
 
-    // Calcular estatísticas
+    // Calcular estatísticas com segurança
     const totalAlunosUnicos = alunosProcessados.size;
     const mediaGeral = contadorNotas > 0 ? (somaNotas / contadorNotas).toFixed(1) : '0.0';
     const taxaConclusao = totalAlunosUnicos > 0 
@@ -4760,7 +4771,7 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
       taxaConclusao: taxaConclusao,
       provas: provas.map(prova => ({
         id: prova._id,
-        titulo: prova.titulo,
+        titulo: prova.titulo || 'Sem título',
         totalQuestoes: prova.questoes?.length || 0,
         dificuldade: prova.dificuldade || 'media',
         dataLimite: prova.dataLimite
@@ -4769,7 +4780,7 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
 
     console.log(`✅ Resultados carregados: ${resultadosCompletos.length} registros`);
 
-    res.json({
+    return res.json({
       success: true,
       resultados: resultadosCompletos,
       estatisticas: estatisticas,
@@ -4777,13 +4788,17 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erro ao buscar resultados do professor:', error);
+    console.error('❌ Erro crítico ao buscar resultados:', error);
     console.error('Stack:', error.stack);
     
-    res.status(500).json({
+    // SEMPRE retornar JSON, mesmo em erro
+    return res.status(500).json({
       success: false,
       error: 'Erro interno ao buscar resultados: ' + error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      detalhes: process.env.NODE_ENV === 'development' ? {
+        stack: error.stack,
+        name: error.name
+      } : undefined
     });
   }
 });
