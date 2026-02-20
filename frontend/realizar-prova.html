@@ -1004,6 +1004,7 @@
     <script src="js/acessibilidade.js"></script>
 
     <script>
+
     // ============ SISTEMA DE MONITORAMENTO COMPLETO - COM BLOQUEIO TOTAL DE ATUALIZAÇÃO ============
     // ============ SISTEMA DE FULLSCREEN E BLOQUEIO ============
     
@@ -1072,9 +1073,23 @@
                 clearInterval(window.cancelTimer);
                 window.cancelTimer = null;
                 
-                // CORREÇÃO: Pequeno delay antes de redirecionar
+                // CORREÇÃO: REDIRECIONAR PARA ALUNO.HTML EM VEZ DE LOGIN.HTML
                 setTimeout(() => {
-                    window.location.href = '/login.html?reason=prova_cancelada';
+                    // Limpar dados da prova
+                    if (prova && prova._id) {
+                        localStorage.removeItem(`prova_${prova._id}`);
+                        localStorage.removeItem(`tempo_prova_${prova._id}`);
+                        localStorage.removeItem(`hora_entrada_${prova._id}`);
+                    }
+                    
+                    // Sair do fullscreen
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen().catch(() => {});
+                    }
+                    
+                    // Redirecionar para aluno.html com parâmetro de cancelamento
+                    window.location.href = '/aluno.html?prova_cancelada=true&motivo=' + 
+                        encodeURIComponent(document.getElementById('cancelReason')?.textContent || 'Prova cancelada');
                 }, 500);
             }
         }, 1000); // CORREÇÃO: Intervalo fixo de 1000ms (1 segundo)
@@ -1728,8 +1743,20 @@
             if (monitoramento) {
                 monitoramento.cancelarProva();
             } else {
-                // Redirecionar para login com motivo
-                window.location.href = '/login.html?reason=prova_abandonada';
+                // Limpar dados da prova
+                if (prova && prova._id) {
+                    localStorage.removeItem(`prova_${prova._id}`);
+                    localStorage.removeItem(`tempo_prova_${prova._id}`);
+                    localStorage.removeItem(`hora_entrada_${prova._id}`);
+                }
+                
+                // Sair do fullscreen
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(() => {});
+                }
+                
+                // Redirecionar para aluno.html com motivo
+                window.location.href = '/aluno.html?prova_abandonada=true';
             }
         }
         
@@ -1760,7 +1787,8 @@
         }
         
         init() {
-            setTimeout(() => entrarEmFullscreen(), 500);
+            // ATIVAR FULLSCREEN IMEDIATAMENTE NO INÍCIO DA PROVA
+            this.ativarFullScreenInicial();
             
             this.configurarMonitoramento();
             this.criarPainelMonitoramento();
@@ -1774,6 +1802,47 @@
             
             // Marcar elementos seguros automaticamente
             setTimeout(() => this.marcarElementosSeguros(), 1000);
+        }
+        
+        // NOVA FUNÇÃO PARA ATIVAR FULLSCREEN NO INÍCIO
+        ativarFullScreenInicial() {
+            console.log('🎯 Ativando modo tela cheia no início da prova...');
+            
+            // Tentar ativar fullscreen imediatamente
+            setTimeout(() => {
+                const elem = document.documentElement;
+                
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen().catch(err => {
+                        console.log('⚠️ Erro ao entrar em fullscreen (pode ser por restrições do navegador):', err);
+                        
+                        // Tentar novamente após interação do usuário
+                        document.addEventListener('click', function initFullscreenOnClick() {
+                            elem.requestFullscreen().catch(() => {});
+                            document.removeEventListener('click', initFullscreenOnClick);
+                        }, { once: true });
+                    });
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
+                
+                // Configurar listener para garantir que permaneça em fullscreen
+                document.addEventListener('fullscreenchange', () => {
+                    if (!document.fullscreenElement) {
+                        console.log('⚠️ Usuário tentou sair do fullscreen - forçando retorno');
+                        
+                        // Pequeno atraso para evitar loop infinito
+                        setTimeout(() => {
+                            if (!document.fullscreenElement && !this.provaCancelada) {
+                                this.ativarFullScreenInicial();
+                                if (this) this.registrarTentativaAtalho('Saída do modo tela cheia');
+                            }
+                        }, 100);
+                    }
+                });
+            }, 500); // Pequeno atraso para garantir que a página carregou
         }
         
         configurarMonitoramento() {
@@ -1939,7 +2008,7 @@
             document.addEventListener('fullscreenchange', () => {
                 if (!document.fullscreenElement) {
                     this.registrarTentativaAtalho('Saída do modo tela cheia');
-                    setTimeout(() => entrarEmFullscreen(), 100);
+                    setTimeout(() => this.ativarFullScreenInicial(), 100);
                 }
             });
             
@@ -2212,8 +2281,24 @@
                 `;
             }
             
-            // Bloquear tela completamente
-            setTimeout(() => bloquearTelaCompletamente(30), 100);
+            // CORREÇÃO: Limpar dados da prova antes de bloquear
+            if (prova && prova._id) {
+                localStorage.removeItem(`prova_${prova._id}`);
+                localStorage.removeItem(`tempo_prova_${prova._id}`);
+                localStorage.removeItem(`hora_entrada_${prova._id}`);
+            }
+            
+            // Bloquear tela completamente e redirecionar para aluno.html
+            setTimeout(() => {
+                // Sair do fullscreen
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(() => {});
+                }
+                
+                // Redirecionar para aluno.html
+                window.location.href = '/aluno.html?prova_cancelada=true&motivo=' + 
+                    encodeURIComponent(motivo || 'Tentativa de atualizar a página');
+            }, 30000); // 30 segundos
         }
         
         mostrarModalAviso() {
@@ -2273,7 +2358,7 @@
                 countdownElement.classList.remove('blink');
                 modal.classList.remove('active');
                 this.isModalOpen = false;
-                entrarEmFullscreen();
+                this.ativarFullScreenInicial();
                 
                 // Desativar flag após o clique
                 setTimeout(() => {
