@@ -5210,6 +5210,92 @@ app.get('/api/aluno/resultados', authenticateToken, async (req, res) => {
   }
 });
 
+// Rota para buscar notas dos alunos com filtros
+app.get('/api/professor/resultados/notas-alunos', async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ success: false, error: 'Token não fornecido' });
+        }
+
+        // Verificar token e obter ID do professor
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const professorId = decoded.userId;
+
+        const { turmaId, disciplina, periodo, status } = req.query;
+
+        // Construir query base
+        let query = {};
+        
+        // Filtrar por turma
+        if (turmaId && turmaId !== '') {
+            query.turmaId = turmaId;
+        }
+
+        // Se for professor, filtrar apenas suas turmas
+        const turmasQuery = { professorId };
+        if (turmaId) turmasQuery._id = turmaId;
+        
+        const turmas = await Turma.find(turmasQuery).select('_id');
+        const turmasIds = turmas.map(t => t._id);
+        
+        if (turmasIds.length === 0) {
+            return res.json({ success: true, resultados: [] });
+        }
+
+        query.turmaId = { $in: turmasIds };
+
+        // Filtrar por período
+        if (periodo && periodo !== '') {
+            const dias = parseInt(periodo);
+            const dataLimite = new Date();
+            dataLimite.setDate(dataLimite.getDate() - dias);
+            query.dataRealizacao = { $gte: dataLimite };
+        }
+
+        // Buscar resultados
+        const resultados = await Resultado.find(query)
+            .populate('alunoId', 'nome email matricula')
+            .populate('provaId', 'titulo disciplina')
+            .populate('turmaId', 'nome disciplina')
+            .sort({ dataRealizacao: -1 });
+
+        // Formatar resultados
+        const resultadosFormatados = resultados.map(r => ({
+            alunoId: r.alunoId?._id,
+            alunoNome: r.alunoId?.nome,
+            alunoEmail: r.alunoId?.email,
+            alunoMatricula: r.alunoId?.matricula,
+            provaId: r.provaId?._id,
+            provaTitulo: r.provaId?.titulo,
+            turmaId: r.turmaId?._id,
+            turmaNome: r.turmaId?.nome,
+            turmaDisciplina: r.turmaId?.disciplina,
+            disciplina: r.provaId?.disciplina || r.turmaId?.disciplina,
+            dataRealizacao: r.dataRealizacao,
+            nota: r.nota,
+            acertos: r.acertos,
+            total: r.total,
+            status: r.status,
+            notaLiberada: r.notaLiberada,
+            cancelada: r.cancelada
+        }));
+
+        res.json({ 
+            success: true, 
+            resultados: resultadosFormatados,
+            total: resultadosFormatados.length
+        });
+
+    } catch (error) {
+        console.error('Erro ao buscar notas:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
 // ROTA: Detalhes de um resultado específico
 app.get('/api/resultados/:resultadoId', authenticateToken, async (req, res) => {
   try {

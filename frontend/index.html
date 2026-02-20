@@ -1116,6 +1116,9 @@
 <!-- Incluir Font Awesome para ícones -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+<!-- Biblioteca para gerar Excel -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <!-- VLibras Oficial (PRIMEIRO) -->
 <script src="js/vlibras-oficial.js"></script>
 
@@ -2718,9 +2721,9 @@ window.addEventListener('scroll', function() {
                             </button>
                         </div>
                         
-                        <button onclick="exportarDadosProvas()" style="
+                        <button onclick="mostrarOpcoesExportacao()" style="
                             padding: 10px 20px;
-                            background: #10b981;
+                            background: linear-gradient(135deg, #10b981, #059669);
                             color: white;
                             border: none;
                             border-radius: 30px;
@@ -2730,6 +2733,7 @@ window.addEventListener('scroll', function() {
                             display: flex;
                             align-items: center;
                             gap: 8px;
+                            transition: all 0.3s;
                         ">
                             <i class="fas fa-download"></i> Exportar Relatório
                         </button>
@@ -2932,6 +2936,8 @@ window.addEventListener('scroll', function() {
                         </div>
                     </div>
                 </div>
+                <!-- Alertas para resultados -->
+                <div id="alertResultados" class="alert" style="display: none; margin-bottom: 25px;"></div>
                 
                 <!-- Filtros (mesmo estilo) -->
                 <div style="
@@ -4709,6 +4715,416 @@ window.addEventListener('scroll', function() {
                     ? parseFloat(((turma.acertos / turma.totalQuestoes) * 100).toFixed(1))
                     : 0
             }));
+        }
+
+        // ============ FUNÇÃO PARA BUSCAR NOTAS DOS ALUNOS POR FILTRO ============
+        async function buscarNotasAlunos(filtros) {
+            try {
+                console.log('🔍 Buscando notas dos alunos com filtros:', filtros);
+                
+                const token = localStorage.getItem('auth_token');
+                let url = '/api/professor/resultados/notas-alunos';
+                
+                // Adicionar filtros à URL
+                const params = new URLSearchParams();
+                if (filtros.turma) params.append('turmaId', filtros.turma);
+                if (filtros.disciplina) params.append('disciplina', filtros.disciplina);
+                if (filtros.periodo) params.append('periodo', filtros.periodo);
+                if (filtros.status) params.append('status', filtros.status);
+                
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                console.log('📡 URL da requisição:', url);
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log(`✅ ${data.resultados.length} resultados encontrados`);
+                    return data.resultados;
+                } else {
+                    throw new Error(data.error || 'Erro ao buscar notas');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao buscar notas:', error);
+                mostrarAlerta('alertResultados', `❌ Erro ao carregar notas: ${error.message}`, 'error');
+                return [];
+            }
+        }
+
+        // ============ FUNÇÃO PARA EXPORTAR NOTAS DOS ALUNOS (VERSÃO CORRETA) ============
+        async function exportarNotasAlunosExcel() {
+            try {
+                console.log('%c📊 EXPORTANDO NOTAS DOS ALUNOS', 'font-size: 14px; font-weight: bold; color: #10b981;');
+                
+                // ========== 1. OBTER TODOS OS FILTROS ATIVOS ==========
+                
+                // Filtro de Status
+                const filtroStatus = document.getElementById('filtroStatus');
+                const statusSelecionado = filtroStatus ? filtroStatus.value : 'todos';
+                const statusTexto = filtroStatus && filtroStatus.selectedIndex >= 0 ? 
+                    filtroStatus.options[filtroStatus.selectedIndex]?.text.replace(/[▶️✅✏️❌📋]/g, '').trim() : 
+                    'Todos';
+                
+                // Filtro de Dificuldade
+                const filtroDificuldade = document.getElementById('filtroDificuldade');
+                const dificuldadeSelecionada = filtroDificuldade ? filtroDificuldade.value : 'todas';
+                const dificuldadeTexto = filtroDificuldade && filtroDificuldade.selectedIndex >= 0 ? 
+                    filtroDificuldade.options[filtroDificuldade.selectedIndex]?.text.replace(/[⚖️🟢🟡🔴]/g, '').trim() : 
+                    'Todas';
+                
+                // Filtro de Tipo
+                const filtroTipo = document.getElementById('filtroTipo');
+                const tipoSelecionado = filtroTipo ? filtroTipo.value : 'todos';
+                const tipoTexto = filtroTipo && filtroTipo.selectedIndex >= 0 ? 
+                    filtroTipo.options[filtroTipo.selectedIndex]?.text.replace(/[📚📄🎯♿]/g, '').trim() : 
+                    'Todos';
+                
+                // Filtro de Turma
+                const filtroTurma = document.getElementById('filtroTurmaProvas');
+                let turmaId = '';
+                let turmaNome = 'Todas as turmas';
+                
+                if (filtroTurma && filtroTurma.selectedIndex >= 0) {
+                    turmaId = filtroTurma.value;
+                    const selectedOption = filtroTurma.options[filtroTurma.selectedIndex];
+                    turmaNome = selectedOption ? selectedOption.text.replace('🏫', '').trim() : 'Todas as turmas';
+                }
+                
+                // Filtro de Busca
+                const buscaInput = document.getElementById('buscaProva');
+                const buscaTexto = buscaInput ? buscaInput.value.toLowerCase() : '';
+                
+                console.log('📋 FILTROS APLICADOS:', {
+                    status: statusSelecionado,
+                    dificuldade: dificuldadeSelecionada,
+                    tipo: tipoSelecionado,
+                    turmaId: turmaId || 'todas',
+                    turmaNome: turmaNome,
+                    busca: buscaTexto || 'vazio'
+                });
+                
+                // ========== 2. OBTER TOKEN ==========
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    throw new Error('Token de autenticação não encontrado. Faça login novamente.');
+                }
+                
+                // ========== 3. BUSCAR TODAS AS PROVAS DO PROFESSOR ==========
+                mostrarAlerta('alertResultados', '🔍 Buscando provas...', 'info');
+                
+                const responseProvas = await fetch('/api/professor/provas', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!responseProvas.ok) {
+                    throw new Error(`Erro ${responseProvas.status} ao buscar provas`);
+                }
+                
+                const dataProvas = await responseProvas.json();
+                let provas = dataProvas.provas || [];
+                
+                // Aplicar filtros nas provas
+                if (turmaId && turmaId !== 'todas') {
+                    provas = provas.filter(p => p.turma?.id === turmaId);
+                }
+                
+                if (dificuldadeSelecionada !== 'todas') {
+                    provas = provas.filter(p => p.dificuldade === dificuldadeSelecionada);
+                }
+                
+                if (tipoSelecionado !== 'todos') {
+                    provas = provas.filter(p => {
+                        const tipoProva = p.tipoProva || (p.adaptada ? 'adaptada' : 'simples');
+                        if (tipoSelecionado === 'adaptada') return tipoProva === 'adaptada' || p.adaptada === true;
+                        return tipoProva === tipoSelecionado;
+                    });
+                }
+                
+                console.log(`📚 Total de provas após filtros: ${provas.length}`);
+                
+                if (provas.length === 0) {
+                    mostrarAlerta('alertResultados', '⚠️ Nenhuma prova encontrada com os filtros selecionados', 'info');
+                    return;
+                }
+                
+                // ========== 4. BUSCAR RESULTADOS DE CADA PROVA ==========
+                mostrarAlerta('alertResultados', `🔍 Buscando resultados dos alunos...`, 'info');
+                
+                let todosResultados = [];
+                
+                for (const prova of provas) {
+                    try {
+                        // Usar a rota específica para resultados da prova
+                        const response = await fetch(`/api/provas/${prova.id}/resultados`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            
+                            if (data.success && data.resultados) {
+                                console.log(`   📝 Prova "${prova.titulo}": ${data.resultados.length} resultados`);
+                                
+                                // Adicionar informações da prova em cada resultado
+                                const resultadosComInfo = data.resultados.map(r => ({
+                                    // Dados do aluno
+                                    alunoId: r.alunoId,
+                                    alunoNome: r.alunoNome || r.userNome || 'Aluno',
+                                    alunoMatricula: r.alunoMatricula || 'N/A',
+                                    alunoEmail: r.alunoEmail || 'N/A',
+                                    
+                                    // Dados da prova
+                                    provaId: prova.id,
+                                    provaTitulo: prova.titulo,
+                                    provaConteudo: prova.conteudo,
+                                    provaDificuldade: prova.dificuldade,
+                                    
+                                    // Dados da turma
+                                    turmaId: prova.turma?.id,
+                                    turmaNome: prova.turma?.nome,
+                                    turmaDisciplina: prova.turma?.disciplina,
+                                    
+                                    // Dados da nota
+                                    nota: r.nota,
+                                    acertos: r.acertos,
+                                    total: r.total,
+                                    status: r.status || (r.notaLiberada ? 'Concluído' : (r.cancelada ? 'Cancelado' : 'Pendente')),
+                                    notaLiberada: r.notaLiberada || false,
+                                    dataRealizacao: r.dataRealizacao || r.createdAt,
+                                    cancelada: r.cancelada || false
+                                }));
+                                
+                                todosResultados.push(...resultadosComInfo);
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Erro ao buscar resultados da prova ${prova.id}:`, error.message);
+                    }
+                }
+                
+                console.log(`📊 TOTAL DE RESULTADOS ENCONTRADOS: ${todosResultados.length}`);
+                
+                if (todosResultados.length === 0) {
+                    mostrarAlerta('alertResultados', '⚠️ Nenhum resultado encontrado. Os alunos ainda não realizaram as provas.', 'info');
+                    return;
+                }
+                
+                // ========== 5. PROCESSAR DADOS - AGRUPAR POR ALUNO ==========
+                const alunosMap = new Map();
+                
+                todosResultados.forEach(item => {
+                    const alunoId = item.alunoId;
+                    if (!alunoId) return;
+                    
+                    if (!alunosMap.has(alunoId)) {
+                        alunosMap.set(alunoId, {
+                            id: alunoId,
+                            nome: item.alunoNome,
+                            matricula: item.alunoMatricula,
+                            email: item.alunoEmail,
+                            turma: item.turmaNome || turmaNome,
+                            disciplina: item.turmaDisciplina || 'N/A',
+                            provas: [],
+                            somaNotas: 0,
+                            quantidadeNotas: 0
+                        });
+                    }
+                    
+                    const aluno = alunosMap.get(alunoId);
+                    
+                    // Adicionar a prova ao aluno
+                    aluno.provas.push({
+                        provaTitulo: item.provaTitulo,
+                        data: item.dataRealizacao ? new Date(item.dataRealizacao).toLocaleDateString('pt-BR') : 'N/A',
+                        nota: item.nota !== null && item.nota !== undefined ? Number(item.nota).toFixed(1) : 'N/A',
+                        acertos: item.acertos || 0,
+                        total: item.total || 0,
+                        status: item.status,
+                        notaLiberada: item.notaLiberada ? 'Sim' : 'Não',
+                        cancelada: item.cancelada ? 'Sim' : 'Não'
+                    });
+                    
+                    // Acumular para média
+                    if (item.nota !== null && item.nota !== undefined) {
+                        aluno.somaNotas += item.nota;
+                        aluno.quantidadeNotas++;
+                    }
+                });
+                
+                // ========== 6. CALCULAR MÉDIA DE CADA ALUNO ==========
+                const alunosArray = Array.from(alunosMap.values()).map(aluno => {
+                    const media = aluno.quantidadeNotas > 0 ? 
+                        (aluno.somaNotas / aluno.quantidadeNotas).toFixed(1) : 'N/A';
+                    
+                    let statusGeral = 'N/A';
+                    if (media !== 'N/A') {
+                        const mediaNum = parseFloat(media);
+                        statusGeral = mediaNum >= 7 ? 'Aprovado' : 
+                                    (mediaNum >= 5 ? 'Recuperação' : 'Reprovado');
+                    }
+                    
+                    return {
+                        nome: aluno.nome,
+                        matricula: aluno.matricula,
+                        email: aluno.email,
+                        turma: aluno.turma,
+                        disciplina: aluno.disciplina,
+                        totalProvas: aluno.provas.length,
+                        media: media,
+                        statusGeral: statusGeral,
+                        provas: aluno.provas
+                    };
+                });
+                
+                // ========== 7. CRIAR DADOS PARA O EXCEL ==========
+                
+                // Aba 1: Resumo por Aluno
+                const dadosResumo = alunosArray.map((aluno, index) => ({
+                    '#': index + 1,
+                    'Aluno': aluno.nome,
+                    'Matrícula': aluno.matricula,
+                    'Email': aluno.email,
+                    'Turma': aluno.turma,
+                    'Disciplina': aluno.disciplina,
+                    'Total Provas': aluno.totalProvas,
+                    'Média': aluno.media,
+                    'Status': aluno.statusGeral
+                }));
+                
+                // Aba 2: Detalhamento (todas as notas)
+                const dadosDetalhados = [];
+                alunosArray.forEach(aluno => {
+                    aluno.provas.forEach(prova => {
+                        dadosDetalhados.push({
+                            'Aluno': aluno.nome,
+                            'Matrícula': aluno.matricula,
+                            'Turma': aluno.turma,
+                            'Prova': prova.provaTitulo,
+                            'Data': prova.data,
+                            'Nota': prova.nota,
+                            'Acertos': `${prova.acertos}/${prova.total}`,
+                            'Status': prova.status,
+                            'Nota Liberada': prova.notaLiberada,
+                            'Cancelada': prova.cancelada
+                        });
+                    });
+                });
+                
+                // Aba 3: Estatísticas
+                const totalAlunos = alunosArray.length;
+                const totalProvas = provas.length;
+                const totalResultados = todosResultados.length;
+                
+                const notasValidas = todosResultados.filter(r => r.nota !== null && r.nota !== undefined);
+                const mediaGeral = notasValidas.length > 0 ? 
+                    (notasValidas.reduce((acc, r) => acc + r.nota, 0) / notasValidas.length).toFixed(1) : 'N/A';
+                
+                const aprovados = alunosArray.filter(a => a.media !== 'N/A' && parseFloat(a.media) >= 7).length;
+                const recuperacao = alunosArray.filter(a => a.media !== 'N/A' && parseFloat(a.media) >= 5 && parseFloat(a.media) < 7).length;
+                const reprovados = alunosArray.filter(a => a.media !== 'N/A' && parseFloat(a.media) < 5).length;
+                
+                const estatisticas = [
+                    ['📊 ESTATÍSTICAS GERAIS'],
+                    ['Descrição', 'Valor'],
+                    ['Total de Alunos', totalAlunos],
+                    ['Total de Provas', totalProvas],
+                    ['Total de Resultados', totalResultados],
+                    ['Média Geral da Turma', mediaGeral],
+                    [''],
+                    ['📈 DISTRIBUIÇÃO DE DESEMPENHO'],
+                    ['Situação', 'Quantidade', 'Percentual'],
+                    ['Aprovados (≥ 7.0)', aprovados, totalAlunos > 0 ? ((aprovados/totalAlunos)*100).toFixed(1) + '%' : '0%'],
+                    ['Recuperação (5.0 - 6.9)', recuperacao, totalAlunos > 0 ? ((recuperacao/totalAlunos)*100).toFixed(1) + '%' : '0%'],
+                    ['Reprovados (< 5.0)', reprovados, totalAlunos > 0 ? ((reprovados/totalAlunos)*100).toFixed(1) + '%' : '0%']
+                ];
+                
+                // ========== 8. CRIAR EXCEL ==========
+                
+                if (typeof XLSX === 'undefined') {
+                    mostrarAlerta('alertResultados', '⚠️ Carregando biblioteca do Excel...', 'info');
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                    script.onload = () => {
+                        mostrarAlerta('alertResultados', '✅ Biblioteca carregada! Clique novamente.', 'success');
+                    };
+                    document.head.appendChild(script);
+                    return;
+                }
+                
+                const wb = XLSX.utils.book_new();
+                
+                // Criar as planilhas
+                const wsResumo = XLSX.utils.json_to_sheet(dadosResumo);
+                const wsDetalhes = XLSX.utils.json_to_sheet(dadosDetalhados);
+                const wsEstatisticas = XLSX.utils.aoa_to_sheet(estatisticas);
+                
+                // Ajustar larguras
+                wsResumo['!cols'] = [
+                    { wch: 5 },   // #
+                    { wch: 30 },  // Aluno
+                    { wch: 15 },  // Matrícula
+                    { wch: 30 },  // Email
+                    { wch: 25 },  // Turma
+                    { wch: 20 },  // Disciplina
+                    { wch: 12 },  // Total Provas
+                    { wch: 8 },   // Média
+                    { wch: 15 }   // Status
+                ];
+                
+                wsDetalhes['!cols'] = [
+                    { wch: 30 },  // Aluno
+                    { wch: 15 },  // Matrícula
+                    { wch: 25 },  // Turma
+                    { wch: 40 },  // Prova
+                    { wch: 15 },  // Data
+                    { wch: 8 },   // Nota
+                    { wch: 12 },  // Acertos
+                    { wch: 15 },  // Status
+                    { wch: 15 },  // Nota Liberada
+                    { wch: 10 }   // Cancelada
+                ];
+                
+                // Adicionar ao workbook
+                XLSX.utils.book_append_sheet(wb, wsEstatisticas, 'Estatísticas');
+                XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo por Aluno');
+                XLSX.utils.book_append_sheet(wb, wsDetalhes, 'Detalhamento');
+                
+                // Gerar arquivo
+                const dataAtual = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+                const nomeArquivo = `notas-${turmaNome.replace(/\s+/g, '-').toLowerCase()}-${dataAtual}.xlsx`;
+                
+                XLSX.writeFile(wb, nomeArquivo);
+                
+                // Mensagem de sucesso
+                mostrarAlerta('alertResultados', 
+                    `✅ Relatório gerado com sucesso!\n` +
+                    `📊 ${totalAlunos} alunos • ${totalResultados} notas\n` +
+                    `📁 ${nomeArquivo}`, 
+                    'success');
+                
+                console.log('✅ Exportação concluída:', {
+                    alunos: totalAlunos,
+                    resultados: totalResultados,
+                    mediaGeral: mediaGeral
+                });
+                
+            } catch (error) {
+                console.error('❌ Erro na exportação:', error);
+                mostrarAlerta('alertResultados', `❌ Erro ao exportar: ${error.message}`, 'error');
+            }
         }
 
         // ============ PROCESSAR RESULTADOS POR ALUNO ============
@@ -8417,6 +8833,843 @@ window.addEventListener('scroll', function() {
                 buttons.forEach(btn => btn.disabled = false);
             }
         }
+
+        // ============ FUNÇÕES PARA EXPORTAR EM PDF E EXCEL ============
+
+        // Função principal para exportar provas em PDF
+        async function exportarDadosProvasPDF() {
+            try {
+                console.log('📊 Exportando relatório de provas em PDF...');
+                
+                if (!provasOriginais || provasOriginais.length === 0) {
+                    mostrarAlerta('alertMinhasProvas', '⚠️ Não há dados de provas para exportar', 'info');
+                    return;
+                }
+
+                // Calcular estatísticas
+                const totalAtivas = provasOriginais.filter(p => p.status === 'ativa' && p.publicada).length;
+                const totalConcluidas = provasOriginais.filter(p => p.status === 'concluida' || p.cancelada).length;
+                const totalRascunhos = provasOriginais.filter(p => !p.publicada).length;
+                const mediaGeral = (provasOriginais.reduce((acc, p) => acc + (p.mediaNotas || 0), 0) / provasOriginais.length).toFixed(1);
+
+                // Criar conteúdo HTML para o PDF
+                const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Relatório de Provas</title>
+                        <style>
+                            body { 
+                                font-family: Arial, sans-serif; 
+                                margin: 30px;
+                                color: #333;
+                            }
+                            .header { 
+                                text-align: center; 
+                                margin-bottom: 30px;
+                                padding: 20px;
+                                background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                                color: white;
+                                border-radius: 10px;
+                            }
+                            .header h1 { margin: 0; font-size: 24px; }
+                            .header p { margin: 5px 0 0; opacity: 0.9; }
+                            .stats-container {
+                                display: flex;
+                                justify-content: space-between;
+                                margin: 30px 0;
+                                gap: 15px;
+                            }
+                            .stat-card {
+                                flex: 1;
+                                background: #f8fafc;
+                                padding: 20px;
+                                border-radius: 10px;
+                                text-align: center;
+                                border-left: 4px solid #4f46e5;
+                            }
+                            .stat-number {
+                                font-size: 28px;
+                                font-weight: bold;
+                                color: #4f46e5;
+                            }
+                            .stat-label {
+                                font-size: 14px;
+                                color: #64748b;
+                                margin-top: 5px;
+                            }
+                            table {
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin: 20px 0;
+                                font-size: 12px;
+                            }
+                            th {
+                                background: #4f46e5;
+                                color: white;
+                                padding: 12px;
+                                text-align: left;
+                            }
+                            td {
+                                padding: 10px;
+                                border-bottom: 1px solid #e2e8f0;
+                            }
+                            tr:nth-child(even) {
+                                background: #f8fafc;
+                            }
+                            .status-ativa { color: #10b981; font-weight: bold; }
+                            .status-concluida { color: #f59e0b; font-weight: bold; }
+                            .status-rascunho { color: #6b7280; font-weight: bold; }
+                            .badge {
+                                padding: 4px 8px;
+                                border-radius: 12px;
+                                font-size: 11px;
+                                font-weight: bold;
+                            }
+                            .badge-facil { background: #d1fae5; color: #065f46; }
+                            .badge-media { background: #fef3c7; color: #92400e; }
+                            .badge-dificil { background: #fee2e2; color: #991b1b; }
+                            .footer {
+                                margin-top: 30px;
+                                text-align: center;
+                                color: #64748b;
+                                font-size: 11px;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h1>📚 Relatório de Provas</h1>
+                            <p>Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+                        </div>
+
+                        <div class="stats-container">
+                            <div class="stat-card">
+                                <div class="stat-number">${provasOriginais.length}</div>
+                                <div class="stat-label">Total de Provas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${totalAtivas}</div>
+                                <div class="stat-label">Ativas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${totalConcluidas}</div>
+                                <div class="stat-label">Concluídas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${mediaGeral}</div>
+                                <div class="stat-label">Média Geral</div>
+                            </div>
+                        </div>
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Título</th>
+                                    <th>Turma</th>
+                                    <th>Tipo</th>
+                                    <th>Dificuldade</th>
+                                    <th>Questões</th>
+                                    <th>Status</th>
+                                    <th>Alunos</th>
+                                    <th>Média</th>
+                                    <th>Data Limite</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${provasOriginais.map(prova => {
+                                    const tipo = prova.tipoProva === 'enem' ? 'ENEM' : 
+                                            (prova.adaptada ? 'Adaptada' : 'Simples');
+                                    const dificuldadeClass = prova.dificuldade === 'facil' ? 'badge-facil' : 
+                                                            (prova.dificuldade === 'dificil' ? 'badge-dificil' : 'badge-media');
+                                    const statusClass = prova.publicada ? 
+                                        (prova.cancelada ? 'status-concluida' : 
+                                        (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'status-concluida' : 'status-ativa')) 
+                                        : 'status-rascunho';
+                                    const statusText = prova.publicada ? 
+                                        (prova.cancelada ? 'Cancelada' : 
+                                        (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) 
+                                        : 'Rascunho';
+                                    
+                                    return `
+                                        <tr>
+                                            <td><strong>${prova.titulo || 'Sem título'}</strong></td>
+                                            <td>${prova.turma?.nome || prova.turma || 'N/A'}</td>
+                                            <td>${tipo}</td>
+                                            <td><span class="badge ${dificuldadeClass}">${prova.dificuldade || 'Médio'}</span></td>
+                                            <td>${prova.quantidadeQuestoes || 0}</td>
+                                            <td class="${statusClass}">${statusText}</td>
+                                            <td>${prova.alunosRealizaram || 0}/${prova.totalAlunos || 0}</td>
+                                            <td><strong>${(prova.mediaNotas || 0).toFixed(1)}</strong></td>
+                                            <td>${prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'N/A'}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+
+                        <div class="footer">
+                            <p>Relatório gerado automaticamente pelo Sistema de Provas</p>
+                            <p>Total de ${provasOriginais.length} provas • ${provasOriginais.reduce((acc, p) => acc + (p.quantidadeQuestoes || 0), 0)} questões</p>
+                        </div>
+                    </body>
+                    </html>
+                `;
+
+                // Criar janela para impressão/PDF
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(htmlContent);
+                printWindow.document.close();
+                
+                // Focar na janela e chamar print
+                printWindow.focus();
+                
+                // Pequeno delay para garantir que tudo carregou
+                setTimeout(() => {
+                    printWindow.print();
+                }, 500);
+
+                mostrarAlerta('alertMinhasProvas', '✅ PDF gerado! Clique em "Salvar" ou "Imprimir" para baixar.', 'success');
+
+            } catch (error) {
+                console.error('❌ Erro ao exportar PDF:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro ao exportar: ${error.message}`, 'error');
+            }
+        }
+
+        // ============ FUNÇÃO CORRIGIDA DO MODAL - MOSTRA TODOS OS FILTROS ============
+        window.mostrarOpcoesExportacao = function() {
+            console.log('📋 Abrindo modal de exportação com TODOS os filtros');
+            
+            // ========== OBTER TODOS OS FILTROS ATIVOS ==========
+            
+            // Filtro de Status
+            const filtroStatus = document.getElementById('filtroStatus');
+            const statusSelecionado = filtroStatus ? filtroStatus.value : 'todos';
+            const statusTexto = filtroStatus && filtroStatus.selectedIndex >= 0 ? 
+                filtroStatus.options[filtroStatus.selectedIndex]?.text.replace(/[▶️✅✏️❌📋]/g, '').trim() : 
+                'Todos';
+            
+            // Filtro de Dificuldade
+            const filtroDificuldade = document.getElementById('filtroDificuldade');
+            const dificuldadeSelecionada = filtroDificuldade ? filtroDificuldade.value : 'todas';
+            const dificuldadeTexto = filtroDificuldade && filtroDificuldade.selectedIndex >= 0 ? 
+                filtroDificuldade.options[filtroDificuldade.selectedIndex]?.text.replace(/[⚖️🟢🟡🔴]/g, '').trim() : 
+                'Todas';
+            
+            // Filtro de Tipo
+            const filtroTipo = document.getElementById('filtroTipo');
+            const tipoSelecionado = filtroTipo ? filtroTipo.value : 'todos';
+            const tipoTexto = filtroTipo && filtroTipo.selectedIndex >= 0 ? 
+                filtroTipo.options[filtroTipo.selectedIndex]?.text.replace(/[📚📄🎯♿]/g, '').trim() : 
+                'Todos';
+            
+            // Filtro de Turma
+            const filtroTurma = document.getElementById('filtroTurmaProvas');
+            let turmaId = '';
+            let turmaNome = 'Todas as turmas';
+            let turmaSelecionada = false;
+            
+            if (filtroTurma) {
+                turmaId = filtroTurma.value;
+                if (filtroTurma.selectedIndex >= 0) {
+                    const selectedOption = filtroTurma.options[filtroTurma.selectedIndex];
+                    turmaNome = selectedOption ? selectedOption.text.replace('🏫', '').trim() : 'Todas as turmas';
+                }
+                turmaSelecionada = turmaId && turmaId !== 'todas' && turmaId !== '';
+            }
+            
+            // Filtro de Busca
+            const buscaInput = document.getElementById('buscaProva');
+            const buscaTexto = buscaInput ? buscaInput.value : '';
+            const temBusca = buscaTexto && buscaTexto.trim() !== '';
+            
+            console.log('📋 FILTROS DETECTADOS:', {
+                status: statusTexto,
+                dificuldade: dificuldadeTexto,
+                tipo: tipoTexto,
+                turma: turmaNome,
+                busca: buscaTexto || 'vazio'
+            });
+            
+            // ========== CONTAR REGISTROS COM FILTROS ==========
+            let totalRegistros = 0;
+            if (window.dadosNotas && window.dadosNotas.length > 0) {
+                let dadosFiltrados = [...window.dadosNotas];
+                
+                if (turmaId && turmaId !== 'todas') {
+                    dadosFiltrados = dadosFiltrados.filter(d => d.turmaId === turmaId);
+                }
+                
+                // Aqui você pode adicionar mais filtros se quiser contar
+                totalRegistros = dadosFiltrados.length;
+            }
+            
+            // ========== CRIAR MODAL ==========
+            let modal = document.getElementById('modalExportacao');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.id = 'modalExportacao';
+                document.body.appendChild(modal);
+            }
+            
+            // HTML do modal com TODOS os filtros
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 650px; border-radius: 24px;">
+                    <div class="modal-header" style="padding: 20px 25px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; color: #1f2937; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-file-export" style="color: #4f46e5;"></i> 
+                            Exportar Relatórios
+                        </h3>
+                        <button class="modal-close" onclick="this.closest('.modal').style.display='none'" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+                    </div>
+                    
+                    <div style="padding: 25px;">
+                        <!-- CARD COM TODOS OS FILTROS ATIVOS -->
+                        <div style="margin-bottom: 25px; background: #f8fafc; border-radius: 16px; padding: 20px; border: 1px solid #e5e7eb;">
+                            <h4 style="margin: 0 0 15px 0; color: #1f2937; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-sliders-h" style="color: #4f46e5;"></i>
+                                Filtros Ativos na Aba "Minhas Provas"
+                            </h4>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                                <!-- Status -->
+                                <div style="background: white; padding: 12px; border-radius: 12px; border-left: 4px solid ${statusSelecionado !== 'todos' ? '#4f46e5' : '#9ca3af'};">
+                                    <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">Status</div>
+                                    <div style="font-weight: 600; color: ${statusSelecionado !== 'todos' ? '#1f2937' : '#6b7280'};">
+                                        ${statusTexto}
+                                    </div>
+                                </div>
+                                
+                                <!-- Dificuldade -->
+                                <div style="background: white; padding: 12px; border-radius: 12px; border-left: 4px solid ${dificuldadeSelecionada !== 'todas' ? '#f59e0b' : '#9ca3af'};">
+                                    <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">Dificuldade</div>
+                                    <div style="font-weight: 600; color: ${dificuldadeSelecionada !== 'todas' ? '#1f2937' : '#6b7280'};">
+                                        ${dificuldadeTexto}
+                                    </div>
+                                </div>
+                                
+                                <!-- Tipo de Prova -->
+                                <div style="background: white; padding: 12px; border-radius: 12px; border-left: 4px solid ${tipoSelecionado !== 'todos' ? '#10b981' : '#9ca3af'};">
+                                    <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">Tipo de Prova</div>
+                                    <div style="font-weight: 600; color: ${tipoSelecionado !== 'todos' ? '#1f2937' : '#6b7280'};">
+                                        ${tipoTexto}
+                                    </div>
+                                </div>
+                                
+                                <!-- Turma -->
+                                <div style="background: white; padding: 12px; border-radius: 12px; border-left: 4px solid ${turmaSelecionada ? '#8b5cf6' : '#9ca3af'};">
+                                    <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">Turma</div>
+                                    <div style="font-weight: 600; color: ${turmaSelecionada ? '#1f2937' : '#6b7280'};">
+                                        ${turmaNome}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Busca (se houver) -->
+                            ${temBusca ? `
+                            <div style="margin-top: 15px; background: white; padding: 12px; border-radius: 12px; border-left: 4px solid #3b82f6;">
+                                <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">Busca por texto</div>
+                                <div style="font-weight: 600; color: #1f2937;">
+                                    "${buscaTexto}"
+                                </div>
+                            </div>
+                            ` : ''}
+                            
+                            <!-- Resumo dos filtros -->
+                            <div style="margin-top: 15px; padding: 10px; background: #e0f2fe; border-radius: 10px; color: #0369a1; font-size: 0.9rem;">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Resumo:</strong> 
+                                ${statusSelecionado !== 'todos' ? `Status: ${statusTexto} • ` : ''}
+                                ${dificuldadeSelecionada !== 'todas' ? `Dificuldade: ${dificuldadeTexto} • ` : ''}
+                                ${tipoSelecionado !== 'todos' ? `Tipo: ${tipoTexto} • ` : ''}
+                                ${turmaSelecionada ? `Turma: ${turmaNome}` : 'Todas as turmas'}
+                                ${temBusca ? ` • Buscando: "${buscaTexto}"` : ''}
+                            </div>
+                            
+                            <!-- Total de registros -->
+                            ${totalRegistros > 0 ? `
+                            <div style="margin-top: 10px; text-align: right; font-size: 0.85rem; color: #4b5563;">
+                                <i class="fas fa-database"></i> ${totalRegistros} registro(s) com estes filtros
+                            </div>
+                            ` : ''}
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            
+                            <!-- Relatório de Provas -->
+                            <div style="background: #f8fafc; border-radius: 16px; padding: 15px;">
+                                <h4 style="margin: 0 0 10px 0; color: #4b5563; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-file-alt" style="color: #3b82f6;"></i> Relatório de Provas
+                                </h4>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <button onclick="exportarDadosProvasPDF(); this.closest('.modal').style.display='none'" 
+                                            style="padding: 12px; background: #ef4444; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
+                                        <i class="fas fa-file-pdf"></i> PDF
+                                    </button>
+                                    <button onclick="exportarDadosProvasExcel(); this.closest('.modal').style.display='none'" 
+                                            style="padding: 12px; background: #10b981; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
+                                        <i class="fas fa-file-excel"></i> Excel
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Relatório de Turmas -->
+                            <div style="background: #f8fafc; border-radius: 16px; padding: 15px;">
+                                <h4 style="margin: 0 0 10px 0; color: #4b5563; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-school" style="color: #8b5cf6;"></i> Relatório de Turmas
+                                </h4>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <button onclick="exportarDadosTurmasPDF(); this.closest('.modal').style.display='none'" 
+                                            style="padding: 12px; background: #8b5cf6; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
+                                        <i class="fas fa-file-pdf"></i> PDF
+                                    </button>
+                                    <button onclick="exportarTurmasExcel(); this.closest('.modal').style.display='none'" 
+                                            style="padding: 12px; background: #8b5cf6; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
+                                        <i class="fas fa-file-excel"></i> Excel
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Relatório de Notas dos Alunos -->
+                            <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 16px; padding: 15px; border: 2px solid #f59e0b;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                                    <div style="width: 40px; height: 40px; background: #f59e0b; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white;">
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; color: #92400e;">📊 Notas dos Alunos</h4>
+                                        <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #92400e;">
+                                            Exportação considerará TODOS os filtros acima
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <button onclick="exportarNotasAlunosExcel(); this.closest('.modal').style.display='none'" 
+                                        style="width: 100%; padding: 15px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 10px; justify-content: center; font-size: 1rem;">
+                                    <i class="fas fa-file-excel" style="font-size: 20px;"></i>
+                                    <div>
+                                        <div>Exportar Notas dos Alunos (Excel)</div>
+                                        <small style="opacity: 0.9;">Usando ${statusSelecionado !== 'todos' ? 'Status, ' : ''}${dificuldadeSelecionada !== 'todas' ? 'Dificuldade, ' : ''}${tipoSelecionado !== 'todos' ? 'Tipo, ' : ''}${turmaSelecionada ? 'Turma' : ''} ${temBusca ? ', Busca' : ''}</small>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: #f3f4f6; border-radius: 10px;">
+                            <div style="display: flex; justify-content: space-between; color: #4b5563;">
+                                <span><strong>📊 Resumo:</strong></span>
+                                <span>${provasOriginais?.length || 0} provas</span>
+                                <span>${turmasProfessor?.length || 0} turmas</span>
+                                <span>${totalRegistros || 0} registros</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; text-align: center; color: #6b7280; font-size: 0.8rem;">
+                            <i class="fas fa-info-circle"></i> Os relatórios respeitam TODOS os filtros selecionados na aba "Minhas Provas"
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.style.display = 'flex';
+        };
+
+        // ============ FUNÇÃO PARA EXPORTAR PROVAS EM EXCEL (MELHOR VISUALIZAÇÃO) ============
+        function exportarDadosProvasExcel() {
+            try {
+                console.log('📊 Exportando relatório de provas em Excel...');
+                
+                if (!provasOriginais || provasOriginais.length === 0) {
+                    mostrarAlerta('alertMinhasProvas', '⚠️ Não há dados de provas para exportar', 'info');
+                    return;
+                }
+
+                // Verificar se a biblioteca XLSX está carregada
+                if (typeof XLSX === 'undefined') {
+                    mostrarAlerta('alertMinhasProvas', '⚠️ Carregando biblioteca do Excel. Tente novamente...', 'info');
+                    
+                    // Carregar a biblioteca dinamicamente se não estiver disponível
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                    script.onload = function() {
+                        mostrarAlerta('alertMinhasProvas', '✅ Biblioteca carregada! Clique novamente em Exportar.', 'success');
+                    };
+                    document.head.appendChild(script);
+                    return;
+                }
+
+                // ========== 1. DADOS DETALHADOS DAS PROVAS ==========
+                const dadosDetalhados = provasOriginais.map((prova, index) => {
+                    const nomeTurma = prova.turma?.nome || prova.turma || 'Sem turma';
+                    const dataCriacao = prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'N/A';
+                    const dataLimite = prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'N/A';
+                    const status = prova.publicada ? 
+                        (prova.cancelada ? 'Cancelada' : 
+                        (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) 
+                        : 'Rascunho';
+                    const tipo = prova.tipoProva === 'enem' ? 'ENEM' : 
+                                (prova.adaptada ? 'Adaptada' : 'Simples');
+                    const dificuldade = prova.dificuldade === 'facil' ? 'Fácil' :
+                                    (prova.dificuldade === 'dificil' ? 'Difícil' : 'Médio');
+                    
+                    return {
+                        'ID': index + 1,
+                        'Título': prova.titulo || 'Sem título',
+                        'Turma': nomeTurma,
+                        'Disciplina': prova.turma?.disciplina || 'N/A',
+                        'Tipo': tipo,
+                        'Dificuldade': dificuldade,
+                        'Questões': prova.quantidadeQuestoes || 0,
+                        'Status': status,
+                        'Alunos Realizaram': prova.alunosRealizaram || 0,
+                        'Total Alunos': prova.totalAlunos || 0,
+                        '% Participação': prova.totalAlunos ? 
+                            Number(((prova.alunosRealizaram || 0) / prova.totalAlunos * 100).toFixed(1)) : 0,
+                        'Média': Number((prova.mediaNotas || 0).toFixed(1)),
+                        'Data Criação': dataCriacao,
+                        'Data Limite': dataLimite,
+                        'Código': prova.codigo || 'N/A'
+                    };
+                });
+
+                // ========== 2. ESTATÍSTICAS RESUMIDAS ==========
+                const totalAtivas = provasOriginais.filter(p => p.status === 'ativa' && p.publicada).length;
+                const totalConcluidas = provasOriginais.filter(p => p.status === 'concluida' || p.cancelada).length;
+                const totalRascunhos = provasOriginais.filter(p => !p.publicada).length;
+                const totalQuestoes = provasOriginais.reduce((acc, p) => acc + (p.quantidadeQuestoes || 0), 0);
+                const totalAlunosEnvolvidos = provasOriginais.reduce((acc, p) => acc + (p.totalAlunos || 0), 0);
+                const totalRealizacoes = provasOriginais.reduce((acc, p) => acc + (p.alunosRealizaram || 0), 0);
+                const mediaGeral = Number((provasOriginais.reduce((acc, p) => acc + (p.mediaNotas || 0), 0) / provasOriginais.length).toFixed(1));
+
+                // Calcular distribuição por dificuldade
+                const faceis = provasOriginais.filter(p => p.dificuldade === 'facil').length;
+                const medias = provasOriginais.filter(p => p.dificuldade === 'media' || !p.dificuldade).length;
+                const dificeis = provasOriginais.filter(p => p.dificuldade === 'dificil').length;
+
+                // ========== 3. CRIAR PLANILHA DO EXCEL ==========
+                
+                // Primeira aba: Resumo
+                const dadosResumo = [
+                    ['📊 RELATÓRIO DE PROVAS - SISTEMA DE PROVAS'],
+                    [`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`],
+                    [''],
+                    ['📈 RESUMO ESTATÍSTICO'],
+                    ['Métrica', 'Valor'],
+                    ['Total de Provas', provasOriginais.length],
+                    ['Provas Ativas', totalAtivas],
+                    ['Provas Concluídas', totalConcluidas],
+                    ['Rascunhos', totalRascunhos],
+                    ['Total de Questões', totalQuestoes],
+                    ['Média Geral das Provas', mediaGeral],
+                    ['Total de Alunos (único)', '=SUM(F2:F' + (provasOriginais.length + 1) + ')'], // Fórmula Excel
+                    ['Total de Realizações', totalRealizacoes],
+                    [''],
+                    ['📊 DISTRIBUIÇÃO POR DIFICULDADE'],
+                    ['Dificuldade', 'Quantidade', 'Percentual'],
+                    ['Fácil', faceis, `=${faceis}/${provasOriginais.length}*100`],
+                    ['Médio', medias, `=${medias}/${provasOriginais.length}*100`],
+                    ['Difícil', dificeis, `=${dificeis}/${provasOriginais.length}*100`],
+                    [''],
+                    ['📋 LEGENDA'],
+                    ['Status:', ''],
+                    ['Ativa', 'Prova disponível para os alunos'],
+                    ['Concluída', 'Data limite passada'],
+                    ['Rascunho', 'Prova não publicada'],
+                    ['Cancelada', 'Prova cancelada']
+                ];
+
+                // Segunda aba: Detalhamento das Provas
+                const sheetDetalhes = XLSX.utils.json_to_sheet(dadosDetalhados);
+
+                // Configurar larguras das colunas para melhor visualização
+                sheetDetalhes['!cols'] = [
+                    { wch: 5 },  // ID
+                    { wch: 40 }, // Título
+                    { wch: 25 }, // Turma
+                    { wch: 20 }, // Disciplina
+                    { wch: 10 }, // Tipo
+                    { wch: 10 }, // Dificuldade
+                    { wch: 8 },  // Questões
+                    { wch: 12 }, // Status
+                    { wch: 15 }, // Alunos Realizaram
+                    { wch: 12 }, // Total Alunos
+                    { wch: 12 }, // % Participação
+                    { wch: 8 },  // Média
+                    { wch: 15 }, // Data Criação
+                    { wch: 15 }, // Data Limite
+                    { wch: 15 }  // Código
+                ];
+
+                // ========== 4. CRIAR WORKBOOK COM MÚLTIPLAS ABAS ==========
+                const wb = XLSX.utils.book_new();
+                
+                // Criar aba de resumo
+                const wsResumo = XLSX.utils.aoa_to_sheet(dadosResumo);
+                wsResumo['!cols'] = [
+                    { wch: 30 }, // Primeira coluna
+                    { wch: 20 }  // Segunda coluna
+                ];
+                
+                // Adicionar as abas ao workbook
+                XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+                XLSX.utils.book_append_sheet(wb, sheetDetalhes, 'Detalhamento');
+
+                // ========== 5. GERAR ARQUIVO EXCEL ==========
+                const dataAtual = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+                const nomeArquivo = `relatorio-provas-${dataAtual}.xlsx`;
+                
+                XLSX.writeFile(wb, nomeArquivo);
+
+                // ========== 6. MOSTRA PREVIEW DOS DADOS ==========
+                console.log('✅ Excel gerado com sucesso!');
+                console.log('📊 Resumo:', {
+                    'Total Provas': provasOriginais.length,
+                    'Total Questões': totalQuestoes,
+                    'Média Geral': mediaGeral,
+                    'Alunos Envolvidos': totalAlunosEnvolvidos
+                });
+
+                // Mostrar mensagem de sucesso com instruções
+                mostrarAlerta('alertMinhasProvas', 
+                    `✅ Arquivo Excel gerado com sucesso!\n` +
+                    `📊 ${provasOriginais.length} provas • ${totalQuestoes} questões\n` +
+                    `📁 Nome: ${nomeArquivo}`, 
+                    'success');
+
+            } catch (error) {
+                console.error('❌ Erro ao exportar Excel:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro ao exportar: ${error.message}`, 'error');
+            }
+        }
+
+        // ============ FUNÇÃO PARA EXPORTAR TURMAS EM EXCEL ============
+        function exportarTurmasExcel() {
+            try {
+                if (!turmasProfessor || turmasProfessor.length === 0) {
+                    mostrarAlerta('alertMinhasTurmas', '⚠️ Não há dados de turmas para exportar', 'info');
+                    return;
+                }
+
+                if (typeof XLSX === 'undefined') {
+                    mostrarAlerta('alertMinhasTurmas', '⚠️ Carregando biblioteca do Excel...', 'info');
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                    script.onload = () => mostrarAlerta('alertMinhasTurmas', '✅ Pronto! Clique novamente.', 'success');
+                    document.head.appendChild(script);
+                    return;
+                }
+
+                // Dados das turmas
+                const dadosTurmas = turmasProfessor.map((turma, index) => ({
+                    'ID': index + 1,
+                    'Nome': turma.nome || 'N/A',
+                    'Disciplina': turma.disciplina || 'N/A',
+                    'Eixo': turma.eixo === 'natureza' ? 'Natureza' : 
+                        (turma.eixo === 'humanas' ? 'Humanas' : 'Geral'),
+                    'Código': turma.codigo || 'N/A',
+                    'Status': turma.ativa !== false ? 'Ativa' : 'Inativa',
+                    'Alunos': turma.totalAlunos || 0,
+                    'Provas': turma.totalProvas || 0,
+                    'Data Criação': turma.dataCriacao ? new Date(turma.dataCriacao).toLocaleDateString('pt-BR') : 'N/A'
+                }));
+
+                // Resumo
+                const totalAlunos = turmasProfessor.reduce((acc, t) => acc + (t.totalAlunos || 0), 0);
+                const totalProvas = turmasProfessor.reduce((acc, t) => acc + (t.totalProvas || 0), 0);
+                const turmasAtivas = turmasProfessor.filter(t => t.ativa !== false).length;
+
+                const dadosResumo = [
+                    ['🏫 RELATÓRIO DE TURMAS'],
+                    [`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`],
+                    [''],
+                    ['📊 RESUMO'],
+                    ['Total de Turmas', turmasProfessor.length],
+                    ['Turmas Ativas', turmasAtivas],
+                    ['Total de Alunos', totalAlunos],
+                    ['Total de Provas', totalProvas],
+                    ['Média Alunos/Turma', Number((totalAlunos / turmasProfessor.length).toFixed(1))]
+                ];
+
+                // Criar workbook
+                const wb = XLSX.utils.book_new();
+                
+                const wsResumo = XLSX.utils.aoa_to_sheet(dadosResumo);
+                const wsDetalhes = XLSX.utils.json_to_sheet(dadosTurmas);
+                
+                wsDetalhes['!cols'] = [
+                    { wch: 5 },  // ID
+                    { wch: 30 }, // Nome
+                    { wch: 20 }, // Disciplina
+                    { wch: 10 }, // Eixo
+                    { wch: 15 }, // Código
+                    { wch: 10 }, // Status
+                    { wch: 8 },  // Alunos
+                    { wch: 8 },  // Provas
+                    { wch: 15 }  // Data
+                ];
+
+                XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+                XLSX.utils.book_append_sheet(wb, wsDetalhes, 'Turmas');
+
+                const dataAtual = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+                XLSX.writeFile(wb, `relatorio-turmas-${dataAtual}.xlsx`);
+
+                mostrarAlerta('alertMinhasTurmas', '✅ Relatório de turmas exportado!', 'success');
+
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                mostrarAlerta('alertMinhasTurmas', `❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // ============ FUNÇÃO PARA EXPORTAR TURMAS EM PDF ============
+        async function exportarDadosTurmasPDF() {
+            try {
+                if (!turmasProfessor || turmasProfessor.length === 0) {
+                    mostrarAlerta('alertMinhasTurmas', '⚠️ Não há dados de turmas para exportar', 'info');
+                    return;
+                }
+
+                const totalAlunos = turmasProfessor.reduce((acc, t) => acc + (t.totalAlunos || 0), 0);
+                const totalProvas = turmasProfessor.reduce((acc, t) => acc + (t.totalProvas || 0), 0);
+                const turmasAtivas = turmasProfessor.filter(t => t.ativa !== false).length;
+
+                const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Relatório de Turmas</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; margin: 30px; color: #333; }
+                            .header { 
+                                text-align: center; 
+                                margin-bottom: 30px;
+                                padding: 20px;
+                                background: linear-gradient(135deg, #10b981, #059669);
+                                color: white;
+                                border-radius: 10px;
+                            }
+                            .stats-container {
+                                display: flex;
+                                justify-content: space-between;
+                                margin: 30px 0;
+                                gap: 15px;
+                            }
+                            .stat-card {
+                                flex: 1;
+                                background: #f8fafc;
+                                padding: 20px;
+                                border-radius: 10px;
+                                text-align: center;
+                                border-left: 4px solid #10b981;
+                            }
+                            .stat-number {
+                                font-size: 28px;
+                                font-weight: bold;
+                                color: #10b981;
+                            }
+                            table {
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin: 20px 0;
+                            }
+                            th {
+                                background: #10b981;
+                                color: white;
+                                padding: 12px;
+                                text-align: left;
+                            }
+                            td {
+                                padding: 10px;
+                                border-bottom: 1px solid #e2e8f0;
+                            }
+                            .eixo-natureza { color: #10b981; }
+                            .eixo-humanas { color: #8b5cf6; }
+                            .eixo-geral { color: #6b7280; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h1>🏫 Relatório de Turmas</h1>
+                            <p>Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+                        </div>
+
+                        <div class="stats-container">
+                            <div class="stat-card">
+                                <div class="stat-number">${turmasProfessor.length}</div>
+                                <div class="stat-label">Total de Turmas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${turmasAtivas}</div>
+                                <div class="stat-label">Turmas Ativas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${totalAlunos}</div>
+                                <div class="stat-label">Total de Alunos</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${totalProvas}</div>
+                                <div class="stat-label">Total de Provas</div>
+                            </div>
+                        </div>
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Disciplina</th>
+                                    <th>Eixo</th>
+                                    <th>Código</th>
+                                    <th>Status</th>
+                                    <th>Alunos</th>
+                                    <th>Provas</th>
+                                    <th>Data Criação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${turmasProfessor.map(turma => {
+                                    const eixoClass = turma.eixo === 'natureza' ? 'eixo-natureza' : 
+                                                    (turma.eixo === 'humanas' ? 'eixo-humanas' : 'eixo-geral');
+                                    return `
+                                        <tr>
+                                            <td><strong>${turma.nome || 'N/A'}</strong></td>
+                                            <td>${turma.disciplina || 'N/A'}</td>
+                                            <td class="${eixoClass}">${turma.eixo || 'Geral'}</td>
+                                            <td><code>${turma.codigo || 'N/A'}</code></td>
+                                            <td>${turma.ativa !== false ? 'Ativa' : 'Inativa'}</td>
+                                            <td>${turma.totalAlunos || 0}</td>
+                                            <td>${turma.totalProvas || 0}</td>
+                                            <td>${turma.dataCriacao ? new Date(turma.dataCriacao).toLocaleDateString('pt-BR') : 'N/A'}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </body>
+                    </html>
+                `;
+
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(htmlContent);
+                printWindow.document.close();
+                
+                setTimeout(() => {
+                    printWindow.print();
+                }, 500);
+
+                mostrarAlerta('alertMinhasTurmas', '✅ PDF gerado com sucesso!', 'success');
+
+            } catch (error) {
+                console.error('❌ Erro ao exportar PDF:', error);
+                mostrarAlerta('alertMinhasTurmas', `❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+
         // Mostrar preview das questões (mantido da versão anterior)
         function mostrarPreviewQuestoes(questoes) {
             const previewContainer = document.getElementById('previewQuestoes');
@@ -11386,5 +12639,6 @@ window.addEventListener('scroll', function() {
         }
 
     </script>
+    <div id="alertGeral" class="alert" style="display: none;"></div>
 </body>
 </html>
