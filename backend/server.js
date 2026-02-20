@@ -1502,6 +1502,176 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ============ ROTA PARA BUSCAR UMA TURMA ESPECÍFICA ============
+app.get('/api/turmas/:id', authenticateToken, async (req, res) => {
+  try {
+    const turmaId = req.params.id;
+    const userId = req.userId;
+    
+    console.log(`🔍 Buscando turma: ${turmaId}`);
+    
+    const turma = await Turma.findById(turmaId)
+      .populate('professorId', 'nome email')
+      .populate('alunos', 'nome email matricula')
+      .lean();
+    
+    if (!turma) {
+      return res.status(404).json({
+        success: false,
+        error: 'Turma não encontrada'
+      });
+    }
+    
+    // Verificar permissão
+    if (turma.professorId._id.toString() !== userId && req.userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Você não tem permissão para ver esta turma'
+      });
+    }
+    
+    // Buscar provas da turma
+    const provas = await Prova.find({ turmaId: turmaId })
+      .select('titulo status quantidadeQuestoes dataLimite')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    res.json({
+      success: true,
+      turma: {
+        id: turma._id,
+        nome: turma.nome,
+        disciplina: turma.disciplina,
+        eixo: turma.eixo,
+        codigo: turma.codigo,
+        descricao: turma.descricao,
+        dataCriacao: turma.createdAt,
+        ativa: turma.ativa,
+        professor: turma.professorId ? {
+          nome: turma.professorId.nome,
+          email: turma.professorId.email
+        } : null,
+        totalAlunos: turma.alunos ? turma.alunos.length : 0,
+        totalProvas: provas.length,
+        alunos: turma.alunos ? turma.alunos.map(a => ({
+          id: a._id,
+          nome: a.nome,
+          email: a.email,
+          matricula: a.matricula
+        })) : [],
+        provas: provas.map(p => ({
+          id: p._id,
+          titulo: p.titulo,
+          status: p.status,
+          quantidadeQuestoes: p.quantidadeQuestoes,
+          dataLimite: p.dataLimite
+        }))
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao buscar turma:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno ao buscar turma: ' + error.message
+    });
+  }
+});
+
+// ============ ROTA PARA BUSCAR ALUNOS DE UMA TURMA ============
+app.get('/api/turmas/:id/alunos', authenticateToken, async (req, res) => {
+  try {
+    const turmaId = req.params.id;
+    const userId = req.userId;
+    
+    const turma = await Turma.findById(turmaId)
+      .populate('alunos', 'nome email matricula');
+    
+    if (!turma) {
+      return res.status(404).json({
+        success: false,
+        error: 'Turma não encontrada'
+      });
+    }
+    
+    // Verificar permissão
+    if (turma.professorId.toString() !== userId && req.userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Você não tem permissão para ver os alunos desta turma'
+      });
+    }
+    
+    const alunos = turma.alunos ? turma.alunos.map(aluno => ({
+      id: aluno._id,
+      nome: aluno.nome,
+      email: aluno.email,
+      matricula: aluno.matricula
+    })) : [];
+    
+    res.json({
+      success: true,
+      alunos
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao buscar alunos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno ao buscar alunos'
+    });
+  }
+});
+
+// ============ ROTA PARA BUSCAR PROVAS DE UMA TURMA ============
+app.get('/api/turmas/:id/provas', authenticateToken, async (req, res) => {
+  try {
+    const turmaId = req.params.id;
+    const userId = req.userId;
+    
+    const turma = await Turma.findById(turmaId);
+    
+    if (!turma) {
+      return res.status(404).json({
+        success: false,
+        error: 'Turma não encontrada'
+      });
+    }
+    
+    // Verificar permissão
+    if (turma.professorId.toString() !== userId && req.userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Você não tem permissão para ver as provas desta turma'
+      });
+    }
+    
+    const provas = await Prova.find({ turmaId: turmaId })
+      .select('titulo status quantidadeQuestoes dataLimite createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    res.json({
+      success: true,
+      provas: provas.map(p => ({
+        id: p._id,
+        titulo: p.titulo,
+        status: p.status,
+        quantidadeQuestoes: p.quantidadeQuestoes,
+        dataLimite: p.dataLimite,
+        dataCriacao: p.createdAt
+      }))
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao buscar provas:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno ao buscar provas'
+    });
+  }
+});
+
 // ============ ROTA ATUALIZADA COM SUPORTE A PROVA ADAPTADA (3 ALTERNATIVAS) ============
 app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (req, res) => {
   try {
