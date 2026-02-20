@@ -5706,6 +5706,7 @@ window.addEventListener('scroll', function() {
         };
 
         // Adicione esta função para visualizar a prova completa
+        // ========== FUNÇÃO CORRIGIDA PARA VISUALIZAR PROVA ==========
         window.visualizarProva = async function(provaId) {
             try {
                 const token = localStorage.getItem('auth_token');
@@ -5757,7 +5758,40 @@ window.addEventListener('scroll', function() {
                     const prova = data.prova;
                     const questoes = data.questoes || [];
                     
-                    // Montar HTML da prova
+                    // 🟢🟢🟢 CORREÇÃO: CALCULAR DURAÇÃO CORRETAMENTE 🟢🟢🟢
+                    let duracaoTexto = 'Não definida';
+                    let duracaoMinutos = 0;
+                    
+                    // Verificar diferentes formatos de duração
+                    if (prova.duracao) {
+                        duracaoTexto = prova.duracao;
+                        duracaoMinutos = parseInt(prova.duracao) || 0;
+                    } else if (prova.duracaoMinutos) {
+                        duracaoMinutos = prova.duracaoMinutos;
+                        // Formatar minutos em horas e minutos
+                        if (duracaoMinutos >= 60) {
+                            const horas = Math.floor(duracaoMinutos / 60);
+                            const minutos = duracaoMinutos % 60;
+                            duracaoTexto = minutos > 0 ? `${horas}h ${minutos}min` : `${horas}h`;
+                        } else {
+                            duracaoTexto = `${duracaoMinutos}min`;
+                        }
+                    } else if (prova.horarioInicio && prova.horarioTermino) {
+                        // Calcular duração a partir dos horários
+                        const [h1, m1] = prova.horarioInicio.split(':').map(Number);
+                        const [h2, m2] = prova.horarioTermino.split(':').map(Number);
+                        duracaoMinutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+                        
+                        if (duracaoMinutos >= 60) {
+                            const horas = Math.floor(duracaoMinutos / 60);
+                            const minutos = duracaoMinutos % 60;
+                            duracaoTexto = minutos > 0 ? `${horas}h ${minutos}min` : `${horas}h`;
+                        } else {
+                            duracaoTexto = `${duracaoMinutos}min`;
+                        }
+                    }
+                    
+                    // Montar HTML das questões
                     let questoesHTML = '';
                     
                     if (questoes.length === 0) {
@@ -5772,7 +5806,7 @@ window.addEventListener('scroll', function() {
                         questoesHTML = questoes.map((questao, index) => {
                             // Calcular letra da resposta correta
                             const respostaCorreta = questao.respostaCorreta;
-                            const letras = ['A', 'B', 'C', 'D'];
+                            const letras = ['A', 'B', 'C', 'D', 'E'];
                             const letraCorreta = letras[respostaCorreta];
                             
                             // Mapear opções
@@ -5879,7 +5913,6 @@ window.addEventListener('scroll', function() {
                     // Informações da prova
                     const dataCriacao = prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'Não disponível';
                     const dataLimite = prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'Sem limite';
-                    const duracao = prova.duracao || 'Não definida';
                     
                     const modalFinalContent = `
                         <div class="modal-header">
@@ -5919,9 +5952,29 @@ window.addEventListener('scroll', function() {
                                     </div>
                                     <div>
                                         <div style="font-size: 0.9rem; opacity: 0.8;">Duração</div>
-                                        <div style="font-weight: 600;">${duracao} min</div>
+                                        <div style="font-weight: 600;">${duracaoTexto}</div>
                                     </div>
                                 </div>
+                                
+                                <!-- Horários (se disponíveis) -->
+                                ${prova.horarioInicio && prova.horarioTermino ? `
+                                <div style="
+                                    margin-top: 15px;
+                                    padding-top: 15px;
+                                    border-top: 1px solid rgba(255,255,255,0.2);
+                                    display: flex;
+                                    gap: 20px;
+                                ">
+                                    <div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Horário Início</div>
+                                        <div style="font-weight: 600;">${prova.horarioInicio}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Horário Término</div>
+                                        <div style="font-weight: 600;">${prova.horarioTermino}</div>
+                                    </div>
+                                </div>
+                                ` : ''}
                             </div>
                             
                             <!-- Questões -->
