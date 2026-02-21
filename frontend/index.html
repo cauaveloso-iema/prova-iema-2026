@@ -2950,6 +2950,7 @@ window.addEventListener('scroll', function() {
                         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
                         gap: 20px;
                     ">
+                        <!-- Filtro por Turma -->
                         <div>
                             <label style="
                                 display: block;
@@ -2975,6 +2976,7 @@ window.addEventListener('scroll', function() {
                             </select>
                         </div>
                         
+                        <!-- Filtro por Disciplina -->
                         <div>
                             <label style="
                                 display: block;
@@ -3000,6 +3002,7 @@ window.addEventListener('scroll', function() {
                             </select>
                         </div>
                         
+                        <!-- 🔴 FILTRO POR PERÍODO LETIVO (substituindo o de dias) -->
                         <div>
                             <label style="
                                 display: block;
@@ -3008,10 +3011,10 @@ window.addEventListener('scroll', function() {
                                 color: #374151;
                                 font-size: 0.9rem;
                             ">
-                                <i class="fas fa-calendar-alt" style="color: #f97316; margin-right: 8px;"></i>
-                                Período
+                                <i class="fas fa-calendar-week" style="color: #f97316; margin-right: 8px;"></i>
+                                Período Letivo
                             </label>
-                            <select id="filtroPeriodo" class="form-control" onchange="filtrarResultados()" style="
+                            <select id="filtroPeriodoResultados" class="form-control" onchange="filtrarResultados()" style="
                                 width: 100%;
                                 padding: 12px 16px;
                                 border: 2px solid #e5e7eb;
@@ -3021,10 +3024,11 @@ window.addEventListener('scroll', function() {
                                 background: white;
                                 cursor: pointer;
                             ">
-                                <option value="">Todo o período</option>
-                                <option value="7">Últimos 7 dias</option>
-                                <option value="30">Últimos 30 dias</option>
-                                <option value="90">Últimos 90 dias</option>
+                                <option value="">Todos os períodos</option>
+                                <option value="1">1º Período</option>
+                                <option value="2">2º Período</option>
+                                <option value="3">3º Período</option>
+                                <option value="4">4º Período</option>
                             </select>
                         </div>
                     </div>
@@ -4683,12 +4687,14 @@ window.addEventListener('scroll', function() {
                 const turmaId = resultado.turmaId || 'sem-turma';
                 const turmaNome = resultado.turmaNome || 'Turma sem nome';
                 const turmaDisciplina = resultado.turmaDisciplina || 'Geral';
+                const periodoProva = resultado.periodo || '1';
                 
                 if (!turmasMap.has(turmaId)) {
                     turmasMap.set(turmaId, {
                         id: turmaId,
                         nome: turmaNome,
                         disciplina: turmaDisciplina,
+                        periodo: periodoProva,
                         alunos: new Set(),
                         provas: new Set(),
                         notas: [],
@@ -5139,6 +5145,8 @@ window.addEventListener('scroll', function() {
             resultados.forEach(resultado => {
                 const alunoId = resultado.alunoId || resultado.userId;
                 if (!alunoId) return;
+
+                const periodoProva = resultado.periodo || '1';
                 
                 if (!alunosMap.has(alunoId)) {
                     alunosMap.set(alunoId, {
@@ -5146,6 +5154,7 @@ window.addEventListener('scroll', function() {
                         nome: resultado.alunoNome || 'Aluno',
                         matricula: resultado.alunoMatricula || '',
                         email: resultado.alunoEmail || '',
+                        periodo: periodoProva,
                         turmas: new Set(),
                         provas: new Set(),
                         notas: [],
@@ -5185,10 +5194,12 @@ window.addEventListener('scroll', function() {
             
             resultados.forEach(resultado => {
                 const disciplina = resultado.disciplina || resultado.turmaDisciplina || 'Geral';
+                const periodoProva = resultado.periodo || '1';
                 
                 if (!disciplinasMap.has(disciplina)) {
                     disciplinasMap.set(disciplina, {
                         nome: disciplina,
+                        periodo: periodoProva, 
                         turmas: new Set(),
                         alunos: new Set(),
                         provas: new Set(),
@@ -5264,16 +5275,18 @@ window.addEventListener('scroll', function() {
             }
         }
 
-        // ============ FUNÇÕES DE FILTRAGEM CORRIGIDAS ============
+        // ============ FUNÇÕES DE FILTRAGEM CORRIGIDAS COM PERÍODO ============
         window.filtrarResultados = function() {
             console.log('🔍 Aplicando filtros nos resultados...');
             
             const filtroTurma = document.getElementById('filtroTurma')?.value || '';
             const filtroDisciplina = document.getElementById('filtroDisciplina')?.value || '';
+            const filtroPeriodo = document.getElementById('filtroPeriodoResultados')?.value || '';
             
             console.log('📊 Filtros selecionados:', { 
                 turma: filtroTurma || 'Todas', 
-                disciplina: filtroDisciplina || 'Todas'
+                disciplina: filtroDisciplina || 'Todas',
+                periodo: filtroPeriodo || 'Todos'
             });
             
             if (!window.resultadosGerais || !window.resultadosGerais.turmas) {
@@ -5285,19 +5298,60 @@ window.addEventListener('scroll', function() {
             // Filtrar turmas
             let turmasFiltradas = window.resultadosGerais.turmas;
             let alunosFiltrados = window.resultadosGerais.alunos;
+            let disciplinasFiltradas = window.resultadosGerais.disciplinas;
             
+            // FILTRO POR TURMA
             if (filtroTurma) {
                 turmasFiltradas = turmasFiltradas.filter(t => t.nome === filtroTurma);
+                
+                // 🔴 CORREÇÃO: Filtrar alunos por turma
                 alunosFiltrados = alunosFiltrados.filter(a => 
                     a.turmas && Array.from(a.turmas).includes(filtroTurma)
                 );
+                
+                // 🔴 CORREÇÃO: Filtrar disciplinas por turma
+                disciplinasFiltradas = disciplinasFiltradas.filter(d => 
+                    d.turmas && Array.from(d.turmas).includes(filtroTurma)
+                );
             }
             
-            if (filtroDisciplina) {
+            // FILTRO POR DISCIPLINA
+            if (filtroDisciplina && filtroDisciplina !== 'Todas' && filtroDisciplina !== '') {
                 turmasFiltradas = turmasFiltradas.filter(t => t.disciplina === filtroDisciplina);
+                
+                // 🔴 CORREÇÃO: Filtrar alunos por disciplina (usando as turmas como referência)
+                // Em vez de a.provas.some, vamos verificar se o aluno está em alguma turma filtrada
+                if (turmasFiltradas.length > 0) {
+                    const turmasNomes = new Set(turmasFiltradas.map(t => t.nome));
+                    alunosFiltrados = alunosFiltrados.filter(a => 
+                        a.turmas && Array.from(a.turmas).some(turma => turmasNomes.has(turma))
+                    );
+                } else {
+                    alunosFiltrados = [];
+                }
+                
+                disciplinasFiltradas = disciplinasFiltradas.filter(d => d.nome === filtroDisciplina);
             }
             
-            console.log(`✅ Mostrando ${turmasFiltradas.length} turmas`);
+            // 🔴 FILTRO POR PERÍODO LETIVO
+            if (filtroPeriodo) {
+                // Filtrar turmas por período
+                turmasFiltradas = turmasFiltradas.filter(t => 
+                    t.periodo === filtroPeriodo || t.periodo?.toString() === filtroPeriodo
+                );
+                
+                // Filtrar alunos por período
+                alunosFiltrados = alunosFiltrados.filter(a => 
+                    a.periodo === filtroPeriodo || a.periodo?.toString() === filtroPeriodo
+                );
+                
+                // Filtrar disciplinas por período
+                disciplinasFiltradas = disciplinasFiltradas.filter(d => 
+                    d.periodo === filtroPeriodo || d.periodo?.toString() === filtroPeriodo
+                );
+            }
+            
+            console.log(`✅ Mostrando ${turmasFiltradas.length} turmas, ${alunosFiltrados.length} alunos, ${disciplinasFiltradas.length} disciplinas`);
             
             // Atualizar listas
             if (typeof atualizarListaTurmasResultados === 'function') {
@@ -5305,6 +5359,9 @@ window.addEventListener('scroll', function() {
             }
             if (typeof atualizarListaAlunosResultados === 'function') {
                 atualizarListaAlunosResultados(alunosFiltrados);
+            }
+            if (typeof atualizarListaDisciplinasResultados === 'function') {
+                atualizarListaDisciplinasResultados(disciplinasFiltradas);
             }
         };
 
@@ -10453,6 +10510,11 @@ window.addEventListener('scroll', function() {
                     const dataFormatada = `${ano}-${mes}-${dia}`;
                     console.log('   Formatada para envio:', dataFormatada);
                 });
+            }
+
+            const filtroPeriodoResultados = document.getElementById('filtroPeriodoResultados');
+            if (filtroPeriodoResultados) {
+                filtroPeriodoResultados.addEventListener('change', filtrarResultados);
             }
 
             // Configurar cálculo de duração

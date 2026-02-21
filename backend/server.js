@@ -4917,6 +4917,8 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
           provaTitulo: prova.titulo || 'Sem título',
           provaConteudo: prova.conteudo || '',
           provaDataLimite: prova.dataLimite,
+          periodo: prova.periodo || '1',
+          periodo: prova.periodo || '1', 
           turmaId: prova.turmaId?._id,
           turmaNome: prova.turmaId?.nome || 'Turma não especificada',
           turmaDisciplina: prova.turmaId?.disciplina || '',
