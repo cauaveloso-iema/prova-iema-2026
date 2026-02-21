@@ -619,10 +619,22 @@ app.post('/api/auth/register', [
     }
     
     if (role === 'professor') {
-        if (!eixo || !['natureza', 'humanas'].includes(eixo)) {
+        // ✅ LISTA COMPLETA DE EIXOS PERMITIDOS
+        const eixosPermitidos = [
+            'natureza',
+            'humanas',
+            'linguagens',
+            'desenvolvimento',
+            'gestao',
+            'producao',
+            'turismo',
+            'ambiente'
+        ];
+        
+        if (!eixo || !eixosPermitidos.includes(eixo)) {
             return res.status(400).json({
                 success: false,
-                error: 'Professores devem escolher um eixo válido (natureza ou humanas)'
+                error: 'Professores devem escolher um eixo válido'
             });
         }
         
@@ -2979,6 +2991,8 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
                         duracao: prova.duracao,
                         duracaoMinutos: prova.duracaoMinutos,
                         dataLimite: prova.dataLimite,
+                        horarioInicio: prova.horarioInicio,         
+                        horarioTermino: prova.horarioTermino,       
                         quantidadeQuestoes: prova.quantidadeQuestoes,
                         dificuldade: prova.dificuldade,
                         turma: prova.turmaId ? {
@@ -4497,26 +4511,42 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       }
     }
     
-    // ========== VERIFICAÇÃO DE HORÁRIO ESPECÍFICO ==========
+    // VERIFICAÇÃO DE HORÁRIO ESPECÍFICO - CORRIGIDA COM FUSO BRASÍLIA
     if (prova.horarioInicio && prova.horarioTermino) {
-      const dataHoje = hoje.toISOString().split('T')[0];
-      const inicioProva = new Date(`${dataHoje}T${prova.horarioInicio}:00`);
-      const terminoProva = new Date(`${dataHoje}T${prova.horarioTermino}:00`);
+      // Obter data da prova a partir da data limite
+      let dataProva;
+      if (prova.dataLimite) {
+        const dataLimite = new Date(prova.dataLimite);
+        const ano = dataLimite.getFullYear();
+        const mes = String(dataLimite.getMonth() + 1).padStart(2, '0');
+        const dia = String(dataLimite.getDate()).padStart(2, '0');
+        dataProva = `${ano}-${mes}-${dia}`;
+      } else {
+        dataProva = hoje.toISOString().split('T')[0];
+      }
       
-      console.log(`   ⏰ Horário permitido: ${prova.horarioInicio} às ${prova.horarioTermino}`);
-      console.log(`   ⏰ Horário atual: ${hoje.toLocaleTimeString('pt-BR')}`);
+      // CRIAR DATAS NO FUSO DE BRASÍLIA (UTC-3)
+      const inicioProva = new Date(`${dataProva}T${prova.horarioInicio}:00-03:00`);
+      const terminoProva = new Date(`${dataProva}T${prova.horarioTermino}:00-03:00`);
       
-      if (hoje < inicioProva) {
-        const minutosRestantes = Math.floor((inicioProva - hoje) / (1000 * 60));
-        let mensagem = `A prova só estará disponível a partir das ${prova.horarioInicio}`;
+      // HORÁRIO ATUAL EM BRASÍLIA
+      const agoraBrasilia = new Date(hoje.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      
+      console.log(`   ⏰ Início (Brasília): ${inicioProva.toLocaleString('pt-BR')}`);
+      console.log(`   ⏰ Término (Brasília): ${terminoProva.toLocaleString('pt-BR')}`);
+      console.log(`   ⏰ Agora (Brasília): ${agoraBrasilia.toLocaleString('pt-BR')}`);
+      
+      if (agoraBrasilia < inicioProva) {
+        const diffMs = inicioProva - agoraBrasilia;
+        const minutosRestantes = Math.floor(diffMs / (1000 * 60));
+        const horas = Math.floor(minutosRestantes / 60);
+        const minutos = minutosRestantes % 60;
         
-        if (minutosRestantes > 0) {
-          if (minutosRestantes > 60) {
-            const horas = Math.floor(minutosRestantes / 60);
-            mensagem += ` (em ${horas} hora${horas > 1 ? 's' : ''})`;
-          } else {
-            mensagem += ` (em ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''})`;
-          }
+        let mensagem = `A prova só estará disponível a partir das ${prova.horarioInicio}`;
+        if (horas > 0) {
+          mensagem += ` (em ${horas}h${minutos > 0 ? minutos + 'min' : ''})`;
+        } else {
+          mensagem += ` (em ${minutos}min)`;
         }
         
         console.log(`   🚫 BLOQUEADO: Prova ainda não iniciou`);
@@ -4529,7 +4559,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
         });
       }
       
-      if (hoje > terminoProva) {
+      if (agoraBrasilia > terminoProva) {
         console.log(`   🚫 BLOQUEADO: Horário da prova já terminou`);
         return res.status(400).json({
           success: false,
@@ -4540,18 +4570,41 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       }
       
       // Calcular tempo restante
-      const tempoRestanteMinutos = Math.floor((terminoProva - hoje) / (1000 * 60));
+      const tempoRestanteMinutos = Math.floor((terminoProva - agoraBrasilia) / (1000 * 60));
       console.log(`   ⏱️ Tempo restante: ${tempoRestanteMinutos} minutos`);
     }
     
     // ========== GERAR TOKEN ESPECÍFICO PARA A PROVA ==========
+    // Calcular expiração baseada no término da prova
+    let expiracaoToken;
+
+    if (prova.horarioTermino && prova.dataLimite) {
+      // Usar a data limite + horário de término
+      const dataLimite = new Date(prova.dataLimite);
+      const ano = dataLimite.getFullYear();
+      const mes = String(dataLimite.getMonth() + 1).padStart(2, '0');
+      const dia = String(dataLimite.getDate()).padStart(2, '0');
+      
+      // Criar data de expiração no fuso de Brasília
+      const dataExpiracao = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00-03:00`);
+      
+      // Adicionar 1 hora de margem após o término
+      dataExpiracao.setHours(dataExpiracao.getHours() + 1);
+      
+      expiracaoToken = Math.floor(dataExpiracao.getTime() / 1000);
+      console.log(`📅 Token expira em: ${dataExpiracao.toLocaleString('pt-BR')}`);
+    } else {
+      // Fallback: 24 horas
+      expiracaoToken = Math.floor(Date.now() / 1000) + (24 * 60 * 60);
+    }
+
     const provaToken = jwt.sign(
       {
         alunoId: alunoId,
         provaId: provaId,
         access: 'prova',
         iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hora de validade
+        exp: expiracaoToken,
         adaptada: isAdaptada
       },
       process.env.JWT_SECRET
@@ -4670,34 +4723,34 @@ app.get('/realizar-prova.html', async (req, res) => {
       `);
     }
     
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (error) {
-      return res.status(401).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Token Expirado</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 40px; text-align: center; }
-            .container { max-width: 500px; margin: 0 auto; }
-            .error { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; margin: 20px 0; }
-            .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>⏰ Token Expirado</h1>
-            <div class="error">
-              <p>Seu token de acesso expirou. Acesse a prova novamente pelo painel.</p>
-            </div>
-            <a href="/aluno.html" class="btn">Voltar ao Painel</a>
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    return res.status(401).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Token Expirado</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; }
+          .container { max-width: 500px; margin: 0 auto; }
+          .error { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; margin: 20px 0; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>⏰ Token Expirado</h1>
+          <div class="error">
+            <p>Seu token de acesso expirou. Acesse a prova novamente pelo painel.</p>
           </div>
-        </body>
-        </html>
-      `);
-    }
+          <a href="/aluno.html" class="btn">Voltar ao Painel</a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
     
     if (decoded.access !== 'prova') {
       return res.status(403).send('Token inválido para esta operação');

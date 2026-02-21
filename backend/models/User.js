@@ -15,7 +15,6 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     validate: {
       validator: function(v) {
-        // VALIDAÇÃO: Deve terminar com @iemasaoluiscentro.net
         return v.endsWith('@iemasaoluiscentro.net');
       },
       message: 'Email deve ser institucional (@iemasaoluiscentro.net)'
@@ -61,11 +60,24 @@ const UserSchema = new mongoose.Schema({
     enum: ['aluno', 'professor', 'admin'],
     default: 'aluno'
   },
+  
+  // ========== ✅ EIXO CORRIGIDO COM TODOS OS VALORES ==========
   eixo: {
     type: String,
-    enum: ['natureza', 'humanas', null],
+    enum: [
+      'natureza',
+      'humanas', 
+      'linguagens',
+      'desenvolvimento',
+      'gestao',
+      'producao',
+      'turismo',
+      'ambiente',
+      null
+    ],
     default: null
   },
+  
   matricula: {
     type: String,
     unique: true,
@@ -80,44 +92,39 @@ const UserSchema = new mongoose.Schema({
     ref: 'Turma'
   }],
   
-  // ========== 🔴 NOVOS CAMPOS DE ACESSIBILIDADE ==========
-  // Flag que indica se o aluno precisa de acessibilidade
+  // ========== CAMPOS DE ACESSIBILIDADE ==========
   precisaAcessibilidade: {
     type: Boolean,
     default: false
   },
   
-  // Condição específica de acessibilidade
   condicaoAcessibilidade: {
     type: String,
     enum: ['visual', 'auditiva', 'motora', 'intelectual', 'dislexia', 'tdah', 'outra', null],
     default: null
   },
   
-  // Descrição quando a condição for 'outra'
   outraCondicao: {
     type: String,
     default: null,
     trim: true
   },
   
-  // Data que o aluno solicitou acessibilidade (para relatórios)
   dataSolicitacaoAcessibilidade: {
     type: Date,
     default: null
   },
   
-  // Quem aprovou a solicitação (admin/professor)
   acessibilidadeAprovadaPor: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null
   },
-  // =======================================================
   
   // Para alunos
   curso: String,
   periodo: String,
+  
   // Para professores
   departamento: String,
   titulacao: String,

@@ -801,7 +801,7 @@
             document.getElementById('alert').style.display = 'none';
         }
         
-        // CORREÇÃO: Adicionar função selecionarRole que estava faltando
+        // FUNÇÃO CORRIGIDA - Aceita todos os eixos
         function selecionarRole(role) {
             // Atualizar botões de seleção
             document.querySelectorAll('.role-option').forEach(opt => {
@@ -819,34 +819,41 @@
             const turmaSelect = document.getElementById('registerTurma');
             const radioSim = document.getElementById('acessibilidadeSim');
             const radioNao = document.getElementById('acessibilidadeNao');
+            const eixoSelect = document.getElementById('registerEixo');
+            const cursoSelect = document.getElementById('registerCurso');
             
             if (role === 'aluno') {
                 document.getElementById('alunoFields').classList.add('active');
                 document.getElementById('professorFields').classList.remove('active');
                 
-                // ADICIONAR required para ALUNO
+                // ALUNO: campos obrigatórios
                 if (turmaSelect) turmaSelect.setAttribute('required', 'true');
                 if (radioSim) radioSim.setAttribute('required', 'true');
                 if (radioNao) radioNao.setAttribute('required', 'true');
                 
-                // Não tornar eixo obrigatório para alunos
-                document.getElementById('registerEixo').removeAttribute('required');
-                // Tornar curso obrigatório apenas para alunos
-                document.getElementById('registerCurso').setAttribute('required', 'true');
+                // Curso obrigatório para alunos
+                if (cursoSelect) cursoSelect.setAttribute('required', 'true');
+                
+                // Eixo NÃO obrigatório para alunos
+                if (eixoSelect) eixoSelect.removeAttribute('required');
                 
             } else {
                 document.getElementById('alunoFields').classList.remove('active');
                 document.getElementById('professorFields').classList.add('active');
                 
-                // 🟢🟢🟢 REMOVER required para PROFESSOR 🟢🟢🟢
+                // PROFESSOR: campos NÃO obrigatórios
                 if (turmaSelect) turmaSelect.removeAttribute('required');
                 if (radioSim) radioSim.removeAttribute('required');
                 if (radioNao) radioNao.removeAttribute('required');
                 
-                // Eixo obrigatório apenas para professores
-                document.getElementById('registerEixo').setAttribute('required', 'true');
-                // Curso não obrigatório para professores
-                document.getElementById('registerCurso').removeAttribute('required');
+                // ✅ CORREÇÃO: Eixo OBRIGATÓRIO para TODOS OS EIXOS
+                if (eixoSelect) {
+                    eixoSelect.setAttribute('required', 'true');
+                    console.log('📚 Eixo obrigatório ativado para professor');
+                }
+                
+                // Curso NÃO obrigatório para professores
+                if (cursoSelect) cursoSelect.removeAttribute('required');
             }
         }
 

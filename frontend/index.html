@@ -1948,9 +1948,15 @@ window.addEventListener('scroll', function() {
                                     onfocus="this.style.borderColor='#10b981'; this.style.boxShadow='0 0 0 4px rgba(16,185,129,0.1)'"
                                     onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
                                 >
-                                    <option value="geral">🌐 Geral (Todos os alunos)</option>
-                                    <option value="natureza">🌿 Natureza (Exatas e Biológicas)</option>
-                                    <option value="humanas">📖 Humanas (Humanidades e Sociais)</option>
+                                    <option value="natureza">🔬 Natureza e Matemática</option>
+                                    <option value="humanas">🏛️ Humanas</option>
+                                    <option value="linguagens"> 🎭 Linguagens</option>
+                                    <option value="desenvolvimento">💻 Desenvolvimento de Sistemas</option>
+                                    <option value="redes">🌐 Redes de Computadores</option>
+                                    <option value="gestao">📊 Gestão e Negócios</option>
+                                    <option value="producao">🎬 Produção Cultural e Design</option>
+                                    <option value="turismo">✈️ Turismo, Hospitalidade e Lazer</option>
+                                    <option value="ambiente">🌱 Ambiente e Saúde</option>
                                 </select>
                             </div>
                             
@@ -5648,40 +5654,83 @@ window.addEventListener('scroll', function() {
             }
         }
         
-        // Atualizar interface com dados do professor
+        // Atualizar interface com dados do professor (VERSÃO FINAL COM CORES DIFERENCIADAS)
         function atualizarInterfaceProfessor() {
-            try {
-                // Atualizar nome do professor
-                const professorNomeEl = document.getElementById('professorNome');
-                if (professorNomeEl) {
-                    professorNomeEl.textContent = usuario.nome;
-                }
-                
-                // Atualizar eixo do professor
-                const professorEixoEl = document.getElementById('professorEixo');
-                if (professorEixoEl) {
-                    if (usuario.eixo === 'natureza') {
-                        professorEixoEl.textContent = 'Eixo Natureza';
-                        professorEixoEl.className = 'eixo-badge eixo-natureza';
-                    } else if (usuario.eixo === 'humanas') {
-                        professorEixoEl.textContent = 'Eixo Humanas';
-                        professorEixoEl.className = 'eixo-badge eixo-humanas';
-                    } else {
-                        professorEixoEl.textContent = 'Sem eixo definido';
-                        professorEixoEl.style.background = '#f3f4f6';
-                        professorEixoEl.style.color = '#6b7280';
-                    }
-                }
-                
-                // Atualizar email
-                const professorEmailEl = document.getElementById('professorEmail');
-                if (professorEmailEl) {
-                    professorEmailEl.textContent = usuario.email;
-                }
-                
-            } catch (error) {
-                console.error('Erro ao atualizar interface:', error);
+        try {
+            // Atualizar nome do professor
+            const professorNomeEl = document.getElementById('professorNome');
+            if (professorNomeEl) {
+            professorNomeEl.textContent = usuario.nome;
             }
+            
+            // ✅ CORREÇÃO: Eixo com cores DIFERENCIADAS para CADA valor
+            const professorEixoEl = document.getElementById('professorEixo');
+            if (professorEixoEl) {
+            console.log('🎯 Eixo detectado:', usuario.eixo);
+            
+            // Mapeamento completo de todos os eixos (texto + classe CSS)
+            const eixoConfig = {
+                'natureza': { 
+                texto: 'Eixo Natureza',
+                classe: 'eixo-natureza'
+                },
+                'humanas': { 
+                texto: 'Eixo Humanas',
+                classe: 'eixo-humanas'
+                },
+                'linguagens': { 
+                texto: 'Eixo Linguagens',
+                classe: 'eixo-linguagens'
+                },
+                'desenvolvimento': { 
+                texto: 'Eixo Desenvolvimento de Sistemas',
+                classe: 'eixo-desenvolvimento'
+                },
+                'gestao': { 
+                texto: 'Eixo Gestão e Negócios',
+                classe: 'eixo-gestao'
+                },
+                'producao': { 
+                texto: 'Eixo Produção Cultural',
+                classe: 'eixo-producao'
+                },
+                'turismo': { 
+                texto: 'Eixo Turismo e Gastronomia',
+                classe: 'eixo-turismo'
+                },
+                'ambiente': { 
+                texto: 'Eixo Ambiente e Saúde',
+                classe: 'eixo-ambiente'
+                }
+            };
+            
+            if (usuario.eixo && eixoConfig[usuario.eixo]) {
+                const config = eixoConfig[usuario.eixo];
+                
+                // Aplicar texto e classe
+                professorEixoEl.textContent = config.texto;
+                professorEixoEl.className = `eixo-badge ${config.classe}`;
+                
+                console.log('✅ Eixo atualizado:', config.texto, 'com classe', config.classe);
+            } else if (usuario.eixo) {
+                // Fallback para eixos não mapeados
+                professorEixoEl.textContent = `Eixo ${usuario.eixo}`;
+                professorEixoEl.className = 'eixo-badge eixo-generico';
+            } else {
+                professorEixoEl.textContent = 'Sem eixo definido';
+                professorEixoEl.className = 'eixo-badge eixo-generico';
+            }
+            }
+            
+            // Atualizar email
+            const professorEmailEl = document.getElementById('professorEmail');
+            if (professorEmailEl) {
+            professorEmailEl.textContent = usuario.email;
+            }
+            
+        } catch (error) {
+            console.error('Erro ao atualizar interface:', error);
+        }
         }
         
         // Carregar turmas do professor
