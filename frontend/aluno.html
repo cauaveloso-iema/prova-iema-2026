@@ -393,6 +393,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             <!-- Eixos Técnicos -->
                             <option value="desenvolvimento" style="font-weight: 600; background: #f3e8ff;">💻 Desenvolvimento de Sistemas</option>
+                            <option value="redes" style="font-weight: 600; background: #e0f2fe;">🌐 Redes de Computadores</option>
                             <option value="gestao" style="font-weight: 600; background: #fef9c3;">📊 Gestão e Negócios</option>
                             <option value="producao" style="font-weight: 600; background: #ffe4e6;">🎬 Produção Cultural e Design</option>
                             <option value="turismo" style="font-weight: 600; background: #fff7ed;">✈️ Turismo, Hospitalidade e Lazer</option>
@@ -790,19 +791,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const curso = getCursoPorTurma(turma);
             if (!curso) return null;
             
-            if (curso.includes('EVENTOS') || curso.includes('GUIA') || curso.includes('GASTRONOMIA')) {
+            const cursoLower = curso.toLowerCase();
+            
+            // Mapeamento de palavras-chave para eixos
+            if (cursoLower.includes('eventos') || cursoLower.includes('guia') || cursoLower.includes('gastronomia')) {
                 return 'turismo';
-            } else if (curso.includes('REDES')) {
+            } else if (cursoLower.includes('redes')) { // Captura tanto "REDES" quanto "REDES DE COMPUTADORES"
                 return 'redes';
-            } else if (curso.includes('DESENVOLVIMENTO')) {
+            } else if (cursoLower.includes('desenvolvimento') || cursoLower.includes('sistemas')) {
                 return 'desenvolvimento';
-            } else if (curso.includes('MARKETING') || curso.includes('SERVIÇOS JURÍDICOS')) {
+            } else if (cursoLower.includes('marketing') || cursoLower.includes('jurídicos') || cursoLower.includes('juridicos')) {
                 return 'gestao';
-            } else if (curso.includes('ÁUDIO') || curso.includes('VÍDEO') || curso.includes('PUBLICIDADE')) {
+            } else if (cursoLower.includes('áudio') || cursoLower.includes('video') || cursoLower.includes('publicidade')) {
                 return 'producao';
-            } else if (curso.includes('MEIO AMBIENTE')) {
+            } else if (cursoLower.includes('meio ambiente') || cursoLower.includes('ambiente')) {
                 return 'ambiente';
             }
+            
             return null;
         }
 
