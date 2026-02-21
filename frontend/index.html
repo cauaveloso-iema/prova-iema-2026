@@ -1335,9 +1335,9 @@ window.addEventListener('scroll', function() {
                 <!-- Formulário Nova Prova -->
                 <div class="form-container">
                     <form id="formNovaProva">
-                        <div class="form-grid">
-                            <!-- Tema -->
-                            <div class="form-group" style="grid-column: 1 / -1;">
+                        <div class="form-grid" style="grid-template-columns: repeat(3, 1fr);">
+                            <!-- Tema (ocupa linha inteira - 3 colunas) -->
+                            <div class="form-group" style="grid-column: span 3;">
                                 <label for="temaProva" class="form-label">
                                     <i class="fas fa-lightbulb"></i> Tema da Prova
                                 </label>
@@ -1366,6 +1366,35 @@ window.addEventListener('scroll', function() {
                                     required
                                 >
                             </div>
+
+                            <!-- 🔴 NOVO CAMPO: PERÍODO LETIVO -->
+                            <div class="form-group">
+                                <label for="periodoProva" class="form-label">
+                                    <i class="fas fa-calendar-week"></i> Período Letivo
+                                </label>
+                                <select id="periodoProva" class="form-control" required>
+                                    <option value="">Selecione o período...</option>
+                                    <option value="1">1º Período</option>
+                                    <option value="2">2º Período</option>
+                                    <option value="3">3º Período</option>
+                                    <option value="4">4º Período</option>
+                                </select>
+                                <small style="color: var(--gray-500); display: block; margin-top: 0.3rem; font-size: 0.8rem;">
+                                    Indique em qual período letivo esta prova será aplicada
+                                </small>
+                            </div>
+                            
+                            <!-- Tipo de Prova -->
+                            <div class="form-group">
+                                <label for="tipoProva" class="form-label">
+                                    <i class="fas fa-file-alt"></i> Tipo de Prova
+                                </label>
+                                <select id="tipoProva" class="form-control" required onchange="mudarTipoProva()">
+                                    <option value="simples">Prova Simples (5 alternativas)</option>
+                                    <option value="enem">Formato ENEM (com texto base)</option>
+                                    <option value="adaptada">🎯 Prova Adaptada - Acessibilidade (3 alternativas)</option>
+                                </select>
+                            </div>
                             
                             <!-- Quantidade -->
                             <div class="form-group">
@@ -1392,18 +1421,6 @@ window.addEventListener('scroll', function() {
                                 </select>
                             </div>
                             
-                            <!-- Tipo de Prova - AGORA COM OPÇÃO ADAPTADA -->
-                            <div class="form-group">
-                                <label for="tipoProva" class="form-label">
-                                    <i class="fas fa-file-alt"></i> Tipo de Prova
-                                </label>
-                                <select id="tipoProva" class="form-control" required onchange="mudarTipoProva()">
-                                    <option value="simples">Prova Simples (5 alternativas)</option>
-                                    <option value="enem">Formato ENEM (com texto base)</option>
-                                    <option value="adaptada">🎯 Prova Adaptada - Acessibilidade (3 alternativas)</option>
-                                </select>
-                            </div>
-                            
                             <!-- Turma -->
                             <div class="form-group">
                                 <label for="turmaProva" class="form-label">
@@ -1426,7 +1443,7 @@ window.addEventListener('scroll', function() {
                                 >
                             </div>
 
-                            <!-- Horários -->
+                            <!-- Horário Início -->
                             <div class="form-group">
                                 <label for="horarioInicio" class="form-label">
                                     <i class="fas fa-clock"></i> Horário Início
@@ -1440,6 +1457,7 @@ window.addEventListener('scroll', function() {
                                 >
                             </div>
 
+                            <!-- Horário Término -->
                             <div class="form-group">
                                 <label for="horarioTermino" class="form-label">
                                     <i class="fas fa-clock"></i> Horário Término
@@ -1453,8 +1471,8 @@ window.addEventListener('scroll', function() {
                                 >
                             </div>
 
-                            <!-- Duração Calculada -->
-                            <div class="form-group" style="grid-column: 1 / -1;">
+                            <!-- Duração Calculada (ocupa linha inteira - 3 colunas) -->
+                            <div class="form-group" style="grid-column: span 3;">
                                 <label class="form-label">
                                     <i class="fas fa-hourglass-half"></i> Duração Calculada
                                 </label>
@@ -1622,8 +1640,8 @@ window.addEventListener('scroll', function() {
                                     <h4><i class="fas fa-list-check"></i> Materiais Adicionados</h4>
                                     <span id="contadorAnexos" class="anexos-count">0</span>
                                     <button onclick="limparTodosAnexos()" style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
-                                     <i class="fas fa-trash"></i> Limpar Tudo
-                                 </button>
+                                    <i class="fas fa-trash"></i> Limpar Tudo
+                                </button>
                                 </div>
                                 
                                 <div id="listaAnexos" class="anexos-lista">
@@ -2629,6 +2647,36 @@ window.addEventListener('scroll', function() {
                                 <option value="adaptada">♿ Adaptada</option>
                             </select>
                         </div>
+
+                        <!-- Filtro por Período - ADICIONAR AQUI -->
+                        <div>
+                            <label style="
+                                display: block;
+                                margin-bottom: 8px;
+                                font-weight: 600;
+                                color: #374151;
+                                font-size: 0.85rem;
+                            ">
+                                <i class="fas fa-calendar-week" style="color: #3b82f6; margin-right: 5px;"></i>
+                                Período
+                            </label>
+                            <select id="filtroPeriodoProvas" class="filtro-select" style="
+                                width: 100%;
+                                padding: 12px 16px;
+                                border: 2px solid #e5e7eb;
+                                border-radius: 16px;
+                                font-size: 0.95rem;
+                                background: white;
+                                cursor: pointer;
+                                padding-right: 40px;
+                            ">
+                                <option value="todos">📅 Todos os períodos</option>
+                                <option value="1">1º Período</option>
+                                <option value="2">2º Período</option>
+                                <option value="3">3º Período</option>
+                                <option value="4">4º Período</option>
+                            </select>
+                        </div>
                         
                         <!-- Filtro por Turma -->
                         <div>
@@ -3240,14 +3288,15 @@ window.addEventListener('scroll', function() {
         function aplicarFiltrosProvas() {
             console.log('🔍 Aplicando filtros...');
             
-            // Pegar valores dos filtros
+            // Pegar valores dos filtros (incluindo período)
             const status = document.getElementById('filtroStatus')?.value || 'todos';
             const dificuldade = document.getElementById('filtroDificuldade')?.value || 'todas';
             const tipo = document.getElementById('filtroTipo')?.value || 'todos';
+            const periodo = document.getElementById('filtroPeriodoProvas')?.value || 'todos'; // <-- NOVO
             const turma = document.getElementById('filtroTurmaProvas')?.value || 'todas';
             const busca = document.getElementById('buscaProva')?.value.toLowerCase() || '';
             
-            console.log('📊 Filtros selecionados:', { status, dificuldade, tipo, turma, busca });
+            console.log('📊 Filtros selecionados:', { status, dificuldade, tipo, periodo, turma, busca });
             
             // VERIFICAR SE EXISTEM PROVAS
             if (!provasOriginais || provasOriginais.length === 0) {
@@ -3415,6 +3464,14 @@ window.addEventListener('scroll', function() {
                     if (tipo === 'adaptada') return tipoProva === 'adaptada' || p.adaptada === true;
                     return tipoProva === tipo;
                 });
+            }
+            
+            // 3.5. FILTRO POR PERÍODO <-- NOVO
+            if (periodo !== 'todos') {
+                provasFiltradas = provasFiltradas.filter(p => 
+                    p.periodo === periodo || 
+                    (p.periodo && p.periodo.toString() === periodo)
+                );
             }
             
             // 4. FILTRO POR TURMA
@@ -5781,8 +5838,7 @@ window.addEventListener('scroll', function() {
         }
 
 
-
-        // ============ FUNÇÃO ATUALIZAR LISTA DE PROVAS - SUA VERSÃO ORIGINAL COM MÍNIMAS ALTERAÇÕES ============
+        // ============ FUNÇÃO ATUALIZAR LISTA DE PROVAS - VERSÃO CORRIGIDA ============
         function atualizarListaProvas(provas) {
             const listaProvas = document.getElementById('listaProvas');
             const alerta = document.getElementById('alertMinhasProvas');
@@ -5853,10 +5909,10 @@ window.addEventListener('scroll', function() {
                     dificuldadeColor = '#ef4444'; // vermelho
                 }
                 
-                // ========== 🔴 ADIÇÃO 1: DETECTAR SE É PROVA ADAPTADA ==========
+                // ========== DETECTAR SE É PROVA ADAPTADA ==========
                 const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
                 
-                // ========== 🔴 ADIÇÃO 2: BADGE DE PROVA ADAPTADA ==========
+                // ========== BADGE DE PROVA ADAPTADA ==========
                 let badgeAdaptada = '';
                 if (isAdaptada) {
                     badgeAdaptada = `
@@ -5975,6 +6031,13 @@ window.addEventListener('scroll', function() {
                                 <i class="fas fa-question-circle"></i>
                                 <span><strong>${prova.quantidadeQuestoes || 0}</strong> questões</span>
                             </div>
+                            
+                            <!-- 🔴 ÍCONE DE PERÍODO CORRIGIDO - SEM COMENTÁRIOS -->
+                            <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-calendar-week"></i>
+                                <span><strong>${prova.periodo ? prova.periodo + 'º Período' : '1º Período'}</strong></span>
+                            </div>
+                            
                             <div class="prova-info-item" style="display: flex; align-items: center; gap: 5px;">
                                 <i class="fas fa-school"></i>
                                 <span>${nomeTurma}</span>
@@ -6008,6 +6071,25 @@ window.addEventListener('scroll', function() {
                             <div>
                                 <i class="fas fa-calendar-times"></i> Limite: ${dataLimite}
                             </div>
+                        </div>
+                        
+                        <!-- INFORMAÇÃO DE PERÍODO - ADICIONAL -->
+                        <div style="
+                            margin-bottom: 15px;
+                            padding: 12px;
+                            background: #f3f4f6;
+                            border-radius: 8px;
+                            font-size: 0.85rem;
+                            color: #4b5563;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            border-left: 3px solid #6b7280;
+                        ">
+                            <i class="fas fa-calendar-week" style="color: #4b5563;"></i>
+                            <span>
+                                <strong>Período letivo:</strong> ${prova.periodo ? prova.periodo + 'º Período' : '1º Período'}
+                            </span>
                         </div>
                         
                         <!-- INFORMAÇÃO DE PÚBLICO ALVO - APENAS PARA ADAPTADA -->
@@ -6131,15 +6213,6 @@ window.addEventListener('scroll', function() {
                     </div>
                 `;
             }).join('');
-            
-            // Tornar os botões responsivos em telas menores
-            const cards = document.querySelectorAll('.prova-card');
-            cards.forEach(card => {
-                const actions = card.querySelector('.prova-actions');
-                if (actions && window.innerWidth < 768) {
-                    actions.style.flexDirection = 'column';
-                }
-            });
         }
 
         // ========== FUNÇÃO PARA FILTRAR APENAS PROVAS ADAPTADAS ==========
@@ -9445,7 +9518,7 @@ window.addEventListener('scroll', function() {
                     return;
                 }
 
-                // ========== 1. DADOS DETALHADOS DAS PROVAS ==========
+                // ========== 1. DADOS DETALHADOS DAS PROVAS (ADICIONAR PERÍODO) ==========
                 const dadosDetalhados = provasOriginais.map((prova, index) => {
                     const nomeTurma = prova.turma?.nome || prova.turma || 'Sem turma';
                     const dataCriacao = prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'N/A';
@@ -9462,6 +9535,7 @@ window.addEventListener('scroll', function() {
                     return {
                         'ID': index + 1,
                         'Título': prova.titulo || 'Sem título',
+                        'Período': prova.periodo ? prova.periodo + 'º' : '1º',  // <-- NOVO
                         'Turma': nomeTurma,
                         'Disciplina': prova.turma?.disciplina || 'N/A',
                         'Tipo': tipo,
@@ -9528,10 +9602,11 @@ window.addEventListener('scroll', function() {
                 // Segunda aba: Detalhamento das Provas
                 const sheetDetalhes = XLSX.utils.json_to_sheet(dadosDetalhados);
 
-                // Configurar larguras das colunas para melhor visualização
+                // Configurar larguras das colunas para melhor visualização (INCLUIR PERÍODO)
                 sheetDetalhes['!cols'] = [
                     { wch: 5 },  // ID
                     { wch: 40 }, // Título
+                    { wch: 8 },  // Período <-- NOVO
                     { wch: 25 }, // Turma
                     { wch: 20 }, // Disciplina
                     { wch: 10 }, // Tipo
@@ -10057,6 +10132,7 @@ window.addEventListener('scroll', function() {
                     titulo: titulo,
                     conteudo: tema,
                     tipoProva: tipoProva,
+                    periodo: periodoProva,
                     quantidadeQuestoes: parseInt(quantidadeQuestoes),
                     dificuldade: dificuldade,
                     dataLimite: dataLimiteEnviar,
@@ -10482,6 +10558,9 @@ window.addEventListener('scroll', function() {
                     const titulo = document.getElementById('tituloProva').value.trim();
                     const turmaId = document.getElementById('turmaProva').value;
                     
+                    // 🔴 CAPTURAR O PERÍODO
+                    const periodoProva = document.getElementById('periodoProva').value;
+                    
                     if (!tema) {
                         mostrarAlerta('alertProva', '⚠️ Digite o tema da prova', 'info');
                         document.getElementById('temaProva').focus();
@@ -10497,6 +10576,13 @@ window.addEventListener('scroll', function() {
                     if (!turmaId) {
                         mostrarAlerta('alertProva', '⚠️ Selecione uma turma', 'info');
                         document.getElementById('turmaProva').focus();
+                        return;
+                    }
+                    
+                    // 🔴 VALIDAR SE O PERÍODO FOI SELECIONADO
+                    if (!periodoProva) {
+                        mostrarAlerta('alertProva', '⚠️ Selecione o período letivo', 'info');
+                        document.getElementById('periodoProva').focus();
                         return;
                     }
                     
@@ -10551,6 +10637,7 @@ window.addEventListener('scroll', function() {
                         titulo: titulo,
                         conteudo: tema,
                         tipoProva: tipoProva,
+                        periodo: periodoProva, // 🔴 PERÍODO INCLUÍDO AQUI
                         quantidadeQuestoes: parseInt(document.getElementById('quantidadeQuestoes').value),
                         dificuldade: document.getElementById('dificuldade').value,
                         dataLimite: dataLimiteEnviar,

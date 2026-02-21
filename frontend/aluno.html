@@ -325,9 +325,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     <p>Carregando informações...</p>
                 </div>
             </div>
-            <button class="btn-entrar-turma" id="btnEntrarTurma">
-                <i class="fas fa-plus-circle"></i> Entrar em Turma
-            </button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-entrar-turma" id="btnEntrarTurma">
+                    <i class="fas fa-plus-circle"></i> Entrar em Turma
+                </button>
+            </div>
         </div>
         
         <!-- Provas Pendentes -->
@@ -350,8 +352,9 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                 <h2><i class="fas fa-check-circle"></i> Provas Concluídas</h2>
                 
-                <!-- FILTRO POR EIXO/DISCIPLINA -->
+                <!-- FILTROS POR EIXO/DISCIPLINA E PERÍODO -->
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <!-- Filtro por Eixo/Disciplina (existente) -->
                     <div style="position: relative; min-width: 250px;">
                         <select id="filtroEixoProvasConcluidas" style="
                             padding: 10px 35px 10px 15px;
@@ -367,7 +370,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             transition: border-color 0.3s;
                             width: 100%;
                         ">
-                            <option value="todos">📚 Todas as disciplinas</option>
+                            <option value="todos">Todas as disciplinas</option>
                             
                             <!-- Eixo Natureza e Matemática -->
                             <option value="natureza" style="font-weight: 600; background: #f0f9ff;">🔬 Natureza e Matemática</option>
@@ -399,7 +402,30 @@ document.addEventListener('DOMContentLoaded', function() {
                             <option value="turismo" style="font-weight: 600; background: #fff7ed;">✈️ Turismo, Hospitalidade e Lazer</option>
                             <option value="ambiente" style="font-weight: 600; background: #dcfce7;">🌱 Ambiente e Saúde</option>
                         </select>
-                        <i class="fas fa-filter" style="position: absolute; left: -25px; top: 50%; transform: translateY(-50%); color: #4f46e5;"></i>
+                    </div>
+                    
+                    <!-- 🔴 FILTRO POR PERÍODO (AO LADO) -->
+                    <div style="position: relative; min-width: 150px;">
+                        <select id="filtroPeriodoProvas" style="
+                            padding: 10px 35px 10px 15px;
+                            border: 2px solid #e5e7eb;
+                            border-radius: 8px;
+                            font-size: 0.95rem;
+                            background: white url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E') no-repeat right 12px center;
+                            appearance: none;
+                            -webkit-appearance: none;
+                            -moz-appearance: none;
+                            cursor: pointer;
+                            outline: none;
+                            transition: border-color 0.3s;
+                            width: 100%;
+                        ">
+                            <option value="todos">Todos os períodos</option>
+                            <option value="1">1º Período</option>
+                            <option value="2">2º Período</option>
+                            <option value="3">3º Período</option>
+                            <option value="4">4º Período</option>
+                        </select>
                     </div>
                     
                     <span id="contadorProvasFiltradas" style="
@@ -439,8 +465,9 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                 <h2><i class="fas fa-school"></i> Minhas Turmas</h2>
                 
-                <!-- FILTRO SIMPLIFICADO POR EIXO (MESMA LÓGICA DAS PROVAS CONCLUÍDAS) -->
+                <!-- FILTROS POR EIXO E PERÍODO (TURMAS) -->
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <!-- Filtro por Eixo (existente) -->
                     <div style="position: relative; min-width: 250px;">
                         <select id="filtroEixoTurmas" style="
                             padding: 10px 35px 10px 15px;
@@ -456,7 +483,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             transition: border-color 0.3s;
                             width: 100%;
                         ">
-                            <option value="todos">📚 Todas as disciplinas</option>
+                            <option value="todos">Todas as disciplinas</option>
                             
                             <!-- Eixos da BNCC (sempre visíveis) -->
                             <option value="natureza" style="font-weight: 600; background: #f0f9ff;">🔬 Natureza e Matemática</option>
@@ -471,7 +498,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             <option value="producao" style="font-weight: 600; background: #ffe4e6; display: none;">🎬 Produção Cultural e Design</option>
                             <option value="ambiente" style="font-weight: 600; background: #dcfce7; display: none;">🌱 Ambiente e Saúde</option>
                         </select>
-                        <i class="fas fa-filter" style="position: absolute; left: -25px; top: 50%; transform: translateY(-50%); color: #4f46e5;"></i>
                     </div>
                     
                     <span id="contadorTurmasFiltradas" style="
@@ -605,6 +631,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let provasConcluidas = [];
         let turmas = [];
         let provaSelecionada = null;
+        let filtroPeriodoAtivo = 'todos';
+        let filtroPeriodoTurmasAtivo = 'todos';
         
         // Funções do modal
         function mostrarModal(id) {
@@ -953,21 +981,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // ========== FUNÇÃO PARA APLICAR FILTRO E RENDERIZAR ==========
+        // ========== FUNÇÃO PARA APLICAR FILTRO E RENDERIZAR (COM PERÍODO) ==========
         function aplicarFiltroEStatus(provas) {
             const container = document.getElementById('provasConcluidas');
             if (!container) return;
             
-            // APLICAR FILTRO ATUAL
+            // Pegar valores dos filtros
+            const filtroEixo = document.getElementById('filtroEixoProvasConcluidas')?.value || 'todos';
+            const filtroPeriodo = document.getElementById('filtroPeriodoProvas')?.value || 'todos';
+            
+            console.log('🔍 Aplicando filtros:', { eixo: filtroEixo, periodo: filtroPeriodo });
+            
+            // APLICAR FILTROS
             let provasFiltradas = provas;
             
-            if (filtroAtivo !== 'todos') {
-                provasFiltradas = provas.filter(prova => {
+            // FILTRO POR EIXO/DISCIPLINA
+            if (filtroEixo !== 'todos') {
+                provasFiltradas = provasFiltradas.filter(prova => {
                     const conteudo = (prova.conteudo || '').toLowerCase();
                     const titulo = (prova.titulo || '').toLowerCase();
+                    const eixoProva = prova.eixo || '';
+                    const disciplinaProva = prova.disciplina || '';
                     
-                    // FILTRO POR EIXO
-                    if (filtroAtivo === prova.eixo) {
+                    // FILTRO POR EIXO PRINCIPAL
+                    if (filtroEixo === prova.eixo) {
                         return true;
                     }
                     
@@ -994,14 +1031,29 @@ document.addEventListener('DOMContentLoaded', function() {
                         'ambiente': ['ambiente', 'ecologia', 'sustentabilidade', 'reciclagem']
                     };
                     
-                    const palavras = palavrasChave[filtroAtivo] || [filtroAtivo];
+                    const palavras = palavrasChave[filtroEixo] || [filtroEixo];
                     for (const palavra of palavras) {
-                        if (conteudo.includes(palavra) || titulo.includes(palavra)) {
+                        if (conteudo.includes(palavra) || titulo.includes(palavra) || 
+                            disciplinaProva.toLowerCase().includes(palavra)) {
                             return true;
                         }
                     }
                     return false;
                 });
+            }
+            
+            // 🔴 FILTRO POR PERÍODO
+            if (filtroPeriodo !== 'todos') {
+                provasFiltradas = provasFiltradas.filter(prova => 
+                    prova.periodo === filtroPeriodo || 
+                    (prova.periodo && prova.periodo.toString() === filtroPeriodo)
+                );
+            }
+            
+            // ATUALIZAR CONTADOR
+            const contadorSpan = document.getElementById('contadorNumerico');
+            if (contadorSpan) {
+                contadorSpan.innerText = provasFiltradas.length;
             }
             
             // SEPARAR POR STATUS
@@ -1018,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // LIMPAR CONTAINER
             container.innerHTML = '';
             
-            // RENDERIZAR AGUARDANDO CORREÇÃO (aparecem primeiro)
+            // RENDERIZAR AGUARDANDO CORREÇÃO
             if (provasAguardando.length > 0) {
                 renderizarProvasAguardandoCorrecao(provasAguardando);
             }
@@ -1039,15 +1091,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="empty-state">
                         <i class="fas fa-file"></i>
                         <h3>Nenhuma prova encontrada</h3>
-                        <p>Não há provas com o filtro selecionado</p>
+                        <p>Não há provas com os filtros selecionados</p>
                     </div>
                 `;
-            }
-            
-            // ATUALIZAR CONTADOR
-            const contadorSpan = document.getElementById('contadorNumerico');
-            if (contadorSpan) {
-                contadorSpan.innerText = provasFiltradas.length;
             }
         }
 
@@ -2312,6 +2358,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             <span>Data limite: ${dataLimite}</span>
                         </div>
                         ` : ''}
+                        <!-- 🔴 NOVO: Período da Prova -->
+                        <div class="prova-info-item">
+                            <i class="fas fa-calendar-week" style="color: ${prova.periodo === '1' ? '#10b981' : 
+                                                                    prova.periodo === '2' ? '#f59e0b' : 
+                                                                    prova.periodo === '3' ? '#8b5cf6' : 
+                                                                    prova.periodo === '4' ? '#ef4444' : '#6b7280'};"></i>
+                            <span>${prova.periodo ? prova.periodo + 'º Período' : '1º Período'}</span>
+                        </div>
+                    </div>
                     </div>
                     
                     <div class="prova-actions">
@@ -2917,18 +2972,21 @@ document.addEventListener('DOMContentLoaded', function() {
             aplicarFiltroTurmas();
         }
 
-        // ========== FUNÇÃO PARA APLICAR FILTRO NAS TURMAS ==========
+        // ========== FUNÇÃO PARA APLICAR FILTRO NAS TURMAS (APENAS EIXO) ==========
         function aplicarFiltroTurmas() {
             const container = document.getElementById('turmasAluno');
-            const filtroSelect = document.getElementById('filtroEixoTurmas');
+            const filtroEixo = document.getElementById('filtroEixoTurmas');
             
-            if (!container || !filtroSelect || !window.turmasBackup) return;
+            if (!container || !filtroEixo || !window.turmasBackup) return;
             
-            const filtroAtivo = filtroSelect.value;
+            const eixoAtivo = filtroEixo.value;
+            
+            console.log('🔍 Aplicando filtros nas turmas (apenas eixo):', { eixo: eixoAtivo });
             
             let turmasFiltradas = window.turmasBackup;
             
-            if (filtroAtivo !== 'todos') {
+            // FILTRO POR EIXO
+            if (eixoAtivo !== 'todos') {
                 turmasFiltradas = window.turmasBackup.filter(turma => {
                     const nomeTurma = (turma.nome || '').toLowerCase();
                     const disciplinaTurma = (turma.disciplina || '').toLowerCase();
@@ -2947,9 +3005,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         'ambiente': ['ambiente', 'ecologia', 'sustentabilidade', 'reciclagem', 'meio ambiente', '308']
                     };
                     
-                    const palavras = palavrasChave[filtroAtivo] || [filtroAtivo];
+                    const palavras = palavrasChave[eixoAtivo] || [eixoAtivo];
                     
-                    // Verificar se alguma palavra-chave corresponde
                     for (const palavra of palavras) {
                         if (nomeTurma.includes(palavra) || 
                             disciplinaTurma.includes(palavra) ||
@@ -2961,13 +3018,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
             
-            // Atualizar contador
+            // ATUALIZAR CONTADOR
             const contadorSpan = document.getElementById('contadorTurmasNumerico');
             if (contadorSpan) {
                 contadorSpan.innerText = turmasFiltradas.length;
             }
             
-            // Renderizar turmas filtradas
+            // RENDERIZAR TURMAS FILTRADAS
             if (turmasFiltradas.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -3003,6 +3060,26 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     
+                    // 🔴 Determinar período pela turma (primeiro dígito do código) - APENAS PARA EXIBIÇÃO
+                    const codigo = turma.codigo || '';
+                    const primeiroDigito = codigo.toString().charAt(0);
+                    let periodoTexto = '';
+                    let periodoCor = '';
+                    
+                    if (primeiroDigito === '1') {
+                        periodoTexto = '1º Período';
+                        periodoCor = '#10b981';
+                    } else if (primeiroDigito === '2') {
+                        periodoTexto = '2º Período';
+                        periodoCor = '#f59e0b';
+                    } else if (primeiroDigito === '3') {
+                        periodoTexto = '3º Período';
+                        periodoCor = '#8b5cf6';
+                    } else if (primeiroDigito === '4') {
+                        periodoTexto = '4º Período';
+                        periodoCor = '#ef4444';
+                    }
+                    
                     return `
                         <div class="turma-card" style="border-left-color: ${corTurma};">
                             <div class="turma-info">
@@ -3010,6 +3087,19 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <h4 style="margin: 0 0 5px 0; display: flex; align-items: center; gap: 8px;">
                                         <i class="fas ${iconeTurma}" style="color: ${corTurma};"></i>
                                         ${turma.nome}
+                                        ${periodoTexto ? `
+                                        <span style="
+                                            background: ${periodoCor}20;
+                                            color: ${periodoCor};
+                                            padding: 2px 8px;
+                                            border-radius: 12px;
+                                            font-size: 0.7rem;
+                                            font-weight: 600;
+                                            margin-left: 5px;
+                                        ">
+                                            ${periodoTexto}
+                                        </span>
+                                        ` : ''}
                                     </h4>
                                     <p style="margin: 0; color: #6b7280; font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 10px;">
                                         <span><i class="fas fa-book" style="color: ${corTurma};"></i> ${turma.disciplina || 'Disciplina não especificada'}</span>
@@ -3259,7 +3349,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 duracaoMinutos: data.prova.duracaoMinutos,
                                 duracaoFormatada: data.prova.duracaoFormatada,
                                 dataCriacao: data.prova.dataCriacao,
-                                professor: data.prova.professor || provasPendentes[index].professor
+                                professor: data.prova.professor || provasPendentes[index].professor,
+                                periodo: data.prova.periodo || provasPendentes[index].periodo || '1' // 🔴 NOVO: período
                             };
                             
                             // Atualizar a prova selecionada também
@@ -3267,7 +3358,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             console.log('✅ Horários carregados:', {
                                 inicio: provaSelecionada.horarioInicio,
-                                termino: provaSelecionada.horarioTermino
+                                termino: provaSelecionada.horarioTermino,
+                                periodo: provaSelecionada.periodo // 🔴 NOVO
                             });
                         }
                     }
@@ -3340,11 +3432,39 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // ================================================
-            // ATUALIZADO: HTML do modal com horários
+            // ATUALIZADO: HTML do modal com horários e PERÍODO
             // ================================================
             document.getElementById('modalProvaInfo').innerHTML = `
                 <h4>${provaSelecionada.titulo || 'Prova sem título'}</h4>
                 ${alertaData}
+                
+                <!-- 🔴 NOVO: BADGE DE PERÍODO -->
+                <div style="display: flex; justify-content: center; margin-bottom: 15px;">
+                    <span style="
+                        background: ${provaSelecionada.periodo === '1' ? '#10b98120' : 
+                                    provaSelecionada.periodo === '2' ? '#f59e0b20' : 
+                                    provaSelecionada.periodo === '3' ? '#8b5cf620' : 
+                                    provaSelecionada.periodo === '4' ? '#ef444420' : '#6b728020'};
+                        color: ${provaSelecionada.periodo === '1' ? '#10b981' : 
+                                provaSelecionada.periodo === '2' ? '#f59e0b' : 
+                                provaSelecionada.periodo === '3' ? '#8b5cf6' : 
+                                provaSelecionada.periodo === '4' ? '#ef4444' : '#6b7280'};
+                        padding: 6px 20px;
+                        border-radius: 30px;
+                        font-size: 0.9rem;
+                        font-weight: 600;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        border: 1px solid ${provaSelecionada.periodo === '1' ? '#10b98140' : 
+                                            provaSelecionada.periodo === '2' ? '#f59e0b40' : 
+                                            provaSelecionada.periodo === '3' ? '#8b5cf640' : 
+                                            provaSelecionada.periodo === '4' ? '#ef444440' : '#6b728040'};
+                    ">
+                        <i class="fas fa-calendar-week"></i>
+                        ${provaSelecionada.periodo ? provaSelecionada.periodo + 'º Período' : '1º Período'}
+                    </span>
+                </div>
                 
                 <!-- SEÇÃO DE HORÁRIOS (ATUALIZADA) -->
                 ${provaSelecionada.horarioInicio && provaSelecionada.horarioTermino ? `
@@ -3401,6 +3521,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         <li><strong>Professor:</strong> ${provaSelecionada.professor?.nome || provaSelecionada.professor || 'Não especificado'}</li>
                         <li><strong>Data limite:</strong> ${dataLimite}</li>
                         ${provaSelecionada.dificuldade ? `<li><strong>Dificuldade:</strong> ${provaSelecionada.dificuldade === 'facil' ? 'Fácil' : provaSelecionada.dificuldade === 'media' ? 'Média' : 'Difícil'}</li>` : ''}
+                        <!-- 🔴 NOVO: Período -->
+                        <li><strong><i class="fas fa-calendar-week" style="color: ${provaSelecionada.periodo === '1' ? '#10b981' : 
+                                                                                    provaSelecionada.periodo === '2' ? '#f59e0b' : 
+                                                                                    provaSelecionada.periodo === '3' ? '#8b5cf6' : 
+                                                                                    provaSelecionada.periodo === '4' ? '#ef4444' : '#6b7280'};"></i> Período:</strong> 
+                            ${provaSelecionada.periodo ? provaSelecionada.periodo + 'º Período' : '1º Período'}
+                        </li>
                     </ul>
                 </div>
                 
@@ -3803,6 +3930,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
             });
+
+             // Inicializar filtros de período
+            const filtroPeriodoProvas = document.getElementById('filtroPeriodoProvas');
+            const filtroPeriodoHeader = document.getElementById('filtroPeriodoHeader');
+            
+            if (filtroPeriodoProvas) {
+                filtroPeriodoProvas.addEventListener('change', function() {
+                    const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
+                    aplicarFiltroEStatus(backup);
+                });
+            }
+            
+            if (filtroPeriodoHeader) {
+                filtroPeriodoHeader.addEventListener('change', function() {
+                    // Sincronizar com o filtro de provas
+                    const filtroProvas = document.getElementById('filtroPeriodoProvas');
+                    if (filtroProvas) {
+                        filtroProvas.value = this.value;
+                        const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
+                        aplicarFiltroEStatus(backup);
+                    }
+                });
+            }
             
             // Carregar dados do aluno
             carregarDadosAluno().then(() => {

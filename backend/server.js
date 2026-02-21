@@ -1709,6 +1709,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       tipoProva = 'simples',
       quantidadeQuestoes = 10, 
       dificuldade = 'media',
+      periodo = '1', 
       adaptada,           // <-- NOVO: Flag para prova adaptada
       alternativas,       // <-- NOVO: Número de alternativas (3)
       publicoAlvo,        // <-- NOVO: Filtro de público alvo
@@ -2561,6 +2562,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       titulo: titulo || `Prova: ${conteudo.substring(0, 50)}`,
       conteudo: conteudo,
       tipoProva: tipoProva,
+      periodo: periodo,
       adaptada: tipoProva === 'adaptada' || adaptada === true, // <-- NOVO
       alternativas: tipoProva === 'adaptada' || adaptada === true ? 3 : 5, // <-- NOVO
       anexos: anexos,
@@ -2985,6 +2987,7 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
                         _id: prova._id,
                         id: prova._id,
                         titulo: prova.titulo,
+                        periodo: prova.periodo || '1', 
                         eixo: prova.eixo,
                         disciplina: prova.disciplina,
                         conteudo: prova.conteudo,
@@ -3198,6 +3201,7 @@ app.get('/api/professor/provas', authenticateToken, async (req, res) => {
             id: prova._id,
             titulo: prova.titulo,
             conteudo: prova.conteudo,
+            periodo: prova.periodo || '1',
             turma: prova.turmaId ? {
               id: prova.turmaId._id,
               nome: prova.turmaId.nome,
@@ -3746,6 +3750,7 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
       _id: prova._id,
       titulo: prova.titulo,
       conteudo: prova.conteudo,
+      periodo: prova.periodo || '1',
       // **ADICIONAR ESTES CAMPOS:**
       horarioInicio: prova.horarioInicio,
       horarioTermino: prova.horarioTermino,
@@ -3922,6 +3927,7 @@ app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
                 _id: prova._id,
                 
                 titulo: prova.titulo,
+                periodo: prova.periodo || '1',
                 eixo: prova.eixo,
                 disciplina: prova.disciplina,
                 conteudo: prova.conteudo,
@@ -4798,6 +4804,7 @@ app.get('/api/provas/dados', async (req, res) => {
       _id: prova._id,
       titulo: prova.titulo,
       conteudo: prova.conteudo,
+      periodo: prova.periodo || '1',
       duracao: prova.duracaoMinutos,
       duracaoMinutos: prova.duracaoMinutos,
       dataLimite: prova.dataLimite,
@@ -5761,6 +5768,7 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
           id: prova._id,
           titulo: prova.titulo,
           conteudo: prova.conteudo,
+          periodo: prova.periodo || '1',
           dataCriacao: prova.createdAt,
           dataLimite: prova.dataLimite,
           // **ADICIONAR ESTES CAMPOS:**

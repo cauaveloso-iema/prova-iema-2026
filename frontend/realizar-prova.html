@@ -903,6 +903,20 @@
                 <h1 id="provaTitulo">Título da Prova</h1>
                 <p id="provaConteudo">Conteúdo da prova</p>
                 
+                <!-- 🔴 NOVA LINHA: BADGE DE PERÍODO -->
+                <div id="periodoBadge" style="
+                    display: inline-block;
+                    margin: 8px 0 5px 0;
+                    padding: 4px 12px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 30px;
+                    font-size: 0.85rem;
+                    font-weight: 600;
+                    border: 1px solid rgba(255,255,255,0.2);
+                ">
+                    <i class="fas fa-calendar-week"></i> <span id="periodoTexto">Carregando...</span>
+                </div>
+                
                 <div id="infoHorario" style="margin-top: 10px; padding: 8px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.9rem;">
                     <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 5px;">
@@ -2883,9 +2897,49 @@
     }
     
     function iniciarProvaInterface() {
-        document.getElementById('provaTitulo').textContent = prova.titulo;
-        document.getElementById('provaConteudo').textContent = prova.conteudo;
-        document.getElementById('questoesCount').textContent = prova.quantidadeQuestoes + ' questões';
+        console.log('📝 Dados completos da prova:', prova);
+        
+        document.getElementById('provaTitulo').textContent = prova.titulo || 'Prova sem título';
+        document.getElementById('provaConteudo').textContent = prova.conteudo || 'Conteúdo não especificado';
+        document.getElementById('questoesCount').textContent = (prova.quantidadeQuestoes || 0) + ' questões';
+        
+        // 🔴 CORREÇÃO: PEGAR O PERÍODO DOS DADOS DA PROVA
+        let periodo = '1'; // valor padrão
+        
+        // Verificar todas as possíveis fontes do período
+        if (prova.periodo) {
+            periodo = prova.periodo;
+            console.log('✅ Período encontrado em prova.periodo:', periodo);
+        } else if (prova.prova && prova.prova.periodo) {
+            periodo = prova.prova.periodo;
+            console.log('✅ Período encontrado em prova.prova.periodo:', periodo);
+        } else if (prova.dados && prova.dados.periodo) {
+            periodo = prova.dados.periodo;
+            console.log('✅ Período encontrado em prova.dados.periodo:', periodo);
+        } else {
+            console.log('⚠️ Período não encontrado, usando padrão: 1');
+        }
+        
+        // ATUALIZAR O PERÍODO NA INTERFACE
+        const periodoElement = document.getElementById('periodoTexto');
+        if (periodoElement) {
+            const periodoText = periodo + 'º Período';
+            periodoElement.textContent = periodoText;
+            
+            // Mudar a cor do badge baseado no período
+            const badge = document.getElementById('periodoBadge');
+            if (badge) {
+                const cores = {
+                    '1': '#10b981', // verde
+                    '2': '#f59e0b', // laranja
+                    '3': '#8b5cf6', // roxo
+                    '4': '#ef4444'  // vermelho
+                };
+                const cor = cores[periodo] || '#4f46e5';
+                badge.style.background = `linear-gradient(135deg, ${cor}30, ${cor}20)`;
+                badge.style.borderColor = `${cor}50`;
+            }
+        }
         
         // ATUALIZAR INFORMAÇÕES DE HORÁRIO E DURAÇÃO
         if (prova.horarioInicio && prova.horarioTermino) {
@@ -2924,7 +2978,7 @@
         }
         
         questaoAtualIndex = 0;
-        totalQuestoes = prova.questoes.length;
+        totalQuestoes = prova.questoes ? prova.questoes.length : 0;
 
         atualizarInformacoesHorario();
         renderizarQuestoes();
@@ -2944,11 +2998,7 @@
             
             if (tempoRestanteMs > 0) {
                 const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
-                
-                console.log('⏱️ Tempo restante pelo horário: ' + tempoRestanteMinutos + ' minutos (' + formatarMinutosEmHoraMinutos(tempoRestanteMinutos) + ')');
-                
-                // O timer já está configurado para contar regressivamente baseado no horário
-                // Não precisamos mais da função iniciarContadorHorario separada
+                console.log('⏱️ Tempo restante pelo horário: ' + tempoRestanteMinutos + ' minutos');
             }
         }
         
@@ -3156,6 +3206,26 @@
         document.body.appendChild(menu);
     }
 
+    // ============ FUNÇÃO PARA FORÇAR ATUALIZAÇÃO DO MENU ============
+    function forcarAtualizacaoMenu() {
+        const botoes = document.querySelectorAll('.btn-questao-rapida');
+        
+        botoes.forEach((btn, index) => {
+            // Forçar reaplicação das classes
+            if (respostas[index]) {
+                btn.classList.add('respondida');
+            } else {
+                btn.classList.remove('respondida');
+            }
+            
+            if (index === questaoAtualIndex) {
+                btn.classList.add('atual');
+            } else {
+                btn.classList.remove('atual');
+            }
+        });
+    }
+
     function carregarQuestaoAtual() {
         const container = document.getElementById('questaoAtualContainer');
         const questao = prova.questoes[questaoAtualIndex];
@@ -3217,6 +3287,7 @@
         setTimeout(() => {
             container.scrollTop = 0;
         }, 100);
+        setTimeout(forcarAtualizacaoMenu, 100);
     }
     
     function selecionarRespostaAtual(opcaoIndex) {
@@ -3248,7 +3319,10 @@
         
         atualizarProgresso();
         salvarRespostasLocalmente();
-        atualizarMenuRapido();
+        
+        // 🔴 ADICIONAR ESTAS DUAS LINHAS:
+        forcarAtualizacaoMenu(); // Atualizar imediatamente
+        setTimeout(forcarAtualizacaoMenu, 50); // Atualizar novamente após delay
     }
 
     function criarMenuRapidoQuestoes() {
@@ -3309,6 +3383,7 @@
         if (index >= 0 && index < totalQuestoes) {
             questaoAtualIndex = index;
             carregarQuestaoAtual();
+            forcarAtualizacaoMenu();
         }
     }
 

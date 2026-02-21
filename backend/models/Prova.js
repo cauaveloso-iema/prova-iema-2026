@@ -80,6 +80,13 @@ const ProvaSchema = new mongoose.Schema({
   },
   // ============================================================
   
+  periodo: {
+  type: String,
+  enum: ['1', '2', '3', '4'],
+  default: '1',
+  required: true
+},
+
   eixo: {
   type: String,
   enum: ['natureza', 'humanas', 'linguagens', 'desenvolvimento', 'redes', 'turismo', 'gestao', 'producao', 'ambiente'],
