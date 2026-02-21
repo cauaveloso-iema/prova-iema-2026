@@ -2870,70 +2870,6 @@ window.addEventListener('scroll', function() {
                                 </p>
                             </div>
                         </div>
-                        
-                        <!-- Stats Cards Rápidos (mesmo estilo das turmas) -->
-                        <div style="
-                            display: flex;
-                            gap: 20px;
-                            margin-top: 20px;
-                            flex-wrap: wrap;
-                        ">
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-users"></i>
-                                <span>Total de Alunos: <strong id="statTotalAlunos">0</strong></span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-file-alt"></i>
-                                <span>Provas Aplicadas: <strong id="statTotalProvas">0</strong></span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-star"></i>
-                                <span>Média Geral: <strong id="statMediaGeral">0.0</strong></span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Taxa de Conclusão: <strong id="statTaxaConclusao">0%</strong></span>
-                            </div>
-                        </div>
                     </div>
                 </div>
                 <!-- Alertas para resultados -->
@@ -4323,20 +4259,25 @@ window.addEventListener('scroll', function() {
                     // Processar resultados
                     const resultados = data.resultados || [];
                     
-                    // Processar por turma
-                    const resultadosPorTurma = processarResultadosPorTurma(resultados);
-                    atualizarListaTurmasResultados(resultadosPorTurma);
+                    // 🔴 ARMAZENAR GLOBALMENTE - LINHA CRÍTICA ADICIONADA
+                    window.resultadosGerais = {
+                        turmas: processarResultadosPorTurma(resultados),
+                        alunos: processarResultadosPorAluno(resultados),
+                        disciplinas: processarResultadosPorDisciplina(resultados)
+                    };
                     
-                    // Processar por aluno
-                    const resultadosPorAluno = processarResultadosPorAluno(resultados);
-                    atualizarListaAlunosResultados(resultadosPorAluno);
+                    console.log('✅ Dados armazenados globalmente:', window.resultadosGerais);
                     
-                    // Processar por disciplina
-                    const resultadosPorDisciplina = processarResultadosPorDisciplina(resultados);
-                    atualizarListaDisciplinasResultados(resultadosPorDisciplina);
+                    // Atualizar listas usando os dados armazenados
+                    atualizarListaTurmasResultados(window.resultadosGerais.turmas);
+                    atualizarListaAlunosResultados(window.resultadosGerais.alunos);
+                    atualizarListaDisciplinasResultados(window.resultadosGerais.disciplinas);
                     
                     // Preencher filtros
-                    preencherFiltros(resultadosPorTurma, resultadosPorDisciplina);
+                    preencherFiltros(window.resultadosGerais.turmas, window.resultadosGerais.disciplinas);
+                    
+                    // 🔴 CHAMAR A CONFIGURAÇÃO DOS FILTROS
+                    configurarFiltrosResultados();
                     
                     console.log('✅ Resultados carregados com sucesso');
                     
@@ -4375,7 +4316,8 @@ window.addEventListener('scroll', function() {
                     }
                 });
             }
-        }        
+        }
+
         // Função para abrir modal de seleção de aluno para correção
         async function abrirProvaCorrigida(provaId) {
             try {
@@ -5259,21 +5201,111 @@ window.addEventListener('scroll', function() {
             }
         }
 
-        // ============ FUNÇÕES DE FILTRAGEM ============
+        // ============ FUNÇÕES DE FILTRAGEM CORRIGIDAS ============
         window.filtrarResultados = function() {
-            // Implementar filtragem se necessário
-            console.log('Filtrando resultados...');
+            console.log('🔍 Aplicando filtros nos resultados...');
+            
+            const filtroTurma = document.getElementById('filtroTurma')?.value || '';
+            const filtroDisciplina = document.getElementById('filtroDisciplina')?.value || '';
+            
+            console.log('📊 Filtros selecionados:', { 
+                turma: filtroTurma || 'Todas', 
+                disciplina: filtroDisciplina || 'Todas'
+            });
+            
+            if (!window.resultadosGerais || !window.resultadosGerais.turmas) {
+                console.log('⚠️ Dados não encontrados, recarregando...');
+                carregarResultadosGerais();
+                return;
+            }
+            
+            // Filtrar turmas
+            let turmasFiltradas = window.resultadosGerais.turmas;
+            let alunosFiltrados = window.resultadosGerais.alunos;
+            
+            if (filtroTurma) {
+                turmasFiltradas = turmasFiltradas.filter(t => t.nome === filtroTurma);
+                alunosFiltrados = alunosFiltrados.filter(a => 
+                    a.turmas && Array.from(a.turmas).includes(filtroTurma)
+                );
+            }
+            
+            if (filtroDisciplina) {
+                turmasFiltradas = turmasFiltradas.filter(t => t.disciplina === filtroDisciplina);
+            }
+            
+            console.log(`✅ Mostrando ${turmasFiltradas.length} turmas`);
+            
+            // Atualizar listas
+            if (typeof atualizarListaTurmasResultados === 'function') {
+                atualizarListaTurmasResultados(turmasFiltradas);
+            }
+            if (typeof atualizarListaAlunosResultados === 'function') {
+                atualizarListaAlunosResultados(alunosFiltrados);
+            }
         };
 
         window.filtrarAlunos = function() {
             const busca = document.getElementById('buscaAluno')?.value.toLowerCase() || '';
-            const container = document.getElementById('listaAlunosResultados');
+            console.log('🔍 Buscando alunos:', busca);
             
-            if (!container) return;
+            if (!window.resultadosGerais || !window.resultadosGerais.alunos) return;
             
-            // Aqui você implementaria a filtragem baseada na busca
-            console.log('Buscando alunos:', busca);
+            if (!busca) {
+                window.filtrarResultados();
+                return;
+            }
+            
+            const filtroTurma = document.getElementById('filtroTurma')?.value || '';
+            let alunosBase = window.resultadosGerais.alunos;
+            
+            if (filtroTurma) {
+                alunosBase = alunosBase.filter(a => 
+                    a.turmas && Array.from(a.turmas).includes(filtroTurma)
+                );
+            }
+            
+            const alunosFiltrados = alunosBase.filter(a => 
+                a.nome.toLowerCase().includes(busca) || 
+                (a.matricula && a.matricula.toLowerCase().includes(busca))
+            );
+            
+            if (typeof atualizarListaAlunosResultados === 'function') {
+                atualizarListaAlunosResultados(alunosFiltrados);
+            }
         };
+
+        // ============ CONFIGURAR FILTROS DE RESULTADOS ============
+        function configurarFiltrosResultados() {
+            console.log('🔧 Configurando event listeners dos filtros...');
+            
+            const filtroTurma = document.getElementById('filtroTurma');
+            const filtroDisciplina = document.getElementById('filtroDisciplina');
+            const filtroPeriodo = document.getElementById('filtroPeriodo');
+            const buscaAluno = document.getElementById('buscaAluno');
+            
+            if (filtroTurma) {
+                filtroTurma.removeEventListener('change', window.filtrarResultados);
+                filtroTurma.addEventListener('change', window.filtrarResultados);
+            }
+            
+            if (filtroDisciplina) {
+                filtroDisciplina.removeEventListener('change', window.filtrarResultados);
+                filtroDisciplina.addEventListener('change', window.filtrarResultados);
+            }
+            
+            if (filtroPeriodo) {
+                filtroPeriodo.removeEventListener('change', window.filtrarResultados);
+                filtroPeriodo.addEventListener('change', window.filtrarResultados);
+            }
+            
+            if (buscaAluno) {
+                buscaAluno.removeEventListener('keyup', window.filtrarAlunos);
+                buscaAluno.addEventListener('keyup', window.filtrarAlunos);
+            }
+            
+            console.log('✅ Listeners configurados');
+        }
 
         // ============ ATUALIZAR LISTA DE TURMAS NOS RESULTADOS ============
         function atualizarListaTurmasResultados(turmas) {
@@ -5507,17 +5539,6 @@ window.addEventListener('scroll', function() {
                 return true;
             });
         }
-
-        // Funções de filtro
-        window.filtrarResultados = function() {
-            atualizarListaTurmasResultados();
-            atualizarListaAlunosResultados();
-            atualizarListaDisciplinasResultados();
-        };
-
-        window.filtrarAlunos = function() {
-            atualizarListaAlunosResultados();
-        };
 
         // Funções auxiliares
         window.verDetalhesTurma = function(turmaId) {
@@ -6534,7 +6555,15 @@ window.addEventListener('scroll', function() {
                 
                 modal.style.display = 'flex';
                 
-                // BUSCAR DADOS DA TURMA
+                // BUSCAR DADOS DA TURMA DA LISTA (que já temos)
+                // Procurar a turma na variável global turmasProfessor
+                let turmaDaLista = null;
+                if (window.turmasProfessor && window.turmasProfessor.length > 0) {
+                    turmaDaLista = window.turmasProfessor.find(t => t.id === turmaId);
+                    console.log('📋 Turma encontrada na lista:', turmaDaLista);
+                }
+                
+                // BUSCAR DETALHES ADICIONAIS DO SERVIDOR
                 const response = await fetch(`/api/turmas/${turmaId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -6546,14 +6575,28 @@ window.addEventListener('scroll', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    const turma = data.turma;
+                    const turmaDetalhes = data.turma;
                     
+                    // COMBINAR os dados da lista com os detalhes
+                    const turma = {
+                        ...turmaDetalhes,  // Primeiro os detalhes
+                        ...turmaDaLista,    // Depois sobrescrever com os dados da lista
+                        // Garantir que a data venha da lista se existir
+                        dataCriacao: turmaDaLista?.dataCriacao || turmaDetalhes.dataCriacao || 
+                                    turmaDetalhes.createdAt || turmaDetalhes.created_at
+                    };
+                    
+                    console.log('✅ Turma combinada:', turma);
+                    
+                    // FORMATAR A DATA DE CRIAÇÃO
                     let dataCriacao = 'Não disponível';
                     
                     if (turma.dataCriacao) {
                         try {
                             const date = new Date(turma.dataCriacao);
+                            
                             if (!isNaN(date.getTime())) {
+                                // Se for data válida, formatar
                                 dataCriacao = date.toLocaleDateString('pt-BR', {
                                     day: '2-digit',
                                     month: '2-digit',
@@ -6562,18 +6605,12 @@ window.addEventListener('scroll', function() {
                                     minute: '2-digit'
                                 });
                             } else {
-                                // Tentar formato alternativo
-                                const dataStr = turma.dataCriacao;
-                                if (dataStr.includes('T')) {
-                                    const [dataPart, horaPart] = dataStr.split('T');
-                                    const [ano, mes, dia] = dataPart.split('-');
-                                    const [hora, minuto] = horaPart.split(':');
-                                    dataCriacao = `${dia}/${mes}/${ano} ${hora}:${minuto}`;
-                                }
+                                // Se não for data válida, mostrar a string original
+                                dataCriacao = turma.dataCriacao;
                             }
                         } catch (e) {
                             console.warn('Erro ao formatar data:', e);
-                            dataCriacao = turma.dataCriacao.substring(0, 10).replace(/-/g, '/');
+                            dataCriacao = turma.dataCriacao;
                         }
                     }
                     
@@ -7057,6 +7094,8 @@ window.addEventListener('scroll', function() {
                 }
             }
         };
+
+
         // Função auxiliar para criar prova
         window.criarProvaParaTurma = function(turmaId) {
             fecharModal('modalDetalhesTurma');
