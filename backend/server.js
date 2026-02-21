@@ -1557,7 +1557,7 @@ app.get('/api/turmas/:id', authenticateToken, async (req, res) => {
         eixo: turma.eixo,
         codigo: turma.codigo,
         descricao: turma.descricao,
-        dataCriacao: turma.createdAt,
+        dataCriacao: turma.dataCriacao,
         ativa: turma.ativa,
         professor: turma.professorId ? {
           nome: turma.professorId.nome,

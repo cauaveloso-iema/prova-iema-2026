@@ -434,16 +434,90 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
         
         <!-- Turmas -->
+        <!-- Substitua a seção de Turmas existente por este código -->
         <div class="card" style="margin-top: 30px; margin-bottom: 50px;">
-            <div class="card-header">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                 <h2><i class="fas fa-school"></i> Minhas Turmas</h2>
+                
+                <!-- FILTRO SIMPLIFICADO POR EIXO (MESMA LÓGICA DAS PROVAS CONCLUÍDAS) -->
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="position: relative; min-width: 250px;">
+                        <select id="filtroEixoTurmas" style="
+                            padding: 10px 35px 10px 15px;
+                            border: 2px solid #e5e7eb;
+                            border-radius: 8px;
+                            font-size: 0.95rem;
+                            background: white url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E') no-repeat right 12px center;
+                            appearance: none;
+                            -webkit-appearance: none;
+                            -moz-appearance: none;
+                            cursor: pointer;
+                            outline: none;
+                            transition: border-color 0.3s;
+                            width: 100%;
+                        ">
+                            <option value="todos">📚 Todas as disciplinas</option>
+                            
+                            <!-- Eixos da BNCC (sempre visíveis) -->
+                            <option value="natureza" style="font-weight: 600; background: #f0f9ff;">🔬 Natureza e Matemática</option>
+                            <option value="humanas" style="font-weight: 600; background: #fef3c7;">🏛️ Humanas</option>
+                            <option value="linguagens" style="font-weight: 600; background: #f0fdf4;">🎭 Linguagens</option>
+                            
+                            <!-- Eixos Técnicos (aparece apenas o do curso do aluno) -->
+                            <option value="desenvolvimento" style="font-weight: 600; background: #f3e8ff; display: none;">💻 Desenvolvimento de Sistemas</option>
+                            <option value="redes" style="font-weight: 600; background: #e0f2fe; display: none;">🌐 Redes de Computadores</option>
+                            <option value="turismo" style="font-weight: 600; background: #fff7ed; display: none;">✈️ Turismo, Eventos e Gastronomia</option>
+                            <option value="gestao" style="font-weight: 600; background: #fef9c3; display: none;">📊 Gestão e Negócios</option>
+                            <option value="producao" style="font-weight: 600; background: #ffe4e6; display: none;">🎬 Produção Cultural e Design</option>
+                            <option value="ambiente" style="font-weight: 600; background: #dcfce7; display: none;">🌱 Ambiente e Saúde</option>
+                        </select>
+                        <i class="fas fa-filter" style="position: absolute; left: -25px; top: 50%; transform: translateY(-50%); color: #4f46e5;"></i>
+                    </div>
+                    
+                    <span id="contadorTurmasFiltradas" style="
+                        background: #4f46e5;
+                        color: white;
+                        padding: 6px 12px;
+                        border-radius: 20px;
+                        font-size: 0.85rem;
+                        font-weight: 600;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 5px;
+                    ">
+                        <i class="fas fa-school"></i>
+                        <span id="contadorTurmasNumerico">0</span> turmas
+                    </span>
+                </div>
             </div>
+            
             <div class="card-body">
                 <div id="turmasAluno">
                     <div class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Carregando suas turmas...</p>
                     </div>
+                </div>
+                
+                <!-- Container para backup de todas as turmas -->
+                <div id="backupTurmas" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Modal de Detalhes da Turma -->
+        <div class="modal" id="modalDetalhesTurma">
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-school"></i> Detalhes da Turma</h3>
+                    <button class="modal-close" onclick="fecharModal('modalDetalhesTurma')">&times;</button>
+                </div>
+                <div id="detalhesTurmaContent" style="padding: 20px;">
+                    <!-- Conteúdo será preenchido dinamicamente -->
+                </div>
+                <div style="padding: 15px 20px; border-top: 1px solid #e5e7eb; text-align: right;">
+                    <button class="btn-sair-prova" onclick="fecharModal('modalDetalhesTurma')">
+                        <i class="fas fa-times"></i> Fechar
+                    </button>
                 </div>
             </div>
         </div>
@@ -2646,6 +2720,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (data.success) {
                     turmas = data.turmas || [];
+                    
+                    // Inicializar filtro baseado no curso
+                    inicializarFiltroTurmas();
+                    
+                    // Atualizar lista
                     atualizarListaTurmas();
                 }
             } catch (error) {
@@ -2675,20 +2754,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            container.innerHTML = turmas.map(turma => `
-                <div class="turma-card">
-                    <div class="turma-info">
-                        <div>
-                            <h4 style="margin: 0 0 5px 0;">${turma.nome}</h4>
-                            <p style="margin: 0; color: #6b7280; font-size: 0.9rem;">
-                                ${turma.disciplina} • ${turma.totalProvas || 0} provas • ${turma.totalAlunos || 0} alunos
-                            </p>
-                        </div>
-                        <div class="turma-codigo">${turma.codigo}</div>
-                    </div>
-                </div>
-            `).join('');
+            // Salvar backup
+            window.turmasBackup = [...turmas];
+            
+            // Atualizar contador total
+            const contadorSpan = document.getElementById('contadorTurmasNumerico');
+            if (contadorSpan) {
+                contadorSpan.innerText = turmas.length;
+            }
+            
+            // Aplicar filtro atual
+            aplicarFiltroTurmas();
         }
+
         
         // Entrar em uma turma
         async function entrarNaTurma() {
@@ -2726,6 +2804,422 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Erro ao entrar na turma:', error);
                 alert('❌ Erro de conexão');
             }
+        }
+
+        // ========== FUNÇÃO PARA OBTER EIXO TÉCNICO PELO CURSO ==========
+        function getEixoTecnicoPorCurso(curso) {
+            if (!curso) return null;
+            
+            const cursoLower = curso.toLowerCase();
+            
+            // Mapeamento de cursos para eixos técnicos
+            if (cursoLower.includes('eventos') || cursoLower.includes('turismo') || cursoLower.includes('gastronomia') || cursoLower.includes('guia')) {
+                return 'turismo';
+            } else if (cursoLower.includes('redes')) {
+                return 'redes';
+            } else if (cursoLower.includes('desenvolvimento') || cursoLower.includes('sistemas')) {
+                return 'desenvolvimento';
+            } else if (cursoLower.includes('marketing') || cursoLower.includes('jurídico') || cursoLower.includes('juridico') || cursoLower.includes('serviços')) {
+                return 'gestao';
+            } else if (cursoLower.includes('áudio') || cursoLower.includes('audio') || cursoLower.includes('vídeo') || cursoLower.includes('video') || cursoLower.includes('publicidade') || cursoLower.includes('produção')) {
+                return 'producao';
+            } else if (cursoLower.includes('meio ambiente') || cursoLower.includes('ambiente') || cursoLower.includes('saúde')) {
+                return 'ambiente';
+            }
+            
+            return null;
+        }
+
+        // ========== INICIALIZAR FILTRO DAS TURMAS BASEADO NO CURSO ==========
+        function inicializarFiltroTurmas() {
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const cursoAluno = userData.curso || '';
+            
+            console.log('🎯 Inicializando filtro de turmas para curso:', cursoAluno);
+            
+            // Obter eixo técnico do aluno
+            const eixoTecnico = getEixoTecnicoPorCurso(cursoAluno);
+            
+            if (eixoTecnico) {
+                console.log(`✅ Eixo técnico identificado: ${eixoTecnico}`);
+                
+                // Mostrar apenas o eixo técnico correspondente
+                const select = document.getElementById('filtroEixoTurmas');
+                if (select) {
+                    // Primeiro, esconder todos os eixos técnicos
+                    const opcoesTecnicas = ['desenvolvimento', 'redes', 'turismo', 'gestao', 'producao', 'ambiente'];
+                    
+                    opcoesTecnicas.forEach(eixo => {
+                        const option = select.querySelector(`option[value="${eixo}"]`);
+                        if (option) {
+                            option.style.display = 'none';
+                        }
+                    });
+                    
+                    // Mostrar apenas o eixo do aluno
+                    const optionAluno = select.querySelector(`option[value="${eixoTecnico}"]`);
+                    if (optionAluno) {
+                        optionAluno.style.display = 'block';
+                        
+                        // Personalizar texto baseado no eixo
+                        const textos = {
+                            'turismo': '✈️ Turismo, Eventos e Gastronomia',
+                            'desenvolvimento': '💻 Desenvolvimento de Sistemas',
+                            'redes': '🌐 Redes de Computadores',
+                            'gestao': '📊 Gestão e Negócios',
+                            'producao': '🎬 Produção Cultural e Design',
+                            'ambiente': '🌱 Ambiente e Saúde'
+                        };
+                        
+                        optionAluno.textContent = textos[eixoTecnico] || optionAluno.textContent;
+                    }
+                }
+            }
+            
+            // Adicionar evento de mudança
+            const select = document.getElementById('filtroEixoTurmas');
+            if (select) {
+                // Remover listener anterior se existir
+                const novoSelect = select.cloneNode(true);
+                select.parentNode.replaceChild(novoSelect, select);
+                
+                novoSelect.addEventListener('change', function() {
+                    aplicarFiltroTurmas();
+                });
+            }
+        }
+
+        // ========== FUNÇÃO PARA ATUALIZAR LISTA DE TURMAS ==========
+        function atualizarListaTurmas() {
+            const container = document.getElementById('turmasAluno');
+            
+            if (!turmas || turmas.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-users-slash"></i>
+                        <h3>Nenhuma turma</h3>
+                        <p>Entre em uma turma usando o código</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Salvar backup
+            window.turmasBackup = [...turmas];
+            
+            // Atualizar contador total
+            const contadorSpan = document.getElementById('contadorTurmasNumerico');
+            if (contadorSpan) {
+                contadorSpan.innerText = turmas.length;
+            }
+            
+            // Aplicar filtro atual
+            aplicarFiltroTurmas();
+        }
+
+        // ========== FUNÇÃO PARA APLICAR FILTRO NAS TURMAS ==========
+        function aplicarFiltroTurmas() {
+            const container = document.getElementById('turmasAluno');
+            const filtroSelect = document.getElementById('filtroEixoTurmas');
+            
+            if (!container || !filtroSelect || !window.turmasBackup) return;
+            
+            const filtroAtivo = filtroSelect.value;
+            
+            let turmasFiltradas = window.turmasBackup;
+            
+            if (filtroAtivo !== 'todos') {
+                turmasFiltradas = window.turmasBackup.filter(turma => {
+                    const nomeTurma = (turma.nome || '').toLowerCase();
+                    const disciplinaTurma = (turma.disciplina || '').toLowerCase();
+                    const codigoTurma = (turma.codigo || '').toLowerCase();
+                    
+                    // Palavras-chave por eixo
+                    const palavrasChave = {
+                        'natureza': ['biologia', 'física', 'química', 'matemática', 'ciências', 'bio', 'fis', 'quim', 'mat'],
+                        'humanas': ['filosofia', 'sociologia', 'geografia', 'história', 'filo', 'socio', 'geo', 'hist'],
+                        'linguagens': ['artes', 'inglês', 'educação física', 'espanhol', 'português', 'literatura', 'redação', 'arte', 'ingles', 'ed fisica', 'port'],
+                        'desenvolvimento': ['desenvolvimento', 'programação', 'sistemas', 'banco de dados', 'algoritmo', 'software', '104', '204', '304'],
+                        'redes': ['redes', 'computadores', 'protocolo', 'tcp/ip', 'roteador', 'infra', '103', '203'],
+                        'turismo': ['eventos', 'turismo', 'gastronomia', 'hospitalidade', 'lazer', 'guia', '106', '206', '302'],
+                        'gestao': ['marketing', 'jurídico', 'gestão', 'negócios', 'administração', '300', '307'],
+                        'producao': ['áudio', 'vídeo', 'publicidade', 'design', 'produção', 'cultural', '105', '205', '305', '109', '209'],
+                        'ambiente': ['ambiente', 'ecologia', 'sustentabilidade', 'reciclagem', 'meio ambiente', '308']
+                    };
+                    
+                    const palavras = palavrasChave[filtroAtivo] || [filtroAtivo];
+                    
+                    // Verificar se alguma palavra-chave corresponde
+                    for (const palavra of palavras) {
+                        if (nomeTurma.includes(palavra) || 
+                            disciplinaTurma.includes(palavra) ||
+                            codigoTurma.includes(palavra)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+            }
+            
+            // Atualizar contador
+            const contadorSpan = document.getElementById('contadorTurmasNumerico');
+            if (contadorSpan) {
+                contadorSpan.innerText = turmasFiltradas.length;
+            }
+            
+            // Renderizar turmas filtradas
+            if (turmasFiltradas.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>Nenhuma turma encontrada</h3>
+                        <p>Não há turmas com o filtro selecionado</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = turmasFiltradas.map(turma => {
+                    // Determinar ícone baseado na disciplina
+                    let iconeTurma = 'fa-school';
+                    let corTurma = '#4f46e5';
+                    
+                    if (turma.disciplina) {
+                        const disciplina = turma.disciplina.toLowerCase();
+                        
+                        if (disciplina.includes('evento') || disciplina.includes('turismo') || disciplina.includes('gastronomia')) {
+                            iconeTurma = 'fa-utensils';
+                            corTurma = '#f59e0b';
+                        } else if (disciplina.includes('redes')) {
+                            iconeTurma = 'fa-network-wired';
+                            corTurma = '#0ea5e9';
+                        } else if (disciplina.includes('desenvolvimento') || disciplina.includes('programação')) {
+                            iconeTurma = 'fa-code';
+                            corTurma = '#8b5cf6';
+                        } else if (disciplina.includes('marketing') || disciplina.includes('gestão')) {
+                            iconeTurma = 'fa-chart-line';
+                            corTurma = '#10b981';
+                        } else if (disciplina.includes('áudio') || disciplina.includes('vídeo') || disciplina.includes('publicidade')) {
+                            iconeTurma = 'fa-video';
+                            corTurma = '#ec4899';
+                        }
+                    }
+                    
+                    return `
+                        <div class="turma-card" style="border-left-color: ${corTurma};">
+                            <div class="turma-info">
+                                <div>
+                                    <h4 style="margin: 0 0 5px 0; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas ${iconeTurma}" style="color: ${corTurma};"></i>
+                                        ${turma.nome}
+                                    </h4>
+                                    <p style="margin: 0; color: #6b7280; font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 10px;">
+                                        <span><i class="fas fa-book" style="color: ${corTurma};"></i> ${turma.disciplina || 'Disciplina não especificada'}</span>
+                                        <span><i class="fas fa-users" style="color: ${corTurma};"></i> ${turma.totalAlunos || 0} alunos</span>
+                                        <span><i class="fas fa-file-alt" style="color: ${corTurma};"></i> ${turma.totalProvas || 0} provas</span>
+                                    </p>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <button onclick="verDetalhesTurma('${turma._id || turma.id}')" 
+                                            style="
+                                                background: none;
+                                                border: 1px solid ${corTurma}40;
+                                                color: ${corTurma};
+                                                padding: 6px 12px;
+                                                border-radius: 20px;
+                                                font-size: 0.8rem;
+                                                cursor: pointer;
+                                                display: flex;
+                                                align-items: center;
+                                                gap: 4px;
+                                                transition: all 0.2s;
+                                            "
+                                            onmouseover="this.style.background='${corTurma}10'; this.style.borderColor='${corTurma}'"
+                                            onmouseout="this.style.background='none'; this.style.borderColor='${corTurma}40'">
+                                        <i class="fas fa-info-circle" style="font-size: 0.75rem;"></i>
+                                        Detalhes
+                                    </button>
+                                    <div class="turma-codigo" style="background: ${corTurma}20; color: ${corTurma};">${turma.codigo}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+
+        // ========== FUNÇÃO PARA VER DETALHES DA TURMA (CORRIGIDA) ==========
+        function verDetalhesTurma(turmaId) {
+            const turma = turmas.find(t => t._id === turmaId || t.id === turmaId);
+            
+            if (!turma) {
+                alert('Turma não encontrada');
+                return;
+            }
+            
+            console.log('📋 Detalhes da turma:', turma);
+            
+            // ========== CORREÇÃO: CAPTURAR DATA DE CRIAÇÃO CORRETAMENTE ==========
+            let dataCriacao = 'Não informada';
+            
+            // Verificar todas as possíveis propriedades que podem conter a data
+            if (turma.createdAt) {
+                dataCriacao = new Date(turma.createdAt).toLocaleDateString('pt-BR');
+            } else if (turma.criadoEm) {
+                dataCriacao = new Date(turma.criadoEm).toLocaleDateString('pt-BR');
+            } else if (turma.dataCriacao) {
+                dataCriacao = new Date(turma.dataCriacao).toLocaleDateString('pt-BR');
+            } else if (turma.created_at) {
+                dataCriacao = new Date(turma.created_at).toLocaleDateString('pt-BR');
+            } else if (turma.criado_em) {
+                dataCriacao = new Date(turma.criado_em).toLocaleDateString('pt-BR');
+            } else if (turma.dataCadastro) {
+                dataCriacao = new Date(turma.dataCadastro).toLocaleDateString('pt-BR');
+            }
+            
+            // Se ainda não encontrou, tentar extrair do ID do MongoDB (se for ObjectId)
+            if (dataCriacao === 'Não informada' && turma._id && turma._id.length === 24) {
+                try {
+                    // ObjectId do MongoDB contém timestamp nos primeiros 8 caracteres
+                    const timestamp = parseInt(turma._id.substring(0, 8), 16) * 1000;
+                    if (!isNaN(timestamp)) {
+                        dataCriacao = new Date(timestamp).toLocaleDateString('pt-BR');
+                        console.log('📅 Data extraída do ObjectId:', dataCriacao);
+                    }
+                } catch (e) {
+                    console.log('Não foi possível extrair data do ObjectId');
+                }
+            }
+            
+            // Professor
+            const professor = turma.professor?.nome || 
+                            turma.professorNome || 
+                            turma.professor?.name || 
+                            turma.nomeProfessor || 
+                            'Não informado';
+            
+            const emailProfessor = turma.professor?.email || 
+                                turma.professorEmail || 
+                                turma.emailProfessor || '';
+            
+            // Determinar cor e ícone baseado na disciplina
+            let corTurma = '#4f46e5';
+            let iconeTurma = 'fa-school';
+            
+            if (turma.disciplina) {
+                const disciplina = turma.disciplina.toLowerCase();
+                
+                if (disciplina.includes('evento') || disciplina.includes('turismo') || disciplina.includes('gastronomia')) {
+                    corTurma = '#f59e0b';
+                    iconeTurma = 'fa-utensils';
+                } else if (disciplina.includes('redes')) {
+                    corTurma = '#0ea5e9';
+                    iconeTurma = 'fa-network-wired';
+                } else if (disciplina.includes('desenvolvimento') || disciplina.includes('programação')) {
+                    corTurma = '#8b5cf6';
+                    iconeTurma = 'fa-code';
+                } else if (disciplina.includes('marketing') || disciplina.includes('gestão')) {
+                    corTurma = '#10b981';
+                    iconeTurma = 'fa-chart-line';
+                } else if (disciplina.includes('áudio') || disciplina.includes('vídeo') || disciplina.includes('publicidade')) {
+                    corTurma = '#ec4899';
+                    iconeTurma = 'fa-video';
+                }
+            }
+            
+            // Criar conteúdo do modal
+            const content = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="
+                        width: 80px;
+                        height: 80px;
+                        background: ${corTurma}20;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin: 0 auto 15px;
+                        border: 3px solid ${corTurma};
+                    ">
+                        <i class="fas ${iconeTurma}" style="font-size: 40px; color: ${corTurma};"></i>
+                    </div>
+                    <h2 style="margin: 0; color: #1f2937;">${turma.nome}</h2>
+                    <p style="color: ${corTurma}; font-weight: 500; margin: 5px 0 0 0;">
+                        <i class="fas fa-tag"></i> Código: ${turma.codigo}
+                    </p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div style="background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 3px solid ${corTurma};">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: ${corTurma};">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                            <strong>Professor</strong>
+                        </div>
+                        <p style="margin: 0; color: #374151;">${professor}</p>
+                        ${emailProfessor ? `<p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.85rem;">${emailProfessor}</p>` : ''}
+                    </div>
+                    
+                    <div style="background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 3px solid ${corTurma};">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: ${corTurma};">
+                            <i class="fas fa-calendar-alt"></i>
+                            <strong>Criação</strong>
+                        </div>
+                        <p style="margin: 0; color: #374151; display: flex; align-items: center; gap: 5px;">
+                            <i class="far fa-calendar-check" style="color: ${corTurma};"></i>
+                            ${dataCriacao}
+                        </p>
+                        <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.8rem;">
+                            ID: ${turma._id || turma.id || 'N/A'}
+                        </p>
+                    </div>
+                </div>
+                
+                <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: ${corTurma};">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Informações da Turma</strong>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.8rem; font-weight: bold; color: ${corTurma};">${turma.totalAlunos || turma.quantidadeAlunos || turma.alunosCount || 0}</div>
+                            <div style="font-size: 0.85rem; color: #6b7280;">Alunos</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.8rem; font-weight: bold; color: ${corTurma};">${turma.totalProvas || turma.quantidadeProvas || turma.provasCount || 0}</div>
+                            <div style="font-size: 0.85rem; color: #6b7280;">Provas</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.8rem; font-weight: bold; color: ${corTurma};">${turma.disciplina ? '1' : '0'}</div>
+                            <div style="font-size: 0.85rem; color: #6b7280;">Disciplinas</div>
+                        </div>
+                    </div>
+                </div>
+                
+                ${turma.descricao ? `
+                <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: ${corTurma};">
+                        <i class="fas fa-align-left"></i>
+                        <strong>Descrição</strong>
+                    </div>
+                    <p style="margin: 0; color: #4b5563; line-height: 1.6;">${turma.descricao}</p>
+                </div>
+                ` : ''}
+                
+                <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 3px solid #0ea5e9;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #0ea5e9;">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Estatísticas da Turma</strong>
+                    </div>
+                    <ul style="margin: 0; padding-left: 20px; color: #0369a1;">
+                        <li>Média geral da turma: <strong>${turma.mediaGeral ? turma.mediaGeral.toFixed(1) : '--'}</strong></li>
+                        <li>Taxa de conclusão: <strong>${turma.taxaConclusao ? turma.taxaConclusao + '%' : '--'}</strong></li>
+                        <li>Próxima prova: <strong>${turma.proximaProva ? new Date(turma.proximaProva).toLocaleDateString('pt-BR') : 'Não agendada'}</strong></li>
+                    </ul>
+                </div>
+            `;
+            
+            document.getElementById('detalhesTurmaContent').innerHTML = content;
+            mostrarModal('modalDetalhesTurma');
         }
         
         // No modal de iniciar prova, adicione uma verificação

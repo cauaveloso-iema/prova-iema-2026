@@ -6566,8 +6566,7 @@ window.addEventListener('scroll', function() {
             }
         };
 
-
-        // ========== FUNÇÃO VER DETALHES DA TURMA - VERSÃO CORRIGIDA ==========
+        // ========== FUNÇÃO VER DETALHES DA TURMA - VERSÃO CORRIGIDA COM DATA ==========
         window.verTurma = async function(turmaId) {
             try {
                 console.log(`🔍 Buscando detalhes da turma: ${turmaId}`);
@@ -6604,15 +6603,7 @@ window.addEventListener('scroll', function() {
                 
                 modal.style.display = 'flex';
                 
-                // BUSCAR DADOS DA TURMA DA LISTA (que já temos)
-                // Procurar a turma na variável global turmasProfessor
-                let turmaDaLista = null;
-                if (window.turmasProfessor && window.turmasProfessor.length > 0) {
-                    turmaDaLista = window.turmasProfessor.find(t => t.id === turmaId);
-                    console.log('📋 Turma encontrada na lista:', turmaDaLista);
-                }
-                
-                // BUSCAR DETALHES ADICIONAIS DO SERVIDOR
+                // BUSCAR DIRETO DA API
                 const response = await fetch(`/api/turmas/${turmaId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -6624,28 +6615,18 @@ window.addEventListener('scroll', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    const turmaDetalhes = data.turma;
+                    const turma = data.turma;
                     
-                    // COMBINAR os dados da lista com os detalhes
-                    const turma = {
-                        ...turmaDetalhes,  // Primeiro os detalhes
-                        ...turmaDaLista,    // Depois sobrescrever com os dados da lista
-                        // Garantir que a data venha da lista se existir
-                        dataCriacao: turmaDaLista?.dataCriacao || turmaDetalhes.dataCriacao || 
-                                    turmaDetalhes.createdAt || turmaDetalhes.created_at
-                    };
+                    console.log('✅ Dados da API:', turma);
                     
-                    console.log('✅ Turma combinada:', turma);
-                    
-                    // FORMATAR A DATA DE CRIAÇÃO
+                    // ========== EXTRAIR DATA DO FORMATO DO MONGODB ==========
                     let dataCriacao = 'Não disponível';
                     
-                    if (turma.dataCriacao) {
+                    // CASO 1: Formato com $date (como no seu banco)
+                    if (turma.dataCriacao && turma.dataCriacao.$date) {
                         try {
-                            const date = new Date(turma.dataCriacao);
-                            
+                            const date = new Date(turma.dataCriacao.$date);
                             if (!isNaN(date.getTime())) {
-                                // Se for data válida, formatar
                                 dataCriacao = date.toLocaleDateString('pt-BR', {
                                     day: '2-digit',
                                     month: '2-digit',
@@ -6653,13 +6634,82 @@ window.addEventListener('scroll', function() {
                                     hour: '2-digit',
                                     minute: '2-digit'
                                 });
-                            } else {
-                                // Se não for data válida, mostrar a string original
-                                dataCriacao = turma.dataCriacao;
+                                console.log('✅ Data extraída do formato $date:', dataCriacao);
                             }
                         } catch (e) {
-                            console.warn('Erro ao formatar data:', e);
-                            dataCriacao = turma.dataCriacao;
+                            console.warn('Erro ao processar $date:', e);
+                        }
+                    }
+                    
+                    // CASO 2: Formato ISO string direto
+                    else if (turma.dataCriacao && typeof turma.dataCriacao === 'string') {
+                        try {
+                            const date = new Date(turma.dataCriacao);
+                            if (!isNaN(date.getTime())) {
+                                dataCriacao = date.toLocaleDateString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                });
+                                console.log('✅ Data extraída da string ISO:', dataCriacao);
+                            }
+                        } catch (e) {
+                            console.warn('Erro ao processar string ISO:', e);
+                        }
+                    }
+                    
+                    // CASO 3: Formato timestamp
+                    else if (turma.dataCriacao && typeof turma.dataCriacao === 'number') {
+                        try {
+                            const date = new Date(turma.dataCriacao);
+                            if (!isNaN(date.getTime())) {
+                                dataCriacao = date.toLocaleDateString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                });
+                                console.log('✅ Data extraída do timestamp:', dataCriacao);
+                            }
+                        } catch (e) {
+                            console.warn('Erro ao processar timestamp:', e);
+                        }
+                    }
+                    
+                    // CASO 4: Outras propriedades comuns
+                    if (dataCriacao === 'Não disponível') {
+                        const outrasPropriedades = [
+                            turma.createdAt,
+                            turma.criadoEm,
+                            turma.created_at
+                        ];
+                        
+                        for (const prop of outrasPropriedades) {
+                            if (prop) {
+                                try {
+                                    let dateValue = prop;
+                                    // Se for objeto com $date
+                                    if (prop.$date) dateValue = prop.$date;
+                                    
+                                    const date = new Date(dateValue);
+                                    if (!isNaN(date.getTime())) {
+                                        dataCriacao = date.toLocaleDateString('pt-BR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        });
+                                        console.log('✅ Data extraída de outra propriedade:', dataCriacao);
+                                        break;
+                                    }
+                                } catch (e) {
+                                    continue;
+                                }
+                            }
                         }
                     }
                     
@@ -6688,6 +6738,12 @@ window.addEventListener('scroll', function() {
                     
                     // CONTAR PROVAS ATIVAS
                     const provasAtivas = turma.provas ? turma.provas.filter(p => p.status === 'ativa').length : 0;
+                    
+                    // NOME DO PROFESSOR
+                    const professorNome = turma.professor?.nome || 
+                                        turma.professorNome || 
+                                        turma.nomeProfessor || 
+                                        'Não informado';
                     
                     // MONTAR HTML DOS ALUNOS
                     let alunosHTML = '';
@@ -6992,7 +7048,7 @@ window.addEventListener('scroll', function() {
                                         <div style="font-size: 0.8rem; color: #6b7280;">Professor</div>
                                         <div style="font-weight: 500; color: #1f2937; background: white; padding: 8px 12px; border-radius: 10px; border: 1px solid #e5e7eb; margin-top: 4px;">
                                             <i class="fas fa-chalkboard-teacher" style="color: ${eixoColor}; margin-right: 5px;"></i>
-                                            ${turma.professor?.nome || 'Não informado'}
+                                            ${professorNome}
                                         </div>
                                     </div>
                                 </div>
