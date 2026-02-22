@@ -2648,7 +2648,7 @@ window.addEventListener('scroll', function() {
                             </select>
                         </div>
 
-                        <!-- Filtro por Período - ADICIONAR AQUI -->
+                        <!-- Filtro por Período - CORRIGIDO (MESMO DESIGN) -->
                         <div>
                             <label style="
                                 display: block;
@@ -2660,7 +2660,7 @@ window.addEventListener('scroll', function() {
                                 <i class="fas fa-calendar-week" style="color: #3b82f6; margin-right: 5px;"></i>
                                 Período
                             </label>
-                            <select id="filtroPeriodoProvas" class="filtro-select" style="
+                            <select id="filtroPeriodoProvas" class="filtro-select" onchange="aplicarFiltrosProvas()" style="
                                 width: 100%;
                                 padding: 12px 16px;
                                 border: 2px solid #e5e7eb;
@@ -3706,7 +3706,20 @@ window.addEventListener('scroll', function() {
                 
                 if (data.success) {
                     provasOriginais = data.provas || [];
+                    
+                    // 🔴 CORREÇÃO: Garantir que todas as provas tenham período
+                    provasOriginais = provasOriginais.map(prova => ({
+                        ...prova,
+                        periodo: prova.periodo || '1' // Default para 1º período se não tiver
+                    }));
+                    
                     console.log(`✅ ${provasOriginais.length} provas carregadas`);
+                    console.log('📊 Distribuição por período:', 
+                        provasOriginais.reduce((acc, p) => {
+                            acc[p.periodo] = (acc[p.periodo] || 0) + 1;
+                            return acc;
+                        }, {})
+                    );
                     
                     // Preencher filtro de turmas
                     const filtroTurma = document.getElementById('filtroTurmaProvas');
@@ -4775,7 +4788,7 @@ window.addEventListener('scroll', function() {
             }
         }
 
-        // ============ FUNÇÃO PARA EXPORTAR NOTAS DOS ALUNOS (VERSÃO CORRETA) ============
+        // ============ FUNÇÃO PARA EXPORTAR NOTAS DOS ALUNOS (VERSÃO CORRETA COM PERÍODO) ============
         async function exportarNotasAlunosExcel() {
             try {
                 console.log('%c📊 EXPORTANDO NOTAS DOS ALUNOS', 'font-size: 14px; font-weight: bold; color: #10b981;');
@@ -4803,6 +4816,18 @@ window.addEventListener('scroll', function() {
                     filtroTipo.options[filtroTipo.selectedIndex]?.text.replace(/[📚📄🎯♿]/g, '').trim() : 
                     'Todos';
                 
+                // 🔴 FILTRO DE PERÍODO - ADICIONADO!
+                const filtroPeriodo = document.getElementById('filtroPeriodoProvas');
+                const periodoSelecionado = filtroPeriodo ? filtroPeriodo.value : 'todos';
+                let periodoTexto = 'Todos os períodos';
+                let periodoSelecionadoFlag = false;
+                
+                if (filtroPeriodo && filtroPeriodo.selectedIndex >= 0) {
+                    const selectedOption = filtroPeriodo.options[filtroPeriodo.selectedIndex];
+                    periodoTexto = selectedOption ? selectedOption.text.replace('📅', '').trim() : 'Todos os períodos';
+                    periodoSelecionadoFlag = periodoSelecionado && periodoSelecionado !== 'todos';
+                }
+                
                 // Filtro de Turma
                 const filtroTurma = document.getElementById('filtroTurmaProvas');
                 let turmaId = '';
@@ -4822,6 +4847,7 @@ window.addEventListener('scroll', function() {
                     status: statusSelecionado,
                     dificuldade: dificuldadeSelecionada,
                     tipo: tipoSelecionado,
+                    periodo: periodoSelecionado, // <-- AGORA INCLUÍDO
                     turmaId: turmaId || 'todas',
                     turmaNome: turmaNome,
                     busca: buscaTexto || 'vazio'
@@ -4864,6 +4890,14 @@ window.addEventListener('scroll', function() {
                     });
                 }
                 
+                // 🔴 FILTRAR POR PERÍODO
+                if (periodoSelecionado !== 'todos') {
+                    provas = provas.filter(p => 
+                        p.periodo === periodoSelecionado || 
+                        p.periodo?.toString() === periodoSelecionado
+                    );
+                }
+                
                 console.log(`📚 Total de provas após filtros: ${provas.length}`);
                 
                 if (provas.length === 0) {
@@ -4878,7 +4912,6 @@ window.addEventListener('scroll', function() {
                 
                 for (const prova of provas) {
                     try {
-                        // Usar a rota específica para resultados da prova
                         const response = await fetch(`/api/provas/${prova.id}/resultados`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                         });
@@ -4887,28 +4920,21 @@ window.addEventListener('scroll', function() {
                             const data = await response.json();
                             
                             if (data.success && data.resultados) {
-                                console.log(`   📝 Prova "${prova.titulo}": ${data.resultados.length} resultados`);
+                                console.log(`   📝 Prova "${prova.titulo}" (Período: ${prova.periodo || '1'}): ${data.resultados.length} resultados`);
                                 
-                                // Adicionar informações da prova em cada resultado
                                 const resultadosComInfo = data.resultados.map(r => ({
-                                    // Dados do aluno
                                     alunoId: r.alunoId,
                                     alunoNome: r.alunoNome || r.userNome || 'Aluno',
                                     alunoMatricula: r.alunoMatricula || 'N/A',
                                     alunoEmail: r.alunoEmail || 'N/A',
-                                    
-                                    // Dados da prova
                                     provaId: prova.id,
                                     provaTitulo: prova.titulo,
+                                    provaPeriodo: prova.periodo || '1', // 🔴 PERÍODO DA PROVA
                                     provaConteudo: prova.conteudo,
                                     provaDificuldade: prova.dificuldade,
-                                    
-                                    // Dados da turma
                                     turmaId: prova.turma?.id,
                                     turmaNome: prova.turma?.nome,
                                     turmaDisciplina: prova.turma?.disciplina,
-                                    
-                                    // Dados da nota
                                     nota: r.nota,
                                     acertos: r.acertos,
                                     total: r.total,
@@ -4956,9 +4982,9 @@ window.addEventListener('scroll', function() {
                     
                     const aluno = alunosMap.get(alunoId);
                     
-                    // Adicionar a prova ao aluno
                     aluno.provas.push({
                         provaTitulo: item.provaTitulo,
+                        provaPeriodo: item.provaPeriodo, // 🔴 PERÍODO DA PROVA
                         data: item.dataRealizacao ? new Date(item.dataRealizacao).toLocaleDateString('pt-BR') : 'N/A',
                         nota: item.nota !== null && item.nota !== undefined ? Number(item.nota).toFixed(1) : 'N/A',
                         acertos: item.acertos || 0,
@@ -4968,7 +4994,6 @@ window.addEventListener('scroll', function() {
                         cancelada: item.cancelada ? 'Sim' : 'Não'
                     });
                     
-                    // Acumular para média
                     if (item.nota !== null && item.nota !== undefined) {
                         aluno.somaNotas += item.nota;
                         aluno.quantidadeNotas++;
@@ -5015,7 +5040,7 @@ window.addEventListener('scroll', function() {
                     'Status': aluno.statusGeral
                 }));
                 
-                // Aba 2: Detalhamento (todas as notas)
+                // Aba 2: Detalhamento (todas as notas) - AGORA COM PERÍODO!
                 const dadosDetalhados = [];
                 alunosArray.forEach(aluno => {
                     aluno.provas.forEach(prova => {
@@ -5023,7 +5048,9 @@ window.addEventListener('scroll', function() {
                             'Aluno': aluno.nome,
                             'Matrícula': aluno.matricula,
                             'Turma': aluno.turma,
+                            'Disciplina': aluno.disciplina,
                             'Prova': prova.provaTitulo,
+                            'Período': prova.provaPeriodo ? prova.provaPeriodo + 'º' : '1º', // 🔴 PERÍODO INCLUÍDO!
                             'Data': prova.data,
                             'Nota': prova.nota,
                             'Acertos': `${prova.acertos}/${prova.total}`,
@@ -5034,7 +5061,7 @@ window.addEventListener('scroll', function() {
                     });
                 });
                 
-                // Aba 3: Estatísticas
+                // Aba 3: Estatísticas - AGORA COM PERÍODO!
                 const totalAlunos = alunosArray.length;
                 const totalProvas = provas.length;
                 const totalResultados = todosResultados.length;
@@ -5053,7 +5080,8 @@ window.addEventListener('scroll', function() {
                     ['Total de Alunos', totalAlunos],
                     ['Total de Provas', totalProvas],
                     ['Total de Resultados', totalResultados],
-                    ['Média Geral da Turma', mediaGeral],
+                    ['Média Geral', mediaGeral],
+                    ['Período Selecionado', periodoTexto], // 🔴 PERÍODO ADICIONADO!
                     [''],
                     ['📈 DISTRIBUIÇÃO DE DESEMPENHO'],
                     ['Situação', 'Quantidade', 'Percentual'],
@@ -5082,7 +5110,7 @@ window.addEventListener('scroll', function() {
                 const wsDetalhes = XLSX.utils.json_to_sheet(dadosDetalhados);
                 const wsEstatisticas = XLSX.utils.aoa_to_sheet(estatisticas);
                 
-                // Ajustar larguras
+                // Ajustar larguras (AGORA COM COLUNA DE PERÍODO)
                 wsResumo['!cols'] = [
                     { wch: 5 },   // #
                     { wch: 30 },  // Aluno
@@ -5099,7 +5127,9 @@ window.addEventListener('scroll', function() {
                     { wch: 30 },  // Aluno
                     { wch: 15 },  // Matrícula
                     { wch: 25 },  // Turma
+                    { wch: 20 },  // Disciplina
                     { wch: 40 },  // Prova
+                    { wch: 10 },  // Período 🔴 NOVA COLUNA
                     { wch: 15 },  // Data
                     { wch: 8 },   // Nota
                     { wch: 12 },  // Acertos
@@ -5113,9 +5143,10 @@ window.addEventListener('scroll', function() {
                 XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo por Aluno');
                 XLSX.utils.book_append_sheet(wb, wsDetalhes, 'Detalhamento');
                 
-                // Gerar arquivo
+                // Gerar arquivo (AGORA COM PERÍODO NO NOME DO ARQUIVO)
                 const dataAtual = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
-                const nomeArquivo = `notas-${turmaNome.replace(/\s+/g, '-').toLowerCase()}-${dataAtual}.xlsx`;
+                const periodoArquivo = periodoSelecionadoFlag ? `-periodo-${periodoSelecionado}` : '';
+                const nomeArquivo = `notas-${turmaNome.replace(/\s+/g, '-').toLowerCase()}${periodoArquivo}-${dataAtual}.xlsx`;
                 
                 XLSX.writeFile(wb, nomeArquivo);
                 
@@ -5123,12 +5154,14 @@ window.addEventListener('scroll', function() {
                 mostrarAlerta('alertResultados', 
                     `✅ Relatório gerado com sucesso!\n` +
                     `📊 ${totalAlunos} alunos • ${totalResultados} notas\n` +
+                    `📁 Período: ${periodoTexto}\n` +
                     `📁 ${nomeArquivo}`, 
                     'success');
                 
                 console.log('✅ Exportação concluída:', {
                     alunos: totalAlunos,
                     resultados: totalResultados,
+                    periodo: periodoTexto,
                     mediaGeral: mediaGeral
                 });
                 
@@ -9339,6 +9372,18 @@ window.addEventListener('scroll', function() {
                 filtroTipo.options[filtroTipo.selectedIndex]?.text.replace(/[📚📄🎯♿]/g, '').trim() : 
                 'Todos';
             
+            // 🔴 FILTRO DE PERÍODO - ADICIONADO!
+            const filtroPeriodo = document.getElementById('filtroPeriodoProvas');
+            const periodoSelecionado = filtroPeriodo ? filtroPeriodo.value : 'todos';
+            let periodoTexto = 'Todos os períodos';
+            let periodoSelecionadoFlag = false;
+            
+            if (filtroPeriodo && filtroPeriodo.selectedIndex >= 0) {
+                const selectedOption = filtroPeriodo.options[filtroPeriodo.selectedIndex];
+                periodoTexto = selectedOption ? selectedOption.text.replace('📅', '').trim() : 'Todos os períodos';
+                periodoSelecionadoFlag = periodoSelecionado && periodoSelecionado !== 'todos';
+            }
+            
             // Filtro de Turma
             const filtroTurma = document.getElementById('filtroTurmaProvas');
             let turmaId = '';
@@ -9363,6 +9408,7 @@ window.addEventListener('scroll', function() {
                 status: statusTexto,
                 dificuldade: dificuldadeTexto,
                 tipo: tipoTexto,
+                periodo: periodoTexto, // <-- AGORA APARECE NO CONSOLE
                 turma: turmaNome,
                 busca: buscaTexto || 'vazio'
             });
@@ -9376,7 +9422,6 @@ window.addEventListener('scroll', function() {
                     dadosFiltrados = dadosFiltrados.filter(d => d.turmaId === turmaId);
                 }
                 
-                // Aqui você pode adicionar mais filtros se quiser contar
                 totalRegistros = dadosFiltrados.length;
             }
             
@@ -9389,7 +9434,7 @@ window.addEventListener('scroll', function() {
                 document.body.appendChild(modal);
             }
             
-            // HTML do modal com TODOS os filtros
+            // HTML do modal com TODOS os filtros (incluindo PERÍODO)
             modal.innerHTML = `
                 <div class="modal-content" style="max-width: 650px; border-radius: 24px;">
                     <div class="modal-header" style="padding: 20px 25px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
@@ -9433,6 +9478,16 @@ window.addEventListener('scroll', function() {
                                     </div>
                                 </div>
                                 
+                                <!-- 🔴 PERÍODO LETIVO - AGORA APARECE! -->
+                                <div style="background: white; padding: 12px; border-radius: 12px; border-left: 4px solid ${periodoSelecionadoFlag ? '#f97316' : '#9ca3af'};">
+                                    <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">
+                                        <i class="fas fa-calendar-week" style="color: #f97316;"></i> Período Letivo
+                                    </div>
+                                    <div style="font-weight: 600; color: ${periodoSelecionadoFlag ? '#1f2937' : '#6b7280'};">
+                                        ${periodoTexto}
+                                    </div>
+                                </div>
+                                
                                 <!-- Turma -->
                                 <div style="background: white; padding: 12px; border-radius: 12px; border-left: 4px solid ${turmaSelecionada ? '#8b5cf6' : '#9ca3af'};">
                                     <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">Turma</div>
@@ -9452,13 +9507,14 @@ window.addEventListener('scroll', function() {
                             </div>
                             ` : ''}
                             
-                            <!-- Resumo dos filtros -->
+                            <!-- Resumo dos filtros (AGORA COM PERÍODO) -->
                             <div style="margin-top: 15px; padding: 10px; background: #e0f2fe; border-radius: 10px; color: #0369a1; font-size: 0.9rem;">
                                 <i class="fas fa-info-circle"></i>
                                 <strong>Resumo:</strong> 
                                 ${statusSelecionado !== 'todos' ? `Status: ${statusTexto} • ` : ''}
                                 ${dificuldadeSelecionada !== 'todas' ? `Dificuldade: ${dificuldadeTexto} • ` : ''}
                                 ${tipoSelecionado !== 'todos' ? `Tipo: ${tipoTexto} • ` : ''}
+                                ${periodoSelecionadoFlag ? `Período: ${periodoTexto} • ` : ''}
                                 ${turmaSelecionada ? `Turma: ${turmaNome}` : 'Todas as turmas'}
                                 ${temBusca ? ` • Buscando: "${buscaTexto}"` : ''}
                             </div>
@@ -9507,7 +9563,7 @@ window.addEventListener('scroll', function() {
                                 </div>
                             </div>
                             
-                            <!-- Relatório de Notas dos Alunos -->
+                            <!-- Relatório de Notas dos Alunos (AGORA MOSTRA TODOS OS FILTROS, INCLUINDO PERÍODO) -->
                             <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 16px; padding: 15px; border: 2px solid #f59e0b;">
                                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
                                     <div style="width: 40px; height: 40px; background: #f59e0b; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white;">
@@ -9526,7 +9582,15 @@ window.addEventListener('scroll', function() {
                                     <i class="fas fa-file-excel" style="font-size: 20px;"></i>
                                     <div>
                                         <div>Exportar Notas dos Alunos (Excel)</div>
-                                        <small style="opacity: 0.9;">Usando ${statusSelecionado !== 'todos' ? 'Status, ' : ''}${dificuldadeSelecionada !== 'todas' ? 'Dificuldade, ' : ''}${tipoSelecionado !== 'todos' ? 'Tipo, ' : ''}${turmaSelecionada ? 'Turma' : ''} ${temBusca ? ', Busca' : ''}</small>
+                                        <small style="opacity: 0.9;">
+                                            Usando: 
+                                            ${statusSelecionado !== 'todos' ? `Status: ${statusTexto} ` : ''}
+                                            ${dificuldadeSelecionada !== 'todas' ? `• Dificuldade: ${dificuldadeTexto} ` : ''}
+                                            ${tipoSelecionado !== 'todos' ? `• Tipo: ${tipoTexto} ` : ''}
+                                            ${periodoSelecionadoFlag ? `• Período: ${periodoTexto} ` : ''}
+                                            ${turmaSelecionada ? `• Turma: ${turmaNome} ` : ''}
+                                            ${temBusca ? `• Busca: "${buscaTexto}"` : ''}
+                                        </small>
                                     </div>
                                 </button>
                             </div>
