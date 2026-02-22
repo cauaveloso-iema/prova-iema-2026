@@ -2748,16 +2748,21 @@
             const prova = data.prova;
             const agora = new Date();
             
+            // 🔴 CORREÇÃO: Usar data LOCAL, não UTC
+            const ano = agora.getFullYear();
+            const mes = String(agora.getMonth() + 1).padStart(2, '0');
+            const dia = String(agora.getDate()).padStart(2, '0');
+            
             // Verificar horário específico
             if (prova.horarioInicio && prova.horarioTermino) {
-                const dataHoje = agora.toISOString().split('T')[0];
-                const inicioProva = new Date(dataHoje + 'T' + prova.horarioInicio + ':00');
-                const terminoProva = new Date(dataHoje + 'T' + prova.horarioTermino + ':00');
+                const inicioProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioInicio}:00`);
+                const terminoProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00`);
                 
-                console.log('⏰ Verificação de horário:');
-                console.log('  Agora:', agora.toLocaleTimeString('pt-BR'));
-                console.log('  Início:', inicioProva.toLocaleTimeString('pt-BR'));
-                console.log('  Término:', terminoProva.toLocaleTimeString('pt-BR'));
+                console.log('📅 VERIFICAÇÃO DE HORÁRIO (CORRIGIDA):');
+                console.log('  Data usada:', `${ano}-${mes}-${dia}`);
+                console.log('  Início (local):', inicioProva.toLocaleString('pt-BR'));
+                console.log('  Término (local):', terminoProva.toLocaleString('pt-BR'));
+                console.log('  Agora (local):', agora.toLocaleString('pt-BR'));
                 
                 if (agora < inicioProva) {
                     const minutosRestantes = Math.floor((inicioProva - agora) / (1000 * 60));
@@ -2781,6 +2786,8 @@
                         'O horário para esta prova terminou às ' + prova.horarioTermino);
                     return false;
                 }
+                
+                console.log('✅ PROVA DISPONÍVEL!');
                 
                 // Calcular e mostrar tempo restante
                 const tempoRestanteMinutos = Math.floor((terminoProva - agora) / (1000 * 60));

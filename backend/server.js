@@ -3681,53 +3681,6 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
       }
     }
     
-    // **VERIFICAÇÃO DE HORÁRIO ESPECÍFICO (NOVO)**
-    if (prova.horarioInicio && prova.horarioTermino) {
-      // Obter data atual em string YYYY-MM-DD
-      const dataHoje = agora.toISOString().split('T')[0];
-      
-      // Criar objetos Date com a data de hoje + horários da prova
-      const inicioProva = new Date(`${dataHoje}T${prova.horarioInicio}:00`);
-      const terminoProva = new Date(`${dataHoje}T${prova.horarioTermino}:00`);
-      
-      console.log(`⏰ Verificando horário da prova:`);
-      console.log(`   Agora: ${agora.toLocaleTimeString('pt-BR')}`);
-      console.log(`   Início da prova: ${inicioProva.toLocaleTimeString('pt-BR')}`);
-      console.log(`   Término da prova: ${terminoProva.toLocaleTimeString('pt-BR')}`);
-      console.log(`   Horário permitido: ${prova.horarioInicio} às ${prova.horarioTermino}`);
-      
-      // Verificar se está dentro do horário permitido
-      if (agora < inicioProva) {
-        const minutosRestantes = Math.floor((inicioProva - agora) / (1000 * 60));
-        
-        let mensagem = `🕐 Esta prova só poderá ser realizada a partir das ${prova.horarioInicio}`;
-        if (minutosRestantes > 0) {
-          if (minutosRestantes > 60) {
-            const horas = Math.floor(minutosRestantes / 60);
-            mensagem += ` (em ${horas} hora${horas > 1 ? 's' : ''})`;
-          } else {
-            mensagem += ` (em ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''})`;
-          }
-        }
-        
-        return res.status(400).json({ 
-          success: false, 
-          error: mensagem 
-        });
-      }
-      
-      if (agora > terminoProva) {
-        return res.status(400).json({ 
-          success: false, 
-          error: `⏰ O horário para esta prova terminou às ${prova.horarioTermino}` 
-        });
-      }
-      
-      // Calcular tempo restante para exibição na interface
-      const tempoRestanteMinutos = Math.floor((terminoProva - agora) / (1000 * 60));
-      console.log(`⏱️ Tempo restante: ${tempoRestanteMinutos} minutos`);
-    }
-    
     if (prova.turmaId) {
       const turma = await Turma.findById(prova.turmaId);
       if (turma && !turma.alunos.includes(alunoId)) {
@@ -4517,67 +4470,40 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       }
     }
     
-    // VERIFICAÇÃO DE HORÁRIO ESPECÍFICO - CORRIGIDA COM FUSO BRASÍLIA
+    // VERIFICAÇÃO DE HORÁRIO - VERSÃO CORRIGIDA USANDO DATA LIMITE
     if (prova.horarioInicio && prova.horarioTermino) {
-      // Obter data da prova a partir da data limite
-      let dataProva;
-      if (prova.dataLimite) {
-        const dataLimite = new Date(prova.dataLimite);
-        const ano = dataLimite.getFullYear();
-        const mes = String(dataLimite.getMonth() + 1).padStart(2, '0');
-        const dia = String(dataLimite.getDate()).padStart(2, '0');
-        dataProva = `${ano}-${mes}-${dia}`;
-      } else {
-        dataProva = hoje.toISOString().split('T')[0];
-      }
+      // Usar data LOCAL, não UTC
+      const agora = new Date();
+      const ano = agora.getFullYear();
+      const mes = String(agora.getMonth() + 1).padStart(2, '0');
+      const dia = String(agora.getDate()).padStart(2, '0');
       
-      // CRIAR DATAS NO FUSO DE BRASÍLIA (UTC-3)
-      const inicioProva = new Date(`${dataProva}T${prova.horarioInicio}:00-03:00`);
-      const terminoProva = new Date(`${dataProva}T${prova.horarioTermino}:00-03:00`);
+      const inicioProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioInicio}:00`);
+      const terminoProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00`);
       
-      // HORÁRIO ATUAL EM BRASÍLIA
-      const agoraBrasilia = new Date(hoje.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      console.log('📅 VERIFICAÇÃO DE HORÁRIO (BACKEND):');
+      console.log(`   Data usada: ${ano}-${mes}-${dia}`);
+      console.log(`   Início: ${inicioProva.toLocaleString('pt-BR')}`);
+      console.log(`   Término: ${terminoProva.toLocaleString('pt-BR')}`);
+      console.log(`   Agora: ${agora.toLocaleString('pt-BR')}`);
       
-      console.log(`   ⏰ Início (Brasília): ${inicioProva.toLocaleString('pt-BR')}`);
-      console.log(`   ⏰ Término (Brasília): ${terminoProva.toLocaleString('pt-BR')}`);
-      console.log(`   ⏰ Agora (Brasília): ${agoraBrasilia.toLocaleString('pt-BR')}`);
-      
-      if (agoraBrasilia < inicioProva) {
-        const diffMs = inicioProva - agoraBrasilia;
-        const minutosRestantes = Math.floor(diffMs / (1000 * 60));
-        const horas = Math.floor(minutosRestantes / 60);
-        const minutos = minutosRestantes % 60;
-        
-        let mensagem = `A prova só estará disponível a partir das ${prova.horarioInicio}`;
-        if (horas > 0) {
-          mensagem += ` (em ${horas}h${minutos > 0 ? minutos + 'min' : ''})`;
-        } else {
-          mensagem += ` (em ${minutos}min)`;
-        }
-        
-        console.log(`   🚫 BLOQUEADO: Prova ainda não iniciou`);
+      if (agora < inicioProva) {
+        const diffMinutos = Math.floor((inicioProva - agora) / 60000);
         return res.status(400).json({
           success: false,
-          error: mensagem,
-          codigo: 'PROVA_NAO_INICIADA',
-          horarioInicio: prova.horarioInicio,
-          minutosRestantes: minutosRestantes
+          error: `A prova só estará disponível a partir das ${prova.horarioInicio} (em ${diffMinutos} minutos)`
         });
       }
       
-      if (agoraBrasilia > terminoProva) {
-        console.log(`   🚫 BLOQUEADO: Horário da prova já terminou`);
+      if (agora > terminoProva) {
         return res.status(400).json({
           success: false,
-          error: `O horário para esta prova terminou às ${prova.horarioTermino}`,
-          codigo: 'PROVA_TERMINADA',
-          horarioTermino: prova.horarioTermino
+          error: `⏰ O horário para esta prova terminou às ${prova.horarioTermino}`
         });
       }
       
-      // Calcular tempo restante
-      const tempoRestanteMinutos = Math.floor((terminoProva - agoraBrasilia) / (1000 * 60));
-      console.log(`   ⏱️ Tempo restante: ${tempoRestanteMinutos} minutos`);
+      // Se chegou aqui, a prova está disponível!
+      console.log('✅ PROVA DISPONÍVEL!');
     }
     
     // ========== GERAR TOKEN ESPECÍFICO PARA A PROVA ==========
