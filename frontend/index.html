@@ -10139,6 +10139,9 @@ window.addEventListener('scroll', function() {
                 return;
             }
 
+            // 🔴 CORREÇÃO: Pegar o período do select
+            const periodoProva = document.getElementById('periodoProva').value;
+
             // Mostrar loading no preview
             const questoesPreview = document.getElementById('questoesPreview');
             if (questoesPreview) {
@@ -10183,13 +10186,13 @@ window.addEventListener('scroll', function() {
                     dataLimiteEnviar = dataLimiteFimDia.toISOString();
                 }
 
-                // Preparar dados da prova
+                // Preparar dados da prova - AGORA COM periodoProva DEFINIDO
                 const dadosProva = {
                     turmaId: turmaId,
                     titulo: titulo,
                     conteudo: tema,
                     tipoProva: tipoProva,
-                    periodo: periodoProva,
+                    periodo: periodoProva, // ✅ AGORA FUNCIONA!
                     quantidadeQuestoes: parseInt(quantidadeQuestoes),
                     dificuldade: dificuldade,
                     dataLimite: dataLimiteEnviar,
