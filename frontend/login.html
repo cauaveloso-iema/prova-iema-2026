@@ -1032,7 +1032,7 @@
             return 'cpf'; // Caso padrão
         }
         
-        // Configuração do formulário de login
+        // ========== FUNÇÃO DE LOGIN COMPLETA E CORRIGIDA ==========
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -1075,7 +1075,7 @@
                 if (dados.success) {
                     mostrarAlerta('✅ Login realizado! Redirecionando...', 'success');
                     
-                    //  CORREÇÃO: VERIFICAR E BUSCAR TURMA SE NÃO VIER
+                    // CORREÇÃO: VERIFICAR E BUSCAR TURMA SE NÃO VIER
                     if (dados.user.role === 'aluno' && !dados.user.turma) {
                         console.log('⚠️ Turma não veio no login. Buscando do /me...');
                         try {
@@ -1096,10 +1096,12 @@
                     localStorage.setItem('auth_token', dados.token);
                     localStorage.setItem('user_data', JSON.stringify(dados.user));
                     
-                    // Redirecionar baseado no role
+                    // 🔴 CORREÇÃO: USAR O REDIRECT TO DO BACKEND
+                    console.log('🔄 Redirecionando para:', dados.redirectTo);
+                    console.log('🔐 Precisa trocar senha:', dados.precisaTrocarSenha);
+                    
                     setTimeout(() => {
-                        window.location.href = dados.redirectTo || 
-                            (dados.user.role === 'professor' ? 'index.html' : 'aluno.html');
+                        window.location.href = dados.redirectTo;
                     }, 1000);
                     
                 } else {
@@ -1275,8 +1277,12 @@
                     localStorage.setItem('user_data', JSON.stringify(dados.user));
                     
                     setTimeout(() => {
-                        window.location.href = dados.redirectTo || 
-                            (role === 'professor' ? 'index.html' : 'aluno.html');
+                        if (dados.user.role === 'admin' || dados.user.role === 'super_admin') {
+                            window.location.href = 'admin.html';
+                        } else {
+                            window.location.href = dados.redirectTo || 
+                                (role === 'professor' ? 'index.html' : 'aluno.html');
+                        }
                     }, 1500);
                     
                 } else {

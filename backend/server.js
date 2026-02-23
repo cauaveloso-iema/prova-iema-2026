@@ -466,7 +466,7 @@ const validateInputs = (validations) => {
   };
 };
 
-// ============ ROTA DE REGISTRO COMPLETA COM ACESSIBILIDADE ============
+// ============ ROTA DE REGISTRO CORRIGIDA ============
 app.post('/api/auth/register', [
   check('nome').not().isEmpty().withMessage('Nome é obrigatório'),
   check('email').isEmail().withMessage('Email inválido'),
@@ -694,6 +694,8 @@ app.post('/api/auth/register', [
       cpf: cpfNumeros,
       telefone: telefoneNumeros,
       matricula: matricula || undefined,
+      ativo: true,
+      forcePasswordChange: false, // Registro normal não força troca de senha
       role,
       eixo: role === 'professor' ? eixo : null,
       curso: role === 'aluno' ? curso : undefined,
@@ -725,12 +727,17 @@ app.post('/api/auth/register', [
         eixo: user.eixo,
         nome: user.nome,
         cpf: user.cpf,
-        precisaAcessibilidade: user.precisaAcessibilidade,
+        precisaAcessibilidade: user.precisaAcessibilidade === true,
         condicaoAcessibilidade: user.condicaoAcessibilidade
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
+    
+    // 🔴 CORREÇÃO: Usar 'user' em vez de 'userCompleto'
+    const redirectTo = user.role === 'admin' || user.role === 'super_admin' 
+        ? '/admin.html' 
+        : (user.role === 'professor' ? '/index.html' : '/aluno.html');
     
     res.status(201).json({
       success: true,
@@ -752,7 +759,7 @@ app.post('/api/auth/register', [
         condicaoAcessibilidade: user.condicaoAcessibilidade,
         outraCondicao: user.outraCondicao
       },
-      redirectTo: role === 'professor' ? '/index.html' : '/aluno.html'
+      redirectTo: redirectTo
     });
     
   } catch (error) {
@@ -811,7 +818,9 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-// ========== ROTA DE LOGIN CORRIGIDA - ADICIONAR TURMA NA RESPOSTA ==========
+
+// ========== ROTA DE LOGIN CORRIGIDA (VERSÃO FINAL) ==========
+// ========== ROTA DE LOGIN - VERSÃO FINAL LIMPA ==========
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password, cpf } = req.body;
@@ -819,16 +828,26 @@ app.post('/api/auth/login', async (req, res) => {
     let user;
     
     if (email) {
-      user = await User.findOne({ email }).select('+password');
+      user = await User.findOne({ email })
+        .select('+password +forcePasswordChange +passwordChangedAt +ativo');
     } else if (cpf) {
       const cpfNumeros = cpf.replace(/\D/g, '');
-      user = await User.findOne({ cpf: cpfNumeros }).select('+password');
+      user = await User.findOne({ cpf: cpfNumeros })
+        .select('+password +forcePasswordChange +passwordChangedAt +ativo');
     } else {
       return res.status(400).json({ success: false, error: 'Email ou CPF é obrigatório' });
     }
     
     if (!user) {
       return res.status(401).json({ success: false, error: 'Email/CPF ou senha incorretos' });
+    }
+    
+    // Verificar se usuário está ativo
+    if (!user.ativo) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Usuário inativo. Entre em contato com a administração.' 
+      });
     }
     
     const isMatch = await user.comparePassword(password);
@@ -839,51 +858,62 @@ app.post('/api/auth/login', async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
     
-    // 🔥 BUSCAR USUÁRIO COMPLETO COM TODOS OS CAMPOS
-    const userCompleto = await User.findById(user._id)
-      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade');
-    
-    console.log(`✅ Login bem-sucedido: ${userCompleto.email}`);
-    console.log(`   📚 Curso: ${userCompleto.curso}`);
-    console.log(`   🏫 TURMA: ${userCompleto.turma}`); // <-- VERIFICAR SE ESTÁ VINDO!
-    console.log(`   🎯 Eixo: ${userCompleto.eixo}`);
+    // Verificar se precisa trocar a senha
+    const precisaTrocarSenha = user.forcePasswordChange === true;
     
     const token = jwt.sign(
       { 
-        id: userCompleto._id, 
-        role: userCompleto.role,
-        eixo: userCompleto.eixo,
-        nome: userCompleto.nome,
-        cpf: userCompleto.cpf,
-        precisaAcessibilidade: userCompleto.precisaAcessibilidade === true,
-        condicaoAcessibilidade: userCompleto.condicaoAcessibilidade
+        id: user._id, 
+        role: user.role,
+        eixo: user.eixo,
+        nome: user.nome,
+        cpf: user.cpf,
+        precisaAcessibilidade: user.precisaAcessibilidade === true,
+        condicaoAcessibilidade: user.condicaoAcessibilidade,
+        forcePasswordChange: precisaTrocarSenha
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
     
-    // CORREÇÃO: INCLUIR TURMA NA RESPOSTA!
+    // Redirecionamento baseado na necessidade de trocar senha
+    let redirectTo = '';
+    
+    if (precisaTrocarSenha) {
+      redirectTo = '/trocar-senha.html';
+    } else if (user.role === 'admin' || user.role === 'super_admin') {
+      redirectTo = '/admin.html';
+    } else if (user.role === 'professor') {
+      redirectTo = '/index.html';
+    } else if (user.role === 'aluno') {
+      redirectTo = '/aluno.html';
+    } else {
+      redirectTo = '/login.html';
+    }
+    
     res.json({
       success: true,
       token,
+      precisaTrocarSenha: precisaTrocarSenha,
       user: {
-        id: userCompleto._id,
-        nome: userCompleto.nome,
-        email: userCompleto.email,
-        cpf: userCompleto.cpf,
-        role: userCompleto.role,
-        eixo: userCompleto.eixo,
-        matricula: userCompleto.matricula,
-        curso: userCompleto.curso,
-        turma: userCompleto.turma,     // <-- ADICIONAR ESTA LINHA!
-        periodo: userCompleto.periodo,
-        departamento: userCompleto.departamento,
-        titulacao: userCompleto.titulacao,
-        precisaAcessibilidade: userCompleto.precisaAcessibilidade === true,
-        condicaoAcessibilidade: userCompleto.condicaoAcessibilidade,
-        outraCondicao: userCompleto.outraCondicao
+        id: user._id,
+        nome: user.nome,
+        email: user.email,
+        cpf: user.cpf,
+        role: user.role,
+        eixo: user.eixo,
+        matricula: user.matricula,
+        curso: user.curso,
+        turma: user.turma,
+        periodo: user.periodo,
+        departamento: user.departamento,
+        titulacao: user.titulacao,
+        precisaAcessibilidade: user.precisaAcessibilidade === true,
+        condicaoAcessibilidade: user.condicaoAcessibilidade,
+        ativo: user.ativo,
+        forcePasswordChange: precisaTrocarSenha
       },
-      redirectTo: userCompleto.role === 'professor' ? '/index.html' : '/aluno.html'
+      redirectTo: redirectTo
     });
     
   } catch (error) {
@@ -1480,38 +1510,83 @@ app.post('/api/turmas/entrar', authenticateToken, async (req, res) => {
   }
 });
 
+// ============ ROTA PARA EXCLUIR TURMA (ADMIN/PROFESSOR) ============
 app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
-  try {
-    const turma = await Turma.findById(req.params.id);
+    try {
+        const turmaId = req.params.id;
+        const usuarioId = req.userId;
+        const usuarioRole = req.userRole;
 
-    if (!turma) {
-      return res.status(404).json({
-        success: false,
-        error: 'Turma não encontrada'
-      });
+        console.log(`🗑️ Tentativa de exclusão da turma ${turmaId} pelo usuário ${usuarioId} (${usuarioRole})`);
+
+        // Buscar turma
+        const turma = await Turma.findById(turmaId);
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+
+        // Verificar permissão (admin ou professor da turma)
+        const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
+        const isProfessorDaTurma = turma.professorId && turma.professorId.toString() === usuarioId;
+
+        if (!isAdmin && !isProfessorDaTurma) {
+            return res.status(403).json({
+                success: false,
+                error: 'Você não tem permissão para excluir esta turma'
+            });
+        }
+
+        // Verificar se há provas associadas
+        const provasAssociadas = await Prova.countDocuments({ turmaId: turmaId });
+        
+        if (provasAssociadas > 0 && !isAdmin) {
+            return res.status(400).json({
+                success: false,
+                error: 'Esta turma possui provas associadas. Exclua as provas primeiro.',
+                detalhes: {
+                    totalProvas: provasAssociadas
+                }
+            });
+        }
+
+        // Se for admin, remover referências das provas
+        if (isAdmin && provasAssociadas > 0) {
+            console.log(`🔧 Admin removendo ${provasAssociadas} provas associadas...`);
+            await Prova.deleteMany({ turmaId: turmaId });
+        }
+
+        // Remover referência da turma dos alunos
+        if (turma.alunos && turma.alunos.length > 0) {
+            await User.updateMany(
+                { _id: { $in: turma.alunos } },
+                { $pull: { turmas: turmaId } }
+            );
+        }
+
+        // Excluir a turma
+        await Turma.findByIdAndDelete(turmaId);
+
+        console.log(`✅ Turma ${turmaId} excluída com sucesso por ${usuarioId}`);
+
+        res.json({
+            success: true,
+            message: 'Turma excluída com sucesso!',
+            detalhes: {
+                provasRemovidas: isAdmin ? provasAssociadas : 0,
+                alunosRemovidos: turma.alunos?.length || 0
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao excluir turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao excluir turma: ' + error.message
+        });
     }
-
-    if (turma.professorId.toString() !== req.userId && req.userRole !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: 'Apenas o professor desta turma pode excluí-la'
-      });
-    }
-
-    await turma.deleteOne();
-
-    res.json({
-      success: true,
-      message: 'Turma excluída com sucesso'
-    });
-
-  } catch (error) {
-    console.error('Erro ao excluir turma:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erro ao excluir turma'
-    });
-  }
 });
 
 // ============ ROTA PARA BUSCAR UMA TURMA ESPECÍFICA ============
@@ -7580,6 +7655,1140 @@ app.get('/api/chatbot/context', authenticateToken, (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Erro ao obter contexto'
+        });
+    }
+});
+
+// ============ ROTAS DO SUPER ADMIN ============
+
+// Middleware para verificar se é super admin
+const isSuperAdmin = (req, res, next) => {
+    if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        return res.status(403).json({
+            success: false,
+            error: 'Acesso negado. Apenas administradores podem acessar esta rota.'
+        });
+    }
+    next();
+};
+
+// Dashboard - Estatísticas gerais
+app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const [
+            totalUsuarios,
+            totalAlunos,
+            totalProfessores,
+            totalAdmins,
+            totalTurmas,
+            totalProvas,
+            totalQuestoes,
+            totalResultados,
+            usuariosPorMes,
+            provasPorStatus,
+            turmasAtivas,
+            alunosComAcessibilidade
+        ] = await Promise.all([
+            User.countDocuments(),
+            User.countDocuments({ role: 'aluno' }),
+            User.countDocuments({ role: 'professor' }),
+            User.countDocuments({ role: { $in: ['admin', 'super_admin'] } }),
+            Turma.countDocuments(),
+            Prova.countDocuments(),
+            Prova.aggregate([{ $project: { count: { $size: "$questoes" } } }, { $group: { _id: null, total: { $sum: "$count" } } }]),
+            Resultado.countDocuments(),
+            User.aggregate([
+                { $group: { 
+                    _id: { $month: "$createdAt" }, 
+                    count: { $sum: 1 } 
+                }},
+                { $sort: { _id: 1 } }
+            ]),
+            Prova.aggregate([
+                { $group: { 
+                    _id: "$status", 
+                    count: { $sum: 1 } 
+                }}
+            ]),
+            Turma.countDocuments({ ativa: true }),
+            User.countDocuments({ precisaAcessibilidade: true, role: 'aluno' })
+        ]);
+
+        // Atividades recentes
+        const atividadesRecentes = await Promise.all([
+            Resultado.find()
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .populate('userId', 'nome')
+                .populate('provaId', 'titulo')
+                .lean(),
+            ProvaRealizada.find()
+                .sort({ dataRealizacao: -1 })
+                .limit(5)
+                .populate('alunoId', 'nome')
+                .populate('provaId', 'titulo')
+                .lean()
+        ]);
+
+        const recentes = [...atividadesRecentes[0], ...atividadesRecentes[1]]
+            .sort((a, b) => new Date(b.createdAt || b.dataRealizacao) - new Date(a.createdAt || a.dataRealizacao))
+            .slice(0, 10);
+
+        res.json({
+            success: true,
+            data: {
+                totalUsuarios,
+                totalAlunos,
+                totalProfessores,
+                totalAdmins,
+                totalTurmas,
+                totalProvas,
+                totalQuestoes: totalQuestoes[0]?.total || 0,
+                totalResultados,
+                usuariosPorMes: usuariosPorMes.map(item => ({ mes: item._id, total: item.count })),
+                provasPorStatus: provasPorStatus.reduce((acc, item) => ({ ...acc, [item._id]: item.count }), {}),
+                turmasAtivas,
+                alunosComAcessibilidade,
+                atividadesRecentes: recentes.map(r => ({
+                    id: r._id,
+                    tipo: r.userId ? 'resultado' : 'prova_realizada',
+                    usuario: r.userId?.nome || r.alunoId?.nome || 'Desconhecido',
+                    acao: r.userId ? 'finalizou a prova' : 'realizou a prova',
+                    prova: r.provaId?.titulo || 'Prova',
+                    data: r.createdAt || r.dataRealizacao
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro no dashboard admin:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ GERENCIAMENTO DE USUÁRIOS ============
+
+// ============ ROTA PARA CRIAR USUÁRIO (ADMIN) - VERSÃO CORRIGIDA ============
+app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const userData = req.body;
+        
+        console.log('📝 Admin criando usuário:', userData.email);
+        
+        // Validar email institucional
+        if (userData.email && !userData.email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
+            return res.status(400).json({
+                success: false,
+                error: 'Somente emails institucionais (@iemasaoluiscentro.net) são permitidos'
+            });
+        }
+
+        // Verificar duplicatas
+        const existingUser = await User.findOne({
+            $or: [
+                { email: userData.email },
+                { cpf: userData.cpf?.replace(/\D/g, '') }
+            ]
+        });
+
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                error: 'Email ou CPF já cadastrado'
+            });
+        }
+
+        // 🔴 GARANTIR QUE TODOS OS CAMPOS IMPORTANTES ESTÃO PRESENTES
+        const user = new User({
+            ...userData,
+            ativo: true,
+            forcePasswordChange: true,  // <-- ISSO É CRÍTICO!
+            passwordChangedAt: null,
+            loginAttempts: 0,
+            lockUntil: null
+        });
+        
+        await user.save();
+
+        console.log(`✅ Usuário criado: ${user.email}`);
+        console.log(`   ativo: ${user.ativo}`);
+        console.log(`   forcePasswordChange: ${user.forcePasswordChange}`); // Deve ser TRUE
+
+        res.status(201).json({
+            success: true,
+            message: 'Usuário criado com sucesso! Ele deverá trocar a senha no primeiro login.',
+            user: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email,
+                role: user.role,
+                ativo: user.ativo,
+                forcePasswordChange: user.forcePasswordChange
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao criar usuário:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ ROTA PARA LISTAR USUÁRIOS (ADMIN) ============
+app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { role, search, page = 1, limit = 20 } = req.query;
+        
+        let query = {};
+        
+        if (role && role !== 'todos') {
+            query.role = role;
+        }
+        
+        if (search) {
+            query.$or = [
+                { nome: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { matricula: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [usuarios, total] = await Promise.all([
+            User.find(query)
+                .select('-password') // NÃO remover os campos importantes
+                .populate('turma', 'nome')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            User.countDocuments(query)
+        ]);
+
+        // Garantir que todos os campos importantes estejam presentes
+        const usuariosFormatados = usuarios.map(user => ({
+            ...user,
+            id: user._id,
+            _id: user._id,
+            forcePasswordChange: user.forcePasswordChange !== undefined ? user.forcePasswordChange : false,
+            passwordChangedAt: user.passwordChangedAt || null,
+            ativo: user.ativo !== undefined ? user.ativo : true
+        }));
+
+        res.json({
+            success: true,
+            usuarios: usuariosFormatados,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar usuários:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// Atualizar usuário
+app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        // Não permitir atualizar senha por esta rota
+        delete updates.password;
+        
+        const user = await User.findByIdAndUpdate(id, updates, { new: true })
+            .select('-password');
+        
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+        }
+
+        res.json({ success: true, user });
+
+    } catch (error) {
+        console.error('❌ Erro ao atualizar usuário:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+// Deletar usuário
+app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Verificar se é o último admin
+        if (req.userId === id) {
+            return res.status(400).json({
+                success: false,
+                error: 'Você não pode excluir seu próprio usuário'
+            });
+        }
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+        }
+
+        // Verificar se há dados relacionados
+        const [resultados, provasRealizadas, provasCriadas] = await Promise.all([
+            Resultado.countDocuments({ userId: id }),
+            ProvaRealizada.countDocuments({ alunoId: id }),
+            Prova.countDocuments({ userId: id })
+        ]);
+
+        if (resultados > 0 || provasRealizadas > 0 || provasCriadas > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Este usuário possui dados associados. Não é possível excluir.',
+                estatisticas: { resultados, provasRealizadas, provasCriadas }
+            });
+        }
+
+        await User.findByIdAndDelete(id);
+
+        res.json({ success: true, message: 'Usuário excluído com sucesso' });
+
+    } catch (error) {
+        console.error('❌ Erro ao deletar usuário:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ GERENCIAMENTO DE TURMAS ============
+
+app.get('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const turmas = await Turma.find()
+            .populate('professorId', 'nome email')
+            .populate('alunos', 'nome email matricula')
+            .populate('provas', 'titulo status')
+            .sort({ createdAt: -1 });
+
+        const turmasComEstatisticas = turmas.map(turma => ({
+            id: turma._id,
+            nome: turma.nome,
+            disciplina: turma.disciplina,
+            eixo: turma.eixo,
+            codigo: turma.codigo,
+            professor: turma.professorId ? {
+                id: turma.professorId._id,
+                nome: turma.professorId.nome,
+                email: turma.professorId.email
+            } : null,
+            totalAlunos: turma.alunos.length,
+            totalProvas: turma.provas.length,
+            alunosComAcessibilidade: turma.alunos.filter(a => a.precisaAcessibilidade).length,
+            dataCriacao: turma.createdAt,
+            ativa: turma.ativa
+        }));
+
+        res.json({ success: true, turmas: turmasComEstatisticas });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar turmas:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ GERENCIAMENTO DE PROVAS ============
+
+app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const provas = await Prova.find()
+            .populate('userId', 'nome email')
+            .populate('turmaId', 'nome disciplina')
+            .sort({ createdAt: -1 });
+
+        const provasComEstatisticas = await Promise.all(provas.map(async (prova) => {
+            const [resultados, provasRealizadas] = await Promise.all([
+                Resultado.countDocuments({ provaId: prova._id }),
+                ProvaRealizada.countDocuments({ provaId: prova._id })
+            ]);
+
+            return {
+                id: prova._id,
+                titulo: prova.titulo,
+                conteudo: prova.conteudo,
+                tipoProva: prova.tipoProva,
+                adaptada: prova.adaptada,
+                alternativas: prova.alternativas,
+                professor: prova.userId ? {
+                    id: prova.userId._id,
+                    nome: prova.userId.nome,
+                    email: prova.userId.email
+                } : null,
+                turma: prova.turmaId ? {
+                    id: prova.turmaId._id,
+                    nome: prova.turmaId.nome,
+                    disciplina: prova.turmaId.disciplina
+                } : null,
+                quantidadeQuestoes: prova.questoes.length,
+                status: prova.status,
+                publicada: prova.publicada,
+                dataLimite: prova.dataLimite,
+                dataCriacao: prova.createdAt,
+                totalParticipantes: resultados + provasRealizadas,
+                codigo: prova.codigo
+            };
+        }));
+
+        res.json({ success: true, provas: provasComEstatisticas });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar provas:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ SISTEMA DE BACKUP ============
+
+// Listar backups
+app.get('/api/admin/backups', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const backupDir = path.join(__dirname, 'backups');
+        
+        if (!fs.existsSync(backupDir)) {
+            fs.mkdirSync(backupDir, { recursive: true });
+            return res.json({ success: true, backups: [] });
+        }
+
+        const files = fs.readdirSync(backupDir)
+            .filter(f => f.endsWith('.json') || f.endsWith('.gz'))
+            .map(f => {
+                const stats = fs.statSync(path.join(backupDir, f));
+                return {
+                    nome: f,
+                    tamanho: (stats.size / 1024 / 1024).toFixed(2) + ' MB',
+                    data: stats.mtime,
+                    criadoEm: stats.birthtime
+                };
+            })
+            .sort((a, b) => new Date(b.data) - new Date(a.data));
+
+        res.json({ success: true, backups: files });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar backups:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Criar backup manual
+app.post('/api/admin/backups/criar', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupFile = path.join(__dirname, 'backups', `backup_${timestamp}.json`);
+        
+        // Coletar todos os dados
+        const [users, turmas, provas, resultados, provasRealizadas] = await Promise.all([
+            User.find({}).lean(),
+            Turma.find({}).populate('alunos professorId').lean(),
+            Prova.find({}).lean(),
+            Resultado.find({}).populate('userId provaId').lean(),
+            ProvaRealizada.find({}).populate('alunoId provaId').lean()
+        ]);
+
+        const backupData = {
+            timestamp: new Date().toISOString(),
+            version: '1.0',
+            data: {
+                users,
+                turmas,
+                provas,
+                resultados,
+                provasRealizadas
+            },
+            estatisticas: {
+                totalUsers: users.length,
+                totalTurmas: turmas.length,
+                totalProvas: provas.length,
+                totalResultados: resultados.length,
+                totalProvasRealizadas: provasRealizadas.length
+            }
+        };
+
+        fs.writeFileSync(backupFile, JSON.stringify(backupData, null, 2));
+        
+        // Comprimir
+        const gzip = require('zlib').createGzip();
+        const input = fs.createReadStream(backupFile);
+        const output = fs.createWriteStream(backupFile + '.gz');
+        
+        input.pipe(gzip).pipe(output);
+        
+        output.on('finish', () => {
+            fs.unlinkSync(backupFile); // Remove o arquivo não comprimido
+        });
+
+        res.json({
+            success: true,
+            message: 'Backup criado com sucesso',
+            arquivo: `backup_${timestamp}.json.gz`,
+            estatisticas: backupData.estatisticas
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao criar backup:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Restaurar backup
+app.post('/api/admin/backups/restaurar/:arquivo', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { arquivo } = req.params;
+        const backupPath = path.join(__dirname, 'backups', arquivo);
+        
+        if (!fs.existsSync(backupPath)) {
+            return res.status(404).json({ success: false, error: 'Arquivo de backup não encontrado' });
+        }
+
+        let backupData;
+        
+        if (arquivo.endsWith('.gz')) {
+            const zlib = require('zlib');
+            const gunzip = zlib.createGunzip();
+            const input = fs.createReadStream(backupPath);
+            
+            backupData = await new Promise((resolve, reject) => {
+                let data = '';
+                input.pipe(gunzip)
+                    .on('data', chunk => data += chunk)
+                    .on('end', () => resolve(JSON.parse(data)))
+                    .on('error', reject);
+            });
+        } else {
+            backupData = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+        }
+
+        res.json({
+            success: true,
+            message: 'Backup carregado. Iniciar restauração?',
+            preview: {
+                timestamp: backupData.timestamp,
+                estatisticas: backupData.estatisticas,
+                colecoes: Object.keys(backupData.data)
+            },
+            confirmToken: jwt.sign(
+                { action: 'restore', backup: arquivo, timestamp: Date.now() },
+                process.env.JWT_SECRET,
+                { expiresIn: '5m' }
+            )
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao restaurar backup:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Confirmar restauração
+app.post('/api/admin/backups/confirmar-restauracao', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { token } = req.body;
+        
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded.action !== 'restore') {
+            return res.status(400).json({ success: false, error: 'Token inválido' });
+        }
+
+        const backupPath = path.join(__dirname, 'backups', decoded.backup);
+        
+        if (!fs.existsSync(backupPath)) {
+            return res.status(404).json({ success: false, error: 'Arquivo de backup não encontrado' });
+        }
+
+        let backupData;
+        
+        if (decoded.backup.endsWith('.gz')) {
+            const zlib = require('zlib');
+            const gunzip = zlib.createGunzip();
+            const input = fs.createReadStream(backupPath);
+            
+            backupData = await new Promise((resolve, reject) => {
+                let data = '';
+                input.pipe(gunzip)
+                    .on('data', chunk => data += chunk)
+                    .on('end', () => resolve(JSON.parse(data)))
+                    .on('error', reject);
+            });
+        } else {
+            backupData = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+        }
+
+        // Limpar coleções existentes
+        await Promise.all([
+            User.deleteMany({}),
+            Turma.deleteMany({}),
+            Prova.deleteMany({}),
+            Resultado.deleteMany({}),
+            ProvaRealizada.deleteMany({})
+        ]);
+
+        // Restaurar dados
+        await User.insertMany(backupData.data.users);
+        await Turma.insertMany(backupData.data.turmas);
+        await Prova.insertMany(backupData.data.provas);
+        await Resultado.insertMany(backupData.data.resultados);
+        await ProvaRealizada.insertMany(backupData.data.provasRealizadas);
+
+        res.json({
+            success: true,
+            message: 'Backup restaurado com sucesso!',
+            estatisticas: backupData.estatisticas
+        });
+
+    } catch (error) {
+        console.error('❌ Erro na restauração:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ MONITORAMENTO ============
+
+app.get('/api/admin/monitoramento/violacoes', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { dias = 7 } = req.query;
+        const dataLimite = new Date();
+        dataLimite.setDate(dataLimite.getDate() - parseInt(dias));
+
+        const provasCanceladas = await ProvaRealizada.find({
+            status: 'cancelada',
+            dataRealizacao: { $gte: dataLimite }
+        })
+        .populate('alunoId', 'nome email matricula')
+        .populate('provaId', 'titulo turmaId')
+        .sort({ dataRealizacao: -1 });
+
+        const estatisticas = {
+            total: provasCanceladas.length,
+            porMotivo: provasCanceladas.reduce((acc, p) => {
+                const motivo = p.flagViolacao ? 'violacao' : 'prazo';
+                acc[motivo] = (acc[motivo] || 0) + 1;
+                return acc;
+            }, {}),
+            porDia: provasCanceladas.reduce((acc, p) => {
+                const dia = p.dataRealizacao.toISOString().split('T')[0];
+                acc[dia] = (acc[dia] || 0) + 1;
+                return acc;
+            }, {})
+        };
+
+        res.json({
+            success: true,
+            provasCanceladas,
+            estatisticas
+        });
+
+    } catch (error) {
+        console.error('❌ Erro no monitoramento:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ CONFIGURAÇÕES DO SISTEMA ============
+
+app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const Config = mongoose.model('Config') || mongoose.model('Config', new mongoose.Schema({
+            chave: String,
+            valor: mongoose.Schema.Types.Mixed,
+            descricao: String,
+            atualizadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            atualizadoEm: Date
+        }));
+
+        const configuracoes = await Config.find().lean();
+        
+        const configPadrao = {
+            sistema: {
+                nome: 'Sistema de Provas IEMA 2026',
+                versao: '1.0.0',
+                ambiente: process.env.NODE_ENV || 'development'
+            },
+            seguranca: {
+                jwtExpiracao: process.env.JWT_EXPIRES_IN || '24h',
+                tentativasLogin: 5,
+                bloqueioTempo: 15 // minutos
+            },
+            provas: {
+                tempoMaximo: 240, // minutos
+                questoesMinimas: 5,
+                questoesMaximas: 50,
+                permitirCorrecaoAutomatica: true
+            },
+            backups: {
+                automatico: true,
+                frequencia: 'diario',
+                manterPor: 30 // dias
+            },
+            email: {
+                servico: process.env.EMAIL_SERVICE || 'brevo',
+                remetente: 'naoresponder@iemasaoluiscentro.net'
+            }
+        };
+
+        const configAtual = { ...configPadrao };
+        
+        configuracoes.forEach(c => {
+            const keys = c.chave.split('.');
+            let target = configAtual;
+            for (let i = 0; i < keys.length - 1; i++) {
+                target = target[keys[i]];
+            }
+            target[keys[keys.length - 1]] = c.valor;
+        });
+
+        res.json({ success: true, configuracoes: configAtual });
+
+    } catch (error) {
+        console.error('❌ Erro ao carregar configurações:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.put('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { configuracoes } = req.body;
+        const Config = mongoose.model('Config');
+        
+        const flattenObject = (obj, prefix = '') => {
+            return Object.keys(obj).reduce((acc, key) => {
+                const pre = prefix.length ? prefix + '.' : '';
+                if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                    Object.assign(acc, flattenObject(obj[key], pre + key));
+                } else {
+                    acc[pre + key] = obj[key];
+                }
+                return acc;
+            }, {});
+        };
+
+        const flatConfig = flattenObject(configuracoes);
+        
+        await Promise.all(
+            Object.entries(flatConfig).map(([chave, valor]) =>
+                Config.findOneAndUpdate(
+                    { chave },
+                    { 
+                        chave,
+                        valor,
+                        atualizadoPor: req.userId,
+                        atualizadoEm: new Date()
+                    },
+                    { upsert: true }
+                )
+            )
+        );
+
+        res.json({ success: true, message: 'Configurações salvas com sucesso' });
+
+    } catch (error) {
+        console.error('❌ Erro ao salvar configurações:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ ROTAS ADMIN PARA TURMAS (CRUD COMPLETO) ============
+
+// Listar turmas (com filtros)
+app.get('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { search, eixo, page = 1, limit = 20 } = req.query;
+        
+        let query = {};
+        
+        if (search) {
+            query.$or = [
+                { nome: { $regex: search, $options: 'i' } },
+                { disciplina: { $regex: search, $options: 'i' } }
+            ];
+        }
+        
+        if (eixo && eixo !== 'todos') {
+            query.eixo = eixo;
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [turmas, total] = await Promise.all([
+            Turma.find(query)
+                .populate('professorId', 'nome email')
+                .populate('alunos', 'nome email matricula precisaAcessibilidade')
+                .populate('provas', 'titulo status')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            Turma.countDocuments(query)
+        ]);
+
+        const turmasComEstatisticas = turmas.map(turma => ({
+            id: turma._id,
+            nome: turma.nome,
+            disciplina: turma.disciplina,
+            eixo: turma.eixo,
+            codigo: turma.codigo,
+            descricao: turma.descricao,
+            dataCriacao: turma.createdAt,
+            ativa: turma.ativa,
+            professor: turma.professorId ? {
+                id: turma.professorId._id,
+                nome: turma.professorId.nome,
+                email: turma.professorId.email
+            } : null,
+            totalAlunos: turma.alunos?.length || 0,
+            alunosComAcessibilidade: turma.alunos?.filter(a => a.precisaAcessibilidade).length || 0,
+            totalProvas: turma.provas?.length || 0,
+            alunos: turma.alunos?.map(a => ({
+                id: a._id,
+                nome: a.nome,
+                email: a.email,
+                matricula: a.matricula,
+                precisaAcessibilidade: a.precisaAcessibilidade
+            })) || []
+        }));
+
+        res.json({
+            success: true,
+            turmas: turmasComEstatisticas,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar turmas (admin):', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Criar turma (admin)
+app.post('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { nome, disciplina, eixo, professorId, descricao, ativa } = req.body;
+
+        const turma = new Turma({
+            nome,
+            disciplina,
+            eixo,
+            professorId,
+            descricao,
+            ativa: ativa !== false
+        });
+
+        await turma.save();
+
+        res.status(201).json({
+            success: true,
+            turma: {
+                id: turma._id,
+                nome: turma.nome,
+                codigo: turma.codigo,
+                disciplina: turma.disciplina
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao criar turma (admin):', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Atualizar turma (admin)
+app.put('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+
+        const turma = await Turma.findByIdAndUpdate(id, updates, { new: true })
+            .populate('professorId', 'nome email');
+
+        if (!turma) {
+            return res.status(404).json({ success: false, error: 'Turma não encontrada' });
+        }
+
+        res.json({
+            success: true,
+            turma: {
+                id: turma._id,
+                nome: turma.nome,
+                disciplina: turma.disciplina,
+                eixo: turma.eixo,
+                codigo: turma.codigo,
+                professor: turma.professorId ? {
+                    id: turma.professorId._id,
+                    nome: turma.professorId.nome
+                } : null,
+                ativa: turma.ativa
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao atualizar turma (admin):', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ ROTAS ADMIN PARA PROVAS ============
+
+// Listar todas as provas (admin)
+app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { status, dificuldade, periodo, search, page = 1, limit = 20 } = req.query;
+        
+        let query = {};
+        
+        if (status && status !== 'todos') {
+            if (status === 'ativa') query = { ...query, publicada: true, status: 'ativa', cancelada: false };
+            else if (status === 'rascunho') query = { ...query, publicada: false };
+            else if (status === 'cancelada') query = { ...query, cancelada: true };
+            else if (status === 'concluida') query = { ...query, publicada: true, dataLimite: { $lt: new Date() } };
+        }
+        
+        if (dificuldade && dificuldade !== 'todas') {
+            query.dificuldade = dificuldade;
+        }
+        
+        if (periodo && periodo !== 'todos') {
+            query.periodo = periodo;
+        }
+        
+        if (search) {
+            query.$or = [
+                { titulo: { $regex: search, $options: 'i' } },
+                { conteudo: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [provas, total] = await Promise.all([
+            Prova.find(query)
+                .populate('userId', 'nome email')
+                .populate('turmaId', 'nome disciplina')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            Prova.countDocuments(query)
+        ]);
+
+        const provasComInfo = await Promise.all(provas.map(async (prova) => {
+            const [resultados, provasRealizadas] = await Promise.all([
+                Resultado.countDocuments({ provaId: prova._id }),
+                ProvaRealizada.countDocuments({ provaId: prova._id })
+            ]);
+
+            return {
+                id: prova._id,
+                titulo: prova.titulo,
+                conteudo: prova.conteudo,
+                tipoProva: prova.tipoProva,
+                adaptada: prova.adaptada,
+                periodo: prova.periodo,
+                quantidadeQuestoes: prova.questoes?.length || 0,
+                dificuldade: prova.dificuldade,
+                dataCriacao: prova.createdAt,
+                dataLimite: prova.dataLimite,
+                publicada: prova.publicada,
+                cancelada: prova.cancelada,
+                status: prova.status,
+                codigo: prova.codigo,
+                professor: prova.userId ? {
+                    id: prova.userId._id,
+                    nome: prova.userId.nome
+                } : null,
+                turma: prova.turmaId ? {
+                    id: prova.turmaId._id,
+                    nome: prova.turmaId.nome
+                } : null,
+                totalParticipantes: resultados + provasRealizadas,
+                alunosRealizaram: resultados + provasRealizadas,
+                mediaNotas: 0 // Calcular média se necessário
+            };
+        }));
+
+        res.json({
+            success: true,
+            provas: provasComInfo,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar provas (admin):', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ ROTA PARA EXCLUIR TURMA (COM REMOÇÃO EM CASCATA) ============
+
+app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
+    try {
+        const turmaId = req.params.id;
+        const usuarioId = req.userId;
+        const usuarioRole = req.userRole;
+
+        console.log(`🗑️ Tentativa de exclusão da turma ${turmaId} pelo usuário ${usuarioId} (${usuarioRole})`);
+
+        const turma = await Turma.findById(turmaId);
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+
+        const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
+        const isProfessorDaTurma = turma.professorId && turma.professorId.toString() === usuarioId;
+
+        if (!isAdmin && !isProfessorDaTurma) {
+            return res.status(403).json({
+                success: false,
+                error: 'Você não tem permissão para excluir esta turma'
+            });
+        }
+
+        // Verificar provas associadas
+        const provasAssociadas = await Prova.find({ turmaId: turmaId });
+        
+        // Se for admin, remover tudo (provas e resultados)
+        if (isAdmin) {
+            console.log(`🔧 Admin removendo ${provasAssociadas.length} provas associadas...`);
+            
+            for (const prova of provasAssociadas) {
+                // Remover resultados
+                await Resultado.deleteMany({ provaId: prova._id });
+                await ProvaRealizada.deleteMany({ provaId: prova._id });
+                // Remover prova
+                await Prova.findByIdAndDelete(prova._id);
+            }
+        } 
+        // Se for professor e houver provas, não permitir
+        else if (provasAssociadas.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Esta turma possui provas associadas. Exclua as provas primeiro.',
+                detalhes: { totalProvas: provasAssociadas.length }
+            });
+        }
+
+        // Remover referência da turma dos alunos
+        if (turma.alunos && turma.alunos.length > 0) {
+            await User.updateMany(
+                { _id: { $in: turma.alunos } },
+                { $pull: { turmas: turmaId } }
+            );
+        }
+
+        // Excluir a turma
+        await Turma.findByIdAndDelete(turmaId);
+
+        console.log(`✅ Turma ${turmaId} excluída com sucesso por ${usuarioId}`);
+
+        res.json({
+            success: true,
+            message: 'Turma excluída com sucesso!',
+            detalhes: {
+                provasRemovidas: isAdmin ? provasAssociadas.length : 0,
+                alunosRemovidos: turma.alunos?.length || 0
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao excluir turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao excluir turma: ' + error.message
+        });
+    }
+});
+
+// ============ ROTA PARA TROCAR SENHA (QUANDO FORÇADO) ============
+app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
+    try {
+        const { senhaAtual, novaSenha } = req.body;
+        const userId = req.userId;
+        
+        if (!senhaAtual || !novaSenha) {
+            return res.status(400).json({
+                success: false,
+                error: 'Senha atual e nova senha são obrigatórias'
+            });
+        }
+        
+        if (novaSenha.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve ter no mínimo 6 caracteres'
+            });
+        }
+        
+        // Buscar usuário com senha
+        const user = await User.findById(userId).select('+password +forcePasswordChange');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Verificar senha atual
+        const isMatch = await user.comparePassword(senhaAtual);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                error: 'Senha atual incorreta'
+            });
+        }
+        
+        // Verificar se a nova senha é igual à atual
+        if (senhaAtual === novaSenha) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve ser diferente da senha atual'
+            });
+        }
+        
+        // Atualizar senha
+        user.password = novaSenha;
+        user.forcePasswordChange = false; // <-- REMOVER A FLAG
+        user.passwordChangedAt = new Date();
+        
+        await user.save();
+        
+        console.log(`✅ Senha alterada com sucesso para usuário: ${user.email}`);
+        console.log(`   🔓 Flag forcePasswordChange removida`);
+        
+        res.json({
+            success: true,
+            message: 'Senha alterada com sucesso!',
+            passwordChangedAt: user.passwordChangedAt
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao trocar senha:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao trocar senha: ' + error.message
         });
     }
 });

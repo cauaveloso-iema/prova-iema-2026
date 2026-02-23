@@ -55,11 +55,65 @@ const UserSchema = new mongoose.Schema({
     minlength: 6,
     select: false
   },
+
+  ativo: {
+    type: Boolean,
+    default: true,
+    description: 'Indica se o usuário está ativo no sistema'
+  },
+
+  passwordChangedAt: {
+      type: Date,
+      default: null
+  },
+  
+  forcePasswordChange: {
+      type: Boolean,
+      default: false  // false = não precisa trocar senha no login
+  },
+
   role: {
     type: String,
     enum: ['aluno', 'professor', 'admin'],
     default: 'aluno'
   },
+
+// ========== CAMPOS DE SUPERUSUÁRIO ==========
+isSuperUser: {
+  type: Boolean,
+  default: false
+},
+superUserPermissions: {
+  type: [String],
+  enum: [
+    'manage_users',
+    'manage_professors',
+    'manage_turmas',
+    'manage_provas',
+    'view_logs',
+    'manage_backups',
+    'manage_system',
+    'manage_acessibilidade'
+  ],
+  default: []
+},
+superUserCreatedAt: {
+  type: Date
+},
+superUserCreatedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User'
+},
+superUserApprovedAt: {
+  type: Date
+},
+superUserApprovedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User'
+},
+superUserLastAction: {
+  type: Date
+},
   
   // ========== ✅ EIXO CORRIGIDO COM TODOS OS VALORES ==========
   eixo: {
@@ -147,6 +201,7 @@ const UserSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
 
 // Middleware para formatar CPF e TELEFONE antes de salvar
 UserSchema.pre('save', async function(next) {

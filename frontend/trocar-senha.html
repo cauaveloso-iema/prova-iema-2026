@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trocar Senha - Sistema de Provas</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #7f1d1d;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4b5563;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .password-requirements {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .requirement {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: #6b7280;
+        }
+
+        .requirement.valid {
+            color: #10b981;
+        }
+
+        .requirement i {
+            width: 20px;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 12px;
+            background: #6b7280;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .user-info {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4f46e5;
+        }
+
+        .user-info p {
+            margin: 5px 0;
+            color: #4b5563;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-key"></i> Trocar Senha</h1>
+            <p>Defina uma nova senha para sua conta</p>
+        </div>
+        
+        <div class="content">
+            <!-- Alertas -->
+            <div id="alert" class="alert"></div>
+            
+            <!-- Informações do usuário -->
+            <div id="userInfo" class="user-info" style="display: none;">
+                <p><i class="fas fa-user"></i> <strong id="userName"></strong></p>
+                <p><i class="fas fa-envelope"></i> <span id="userEmail"></span></p>
+                <p><i class="fas fa-tag"></i> <span id="userRole"></span></p>
+            </div>
+            
+            <form id="trocarSenhaForm">
+                <div class="form-group">
+                    <label for="senhaAtual">
+                        <i class="fas fa-lock"></i> Senha Atual
+                    </label>
+                    <input type="password" id="senhaAtual" class="form-control" 
+                           placeholder="Digite sua senha atual" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="novaSenha">
+                        <i class="fas fa-key"></i> Nova Senha
+                    </label>
+                    <input type="password" id="novaSenha" class="form-control" 
+                           placeholder="Mínimo 6 caracteres" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmarSenha">
+                        <i class="fas fa-check-circle"></i> Confirmar Nova Senha
+                    </label>
+                    <input type="password" id="confirmarSenha" class="form-control" 
+                           placeholder="Digite a nova senha novamente" required>
+                </div>
+                
+                <!-- Requisitos de senha -->
+                <div class="password-requirements">
+                    <div class="requirement" id="reqLength">
+                        <i class="far fa-circle"></i> Mínimo 6 caracteres
+                    </div>
+                    <div class="requirement" id="reqMatch">
+                        <i class="far fa-circle"></i> Senhas coincidem
+                    </div>
+                    <div class="requirement" id="reqDifferent">
+                        <i class="far fa-circle"></i> Diferente da senha atual
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-primary" id="btnTrocarSenha" disabled>
+                    <i class="fas fa-save"></i> Salvar Nova Senha
+                </button>
+            </form>
+
+            <button class="btn-secondary" onclick="voltarParaLogin()">
+                <i class="fas fa-arrow-left"></i> Voltar para o Login
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // TROCAR SENHA - VERSÃO SIMPLIFICADA
+        // ============================================
+        
+        const API_BASE_URL = '/api';
+        
+        // ========== VERIFICAR AUTENTICAÇÃO ==========
+        function verificarAutenticacao() {
+            const token = localStorage.getItem('auth_token');
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            
+            console.log('📦 Verificando autenticação:');
+            console.log('   Token:', token ? '✅' : '❌');
+            console.log('   User:', userData);
+            console.log('   forcePasswordChange:', userData.forcePasswordChange);
+            
+            return { token, userData };
+        }
+
+        // ========== CARREGAR INFORMAÇÕES DO USUÁRIO ==========
+        function carregarInfoUsuario() {
+            const { token, userData } = verificarAutenticacao();
+            
+            if (!token || !userData.nome) {
+                mostrarAlerta('Sessão expirada. Faça login novamente.', 'error');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 2000);
+                return false;
+            }
+            
+            // Mostrar informações do usuário
+            document.getElementById('userName').textContent = userData.nome || 'Usuário';
+            document.getElementById('userEmail').textContent = userData.email || '';
+            
+            let roleText = '';
+            if (userData.role === 'admin' || userData.role === 'super_admin') {
+                roleText = 'Administrador';
+            } else if (userData.role === 'professor') {
+                roleText = 'Professor';
+            } else if (userData.role === 'aluno') {
+                roleText = 'Aluno';
+            }
+            document.getElementById('userRole').textContent = roleText;
+            document.getElementById('userInfo').style.display = 'block';
+            
+            return true;
+        }
+
+        // ========== VALIDAÇÃO DE SENHA EM TEMPO REAL ==========
+        const senhaAtualInput = document.getElementById('senhaAtual');
+        const novaSenhaInput = document.getElementById('novaSenha');
+        const confirmarSenhaInput = document.getElementById('confirmarSenha');
+        
+        function validarSenhas() {
+            const senhaAtual = senhaAtualInput.value;
+            const novaSenha = novaSenhaInput.value;
+            const confirmarSenha = confirmarSenhaInput.value;
+            
+            // Requisito 1: Mínimo 6 caracteres
+            const reqLength = document.getElementById('reqLength');
+            if (novaSenha.length >= 6) {
+                reqLength.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Mínimo 6 caracteres';
+                reqLength.classList.add('valid');
+            } else {
+                reqLength.innerHTML = '<i class="far fa-circle"></i> Mínimo 6 caracteres';
+                reqLength.classList.remove('valid');
+            }
+            
+            // Requisito 2: Senhas coincidem
+            const reqMatch = document.getElementById('reqMatch');
+            if (novaSenha && confirmarSenha && novaSenha === confirmarSenha) {
+                reqMatch.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Senhas coincidem';
+                reqMatch.classList.add('valid');
+            } else {
+                reqMatch.innerHTML = '<i class="far fa-circle"></i> Senhas coincidem';
+                reqMatch.classList.remove('valid');
+            }
+            
+            // Requisito 3: Diferente da senha atual
+            const reqDifferent = document.getElementById('reqDifferent');
+            if (senhaAtual && novaSenha && senhaAtual !== novaSenha) {
+                reqDifferent.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Diferente da senha atual';
+                reqDifferent.classList.add('valid');
+            } else {
+                reqDifferent.innerHTML = '<i class="far fa-circle"></i> Diferente da senha atual';
+                reqDifferent.classList.remove('valid');
+            }
+            
+            // Habilitar/desabilitar botão
+            const btn = document.getElementById('btnTrocarSenha');
+            const valido = novaSenha.length >= 6 && 
+                          novaSenha === confirmarSenha && 
+                          senhaAtual && senhaAtual !== novaSenha;
+            
+            btn.disabled = !valido;
+        }
+
+        senhaAtualInput.addEventListener('input', validarSenhas);
+        novaSenhaInput.addEventListener('input', validarSenhas);
+        confirmarSenhaInput.addEventListener('input', validarSenhas);
+
+        // ========== TROCAR SENHA ==========
+        document.getElementById('trocarSenhaForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const token = localStorage.getItem('auth_token');
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            
+            const senhaAtual = senhaAtualInput.value;
+            const novaSenha = novaSenhaInput.value;
+            
+            // Mostrar loading
+            const btn = document.getElementById('btnTrocarSenha');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="loading-spinner"></span> Processando...';
+            btn.disabled = true;
+            
+            try {
+                console.log('📤 Enviando requisição para trocar senha...');
+                
+                const response = await fetch(`${API_BASE_URL}/auth/trocar-senha`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        senhaAtual: senhaAtual,
+                        novaSenha: novaSenha
+                    })
+                });
+                
+                const data = await response.json();
+                console.log('📦 Resposta:', data);
+                
+                if (data.success) {
+                    mostrarAlerta('✅ Senha alterada com sucesso!', 'success');
+                    
+                    // Atualizar localStorage
+                    userData.forcePasswordChange = false;
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    
+                    // Redirecionar após 2 segundos
+                    setTimeout(() => {
+                        if (userData.role === 'admin' || userData.role === 'super_admin') {
+                            window.location.href = 'admin.html';
+                        } else if (userData.role === 'professor') {
+                            window.location.href = 'index.html';
+                        } else if (userData.role === 'aluno') {
+                            window.location.href = 'aluno.html';
+                        } else {
+                            window.location.href = 'login.html';
+                        }
+                    }, 2000);
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao trocar senha');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                mostrarAlerta('❌ ' + error.message, 'error');
+                
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // ========== VOLTAR PARA LOGIN ==========
+        function voltarParaLogin() {
+            window.location.href = 'login.html';
+        }
+
+        // ========== MOSTRAR ALERTA ==========
+        function mostrarAlerta(mensagem, tipo = 'info') {
+            const alerta = document.getElementById('alert');
+            alerta.textContent = mensagem;
+            alerta.className = `alert alert-${tipo}`;
+            alerta.style.display = 'block';
+            
+            setTimeout(() => {
+                alerta.style.display = 'none';
+            }, 5000);
+        }
+
+        // ========== INICIALIZAÇÃO ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Página de trocar senha carregada');
+            
+            const autenticado = carregarInfoUsuario();
+            
+            if (!autenticado) {
+                console.log('❌ Usuário não autenticado');
+            }
+        });
+
+        // Tornar função global para o botão
+        window.voltarParaLogin = voltarParaLogin;
+    </script>
+</body>
+</html>
