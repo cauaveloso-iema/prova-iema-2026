@@ -1771,7 +1771,10 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       });
     }
 
-    if (turma.professorId.toString() !== req.userId && req.userRole !== 'admin') {
+    // ===== CORREÇÃO: Permitir que admin crie prova para QUALQUER professor =====
+    // Professores só podem criar nas suas próprias turmas
+    // Admin pode criar em qualquer turma para qualquer professor
+    if (req.userRole !== 'admin' && turma.professorId.toString() !== req.userId) {
       return res.status(403).json({
         success: false,
         error: 'Apenas o professor desta turma pode criar provas'
@@ -1785,14 +1788,15 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       quantidadeQuestoes = 10, 
       dificuldade = 'media',
       periodo = '1', 
-      adaptada,           // <-- NOVO: Flag para prova adaptada
-      alternativas,       // <-- NOVO: Número de alternativas (3)
-      publicoAlvo,        // <-- NOVO: Filtro de público alvo
+      adaptada,           
+      alternativas,       
+      publicoAlvo,        
       dataLimite, 
       horarioInicio, 
       horarioTermino,
       anexosData = '[]',
-      recursosAcessibilidade // <-- NOVO: Recursos específicos
+      recursosAcessibilidade,
+      professorId  // <-- RECEBER DO BODY (enviado pelo admin)
     } = req.body;
 
     // Processar anexos
@@ -1891,27 +1895,24 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
     console.log(`🤖 Professor ${req.userId} solicitando prova tipo ${tipoProva} sobre: "${conteudo}"`);
     console.log(`📎 Anexos recebidos: ${anexos.length}`);
 
-    // ========== NOVO: LÓGICA PARA PROVA ADAPTADA ==========
+    // ========== LÓGICA PARA PROVA ADAPTADA ==========
     let alunosDestino = [];
     
     if (tipoProva === 'adaptada' || adaptada === true) {
-      // Buscar APENAS alunos que precisam de acessibilidade nesta turma
       alunosDestino = await User.find({
         role: 'aluno',
         _id: { $in: turma.alunos || [] },
         precisaAcessibilidade: true
       }).select('_id nome email matricula precisaAcessibilidade condicaoAcessibilidade');
       
-      
       if (alunosDestino.length === 0) {
         return res.status(400).json({
           success: false,
-          error: '❌ Não há alunos com necessidades de acessibilidade nesta turma. A prova adaptada não pode ser criada.',
+          error: '❌ Não há alunos com necessidades de acessibilidade nesta turma.',
           detalhes: 'Crie uma turma com alunos que selecionaram "Sim" no campo de acessibilidade do cadastro.'
         });
       }
     } else {
-      // Prova normal - enviar para TODOS os alunos
       alunosDestino = await User.find({
         role: 'aluno',
         _id: { $in: turma.alunos || [] }
@@ -1923,7 +1924,6 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
     let questoesValidadas = [];
     let areaDetectada = 'geral';
     
-    // BANCO DE EXEMPLOS DE QUESTÕES DESAFIADORAS POR ÁREA
     const exemplosPorArea = {
       matematica: {
         titulo: "PROBLEMAS DE CONTAGEM E RACIOCÍNIO LÓGICO",
@@ -2007,7 +2007,6 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
           conceitos: ["Raciocínio lógico", "Ordenação"]
         }
       },
-      // ========== NOVO: EXEMPLOS PARA PROVA ADAPTADA (3 ALTERNATIVAS) ==========
       adaptada: {
         titulo: "QUESTÕES ADAPTADAS - ACESSIBILIDADE",
         exemplo1: {
@@ -2058,12 +2057,10 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
         "mixtral-8x7b-32768"
       ];
 
-      // Processar anexos para contexto
       const contextoAnexos = await processarAnexosParaIA(anexos);
       
       console.log(`📋 Contexto de anexos gerado: ${contextoAnexos.length} caracteres`);
 
-      // DETECTAR ÁREA DO CONHECIMENTO AUTOMATICAMENTE
       const detectarArea = (conteudo) => {
         if (!conteudo || typeof conteudo !== 'string') {
           console.log('⚠️ Conteúdo vazio para detectar área, usando "geral"');
@@ -2110,7 +2107,6 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
         try {
           console.log(`🔄 Tentando modelo: ${modelo}`);
           
-          // ========== NOVO: PROMPT DIFERENCIADO PARA PROVA ADAPTADA ==========
           let systemPrompt;
           
           if (tipoProva === 'adaptada' || adaptada === true) {
@@ -2136,7 +2132,7 @@ FORMATO JSON EXIGIDO:
         "B) Alternativa B - clara e direta", 
         "C) Alternativa C - clara e direta (RESPOSTA CORRETA)"
       ],
-      "respostaCorreta": 2, // Índice 0, 1 ou 2
+      "respostaCorreta": 2,
       "explicacao": "Explicação PASSO A PASSO, com linguagem simples",
       "dificuldade": "facil|media|dificil",
       "area": "área do conhecimento"
@@ -2300,7 +2296,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt }
             ],
-            temperature: tipoProva === 'adaptada' ? 0.5 : 0.7, // Menor temperatura para adaptada (mais consistente)
+            temperature: tipoProva === 'adaptada' ? 0.5 : 0.7,
             max_tokens: 8000,
             top_p: 0.9,
             response_format: { type: "json_object" }
@@ -2379,7 +2375,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
 
       console.log(`📊 ${questoesArray.length} questões recebidas da IA`);
 
-      // Processar questões
       const questoesProcessadas = [];
       
       for (let i = 0; i < Math.min(questoesArray.length, quantidadeQuestoes); i++) {
@@ -2390,7 +2385,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
           continue;
         }
 
-        // ========== PROCESSAMENTO PARA PROVA ADAPTADA ==========
         if (tipoProva === 'adaptada' || adaptada === true) {
           const pergunta = questao.pergunta || questao.question || questao.text || 
                           `Questão ${i + 1} sobre ${conteudo}`;
@@ -2401,7 +2395,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
             opcoes = opcoes.split('\n').filter(o => o.trim().length > 0);
           }
           
-          // FORÇAR EXATAMENTE 3 ALTERNATIVAS
           while (opcoes.length < 3) {
             const letra = String.fromCharCode(65 + opcoes.length);
             opcoes.push(`${letra}) Opção ${letra}`);
@@ -2451,7 +2444,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
           });
           
         } else if (tipoProva === 'enem') {
-          // ... código existente para ENEM ...
           const contexto = questao.contexto || questao.textoBase || questao.base || '';
           const enunciado = questao.enunciado || questao.pergunta || questao.question || '';
           
@@ -2506,7 +2498,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
           });
           
         } else {
-          // PROVA SIMPLES (5 alternativas) - código existente
           const pergunta = questao.pergunta || questao.question || questao.text || 
                           `Questão ${i + 1} sobre ${conteudo}`;
           
@@ -2571,7 +2562,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     } catch (iaError) {
       console.error('❌ Erro na IA, usando fallback:', iaError.message);
       
-      // ========== FALLBACK ESPECÍFICO PARA PROVA ADAPTADA ==========
       const areaFallback = areaDetectada && areaDetectada in exemplosPorArea ? areaDetectada : 'geral';
       
       for (let i = 0; i < quantidadeQuestoes; i++) {
@@ -2628,18 +2618,23 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       console.log(`✅ ${questoesValidadas.length} questões criadas via fallback (área: ${areaFallback})`);
     }
 
-    // ========== CRIAR PROVA COM CAMPOS ESPECÍFICOS ==========
+    // ===== CORREÇÃO: DECIDIR QUAL PROFESSOR USAR =====
+    const professorDaProva = req.userRole === 'admin' && professorId ? professorId : req.userId;
+    
+    console.log(`👨‍🏫 Professor da prova: ${professorDaProva} (${req.userRole === 'admin' ? 'Selecionado pelo admin' : 'Próprio professor'})`);
+
+    // ========== CRIAR PROVA COM O PROFESSOR CORRETO ==========
     const prova = new Prova({
-      userId: req.userId,
+      userId: professorDaProva,  // <-- USAR O PROFESSOR CORRETO
       turmaId: turma._id,
-      eixo: turma.eixo,  // <-- ADICIONE ESTA LINHA!
-      disciplina: turma.disciplina, // <-- ADICIONE SE QUISER
+      eixo: turma.eixo,
+      disciplina: turma.disciplina,
       titulo: titulo || `Prova: ${conteudo.substring(0, 50)}`,
       conteudo: conteudo,
       tipoProva: tipoProva,
       periodo: periodo,
-      adaptada: tipoProva === 'adaptada' || adaptada === true, // <-- NOVO
-      alternativas: tipoProva === 'adaptada' || adaptada === true ? 3 : 5, // <-- NOVO
+      adaptada: tipoProva === 'adaptada' || adaptada === true,
+      alternativas: tipoProva === 'adaptada' || adaptada === true ? 3 : 5,
       anexos: anexos,
       questoes: questoesValidadas,
       quantidadeQuestoes: questoesValidadas.length,
@@ -2649,9 +2644,9 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       horarioTermino: horarioTermino,
       duracaoMinutos: duracaoMinutos,
       status: 'rascunho',
-      alunosAtribuidos: alunosDestino.map(a => a._id), // <-- NOVO: APENAS ALUNOS ALVO
-      totalAlunosAlvo: alunosDestino.length, // <-- NOVO
-      alunosComAcessibilidade: tipoProva === 'adaptada' ? alunosDestino.length : 0, // <-- NOVO
+      alunosAtribuidos: alunosDestino.map(a => a._id),
+      totalAlunosAlvo: alunosDestino.length,
+      alunosComAcessibilidade: tipoProva === 'adaptada' ? alunosDestino.length : 0,
       recursosAcessibilidade: recursosAcessibilidade || [
         'fonte_ampliada',
         'alto_contraste', 
@@ -2659,7 +2654,8 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
         'tempo_adicional'
       ],
       fonteGeracao: `Groq AI - Área: ${areaDetectada}`,
-      publicada: false
+      publicada: false,
+      criadoPor: req.userId // Guardar quem criou (admin ou professor)
     });
 
     await prova.save();
@@ -2668,10 +2664,10 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     turma.provas.push(prova._id);
     await turma.save();
 
-    console.log(`✅ Professor ${req.userId} criou prova ${prova._id} do tipo ${tipoProva} (área: ${areaDetectada})`);
+    console.log(`✅ ${req.userRole === 'admin' ? 'Admin' : 'Professor'} ${req.userId} criou prova ${prova._id} do tipo ${tipoProva} (área: ${areaDetectada})`);
+    console.log(`👨‍🏫 Professor atribuído: ${professorDaProva}`);
     console.log(`🎯 Alunos alvo: ${alunosDestino.length} alunos`);
 
-    // ========== MENSAGEM PERSONALIZADA ==========
     let mensagemSucesso = '';
     if (tipoProva === 'adaptada' || adaptada === true) {
       mensagemSucesso = `✅ Prova ADAPTADA criada com sucesso! 
@@ -2701,7 +2697,8 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
         dificuldade: prova.dificuldade,
         fonteGeracao: prova.fonteGeracao,
         totalAlunosAlvo: alunosDestino.length,
-        alunosComAcessibilidade: prova.alunosComAcessibilidade
+        alunosComAcessibilidade: prova.alunosComAcessibilidade,
+        professorId: professorDaProva // <-- RETORNAR NA RESPOSTA
       },
       questoes: prova.questoes.slice(0, quantidadeQuestoes)
     });
@@ -7969,9 +7966,10 @@ app.get('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) =
     try {
         const turmas = await Turma.find()
             .populate('professorId', 'nome email')
-            .populate('alunos', 'nome email matricula')
+            .populate('alunos', 'nome email matricula precisaAcessibilidade')
             .populate('provas', 'titulo status')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean(); // Adicionar .lean() para melhor performance
 
         const turmasComEstatisticas = turmas.map(turma => ({
             id: turma._id,
@@ -7979,19 +7977,31 @@ app.get('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) =
             disciplina: turma.disciplina,
             eixo: turma.eixo,
             codigo: turma.codigo,
+            descricao: turma.descricao,
+            dataCriacao: turma.createdAt || turma.dataCriacao || turma.criadoEm, // 🔴 CAPTURAR DATA
+            createdAt: turma.createdAt, // 🔴 INCLUIR createdAt
+            ativa: turma.ativa,
             professor: turma.professorId ? {
                 id: turma.professorId._id,
                 nome: turma.professorId.nome,
                 email: turma.professorId.email
             } : null,
-            totalAlunos: turma.alunos.length,
-            totalProvas: turma.provas.length,
-            alunosComAcessibilidade: turma.alunos.filter(a => a.precisaAcessibilidade).length,
-            dataCriacao: turma.createdAt,
-            ativa: turma.ativa
+            totalAlunos: turma.alunos?.length || 0,
+            totalProvas: turma.provas?.length || 0,
+            alunosComAcessibilidade: turma.alunos?.filter(a => a.precisaAcessibilidade).length || 0,
+            alunos: turma.alunos?.map(a => ({
+                id: a._id,
+                nome: a.nome,
+                email: a.email,
+                matricula: a.matricula,
+                precisaAcessibilidade: a.precisaAcessibilidade
+            })) || []
         }));
 
-        res.json({ success: true, turmas: turmasComEstatisticas });
+        res.json({ 
+            success: true, 
+            turmas: turmasComEstatisticas 
+        });
 
     } catch (error) {
         console.error('❌ Erro ao listar turmas:', error);

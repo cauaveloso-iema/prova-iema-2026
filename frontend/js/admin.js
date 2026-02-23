@@ -18,6 +18,12 @@ class AdminPanel {
             provas: { status: 'todos', dificuldade: 'todas', periodo: 'todos', search: '', page: 1, limit: 10 }
         };
         
+        // ===== VARIÁVEIS PARA CRIAÇÃO DE PROVAS =====
+        this.provaGeradaAdmin = null;
+        this.anexosAdmin = [];
+        this.arquivosParaUploadAdmin = [];
+        this.arquivosOriginaisBackupAdmin = [];
+        
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
         } else {
@@ -289,6 +295,7 @@ class AdminPanel {
             usuarios: 'Gerenciar Usuários',
             turmas: 'Gerenciar Turmas',
             provas: 'Gerenciar Provas',
+            'nova-prova': 'Nova Prova',
             questoes: 'Banco de Questões',
             resultados: 'Resultados',
             matriculas: 'Matrículas Autorizadas',
@@ -326,6 +333,9 @@ class AdminPanel {
                 break;
             case 'provas':
                 await this.loadProvas();
+                break;
+            case 'nova-prova':
+                await this.carregarNovaProva();
                 break;
             case 'questoes':
                 await this.loadQuestoes();
@@ -1293,9 +1303,97 @@ class AdminPanel {
         }
     }
 
+    // ============ VER DETALHES DA TURMA ============
     verTurma(turmaId) {
         const turma = this.turmas.find(t => t.id === turmaId);
         if (!turma) return;
+
+        let dataCriacao = 'Não informada';
+        
+        const possiveisCamposData = [
+            turma.dataCriacao,
+            turma.createdAt,
+            turma.criadoEm,
+            turma.created_at,
+            turma.criado_em,
+            turma.dataCadastro
+        ];
+        
+        for (const campo of possiveisCamposData) {
+            if (!campo) continue;
+            
+            try {
+                if (campo && campo.$date) {
+                    const date = new Date(campo.$date);
+                    if (!isNaN(date.getTime())) {
+                        dataCriacao = date.toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        break;
+                    }
+                }
+                else if (typeof campo === 'string') {
+                    const date = new Date(campo);
+                    if (!isNaN(date.getTime())) {
+                        dataCriacao = date.toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        break;
+                    }
+                }
+                else if (typeof campo === 'number') {
+                    const date = new Date(campo);
+                    if (!isNaN(date.getTime())) {
+                        dataCriacao = date.toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        break;
+                    }
+                }
+                else if (campo instanceof Date) {
+                    if (!isNaN(campo.getTime())) {
+                        dataCriacao = campo.toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        break;
+                    }
+                }
+            } catch (e) {
+                continue;
+            }
+        }
+
+        if (dataCriacao === 'Não informada' && turma._id && turma._id.length === 24) {
+            try {
+                const timestamp = parseInt(turma._id.substring(0, 8), 16) * 1000;
+                if (!isNaN(timestamp)) {
+                    const date = new Date(timestamp);
+                    dataCriacao = date.toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            } catch (e) {}
+        }
 
         const modalBody = document.getElementById('modalBody');
         modalBody.innerHTML = `
@@ -1303,11 +1401,11 @@ class AdminPanel {
                 <h3 style="margin: 0 0 20px 0; color: #495057;">${turma.nome}</h3>
                 
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <p><strong><i class="fas fa-book"></i> Disciplina:</strong> ${turma.disciplina}</p>
+                    <p><strong><i class="fas fa-book"></i> Disciplina:</strong> ${turma.disciplina || 'Não definida'}</p>
                     <p><strong><i class="fas fa-sitemap"></i> Eixo:</strong> ${turma.eixo || 'Não definido'}</p>
                     <p><strong><i class="fas fa-chalkboard-teacher"></i> Professor:</strong> ${turma.professor?.nome || 'Não atribuído'}</p>
                     <p><strong><i class="fas fa-hashtag"></i> Código:</strong> <code>${turma.codigo}</code></p>
-                    <p><strong><i class="fas fa-calendar"></i> Data de Criação:</strong> ${turma.dataCriacao ? new Date(turma.dataCriacao).toLocaleDateString('pt-BR') : 'N/A'}</p>
+                    <p><strong><i class="fas fa-calendar"></i> Data de Criação:</strong> <span style="font-weight: bold; color: #0d6efd;">${dataCriacao}</span></p>
                     <p><strong><i class="fas fa-circle"></i> Status:</strong> 
                         <span class="status-badge ${turma.ativa ? 'active' : 'inactive'}">
                             ${turma.ativa ? 'Ativa' : 'Inativa'}
@@ -1424,7 +1522,7 @@ class AdminPanel {
                 <div class="section">
                     <div class="section-header">
                         <h2><i class="fas fa-file-alt"></i> Gerenciar Provas</h2>
-                        <button class="btn-primary" onclick="admin.abrirModalProva()">
+                        <button class="btn-primary" onclick="admin.switchSection('nova-prova')">
                             <i class="fas fa-plus"></i> Nova Prova
                         </button>
                     </div>
@@ -1433,7 +1531,7 @@ class AdminPanel {
                         <div class="filter-group">
                             <label><i class="fas fa-search"></i> Buscar</label>
                             <input type="text" id="searchProvas" placeholder="Título ou conteúdo..." 
-                                   value="${search}" oninput="admin.filtrarProvas()" class="form-control">
+                                value="${search}" oninput="admin.filtrarProvas()" class="form-control">
                         </div>
                         <div class="filter-group">
                             <label><i class="fas fa-circle"></i> Status</label>
@@ -1511,169 +1609,1422 @@ class AdminPanel {
         }
     }
 
-    gerarLinhasProvas(provas) {
-        if (!provas || provas.length === 0) {
-            return `
-                <tr>
-                    <td colspan="9" style="text-align: center; padding: 40px;">
-                        <i class="fas fa-file-alt" style="font-size: 2rem; color: #dee2e6; margin-bottom: 10px; display: block;"></i>
-                        Nenhuma prova encontrada
-                    </td>
-                </tr>
-            `;
-        }
-
-        return provas.map(prova => {
-            const tipo = prova.tipoProva === 'enem' ? 'ENEM' : 
-                        (prova.adaptada ? 'Adaptada' : 'Simples');
-            const statusClass = prova.publicada ? 
-                (prova.cancelada ? 'inactive' : 
-                (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'warning' : 'active')) 
-                : 'inactive';
-            const statusText = prova.publicada ? 
-                (prova.cancelada ? 'Cancelada' : 
-                (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) 
-                : 'Rascunho';
-
-            return `
-                <tr>
-                    <td>
-                        <strong>${prova.titulo || 'Sem título'}</strong>
-                        ${prova.adaptada ? '<span class="badge-acessibilidade" title="Adaptada"><i class="fas fa-universal-access"></i></span>' : ''}
-                    </td>
-                    <td>${prova.professor?.nome || 'Desconhecido'}</td>
-                    <td>${prova.turma?.nome || prova.turma || 'N/A'}</td>
-                    <td>${prova.periodo ? prova.periodo + 'º' : '1º'}</td>
-                    <td>${tipo}</td>
-                    <td>${prova.quantidadeQuestoes || 0}</td>
-                    <td>
-                        <span class="status-badge ${statusClass}">
-                            ${statusText}
-                        </span>
-                    </td>
-                    <td>${prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'N/A'}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn-icon" onclick="admin.verProva('${prova.id}')" title="Ver detalhes">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            <button class="btn-icon success" onclick="admin.exportarResultadosProva('${prova.id}')" title="Exportar resultados">
-                                <i class="fas fa-download"></i>
-                            </button>
-                            <button class="btn-icon danger" onclick="admin.excluirProva('${prova.id}')" title="Excluir">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    filtrarProvas() {
-        this.filtros.provas.search = document.getElementById('searchProvas')?.value || '';
-        this.filtros.provas.status = document.getElementById('filterStatus')?.value || 'todos';
-        this.filtros.provas.dificuldade = document.getElementById('filterDificuldade')?.value || 'todas';
-        this.filtros.provas.periodo = document.getElementById('filterPeriodo')?.value || 'todos';
-        this.filtros.provas.page = 1;
-        this.loadProvas();
-    }
-
-    limparFiltrosProvas() {
-        this.filtros.provas = { status: 'todos', dificuldade: 'todas', periodo: 'todos', search: '', page: 1, limit: 10 };
-        this.loadProvas();
-    }
-
-    abrirModalProva() {
-        this.showToast('Funcionalidade de criar prova em desenvolvimento', 'info');
-    }
-
-    verProva(provaId) {
-        const prova = this.provas.find(p => p.id === provaId);
-        if (!prova) return;
-
-        const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
-            <div style="padding: 10px;">
-                <h3 style="margin: 0 0 20px 0; color: #495057;">${prova.titulo}</h3>
-                
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <p><strong><i class="fas fa-align-left"></i> Conteúdo:</strong> ${prova.conteudo || 'Não especificado'}</p>
-                    <p><strong><i class="fas fa-user"></i> Professor:</strong> ${prova.professor?.nome || 'Desconhecido'}</p>
-                    <p><strong><i class="fas fa-school"></i> Turma:</strong> ${prova.turma?.nome || prova.turma || 'N/A'}</p>
-                    <p><strong><i class="fas fa-calendar-week"></i> Período:</strong> ${prova.periodo ? prova.periodo + 'º' : '1º'}</p>
-                    <p><strong><i class="fas fa-calendar-alt"></i> Data Limite:</strong> ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'Sem limite'}</p>
-                    <p><strong><i class="fas fa-clock"></i> Duração:</strong> ${prova.duracaoMinutos ? prova.duracaoMinutos + ' minutos' : 'Não definida'}</p>
-                    <p><strong><i class="fas fa-circle"></i> Status:</strong> 
-                        <span class="status-badge ${prova.publicada ? (prova.cancelada ? 'inactive' : 'active') : 'inactive'}">
-                            ${prova.publicada ? (prova.cancelada ? 'Cancelada' : (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) : 'Rascunho'}
-                        </span>
-                    </p>
+    // ============ NOVA PROVA COM SELETOR DE PROFESSOR ============
+    async carregarNovaProva() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Primeiro insere o HTML
+        contentArea.innerHTML = `
+            <div class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-plus-circle"></i> Nova Prova</h2>
+                    <button class="btn-secondary" onclick="admin.switchSection('provas')">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </button>
                 </div>
 
-                <h4 style="margin: 20px 0 10px 0;">📊 Estatísticas</h4>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #0d6efd;">${prova.alunosRealizaram || 0}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Realizações</div>
-                    </div>
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #198754;">${(prova.mediaNotas || 0).toFixed(1)}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Média</div>
-                    </div>
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${prova.totalParticipantes || 0}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Participantes</div>
+                <!-- Alertas -->
+                <div id="alertProvaAdmin" class="alert" style="display: none;"></div>
+
+                <!-- Formulário de Nova Prova -->
+                <div class="form-container" style="margin-top: 20px;">
+                    <form id="formNovaProvaAdmin">
+                        <div class="form-grid" style="grid-template-columns: repeat(3, 1fr);">
+                            <!-- Tema da Prova -->
+                            <div class="form-group" style="grid-column: span 3;">
+                                <label class="form-label">
+                                    <i class="fas fa-lightbulb"></i> Tema da Prova
+                                </label>
+                                <textarea 
+                                    id="temaProvaAdmin" 
+                                    class="form-control" 
+                                    placeholder="Ex: 'Equações do 2º grau', 'Segunda Guerra Mundial', 'Fotossíntese'..."
+                                    required
+                                    rows="3"
+                                ></textarea>
+                                <small style="color: #6c757d; display: block; margin-top: 5px;">
+                                    Seja específico para melhores resultados.
+                                </small>
+                            </div>
+
+                            <!-- Título -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-heading"></i> Título da Prova
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="tituloProvaAdmin" 
+                                    class="form-control" 
+                                    placeholder="Ex: Prova Bimestral"
+                                    required
+                                >
+                            </div>
+
+                            <!-- Período Letivo -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-week"></i> Período Letivo
+                                </label>
+                                <select id="periodoProvaAdmin" class="form-control" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="1">1º Período</option>
+                                    <option value="2">2º Período</option>
+                                    <option value="3">3º Período</option>
+                                    <option value="4">4º Período</option>
+                                </select>
+                            </div>
+
+                            <!-- Professor Responsável -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-chalkboard-teacher"></i> Professor Responsável
+                                </label>
+                                <select id="professorProvaAdmin" class="form-control" required>
+                                    <option value="">Carregando professores...</option>
+                                </select>
+                                <small style="color: #6c757d;">A prova será atribuída a este professor</small>
+                            </div>
+
+                            <!-- Tipo de Prova -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-file-alt"></i> Tipo de Prova
+                                </label>
+                                <select id="tipoProvaAdmin" class="form-control" required onchange="admin.mudarTipoProvaAdmin()">
+                                    <option value="simples">Prova Simples (5 alternativas)</option>
+                                    <option value="enem">Formato ENEM (com texto base)</option>
+                                    <option value="adaptada">🎯 Prova Adaptada (3 alternativas)</option>
+                                </select>
+                            </div>
+
+                            <!-- Quantidade -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-question-circle"></i> Quantidade
+                                </label>
+                                <select id="quantidadeQuestoesAdmin" class="form-control" required>
+                                    <option value="5">5 questões</option>
+                                    <option value="10" selected>10 questões</option>
+                                    <option value="15">15 questões</option>
+                                    <option value="20">20 questões</option>
+                                </select>
+                            </div>
+
+                            <!-- Dificuldade -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-chart-line"></i> Dificuldade
+                                </label>
+                                <select id="dificuldadeAdmin" class="form-control" required>
+                                    <option value="facil">Fácil</option>
+                                    <option value="media" selected>Médio</option>
+                                    <option value="dificil">Difícil</option>
+                                </select>
+                            </div>
+
+                            <!-- Turma -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-school"></i> Turma
+                                </label>
+                                <select id="turmaProvaAdmin" class="form-control" required>
+                                    <option value="">Carregando turmas...</option>
+                                </select>
+                            </div>
+
+                            <!-- Data Limite -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-alt"></i> Data Limite
+                                </label>
+                                <input type="date" id="dataLimiteAdmin" class="form-control">
+                            </div>
+
+                            <!-- Horário Início -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-clock"></i> Horário Início
+                                </label>
+                                <input type="time" id="horarioInicioAdmin" class="form-control" value="08:00" required>
+                            </div>
+
+                            <!-- Horário Término -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-clock"></i> Horário Término
+                                </label>
+                                <input type="time" id="horarioTerminoAdmin" class="form-control" value="09:30" required>
+                            </div>
+
+                            <!-- Duração Calculada -->
+                            <div class="form-group" style="grid-column: span 3;">
+                                <label class="form-label">
+                                    <i class="fas fa-hourglass-half"></i> Duração Calculada
+                                </label>
+                                <div id="duracaoCalculadaAdmin" style="
+                                    padding: 10px;
+                                    background: #f3f4f6;
+                                    border-radius: 6px;
+                                    font-weight: 600;
+                                    color: #0d6efd;
+                                    text-align: center;
+                                ">
+                                    Calculando...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Seção de Anexos (ENEM) -->
+                        <div id="secaoAnexosAdmin" class="secao-anexos-container" style="display: none; margin-top: 30px;">
+                            <div class="info-card" style="background: #cce5ff; color: #004085;">
+                                <i class="fas fa-paperclip"></i>
+                                <div>
+                                    <strong>Materiais de Referência</strong>
+                                    <p style="margin: 5px 0 0 0;">Adicione arquivos, textos ou links para a IA usar como base</p>
+                                </div>
+                            </div>
+
+                            <!-- Tabs de Anexos -->
+                            <div style="display: flex; gap: 5px; margin: 15px 0;">
+                                <button type="button" class="btn-filter active" onclick="admin.mostrarTabAnexoAdmin('upload')">
+                                    <i class="fas fa-upload"></i> Upload
+                                </button>
+                                <button type="button" class="btn-filter" onclick="admin.mostrarTabAnexoAdmin('texto')">
+                                    <i class="fas fa-file-alt"></i> Texto
+                                </button>
+                                <button type="button" class="btn-filter" onclick="admin.mostrarTabAnexoAdmin('link')">
+                                    <i class="fas fa-link"></i> Link
+                                </button>
+                            </div>
+
+                            <!-- Tab Upload -->
+                            <div id="tab-upload-admin" class="tab-anexo-content" style="display: block;">
+                                <div class="drop-zone" 
+                                    onclick="document.getElementById('fileInputAdmin').click()"
+                                    ondrop="admin.handleDropAdmin(event)"
+                                    ondragover="admin.handleDragOverAdmin(event)"
+                                    ondragleave="admin.handleDragLeaveAdmin(event)"
+                                    style="border: 2px dashed #dee2e6; padding: 30px; text-align: center; border-radius: 8px; cursor: pointer;">
+                                    <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; color: #0d6efd;"></i>
+                                    <h4>Arraste arquivos ou clique para selecionar</h4>
+                                    <p>PDF, imagens, TXT, DOC, DOCX (até 10MB)</p>
+                                    <button type="button" class="btn-primary">
+                                        <i class="fas fa-folder-open"></i> Selecionar Arquivos
+                                    </button>
+                                </div>
+                                <input type="file" id="fileInputAdmin" multiple style="display: none;" 
+                                    accept=".pdf,.jpg,.jpeg,.png,.gif,.txt,.doc,.docx" onchange="admin.handleFileSelectAdmin(event)">
+                            </div>
+
+                            <!-- Tab Texto -->
+                            <div id="tab-texto-admin" class="tab-anexo-content" style="display: none;">
+                                <div class="form-group">
+                                    <label>Título do Texto</label>
+                                    <input type="text" id="textoTituloAdmin" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label>Conteúdo</label>
+                                    <textarea id="textoConteudoAdmin" class="form-control" rows="4"></textarea>
+                                </div>
+                                <button type="button" class="btn-success" onclick="admin.adicionarTextoAdmin()">
+                                    Adicionar Texto
+                                </button>
+                            </div>
+
+                            <!-- Tab Link -->
+                            <div id="tab-link-admin" class="tab-anexo-content" style="display: none;">
+                                <div class="form-group">
+                                    <label>Título</label>
+                                    <input type="text" id="linkTituloAdmin" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label>URL</label>
+                                    <input type="url" id="linkURLAdmin" class="form-control" placeholder="https://...">
+                                </div>
+                                <button type="button" class="btn-success" onclick="admin.adicionarLinkAdmin()">
+                                    Adicionar Link
+                                </button>
+                            </div>
+
+                            <!-- Lista de Anexos -->
+                            <div style="margin-top: 20px;">
+                                <h4><i class="fas fa-list-check"></i> Materiais Adicionados <span id="contadorAnexosAdmin">0</span></h4>
+                                <div id="listaAnexosAdmin" style="min-height: 50px;">
+                                    <div id="emptyAnexosAdmin" style="text-align: center; padding: 20px;">
+                                        <i class="fas fa-inbox"></i>
+                                        <p>Nenhum material adicionado</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Informações IA -->
+                        <div class="info-card" style="margin-top: 20px;">
+                            <h4><i class="fas fa-robot"></i> Sobre a IA</h4>
+                            <p>A prova será gerada automaticamente usando inteligência artificial e atribuída ao professor selecionado.</p>
+                        </div>
+
+                        <!-- Botão Gerar -->
+                        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 20px;" id="btnGerarProvaAdmin">
+                            <i class="fas fa-magic"></i> Gerar Prova com IA
+                        </button>
+                    </form>
+
+                    <!-- Preview das Questões -->
+                    <div id="previewQuestoesAdmin" class="preview-container" style="display: none; margin-top: 30px;">
+                        <h3><i class="fas fa-eye"></i> Pré-visualização da Prova</h3>
+                        <div id="questoesPreviewAdmin"></div>
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn-success" onclick="admin.publicarProvaAdmin()" style="flex: 1;">
+                                <i class="fas fa-paper-plane"></i> Publicar Prova
+                            </button>
+                            <button class="btn-warning" onclick="admin.abrirEdicaoQuestoesPreview()" style="flex: 1; background: #f59e0b;">
+                                <i class="fas fa-edit"></i> Editar Questões
+                            </button>
+                            <button class="btn-danger" onclick="admin.regenerarProvaAdmin()" style="flex: 1;">
+                                <i class="fas fa-redo"></i> Regenerar
+                            </button>
+                            <button class="btn-secondary" onclick="admin.cancelarProvaAdmin()" style="flex: 1;">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         `;
 
-        document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> Detalhes da Prova`;
-        document.getElementById('modalSaveBtn').style.display = 'none';
-        this.openModal();
+        // Configurar eventos
+        this.configurarEventosProvaAdmin();
+        
+        // ===== CORREÇÃO: Carregar dados APÓS o HTML estar no DOM =====
+        setTimeout(() => {
+            this.carregarTurmasParaProva();
+            this.carregarProfessoresParaProva();
+        }, 100);
     }
 
-    async exportarResultadosProva(provaId) {
-        this.showToast('Funcionalidade em desenvolvimento', 'info');
-    }
-
-    async excluirProva(provaId) {
-        const prova = this.provas.find(p => p.id === provaId);
-        if (!prova) return;
-
-        const confirmar = await this.confirmar(
-            `Excluir prova ${prova.titulo}?`,
-            `Esta ação não pode ser desfeita. Todos os resultados associados também serão excluídos.`
-        );
-
-        if (!confirmar) return;
-
+    // ============ CARREGAR PROFESSORES PARA O SELECT ============
+    async carregarProfessoresParaProva() {
         try {
-            this.showToast('Excluindo prova...', 'info');
-
-            const response = await fetch(`/api/professor/provas/${provaId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            console.log('👨‍🏫 Carregando professores para o select...');
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${this.apiBase}/usuarios?role=professor&limit=100`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             const data = await response.json();
 
             if (data.success) {
-                this.showToast('Prova excluída com sucesso!', 'success');
-                this.loadProvas();
-                this.carregarDadosReais();
-            } else {
-                throw new Error(data.error || 'Erro ao excluir prova');
+                const professores = data.usuarios || [];
+                console.log(`✅ ${professores.length} professores carregados`);
+                
+                // Verificar se o select existe
+                const select = document.getElementById('professorProvaAdmin');
+                if (select) {
+                    select.innerHTML = '<option value="">Selecione um professor...</option>';
+                    
+                    if (professores.length === 0) {
+                        select.innerHTML += '<option value="" disabled>Nenhum professor disponível</option>';
+                    } else {
+                        professores.forEach(prof => {
+                            const option = document.createElement('option');
+                            option.value = prof._id;
+                            option.textContent = `${prof.nome} - ${prof.email}`;
+                            select.appendChild(option);
+                        });
+                    }
+                } else {
+                    console.error('❌ Select professorProvaAdmin não encontrado');
+                }
             }
-
         } catch (error) {
-            console.error('Erro ao excluir prova:', error);
-            this.showToast('Erro: ' + error.message, 'error');
+            console.error('Erro ao carregar professores:', error);
+            const select = document.getElementById('professorProvaAdmin');
+            if (select) {
+                select.innerHTML = '<option value="">Erro ao carregar professores</option>';
+            }
         }
     }
 
-    // ============ BACKUPS ============
+    // ============ CARREGAR TURMAS PARA O SELECT ============
+    async carregarTurmasParaProva() {
+        try {
+            console.log('📚 Carregando turmas para o select...');
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/turmas?limit=100', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.turmas = data.turmas || [];
+                console.log(`✅ ${this.turmas.length} turmas carregadas`);
+                
+                // Verificar se o select existe
+                const select = document.getElementById('turmaProvaAdmin');
+                if (select) {
+                    select.innerHTML = '<option value="">Selecione uma turma...</option>';
+                    
+                    if (this.turmas.length === 0) {
+                        select.innerHTML += '<option value="" disabled>Nenhuma turma disponível</option>';
+                    } else {
+                        this.turmas.forEach(turma => {
+                            const option = document.createElement('option');
+                            option.value = turma.id;
+                            option.textContent = `${turma.nome} - ${turma.disciplina} (${turma.totalAlunos || 0} alunos)`;
+                            select.appendChild(option);
+                        });
+                    }
+                } else {
+                    console.error('❌ Select turmaProvaAdmin não encontrado');
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao carregar turmas:', error);
+            const select = document.getElementById('turmaProvaAdmin');
+            if (select) {
+                select.innerHTML = '<option value="">Erro ao carregar turmas</option>';
+            }
+        }
+    }
+
+    // ============ CONFIGURAR EVENTOS ============
+    configurarEventosProvaAdmin() {
+        // Calcular duração
+        const inicio = document.getElementById('horarioInicioAdmin');
+        const termino = document.getElementById('horarioTerminoAdmin');
+        
+        if (inicio && termino) {
+            inicio.addEventListener('change', () => this.calcularDuracaoAdmin());
+            termino.addEventListener('change', () => this.calcularDuracaoAdmin());
+            setTimeout(() => this.calcularDuracaoAdmin(), 500);
+        }
+
+        // Formulário
+        const form = document.getElementById('formNovaProvaAdmin');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.gerarProvaAdmin();
+            });
+        }
+    }
+
+    // ============ CALCULAR DURAÇÃO ============
+    calcularDuracaoAdmin() {
+        const inicio = document.getElementById('horarioInicioAdmin')?.value;
+        const termino = document.getElementById('horarioTerminoAdmin')?.value;
+        
+        if (!inicio || !termino) return;
+        
+        const [h1, m1] = inicio.split(':').map(Number);
+        const [h2, m2] = termino.split(':').map(Number);
+        
+        const totalMinutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+        
+        if (totalMinutos <= 0) {
+            document.getElementById('duracaoCalculadaAdmin').innerHTML = 
+                '<span style="color: #dc3545;">Horário inválido</span>';
+            return;
+        }
+        
+        const horas = Math.floor(totalMinutos / 60);
+        const minutos = totalMinutos % 60;
+        
+        let duracaoTexto = '';
+        if (horas > 0) duracaoTexto += `${horas} hora${horas > 1 ? 's' : ''}`;
+        if (minutos > 0) {
+            if (horas > 0) duracaoTexto += ' e ';
+            duracaoTexto += `${minutos} minuto${minutos > 1 ? 's' : ''}`;
+        }
+        
+        document.getElementById('duracaoCalculadaAdmin').innerHTML = 
+            `<strong>${duracaoTexto}</strong> (${totalMinutos} minutos)`;
+    }
+
+    // ============ MUDAR TIPO DE PROVA ============
+    mudarTipoProvaAdmin() {
+        const tipo = document.getElementById('tipoProvaAdmin').value;
+        const secaoAnexos = document.getElementById('secaoAnexosAdmin');
+        
+        if (tipo === 'enem') {
+            secaoAnexos.style.display = 'block';
+        } else {
+            secaoAnexos.style.display = 'none';
+            this.anexosAdmin = [];
+            this.arquivosParaUploadAdmin = [];
+            this.atualizarListaAnexosAdmin();
+        }
+        
+        if (tipo === 'adaptada') {
+            this.mostrarAlertaAdmin('🎯 Modo Prova Adaptada ativado! 3 alternativas por questão.', 'info');
+        }
+    }
+
+    // ============ FUNÇÕES DE ANEXOS ============
+    mostrarTabAnexoAdmin(tipo) {
+        document.querySelectorAll('#secaoAnexosAdmin .btn-filter').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.currentTarget.classList.add('active');
+        
+        document.querySelectorAll('#secaoAnexosAdmin .tab-anexo-content').forEach(tab => {
+            tab.style.display = 'none';
+        });
+        
+        document.getElementById(`tab-${tipo}-admin`).style.display = 'block';
+    }
+
+    handleDragOverAdmin(e) {
+        e.preventDefault();
+        e.currentTarget.style.background = '#f8f9fa';
+    }
+
+    handleDragLeaveAdmin(e) {
+        e.currentTarget.style.background = '';
+    }
+
+    handleDropAdmin(e) {
+        e.preventDefault();
+        e.currentTarget.style.background = '';
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            this.handleFilesAdmin(files);
+        }
+    }
+
+    handleFileSelectAdmin(e) {
+        const files = e.target.files;
+        if (files.length > 0) {
+            this.handleFilesAdmin(files);
+        }
+    }
+
+    handleFilesAdmin(files) {
+        if (!this.arquivosParaUploadAdmin) this.arquivosParaUploadAdmin = [];
+        
+        Array.from(files).forEach(file => {
+            if (file.size > 10 * 1024 * 1024) {
+                this.mostrarAlertaAdmin(`⚠️ Arquivo "${file.name}" muito grande (máx: 10MB)`, 'error');
+                return;
+            }
+            
+            this.arquivosParaUploadAdmin.push(file);
+            this.mostrarPreviewArquivoAdmin(file);
+        });
+        
+        this.atualizarContadorAnexosAdmin();
+        document.getElementById('fileInputAdmin').value = '';
+    }
+
+    mostrarPreviewArquivoAdmin(file) {
+        const container = document.getElementById('listaAnexosAdmin');
+        const empty = document.getElementById('emptyAnexosAdmin');
+        
+        if (empty) empty.style.display = 'none';
+        
+        const icon = file.type.includes('pdf') ? 'fa-file-pdf' :
+                    file.type.includes('image') ? 'fa-file-image' :
+                    file.type.includes('word') ? 'fa-file-word' : 'fa-file';
+        
+        const fileId = 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        
+        const html = `
+            <div class="anexo-item" id="${fileId}" style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px;
+                background: #f8f9fa;
+                border-radius: 6px;
+                margin-bottom: 8px;
+            ">
+                <i class="fas ${icon}" style="color: #0d6efd;"></i>
+                <div style="flex: 1;">
+                    <div><strong>${file.name}</strong></div>
+                    <small>${(file.size / 1024).toFixed(2)} KB</small>
+                </div>
+                <button onclick="admin.removerArquivoAdmin('${fileId}', '${file.name}')" style="
+                    background: none;
+                    border: none;
+                    color: #dc3545;
+                    cursor: pointer;
+                    font-size: 1.2rem;
+                ">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', html);
+    }
+
+    removerArquivoAdmin(fileId, fileName) {
+        document.getElementById(fileId)?.remove();
+        this.arquivosParaUploadAdmin = this.arquivosParaUploadAdmin.filter(f => f.name !== fileName);
+        this.atualizarContadorAnexosAdmin();
+        
+        if (this.arquivosParaUploadAdmin.length === 0 && (!this.anexosAdmin || this.anexosAdmin.length === 0)) {
+            document.getElementById('emptyAnexosAdmin').style.display = 'block';
+        }
+    }
+
+    adicionarTextoAdmin() {
+        const titulo = document.getElementById('textoTituloAdmin').value.trim();
+        const conteudo = document.getElementById('textoConteudoAdmin').value.trim();
+        
+        if (!titulo || !conteudo) {
+            this.mostrarAlertaAdmin('⚠️ Título e conteúdo são obrigatórios', 'error');
+            return;
+        }
+        
+        if (!this.anexosAdmin) this.anexosAdmin = [];
+        
+        this.anexosAdmin.push({
+            tipo: 'texto',
+            titulo: titulo,
+            conteudo: conteudo
+        });
+        
+        document.getElementById('textoTituloAdmin').value = '';
+        document.getElementById('textoConteudoAdmin').value = '';
+        
+        this.atualizarListaAnexosAdmin();
+        this.mostrarAlertaAdmin('✅ Texto adicionado!', 'success');
+    }
+
+    adicionarLinkAdmin() {
+        const titulo = document.getElementById('linkTituloAdmin').value.trim();
+        const url = document.getElementById('linkURLAdmin').value.trim();
+        
+        if (!titulo || !url) {
+            this.mostrarAlertaAdmin('⚠️ Título e URL são obrigatórios', 'error');
+            return;
+        }
+        
+        if (!url.startsWith('http')) {
+            this.mostrarAlertaAdmin('⚠️ URL deve começar com http:// ou https://', 'error');
+            return;
+        }
+        
+        if (!this.anexosAdmin) this.anexosAdmin = [];
+        
+        this.anexosAdmin.push({
+            tipo: 'link',
+            titulo: titulo,
+            url: url
+        });
+        
+        document.getElementById('linkTituloAdmin').value = '';
+        document.getElementById('linkURLAdmin').value = '';
+        
+        this.atualizarListaAnexosAdmin();
+        this.mostrarAlertaAdmin('✅ Link adicionado!', 'success');
+    }
+
+    atualizarListaAnexosAdmin() {
+        const container = document.getElementById('listaAnexosAdmin');
+        const empty = document.getElementById('emptyAnexosAdmin');
+        
+        if ((!this.anexosAdmin || this.anexosAdmin.length === 0) && 
+            (!this.arquivosParaUploadAdmin || this.arquivosParaUploadAdmin.length === 0)) {
+            if (empty) empty.style.display = 'block';
+            return;
+        }
+        
+        if (empty) empty.style.display = 'none';
+        
+        // Limpar apenas os anexos de texto/link (manter arquivos)
+        const elementos = container.querySelectorAll('.anexo-item');
+        elementos.forEach(el => {
+            if (!el.id.startsWith('file-')) {
+                el.remove();
+            }
+        });
+        
+        // Adicionar anexos de texto/link
+        if (this.anexosAdmin) {
+            this.anexosAdmin.forEach((anexo, index) => {
+                const icon = anexo.tipo === 'texto' ? 'fa-file-alt' : 'fa-link';
+                const html = `
+                    <div class="anexo-item" style="
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        padding: 10px;
+                        background: #e7f3ff;
+                        border-radius: 6px;
+                        margin-bottom: 8px;
+                    ">
+                        <i class="fas ${icon}" style="color: #0d6efd;"></i>
+                        <div style="flex: 1;">
+                            <div><strong>${anexo.titulo}</strong></div>
+                            <small>${anexo.tipo === 'texto' ? 'Texto' : 'Link'}</small>
+                        </div>
+                        <button onclick="admin.removerAnexoAdmin(${index})" style="
+                            background: none;
+                            border: none;
+                            color: #dc3545;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+        }
+        
+        this.atualizarContadorAnexosAdmin();
+    }
+
+    removerAnexoAdmin(index) {
+        this.anexosAdmin.splice(index, 1);
+        this.atualizarListaAnexosAdmin();
+    }
+
+    atualizarContadorAnexosAdmin() {
+        const total = (this.anexosAdmin?.length || 0) + (this.arquivosParaUploadAdmin?.length || 0);
+        const contador = document.getElementById('contadorAnexosAdmin');
+        if (contador) contador.textContent = total;
+    }
+
+    // ============ GERAR PROVA ============
+    async gerarProvaAdmin() {
+        const btn = document.getElementById('btnGerarProvaAdmin');
+        // Só mudar o botão se ele existir (caso contrário é regeneração)
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+            btn.disabled = true;
+        }
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // PEGAR O ID DO PROFESSOR SELECIONADO
+            const professorSelect = document.getElementById('professorProvaAdmin');
+            const professorId = professorSelect ? professorSelect.value : null;
+            
+            const turmaId = document.getElementById('turmaProvaAdmin')?.value;
+            const titulo = document.getElementById('tituloProvaAdmin')?.value;
+            const tema = document.getElementById('temaProvaAdmin')?.value;
+            const periodo = document.getElementById('periodoProvaAdmin')?.value;
+            const tipoProva = document.getElementById('tipoProvaAdmin')?.value;
+            const quantidade = parseInt(document.getElementById('quantidadeQuestoesAdmin')?.value);
+            const dificuldade = document.getElementById('dificuldadeAdmin')?.value;
+            const horarioInicio = document.getElementById('horarioInicioAdmin')?.value;
+            const horarioTermino = document.getElementById('horarioTerminoAdmin')?.value;
+            
+            // VALIDAÇÃO DO PROFESSOR
+            if (!professorId) {
+                throw new Error('Selecione um professor responsável pela prova');
+            }
+            
+            // Mostrar qual professor foi selecionado (para debug)
+            const professorNome = professorSelect.options[professorSelect.selectedIndex]?.text || 'Desconhecido';
+            console.log(`👨‍🏫 Professor selecionado: ${professorNome} (ID: ${professorId})`);
+            
+            // Validar outros campos
+            if (!turmaId) {
+                throw new Error('Selecione uma turma');
+            }
+            
+            if (!periodo) {
+                throw new Error('Selecione o período letivo');
+            }
+            
+            let dataLimite = null;
+            const dataLimiteInput = document.getElementById('dataLimiteAdmin')?.value;
+            if (dataLimiteInput) {
+                const [ano, mes, dia] = dataLimiteInput.split('-').map(Number);
+                dataLimite = new Date(ano, mes - 1, dia, 23, 59, 59).toISOString();
+            }
+            
+            // CORREÇÃO: Incluir professorId nos dados da prova
+            const dadosProva = {
+                professorId: professorId, // <-- ESSA LINHA É CRÍTICA
+                turmaId,
+                titulo,
+                conteudo: tema,
+                tipoProva,
+                periodo,
+                quantidadeQuestoes: quantidade,
+                dificuldade,
+                dataLimite,
+                horarioInicio,
+                horarioTermino
+            };
+            
+            console.log('📤 Enviando dados da prova:', {
+                ...dadosProva,
+                professorId: professorId,
+                professorSelecionado: professorNome
+            });
+            
+            if (tipoProva === 'adaptada') {
+                dadosProva.adaptada = true;
+                dadosProva.alternativas = 3;
+            }
+            
+            // Fazer backup dos arquivos para regeneração
+            this.arquivosOriginaisBackupAdmin = [...this.arquivosParaUploadAdmin];
+            
+            let response;
+            
+            if (tipoProva === 'enem' && ((this.anexosAdmin?.length || 0) + (this.arquivosParaUploadAdmin?.length || 0) > 0)) {
+                const formData = new FormData();
+                Object.keys(dadosProva).forEach(key => {
+                    formData.append(key, dadosProva[key]);
+                });
+                
+                const todosAnexos = [...(this.anexosAdmin || [])];
+                
+                for (const file of (this.arquivosParaUploadAdmin || [])) {
+                    const fileFormData = new FormData();
+                    fileFormData.append('arquivo', file);
+                    
+                    const uploadResponse = await fetch('/api/upload/temp', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: fileFormData
+                    });
+                    
+                    if (uploadResponse.ok) {
+                        const uploadData = await uploadResponse.json();
+                        if (uploadData.success) {
+                            todosAnexos.push({
+                                tipo: uploadData.file.tipo,
+                                titulo: uploadData.file.nome,
+                                nomeArquivo: uploadData.file.nomeArquivo,
+                                url: uploadData.file.url
+                            });
+                        }
+                    }
+                }
+                
+                formData.append('anexosData', JSON.stringify(todosAnexos));
+                
+                response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+            } else {
+                response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dadosProva)
+                });
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.provaGeradaAdmin = {
+                    id: data.provaId,
+                    ...data.prova,
+                    questoes: data.questoes || [],
+                    // Garantir que o professor está correto
+                    professor: {
+                        id: professorId,
+                        nome: professorNome
+                    }
+                };
+                
+                console.log('✅ Prova gerada com sucesso! Professor atribuído:', professorNome);
+                
+                this.mostrarPreviewQuestoesAdmin(data.questoes || []);
+                this.mostrarAlertaAdmin(`✅ Prova gerada com sucesso! Professor: ${professorNome}`, 'success');
+            } else {
+                throw new Error(data.error || 'Erro ao gerar prova');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao gerar prova:', error);
+            this.mostrarAlertaAdmin('❌ ' + error.message, 'error');
+            
+            // Se for regeneração, mostrar erro no preview
+            const questoesPreview = document.getElementById('questoesPreviewAdmin');
+            if (questoesPreview && !document.getElementById('btnGerarProvaAdmin')) {
+                questoesPreview.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #dc3545; margin-bottom: 15px;"></i>
+                        <h3 style="color: #721c24;">Erro ao regenerar prova</h3>
+                        <p style="color: #6c757d;">${error.message}</p>
+                    </div>
+                `;
+            }
+        } finally {
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-magic"></i> Gerar Prova com IA';
+                btn.disabled = false;
+            }
+        }
+    }
+
+    // ============ MOSTRAR PREVIEW DAS QUESTÕES ============
+    mostrarPreviewQuestoesAdmin(questoes) {
+        const container = document.getElementById('questoesPreviewAdmin');
+        const preview = document.getElementById('previewQuestoesAdmin');
+        
+        if (!questoes || questoes.length === 0) {
+            container.innerHTML = '<p style="color: #dc3545;">Nenhuma questão gerada</p>';
+            return;
+        }
+        
+        let html = '';
+        
+        questoes.forEach((q, i) => {
+            const tipo = q.tipo === 'enem' ? 'ENEM' : (q.tipo === 'adaptada' ? '🎯 ADAPTADA' : 'SIMPLES');
+            const cor = q.tipo === 'enem' ? '#0dcaf0' : (q.tipo === 'adaptada' ? '#198754' : '#0d6efd');
+            
+            html += `
+                <div style="
+                    background: #f8f9fa;
+                    border-left: 4px solid ${cor};
+                    padding: 15px;
+                    margin-bottom: 15px;
+                    border-radius: 4px;
+                ">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <strong>Questão ${i + 1}</strong>
+                        <span style="background: ${cor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">
+                            ${tipo}
+                        </span>
+                    </div>
+                    <p>${q.pergunta || q.enunciado || 'Pergunta'}</p>
+                    <div style="margin-top: 10px;">
+                        ${q.opcoes.map((opcao, idx) => `
+                            <div style="
+                                padding: 8px;
+                                margin: 5px 0;
+                                background: ${idx === q.respostaCorreta ? '#d4edda' : 'white'};
+                                border: 1px solid ${idx === q.respostaCorreta ? '#28a745' : '#dee2e6'};
+                                border-radius: 4px;
+                            ">
+                                ${opcao}
+                                ${idx === q.respostaCorreta ? ' ✓' : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+        preview.style.display = 'block';
+        
+        // Rolar até o preview
+        preview.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ============ ABRIR EDIÇÃO DE QUESTÕES (VERSÃO COMPLETA) ============
+    abrirEdicaoQuestoesPreview() {
+        if (!this.provaGeradaAdmin || !this.provaGeradaAdmin.questoes || this.provaGeradaAdmin.questoes.length === 0) {
+            this.mostrarAlertaAdmin('⚠️ Nenhuma prova gerada para editar', 'info');
+            return;
+        }
+        
+        // Criar modal de edição completo
+        const modalBody = document.getElementById('modalBody');
+        const questoes = this.provaGeradaAdmin.questoes;
+        
+        let questoesHTML = '';
+        
+        questoes.forEach((questao, index) => {
+            const tipo = questao.tipo === 'enem' ? 'ENEM' : (questao.tipo === 'adaptada' ? 'Adaptada' : 'Simples');
+            const badgeColor = questao.tipo === 'enem' ? '#0dcaf0' : (questao.tipo === 'adaptada' ? '#198754' : '#0d6efd');
+            
+            let opcoesHTML = '';
+            questao.opcoes.forEach((opcao, opcaoIndex) => {
+                const isCorreta = opcaoIndex === questao.respostaCorreta;
+                opcoesHTML += `
+                    <div style="
+                        margin-bottom: 10px;
+                        padding: 10px;
+                        background: ${isCorreta ? '#d4edda' : '#f8f9fa'};
+                        border: 2px solid ${isCorreta ? '#28a745' : '#dee2e6'};
+                        border-radius: 6px;
+                        position: relative;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                            <span style="
+                                width: 30px;
+                                height: 30px;
+                                background: ${isCorreta ? '#28a745' : '#6c757d'};
+                                color: white;
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-weight: bold;
+                            ">${String.fromCharCode(65 + opcaoIndex)}</span>
+                            
+                            <select class="form-control" id="opcao-correta-${index}" 
+                                onchange="admin.marcarOpcaoCorreta(${index}, this.value)"
+                                style="width: auto; margin-left: auto;">
+                                ${questao.opcoes.map((_, idx) => `
+                                    <option value="${idx}" ${idx === questao.respostaCorreta ? 'selected' : ''}>
+                                        ${String.fromCharCode(65 + idx)} é a correta
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        
+                        <textarea 
+                            class="form-control" 
+                            id="opcao-${index}-${opcaoIndex}" 
+                            rows="2"
+                            style="font-weight: ${isCorreta ? 'bold' : 'normal'};"
+                        >${opcao.replace(/<[^>]*>/g, '')}</textarea>
+                    </div>
+                `;
+            });
+            
+            questoesHTML += `
+                <div class="questao-editavel" id="questao-${index}" style="
+                    margin-bottom: 30px;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    border: 1px solid #dee2e6;
+                    position: relative;
+                ">
+                    <!-- Cabeçalho da questão com botão excluir -->
+                    <div style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 15px;
+                        padding-bottom: 10px;
+                        border-bottom: 2px solid #dee2e6;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="
+                                background: ${badgeColor};
+                                color: white;
+                                padding: 5px 12px;
+                                border-radius: 20px;
+                                font-weight: bold;
+                            ">Questão ${index + 1}</span>
+                            <span style="
+                                background: #e9ecef;
+                                padding: 3px 8px;
+                                border-radius: 12px;
+                                font-size: 0.8rem;
+                            ">${tipo}</span>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="btn-icon" onclick="admin.inserirImagemNaQuestao(${index})" 
+                                    style="background: #0d6efd; color: white;" title="Inserir imagem">
+                                <i class="fas fa-image"></i>
+                            </button>
+                            <button type="button" class="btn-icon danger" onclick="admin.excluirQuestao(${index})" 
+                                    style="background: #dc3545; color: white;" title="Excluir questão">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Pergunta -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-weight: bold; display: block; margin-bottom: 5px;">
+                            <i class="fas fa-question-circle"></i> Pergunta:
+                        </label>
+                        <textarea class="form-control" id="pergunta-${index}" rows="3">${questao.pergunta ? questao.pergunta.replace(/<[^>]*>/g, '') : ''}</textarea>
+                    </div>
+                    
+                    <!-- Imagens da questão (se houver) -->
+                    <div id="imagens-questao-${index}" style="margin-bottom: 15px;">
+                        ${questao.imagens && questao.imagens.length > 0 ? `
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-weight: bold;">Imagens:</label>
+                                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+                                    ${questao.imagens.map((img, imgIndex) => `
+                                        <div style="position: relative; width: 100px;">
+                                            <img src="${img.url}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 4px;">
+                                            <button onclick="admin.removerImagemQuestao(${index}, ${imgIndex})" 
+                                                    style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer;">×</button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <!-- Opções -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-weight: bold; display: block; margin-bottom: 5px;">
+                            <i class="fas fa-list-ul"></i> Opções:
+                        </label>
+                        <div id="opcoes-container-${index}">
+                            ${opcoesHTML}
+                        </div>
+                        <button type="button" class="btn-secondary" onclick="admin.adicionarOpcao(${index})" 
+                                style="margin-top: 10px; width: 100%;">
+                            <i class="fas fa-plus"></i> Adicionar Opção
+                        </button>
+                    </div>
+                    
+                    <!-- Explicação -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-weight: bold; display: block; margin-bottom: 5px;">
+                            <i class="fas fa-lightbulb"></i> Explicação:
+                        </label>
+                        <textarea class="form-control" id="explicacao-${index}" rows="2">${questao.explicacao ? questao.explicacao.replace(/<[^>]*>/g, '') : ''}</textarea>
+                    </div>
+                </div>
+            `;
+        });
+        
+        modalBody.innerHTML = `
+            <div style="max-height: 70vh; overflow-y: auto; padding: 10px;">
+                ${questoesHTML}
+                <button type="button" class="btn-success" onclick="admin.adicionarNovaQuestao()" style="width: 100%; margin: 20px 0;">
+                    <i class="fas fa-plus"></i> Adicionar Nova Questão
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editor de Questões';
+        document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicoesQuestoes();
+        document.getElementById('modalSaveBtn').textContent = 'Salvar Todas as Alterações';
+        this.openModal();
+    }
+
+    // ============ MÉTODOS AUXILIARES PARA EDIÇÃO ============
+
+    // Marcar opção como correta
+    marcarOpcaoCorreta(questaoIndex, opcaoIndex) {
+        if (this.provaGeradaAdmin && this.provaGeradaAdmin.questoes[questaoIndex]) {
+            this.provaGeradaAdmin.questoes[questaoIndex].respostaCorreta = parseInt(opcaoIndex);
+        }
+    }
+
+    // Excluir questão
+    excluirQuestao(questaoIndex) {
+        if (this.provaGeradaAdmin && this.provaGeradaAdmin.questoes.length > 1) {
+            if (confirm('Tem certeza que deseja excluir esta questão?')) {
+                this.provaGeradaAdmin.questoes.splice(questaoIndex, 1);
+                this.abrirEdicaoQuestoesPreview(); // Recarregar o modal
+                this.mostrarAlertaAdmin('✅ Questão excluída!', 'success');
+            }
+        } else {
+            this.mostrarAlertaAdmin('❌ A prova deve ter pelo menos uma questão', 'error');
+        }
+    }
+
+    // Adicionar nova questão
+    adicionarNovaQuestao() {
+        if (this.provaGeradaAdmin) {
+            const novaQuestao = {
+                pergunta: 'Nova pergunta...',
+                opcoes: ['Opção A', 'Opção B', 'Opção C', 'Opção D', 'Opção E'],
+                respostaCorreta: 0,
+                explicacao: 'Explicação...',
+                tipo: 'simples',
+                imagens: []
+            };
+            this.provaGeradaAdmin.questoes.push(novaQuestao);
+            this.abrirEdicaoQuestoesPreview();
+            this.mostrarAlertaAdmin('✅ Nova questão adicionada!', 'success');
+        }
+    }
+
+    // Adicionar opção
+    adicionarOpcao(questaoIndex) {
+        if (this.provaGeradaAdmin && this.provaGeradaAdmin.questoes[questaoIndex]) {
+            const numOpcoes = this.provaGeradaAdmin.questoes[questaoIndex].opcoes.length;
+            if (numOpcoes < 5) {
+                const letra = String.fromCharCode(65 + numOpcoes);
+                this.provaGeradaAdmin.questoes[questaoIndex].opcoes.push(`Opção ${letra}`);
+                this.abrirEdicaoQuestoesPreview();
+            } else {
+                this.mostrarAlertaAdmin('❌ Máximo de 5 opções por questão', 'error');
+            }
+        }
+    }
+
+    // Inserir imagem na questão
+    inserirImagemNaQuestao(questaoIndex) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const formData = new FormData();
+                    formData.append('imagem', file);
+                    
+                    const response = await fetch('/api/upload/imagem', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        if (!this.provaGeradaAdmin.questoes[questaoIndex].imagens) {
+                            this.provaGeradaAdmin.questoes[questaoIndex].imagens = [];
+                        }
+                        this.provaGeradaAdmin.questoes[questaoIndex].imagens.push({
+                            url: data.url,
+                            nome: file.name
+                        });
+                        this.abrirEdicaoQuestoesPreview();
+                        this.mostrarAlertaAdmin('✅ Imagem adicionada!', 'success');
+                    }
+                } catch (error) {
+                    this.mostrarAlertaAdmin('❌ Erro ao fazer upload', 'error');
+                }
+            }
+        };
+        input.click();
+    }
+
+    // Remover imagem da questão
+    removerImagemQuestao(questaoIndex, imgIndex) {
+        if (this.provaGeradaAdmin && this.provaGeradaAdmin.questoes[questaoIndex].imagens) {
+            this.provaGeradaAdmin.questoes[questaoIndex].imagens.splice(imgIndex, 1);
+            this.abrirEdicaoQuestoesPreview();
+            this.mostrarAlertaAdmin('✅ Imagem removida!', 'success');
+        }
+    }
+
+    // ============ SALVAR EDIÇÕES DAS QUESTÕES ============
+    async salvarEdicoesQuestoes() {
+        if (!this.provaGeradaAdmin || !this.provaGeradaAdmin.questoes) {
+            this.closeModal();
+            return;
+        }
+        
+        try {
+            const questoes = [];
+            const questoesOriginais = this.provaGeradaAdmin.questoes;
+            
+            for (let i = 0; i < questoesOriginais.length; i++) {
+                const pergunta = document.getElementById(`pergunta-${i}`)?.value || questoesOriginais[i].pergunta;
+                const explicacao = document.getElementById(`explicacao-${i}`)?.value || questoesOriginais[i].explicacao;
+                const respostaCorreta = parseInt(document.getElementById(`resposta-${i}`)?.value || questoesOriginais[i].respostaCorreta);
+                
+                const opcoes = [];
+                for (let j = 0; j < questoesOriginais[i].opcoes.length; j++) {
+                    const opcaoElement = document.getElementById(`opcao-${i}-${j}`);
+                    opcoes.push(opcaoElement ? opcaoElement.value : questoesOriginais[i].opcoes[j]);
+                }
+                
+                questoes.push({
+                    ...questoesOriginais[i],
+                    pergunta,
+                    explicacao,
+                    respostaCorreta,
+                    opcoes
+                });
+            }
+            
+            // Atualizar localmente
+            this.provaGeradaAdmin.questoes = questoes;
+            
+            // Atualizar preview
+            this.mostrarPreviewQuestoesAdmin(questoes);
+            
+            this.closeModal();
+            this.mostrarAlertaAdmin('✅ Questões atualizadas!', 'success');
+            
+        } catch (error) {
+            this.mostrarAlertaAdmin('❌ Erro ao salvar: ' + error.message, 'error');
+        }
+    }
+
+    // ============ PUBLICAR PROVA ============
+    async publicarProvaAdmin() {
+        if (!this.provaGeradaAdmin || !this.provaGeradaAdmin.id) {
+            this.mostrarAlertaAdmin('❌ Nenhuma prova para publicar', 'error');
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Mostrar loading no botão
+            const btnPublicar = document.querySelector('#previewQuestoesAdmin .btn-success');
+            const originalText = btnPublicar.innerHTML;
+            btnPublicar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publicando...';
+            btnPublicar.disabled = true;
+            
+            const response = await fetch(`/api/professor/provas/${this.provaGeradaAdmin.id}/publicar`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.mostrarAlertaAdmin('✅ Prova publicada com sucesso! Agora está disponível para os alunos.', 'success');
+                
+                // Limpar formulário
+                document.getElementById('formNovaProvaAdmin').reset();
+                document.getElementById('previewQuestoesAdmin').style.display = 'none';
+                
+                this.anexosAdmin = [];
+                this.arquivosParaUploadAdmin = [];
+                this.atualizarListaAnexosAdmin();
+                this.provaGeradaAdmin = null;
+                
+                // Voltar para lista de provas após 2 segundos
+                setTimeout(() => {
+                    this.switchSection('provas');
+                    // Recarregar a lista de provas
+                    this.loadProvas();
+                }, 2000);
+            } else {
+                throw new Error(data.error || 'Erro ao publicar');
+            }
+            
+        } catch (error) {
+            this.mostrarAlertaAdmin('❌ ' + error.message, 'error');
+        } finally {
+            const btnPublicar = document.querySelector('#previewQuestoesAdmin .btn-success');
+            if (btnPublicar) {
+                btnPublicar.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar Prova';
+                btnPublicar.disabled = false;
+            }
+        }
+    }
+
+    // ============ REGENERAR PROVA ============
+    async regenerarProvaAdmin() {
+        if (!this.provaGeradaAdmin) {
+            this.mostrarAlertaAdmin('❌ Nenhuma prova para regenerar', 'error');
+            return;
+        }
+        
+        // Mostrar loading no preview
+        const questoesPreview = document.getElementById('questoesPreviewAdmin');
+        const previewContainer = document.getElementById('previewQuestoesAdmin');
+        
+        if (questoesPreview) {
+            questoesPreview.innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 3rem; color: #0d6efd; margin-bottom: 15px;"></i>
+                    <h3 style="color: #495057;">Regenerando prova...</h3>
+                    <p style="color: #6c757d;">A IA está criando novas questões. Por favor, aguarde.</p>
+                </div>
+            `;
+        }
+        
+        // Desabilitar botões
+        const botoes = previewContainer.querySelectorAll('button');
+        botoes.forEach(btn => btn.disabled = true);
+        
+        await this.gerarProvaAdmin();
+        
+        // Reabilitar botões após a geração
+        botoes.forEach(btn => btn.disabled = false);
+    }
+
+    // ============ CANCELAR PROVA ============
+    cancelarProvaAdmin() {
+        document.getElementById('previewQuestoesAdmin').style.display = 'none';
+        this.provaGeradaAdmin = null;
+        this.mostrarAlertaAdmin('❌ Geração cancelada', 'info');
+    }
+
+    // ============ MOSTRAR ALERTA ============
+    mostrarAlertaAdmin(mensagem, tipo = 'info') {
+        const alerta = document.getElementById('alertProvaAdmin');
+        if (!alerta) return;
+        
+        alerta.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                <span>${mensagem}</span>
+            </div>
+        `;
+        alerta.className = `alert alert-${tipo}`;
+        alerta.style.display = 'block';
+        
+        if (tipo !== 'error') {
+            setTimeout(() => {
+                alerta.style.display = 'none';
+            }, 5000);
+        }
+    }
+
+    // ============ MÓDULOS EM DESENVOLVIMENTO ============
+
+    async loadQuestoes() {
+        const contentArea = document.getElementById('contentArea');
+        contentArea.innerHTML = `
+            <div class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-question-circle"></i> Banco de Questões</h2>
+                    <button class="btn-primary" onclick="admin.abrirModalQuestao()">
+                        <i class="fas fa-plus"></i> Nova Questão
+                    </button>
+                </div>
+                <div class="info-card" style="background: #fff3cd; color: #856404;">
+                    <i class="fas fa-tools"></i>
+                    <div>
+                        <strong>Módulo em desenvolvimento</strong>
+                        <p style="margin: 5px 0 0 0;">Em breve você poderá gerenciar o banco de questões completo.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async loadResultados() {
+        const contentArea = document.getElementById('contentArea');
+        contentArea.innerHTML = `
+            <div class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-chart-line"></i> Resultados</h2>
+                </div>
+                <div class="info-card" style="background: #fff3cd; color: #856404;">
+                    <i class="fas fa-tools"></i>
+                    <div>
+                        <strong>Módulo em desenvolvimento</strong>
+                        <p style="margin: 5px 0 0 0;">Em breve você poderá visualizar resultados consolidados de todas as turmas.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async loadMatriculas() {
+        const contentArea = document.getElementById('contentArea');
+        contentArea.innerHTML = `
+            <div class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-user-graduate"></i> Matrículas Autorizadas</h2>
+                    <button class="btn-primary" onclick="admin.abrirModalMatricula()">
+                        <i class="fas fa-plus"></i> Nova Matrícula
+                    </button>
+                </div>
+                <div class="info-card" style="background: #fff3cd; color: #856404;">
+                    <i class="fas fa-tools"></i>
+                    <div>
+                        <strong>Módulo em desenvolvimento</strong>
+                        <p style="margin: 5px 0 0 0;">Gerencie as matrículas autorizadas para professores.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 
     async loadBackups() {
         const contentArea = document.getElementById('contentArea');
@@ -1765,88 +3116,6 @@ class AdminPanel {
             </div>
         `).join('');
     }
-
-    async criarBackup() {
-        try {
-            this.showToast('Criando backup...', 'info');
-
-            const response = await fetch(`${this.apiBase}/backups/criar`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                this.showToast('Backup criado com sucesso!', 'success');
-                this.loadBackups();
-            } else {
-                throw new Error(data.error || 'Erro ao criar backup');
-            }
-
-        } catch (error) {
-            console.error('Erro ao criar backup:', error);
-            this.showToast('Erro: ' + error.message, 'error');
-        }
-    }
-
-    async restaurarBackup(arquivo) {
-        const confirmar = await this.confirmar(
-            'Restaurar Backup',
-            `Tem certeza que deseja restaurar o backup <strong>${arquivo}</strong>?<br><br>
-            <span style="color: #dc3545; font-weight: bold;">⚠️ ATENÇÃO:</span><br>
-            Todos os dados atuais serão substituídos pelos dados do backup.<br>
-            Esta ação não pode ser desfeita.`
-        );
-
-        if (!confirmar) return;
-
-        try {
-            this.showToast('Restaurando backup...', 'info');
-
-            const response = await fetch(`${this.apiBase}/backups/restaurar/${arquivo}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                this.showToast('Backup restaurado com sucesso! Recarregando sistema...', 'success');
-                setTimeout(() => window.location.reload(), 3000);
-            } else {
-                throw new Error(data.error || 'Erro ao restaurar backup');
-            }
-
-        } catch (error) {
-            console.error('Erro ao restaurar backup:', error);
-            this.showToast('Erro: ' + error.message, 'error');
-        }
-    }
-
-    async excluirBackup(arquivo) {
-        const confirmar = await this.confirmar(
-            'Excluir Backup',
-            `Tem certeza que deseja excluir o backup <strong>${arquivo}</strong>?`
-        );
-
-        if (!confirmar) return;
-
-        try {
-            // Implementar exclusão de backup
-            this.showToast('Backup excluído!', 'success');
-            this.loadBackups();
-        } catch (error) {
-            console.error('Erro ao excluir backup:', error);
-            this.showToast('Erro: ' + error.message, 'error');
-        }
-    }
-
-    baixarBackup(arquivo) {
-        window.location.href = `/backups/${arquivo}`;
-    }
-
-    // ============ MONITORAMENTO ============
 
     async loadMonitoramento() {
         const contentArea = document.getElementById('contentArea');
@@ -1957,68 +3226,6 @@ class AdminPanel {
         `).join('');
     }
 
-    // ============ MÓDULOS EM DESENVOLVIMENTO ============
-
-    async loadQuestoes() {
-        const contentArea = document.getElementById('contentArea');
-        contentArea.innerHTML = `
-            <div class="section">
-                <div class="section-header">
-                    <h2><i class="fas fa-question-circle"></i> Banco de Questões</h2>
-                    <button class="btn-primary" onclick="admin.abrirModalQuestao()">
-                        <i class="fas fa-plus"></i> Nova Questão
-                    </button>
-                </div>
-                <div class="info-card" style="background: #fff3cd; color: #856404;">
-                    <i class="fas fa-tools"></i>
-                    <div>
-                        <strong>Módulo em desenvolvimento</strong>
-                        <p style="margin: 5px 0 0 0;">Em breve você poderá gerenciar o banco de questões completo.</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    async loadResultados() {
-        const contentArea = document.getElementById('contentArea');
-        contentArea.innerHTML = `
-            <div class="section">
-                <div class="section-header">
-                    <h2><i class="fas fa-chart-line"></i> Resultados</h2>
-                </div>
-                <div class="info-card" style="background: #fff3cd; color: #856404;">
-                    <i class="fas fa-tools"></i>
-                    <div>
-                        <strong>Módulo em desenvolvimento</strong>
-                        <p style="margin: 5px 0 0 0;">Em breve você poderá visualizar resultados consolidados de todas as turmas.</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    async loadMatriculas() {
-        const contentArea = document.getElementById('contentArea');
-        contentArea.innerHTML = `
-            <div class="section">
-                <div class="section-header">
-                    <h2><i class="fas fa-user-graduate"></i> Matrículas Autorizadas</h2>
-                    <button class="btn-primary" onclick="admin.abrirModalMatricula()">
-                        <i class="fas fa-plus"></i> Nova Matrícula
-                    </button>
-                </div>
-                <div class="info-card" style="background: #fff3cd; color: #856404;">
-                    <i class="fas fa-tools"></i>
-                    <div>
-                        <strong>Módulo em desenvolvimento</strong>
-                        <p style="margin: 5px 0 0 0;">Gerencie as matrículas autorizadas para professores.</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
     async loadConfiguracoes() {
         const contentArea = document.getElementById('contentArea');
         contentArea.innerHTML = `
@@ -2037,12 +3244,213 @@ class AdminPanel {
         `;
     }
 
-    abrirModalQuestao() {
+    // ============ GERAR LINHAS DA TABELA DE PROVAS (CORRIGIDO) ============
+    gerarLinhasProvas(provas) {
+        if (!provas || provas.length === 0) {
+            return `
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 40px;">
+                        <i class="fas fa-file-alt" style="font-size: 2rem; color: #dee2e6; margin-bottom: 10px; display: block;"></i>
+                        Nenhuma prova encontrada
+                    </td>
+                </tr>
+            `;
+        }
+
+        return provas.map(prova => {
+            const tipo = prova.tipoProva === 'enem' ? 'ENEM' : 
+                        (prova.adaptada ? 'Adaptada' : 'Simples');
+            const statusClass = prova.publicada ? 
+                (prova.cancelada ? 'inactive' : 
+                (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'warning' : 'active')) 
+                : 'inactive';
+            const statusText = prova.publicada ? 
+                (prova.cancelada ? 'Cancelada' : 
+                (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) 
+                : 'Rascunho';
+
+            // ===== CORREÇÃO: EXTRAIR NOME DO PROFESSOR CORRETAMENTE =====
+            let nomeProfessor = 'Desconhecido';
+            
+            // Verificar todas as possíveis localizações do nome do professor
+            if (prova.professor) {
+                if (typeof prova.professor === 'object') {
+                    nomeProfessor = prova.professor.nome || prova.professor.name || 'Desconhecido';
+                } else if (typeof prova.professor === 'string') {
+                    nomeProfessor = prova.professor;
+                }
+            } else if (prova.professorId) {
+                // Se tiver apenas o ID, tenta buscar na lista de usuários
+                if (this.usuarios && this.usuarios.length > 0) {
+                    const prof = this.usuarios.find(u => u._id === prova.professorId || u.id === prova.professorId);
+                    if (prof) {
+                        nomeProfessor = prof.nome || prof.name || 'Desconhecido';
+                    }
+                }
+            } else if (prova.professorNome) {
+                nomeProfessor = prova.professorNome;
+            } else if (prova.nomeProfessor) {
+                nomeProfessor = prova.nomeProfessor;
+            }
+
+            return `
+                <tr>
+                    <td>
+                        <strong>${prova.titulo || 'Sem título'}</strong>
+                        ${prova.adaptada ? '<span class="badge-acessibilidade" title="Adaptada"><i class="fas fa-universal-access"></i></span>' : ''}
+                    </td>
+                    <td>
+                        <span style="display: flex; align-items: center; gap: 5px;">
+                            <i class="fas fa-chalkboard-teacher" style="color: #0d6efd;"></i>
+                            ${nomeProfessor}
+                        </span>
+                    </td>
+                    <td>${prova.turma?.nome || prova.turma || 'N/A'}</td>
+                    <td>${prova.periodo ? prova.periodo + 'º' : '1º'}</td>
+                    <td>${tipo}</td>
+                    <td>${prova.quantidadeQuestoes || 0}</td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            ${statusText}
+                        </span>
+                    </td>
+                    <td>${prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'N/A'}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-icon" onclick="admin.verProva('${prova.id}')" title="Ver detalhes">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn-icon success" onclick="admin.exportarResultadosProva('${prova.id}')" title="Exportar resultados">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <button class="btn-icon danger" onclick="admin.excluirProva('${prova.id}')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    filtrarProvas() {
+        this.filtros.provas.search = document.getElementById('searchProvas')?.value || '';
+        this.filtros.provas.status = document.getElementById('filterStatus')?.value || 'todos';
+        this.filtros.provas.dificuldade = document.getElementById('filterDificuldade')?.value || 'todas';
+        this.filtros.provas.periodo = document.getElementById('filterPeriodo')?.value || 'todos';
+        this.filtros.provas.page = 1;
+        this.loadProvas();
+    }
+
+    limparFiltrosProvas() {
+        this.filtros.provas = { status: 'todos', dificuldade: 'todas', periodo: 'todos', search: '', page: 1, limit: 10 };
+        this.loadProvas();
+    }
+
+    // ============ VER DETALHES DA PROVA (CORRIGIDO) ============
+    verProva(provaId) {
+        const prova = this.provas.find(p => p.id === provaId);
+        if (!prova) return;
+
+        // Extrair nome do professor
+        let nomeProfessor = 'Desconhecido';
+        if (prova.professor) {
+            if (typeof prova.professor === 'object') {
+                nomeProfessor = prova.professor.nome || prova.professor.name || 'Desconhecido';
+            } else {
+                nomeProfessor = prova.professor;
+            }
+        } else if (prova.professorId) {
+            if (this.usuarios && this.usuarios.length > 0) {
+                const prof = this.usuarios.find(u => u._id === prova.professorId);
+                if (prof) nomeProfessor = prof.nome;
+            }
+        }
+
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 10px;">
+                <h3 style="margin: 0 0 20px 0; color: #495057;">${prova.titulo}</h3>
+                
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <p><strong><i class="fas fa-align-left"></i> Conteúdo:</strong> ${prova.conteudo || 'Não especificado'}</p>
+                    <p><strong><i class="fas fa-user"></i> Professor:</strong> 
+                        <span style="display: inline-flex; align-items: center; gap: 5px;">
+                            <i class="fas fa-chalkboard-teacher" style="color: #0d6efd;"></i>
+                            ${nomeProfessor}
+                        </span>
+                    </p>
+                    <p><strong><i class="fas fa-school"></i> Turma:</strong> ${prova.turma?.nome || prova.turma || 'N/A'}</p>
+                    <p><strong><i class="fas fa-calendar-week"></i> Período:</strong> ${prova.periodo ? prova.periodo + 'º' : '1º'}</p>
+                    <p><strong><i class="fas fa-calendar-alt"></i> Data Limite:</strong> ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'Sem limite'}</p>
+                    <p><strong><i class="fas fa-clock"></i> Duração:</strong> ${prova.duracaoMinutos ? prova.duracaoMinutos + ' minutos' : 'Não definida'}</p>
+                    <p><strong><i class="fas fa-circle"></i> Status:</strong> 
+                        <span class="status-badge ${prova.publicada ? (prova.cancelada ? 'inactive' : 'active') : 'inactive'}">
+                            ${prova.publicada ? (prova.cancelada ? 'Cancelada' : (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) : 'Rascunho'}
+                        </span>
+                    </p>
+                </div>
+
+                <h4 style="margin: 20px 0 10px 0;">📊 Estatísticas</h4>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
+                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #0d6efd;">${prova.alunosRealizaram || 0}</div>
+                        <div style="font-size: 12px; color: #6c757d;">Realizações</div>
+                    </div>
+                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #198754;">${(prova.mediaNotas || 0).toFixed(1)}</div>
+                        <div style="font-size: 12px; color: #6c757d;">Média</div>
+                    </div>
+                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${prova.totalParticipantes || 0}</div>
+                        <div style="font-size: 12px; color: #6c757d;">Participantes</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> Detalhes da Prova`;
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.openModal();
+    }
+
+    async exportarResultadosProva(provaId) {
         this.showToast('Funcionalidade em desenvolvimento', 'info');
     }
 
-    abrirModalMatricula() {
-        this.showToast('Funcionalidade em desenvolvimento', 'info');
+    async excluirProva(provaId) {
+        const prova = this.provas.find(p => p.id === provaId);
+        if (!prova) return;
+
+        const confirmar = await this.confirmar(
+            `Excluir prova ${prova.titulo}?`,
+            `Esta ação não pode ser desfeita. Todos os resultados associados também serão excluídos.`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            this.showToast('Excluindo prova...', 'info');
+
+            const response = await fetch(`/api/professor/provas/${provaId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showToast('Prova excluída com sucesso!', 'success');
+                this.loadProvas();
+                this.carregarDadosReais();
+            } else {
+                throw new Error(data.error || 'Erro ao excluir prova');
+            }
+
+        } catch (error) {
+            console.error('Erro ao excluir prova:', error);
+            this.showToast('Erro: ' + error.message, 'error');
+        }
     }
 
     // ============ UTILITÁRIOS ============
@@ -2114,21 +3522,99 @@ class AdminPanel {
         localStorage.removeItem('user_data');
         window.location.href = 'login.html';
     }
+
+    abrirModalQuestao() {
+        this.showToast('Funcionalidade em desenvolvimento', 'info');
+    }
+
+    abrirModalMatricula() {
+        this.showToast('Funcionalidade em desenvolvimento', 'info');
+    }
+
+    async criarBackup() {
+        try {
+            this.showToast('Criando backup...', 'info');
+
+            const response = await fetch(`${this.apiBase}/backups/criar`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showToast('Backup criado com sucesso!', 'success');
+                this.loadBackups();
+            } else {
+                throw new Error(data.error || 'Erro ao criar backup');
+            }
+
+        } catch (error) {
+            console.error('Erro ao criar backup:', error);
+            this.showToast('Erro: ' + error.message, 'error');
+        }
+    }
+
+    async restaurarBackup(arquivo) {
+        const confirmar = await this.confirmar(
+            'Restaurar Backup',
+            `Tem certeza que deseja restaurar o backup <strong>${arquivo}</strong>?<br><br>
+            <span style="color: #dc3545; font-weight: bold;">⚠️ ATENÇÃO:</span><br>
+            Todos os dados atuais serão substituídos pelos dados do backup.<br>
+            Esta ação não pode ser desfeita.`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            this.showToast('Restaurando backup...', 'info');
+
+            const response = await fetch(`${this.apiBase}/backups/restaurar/${arquivo}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showToast('Backup restaurado com sucesso! Recarregando sistema...', 'success');
+                setTimeout(() => window.location.reload(), 3000);
+            } else {
+                throw new Error(data.error || 'Erro ao restaurar backup');
+            }
+
+        } catch (error) {
+            console.error('Erro ao restaurar backup:', error);
+            this.showToast('Erro: ' + error.message, 'error');
+        }
+    }
+
+    async excluirBackup(arquivo) {
+        const confirmar = await this.confirmar(
+            'Excluir Backup',
+            `Tem certeza que deseja excluir o backup <strong>${arquivo}</strong>?`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            // Implementar exclusão de backup
+            this.showToast('Backup excluído!', 'success');
+            this.loadBackups();
+        } catch (error) {
+            console.error('Erro ao excluir backup:', error);
+            this.showToast('Erro: ' + error.message, 'error');
+        }
+    }
+
+    baixarBackup(arquivo) {
+        window.location.href = `/backups/${arquivo}`;
+    }
 }
 
-// Inicialização
-let admin;
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        admin = new AdminPanel();
-        window.admin = admin;
-    });
-} else {
-    admin = new AdminPanel();
-    window.admin = admin;
-}
-
-// Funções de formatação
+// ============================================
+// FUNÇÕES DE FORMATAÇÃO GLOBAIS
+// ============================================
 function formatarCPF(input) {
     let cpf = input.value.replace(/\D/g, '').substring(0, 11);
     if (cpf.length > 9) {
@@ -2153,8 +3639,29 @@ function formatarTelefone(input) {
     input.value = telefone;
 }
 
-// Funções globais
-function closeModal() { if (admin) admin.closeModal(); }
-function closeConfirmModal() { if (admin) admin.closeConfirmModal(); }
+// ============================================
+// FUNÇÕES GLOBAIS PARA MODAIS
+// ============================================
+function closeModal() { 
+    if (admin) admin.closeModal(); 
+}
+
+function closeConfirmModal() { 
+    if (admin) admin.closeConfirmModal(); 
+}
+
+// ============================================
+// INICIALIZAÇÃO
+// ============================================
+let admin;
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        admin = new AdminPanel();
+        window.admin = admin;
+    });
+} else {
+    admin = new AdminPanel();
+    window.admin = admin;
+}
 
 console.log('✅ admin.js carregado com todas as funcionalidades');
