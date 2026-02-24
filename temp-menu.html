@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Console do Servidor</title>
+    <style>
+        body {
+            background: #1e1e1e;
+            color: #f8f9fa;
+            font-family: 'Consolas', 'Monaco', monospace;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #ffc107;
+            border-bottom: 2px solid #ffc107;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #2d2d2d;
+            border-radius: 8px;
+        }
+        h2 {
+            color: #0d6efd;
+            margin-top: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #3d3d3d;
+        }
+        .cmd {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .desc {
+            color: #adb5bd;
+        }
+        .note {
+            background: #3d3d3d;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            color: #f8f9fa;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 CONSOLE DO SERVIDOR</h1>
+        
+        <div class="section">
+            <h2>📋 COMANDOS BÁSICOS</h2>
+            <table>
+                <tr><td class="cmd">help()</td><td class="desc">Mostra esta ajuda</td></tr>
+                <tr><td class="cmd">stats()</td><td class="desc">Estatísticas completas do sistema</td></tr>
+                <tr><td class="cmd">osinfo()</td><td class="desc">Informações detalhadas do SO</td></tr>
+                <tr><td class="cmd">memory()</td><td class="desc">Uso de memória do processo</td></tr>
+                <tr><td class="cmd">cpu()</td><td class="desc">Informações da CPU</td></tr>
+                <tr><td class="cmd">clear()</td><td class="desc">Limpa o console</td></tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>🧮 EXPRESSÕES MATEMÁTICAS</h2>
+            <table>
+                <tr><td class="cmd">2 + 2</td><td class="desc">Soma</td></tr>
+                <tr><td class="cmd">10 * 5</td><td class="desc">Multiplicação</td></tr>
+                <tr><td class="cmd">100 / 4</td><td class="desc">Divisão</td></tr>
+                <tr><td class="cmd">(5 + 3) * 2</td><td class="desc">Expressões com parênteses</td></tr>
+                <tr><td class="cmd">Math.PI</td><td class="desc">Valor de PI (3.14159)</td></tr>
+                <tr><td class="cmd">Math.random()</td><td class="desc">Número aleatório entre 0 e 1</td></tr>
+                <tr><td class="cmd">Math.pow(2, 3)</td><td class="desc">Potência (2³ = 8)</td></tr>
+                <tr><td class="cmd">Math.sqrt(16)</td><td class="desc">Raiz quadrada (4)</td></tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>📝 EXEMPLOS PRÁTICOS</h2>
+            <table>
+                <tr><td class="cmd">process.memoryUsage().heapUsed / 1024 / 1024 + " MB"</td></tr>
+                <tr><td class="cmd">os.cpus().length + " núcleos"</td></tr>
+                <tr><td class="cmd">(os.freemem() / 1024 / 1024 / 1024).toFixed(2) + " GB"</td></tr>
+                <tr><td class="cmd">Math.floor(Math.random() * 100) + 1</td></tr>
+                <tr><td class="cmd">JSON.stringify(process.versions, null, 2)</td></tr>
+            </table>
+        </div>
+
+        <div class="note">
+            ⚠️ INFORMAÇÕES IMPORTANTES:<br>
+            • Timeout: 5 segundos por comando<br>
+            • Módulos permitidos: os, path, process<br>
+            • Use setas ↑↓ para navegar no histórico de comandos<br>
+            • Pressione Enter para executar
+        </div>
+
+        <div class="footer">
+            Digite qualquer comando no console e veja o resultado!
+        </div>
+    </div>
+</body>
+</html>

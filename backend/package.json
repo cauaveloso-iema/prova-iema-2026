@@ -29,7 +29,8 @@
     "multer": "^2.0.2",
     "nodemailer": "^7.0.12",
     "openai": "^4.20.0",
-    "resend": "^6.8.0"
+    "resend": "^6.8.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

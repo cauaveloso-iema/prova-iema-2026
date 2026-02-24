@@ -14,7 +14,23 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 require('./email-service-resend');  // Fix para Render
 const multer = require('multer');
 const fs = require('fs');
+const Groq = require("groq-sdk");
+const http = require('http'); // <-- LINHA ADICIONADA
 
+// ============ CRIAR DIRETÓRIOS NECESSÁRIOS PRIMEIRO ============
+const dirs = [
+    path.join(__dirname, 'logs'),
+    path.join(__dirname, 'backups'),
+    path.join(__dirname, 'uploads'),
+    path.join(__dirname, '../frontend')
+];
+
+dirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        console.log(`📁 Diretório criado: ${dir}`);
+    }
+});
 
 // Logo após require('dotenv')
 console.log('📁 Diretório atual:', __dirname);
@@ -22,198 +38,70 @@ console.log('🔍 Procurando .env em:', path.join(__dirname, '..', '.env'));
 console.log('🔑 Chave encontrada?:', process.env.OPENROUTER_API_KEY ? '✅ Sim' : '❌ Não');
 console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Configurada' : '❌ Não configurada');
 
-// Importar modelos - APENAS os que existem como arquivos separados
+// ============ CRIAR INSTÂNCIA DO EXPRESS ============
+const app = express();
+const PORT = process.env.PORT || 10000;
+
+// ============ CRIAR SERVIDOR HTTP ============
+const server = http.createServer(app); // <-- LINHA ADICIONADA
+
+// ============ IMPORTAR ROTAS (DEPOIS DE CRIAR O APP) ============
+const monitoramentoRoutes = require('./routes/monitoramento');
+
+// ============ IMPORTAR SERVIÇO DE LOGS ============
+const LoggerService = require('./services/logger-service'); // <-- LINHA ADICIONADA
+
+// ============ INICIALIZAR LOGGER SERVICE ============
+const loggerService = new LoggerService(server); // <-- LINHA ADICIONADA
+
+// IMPORTE O EMAIL SERVICE
+const EmailService = require('./email-service-resend');
+const emailService = new EmailService();
+
+// ============ MIDDLEWARES DE SEGURANÇA ============
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false
+}));
+
+app.use(compression());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+
+// ============ REGISTRAR ROTAS DE MONITORAMENTO (DEPOIS DOS MIDDLEWARES) ============
+app.use('/api/admin/monitoramento', monitoramentoRoutes);
+
+// ============ SESSÃO COM MONGODB ============
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'sessao_secreta_provisoria',
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/provas_online',
+    ttl: 24 * 60 * 60
+  }),
+  cookie: {
+    secure: false,
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
+
+// ============ IMPORTAR MODELOS ============
 const User = require('./models/User');
 const Prova = require('./models/Prova');
 const Turma = require('./models/Turma');
 
-// IMPORTE O EMAIL SERVICE (ADICIONE AQUI)
-const EmailService = require('./email-service-resend');
-const emailService = new EmailService()
-
-// NÃO importar Resultado ou ProvaRealizada se forem criados inline
-// ============ CRIAR MODELOS INLINE ============
-
-// 1. CRIAR MODELO Resultado inline (ATUALIZADO)
-const ResultadoSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  provaId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Prova',
-    required: true
-  },
-  alunoNome: {
-    type: String,
-    required: true
-  },
-  respostas: {
-    type: [String],
-    default: []
-  },
-  nota: {
-    type: Number,
-    default: null,
-    required: false
-  },
-  acertos: {
-    type: Number,
-    default: 0
-  },
-  total: {
-    type: Number,
-    required: true
-  },
-  porcentagem: {
-    type: String,
-    default: '0.0'
-  },
-  tempoGasto: {
-    type: Number,
-    default: 0
-  },
-  resultadoDetalhado: {
-    type: [Object],
-    default: []
-  },
-  dataCriacao: {
-    type: Date,
-    default: Date.now
-  },
-  notaLiberada: {
-    type: Boolean,
-    default: false
-  },
-  
-  // === CAMPOS DE CANCELAMENTO (ADICIONE ESTES) ===
-  cancelada: {
-    type: Boolean,
-    default: false
-  },
-  motivoCancelamento: {
-    type: String,
-    default: null
-  },
-  flagViolacao: {
-    type: Boolean,
-    default: false
-  },
-  estatisticasCancelamento: {
-    type: Object,
-    default: null
-  },
-  motivoCancelamentoTipo: {
-    type: String,
-    enum: ['violacao', 'prazo_expirado', 'outro', null],
-    default: null
-  },
-  status: {
-    type: String,
-    enum: ['pendente', 'corrigida', 'cancelada', null],
-    default: null
-  }
-}, {
-  timestamps: true
-});
-
-ResultadoSchema.index({ userId: 1, provaId: 1 }, { unique: true });
-const Resultado = mongoose.model('Resultado', ResultadoSchema);
-
-// 2. CRIAR MODELO ProvaRealizada inline (ATUALIZADO COM CAMPOS DE CANCELAMENTO)
-const ProvaRealizadaSchema = new mongoose.Schema({
-  provaId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Prova',
-    required: true
-  },
-  alunoId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  respostas: {
-    type: [String],
-    default: []
-  },
-  nota: {
-    type: Number,
-    default: null // Alterado para null (nota não liberada)
-  },
-  tempoGasto: {
-    type: Number,
-    default: 0
-  },
-  dataRealizacao: {
-    type: Date,
-    default: Date.now
-  },
-  status: {
-    type: String,
-    enum: ['pendente', 'em_andamento', 'finalizada', 'corrigida', 'cancelada'],
-    default: 'pendente'
-  },
-  notaLiberada: {
-    type: Boolean,
-    default: false // Professor liberou a nota?
-  },
-  resultadoDetalhado: {
-    type: [Object],
-    default: []
-  },
-  
-  // === CAMPOS DE CANCELAMENTO (ADICIONE ESTES) ===
-  cancelada: {
-    type: Boolean,
-    default: false
-  },
-  motivoCancelamento: {
-    type: String,
-    default: null
-  },
-  flagViolacao: {
-    type: Boolean,
-    default: false
-  },
-  estatisticasCancelamento: {
-    type: Object,
-    default: null
-  },
-  motivoCancelamentoTipo: {
-    type: String,
-    enum: ['violacao', 'prazo_expirado', 'outro', null],
-    default: null
-  },
-  sincronizadoEm: {
-    type: Date,
-    default: null
-  }
-}, {
-  timestamps: true
-});
-
-ProvaRealizadaSchema.index({ provaId: 1, alunoId: 1 }, { unique: true });
-const ProvaRealizada = mongoose.model('ProvaRealizada', ProvaRealizadaSchema);
-
-// Configuração OpenRouter
-//const OpenAI = require('openai');
-//let openai;
-//if (process.env.OPENROUTER_API_KEY) {
-//  openai = new OpenAI({
-//    baseURL: "https://openrouter.ai/api/v1",
-//    apiKey: process.env.OPENROUTER_API_KEY,
-//    defaultHeaders: {
-//      "HTTP-Referer": "http://localhost:3000",
-//      "X-Title": "Sistema de Provas Online"
-//    }
-//  });
-//}
-
-// ADICIONE ESTA CONFIGURAÇÃO DA GROQ:
-const Groq = require("groq-sdk");
-
+// ============ CONFIGURAÇÃO GROQ ============
 let groq;
 if (process.env.GROQ_API_KEY) {
   groq = new Groq({
@@ -224,10 +112,182 @@ if (process.env.GROQ_API_KEY) {
   console.warn('⚠️  Groq API key não configurada');
 }
 
-// Adicione esta função para testar modelos
+// ============ CRIAR MODELOS INLINE (SE NÃO EXISTIREM COMO ARQUIVOS) ============
+
+// 1. MODELO Resultado
+let Resultado;
+try {
+  Resultado = mongoose.model('Resultado');
+} catch {
+  const ResultadoSchema = new mongoose.Schema({
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    provaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Prova',
+      required: true
+    },
+    alunoNome: {
+      type: String,
+      required: true
+    },
+    respostas: {
+      type: [String],
+      default: []
+    },
+    nota: {
+      type: Number,
+      default: null
+    },
+    acertos: {
+      type: Number,
+      default: 0
+    },
+    total: {
+      type: Number,
+      required: true
+    },
+    porcentagem: {
+      type: String,
+      default: '0.0'
+    },
+    tempoGasto: {
+      type: Number,
+      default: 0
+    },
+    resultadoDetalhado: {
+      type: [Object],
+      default: []
+    },
+    dataCriacao: {
+      type: Date,
+      default: Date.now
+    },
+    notaLiberada: {
+      type: Boolean,
+      default: false
+    },
+    cancelada: {
+      type: Boolean,
+      default: false
+    },
+    motivoCancelamento: {
+      type: String,
+      default: null
+    },
+    flagViolacao: {
+      type: Boolean,
+      default: false
+    },
+    estatisticasCancelamento: {
+      type: Object,
+      default: null
+    },
+    motivoCancelamentoTipo: {
+      type: String,
+      enum: ['violacao', 'prazo_expirado', 'outro', null],
+      default: null
+    },
+    status: {
+      type: String,
+      enum: ['pendente', 'corrigida', 'cancelada', null],
+      default: null
+    }
+  }, {
+    timestamps: true
+  });
+
+  ResultadoSchema.index({ userId: 1, provaId: 1 }, { unique: true });
+  Resultado = mongoose.model('Resultado', ResultadoSchema);
+}
+
+// 2. MODELO ProvaRealizada
+let ProvaRealizada;
+try {
+  ProvaRealizada = mongoose.model('ProvaRealizada');
+} catch {
+  const ProvaRealizadaSchema = new mongoose.Schema({
+    provaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Prova',
+      required: true
+    },
+    alunoId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    respostas: {
+      type: [String],
+      default: []
+    },
+    nota: {
+      type: Number,
+      default: null
+    },
+    tempoGasto: {
+      type: Number,
+      default: 0
+    },
+    dataRealizacao: {
+      type: Date,
+      default: Date.now
+    },
+    status: {
+      type: String,
+      enum: ['pendente', 'em_andamento', 'finalizada', 'corrigida', 'cancelada'],
+      default: 'pendente'
+    },
+    notaLiberada: {
+      type: Boolean,
+      default: false
+    },
+    resultadoDetalhado: {
+      type: [Object],
+      default: []
+    },
+    cancelada: {
+      type: Boolean,
+      default: false
+    },
+    motivoCancelamento: {
+      type: String,
+      default: null
+    },
+    flagViolacao: {
+      type: Boolean,
+      default: false
+    },
+    estatisticasCancelamento: {
+      type: Object,
+      default: null
+    },
+    motivoCancelamentoTipo: {
+      type: String,
+      enum: ['violacao', 'prazo_expirado', 'outro', null],
+      default: null
+    },
+    sincronizadoEm: {
+      type: Date,
+      default: null
+    }
+  }, {
+    timestamps: true
+  });
+
+  ProvaRealizadaSchema.index({ provaId: 1, alunoId: 1 }, { unique: true });
+  ProvaRealizada = mongoose.model('ProvaRealizada', ProvaRealizadaSchema);
+}
+
+// ============ FUNÇÃO PARA TESTAR MODELOS GROQ ============
 async function testarModelosDisponiveis() {
+  if (!groq) return;
+  
   const modelosParaTestar = [
-    "llama-3.2-90b-vision-preview",    // Modelo mais recente
+    "llama-3.2-90b-vision-preview",
     "llama-3.2-11b-vision-preview",
     "llama-3.2-3b-preview",
     "llama-3.1-8b-instant",
@@ -266,7 +326,6 @@ async function testarModelosDisponiveis() {
       }
     }
     
-    // Pequena pausa entre testes
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   
@@ -278,54 +337,8 @@ async function testarModelosDisponiveis() {
   return modelosFuncionais;
 }
 
-// Chame esta função no startup do servidor
-if (groq) {
-  setTimeout(() => testarModelosDisponiveis(), 2000);
-}
-
-
-const app = express();
-const PORT = process.env.PORT || 10000;
-
-// ============ MIDDLEWARES DE SEGURANÇA ============
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: false
-}));
-
-app.use(compression());
-app.use(cors({
-  origin: true,  // 👈 Permite TODAS as origens por enquanto
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
-
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.json());
-
-// Sessão com MongoDB
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'sessao_secreta_provisoria',
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/provas_online',
-    ttl: 24 * 60 * 60
-  }),
-  cookie: {
-    secure: false,
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000
-  }
-}));
-
-// ============ CONEXÃO COM MONGODB (ATUALIZADA - SOLUÇÃO DEFINITIVA) ============
-
+// ============ CONEXÃO COM MONGODB ============
 const connectToDatabase = async () => {
-  // Verificar ambiente
   const ENV = process.env.NODE_ENV || 'development';
   const IS_PRODUCTION = ENV === 'production';
   const IS_DEVELOPMENT = ENV === 'development';
@@ -336,31 +349,25 @@ const connectToDatabase = async () => {
   let connectionUri;
   let databaseType = 'Desconhecido';
   
-  // DECISÃO: Qual banco usar?
   if (IS_PRODUCTION) {
-    // 1. PRODUÇÃO NO RENDER: Usa MongoDB Atlas
     connectionUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
     databaseType = 'MongoDB Atlas (NUVEM)';
     console.log('🌐 PRODUÇÃO: Conectando ao MongoDB Atlas');
   } else if (IS_DEVELOPMENT) {
-    // 2. DESENVOLVIMENTO LOCAL: Tenta MongoDB Local primeiro
     connectionUri = process.env.MONGODB_LOCAL_URI || 'mongodb://localhost:27017/provas_online_local';
     databaseType = 'MongoDB Local';
     console.log('💻 DESENVOLVIMENTO: Conectando ao MongoDB Local');
   } else {
-    // 3. FALLBACK: Usa o padrão do .env
     connectionUri = process.env.MONGODB_URI;
     databaseType = 'Configuração padrão';
     console.log('⚙️  Usando configuração padrão do .env');
   }
   
-  // Mostrar URI de forma segura (esconde senha)
   const safeUri = connectionUri ? connectionUri.replace(/\/\/[^@]+@/, '//***@') : 'Não configurada';
   console.log(`🗄️  URI: ${safeUri}`);
   console.log(`📊 Tipo: ${databaseType}`);
   console.log('='.repeat(60));
   
-  // Configurações de conexão
   const options = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -372,12 +379,10 @@ const connectToDatabase = async () => {
     w: 'majority'
   };
   
-  // Tentar conexão principal
   try {
     console.log('🔄 Tentando conexão...');
     await mongoose.connect(connectionUri, options);
     
-    // Verificar conexão bem-sucedida
     const db = mongoose.connection.db;
     const host = mongoose.connection.host;
     const isAtlas = host.includes('mongodb.net');
@@ -389,14 +394,17 @@ const connectToDatabase = async () => {
     console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
     console.log('='.repeat(60));
     
+    // Testar modelos após conectar
+    if (groq) {
+      setTimeout(() => testarModelosDisponiveis(), 2000);
+    }
+    
   } catch (error) {
     console.error('❌ ERRO na conexão principal:', error.message);
     
-    // ESTRATÉGIA DE FALLBACK INTELIGENTE
     if (IS_DEVELOPMENT) {
       console.log('🔄 DESENVOLVIMENTO: Tentando fallback para Atlas...');
       try {
-        // Se local falhou, tenta Atlas como fallback
         const fallbackUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
         await mongoose.connect(fallbackUri, options);
         console.log('✅ Fallback para Atlas bem-sucedido');
@@ -409,10 +417,6 @@ const connectToDatabase = async () => {
       }
     } else if (IS_PRODUCTION) {
       console.error('❌ PRODUÇÃO: Conexão com Atlas falhou!');
-      console.log('💡 Verifique:');
-      console.log('   1. A URI do Atlas no .env');
-      console.log('   2. A conexão com a internet');
-      console.log('   3. O IP no MongoDB Atlas (adicione 0.0.0.0/0 temporariamente)');
       throw error;
     }
   }
@@ -420,7 +424,6 @@ const connectToDatabase = async () => {
 
 // Conectar ao banco de dados
 connectToDatabase();
-
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO ============
 const authenticateToken = (req, res, next) => {
@@ -8811,7 +8814,7 @@ app.get('*', (req, res) => {
 });
 
 // ============ INICIAR SERVIDOR ============
-app.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(50));
   console.log(`🚀 SISTEMA DE PROVAS ONLINE - PRODUÇÃO`);
   console.log(`📡 Servidor rodando na porta: ${PORT}`);

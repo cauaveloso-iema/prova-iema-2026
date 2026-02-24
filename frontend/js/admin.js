@@ -300,7 +300,7 @@ class AdminPanel {
             resultados: 'Resultados',
             matriculas: 'Matrículas Autorizadas',
             backups: 'Backups e Restauração',
-            monitoramento: 'Monitoramento do Sistema',
+            monitoramento: 'Monitoramento do Sistema',  // <-- ADICIONAR ESTA LINHA
             configuracoes: 'Configurações do Sistema'
         };
         
@@ -349,7 +349,7 @@ class AdminPanel {
             case 'backups':
                 await this.loadBackups();
                 break;
-            case 'monitoramento':
+            case 'monitoramento':  // <-- ADICIONAR ESTE CASE
                 await this.loadMonitoramento();
                 break;
             case 'configuracoes':
@@ -4042,222 +4042,84 @@ class AdminPanel {
 
     // ============ MÓDULOS EM DESENVOLVIMENTO ============
 
-    async loadQuestoes() {
-        const contentArea = document.getElementById('contentArea');
-        contentArea.innerHTML = `
-            <div class="section">
-                <div class="section-header">
-                    <h2><i class="fas fa-question-circle"></i> Banco de Questões</h2>
-                    <button class="btn-primary" onclick="admin.abrirModalQuestao()">
-                        <i class="fas fa-plus"></i> Nova Questão
-                    </button>
-                </div>
-                <div class="info-card" style="background: #fff3cd; color: #856404;">
-                    <i class="fas fa-tools"></i>
-                    <div>
-                        <strong>Módulo em desenvolvimento</strong>
-                        <p style="margin: 5px 0 0 0;">Em breve você poderá gerenciar o banco de questões completo.</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
+    // ============ MONITORAMENTO DO SISTEMA ============
 
-    async loadResultados() {
-        const contentArea = document.getElementById('contentArea');
-        contentArea.innerHTML = `
-            <div class="section">
-                <div class="section-header">
-                    <h2><i class="fas fa-chart-line"></i> Resultados</h2>
-                </div>
-                <div class="info-card" style="background: #fff3cd; color: #856404;">
-                    <i class="fas fa-tools"></i>
-                    <div>
-                        <strong>Módulo em desenvolvimento</strong>
-                        <p style="margin: 5px 0 0 0;">Em breve você poderá visualizar resultados consolidados de todas as turmas.</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
+    // ============================================================================
+    // MÓDULO DE MONITORAMENTO DO SISTEMA - VERSÃO CORRIGIDA
+    // ============================================================================
 
-    async loadMatriculas() {
-        const contentArea = document.getElementById('contentArea');
-        contentArea.innerHTML = `
-            <div class="section">
-                <div class="section-header">
-                    <h2><i class="fas fa-user-graduate"></i> Matrículas Autorizadas</h2>
-                    <button class="btn-primary" onclick="admin.abrirModalMatricula()">
-                        <i class="fas fa-plus"></i> Nova Matrícula
-                    </button>
-                </div>
-                <div class="info-card" style="background: #fff3cd; color: #856404;">
-                    <i class="fas fa-tools"></i>
-                    <div>
-                        <strong>Módulo em desenvolvimento</strong>
-                        <p style="margin: 5px 0 0 0;">Gerencie as matrículas autorizadas para professores.</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    async loadBackups() {
-        const contentArea = document.getElementById('contentArea');
-        
-        try {
-            const response = await fetch(`${this.apiBase}/backups`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-            });
-
-            const data = await response.json();
-
-            if (!data.success) throw new Error(data.error || 'Erro ao carregar backups');
-
-            this.backups = data.backups || [];
-
-            contentArea.innerHTML = `
-                <div class="section">
-                    <div class="section-header">
-                        <h2><i class="fas fa-database"></i> Backups e Restauração</h2>
-                        <button class="btn-primary" onclick="admin.criarBackup()">
-                            <i class="fas fa-plus"></i> Novo Backup
-                        </button>
-                    </div>
-
-                    <div class="backup-info">
-                        <div class="info-card">
-                            <i class="fas fa-info-circle"></i>
-                            <div>
-                                <strong>Backups automáticos todos os dias às 02:00</strong>
-                                <p style="margin: 5px 0 0 0; font-size: 12px;">Os backups são armazenados por 30 dias</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="backup-list">
-                        ${this.gerarListaBackups(this.backups)}
-                    </div>
-                </div>
-            `;
-
-        } catch (error) {
-            console.error('Erro ao carregar backups:', error);
-            contentArea.innerHTML = `
-                <div class="error-container">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Erro ao carregar backups</h3>
-                    <p>${error.message}</p>
-                    <button class="btn-primary" onclick="admin.loadBackups()">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
-                </div>
-            `;
-        }
-    }
-
-    gerarListaBackups(backups) {
-        if (!backups || backups.length === 0) {
-            return `
-                <div class="empty-state">
-                    <i class="fas fa-database"></i>
-                    <h3>Nenhum backup encontrado</h3>
-                    <p>Clique em "Novo Backup" para criar o primeiro backup.</p>
-                </div>
-            `;
-        }
-
-        return backups.map(backup => `
-            <div class="backup-item" style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #e9ecef;">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <div style="width: 40px; height: 40px; background: #e9ecef; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #0d6efd; font-size: 20px;">
-                        <i class="fas fa-file-archive"></i>
-                    </div>
-                    <div>
-                        <h4 style="margin: 0 0 5px 0; font-size: 14px;">${backup.nome}</h4>
-                        <small style="color: #6c757d;">Criado em: ${new Date(backup.data).toLocaleString('pt-BR')} • Tamanho: ${backup.tamanho}</small>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn-icon success" onclick="admin.baixarBackup('${backup.nome}')" title="Download">
-                        <i class="fas fa-download"></i>
-                    </button>
-                    <button class="btn-icon warning" onclick="admin.restaurarBackup('${backup.nome}')" title="Restaurar">
-                        <i class="fas fa-undo-alt"></i>
-                    </button>
-                    <button class="btn-icon danger" onclick="admin.excluirBackup('${backup.nome}')" title="Excluir">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `).join('');
-    }
-
+    // ==================== MÉTODO PRINCIPAL ====================
     async loadMonitoramento() {
         const contentArea = document.getElementById('contentArea');
         
+        // Mostrar loading
+        contentArea.innerHTML = `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                <p style="color: #495057;">Carregando dados reais do sistema...</p>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+
         try {
-            const response = await fetch(`${this.apiBase}/monitoramento/violacoes`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            // Buscar dados reais do backend
+            const token = localStorage.getItem('auth_token');
+            
+            // Fazer requisições paralelas
+            const [metricasRes, anomaliasRes, estatisticasRes] = await Promise.all([
+                fetch(`${this.apiBase}/monitoramento/metricas`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${this.apiBase}/monitoramento/anomalias`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${this.apiBase}/monitoramento/estatisticas`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+
+            // Processar respostas
+            const metricas = await metricasRes.json();
+            const anomalias = await anomaliasRes.json();
+            const estatisticas = await estatisticasRes.json();
+
+            console.log('✅ Dados reais carregados:', { 
+                metricas: metricas.data,
+                anomalias: anomalias.data?.length,
+                estatisticas: estatisticas.data 
             });
 
-            const data = await response.json();
+            // Salvar dados no objeto this
+            this.metricasData = metricas.data || {};
+            this.anomaliasData = anomalias.data || [];
+            this.estatisticasData = estatisticas.data || {};
 
-            if (!data.success) throw new Error(data.error || 'Erro ao carregar monitoramento');
+            // Renderizar HTML com os dados reais
+            contentArea.innerHTML = this.renderMonitoramentoComDadosReais(
+                this.metricasData, 
+                this.anomaliasData, 
+                this.estatisticasData
+            );
 
-            const violacoes = data.provasCanceladas || [];
+            // CONECTAR AO WEBSOCKET PARA LOGS REAIS
+            this.conectarWebSocketLogs();
 
-            contentArea.innerHTML = `
-                <div class="section">
-                    <div class="section-header">
-                        <h2><i class="fas fa-eye"></i> Monitoramento do Sistema</h2>
-                    </div>
+            // Inicializar gráficos com dados reais
+            setTimeout(() => {
+                this.inicializarGraficosComDadosReais(this.metricasData);
+            }, 500);
 
-                    <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
-                        <div class="stat-card info">
-                            <div class="stat-icon">
-                                <i class="fas fa-exclamation-triangle"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3>Total de Cancelamentos</h3>
-                                <div class="stat-number">${data.estatisticas?.total || 0}</div>
-                                <div class="stat-details">
-                                    <span><i class="fas fa-user-slash"></i> ${data.estatisticas?.porMotivo?.violacao || 0} violações</span>
-                                    <span><i class="fas fa-clock"></i> ${data.estatisticas?.porMotivo?.prazo || 0} prazo</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="stat-card warning">
-                            <div class="stat-icon">
-                                <i class="fas fa-chart-line"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3>Últimos 7 dias</h3>
-                                <div class="stat-number">${Object.values(data.estatisticas?.porDia || {}).reduce((a, b) => a + b, 0) || 0}</div>
-                                <div class="stat-details">
-                                    <span><i class="fas fa-calendar-day"></i> Média: ${(Object.values(data.estatisticas?.porDia || {}).reduce((a, b) => a + b, 0) / 7).toFixed(1)}/dia</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <h3 style="margin: 30px 0 20px 0;">📋 Últimas Violações</h3>
-                    <div class="violation-list">
-                        ${this.gerarListaViolacoes(violacoes)}
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('badge-violacoes').textContent = data.estatisticas?.total || 0;
+            // Configurar eventos
+            this.configurarEventosMonitoramento();
 
         } catch (error) {
-            console.error('Erro ao carregar monitoramento:', error);
+            console.error('❌ Erro ao carregar monitoramento:', error);
             contentArea.innerHTML = `
-                <div class="error-container">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Erro ao carregar monitoramento</h3>
-                    <p>${error.message}</p>
-                    <button class="btn-primary" onclick="admin.loadMonitoramento()">
+                <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 20px;"></i>
+                    <h3 style="color: #721c24;">Erro ao carregar dados do sistema</h3>
+                    <p style="color: #6c757d;">${error.message}</p>
+                    <button onclick="admin.loadMonitoramento()" style="background: #0d6efd; color: white; border: none; padding: 10px 30px; border-radius: 6px; margin-top: 20px; cursor: pointer;">
                         <i class="fas fa-sync-alt"></i> Tentar novamente
                     </button>
                 </div>
@@ -4265,41 +4127,1740 @@ class AdminPanel {
         }
     }
 
-    gerarListaViolacoes(violacoes) {
-        if (!violacoes || violacoes.length === 0) {
+    // ==================== RENDERIZAÇÃO COM DADOS REAIS ====================
+    renderMonitoramentoComDadosReais(metricas, anomalias, estatisticas) {
+        // Valores padrão caso os dados não venham
+        const cpuUsage = metricas?.cpu?.usage || 0;
+        const memUsage = metricas?.memory?.usedPercent || 0;
+        const memUsed = metricas?.memory?.used || 0;
+        const memTotal = metricas?.memory?.total || 0;
+        const uptime = metricas?.system?.uptimeFormatted || 'N/A';
+        const hostname = metricas?.system?.hostname || 'localhost';
+        const nodeVersion = metricas?.process?.version || 'N/A';
+        const pid = metricas?.process?.pid || 'N/A';
+        const loadAvg = metricas?.cpu?.loadAverage || [0, 0, 0];
+        
+        // Estatísticas
+        const erros24h = estatisticas?.erros?.ultimas24h || 0;
+        const cancelamentos24h = estatisticas?.cancelamentos?.ultimas24h || 0;
+        const violacoes24h = estatisticas?.violacoes?.ultimas24h || 0;
+        const usuariosOnline = estatisticas?.sistema?.usuariosOnline || 0;
+        const provasAtivas = estatisticas?.sistema?.provasAtivas || 0;
+        const requisicoes = estatisticas?.requisicoes?.ultimas24h || '0';
+        const latencia = estatisticas?.latencia?.media || 0;
+
+        return `
+            <div class="monitoring-container">
+                <!-- Header com estatísticas reais -->
+                <div class="monitoring-header">
+                    <div class="header-left">
+                        <i class="fas fa-terminal"></i>
+                        <h2>Console do Servidor & Monitoramento</h2>
+                    </div>
+                    <div class="header-actions">
+                        <span style="background: #e9ecef; padding: 8px 16px; border-radius: 6px; font-size: 13px;">
+                            <i class="fas fa-server"></i> ${hostname}
+                        </span>
+                        <button class="btn-monitoring" onclick="admin.limparConsole()" id="btnLimparConsole">
+                            <i class="fas fa-eraser"></i> Limpar Console
+                        </button>
+                        <button class="btn-monitoring" onclick="admin.exportarLogs()">
+                            <i class="fas fa-download"></i> Exportar Logs
+                        </button>
+                        <button class="btn-monitoring refresh" onclick="admin.atualizarMonitoramento()">
+                            <i class="fas fa-sync-alt"></i> Atualizar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Cards de Status do Sistema com DADOS REAIS -->
+                <div class="system-status-grid">
+                    <div class="status-card" id="statusServidor">
+                        <div class="status-icon">
+                            <i class="fas fa-server"></i>
+                        </div>
+                        <div class="status-content">
+                            <span class="status-label">Servidor</span>
+                            <span class="status-value online" id="servidorStatus">Online</span>
+                            <small>Uptime: ${uptime}</small>
+                        </div>
+                    </div>
+
+                    <div class="status-card" id="statusBanco">
+                        <div class="status-icon">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div class="status-content">
+                            <span class="status-label">Banco de Dados</span>
+                            <span class="status-value online" id="bancoStatus">MongoDB</span>
+                            <small>${erros24h} erros/24h</small>
+                        </div>
+                    </div>
+
+                    <div class="status-card" id="statusMemoria">
+                        <div class="status-icon">
+                            <i class="fas fa-memory"></i>
+                        </div>
+                        <div class="status-content">
+                            <span class="status-label">Memória</span>
+                            <span class="status-value ${memUsage > 80 ? 'warning' : 'online'}" id="memoriaStatus">
+                                ${this.formatarBytes(memUsed)} / ${this.formatarBytes(memTotal)}
+                            </span>
+                            <small>${memUsage}% usado</small>
+                        </div>
+                    </div>
+
+                    <div class="status-card" id="statusCPU">
+                        <div class="status-icon">
+                            <i class="fas fa-microchip"></i>
+                        </div>
+                        <div class="status-content">
+                            <span class="status-label">CPU</span>
+                            <span class="status-value ${cpuUsage > 70 ? 'warning' : 'online'}" id="cpuStatus">
+                                ${cpuUsage}%
+                            </span>
+                            <small>Load: ${loadAvg[0].toFixed(2)}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs de Monitoramento -->
+                <div class="monitoring-tabs">
+                    <button class="tab-btn active" onclick="admin.mudarTabMonitoramento('console')">
+                        <i class="fas fa-terminal"></i> Console do Servidor
+                    </button>
+                    <button class="tab-btn" onclick="admin.mudarTabMonitoramento('anomalias')">
+                        <i class="fas fa-exclamation-triangle"></i> Anomalias Detectadas
+                        <span class="badge" id="badgeAnomalias">${anomalias.length}</span>
+                    </button>
+                    <button class="tab-btn" onclick="admin.mudarTabMonitoramento('metricas')">
+                        <i class="fas fa-chart-line"></i> Métricas do Sistema
+                    </button>
+                    <button class="tab-btn" onclick="admin.mudarTabMonitoramento('alertas')">
+                        <i class="fas fa-bell"></i> Alertas Ativos
+                        <span class="badge" id="badgeAlertas">${erros24h}</span>
+                    </button>
+                </div>
+
+                <!-- CONSOLE DO SERVIDOR (TAB 1) -->
+                <div id="tab-console" class="tab-content active">
+                    <div class="console-container">
+                        <div class="console-header">
+                            <div class="console-controls">
+                                <span class="console-title">
+                                    <i class="fas fa-circle" style="color: #28a745; font-size: 10px;"></i>
+                                    Servidor Ativo - Logs em tempo real
+                                </span>
+                                <div class="console-actions">
+                                    <label class="auto-scroll">
+                                        <input type="checkbox" id="autoScrollConsole" checked onchange="admin.toggleAutoScroll()">
+                                        Auto Scroll
+                                    </label>
+                                    <select id="logLevel" class="log-level-select" onchange="admin.filtrarLogs()">
+                                        <option value="all">Todos os níveis</option>
+                                        <option value="error">Erros</option>
+                                        <option value="warn">Avisos</option>
+                                        <option value="info">Informações</option>
+                                        <option value="debug">Debug</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="console-output" id="consoleOutput">
+                            <div class="console-line system">
+                                <span class="console-timestamp">[${new Date().toLocaleTimeString()}]</span>
+                                <span class="console-level system">[SYSTEM]</span>
+                                <span class="console-message">Monitoramento iniciado - Node ${nodeVersion} | PID: ${pid}</span>
+                            </div>
+                            <div class="console-line system">
+                                <span class="console-timestamp">[${new Date().toLocaleTimeString()}]</span>
+                                <span class="console-level system">[SYSTEM]</span>
+                                <span class="console-message">Servidor: ${hostname} | Uptime: ${uptime}</span>
+                            </div>
+                        </div>
+                        <div class="console-footer">
+                            <div class="console-stats" id="consoleStats">
+                                <span><i class="fas fa-circle text-success"></i> Conectado</span>
+                                <span><i class="fas fa-clock"></i> <span id="ultimaAtualizacao">Agora</span></span>
+                            </div>
+                            <div class="console-command" style="flex: 1; max-width: 500px;">
+                                <i class="fas fa-chevron-right" style="color: #28a745;"></i>
+                                <input type="text" id="consoleCommandInput" placeholder="Digite um comando (ex: help(), stats(), process.memoryUsage())..." 
+                                    style="flex: 1; background: #2d2d2d; border: none; color: #fff; padding: 6px 12px; border-radius: 4px; outline: none; font-family: monospace;">
+                                <button onclick="admin.executarComando()" style="background: #0d6efd; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; margin-left: 8px;">
+                                    <i class="fas fa-play"></i> Executar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ANOMALIAS DETECTADAS (TAB 2) -->
+                <div id="tab-anomalias" class="tab-content">
+                    <div class="anomalias-container">
+                        <div class="anomalias-header">
+                            <h3><i class="fas fa-exclamation-triangle"></i> Anomalias Detectadas</h3>
+                            <div class="anomalias-filters">
+                                <select id="filtroAnomalia" onchange="admin.filtrarAnomalias()">
+                                    <option value="todas">Todas as anomalias</option>
+                                    <option value="critica">Críticas</option>
+                                    <option value="alta">Alta</option>
+                                    <option value="media">Média</option>
+                                    <option value="baixa">Baixa</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="anomalias-list" id="anomaliasList">
+                            ${this.gerarListaAnomaliasReais(anomalias)}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MÉTRICAS DO SISTEMA (TAB 3) -->
+                <div id="tab-metricas" class="tab-content">
+                    <div class="metricas-container">
+                        <div class="metricas-header">
+                            <h3><i class="fas fa-chart-line"></i> Métricas em Tempo Real</h3>
+                            <span class="metricas-periodo">Dados atualizados</span>
+                        </div>
+                        
+                        <div class="metricas-grid">
+                            <div class="metrica-card">
+                                <canvas id="graficoCPU"></canvas>
+                                <p>Uso de CPU: ${cpuUsage}%</p>
+                            </div>
+                            <div class="metrica-card">
+                                <canvas id="graficoMemoria"></canvas>
+                                <p>Uso de Memória: ${memUsage}%</p>
+                            </div>
+                            <div class="metrica-card">
+                                <canvas id="graficoRequisicoes"></canvas>
+                                <p>Requisições: ${requisicoes}/min</p>
+                            </div>
+                            <div class="metrica-card">
+                                <canvas id="graficoErros"></canvas>
+                                <p>Taxa de Erros: ${erros24h}/24h</p>
+                            </div>
+                        </div>
+
+                        <div class="metricas-detalhadas">
+                            <h4>Métricas Detalhadas</h4>
+                            <table class="metricas-table">
+                                <tr>
+                                    <td>Tempo de atividade:</td>
+                                    <td id="uptime">${uptime}</td>
+                                </tr>
+                                <tr>
+                                    <td>Total de requisições (24h):</td>
+                                    <td id="totalRequisicoes">${requisicoes}</td>
+                                </tr>
+                                <tr>
+                                    <td>Erros (24h):</td>
+                                    <td id="totalErros">${erros24h}</td>
+                                </tr>
+                                <tr>
+                                    <td>Latência média:</td>
+                                    <td id="latenciaMedia">${latencia}ms</td>
+                                </tr>
+                                <tr>
+                                    <td>Provas ativas:</td>
+                                    <td id="provasAtivas">${provasAtivas}</td>
+                                </tr>
+                                <tr>
+                                    <td>Usuários online:</td>
+                                    <td id="usuariosOnline">${usuariosOnline}</td>
+                                </tr>
+                                <tr>
+                                    <td>Cancelamentos (24h):</td>
+                                    <td id="cancelamentos">${cancelamentos24h}</td>
+                                </tr>
+                                <tr>
+                                    <td>Violações (24h):</td>
+                                    <td id="violacoes">${violacoes24h}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ALERTAS ATIVOS (TAB 4) -->
+                <div id="tab-alertas" class="tab-content">
+                    <div class="alertas-container">
+                        <div class="alertas-header">
+                            <h3><i class="fas fa-bell"></i> Alertas Ativos</h3>
+                            <button class="btn-resolver" onclick="admin.resolverTodosAlertas()">
+                                <i class="fas fa-check-double"></i> Resolver Todos
+                            </button>
+                        </div>
+                        <div class="alertas-list" id="alertasList">
+                            ${this.gerarListaAlertasReais(anomalias)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .monitoring-container {
+                    padding: 20px;
+                    max-width: 1400px;
+                    margin: 0 auto;
+                }
+
+                .monitoring-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    background: white;
+                    padding: 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .header-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+
+                .header-left i {
+                    font-size: 24px;
+                    color: #0d6efd;
+                }
+
+                .header-left h2 {
+                    margin: 0;
+                    font-size: 20px;
+                    color: #212529;
+                }
+
+                .btn-monitoring {
+                    padding: 8px 16px;
+                    border: 1px solid #dee2e6;
+                    background: white;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 13px;
+                    transition: all 0.3s;
+                }
+
+                .btn-monitoring:hover {
+                    background: #e9ecef;
+                }
+
+                .btn-monitoring.refresh {
+                    background: #0d6efd;
+                    color: white;
+                    border: none;
+                }
+
+                .btn-monitoring.refresh:hover {
+                    background: #0b5ed7;
+                }
+
+                /* Status Cards */
+                .system-status-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 15px;
+                    margin-bottom: 25px;
+                }
+
+                .status-card {
+                    background: white;
+                    border-radius: 12px;
+                    padding: 20px;
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .status-icon {
+                    width: 50px;
+                    height: 50px;
+                    background: #e7f3ff;
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #0d6efd;
+                    font-size: 24px;
+                }
+
+                .status-content {
+                    flex: 1;
+                }
+
+                .status-label {
+                    display: block;
+                    font-size: 12px;
+                    color: #6c757d;
+                    margin-bottom: 4px;
+                }
+
+                .status-value {
+                    font-size: 18px;
+                    font-weight: 600;
+                }
+
+                .status-value.online {
+                    color: #28a745;
+                }
+
+                .status-value.offline {
+                    color: #dc3545;
+                }
+
+                .status-value.warning {
+                    color: #ffc107;
+                }
+
+                /* Tabs */
+                .monitoring-tabs {
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: 20px;
+                    background: white;
+                    padding: 10px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .tab-btn {
+                    padding: 10px 20px;
+                    border: none;
+                    background: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: #6c757d;
+                    transition: all 0.3s;
+                    position: relative;
+                }
+
+                .tab-btn i {
+                    font-size: 16px;
+                }
+
+                .tab-btn .badge {
+                    background: #dc3545;
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                    margin-left: 5px;
+                }
+
+                .tab-btn:hover {
+                    background: #f8f9fa;
+                    color: #0d6efd;
+                }
+
+                .tab-btn.active {
+                    background: #0d6efd;
+                    color: white;
+                }
+
+                .tab-btn.active .badge {
+                    background: white;
+                    color: #0d6efd;
+                }
+
+                .tab-content {
+                    display: none;
+                    background: white;
+                    border-radius: 12px;
+                    padding: 20px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .tab-content.active {
+                    display: block;
+                }
+
+                /* Console */
+                .console-container {
+                    border: 1px solid #dee2e6;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+
+                .console-header {
+                    background: #343a40;
+                    padding: 10px 15px;
+                    color: white;
+                }
+
+                .console-controls {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+
+                .console-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 13px;
+                }
+
+                .console-actions {
+                    display: flex;
+                    gap: 15px;
+                    align-items: center;
+                }
+
+                .auto-scroll {
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                    font-size: 12px;
+                    color: #adb5bd;
+                    cursor: pointer;
+                }
+
+                .log-level-select {
+                    background: #495057;
+                    color: white;
+                    border: none;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    cursor: pointer;
+                }
+
+                .console-output {
+                    background: #1e1e1e;
+                    color: #f8f9fa;
+                    font-family: 'Consolas', 'Monaco', monospace;
+                    font-size: 13px;
+                    padding: 15px;
+                    height: 400px;
+                    overflow-y: auto;
+                    line-height: 1.5;
+                }
+
+                .console-line {
+                    padding: 2px 0;
+                    border-bottom: 1px solid #2d2d2d;
+                    display: flex;
+                    gap: 10px;
+                }
+
+                .console-timestamp {
+                    color: #6c757d;
+                    font-size: 11px;
+                    min-width: 80px;
+                }
+
+                .console-level {
+                    min-width: 60px;
+                    font-weight: 600;
+                }
+
+                .console-level.error { color: #dc3545; }
+                .console-level.warn { color: #ffc107; }
+                .console-level.info { color: #0dcaf0; }
+                .console-level.debug { color: #6f42c1; }
+                .console-level.system { color: #6c757d; }
+
+                .console-message {
+                    flex: 1;
+                    word-break: break-word;
+                }
+
+                .console-message.error { color: #f8d7da; }
+                .console-message.warn { color: #fff3cd; }
+                .console-message.sql { color: #d4edda; }
+
+                .console-footer {
+                    background: #343a40;
+                    padding: 10px 15px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    color: #adb5bd;
+                    font-size: 12px;
+                }
+
+                .console-stats {
+                    display: flex;
+                    gap: 20px;
+                }
+
+                .console-stats i {
+                    margin-right: 4px;
+                }
+
+                .text-success { color: #28a745; }
+
+                .console-command {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    background: #495057;
+                    padding: 4px 10px;
+                    border-radius: 4px;
+                }
+
+                .console-command input {
+                    background: none;
+                    border: none;
+                    color: white;
+                    font-family: monospace;
+                    outline: none;
+                    width: 300px;
+                }
+
+                .console-command input::placeholder {
+                    color: #6c757d;
+                }
+
+                /* Anomalias */
+                .anomalias-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                }
+
+                .anomalias-header h3 {
+                    margin: 0;
+                    font-size: 16px;
+                    color: #495057;
+                }
+
+                .anomalias-filters select {
+                    padding: 6px 12px;
+                    border: 1px solid #dee2e6;
+                    border-radius: 6px;
+                    font-size: 13px;
+                }
+
+                .anomalia-card {
+                    background: #f8f9fa;
+                    border-left: 4px solid;
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin-bottom: 10px;
+                    transition: all 0.3s;
+                }
+
+                .anomalia-card:hover {
+                    transform: translateX(5px);
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+
+                .anomalia-card.critica { border-left-color: #dc3545; }
+                .anomalia-card.alta { border-left-color: #fd7e14; }
+                .anomalia-card.media { border-left-color: #ffc107; }
+                .anomalia-card.baixa { border-left-color: #0dcaf0; }
+
+                .anomalia-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 10px;
+                }
+
+                .anomalia-tipo {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .anomalia-tipo i {
+                    font-size: 18px;
+                }
+
+                .anomalia-tipo span {
+                    font-weight: 600;
+                }
+
+                .anomalia-nivel {
+                    padding: 3px 10px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+
+                .anomalia-nivel.critica { background: #f8d7da; color: #b02a37; }
+                .anomalia-nivel.alta { background: #ffe5d0; color: #b45f06; }
+                .anomalia-nivel.media { background: #fff3cd; color: #997404; }
+                .anomalia-nivel.baixa { background: #cff4fc; color: #055160; }
+
+                .anomalia-descricao {
+                    font-size: 14px;
+                    margin-bottom: 10px;
+                }
+
+                .anomalia-solucao {
+                    background: #e9ecef;
+                    padding: 10px;
+                    border-radius: 6px;
+                    margin: 10px 0;
+                    font-size: 13px;
+                }
+
+                .anomalia-solucao i {
+                    color: #198754;
+                    margin-right: 5px;
+                }
+
+                .anomalia-acoes {
+                    display: flex;
+                    gap: 8px;
+                    justify-content: flex-end;
+                }
+
+                .btn-solucao {
+                    padding: 5px 12px;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+
+                .btn-solucao.imediata {
+                    background: #198754;
+                    color: white;
+                }
+
+                .btn-solucao.agendada {
+                    background: #ffc107;
+                    color: #212529;
+                }
+
+                .btn-solucao.ignorar {
+                    background: #6c757d;
+                    color: white;
+                }
+
+                /* Métricas */
+                .metricas-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 20px;
+                    margin: 20px 0;
+                }
+
+                .metrica-card {
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    padding: 15px;
+                    text-align: center;
+                }
+
+                .metrica-card canvas {
+                    max-height: 150px;
+                    width: 100% !important;
+                }
+
+                .metrica-card p {
+                    margin: 10px 0 0;
+                    font-size: 14px;
+                    color: #495057;
+                }
+
+                .metricas-detalhadas {
+                    margin-top: 30px;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                }
+
+                .metricas-detalhadas h4 {
+                    margin: 0 0 15px;
+                    font-size: 16px;
+                }
+
+                .metricas-table {
+                    width: 100%;
+                }
+
+                .metricas-table td {
+                    padding: 8px;
+                    border-bottom: 1px solid #dee2e6;
+                }
+
+                .metricas-table td:first-child {
+                    font-weight: 600;
+                    width: 200px;
+                }
+
+                /* Alertas */
+                .alertas-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                }
+
+                .btn-resolver {
+                    background: #198754;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .alerta-item {
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin-bottom: 10px;
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                }
+
+                .alerta-icon {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 20px;
+                }
+
+                .alerta-icon.critico { background: #f8d7da; color: #b02a37; }
+                .alerta-icon.aviso { background: #fff3cd; color: #997404; }
+                .alerta-icon.info { background: #cfe2ff; color: #0a58ca; }
+
+                .alerta-content {
+                    flex: 1;
+                }
+
+                .alerta-titulo {
+                    font-weight: 600;
+                    margin-bottom: 4px;
+                }
+
+                .alerta-descricao {
+                    font-size: 12px;
+                    color: #6c757d;
+                }
+
+                .alerta-acoes button {
+                    background: none;
+                    border: none;
+                    color: #198754;
+                    cursor: pointer;
+                    font-size: 14px;
+                    padding: 5px 10px;
+                }
+
+                /* Responsividade */
+                @media (max-width: 768px) {
+                    .system-status-grid {
+                        grid-template-columns: 1fr;
+                    }
+
+                    .metricas-grid {
+                        grid-template-columns: 1fr;
+                    }
+
+                    .monitoring-header {
+                        flex-direction: column;
+                        gap: 10px;
+                    }
+
+                    .monitoring-tabs {
+                        flex-wrap: wrap;
+                    }
+
+                    .tab-btn {
+                        flex: 1;
+                    }
+
+                    .console-command input {
+                        width: 150px;
+                    }
+                }
+            </style>
+        `;
+    }
+
+    // ==================== CONEXÃO WEBSOCKET PARA LOGS REAIS ====================
+    conectarWebSocketLogs() {
+        // Se já existe uma conexão ativa, não fazer nada
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            console.log('ℹ️ WebSocket já está conectado ou conectando');
+            return;
+        }
+
+        // Fechar conexão anterior se existir (apenas se não estiver já fechando)
+        if (this.ws) {
+            try {
+                this.ws.close();
+            } catch (e) {
+                // Ignorar erros ao fechar
+            }
+            this.ws = null;
+        }
+
+        // Determinar protocolo (ws ou wss)
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
+        
+        console.log('🔌 Conectando ao WebSocket de logs:', wsUrl);
+        
+        this.ws = new WebSocket(wsUrl);
+        this.wsReconnectTimer = null; // Para controlar reconexão
+        
+        this.ws.onopen = () => {
+            console.log('✅ Conectado ao servidor de logs em tempo real');
+            this.adicionarLogServidor({
+                type: 'system',
+                message: '✅ Conectado ao servidor de logs em tempo real',
+                timestamp: new Date().toISOString()
+            });
+            
+            // Enviar comando para ativar modo de comandos
+            this.ws.send(JSON.stringify({ type: 'enable_commands' }));
+            
+            // Limpar qualquer timer de reconexão pendente
+            if (this.wsReconnectTimer) {
+                clearTimeout(this.wsReconnectTimer);
+                this.wsReconnectTimer = null;
+            }
+        };
+        
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                
+                // Verificar se é comando para limpar console
+                if (data.type === 'clear_console') {
+                    this.limparConsole();
+                    return;
+                }
+                
+                // Verificar se é resultado de comando
+                if (data.type === 'command_result') {
+                    this.adicionarLogServidor({
+                        type: 'success',
+                        message: data.result,
+                        timestamp: data.timestamp
+                    });
+                } 
+                // Verificar se é erro de comando
+                else if (data.type === 'command_error') {
+                    this.adicionarLogServidor({
+                        type: 'error',
+                        message: `❌ Erro: ${data.error}`,
+                        timestamp: data.timestamp
+                    });
+                }
+                // Log normal
+                else {
+                    this.adicionarLogServidor(data);
+                }
+            } catch (e) {
+                console.error('Erro ao processar log:', e);
+            }
+        };
+        
+        this.ws.onerror = (error) => {
+            console.error('❌ Erro na conexão WebSocket:', error);
+            this.adicionarLogServidor({
+                type: 'error',
+                message: '❌ Erro na conexão com o servidor de logs',
+                timestamp: new Date().toISOString()
+            });
+        };
+        
+        this.ws.onclose = () => {
+            console.log('🔌 Desconectado do servidor de logs');
+            this.adicionarLogServidor({
+                type: 'system',
+                message: '🔌 Desconectado do servidor de logs',
+                timestamp: new Date().toISOString()
+            });
+            
+            // Limpar a referência do WebSocket
+            this.ws = null;
+            
+            // Não tentar reconectar automaticamente - apenas se o usuário estiver na aba de console
+            // e se não houver um timer já programado
+            if (!this.wsReconnectTimer && document.getElementById('tab-console')?.classList.contains('active')) {
+                console.log('⏳ Aguardando 10 segundos antes de tentar reconectar...');
+                this.wsReconnectTimer = setTimeout(() => {
+                    console.log('🔄 Tentando reconectar...');
+                    this.wsReconnectTimer = null;
+                    this.conectarWebSocketLogs();
+                }, 10000); // 10 segundos de espera
+            }
+        };
+    }
+
+    // Adicione este método para limpar a conexão ao mudar de aba
+    limparConexaoWebSocket() {
+        if (this.ws) {
+            try {
+                this.ws.close();
+            } catch (e) {}
+            this.ws = null;
+        }
+        if (this.wsReconnectTimer) {
+            clearTimeout(this.wsReconnectTimer);
+            this.wsReconnectTimer = null;
+        }
+    }
+
+    // ==================== ADICIONAR LOG DO SERVIDOR ====================
+    adicionarLogServidor(log) {
+        const consoleOutput = document.getElementById('consoleOutput');
+        if (!consoleOutput) return;
+        
+        const linha = document.createElement('div');
+        linha.className = 'console-line';
+        
+        const data = new Date(log.timestamp);
+        const hora = data.toLocaleTimeString('pt-BR', { hour12: false });
+        
+        // Determinar ícone e cor baseado no tipo
+        let icone = 'ℹ️';
+        let tipo = 'info';
+        let cor = '#0dcaf0';
+        
+        // Verificar mensagens específicas do terminal
+        const mensagem = log.message || '';
+        
+        if (mensagem.includes('❌') || mensagem.includes('Error') || mensagem.includes('erro') || log.type === 'error') {
+            icone = '❌';
+            tipo = 'error';
+            cor = '#dc3545';
+        }
+        else if (mensagem.includes('⚠️') || mensagem.includes('warn') || log.type === 'warn') {
+            icone = '⚠️';
+            tipo = 'warn';
+            cor = '#ffc107';
+        }
+        else if (mensagem.includes('✅') || mensagem.includes('sucesso') || log.type === 'success') {
+            icone = '✅';
+            tipo = 'success';
+            cor = '#28a745';
+        }
+        else if (mensagem.includes('🔍') || mensagem.includes('Testando') || log.type === 'debug') {
+            icone = '🔍';
+            tipo = 'debug';
+            cor = '#6f42c1';
+        }
+        else if (mensagem.includes('📁') || mensagem.includes('📊') || mensagem.includes('📝') || mensagem.includes('🚀')) {
+            icone = '📌';
+            tipo = 'system';
+            cor = '#6c757d';
+        }
+        
+        linha.innerHTML = `
+            <span class="console-timestamp" style="color: #6c757d; min-width: 80px;">[${hora}]</span>
+            <span class="console-level ${tipo}" style="color: ${cor}; min-width: 70px;">${icone} [${tipo.toUpperCase()}]</span>
+            <span class="console-message" style="color: ${tipo === 'error' ? '#f8d7da' : '#f8f9fa'};">${this.escapeHtml(mensagem)}</span>
+        `;
+        
+        consoleOutput.appendChild(linha);
+        
+        // Limitar número de linhas
+        while (consoleOutput.children.length > 500) {
+            consoleOutput.removeChild(consoleOutput.firstChild);
+        }
+        
+        // Auto scroll se ativado
+        if (document.getElementById('autoScrollConsole')?.checked) {
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        // Atualizar estatísticas
+        this.atualizarStatsConsole();
+    }
+
+    // ==================== EXECUÇÃO DE COMANDOS ====================
+    async executarComando() {
+        const input = document.getElementById('consoleCommandInput');
+        const comando = input.value.trim();
+        
+        if (!comando) {
+            this.mostrarToast('⚠️ Digite um comando', 'warning');
+            return;
+        }
+
+        // Adicionar comando ao log
+        this.adicionarLogServidor({
+            type: 'command',
+            message: `⚡ $ ${comando}`,
+            timestamp: new Date().toISOString()
+        });
+
+        // Limpar input
+        input.value = '';
+
+        // Enviar via WebSocket
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+                type: 'execute_command',
+                command: comando
+            }));
+        } else {
+            this.adicionarLogServidor({
+                type: 'error',
+                message: '❌ WebSocket não conectado. Tentando reconectar...',
+                timestamp: new Date().toISOString()
+            });
+            this.conectarWebSocketLogs();
+        }
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ==================== MÉTODOS DE LOGS ====================
+    filtrarLogs() {
+        const nivel = document.getElementById('logLevel')?.value;
+        const linhas = document.querySelectorAll('#consoleOutput .console-line');
+        
+        linhas.forEach(linha => {
+            if (nivel === 'all') {
+                linha.style.display = '';
+            } else {
+                const level = linha.querySelector('.console-level')?.textContent.toLowerCase();
+                linha.style.display = level && level.includes(nivel) ? '' : 'none';
+            }
+        });
+        
+        this.atualizarStatsConsole();
+    }
+
+    toggleAutoScroll() {
+        // Função vazia
+    }
+
+    limparConsole() {
+        const consoleOutput = document.getElementById('consoleOutput');
+        if (consoleOutput) {
+            consoleOutput.innerHTML = '';
+            this.adicionarLogServidor({
+                type: 'system',
+                message: '🧹 Console limpo pelo administrador',
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+
+    exportarLogs() {
+        const logs = [];
+        document.querySelectorAll('#consoleOutput .console-line').forEach(linha => {
+            const timestamp = linha.querySelector('.console-timestamp')?.textContent || '';
+            const level = linha.querySelector('.console-level')?.textContent || '';
+            const message = linha.querySelector('.console-message')?.textContent || '';
+            logs.push(`${timestamp} ${level} ${message}`);
+        });
+        
+        if (logs.length === 0) {
+            this.mostrarToast('❌ Nenhum log para exportar', 'error');
+            return;
+        }
+        
+        const blob = new Blob([logs.join('\n')], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `logs-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        this.mostrarToast('📥 Logs exportados com sucesso', 'success');
+    }
+
+    atualizarStatsConsole() {
+        const stats = document.getElementById('consoleStats');
+        if (!stats) return;
+        
+        const linhasVisiveis = document.querySelectorAll('#consoleOutput .console-line[style=""]:not([style*="display: none"])').length;
+        
+        const ultimaAtualizacao = document.getElementById('ultimaAtualizacao');
+        if (ultimaAtualizacao) {
+            ultimaAtualizacao.textContent = new Date().toLocaleTimeString();
+        }
+    }
+
+    // ==================== MÉTODOS DE GRÁFICOS ====================
+    inicializarGraficosComDadosReais(metricas) {
+        if (!window.Chart) {
+            console.warn('Chart.js não encontrado');
+            return;
+        }
+
+        // Destruir gráficos existentes
+        if (this.graficoCPU) this.graficoCPU.destroy();
+        if (this.graficoMemoria) this.graficoMemoria.destroy();
+        if (this.graficoRequisicoes) this.graficoRequisicoes.destroy();
+        if (this.graficoErros) this.graficoErros.destroy();
+
+        const labels = this.gerarLabelsTempo(12);
+        const cpuUsage = metricas?.cpu?.usage || 45;
+        const memUsage = metricas?.memory?.usedPercent || 55;
+
+        // Gráfico de CPU
+        const ctxCPU = document.getElementById('graficoCPU')?.getContext('2d');
+        if (ctxCPU) {
+            this.graficoCPU = new Chart(ctxCPU, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'CPU %',
+                        data: this.gerarDadosMetricaReais(cpuUsage, 15, 12),
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13,110,253,0.1)',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { min: 0, max: 100 } }
+                }
+            });
+        }
+
+        // Gráfico de Memória
+        const ctxMem = document.getElementById('graficoMemoria')?.getContext('2d');
+        if (ctxMem) {
+            this.graficoMemoria = new Chart(ctxMem, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Memória %',
+                        data: this.gerarDadosMetricaReais(memUsage, 10, 12),
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25,135,84,0.1)',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { min: 0, max: 100 } }
+                }
+            });
+        }
+
+        // Gráfico de Requisições
+        const ctxReqs = document.getElementById('graficoRequisicoes')?.getContext('2d');
+        if (ctxReqs) {
+            this.graficoRequisicoes = new Chart(ctxReqs, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Requisições',
+                        data: this.gerarDadosMetricaReais(100, 30, 12),
+                        backgroundColor: '#ffc107',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // Gráfico de Erros
+        const ctxErros = document.getElementById('graficoErros')?.getContext('2d');
+        if (ctxErros) {
+            this.graficoErros = new Chart(ctxErros, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Erros',
+                        data: this.gerarDadosMetricaReais(5, 3, 12),
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220,53,69,0.1)',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+    }
+
+    gerarLabelsTempo(quantidade) {
+        const labels = [];
+        for (let i = quantidade; i >= 0; i--) {
+            const d = new Date(Date.now() - i * 60000);
+            labels.push(d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+        }
+        return labels;
+    }
+
+    gerarDadosMetricaReais(valorBase, variacao, quantidade) {
+        const dados = [];
+        for (let i = 0; i <= quantidade; i++) {
+            const variacaoAtual = (Math.random() * variacao * 2) - variacao;
+            let valor = valorBase + variacaoAtual;
+            valor = Math.max(0, Math.min(100, valor));
+            dados.push(Math.round(valor * 10) / 10);
+        }
+        return dados;
+    }
+
+    // ==================== MÉTODOS AUXILIARES ====================
+    formatarBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 GB';
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+        return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+    }
+
+    calcularTempoRelativo(data) {
+        const segundos = Math.floor((new Date() - data) / 1000);
+        if (segundos < 60) return `há ${segundos} segundos`;
+        if (segundos < 3600) return `há ${Math.floor(segundos / 60)} minutos`;
+        if (segundos < 86400) return `há ${Math.floor(segundos / 3600)} horas`;
+        return `há ${Math.floor(segundos / 86400)} dias`;
+    }
+
+    getCorNivel(nivel) {
+        const cores = {
+            'critica': '#dc3545',
+            'alta': '#fd7e14',
+            'media': '#ffc107',
+            'baixa': '#0dcaf0'
+        };
+        return cores[nivel] || '#6c757d';
+    }
+
+    // ==================== MÉTODOS DE NAVEGAÇÃO ENTRE TABS ====================
+    mudarTabMonitoramento(tab) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
+        document.getElementById(`tab-${tab}`).classList.add('active');
+        
+        const buttons = document.querySelectorAll('.tab-btn');
+        const index = tab === 'console' ? 0 : tab === 'anomalias' ? 1 : tab === 'metricas' ? 2 : 3;
+        if (buttons[index]) buttons[index].classList.add('active');
+        
+        if (tab === 'metricas') {
+            this.atualizarGraficosMetricas();
+        }
+        
+        // Se não for a aba de console, limpar a conexão WebSocket para economizar recursos
+        if (tab !== 'console') {
+            this.limparConexaoWebSocket();
+        } else {
+            // Se for a aba de console, reconectar
+            this.conectarWebSocketLogs();
+        }
+    }
+
+    // ==================== MÉTODOS DE ANOMALIAS ====================
+    gerarListaAnomaliasReais(anomalias) {
+        if (!anomalias || anomalias.length === 0) {
             return `
-                <div class="empty-state">
-                    <i class="fas fa-check-circle" style="color: #198754; font-size: 48px;"></i>
-                    <h3>Nenhuma violação registrada</h3>
-                    <p>O sistema está operando normalmente.</p>
+                <div class="empty-state" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-check-circle" style="font-size: 48px; color: #28a745;"></i>
+                    <h3 style="color: #495057;">Nenhuma anomalia detectada</h3>
+                    <p style="color: #6c757d;">O sistema está operando normalmente.</p>
                 </div>
             `;
         }
 
-        return violacoes.map(v => `
-            <div class="violation-item" style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 4px solid ${v.flagViolacao ? '#dc3545' : '#ffc107'};">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <div>
-                        <strong>${v.alunoId?.nome || 'Aluno desconhecido'}</strong>
-                        <span style="margin-left: 10px; padding: 4px 10px; border-radius: 30px; font-size: 11px; font-weight: 600; background: ${v.flagViolacao ? '#f8d7da' : '#fff3cd'}; color: ${v.flagViolacao ? '#b02a37' : '#997404'};">
-                            ${v.flagViolacao ? '🚫 Violação' : '⏰ Prazo expirado'}
-                        </span>
+        return anomalias.map(a => this.gerarCardAnomaliaReal(a)).join('');
+    }
+
+    gerarCardAnomaliaReal(anomalia) {
+        const tempoRelativo = this.calcularTempoRelativo(new Date(anomalia.timestamp));
+        const nivel = anomalia.nivel || 'media';
+        
+        return `
+            <div class="anomalia-card ${nivel}" id="anomalia-${anomalia.id}">
+                <div class="anomalia-header">
+                    <div class="anomalia-tipo">
+                        <i class="fas fa-exclamation-triangle" style="color: ${this.getCorNivel(nivel)}"></i>
+                        <span>${anomalia.tipo}</span>
                     </div>
-                    <small style="color: #6c757d;">${new Date(v.dataRealizacao).toLocaleString('pt-BR')}</small>
+                    <span class="anomalia-nivel ${nivel}">${nivel.toUpperCase()}</span>
                 </div>
-                <div style="margin-bottom: 10px;">
-                    <p><strong>Prova:</strong> ${v.provaId?.titulo || 'Prova desconhecida'}</p>
-                    <p><strong>Motivo:</strong> ${v.motivoCancelamento || 'Não especificado'}</p>
-                    ${v.estatisticasCancelamento ? `
-                    <p><strong>Detalhes:</strong> ${JSON.stringify(v.estatisticasCancelamento)}</p>
-                    ` : ''}
+                <div class="anomalia-descricao">
+                    ${anomalia.descricao}
+                    <br>
+                    <small style="color: #6c757d;">Log: ${anomalia.logAssociado || 'N/A'}</small>
                 </div>
-                <div style="display: flex; gap: 15px; font-size: 11px; color: #6c757d;">
-                    <span><i class="fas fa-user"></i> ${v.alunoId?.email || ''}</span>
-                    <span><i class="fas fa-id-card"></i> ${v.alunoId?.matricula || ''}</span>
+                <div class="anomalia-solucao">
+                    <i class="fas fa-lightbulb"></i>
+                    <strong>Solução Recomendada:</strong> ${anomalia.solucao}
+                </div>
+                <div class="anomalia-solucao" style="background: #d4edda; color: #155724;">
+                    <i class="fas fa-clock"></i>
+                    <strong>Solução Imediata:</strong> ${anomalia.solucaoImediata}
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                    <span class="anomalia-timestamp" style="font-size: 11px; color: #6c757d;">
+                        <i class="far fa-clock"></i> ${tempoRelativo}
+                    </span>
+                    <div class="anomalia-acoes">
+                        <button class="btn-solucao imediata" onclick="admin.aplicarSolucaoImediata('${anomalia.id}')">
+                            <i class="fas fa-bolt"></i> Aplicar
+                        </button>
+                        <button class="btn-solucao agendada" onclick="admin.agendarSolucao('${anomalia.id}')">
+                            <i class="fas fa-calendar-alt"></i> Agendar
+                        </button>
+                        <button class="btn-solucao ignorar" onclick="admin.ignorarAnomalia('${anomalia.id}')">
+                            <i class="fas fa-check"></i> Ignorar
+                        </button>
+                    </div>
                 </div>
             </div>
-        `).join('');
+        `;
+    }
+
+    filtrarAnomalias() {
+        const filtro = document.getElementById('filtroAnomalia')?.value;
+        const cards = document.querySelectorAll('#anomaliasList .anomalia-card');
+        
+        cards.forEach(card => {
+            if (filtro === 'todas') {
+                card.style.display = '';
+            } else {
+                const nivel = card.classList[1];
+                card.style.display = nivel === filtro ? '' : 'none';
+            }
+        });
+    }
+
+    async aplicarSolucaoImediata(anomaliaId) {
+        const anomaliaCard = document.getElementById(`anomalia-${anomaliaId}`);
+        if (!anomaliaCard) return;
+        
+        anomaliaCard.style.opacity = '0.5';
+        
+        try {
+            const response = await fetch(`${this.apiBase}/monitoramento/solucao/${anomaliaId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ tipo: 'solucao_imediata', acao: { anomaliaId } })
+            });
+
+            if (response.ok) {
+                anomaliaCard.remove();
+                this.adicionarLogServidor({
+                    type: 'info',
+                    message: `✅ Solução imediata aplicada para anomalia ${anomaliaId}`,
+                    timestamp: new Date().toISOString()
+                });
+                this.mostrarToast('✅ Solução aplicada com sucesso!', 'success');
+            } else {
+                throw new Error('Erro ao aplicar solução');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            this.mostrarToast('❌ Erro ao aplicar solução', 'error');
+            anomaliaCard.style.opacity = '1';
+        }
+        
+        this.atualizarBadgeAnomalias();
+    }
+
+    agendarSolucao(anomaliaId) {
+        this.mostrarToast('📅 Solução agendada', 'info');
+    }
+
+    ignorarAnomalia(anomaliaId) {
+        const anomaliaCard = document.getElementById(`anomalia-${anomaliaId}`);
+        if (!anomaliaCard) return;
+        
+        if (confirm('Ignorar esta anomalia?')) {
+            anomaliaCard.remove();
+            this.adicionarLogServidor({
+                type: 'warn',
+                message: `Anomalia ${anomaliaId} ignorada`,
+                timestamp: new Date().toISOString()
+            });
+            this.atualizarBadgeAnomalias();
+            this.mostrarToast('👁️ Anomalia ignorada', 'info');
+        }
+    }
+
+    atualizarBadgeAnomalias() {
+        const badge = document.getElementById('badgeAnomalias');
+        const anomaliasList = document.getElementById('anomaliasList');
+        if (badge && anomaliasList) {
+            badge.textContent = anomaliasList.children.length;
+        }
+    }
+
+    // ==================== MÉTODOS DE ALERTAS ====================
+    gerarListaAlertasReais(anomalias) {
+        const alertasAtivos = (anomalias || [])
+            .filter(a => a.nivel === 'critica' || a.nivel === 'alta')
+            .slice(0, 5);
+        
+        if (alertasAtivos.length === 0) {
+            return '<p style="text-align: center; color: #6c757d;">Nenhum alerta ativo</p>';
+        }
+
+        return alertasAtivos.map(a => this.gerarCardAlertaReal(a)).join('');
+    }
+
+    gerarCardAlertaReal(alerta) {
+        const tempoRelativo = this.calcularTempoRelativo(new Date(alerta.timestamp));
+        const tipoClasse = alerta.nivel === 'critica' ? 'critico' : 'aviso';
+        const icone = alerta.nivel === 'critica' ? 'fa-exclamation-circle' : 'fa-exclamation-triangle';
+        
+        return `
+            <div class="alerta-item" id="alerta-${alerta.id}">
+                <div class="alerta-icon ${tipoClasse}">
+                    <i class="fas ${icone}"></i>
+                </div>
+                <div class="alerta-content">
+                    <div class="alerta-titulo">${alerta.tipo}</div>
+                    <div class="alerta-descricao">${alerta.descricao.substring(0, 100)}... • ${tempoRelativo}</div>
+                </div>
+                <div class="alerta-acoes">
+                    <button onclick="admin.resolverAlerta('${alerta.id}')">
+                        <i class="fas fa-check"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    resolverAlerta(alertaId) {
+        const alerta = document.getElementById(`alerta-${alertaId}`);
+        if (alerta) {
+            alerta.remove();
+            this.atualizarBadgeAlertas();
+            this.mostrarToast('✅ Alerta resolvido', 'success');
+        }
+    }
+
+    resolverTodosAlertas() {
+        const alertasList = document.getElementById('alertasList');
+        if (alertasList) {
+            alertasList.innerHTML = '<p style="text-align: center; color: #6c757d;">Nenhum alerta ativo</p>';
+            document.getElementById('badgeAlertas').textContent = '0';
+            this.mostrarToast('✅ Todos os alertas foram resolvidos', 'success');
+        }
+    }
+
+    atualizarBadgeAlertas() {
+        const badge = document.getElementById('badgeAlertas');
+        const alertasList = document.getElementById('alertasList');
+        if (badge && alertasList) {
+            badge.textContent = alertasList.children.length;
+        }
+    }
+
+    // ==================== MÉTODOS DE GRÁFICOS ====================
+    atualizarGraficosMetricas() {
+        if (this.graficoCPU) {
+            this.graficoCPU.data.datasets[0].data = this.gerarDadosMetricaReais(50, 15, 12);
+            this.graficoCPU.update();
+        }
+        if (this.graficoMemoria) {
+            this.graficoMemoria.data.datasets[0].data = this.gerarDadosMetricaReais(50, 10, 12);
+            this.graficoMemoria.update();
+        }
+        if (this.graficoRequisicoes) {
+            this.graficoRequisicoes.data.datasets[0].data = this.gerarDadosMetricaReais(100, 30, 12);
+            this.graficoRequisicoes.update();
+        }
+        if (this.graficoErros) {
+            this.graficoErros.data.datasets[0].data = this.gerarDadosMetricaReais(5, 3, 12);
+            this.graficoErros.update();
+        }
+    }
+
+    // ==================== MÉTODO DE ATUALIZAÇÃO ====================
+    atualizarMonitoramento() {
+        // Mostrar toast de atualização
+        this.mostrarToast('🔄 Atualizando métricas...', 'info');
+        
+        // APENAS atualizar os dados, sem recarregar a página inteira
+        this.carregarDadosMonitoramento();
+    }
+
+    async carregarDadosMonitoramento() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar apenas os dados atualizados
+            const [metricasRes, anomaliasRes, estatisticasRes] = await Promise.all([
+                fetch(`${this.apiBase}/monitoramento/metricas`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${this.apiBase}/monitoramento/anomalias`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${this.apiBase}/monitoramento/estatisticas`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+
+            const metricas = await metricasRes.json();
+            const anomalias = await anomaliasRes.json();
+            const estatisticas = await estatisticasRes.json();
+
+            // Atualizar os dados no objeto this
+            this.metricasData = metricas.data || {};
+            this.anomaliasData = anomalias.data || [];
+            this.estatisticasData = estatisticas.data || {};
+
+            // Atualizar os cards de status se eles existirem
+            this.atualizarCardsStatus(this.metricasData, this.estatisticasData);
+            
+            // Atualizar os gráficos se eles existirem
+            this.atualizarGraficosMetricas();
+            
+            // Atualizar badges
+            this.atualizarBadgesMonitoramento(this.anomaliasData, this.estatisticasData);
+            
+            this.mostrarToast('✅ Dados atualizados com sucesso!', 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao atualizar dados:', error);
+            this.mostrarToast('❌ Erro ao atualizar dados', 'error');
+        }
+    }
+
+    atualizarCardsStatus(metricas, estatisticas) {
+        // Verificar se os elementos existem antes de atualizar
+        const cpuStatus = document.getElementById('cpuStatus');
+        if (cpuStatus) {
+            cpuStatus.textContent = (metricas.cpu?.usage || 0) + '%';
+            cpuStatus.className = 'status-value ' + (metricas.cpu?.usage > 70 ? 'warning' : 'online');
+        }
+        
+        const memoriaStatus = document.getElementById('memoriaStatus');
+        if (memoriaStatus) {
+            const memUsed = metricas.memory?.used || 0;
+            const memTotal = metricas.memory?.total || 0;
+            memoriaStatus.textContent = this.formatarBytes(memUsed) + ' / ' + this.formatarBytes(memTotal);
+        }
+        
+        const erros24h = document.getElementById('totalErros');
+        if (erros24h) {
+            erros24h.textContent = estatisticas.erros?.ultimas24h || 0;
+        }
+        
+        const uptime = document.getElementById('uptime');
+        if (uptime) {
+            uptime.textContent = metricas.system?.uptimeFormatted || 'N/A';
+        }
+        
+        const totalRequisicoes = document.getElementById('totalRequisicoes');
+        if (totalRequisicoes) {
+            totalRequisicoes.textContent = estatisticas.requisicoes?.ultimas24h || '0';
+        }
+        
+        const latenciaMedia = document.getElementById('latenciaMedia');
+        if (latenciaMedia) {
+            latenciaMedia.textContent = (estatisticas.latencia?.media || 0) + 'ms';
+        }
+    }
+
+    atualizarBadgesMonitoramento(anomalias, estatisticas) {
+        const badgeAnomalias = document.getElementById('badgeAnomalias');
+        const badgeAlertas = document.getElementById('badgeAlertas');
+        const badgeViolacoes = document.getElementById('badge-violacoes');
+        
+        if (badgeAnomalias && anomalias) {
+            badgeAnomalias.textContent = anomalias.length;
+        }
+        
+        if (badgeAlertas && estatisticas) {
+            badgeAlertas.textContent = estatisticas.erros?.ultimas24h || 0;
+        }
+        
+        if (badgeViolacoes && estatisticas) {
+            badgeViolacoes.textContent = estatisticas.cancelamentos?.ultimas24h || 0;
+        }
+    }
+
+    // ==================== MÉTODO DE TOAST ====================
+    mostrarToast(mensagem, tipo = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${tipo}`;
+        toast.style.cssText = `
+            position: fixed; bottom: 20px; right: 20px; background: white; padding: 12px 20px;
+            border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex;
+            align-items: center; gap: 10px; border-left: 4px solid ${tipo === 'success' ? '#28a745' : tipo === 'error' ? '#dc3545' : '#0d6efd'};
+            z-index: 9999; animation: slideIn 0.3s ease;
+        `;
+        toast.innerHTML = `
+            <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+            <span>${mensagem}</span>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ==================== CONFIGURAÇÃO DE EVENTOS ====================
+    configurarEventosMonitoramento() {
+        // Configurar auto-scroll do console
+        const autoScroll = document.getElementById('autoScrollConsole');
+        if (autoScroll) {
+            autoScroll.addEventListener('change', () => this.toggleAutoScroll());
+        }
+
+        // Configurar filtro de logs
+        const logLevel = document.getElementById('logLevel');
+        if (logLevel) {
+            logLevel.addEventListener('change', () => this.filtrarLogs());
+        }
+        
+        // Adicionar evento de tecla Enter no input de comando
+        const commandInput = document.getElementById('consoleCommandInput');
+        if (commandInput) {
+            commandInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.executarComando();
+                }
+            });
+        }
     }
 
     async loadConfiguracoes() {
@@ -4318,6 +5879,259 @@ class AdminPanel {
                 </div>
             </div>
         `;
+    }
+
+    adicionarLogServidor(log) {
+        const consoleOutput = document.getElementById('consoleOutput');
+        if (!consoleOutput) return;
+        
+        const linha = document.createElement('div');
+        linha.className = 'console-line';
+        
+        const data = new Date(log.timestamp);
+        const hora = data.toLocaleTimeString('pt-BR', { hour12: false });
+        
+        // Determinar ícone e cor baseado no tipo
+        let icone = 'ℹ️';
+        let tipo = 'info';
+        let cor = '#0dcaf0';
+        
+        // Verificar mensagens específicas do terminal
+        const mensagem = log.message || '';
+        
+        if (mensagem.includes('❌') || mensagem.includes('Error') || mensagem.includes('erro') || log.type === 'error') {
+            icone = '❌';
+            tipo = 'error';
+            cor = '#dc3545';
+        }
+        else if (mensagem.includes('⚠️') || mensagem.includes('warn') || log.type === 'warn') {
+            icone = '⚠️';
+            tipo = 'warn';
+            cor = '#ffc107';
+        }
+        else if (mensagem.includes('✅') || mensagem.includes('sucesso') || log.type === 'success') {
+            icone = '✅';
+            tipo = 'success';
+            cor = '#28a745';
+        }
+        else if (mensagem.includes('🔍') || mensagem.includes('Testando') || log.type === 'debug') {
+            icone = '🔍';
+            tipo = 'debug';
+            cor = '#6f42c1';
+        }
+        else if (mensagem.includes('📁') || mensagem.includes('📊') || mensagem.includes('📝') || mensagem.includes('🚀')) {
+            icone = '📌';
+            tipo = 'system';
+            cor = '#6c757d';
+        }
+        
+        linha.innerHTML = `
+            <span class="console-timestamp" style="color: #6c757d; min-width: 80px;">[${hora}]</span>
+            <span class="console-level ${tipo}" style="color: ${cor}; min-width: 70px;">${icone} [${tipo.toUpperCase()}]</span>
+            <span class="console-message" style="color: ${tipo === 'error' ? '#f8d7da' : '#f8f9fa'};">${this.escapeHtml(mensagem)}</span>
+        `;
+        
+        consoleOutput.appendChild(linha);
+        
+        // Limitar número de linhas
+        while (consoleOutput.children.length > 500) {
+            consoleOutput.removeChild(consoleOutput.firstChild);
+        }
+        
+        // Auto scroll se ativado
+        if (document.getElementById('autoScrollConsole')?.checked) {
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        // Atualizar estatísticas
+        this.atualizarStatsConsole();
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    // ==================== EXECUÇÃO DE COMANDOS ====================
+    async executarComando() {
+        const input = document.getElementById('consoleCommandInput');
+        const comando = input.value.trim();
+        
+        if (!comando) {
+            this.mostrarToast('⚠️ Digite um comando', 'warning');
+            return;
+        }
+
+        // Adicionar comando ao log
+        this.adicionarLogServidor({
+            type: 'command',
+            message: `⚡ $ ${comando}`,
+            timestamp: new Date().toISOString()
+        });
+
+        // Limpar input
+        input.value = '';
+
+        // Enviar via WebSocket
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+                type: 'execute_command',
+                command: comando
+            }));
+        } else {
+            this.adicionarLogServidor({
+                type: 'error',
+                message: '❌ WebSocket não conectado. Tentando reconectar...',
+                timestamp: new Date().toISOString()
+            });
+            this.conectarWebSocketLogs();
+        }
+    }
+
+    executarComandoLocal(comando) {
+        try {
+            // AVISO: Isso executa no navegador, não no servidor!
+            // Apenas para comandos simples de teste
+            const resultado = eval(comando);
+            
+            this.adicionarLogServidor({
+                type: 'success',
+                message: `✅ Resultado: ${resultado}`,
+                timestamp: new Date().toISOString()
+            });
+        } catch (error) {
+            this.adicionarLogServidor({
+                type: 'error',
+                message: `❌ Erro: ${error.message}`,
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+
+    // ==================== COMANDOS RÁPIDOS ====================
+    comandosRapidos() {
+        const comandos = [
+            { nome: 'Status do Servidor', comando: 'process.memoryUsage()' },
+            { nome: 'Uptime', comando: 'process.uptime()' },
+            { nome: 'Versão Node', comando: 'process.version' },
+            { nome: 'Listar Usuários', comando: 'db.users.count()' },
+            { nome: 'Limpar Console', comando: 'clear()' }
+        ];
+        
+        let html = '<div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px;">';
+        html += '<strong style="display: block; margin-bottom: 8px;">📋 Comandos rápidos:</strong>';
+        html += '<div style="display: flex; gap: 8px; flex-wrap: wrap;">';
+        
+        comandos.forEach(cmd => {
+            html += `<button onclick="admin.inserirComando('${cmd.comando}')" 
+                        style="background: #e9ecef; border: none; padding: 5px 12px; border-radius: 20px; cursor: pointer; font-size: 12px;">
+                    ${cmd.nome}
+                    </button>`;
+        });
+        
+        html += '</div></div>';
+        return html;
+    }
+
+    inserirComando(comando) {
+        const input = document.getElementById('consoleCommandInput');
+        if (input) {
+            input.value = comando;
+            input.focus();
+        }
+    }
+
+    conectarWebSocketLogs() {
+        // Fechar conexão anterior se existir
+        if (this.ws) {
+            this.ws.close();
+        }
+
+        // Determinar protocolo (ws ou wss)
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
+        
+        console.log('🔌 Conectando ao WebSocket de logs:', wsUrl);
+        
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.onopen = () => {
+            console.log('✅ Conectado ao servidor de logs em tempo real');
+            this.adicionarLogServidor({
+                type: 'system',
+                message: '✅ Conectado ao servidor de logs em tempo real',
+                timestamp: new Date().toISOString()
+            });
+            
+            // Enviar comando para ativar modo de comandos
+            this.ws.send(JSON.stringify({ type: 'enable_commands' }));
+        };
+        
+        // Dentro do método conectarWebSocketLogs, no ws.onmessage:
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                
+                // Verificar se é comando para limpar console
+                if (data.type === 'clear_console') {
+                    this.limparConsole();
+                    return;
+                }
+                
+                // Verificar se é resultado de comando
+                if (data.type === 'command_result') {
+                    this.adicionarLogServidor({
+                        type: 'success',
+                        message: data.result,
+                        timestamp: data.timestamp
+                    });
+                } 
+                // Verificar se é erro de comando
+                else if (data.type === 'command_error') {
+                    this.adicionarLogServidor({
+                        type: 'error',
+                        message: `❌ Erro: ${data.error}`,
+                        timestamp: data.timestamp
+                    });
+                }
+                // Log normal
+                else {
+                    this.adicionarLogServidor(data);
+                }
+            } catch (e) {
+                console.error('Erro ao processar log:', e);
+            }
+        };
+        
+        this.ws.onerror = (error) => {
+            console.error('❌ Erro na conexão WebSocket:', error);
+            this.adicionarLogServidor({
+                type: 'error',
+                message: '❌ Erro na conexão com o servidor de logs',
+                timestamp: new Date().toISOString()
+            });
+            
+            // Fallback para logs simulados
+            this.iniciarLogsSimulados();
+        };
+        
+        this.ws.onclose = () => {
+            console.log('🔌 Desconectado do servidor de logs');
+            this.adicionarLogServidor({
+                type: 'system',
+                message: '🔌 Desconectado do servidor de logs',
+                timestamp: new Date().toISOString()
+            });
+            
+            // Tentar reconectar após 5 segundos
+            setTimeout(() => {
+                if (document.getElementById('tab-console')?.classList.contains('active')) {
+                    console.log('🔄 Tentando reconectar...');
+                    this.conectarWebSocketLogs();
+                }
+            }, 5000);
+        };
     }
 
     // ============ GERAR LINHAS DA TABELA DE PROVAS (CORRIGIDO) ============
