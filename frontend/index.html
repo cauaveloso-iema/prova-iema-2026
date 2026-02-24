@@ -1155,6 +1155,426 @@
     <i class="fas fa-arrow-down"></i>
 </button>
 
+<!-- ===== SISTEMA DE NOTIFICAÇÕES (SCRIPT) ===== -->
+<script>
+// ============================================
+// SISTEMA DE NOTIFICAÇÕES DO PROFESSOR
+// ============================================
+let notificacoesInterval;
+
+// Iniciar notificações quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    iniciarNotificacoes();
+    
+    // Fechar dropdown ao clicar fora
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('notificacoesDropdown');
+        const btn = document.getElementById('notificacoesBtn');
+        
+        if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+});
+
+function iniciarNotificacoes() {
+    carregarNotificacoes();
+    // Atualizar a cada 30 segundos
+    notificacoesInterval = setInterval(carregarNotificacoes, 30000);
+}
+
+function pararNotificacoes() {
+    if (notificacoesInterval) {
+        clearInterval(notificacoesInterval);
+    }
+}
+
+async function carregarNotificacoes() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        // Carregar contador
+        const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const countData = await countResponse.json();
+        
+        if (countData.success) {
+            const badge = document.getElementById('notificacoesBadge');
+            if (countData.count > 0) {
+                badge.textContent = countData.count > 99 ? '99+' : countData.count;
+                badge.style.display = 'inline';
+                
+                // Adicionar classe de destaque ao botão
+                document.getElementById('notificacoesBtn').classList.add('tem-notificacao');
+            } else {
+                badge.style.display = 'none';
+                document.getElementById('notificacoesBtn').classList.remove('tem-notificacao');
+            }
+        }
+        
+        // Se o dropdown estiver aberto, carregar lista completa
+        const dropdown = document.getElementById('notificacoesDropdown');
+        if (dropdown && dropdown.classList.contains('show')) {
+            await carregarListaNotificacoes();
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar notificações:', error);
+    }
+}
+
+async function carregarListaNotificacoes() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            renderizarNotificacoes(data.notificacoes);
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar lista:', error);
+    }
+}
+
+function renderizarNotificacoes(notificacoes) {
+    const lista = document.getElementById('notificacoesLista');
+    if (!lista) return;
+    
+    // Verificar se é admin
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    const isAdmin = userData.role === 'admin' || userData.role === 'super_admin';
+    
+    if (notificacoes.length === 0) {
+        lista.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                <p style="font-size: 1rem;">Nenhuma notificação</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    notificacoes.forEach(notif => {
+        const data = new Date(notif.createdAt);
+        const agora = new Date();
+        const diffMs = agora - data;
+        const diffMin = Math.floor(diffMs / 60000);
+        const diffHr = Math.floor(diffMs / 3600000);
+        const diffDia = Math.floor(diffMs / 86400000);
+        
+        let tempoTexto;
+        if (diffMin < 1) tempoTexto = 'agora mesmo';
+        else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+        else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
+        else tempoTexto = `há ${diffDia} d`;
+        
+        const classeLida = notif.lida ? '' : 'nao-lida';
+        
+        html += `
+            <div class="notificacao-item ${classeLida}" style="position: relative; padding-right: ${isAdmin ? '40px' : '15px'};">
+                <div onclick="abrirNotificacao('${notif._id}', '${notif.link || '#'}')" style="display: flex; gap: 12px; flex: 1; cursor: pointer;">
+                    <div class="notificacao-icone" style="background: ${notif.cor || '#0d6efd'};">
+                        ${notif.icone || '📋'}
+                    </div>
+                    <div class="notificacao-conteudo">
+                        <div class="notificacao-titulo">${notif.titulo}</div>
+                        <div class="notificacao-mensagem">${notif.mensagem}</div>
+                        <div class="notificacao-tempo">
+                            <i class="far fa-clock"></i> ${tempoTexto}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- BOTÃO EXCLUIR (APARECE APENAS PARA ADMIN) -->
+                ${isAdmin ? `
+                <button onclick="if(window.admin) admin.excluirNotificacao('${notif._id}')" style="
+                    position: absolute;
+                    top: 50%;
+                    right: 10px;
+                    transform: translateY(-50%);
+                    background: #fee2e2;
+                    color: #dc2626;
+                    border: none;
+                    border-radius: 6px;
+                    width: 30px;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    font-size: 1rem;
+                    opacity: 0.6;
+                    transition: all 0.2s;
+                " onmouseover="this.style.opacity='1'; this.style.background='#fecaca'" 
+                   onmouseout="this.style.opacity='0.6'; this.style.background='#fee2e2'"
+                   title="Excluir notificação">
+                    <i class="fas fa-trash"></i>
+                </button>
+                ` : ''}
+            </div>
+        `;
+    });
+    
+    lista.innerHTML = html;
+}
+
+async function limparMinhasNotificacoes() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        const confirmacao = confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+        
+        if (!confirmacao) return;
+        
+        // Mostrar loading no botão
+        const btn = event?.currentTarget;
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+            btn.disabled = true;
+        }
+        
+        const response = await fetch('/api/notificacoes/limpar-minhas', {
+            method: 'DELETE',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Recarregar lista
+            await carregarListaNotificacoes();
+            
+            // Atualizar badge
+            document.getElementById('notificacoesBadge').style.display = 'none';
+            document.getElementById('notificacoesBtn').classList.remove('tem-notificacao');
+            
+            // Mostrar mensagem
+            alert(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`);
+            
+        } else {
+            throw new Error(data.error || 'Erro ao excluir notificações');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        alert('❌ ' + error.message);
+    } finally {
+        // Restaurar botão
+        const btn = document.querySelector('.notificacao-footer button');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-trash"></i> Limpar todas';
+            btn.disabled = false;
+        }
+    }
+}
+
+function abrirNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    dropdown.classList.toggle('show');
+    
+    if (dropdown.classList.contains('show')) {
+        carregarListaNotificacoes();
+    }
+}
+
+async function abrirNotificacao(id, link) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        await fetch(`/api/notificacoes/${id}/lida`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        document.getElementById('notificacoesDropdown').classList.remove('show');
+        
+        if (link && link !== '#') {
+            window.location.href = link;
+        }
+        
+        carregarNotificacoes();
+        
+    } catch (error) {
+        console.error('Erro ao abrir notificação:', error);
+    }
+}
+
+async function marcarTodasLidas() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            await carregarListaNotificacoes();
+            document.getElementById('notificacoesBadge').style.display = 'none';
+            document.getElementById('notificacoesBtn').classList.remove('tem-notificacao');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao marcar todas como lidas:', error);
+    }
+}
+
+// ============ FUNÇÃO PARA VER TODAS AS NOTIFICAÇÕES ============
+function verTodasNotificacoes(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    console.log('🔍 Redirecionando para página de notificações...');
+    
+    // Verificar se o usuário é aluno ou professor e redirecionar para a mesma página
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    const role = userData.role || 'aluno';
+    
+    // Para qualquer usuário, usar a mesma página de notificações
+    window.location.href = 'notificacoes.html';
+}
+
+// Parar quando sair da página
+window.addEventListener('beforeunload', function() {
+    if (notificacoesInterval) {
+        clearInterval(notificacoesInterval);
+    }
+});
+
+// Adicionar estilos CSS
+const style = document.createElement('style');
+style.textContent = `
+.notificacoes-container {
+    position: relative;
+    display: inline-block;
+}
+
+.notificacoes-btn:hover {
+    background: #e5e7eb !important;
+    color: #4f46e5 !important;
+}
+
+.notificacoes-btn.tem-notificacao {
+    animation: pulse-notification 2s infinite;
+}
+
+@keyframes pulse-notification {
+    0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+}
+
+.notificacoes-dropdown.show {
+    display: block !important;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.notificacao-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    gap: 12px;
+    background: white;
+}
+
+.notificacao-item:hover {
+    background: #f1f5f9;
+    transform: translateX(5px);
+}
+
+.notificacao-item.nao-lida {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+}
+
+.notificacao-icone {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+.notificacao-conteudo {
+    flex: 1;
+}
+
+.notificacao-titulo {
+    font-weight: 600;
+    margin-bottom: 3px;
+    font-size: 0.9rem;
+    color: #1f2937;
+}
+
+.notificacao-mensagem {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.notificacao-tempo {
+    font-size: 0.65rem;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.notificacao-footer {
+    padding: 10px 15px;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+}
+
+.notificacao-footer a {
+    color: #667eea;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.notificacao-footer a:hover {
+    color: #764ba2;
+}
+`;
+document.head.appendChild(style);
+</script>
+
 <style>
 /* Animação de pulso para a seta */
 @keyframes pulse {
@@ -1292,7 +1712,7 @@ window.addEventListener('scroll', function() {
                 <p class="header-subtitle">Gerencie suas provas, turmas e resultados de forma eficiente</p>
             </div>
             
-            <!-- Tabs de Navegação -->
+            <!-- Tabs de Navegação (MANTIDAS IGUAIS) -->
             <div class="content-tabs">
                 <button class="content-tab active" onclick="mostrarTab('nova-prova')">
                     <i class="fas fa-plus-circle"></i> Nova Prova
@@ -1309,6 +1729,137 @@ window.addEventListener('scroll', function() {
                 <button class="content-tab" onclick="mostrarTab('resultados-gerais')">
                     <i class="fas fa-chart-bar"></i> Resultados
                 </button>
+            </div>
+
+            <!-- NOTIFICAÇÕES POSICIONADAS NO CANTO SUPERIOR DIREITO (fora do fluxo) -->
+            <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
+                <div class="notificacoes-container">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" style="
+                        background: #4f46e5;
+                        border: 2px solid white;
+                        border-radius: 50%;
+                        width: 48px;
+                        height: 48px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        color: white;
+                        font-size: 1.2rem;
+                        position: relative;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    ">
+                        <i class="fas fa-bell"></i>
+                        <span class="notificacoes-badge" id="notificacoesBadge" style="
+                            position: absolute;
+                            top: -5px;
+                            right: -5px;
+                            background: #dc3545;
+                            color: white;
+                            font-size: 0.7rem;
+                            font-weight: bold;
+                            padding: 2px 6px;
+                            border-radius: 12px;
+                            min-width: 20px;
+                            text-align: center;
+                            border: 2px solid white;
+                            display: none;
+                        ">0</span>
+                    </button>
+                    
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown" style="
+                        position: absolute;
+                        top: 60px;
+                        right: 0;
+                        width: 380px;
+                        background: white;
+                        border-radius: 16px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        display: none;
+                        z-index: 10000;
+                        overflow: hidden;
+                        border: 1px solid #e5e7eb;
+                    ">
+                        <div class="notificacoes-header" style="
+                            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                            color: white;
+                            padding: 18px 20px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        ">
+                            <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-bell"></i> Notificações
+                            </h3>
+                            <button onclick="marcarTodasLidas()" class="btn-marcar-todas" style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 6px 12px;
+                                border-radius: 20px;
+                                font-size: 0.8rem;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 5px;
+                                border: none;
+                            ">
+                                <i class="fas fa-check-double"></i> Marcar todas
+                            </button>
+                        </div>
+                        
+                        <div class="notificacoes-lista" id="notificacoesLista" style="
+                            max-height: 400px;
+                            overflow-y: auto;
+                            background: #f8fafc;
+                        ">
+                            <!-- Notificações serão inseridas aqui -->
+                            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                                <p style="font-size: 1rem;">Carregando notificações...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- RODAPÉ DO DROPDOWN COM DOIS BOTÕES -->
+                        <div class="notificacao-footer" style="
+                            padding: 12px 20px;
+                            background: white;
+                            border-top: 1px solid #e5e7eb;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        ">
+                            <a href="#" onclick="verTodasNotificacoes(event)" style="
+                                color: #4f46e5;
+                                text-decoration: none;
+                                font-size: 0.9rem;
+                                font-weight: 500;
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 5px;
+                            ">
+                                <i class="fas fa-eye"></i> Ver todas
+                            </a>
+                            
+                            <!-- BOTÃO LIMPAR TODAS -->
+                            <button onclick="limparMinhasNotificacoes()" style="
+                                background: none;
+                                border: none;
+                                color: #dc2626;
+                                font-size: 0.9rem;
+                                font-weight: 500;
+                                cursor: pointer;
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 5px;
+                                padding: 0;
+                            ">
+                                <i class="fas fa-trash"></i> Limpar todas
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Conteúdo da Aba Nova Prova -->

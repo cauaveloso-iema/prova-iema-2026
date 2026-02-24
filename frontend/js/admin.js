@@ -5863,6 +5863,1795 @@ class AdminPanel {
         }
     }
 
+        // ============================================================================
+        // MÓDULO DE RESULTADOS - ADMIN (VERSÃO CORRIGIDA)
+        // ============================================================================
+
+        async loadResultados() {
+            const contentArea = document.getElementById('contentArea');
+            
+            contentArea.innerHTML = `
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Carregando resultados...</p>
+                </div>
+                <style>
+                    .loading-spinner { text-align: center; padding: 60px; background: white; border-radius: 12px; }
+                    .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; margin: 0 auto 15px; animation: spin 1s linear infinite; }
+                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                </style>
+            `;
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Buscar TODOS os resultados (nova rota)
+                const response = await fetch('/api/admin/todos-resultados', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+                
+                console.log('📊 Todos os resultados:', data);
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao carregar resultados');
+                }
+
+                if (data.resultados.length === 0) {
+                    contentArea.innerHTML = this.renderSemResultados();
+                    return;
+                }
+
+                // Usar os resultados e estatísticas diretamente da API
+                const resultados = data.resultados;
+                const estatisticas = data.estatisticas || {
+                    total: resultados.length,
+                    comNota: resultados.filter(r => r.nota !== null && r.nota !== undefined).length,
+                    semNota: resultados.filter(r => r.nota === null || r.nota === undefined).length,
+                    aprovados: resultados.filter(r => r.nota && r.nota >= 7).length,
+                    reprovados: resultados.filter(r => r.nota && r.nota < 7).length,
+                    pendentes: resultados.filter(r => !r.nota).length,
+                    totalResultados: resultados.length,
+                    totalAlunos: new Set(resultados.map(r => r.alunoId)).size,
+                    totalProvas: new Set(resultados.map(r => r.provaId)).size,
+                    mediaGeral: (resultados.filter(r => r.nota).reduce((acc, r) => acc + r.nota, 0) / (resultados.filter(r => r.nota).length || 1)).toFixed(2),
+                    taxaAprovacao: ((resultados.filter(r => r.nota && r.nota >= 7).length / (resultados.filter(r => r.nota).length || 1)) * 100).toFixed(1)
+                };
+
+                // Preparar dados para gráficos
+                const dadosGraficos = this.prepararDadosGraficos(resultados);
+                
+                // Renderizar a página com os resultados
+                contentArea.innerHTML = this.renderResultadosCompleto(resultados, estatisticas);
+
+                // Renderizar a tabela e gráficos
+                setTimeout(() => {
+                    this.renderTabelaResultados(resultados);
+                    this.inicializarGraficosResultados(dadosGraficos);
+                    this.configurarEventosResultados();
+                }, 100);
+
+            } catch (error) {
+                console.error('❌ Erro ao carregar resultados:', error);
+                contentArea.innerHTML = this.renderErro(error);
+            }
+        }
+
+        processarResultadosReais(dashboardData, provasData, alunosData, resultadosAPI) {
+            const resultados = [];
+            const alunosMap = new Map();
+            const provasMap = new Map();
+            
+            // Mapear alunos com dados COMPLETOS
+            if (alunosData?.success && alunosData.usuarios) {
+                alunosData.usuarios.forEach(aluno => {
+                    alunosMap.set(aluno._id, {
+                        id: aluno._id,
+                        nome: aluno.nome || 'Aluno',
+                        email: aluno.email || '',
+                        matricula: aluno.matricula || '',
+                        turma: aluno.turma || '',
+                        curso: aluno.curso || ''
+                    });
+                });
+            }
+
+            // Mapear provas
+            if (provasData?.success && provasData.provas) {
+                provasData.provas.forEach(prova => {
+                    provasMap.set(prova.id, {
+                        id: prova.id,
+                        titulo: prova.titulo || 'Prova',
+                        disciplina: prova.disciplina || '',
+                        turma: prova.turma?.nome || ''
+                    });
+                });
+            }
+
+            // 1. Processar resultados da API de resultados (dados mais completos)
+            if (resultadosAPI?.success && resultadosAPI.resultados) {
+                resultadosAPI.resultados.forEach(r => {
+                    const aluno = alunosMap.get(r.alunoId) || {};
+                    const prova = provasMap.get(r.provaId) || {};
+                    
+                    // Determinar status baseado na nota
+                    let status = 'pendente';
+                    if (r.nota !== null && r.nota !== undefined) {
+                        status = r.nota >= 7 ? 'aprovado' : 'reprovado';
+                    }
+                    
+                    resultados.push({
+                        id: r.id || r._id || `res-${Date.now()}-${Math.random()}`,
+                        tipo: 'individual',
+                        alunoId: r.alunoId,
+                        alunoNome: r.alunoNome || aluno.nome || 'Aluno',
+                        alunoEmail: r.alunoEmail || aluno.email || '',
+                        alunoMatricula: aluno.matricula || '',
+                        alunoTurma: r.turmaNome || prova.turma || aluno.turma || '',
+                        alunoCurso: aluno.curso || '',
+                        provaId: r.provaId,
+                        provaTitulo: r.provaTitulo || prova.titulo || 'Prova',
+                        dataRealizacao: r.dataEntrega || r.dataRealizacao || r.createdAt,
+                        nota: r.nota !== undefined ? parseFloat(r.nota) : null,
+                        acertos: r.acertos || 0,
+                        total: r.total || 0,
+                        tempoGasto: r.tempoGasto || 0,
+                        status: status,
+                        resultadoDetalhado: r.resultadoDetalhado || [],
+                        observacoes: r.observacoes || '',
+                        corrigidoPor: r.corrigidoPor || null,
+                        dataCorrecao: r.dataCorrecao || null
+                    });
+                });
+            }
+
+            // 2. Processar atividades do dashboard (para complementar)
+            if (dashboardData?.data?.atividadesRecentes) {
+                dashboardData.data.atividadesRecentes.forEach(ativ => {
+                    if (ativ.tipo === 'resultado') {
+                        // Verificar se já existe este resultado
+                        const existe = resultados.some(r => 
+                            r.alunoNome === ativ.usuario && 
+                            r.provaTitulo === ativ.prova &&
+                            new Date(r.dataRealizacao).toDateString() === new Date(ativ.data).toDateString()
+                        );
+
+                        if (!existe) {
+                            const aluno = alunosMap.get(ativ.usuarioId) || {};
+                            
+                            // Determinar status baseado na nota
+                            let status = 'pendente';
+                            if (ativ.nota !== null && ativ.nota !== undefined) {
+                                status = ativ.nota >= 7 ? 'aprovado' : 'reprovado';
+                            }
+                            
+                            resultados.push({
+                                id: ativ.id || `ativ-${Date.now()}-${Math.random()}`,
+                                tipo: 'individual',
+                                alunoId: ativ.usuarioId,
+                                alunoNome: ativ.usuario || aluno.nome || 'Aluno',
+                                alunoEmail: aluno.email || '',
+                                alunoMatricula: aluno.matricula || '',
+                                alunoTurma: aluno.turma || '',
+                                alunoCurso: aluno.curso || '',
+                                provaId: ativ.provaId,
+                                provaTitulo: ativ.prova || 'Prova',
+                                dataRealizacao: ativ.data,
+                                nota: ativ.nota !== undefined ? parseFloat(ativ.nota) : null,
+                                acertos: ativ.acertos || 0,
+                                total: ativ.total || 0,
+                                tempoGasto: ativ.tempoGasto || 0,
+                                status: status,
+                                acao: ativ.acao || 'finalizou a prova',
+                                resultadoDetalhado: ativ.resultadoDetalhado || [],
+                                observacoes: ativ.observacoes || ''
+                            });
+                        }
+                    }
+                });
+            }
+
+            // Ordenar por data (mais recentes primeiro)
+            return resultados.sort((a, b) => new Date(b.dataRealizacao) - new Date(a.dataRealizacao));
+        }
+
+        calcularEstatisticasReais(resultados) {
+            const individuais = resultados.filter(r => r.tipo === 'individual');
+            
+            let somaNotas = 0;
+            let totalNotas = 0;
+            let aprovados = 0;
+            let reprovados = 0;
+            let pendentes = 0;
+            const notas = [];
+            const tempos = [];
+            
+            individuais.forEach(r => {
+                if (r.nota !== null && r.nota !== undefined) {
+                    somaNotas += r.nota;
+                    totalNotas++;
+                    notas.push(r.nota);
+                    if (r.nota >= 7) {
+                        aprovados++;
+                    } else {
+                        reprovados++;
+                    }
+                } else {
+                    pendentes++;
+                }
+                if (r.tempoGasto) {
+                    tempos.push(r.tempoGasto);
+                }
+            });
+
+            // Calcular mediana das notas
+            const notasOrdenadas = [...notas].sort((a, b) => a - b);
+            const mediana = notasOrdenadas.length > 0 
+                ? notasOrdenadas.length % 2 === 0
+                    ? (notasOrdenadas[notasOrdenadas.length/2 - 1] + notasOrdenadas[notasOrdenadas.length/2]) / 2
+                    : notasOrdenadas[Math.floor(notasOrdenadas.length/2)]
+                : 0;
+
+            // Calcular tempo médio
+            const tempoMedio = tempos.length > 0 
+                ? tempos.reduce((a, b) => a + b, 0) / tempos.length 
+                : 0;
+
+            return {
+                totalResultados: individuais.length,
+                totalAlunos: new Set(individuais.map(r => r.alunoId)).size,
+                totalProvas: new Set(individuais.map(r => r.provaId)).size,
+                mediaGeral: totalNotas > 0 ? (somaNotas / totalNotas).toFixed(2) : '0.00',
+                mediana: mediana.toFixed(2),
+                tempoMedio: Math.round(tempoMedio / 60),
+                aprovados,
+                reprovados,
+                pendentes,
+                taxaAprovacao: totalNotas > 0 ? ((aprovados / totalNotas) * 100).toFixed(1) : '0.0',
+                maiorNota: notas.length > 0 ? Math.max(...notas).toFixed(2) : '0.00',
+                menorNota: notas.length > 0 ? Math.min(...notas).toFixed(2) : '0.00'
+            };
+        }
+
+        prepararDadosGraficos(resultados) {
+            // Resultados por prova
+            const provasMap = new Map();
+            resultados.forEach(r => {
+                if (!provasMap.has(r.provaTitulo)) {
+                    provasMap.set(r.provaTitulo, 0);
+                }
+                provasMap.set(r.provaTitulo, provasMap.get(r.provaTitulo) + 1);
+            });
+
+            const provasArray = Array.from(provasMap.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8);
+
+            // Resultados por dia (últimos 7 dias)
+            const ultimos7Dias = [];
+            const hoje = new Date();
+            for (let i = 6; i >= 0; i--) {
+                const data = new Date(hoje);
+                data.setDate(data.getDate() - i);
+                ultimos7Dias.push(data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+            }
+
+            const resultadosPorDia = Array(7).fill(0);
+            resultados.forEach(r => {
+                const dataR = new Date(r.dataRealizacao);
+                const diffDias = Math.floor((hoje - dataR) / (1000 * 60 * 60 * 24));
+                if (diffDias >= 0 && diffDias < 7) {
+                    resultadosPorDia[6 - diffDias]++;
+                }
+            });
+
+            return {
+                provas: {
+                    labels: provasArray.map(p => p[0].length > 20 ? p[0].substring(0, 17) + '...' : p[0]),
+                    dados: provasArray.map(p => p[1])
+                },
+                evolucao: {
+                    labels: ultimos7Dias,
+                    dados: resultadosPorDia
+                }
+            };
+        }
+
+        renderResultadosCompleto(resultados, estatisticas) {
+            return `
+                <div class="resultados-container">
+                    <!-- HEADER PROFISSIONAL -->
+                    <div class="resultados-header">
+                        <div class="header-left">
+                            <i class="fas fa-chart-line"></i>
+                            <div>
+                                <h2>Gestão de Resultados</h2>
+                                <p>${resultados.length} ${resultados.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}</p>
+                            </div>
+                        </div>
+                        <div class="header-actions">
+                            <button class="btn-header" onclick="admin.exportarResultadosPDF()" title="Exportar PDF">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </button>
+                            <button class="btn-header" onclick="admin.exportarResultadosCSV()" title="Exportar CSV">
+                                <i class="fas fa-file-csv"></i> CSV
+                            </button>
+                            <button class="btn-header refresh" onclick="admin.loadResultados()" title="Atualizar">
+                                <i class="fas fa-sync-alt"></i> Atualizar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CARDS DE ESTATÍSTICAS AVANÇADAS -->
+                    <div class="stats-grid">
+                        <div class="stat-card primary" onclick="admin.filtrarPorStatus('todos')">
+                            <div class="stat-icon">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>Total de Resultados</h3>
+                                <div class="stat-number">${estatisticas.totalResultados || estatisticas.total}</div>
+                                <div class="stat-details">
+                                    <span><i class="fas fa-users"></i> ${estatisticas.totalAlunos || 0} alunos</span>
+                                    <span><i class="fas fa-tasks"></i> ${estatisticas.totalProvas || 0} provas</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stat-card success" onclick="admin.filtrarPorStatus('aprovado')">
+                            <div class="stat-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>Aprovados</h3>
+                                <div class="stat-number">${estatisticas.aprovados || 0}</div>
+                                <div class="stat-details">
+                                    <span><i class="fas fa-percent"></i> ${estatisticas.taxaAprovacao || 0}%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stat-card danger" onclick="admin.filtrarPorStatus('reprovado')">
+                            <div class="stat-icon">
+                                <i class="fas fa-times-circle"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>Reprovados</h3>
+                                <div class="stat-number">${estatisticas.reprovados || 0}</div>
+                                <div class="stat-details">
+                                    <span><i class="fas fa-chart-line"></i> Média: ${estatisticas.mediaGeral || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stat-card warning" onclick="admin.filtrarPorStatus('pendente')">
+                            <div class="stat-icon">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>Pendentes</h3>
+                                <div class="stat-number">${estatisticas.pendentes || 0}</div>
+                                <div class="stat-details">
+                                    <span><i class="fas fa-hourglass-half"></i> aguardando correção</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GRÁFICOS -->
+                    <div class="charts-row">
+                        <div class="chart-card">
+                            <h3><i class="fas fa-chart-bar"></i> Resultados por Prova</h3>
+                            <canvas id="graficoProvas" style="width: 100%; height: 250px;"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3><i class="fas fa-chart-line"></i> Atividades nos Últimos 7 Dias</h3>
+                            <canvas id="graficoEvolucao" style="width: 100%; height: 250px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- FILTROS AVANÇADOS -->
+                    <div class="filters-card">
+                        <div class="filters-row">
+                            <div class="filter-group">
+                                <label><i class="fas fa-search"></i> Buscar</label>
+                                <input type="text" id="searchResultados" placeholder="Aluno, prova, turma, email..." 
+                                    class="filter-input" onkeyup="admin.filtrarTabelaResultados()">
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-filter"></i> Status</label>
+                                <select id="filtroStatus" class="filter-select" onchange="admin.filtrarTabelaResultados()">
+                                    <option value="todos">Todos</option>
+                                    <option value="aprovado">Aprovados (≥7)</option>
+                                    <option value="reprovado">Reprovados (<7)</option>
+                                    <option value="pendente">Pendentes</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-calendar"></i> Período</label>
+                                <select id="filtroPeriodo" class="filter-select" onchange="admin.filtrarTabelaResultados()">
+                                    <option value="todos">Todos</option>
+                                    <option value="hoje">Hoje</option>
+                                    <option value="semana">Esta semana</option>
+                                    <option value="mes">Este mês</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-sort"></i> Ordenar</label>
+                                <select id="filtroOrdenacao" class="filter-select" onchange="admin.ordenarResultados()">
+                                    <option value="data_desc">Mais recentes</option>
+                                    <option value="data_asc">Mais antigos</option>
+                                    <option value="nome_asc">Aluno (A-Z)</option>
+                                    <option value="nome_desc">Aluno (Z-A)</option>
+                                    <option value="nota_desc">Maior nota</option>
+                                    <option value="nota_asc">Menor nota</option>
+                                </select>
+                            </div>
+                            <button class="btn-clear-filters" onclick="admin.limparFiltros()" title="Limpar filtros">
+                                <i class="fas fa-eraser"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TABELA DE RESULTADOS COM AÇÕES -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3><i class="fas fa-list"></i> Lista de Resultados</h3>
+                            <div class="table-info">
+                                <span id="resultadosCount">${resultados.length}</span> registros
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Aluno</th>
+                                        <th>Email</th>
+                                        <th>Prova</th>
+                                        <th>Turma</th>
+                                        <th>Data</th>
+                                        <th>Nota</th>
+                                        <th>Acertos</th>
+                                        <th>Tempo</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaResultadosBody"></tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- PAGINAÇÃO -->
+                        <div class="pagination-container" id="paginacao">
+                            <button class="btn-pagination" onclick="admin.paginaAnterior()" id="btnAnterior" disabled>
+                                <i class="fas fa-chevron-left"></i> Anterior
+                            </button>
+                            <span class="page-info" id="pageInfo">Página 1 de 1</span>
+                            <button class="btn-pagination" onclick="admin.proximaPagina()" id="btnProxima" disabled>
+                                Próxima <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <style>
+                    .resultados-container {
+                        padding: 20px;
+                        max-width: 1400px;
+                        margin: 0 auto;
+                        font-family: 'Inter', -apple-system, sans-serif;
+                    }
+
+                    .resultados-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 25px;
+                        background: white;
+                        padding: 20px 25px;
+                        border-radius: 16px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    }
+
+                    .header-left {
+                        display: flex;
+                        align-items: center;
+                        gap: 15px;
+                    }
+
+                    .header-left i {
+                        font-size: 32px;
+                        color: #0d6efd;
+                        background: #e7f3ff;
+                        padding: 12px;
+                        border-radius: 12px;
+                    }
+
+                    .header-left h2 {
+                        margin: 0;
+                        font-size: 20px;
+                        color: #212529;
+                    }
+
+                    .header-left p {
+                        margin: 5px 0 0;
+                        color: #6c757d;
+                        font-size: 13px;
+                    }
+
+                    .header-actions {
+                        display: flex;
+                        gap: 10px;
+                    }
+
+                    .btn-header {
+                        padding: 8px 16px;
+                        border: 1px solid #dee2e6;
+                        background: white;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        font-size: 13px;
+                        transition: all 0.3s;
+                    }
+
+                    .btn-header:hover {
+                        background: #f8f9fa;
+                        border-color: #0d6efd;
+                        color: #0d6efd;
+                    }
+
+                    .btn-header.refresh {
+                        background: #0d6efd;
+                        border-color: #0d6efd;
+                        color: white;
+                    }
+
+                    .btn-header.refresh:hover {
+                        background: #0b5ed7;
+                    }
+
+                    .stats-grid {
+                        display: grid;
+                        grid-template-columns: repeat(4, 1fr);
+                        gap: 20px;
+                        margin-bottom: 25px;
+                    }
+
+                    .stat-card {
+                        background: white;
+                        border-radius: 16px;
+                        padding: 20px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                        display: flex;
+                        align-items: center;
+                        gap: 20px;
+                        transition: all 0.3s;
+                        cursor: pointer;
+                    }
+
+                    .stat-card:hover {
+                        transform: translateY(-4px);
+                        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+                    }
+
+                    .stat-card.primary .stat-icon { background: linear-gradient(135deg, #0d6efd, #0b5ed7); }
+                    .stat-card.success .stat-icon { background: linear-gradient(135deg, #198754, #157347); }
+                    .stat-card.danger .stat-icon { background: linear-gradient(135deg, #dc3545, #bb2d3b); }
+                    .stat-card.warning .stat-icon { background: linear-gradient(135deg, #ffc107, #ffb300); }
+
+                    .stat-icon {
+                        width: 60px;
+                        height: 60px;
+                        border-radius: 16px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 28px;
+                        color: white;
+                    }
+
+                    .stat-content h3 {
+                        font-size: 14px;
+                        color: #6c757d;
+                        margin-bottom: 5px;
+                    }
+
+                    .stat-number {
+                        font-size: 28px;
+                        font-weight: 700;
+                        color: #212529;
+                        line-height: 1.2;
+                    }
+
+                    .stat-details {
+                        display: flex;
+                        gap: 12px;
+                        margin-top: 5px;
+                        font-size: 12px;
+                        color: #6c757d;
+                    }
+
+                    .charts-row {
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 20px;
+                        margin-bottom: 25px;
+                    }
+
+                    .chart-card {
+                        background: white;
+                        border-radius: 16px;
+                        padding: 20px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    }
+
+                    .chart-card h3 {
+                        margin: 0 0 15px;
+                        font-size: 16px;
+                        color: #495057;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+
+                    .filters-card {
+                        background: white;
+                        border-radius: 16px;
+                        padding: 20px;
+                        margin-bottom: 25px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    }
+
+                    .filters-row {
+                        display: flex;
+                        gap: 15px;
+                        flex-wrap: wrap;
+                        align-items: flex-end;
+                    }
+
+                    .filter-group {
+                        flex: 1;
+                        min-width: 150px;
+                    }
+
+                    .filter-group label {
+                        display: block;
+                        font-size: 12px;
+                        color: #6c757d;
+                        margin-bottom: 5px;
+                    }
+
+                    .filter-input, .filter-select {
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #dee2e6;
+                        border-radius: 8px;
+                        font-size: 13px;
+                        transition: all 0.3s;
+                    }
+
+                    .filter-input:focus, .filter-select:focus {
+                        outline: none;
+                        border-color: #0d6efd;
+                        box-shadow: 0 0 0 3px rgba(13,110,253,0.1);
+                    }
+
+                    .btn-clear-filters {
+                        padding: 8px 16px;
+                        background: #6c757d;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 13px;
+                        display: flex;
+                        align-items: center;
+                        gap: 5px;
+                        height: 38px;
+                    }
+
+                    .btn-clear-filters:hover {
+                        background: #5a6268;
+                    }
+
+                    .table-container {
+                        background: white;
+                        border-radius: 16px;
+                        padding: 20px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    }
+
+                    .table-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 15px;
+                    }
+
+                    .table-header h3 {
+                        margin: 0;
+                        font-size: 16px;
+                        color: #495057;
+                    }
+
+                    .table-info {
+                        color: #6c757d;
+                        font-size: 13px;
+                    }
+
+                    .data-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                    }
+
+                    .data-table th {
+                        background: #f8f9fa;
+                        padding: 12px 16px;
+                        text-align: left;
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #495057;
+                        border-bottom: 2px solid #dee2e6;
+                    }
+
+                    .data-table td {
+                        padding: 12px 16px;
+                        border-bottom: 1px solid #e9ecef;
+                        font-size: 13px;
+                        vertical-align: middle;
+                    }
+
+                    .data-table tr:hover td {
+                        background: #f8f9fa;
+                    }
+
+                    .status-badge {
+                        padding: 4px 10px;
+                        border-radius: 30px;
+                        font-size: 11px;
+                        font-weight: 600;
+                        display: inline-block;
+                    }
+
+                    .status-aprovado {
+                        background: #d4edda;
+                        color: #155724;
+                    }
+
+                    .status-reprovado {
+                        background: #f8d7da;
+                        color: #721c24;
+                    }
+
+                    .status-pendente {
+                        background: #fff3cd;
+                        color: #856404;
+                    }
+
+                    .nota-alta {
+                        color: #28a745;
+                        font-weight: 600;
+                    }
+
+                    .nota-baixa {
+                        color: #dc3545;
+                        font-weight: 600;
+                    }
+
+                    .action-buttons {
+                        display: flex;
+                        gap: 5px;
+                    }
+
+                    .btn-icon {
+                        width: 32px;
+                        height: 32px;
+                        border: none;
+                        border-radius: 6px;
+                        background: transparent;
+                        color: #6c757d;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: all 0.2s;
+                    }
+
+                    .btn-icon:hover {
+                        background: #e9ecef;
+                        color: #0d6efd;
+                    }
+
+                    .btn-icon.edit:hover {
+                        color: #ffc107;
+                    }
+
+                    .btn-icon.delete:hover {
+                        color: #dc3545;
+                    }
+
+                    .pagination-container {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        gap: 15px;
+                        margin-top: 20px;
+                        padding-top: 20px;
+                        border-top: 1px solid #e9ecef;
+                    }
+
+                    .btn-pagination {
+                        padding: 8px 16px;
+                        border: 1px solid #dee2e6;
+                        background: white;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 5px;
+                        font-size: 13px;
+                        transition: all 0.3s;
+                    }
+
+                    .btn-pagination:hover:not(:disabled) {
+                        background: #e9ecef;
+                        border-color: #0d6efd;
+                        color: #0d6efd;
+                    }
+
+                    .btn-pagination:disabled {
+                        opacity: 0.5;
+                        cursor: not-allowed;
+                    }
+
+                    .page-info {
+                        font-size: 13px;
+                        color: #6c757d;
+                    }
+
+                    @media (max-width: 1200px) {
+                        .stats-grid {
+                            grid-template-columns: repeat(2, 1fr);
+                        }
+                    }
+
+                    @media (max-width: 768px) {
+                        .stats-grid {
+                            grid-template-columns: 1fr;
+                        }
+                        .charts-row {
+                            grid-template-columns: 1fr;
+                        }
+                        .filters-row {
+                            flex-direction: column;
+                        }
+                        .filter-group {
+                            width: 100%;
+                        }
+                        .resultados-header {
+                            flex-direction: column;
+                            gap: 15px;
+                            align-items: flex-start;
+                        }
+                    }
+                </style>
+            `;
+        }
+
+        renderTabelaResultados(resultados) {
+            const tbody = document.getElementById('tabelaResultadosBody');
+            if (!tbody) return;
+
+            this.resultadosCompletos = resultados;
+            this.paginaAtual = 1;
+            this.itensPorPagina = 15;
+            this.resultadosFiltrados = resultados;
+            
+            this.atualizarTabelaPaginada();
+        }
+
+        atualizarTabelaPaginada() {
+            const tbody = document.getElementById('tabelaResultadosBody');
+            if (!tbody || !this.resultadosFiltrados) return;
+
+            const inicio = (this.paginaAtual - 1) * this.itensPorPagina;
+            const fim = inicio + this.itensPorPagina;
+            const paginaResultados = this.resultadosFiltrados.slice(inicio, fim);
+
+            let html = '';
+            paginaResultados.forEach(r => {
+                const data = new Date(r.dataRealizacao).toLocaleDateString('pt-BR');
+                const notaClass = r.nota ? (r.nota >= 7 ? 'nota-alta' : 'nota-baixa') : '';
+                const statusClass = r.nota ? (r.nota >= 7 ? 'status-aprovado' : 'status-reprovado') : 'status-pendente';
+                const statusText = r.nota ? (r.nota >= 7 ? 'Aprovado' : 'Reprovado') : 'Pendente';
+                const percentual = r.total > 0 ? Math.round((r.acertos / r.total) * 100) : 0;
+
+                html += `
+                    <tr>
+                        <td>
+                            <strong>${r.alunoNome}</strong>
+                            <div style="font-size: 11px; color: #6c757d;">${r.alunoMatricula || ''}</div>
+                        </td>
+                        <td style="font-size: 12px; color: #6c757d;">${r.alunoEmail || '-'}</td>
+                        <td>${r.provaTitulo}</td>
+                        <td>${r.alunoTurma || '-'}</td>
+                        <td>${data}</td>
+                        <td class="${notaClass}">${r.nota ? r.nota.toFixed(2) : '-'}</td>
+                        <td>${r.acertos}/${r.total} (${percentual}%)</td>
+                        <td>${r.tempoGasto ? Math.round(r.tempoGasto / 60) + ' min' : '-'}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-icon" onclick="admin.verResultadoDetalhado('${r.id}')" title="Ver detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn-icon edit" onclick="admin.editarResultado('${r.id}')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-icon" onclick="admin.enviarLembrete('${r.id}')" title="Enviar lembrete">
+                                    <i class="fas fa-bell"></i>
+                                </button>
+                                <button class="btn-icon delete" onclick="admin.excluirResultado('${r.id}')" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+
+            // Atualizar paginação
+            const totalPaginas = Math.ceil(this.resultadosFiltrados.length / this.itensPorPagina);
+            document.getElementById('pageInfo').textContent = `Página ${this.paginaAtual} de ${totalPaginas}`;
+            document.getElementById('resultadosCount').textContent = this.resultadosFiltrados.length;
+            
+            document.getElementById('btnAnterior').disabled = this.paginaAtual === 1;
+            document.getElementById('btnProxima').disabled = this.paginaAtual === totalPaginas;
+        }
+
+        inicializarGraficosResultados(dadosGraficos) {
+            if (!window.Chart) {
+                console.warn('Chart.js não encontrado');
+                return;
+            }
+
+            // Destruir gráficos existentes
+            if (this.graficoProvas) this.graficoProvas.destroy();
+            if (this.graficoEvolucao) this.graficoEvolucao.destroy();
+
+            // Gráfico de Provas
+            const ctxProvas = document.getElementById('graficoProvas')?.getContext('2d');
+            if (ctxProvas && dadosGraficos.provas.labels.length > 0) {
+                this.graficoProvas = new Chart(ctxProvas, {
+                    type: 'bar',
+                    data: {
+                        labels: dadosGraficos.provas.labels,
+                        datasets: [{
+                            data: dadosGraficos.provas.dados,
+                            backgroundColor: '#0d6efd',
+                            borderRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: { backgroundColor: '#1e1e1e' }
+                        },
+                        scales: {
+                            y: { 
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Gráfico de Evolução
+            const ctxEvolucao = document.getElementById('graficoEvolucao')?.getContext('2d');
+            if (ctxEvolucao) {
+                this.graficoEvolucao = new Chart(ctxEvolucao, {
+                    type: 'line',
+                    data: {
+                        labels: dadosGraficos.evolucao.labels,
+                        datasets: [{
+                            data: dadosGraficos.evolucao.dados,
+                            borderColor: '#198754',
+                            backgroundColor: 'rgba(25,135,84,0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: '#198754',
+                            pointBorderColor: 'white',
+                            pointBorderWidth: 2,
+                            pointRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: { backgroundColor: '#1e1e1e' }
+                        },
+                        scales: {
+                            y: { 
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        filtrarTabelaResultados() {
+            if (!this.resultadosCompletos) return;
+
+            const search = document.getElementById('searchResultados')?.value.toLowerCase() || '';
+            const status = document.getElementById('filtroStatus')?.value || 'todos';
+            const periodo = document.getElementById('filtroPeriodo')?.value || 'todos';
+
+            const agora = new Date();
+            this.resultadosFiltrados = this.resultadosCompletos.filter(r => {
+                // Filtro de busca
+                const matchSearch = search === '' || 
+                    r.alunoNome.toLowerCase().includes(search) ||
+                    (r.alunoEmail && r.alunoEmail.toLowerCase().includes(search)) ||
+                    r.provaTitulo.toLowerCase().includes(search) ||
+                    (r.alunoTurma && r.alunoTurma.toLowerCase().includes(search)) ||
+                    (r.alunoMatricula && r.alunoMatricula.toLowerCase().includes(search));
+
+                // Filtro de status
+                let matchStatus = true;
+                if (status !== 'todos') {
+                    if (status === 'aprovado') matchStatus = r.nota && r.nota >= 7;
+                    else if (status === 'reprovado') matchStatus = r.nota && r.nota < 7;
+                    else if (status === 'pendente') matchStatus = !r.nota;
+                }
+
+                // Filtro de período
+                let matchPeriodo = true;
+                if (periodo !== 'todos') {
+                    const dataR = new Date(r.dataRealizacao);
+                    if (periodo === 'hoje') {
+                        matchPeriodo = dataR.toDateString() === agora.toDateString();
+                    } else if (periodo === 'semana') {
+                        const umaSemana = new Date(agora - 7 * 24 * 60 * 60 * 1000);
+                        matchPeriodo = dataR >= umaSemana;
+                    } else if (periodo === 'mes') {
+                        const umMes = new Date(agora.setMonth(agora.getMonth() - 1));
+                        matchPeriodo = dataR >= umMes;
+                    }
+                }
+
+                return matchSearch && matchStatus && matchPeriodo;
+            });
+
+            this.paginaAtual = 1;
+            this.atualizarTabelaPaginada();
+        }
+
+        ordenarResultados() {
+            if (!this.resultadosFiltrados) return;
+
+            const ordenacao = document.getElementById('filtroOrdenacao')?.value || 'data_desc';
+
+            switch(ordenacao) {
+                case 'data_desc':
+                    this.resultadosFiltrados.sort((a, b) => new Date(b.dataRealizacao) - new Date(a.dataRealizacao));
+                    break;
+                case 'data_asc':
+                    this.resultadosFiltrados.sort((a, b) => new Date(a.dataRealizacao) - new Date(b.dataRealizacao));
+                    break;
+                case 'nome_asc':
+                    this.resultadosFiltrados.sort((a, b) => a.alunoNome.localeCompare(b.alunoNome));
+                    break;
+                case 'nome_desc':
+                    this.resultadosFiltrados.sort((a, b) => b.alunoNome.localeCompare(a.alunoNome));
+                    break;
+                case 'nota_desc':
+                    this.resultadosFiltrados.sort((a, b) => (b.nota || 0) - (a.nota || 0));
+                    break;
+                case 'nota_asc':
+                    this.resultadosFiltrados.sort((a, b) => (a.nota || 0) - (b.nota || 0));
+                    break;
+            }
+
+            this.paginaAtual = 1;
+            this.atualizarTabelaPaginada();
+        }
+
+        filtrarPorStatus(status) {
+            const select = document.getElementById('filtroStatus');
+            if (select) {
+                select.value = status;
+                this.filtrarTabelaResultados();
+            }
+        }
+
+        limparFiltros() {
+            document.getElementById('searchResultados').value = '';
+            document.getElementById('filtroStatus').value = 'todos';
+            document.getElementById('filtroPeriodo').value = 'todos';
+            document.getElementById('filtroOrdenacao').value = 'data_desc';
+            this.filtrarTabelaResultados();
+        }
+
+        paginaAnterior() {
+            if (this.paginaAtual > 1) {
+                this.paginaAtual--;
+                this.atualizarTabelaPaginada();
+            }
+        }
+
+        proximaPagina() {
+            const totalPaginas = Math.ceil(this.resultadosFiltrados.length / this.itensPorPagina);
+            if (this.paginaAtual < totalPaginas) {
+                this.paginaAtual++;
+                this.atualizarTabelaPaginada();
+            }
+        }
+
+        configurarEventosResultados() {
+            // Eventos adicionais podem ser configurados aqui
+        }
+
+        async verResultadoDetalhado(resultadoId) {
+            const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+            if (!resultado) {
+                this.showToast('❌ Resultado não encontrado', 'error');
+                return;
+            }
+
+            console.log('📝 Dados completos do resultado:', resultado);
+
+            const modalBody = document.getElementById('modalBody');
+            const data = new Date(resultado.dataRealizacao).toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            const percentual = resultado.total > 0 
+                ? Math.round((resultado.acertos / resultado.total) * 100) 
+                : 0;
+
+            // Gerar HTML para questões detalhadas se existirem
+            let questoesHtml = '';
+            if (resultado.resultadoDetalhado && resultado.resultadoDetalhado.length > 0) {
+                questoesHtml = '<div style="margin-top: 20px;"><h4 style="margin: 0 0 15px; font-size: 16px;">📋 Detalhamento das Questões</h4>';
+                resultado.resultadoDetalhado.forEach((q, index) => {
+                    questoesHtml += `
+                        <div style="background: ${q.correto ? '#d4edda' : '#f8d7da'}; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${q.correto ? '#28a745' : '#dc3545'};">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                <strong>Questão ${index + 1}</strong>
+                                <span style="color: ${q.correto ? '#28a745' : '#dc3545'};">${q.correto ? '✓ Correta' : '✗ Incorreta'}</span>
+                            </div>
+                            <p style="margin: 5px 0; font-size: 14px;">${q.pergunta || ''}</p>
+                            <p style="margin: 5px 0;"><strong>Sua resposta:</strong> ${q.respostaAluno || 'Não respondida'}</p>
+                            <p style="margin: 5px 0;"><strong>Resposta correta:</strong> ${q.respostaCorreta || ''}</p>
+                            ${q.explicacao ? `<p style="margin: 5px 0; color: #6c757d; font-size: 13px;">📌 ${q.explicacao}</p>` : ''}
+                        </div>
+                    `;
+                });
+                questoesHtml += '</div>';
+            }
+
+            modalBody.innerHTML = `
+                <div style="padding: 25px; max-height: 70vh; overflow-y: auto;">
+                    <!-- Cabeçalho com foto/avatar -->
+                    <div style="text-align: center; margin-bottom: 25px;">
+                        <div style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                            <span style="font-size: 40px; color: white; font-weight: bold;">
+                                ${resultado.alunoNome ? resultado.alunoNome.charAt(0).toUpperCase() : 'A'}
+                            </span>
+                        </div>
+                        <h2 style="margin: 0; color: #333; font-size: 24px;">${resultado.alunoNome}</h2>
+                        <p style="color: #6c757d; margin: 5px 0;">
+                            <i class="fas fa-envelope"></i> ${resultado.alunoEmail || 'Email não cadastrado'}
+                        </p>
+                        <p style="color: #6c757d; font-size: 13px; margin: 5px 0;">
+                            <i class="fas fa-id-card"></i> ${resultado.alunoMatricula || 'Sem matrícula'} • 
+                            <i class="fas fa-school"></i> ${resultado.alunoTurma || 'Sem turma'}
+                        </p>
+                    </div>
+
+                    <!-- Informações da Prova -->
+                    <div style="background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 15px; font-size: 16px; color: #495057;">
+                            <i class="fas fa-file-alt" style="color: #0d6efd;"></i> Informações da Prova
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                            <div>
+                                <div style="font-size: 12px; color: #6c757d;">Prova</div>
+                                <div style="font-size: 16px; font-weight: 600;">${resultado.provaTitulo}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6c757d;">Data de Realização</div>
+                                <div style="font-size: 16px;">${data}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cards de Resultado -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+                        <div style="text-align: center; background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                            <div style="font-size: 32px; font-weight: 700; color: ${resultado.nota !== null ? (resultado.nota >= 7 ? '#28a745' : '#dc3545') : '#6c757d'};">
+                                ${resultado.nota !== null ? resultado.nota.toFixed(2) : '-'}
+                            </div>
+                            <div style="font-size: 12px; color: #6c757d;">Nota Final</div>
+                        </div>
+                        <div style="text-align: center; background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                            <div style="font-size: 32px; font-weight: 700;">${resultado.acertos}/${resultado.total}</div>
+                            <div style="font-size: 12px; color: #6c757d;">Acertos • ${percentual}%</div>
+                        </div>
+                        <div style="text-align: center; background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                            <div style="font-size: 32px; font-weight: 700;">${resultado.tempoGasto ? Math.round(resultado.tempoGasto / 60) : 0}</div>
+                            <div style="font-size: 12px; color: #6c757d;">Tempo (minutos)</div>
+                        </div>
+                    </div>
+
+                    <!-- Status e Observações -->
+                    <div style="background: #f8f9fa; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <span style="font-weight: 600;">Status da Correção</span>
+                            <span class="status-badge ${resultado.nota ? (resultado.nota >= 7 ? 'status-aprovado' : 'status-reprovado') : 'status-pendente'}">
+                                ${resultado.nota ? (resultado.nota >= 7 ? 'Aprovado' : 'Reprovado') : 'Pendente'}
+                            </span>
+                        </div>
+                        ${resultado.observacoes ? `
+                            <div style="margin-top: 15px;">
+                                <div style="font-weight: 600; margin-bottom: 5px;">📝 Observações</div>
+                                <p style="margin: 0; color: #495057;">${resultado.observacoes}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Questões detalhadas -->
+                    ${questoesHtml}
+
+                    <!-- Ações -->
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+                        <button onclick="admin.editarResultado('${resultado.id}')" style="background: #ffc107; color: #212529; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button onclick="admin.enviarLembrete('${resultado.id}')" style="background: #0d6efd; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                            <i class="fas fa-bell"></i> Lembrete
+                        </button>
+                        <button onclick="admin.fecharModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                            <i class="fas fa-times"></i> Fechar
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-eye"></i> Detalhes do Resultado';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.openModal();
+        }
+
+        async editarResultado(resultadoId) {
+            const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+            if (!resultado) return;
+
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 25px;">
+                    <h3 style="margin: 0 0 20px;">Editar Resultado - ${resultado.alunoNome}</h3>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                        <p><strong>Prova:</strong> ${resultado.provaTitulo}</p>
+                        <p><strong>Data:</strong> ${new Date(resultado.dataRealizacao).toLocaleString('pt-BR')}</p>
+                        <p><strong>Email:</strong> ${resultado.alunoEmail || 'Não cadastrado'}</p>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nota (0-10)</label>
+                        <input type="number" id="editNota" min="0" max="10" step="0.1" value="${resultado.nota || 0}" 
+                            style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Acertos</label>
+                        <input type="number" id="editAcertos" min="0" max="${resultado.total || 10}" value="${resultado.acertos}" 
+                            style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Total de Questões</label>
+                        <input type="number" id="editTotal" min="1" value="${resultado.total || 10}" 
+                            style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Tempo Gasto (minutos)</label>
+                        <input type="number" id="editTempo" min="0" value="${Math.round(resultado.tempoGasto / 60) || 0}" 
+                            style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Observações</label>
+                        <textarea id="editObservacoes" rows="3" style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px;">${resultado.observacoes || ''}</textarea>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Resultado';
+            document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoResultado(resultadoId);
+            document.getElementById('modalSaveBtn').style.display = 'inline-block';
+            document.getElementById('modalSaveBtn').textContent = 'Salvar Alterações';
+            this.openModal();
+        }
+
+        // ============ SALVAR EDIÇÃO DO RESULTADO (VERSÃO CORRIGIDA) ============
+        async salvarEdicaoResultado(resultadoId) {
+            const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+            if (!resultado) return;
+
+            const novaNota = parseFloat(document.getElementById('editNota')?.value);
+            const novoTotal = parseInt(document.getElementById('editTotal')?.value);
+            const novoTempo = parseInt(document.getElementById('editTempo')?.value) * 60;
+            const novasObservacoes = document.getElementById('editObservacoes')?.value;
+
+            // 🔴 CALCULAR ACERTOS BASEADO NA NOTA
+            // Se a prova tem 10 questões, nota 8 = 8 acertos
+            // Fórmula: acertos = (nota / 10) * total
+            const novosAcertos = Math.round((novaNota / 10) * novoTotal);
+
+            // Validações
+            if (isNaN(novaNota) || novaNota < 0 || novaNota > 10) {
+                this.showToast('❌ Nota inválida. Deve ser entre 0 e 10', 'error');
+                return;
+            }
+
+            if (isNaN(novoTotal) || novoTotal < 1) {
+                this.showToast('❌ Total de questões inválido', 'error');
+                return;
+            }
+
+            try {
+                // Mostrar loading
+                this.showToast('💾 Salvando alterações...', 'info');
+
+                // ENVIAR PARA O BACKEND
+                const response = await fetch(`/api/admin/resultados/${resultadoId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                    },
+                    body: JSON.stringify({
+                        nota: novaNota,
+                        acertos: novosAcertos,  // 🔴 VALOR CORRETO
+                        total: novoTotal,
+                        tempoGasto: novoTempo,
+                        observacoes: novasObservacoes,
+                        notaLiberada: true
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao salvar no servidor');
+                }
+
+                // Atualizar localmente
+                resultado.nota = novaNota;
+                resultado.acertos = novosAcertos;  // 🔴 VALOR CORRETO
+                resultado.total = novoTotal;
+                resultado.tempoGasto = novoTempo;
+                resultado.observacoes = novasObservacoes;
+                resultado.status = novaNota >= 7 ? 'aprovado' : 'reprovado';
+                
+                // 🔴 Recalcular porcentagem
+                resultado.porcentagem = novoTotal > 0 ? 
+                    ((novosAcertos / novoTotal) * 100).toFixed(1) : '0.0';
+
+                this.showToast('✅ Resultado atualizado com sucesso!', 'success');
+                this.closeModal();
+                this.atualizarTabelaPaginada();
+
+            } catch (error) {
+                console.error('❌ Erro ao salvar resultado:', error);
+                this.showToast('❌ Erro ao salvar: ' + error.message, 'error');
+            }
+        }
+
+        async enviarLembrete(resultadoId) {
+            const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+            if (!resultado) return;
+
+            if (confirm(`Enviar lembrete para ${resultado.alunoNome} (${resultado.alunoEmail || 'email não cadastrado'}) sobre a prova "${resultado.provaTitulo}"?`)) {
+                // Aqui você faria uma chamada API para enviar o lembrete
+                this.showToast('📧 Lembrete enviado com sucesso!', 'success');
+            }
+        }
+
+        async excluirResultado(resultadoId) {
+            const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+            if (!resultado) return;
+
+            if (await this.confirmar(
+                'Excluir Resultado',
+                `Tem certeza que deseja excluir o resultado de <strong>${resultado.alunoNome}</strong> na prova <strong>${resultado.provaTitulo}</strong>?<br><br>Esta ação não pode ser desfeita.`
+            )) {
+                // Aqui você faria uma chamada API para excluir
+                this.resultadosCompletos = this.resultadosCompletos.filter(r => r.id !== resultadoId);
+                this.filtrarTabelaResultados();
+                this.showToast('✅ Resultado excluído com sucesso!', 'success');
+            }
+        }
+
+        exportarResultadosPDF() {
+            if (!this.resultadosFiltrados || this.resultadosFiltrados.length === 0) {
+                this.showToast('❌ Nenhum resultado para exportar', 'error');
+                return;
+            }
+
+            this.showToast('📄 Gerando relatório PDF...', 'info');
+
+            try {
+                // Criar uma nova janela para o relatório
+                const printWindow = window.open('', '_blank');
+                
+                if (!printWindow) {
+                    this.showToast('⚠️ Permita popups para gerar o PDF', 'warning');
+                    return;
+                }
+
+                // Calcular estatísticas
+                const totalResultados = this.resultadosFiltrados.length;
+                const aprovados = this.resultadosFiltrados.filter(r => r.nota && r.nota >= 7).length;
+                const reprovados = this.resultadosFiltrados.filter(r => r.nota && r.nota < 7).length;
+                const pendentes = this.resultadosFiltrados.filter(r => !r.nota).length;
+                const mediaGeral = this.resultadosFiltrados.filter(r => r.nota).reduce((acc, r) => acc + r.nota, 0) / (this.resultadosFiltrados.filter(r => r.nota).length || 1);
+                
+                const dataAtual = new Date().toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                // Criar o conteúdo HTML
+                let htmlContent = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <title>Relatório de Resultados</title>
+            <style>
+                body {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: #fff;
+                    color: #333;
+                }
+                .header {
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    padding: 30px;
+                    border-radius: 12px;
+                    margin-bottom: 30px;
+                }
+                .header h1 {
+                    margin: 0;
+                    font-size: 28px;
+                }
+                .header p {
+                    margin: 10px 0 0;
+                    opacity: 0.9;
+                }
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                .stat-card {
+                    background: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 12px;
+                    border-left: 4px solid #667eea;
+                }
+                .stat-card .label {
+                    font-size: 14px;
+                    color: #6c757d;
+                    margin-bottom: 5px;
+                }
+                .stat-card .value {
+                    font-size: 28px;
+                    font-weight: 600;
+                    color: #333;
+                }
+                .stat-card .detail {
+                    font-size: 12px;
+                    color: #6c757d;
+                    margin-top: 5px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                    font-size: 12px;
+                }
+                th {
+                    background: #f1f3f5;
+                    padding: 12px;
+                    text-align: left;
+                    font-weight: 600;
+                    color: #495057;
+                }
+                td {
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #e9ecef;
+                }
+                .status-aprovado {
+                    background: #d4edda;
+                    color: #155724;
+                    padding: 4px 8px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    display: inline-block;
+                }
+                .status-reprovado {
+                    background: #f8d7da;
+                    color: #721c24;
+                    padding: 4px 8px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    display: inline-block;
+                }
+                .status-pendente {
+                    background: #fff3cd;
+                    color: #856404;
+                    padding: 4px 8px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    display: inline-block;
+                }
+                .footer {
+                    margin-top: 30px;
+                    text-align: center;
+                    color: #6c757d;
+                    font-size: 12px;
+                    border-top: 1px solid #e9ecef;
+                    padding-top: 20px;
+                }
+                @media print {
+                    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>📊 Relatório de Resultados</h1>
+                <p>Gerado em: ${dataAtual}</p>
+                <p>Total de registros: ${this.resultadosFiltrados.length}</p>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="label">Total de Resultados</div>
+                    <div class="value">${totalResultados}</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #28a745;">
+                    <div class="label">Aprovados</div>
+                    <div class="value">${aprovados}</div>
+                    <div class="detail">${((aprovados / (totalResultados || 1)) * 100).toFixed(1)}%</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #dc3545;">
+                    <div class="label">Reprovados</div>
+                    <div class="value">${reprovados}</div>
+                    <div class="detail">${((reprovados / (totalResultados || 1)) * 100).toFixed(1)}%</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #ffc107;">
+                    <div class="label">Média Geral</div>
+                    <div class="value">${mediaGeral.toFixed(2)}</div>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aluno</th>
+                        <th>Email</th>
+                        <th>Matrícula</th>
+                        <th>Turma</th>
+                        <th>Prova</th>
+                        <th>Data</th>
+                        <th>Nota</th>
+                        <th>Acertos</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+                // Adicionar linhas da tabela
+                this.resultadosFiltrados.slice(0, 100).forEach(r => {
+                    const data = r.dataRealizacao ? new Date(r.dataRealizacao).toLocaleDateString('pt-BR') : 'N/A';
+                    const statusClass = r.nota ? (r.nota >= 7 ? 'status-aprovado' : 'status-reprovado') : 'status-pendente';
+                    const statusText = r.nota ? (r.nota >= 7 ? 'Aprovado' : 'Reprovado') : 'Pendente';
+                    
+                    htmlContent += `
+                    <tr>
+                        <td>${r.alunoNome || ''}</td>
+                        <td>${r.alunoEmail || ''}</td>
+                        <td>${r.alunoMatricula || ''}</td>
+                        <td>${r.alunoTurma || ''}</td>
+                        <td>${r.provaTitulo || ''}</td>
+                        <td>${data}</td>
+                        <td style="font-weight: 600; color: ${r.nota ? (r.nota >= 7 ? '#28a745' : '#dc3545') : '#6c757d'};">${r.nota ? r.nota.toFixed(2) : '-'}</td>
+                        <td>${r.acertos}/${r.total}</td>
+                        <td><span class="${statusClass}">${statusText}</span></td>
+                    </tr>
+                    `;
+                });
+
+                if (this.resultadosFiltrados.length > 100) {
+                    htmlContent += `<tr><td colspan="9" style="text-align: center; padding: 15px; color: #6c757d;">Mostrando 100 de ${this.resultadosFiltrados.length} resultados</td></tr>`;
+                }
+
+                htmlContent += `
+                </tbody>
+            </table>
+
+            <div class="footer">
+                <p>Relatório gerado automaticamente pelo Sistema de Provas IEMA 2026</p>
+            </div>
+        </body>
+        </html>
+        `;
+
+                // Escrever na nova janela
+                printWindow.document.write(htmlContent);
+                printWindow.document.close();
+
+                // Aguardar carregamento e chamar print
+                setTimeout(() => {
+                    printWindow.focus();
+                    printWindow.print();
+                }, 500);
+
+                this.showToast('📄 Relatório gerado! Verifique a janela de impressão.', 'success');
+
+            } catch (error) {
+                console.error('❌ Erro ao gerar PDF:', error);
+                this.showToast('❌ Erro ao gerar relatório PDF', 'error');
+            }
+        }
+
+        exportarResultadosCSV() {
+            if (!this.resultadosFiltrados || this.resultadosFiltrados.length === 0) {
+                this.showToast('❌ Nenhum resultado para exportar', 'error');
+                return;
+            }
+
+            try {
+                // Mostrar toast de processo
+                this.showToast('📥 Gerando arquivo CSV...', 'info');
+
+                // Definir o cabeçalho do CSV
+                const headers = [
+                    'Aluno',
+                    'Email',
+                    'Matrícula',
+                    'Turma',
+                    'Prova',
+                    'Data',
+                    'Nota',
+                    'Acertos',
+                    'Total',
+                    'Percentual',
+                    'Tempo (min)',
+                    'Status'
+                ];
+
+                // Construir o conteúdo do CSV
+                let csvContent = headers.join(',') + '\n';
+
+                this.resultadosFiltrados.forEach(r => {
+                    const data = r.dataRealizacao ? new Date(r.dataRealizacao).toLocaleDateString('pt-BR') : 'N/A';
+                    const status = r.nota ? (r.nota >= 7 ? 'Aprovado' : 'Reprovado') : 'Pendente';
+                    const percentual = r.total > 0 ? Math.round((r.acertos / r.total) * 100) : 0;
+                    
+                    // Escapar aspas duplas nos campos de texto
+                    const alunoNome = (r.alunoNome || '').replace(/"/g, '""');
+                    const alunoEmail = (r.alunoEmail || '').replace(/"/g, '""');
+                    const alunoMatricula = (r.alunoMatricula || '').replace(/"/g, '""');
+                    const alunoTurma = (r.alunoTurma || '').replace(/"/g, '""');
+                    const provaTitulo = (r.provaTitulo || '').replace(/"/g, '""');
+                    
+                    const linha = [
+                        `"${alunoNome}"`,
+                        `"${alunoEmail}"`,
+                        `"${alunoMatricula}"`,
+                        `"${alunoTurma}"`,
+                        `"${provaTitulo}"`,
+                        `"${data}"`,
+                        r.nota || '',
+                        r.acertos,
+                        r.total,
+                        percentual,
+                        Math.round(r.tempoGasto / 60) || 0,
+                        `"${status}"`
+                    ].join(',');
+                    
+                    csvContent += linha + '\n';
+                });
+
+                // Criar o blob com BOM para UTF-8
+                const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                
+                // Criar URL do blob
+                const url = window.URL.createObjectURL(blob);
+                
+                // Criar link de download
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `resultados-${new Date().toISOString().slice(0, 10)}.csv`;
+                link.style.display = 'none';
+                
+                // Adicionar ao DOM, clicar e remover
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Limpar a URL
+                window.URL.revokeObjectURL(url);
+                
+                this.showToast('✅ Resultados exportados com sucesso!', 'success');
+                
+            } catch (error) {
+                console.error('❌ Erro ao exportar CSV:', error);
+                this.showToast('❌ Erro ao exportar resultados', 'error');
+            }
+        }
+
+        renderSemResultados() {
+            return `
+                <div class="empty-state" style="text-align: center; padding: 80px; background: white; border-radius: 16px;">
+                    <i class="fas fa-chart-line" style="font-size: 64px; color: #dee2e6; margin-bottom: 20px;"></i>
+                    <h2 style="color: #495057; margin-bottom: 10px;">Nenhum resultado encontrado</h2>
+                    <p style="color: #6c757d; margin-bottom: 25px;">Ainda não há resultados de provas no sistema.</p>
+                    <button class="btn-primary" onclick="admin.loadResultados()" style="background: #0d6efd; color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                </div>
+            `;
+        }
+
+        renderErro(error) {
+            return `
+                <div class="error-container" style="text-align: center; padding: 80px; background: white; border-radius: 16px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 64px; color: #dc3545; margin-bottom: 20px;"></i>
+                    <h2 style="color: #721c24; margin-bottom: 10px;">Erro ao carregar resultados</h2>
+                    <p style="color: #6c757d; margin-bottom: 25px;">${error.message}</p>
+                    <button class="btn-primary" onclick="admin.loadResultados()" style="background: #0d6efd; color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                        <i class="fas fa-sync-alt"></i> Tentar novamente
+                    </button>
+                </div>
+            `;
+        } 
+    
     async loadConfiguracoes() {
         const contentArea = document.getElementById('contentArea');
         contentArea.innerHTML = `

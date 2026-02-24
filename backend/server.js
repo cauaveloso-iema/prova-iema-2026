@@ -2806,7 +2806,7 @@ async function obterDimensoesImagem(caminhoArquivo) {
     }
 }
 
-// ============ ROTA PARA ALUNO RESPONDER PROVA (ATUALIZADA) ============
+// ============ ROTA PARA ALUNO RESPONDER PROVA (COM VERIFICAÇÃO DE DUPLICATA) ============
 app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.id;
@@ -2814,7 +2814,6 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     const { respostas, tempoGasto } = req.body;
     
     console.log(`📤 Aluno ${alunoId} enviando respostas para prova ${provaId}`);
-    console.log('📝 Respostas recebidas:', JSON.stringify(respostas));
     
     // VALIDAR ENTRADA
     if (!respostas || !Array.isArray(respostas)) {
@@ -2832,32 +2831,30 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
       });
     }
     
-    // Verificar se já realizou a prova
-    const provaRealizadaExistente = await ProvaRealizada.findOne({
-      provaId: provaId,
-      alunoId: alunoId
-    });
+    // Verificar se já existe QUALQUER registro (Resultado OU ProvaRealizada)
+    const [resultadoExistente, provaRealizadaExistente] = await Promise.all([
+      Resultado.findOne({ provaId, userId: alunoId }),
+      ProvaRealizada.findOne({ provaId, alunoId })
+    ]);
     
-    if (provaRealizadaExistente) {
+    if (resultadoExistente || provaRealizadaExistente) {
       return res.status(400).json({ 
         success: false, 
         error: 'Você já realizou esta prova' 
       });
     }
     
-    // CALCULAR RESULTADO (mas NÃO mostrar para o aluno ainda)
+    // CALCULAR RESULTADO
     let acertos = 0;
     const resultadoDetalhado = [];
     
     prova.questoes.forEach((questao, index) => {
       const respostaAluno = respostas[index];
       let correto = false;
-      let respostaLetra = null;
       let respostaCorretaLetra = String.fromCharCode(65 + questao.respostaCorreta);
       
       if (respostaAluno && typeof respostaAluno === 'string') {
         const respostaAlunoUpper = respostaAluno.toUpperCase().trim();
-        respostaLetra = respostaAlunoUpper;
         
         if (respostaAlunoUpper === respostaCorretaLetra) {
           acertos++;
@@ -2868,85 +2865,81 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
       resultadoDetalhado.push({
         questaoNumero: index + 1,
         pergunta: questao.pergunta,
-        respostaAluno: respostaLetra || 'Não respondida',
+        respostaAluno: respostaAluno || 'Não respondida',
         respostaCorreta: respostaCorretaLetra,
-        opcoes: questao.opcoes,
         correto: correto,
         explicacao: questao.explicacao
       });
     });
     
-    // CALCULAR NOTA (mas NÃO liberar ainda)
     const notaCalculada = prova.questoes.length > 0 ? (acertos / prova.questoes.length) * 10 : 0;
-    const porcentagem = prova.questoes.length > 0 ? ((acertos / prova.questoes.length) * 100).toFixed(1) : '0.0';
     
     console.log(`📊 Resultado calculado: ${acertos}/${prova.questoes.length} acertos | Nota: ${notaCalculada.toFixed(2)}`);
     
-    // SALVAR PROVA REALIZADA (com nota NULL - não liberada para aluno)
-    const provaRealizada = new ProvaRealizada({
-      provaId: provaId,
-      alunoId: alunoId,
-      respostas: respostas,
-      nota: null, // NOTA NÃO LIBERADA PARA O ALUNO
-      tempoGasto: tempoGasto || 0,
-      status: 'finalizada', // Aluno finalizou, mas nota não liberada
-      notaLiberada: false, // Professor ainda não liberou a nota
-      resultadoDetalhado: resultadoDetalhado
-    });
-    
-    await provaRealizada.save();
-    console.log(`✅ ProvaRealizada salva com ID: ${provaRealizada._id} (nota não liberada)`);
-    
-    // SALVAR RESULTADO TAMBÉM (para histórico, com nota calculada mas notaLiberada: false)
     const user = await User.findById(alunoId);
-    const resultado = new Resultado({
-      userId: alunoId,
-      provaId: provaId,
-      alunoNome: user ? user.nome : 'Aluno',
-      respostas: respostas,
-      nota: notaCalculada.toFixed(2), // Salva a nota calculada
-      acertos: acertos,
-      total: prova.questoes.length,
-      porcentagem: porcentagem,
-      tempoGasto: tempoGasto || 0,
-      resultadoDetalhado: resultadoDetalhado,
-      notaLiberada: false // IMPORTANTE: Nota NÃO está liberada para o aluno
-    });
     
-    await resultado.save();
-    console.log(`✅ Resultado salvo com ID: ${resultado._id} (nota: ${notaCalculada.toFixed(2)}, notaLiberada: false)`);
+    // USAR TRANSAÇÃO PARA GARANTIR CONSISTÊNCIA
+    const session = await mongoose.startSession();
+    session.startTransaction();
     
-    // ATUALIZAR ESTATÍSTICAS DA PROVA (somente para o professor)
-    prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
-    await prova.save();
-    
-    console.log(`📈 Aluno ${alunoId} finalizou a prova ${provaId}. Nota calculada: ${notaCalculada.toFixed(2)} (aguardando liberação do professor)`);
-    
-    // RETORNAR SUCESSO SEM NOTA PARA O ALUNO
-    res.json({ 
-      success: true, 
-      message: 'Prova finalizada com sucesso! Aguarde a correção do professor.',
-      // NÃO retornar nota, acertos, porcentagem para o aluno
-      tempoGasto: tempoGasto || 0
-    });
+    try {
+      // SALVAR APENAS NO MODELO Resultado (principal)
+      const resultado = new Resultado({
+        userId: alunoId,
+        provaId: provaId,
+        alunoNome: user ? user.nome : 'Aluno',
+        respostas: respostas,
+        nota: notaCalculada.toFixed(2),
+        acertos: acertos,
+        total: prova.questoes.length,
+        porcentagem: ((acertos / prova.questoes.length) * 100).toFixed(1),
+        tempoGasto: tempoGasto || 0,
+        resultadoDetalhado: resultadoDetalhado,
+        notaLiberada: false,
+        dataCriacao: new Date()
+      });
+      
+      await resultado.save({ session });
+      console.log(`✅ Resultado salvo com ID: ${resultado._id} (nota: ${notaCalculada.toFixed(2)})`);
+      
+      // OPCIONAL: Salvar também em ProvaRealizada se necessário, mas vamos evitar duplicata
+      // Se precisar manter compatibilidade, podemos salvar mas com flag
+      
+      await session.commitTransaction();
+      
+      // ATUALIZAR ESTATÍSTICAS DA PROVA
+      prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
+      
+      if (prova.mediaNotas) {
+        const somaTotal = prova.mediaNotas * (prova.totalParticipantes - 1);
+        prova.mediaNotas = (somaTotal + notaCalculada) / prova.totalParticipantes;
+      } else {
+        prova.mediaNotas = notaCalculada;
+      }
+      prova.mediaNotas = parseFloat(prova.mediaNotas.toFixed(2));
+      
+      await prova.save();
+      
+      console.log(`📈 Aluno ${alunoId} finalizou a prova ${provaId}. Nota: ${notaCalculada.toFixed(2)}`);
+      
+      res.json({ 
+        success: true, 
+        message: 'Prova finalizada com sucesso! Aguarde a liberação do professor.',
+        tempoGasto: tempoGasto || 0
+      });
+      
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
     
   } catch (error) {
     console.error('❌ Erro detalhado ao finalizar prova:', error);
-    
-    if (error.name === 'ValidationError') {
-      const mensagensErro = Object.values(error.errors).map(e => e.message);
-      console.error('Erros de validação:', mensagensErro);
-      
-      return res.status(400).json({
-        success: false,
-        error: 'Erro de validação nos dados: ' + mensagensErro.join(', '),
-        detalhes: error.errors
-      });
-    }
-    
     res.status(500).json({ 
       success: false, 
-      error: 'Erro interno ao finalizar prova: ' + error.message
+      error: 'Erro interno ao finalizar prova: ' + error.message 
     });
   }
 });
@@ -8803,6 +8796,587 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
             success: false,
             error: 'Erro interno ao trocar senha: ' + error.message
         });
+    }
+});
+
+// ============ ROTA PARA ADMIN LISTAR TODOS OS RESULTADOS (SEM DUPLICATAS) ============
+app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (req, res) => {
+  try {
+    console.log('📊 Admin buscando todos os resultados');
+    
+    // Buscar resultados do modelo Resultado
+    const resultados = await Resultado.find()
+      .populate('userId', 'nome email matricula turma')
+      .populate('provaId', 'titulo')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Buscar provas realizadas
+    const provasRealizadas = await ProvaRealizada.find()
+      .populate('alunoId', 'nome email matricula turma')
+      .populate('provaId', 'titulo')
+      .sort({ dataRealizacao: -1 })
+      .lean();
+    
+    // Buscar atividades do dashboard (se houver)
+    let dashboardAtividades = [];
+    try {
+      // Aqui você precisaria ter uma coleção de dashboard ou buscar de outro lugar
+      // Por enquanto, vamos ignorar para evitar duplicatas
+    } catch (e) {
+      console.warn('⚠️ Erro ao buscar dashboard:', e.message);
+    }
+    
+    // Usar um Map para garantir unicidade (chave: alunoId + provaId + data)
+    const resultadosMap = new Map();
+    
+    // Processar resultados do modelo Resultado (prioridade mais alta)
+    resultados.forEach(r => {
+      const dataStr = r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '';
+      const key = `${r.userId?._id || r.userId}-${r.provaId?._id || r.provaId}-${dataStr}`;
+      
+      resultadosMap.set(key, {
+        id: r._id,
+        alunoId: r.userId?._id,
+        alunoNome: r.alunoNome || r.userId?.nome || 'Aluno',
+        alunoEmail: r.userId?.email || '',
+        alunoMatricula: r.userId?.matricula || '',
+        alunoTurma: r.userId?.turma || '',
+        provaId: r.provaId?._id,
+        provaTitulo: r.provaId?.titulo || 'Prova',
+        dataRealizacao: r.createdAt,
+        nota: r.nota !== undefined ? parseFloat(r.nota) : null,
+        acertos: r.acertos || 0,
+        total: r.total || 0,
+        tempoGasto: r.tempoGasto || 0,
+        status: r.nota ? (r.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente',
+        notaLiberada: r.notaLiberada || false,
+        origem: 'resultado',
+        resultadoDetalhado: r.resultadoDetalhado || [],
+        observacoes: r.observacoes || ''
+      });
+    });
+    
+    // Processar provas realizadas (só adicionar se não existir no Map)
+    provasRealizadas.forEach(pr => {
+      const dataStr = pr.dataRealizacao ? new Date(pr.dataRealizacao).toISOString().split('T')[0] : '';
+      const key = `${pr.alunoId?._id || pr.alunoId}-${pr.provaId?._id || pr.provaId}-${dataStr}`;
+      
+      // Só adicionar se ainda não existir
+      if (!resultadosMap.has(key)) {
+        resultadosMap.set(key, {
+          id: pr._id,
+          alunoId: pr.alunoId?._id,
+          alunoNome: pr.alunoId?.nome || 'Aluno',
+          alunoEmail: pr.alunoId?.email || '',
+          alunoMatricula: pr.alunoId?.matricula || '',
+          alunoTurma: pr.alunoId?.turma || '',
+          provaId: pr.provaId?._id,
+          provaTitulo: pr.provaId?.titulo || 'Prova',
+          dataRealizacao: pr.dataRealizacao,
+          nota: pr.nota !== undefined ? parseFloat(pr.nota) : null,
+          acertos: pr.acertos || 0,
+          total: pr.total || 0,
+          tempoGasto: pr.tempoGasto || 0,
+          status: pr.nota ? (pr.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente',
+          notaLiberada: pr.notaLiberada || false,
+          origem: 'provaRealizada',
+          resultadoDetalhado: pr.resultadoDetalhado || [],
+          observacoes: pr.observacoes || ''
+        });
+      }
+    });
+    
+    // Converter o Map de volta para array
+    const todosResultados = Array.from(resultadosMap.values());
+    
+    // Ordenar por data (mais recentes primeiro)
+    todosResultados.sort((a, b) => new Date(b.dataRealizacao) - new Date(a.dataRealizacao));
+    
+    console.log(`✅ Total de resultados únicos: ${todosResultados.length}`);
+    
+    res.json({
+      success: true,
+      resultados: todosResultados,
+      total: todosResultados.length,
+      estatisticas: {
+        total: todosResultados.length,
+        comNota: todosResultados.filter(r => r.nota !== null && r.nota !== undefined).length,
+        semNota: todosResultados.filter(r => r.nota === null || r.nota === undefined).length,
+        aprovados: todosResultados.filter(r => r.nota && r.nota >= 7).length,
+        reprovados: todosResultados.filter(r => r.nota && r.nota < 7).length,
+        pendentes: todosResultados.filter(r => !r.nota).length
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao listar todos os resultados:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ROTA PARA ADMIN SALVAR RESULTADO ============
+app.post('/api/admin/resultados/salvar', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { provaId, alunoId, nota, acertos, total, porcentagem, respostas, notaLiberada } = req.body;
+        
+        console.log(`📝 Admin ${req.userId} salvando resultado para prova ${provaId}, aluno ${alunoId}`);
+        
+        // Verificar se já existe um resultado
+        let resultado = await Resultado.findOne({
+            provaId: provaId,
+            userId: alunoId
+        });
+        
+        if (resultado) {
+            // Atualizar existente
+            resultado.nota = nota;
+            resultado.acertos = acertos;
+            resultado.total = total;
+            resultado.porcentagem = porcentagem;
+            resultado.respostas = respostas;
+            resultado.notaLiberada = notaLiberada !== false;
+            resultado.updatedAt = new Date();
+            
+            await resultado.save();
+            console.log(`✅ Resultado ${resultado._id} atualizado`);
+        } else {
+            // Buscar nome do aluno
+            const aluno = await User.findById(alunoId).select('nome');
+            
+            // Criar novo
+            resultado = new Resultado({
+                userId: alunoId,
+                provaId: provaId,
+                alunoNome: aluno ? aluno.nome : 'Aluno',
+                respostas: respostas || [],
+                nota: nota,
+                acertos: acertos,
+                total: total,
+                porcentagem: porcentagem,
+                notaLiberada: notaLiberada !== false,
+                dataCriacao: new Date()
+            });
+            
+            await resultado.save();
+            console.log(`✅ Novo resultado ${resultado._id} criado`);
+        }
+        
+        // Atualizar também na ProvaRealizada para consistência
+        let provaRealizada = await ProvaRealizada.findOne({
+            provaId: provaId,
+            alunoId: alunoId
+        });
+        
+        if (provaRealizada) {
+            provaRealizada.nota = nota;
+            provaRealizada.notaLiberada = notaLiberada !== false;
+            provaRealizada.status = 'corrigida';
+            await provaRealizada.save();
+        }
+        
+        // Atualizar estatísticas da prova
+        const prova = await Prova.findById(provaId);
+        if (prova) {
+            // Recalcular média
+            const todosResultados = await Resultado.find({ 
+                provaId: provaId,
+                notaLiberada: true 
+            });
+            
+            const somaNotas = todosResultados.reduce((acc, r) => acc + (r.nota || 0), 0);
+            prova.mediaNotas = todosResultados.length > 0 ? somaNotas / todosResultados.length : 0;
+            await prova.save();
+        }
+        
+        res.json({
+            success: true,
+            message: 'Resultado salvo com sucesso!',
+            resultado: {
+                id: resultado._id,
+                nota: resultado.nota,
+                acertos: resultado.acertos
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar resultado:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao salvar resultado: ' + error.message
+        });
+    }
+});
+
+// ============ ROTA PARA ADMIN ATUALIZAR RESULTADO (COM NOTIFICAÇÕES) ============
+// ============ ROTA PARA ADMIN ATUALIZAR RESULTADO (VERSÃO CORRIGIDA) ============
+app.put('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nota, acertos, total, tempoGasto, observacoes, notaLiberada } = req.body;
+
+        console.log(`📝 Admin ${req.userId} atualizando resultado ${id}`);
+        console.log('   Nova nota:', nota);
+        console.log('   Acertos recebidos:', acertos, '/', total);
+
+        // 🔴 CORREÇÃO 1: Calcular acertos automaticamente baseado na nota
+        const acertosCalculados = Math.round((nota / 10) * total);
+        
+        console.log(`   🔄 Acertos calculados: ${acertosCalculados} (${nota} / 10 * ${total})`);
+
+        // 🔴 CORREÇÃO 2: Validar se os acertos recebidos são consistentes
+        let acertosFinais = acertosCalculados;
+        
+        if (Math.abs(acertos - acertosCalculados) > 1) {
+            console.warn(`⚠️ Inconsistência detectada: recebido ${acertos}, calculado ${acertosCalculados}. Usando valor calculado.`);
+        } else if (acertos !== acertosCalculados) {
+            console.log(`ℹ️ Pequena diferença (${acertos} vs ${acertosCalculados}) - mantendo valor original`);
+            acertosFinais = acertos;
+        }
+
+        // Buscar dados do admin
+        const admin = await User.findById(req.userId).select('nome email');
+
+        // TENTAR PRIMEIRO NO MODELO Resultado
+        let resultado = await Resultado.findById(id);
+        let tipoAcao = 'editada';
+        let resultadoAntigo = null;
+        
+        if (resultado) {
+            // Guardar valores antigos para comparar
+            resultadoAntigo = {
+                nota: resultado.nota,
+                acertos: resultado.acertos,
+                notaLiberada: resultado.notaLiberada
+            };
+
+            // Verificar se é liberação ou edição
+            if (!resultadoAntigo.notaLiberada && notaLiberada) {
+                tipoAcao = 'liberada';
+            }
+
+            // 🔴 Atualizar Resultado com os valores CORRETOS
+            resultado.nota = nota;
+            resultado.acertos = acertosFinais;  // Usar valor calculado/validado
+            resultado.total = total;
+            resultado.tempoGasto = tempoGasto;
+            resultado.observacoes = observacoes;
+            resultado.notaLiberada = notaLiberada !== false;
+            
+            // 🔴 Recalcular porcentagem com os acertos corretos
+            resultado.porcentagem = total > 0 ? ((acertosFinais / total) * 100).toFixed(1) : '0.0';
+            
+            await resultado.save();
+
+            console.log(`✅ Resultado ${id} atualizado:`);
+            console.log(`   Nota: ${resultado.nota}`);
+            console.log(`   Acertos: ${resultado.acertos}/${resultado.total} (${resultado.porcentagem}%)`);
+
+            // BUSCAR DADOS PARA NOTIFICAÇÃO
+            const aluno = await User.findById(resultado.userId).select('nome email');
+            const prova = await Prova.findById(resultado.provaId).select('titulo userId');
+            
+            if (prova && prova.userId) {
+                const professor = await User.findById(prova.userId).select('nome email');
+
+                // CRIAR NOTIFICAÇÕES
+                const NotificationService = require('./services/notification-service');
+                const notificationService = new NotificationService();
+
+                // Notificar aluno
+                if (aluno) {
+                    await notificationService.notificarAlunoResultado(
+                        aluno, 
+                        prova, 
+                        resultado, 
+                        admin, 
+                        tipoAcao
+                    );
+                }
+
+                // Notificar professor
+                if (professor && professor._id.toString() !== admin._id.toString()) {
+                    await notificationService.notificarProfessorResultado(
+                        professor,
+                        aluno,
+                        prova,
+                        resultado,
+                        admin,
+                        tipoAcao
+                    );
+                }
+            }
+
+            return res.json({
+                success: true,
+                message: tipoAcao === 'liberada' ? 
+                    '✅ Resultado liberado e notificações enviadas!' : 
+                    '✅ Resultado atualizado e notificações enviadas!',
+                resultado: {
+                    id: resultado._id,
+                    nota: resultado.nota,
+                    acertos: resultado.acertos,
+                    total: resultado.total,
+                    porcentagem: resultado.porcentagem
+                }
+            });
+        }
+
+        // SE NÃO ENCONTROU NO Resultado, TENTAR NO ProvaRealizada
+        const provaRealizada = await ProvaRealizada.findById(id);
+        
+        if (provaRealizada) {
+            // 🔴 MESMA LÓGICA PARA PROVAREALIZADA
+            const acertosCalculados = Math.round((nota / 10) * total);
+            
+            provaRealizada.nota = nota;
+            provaRealizada.acertos = acertosCalculados;
+            provaRealizada.total = total;
+            provaRealizada.tempoGasto = tempoGasto;
+            provaRealizada.observacoes = observacoes;
+            provaRealizada.notaLiberada = notaLiberada !== false;
+            provaRealizada.status = 'corrigida';
+            
+            await provaRealizada.save();
+
+            console.log(`✅ ProvaRealizada ${id} atualizada: ${acertosCalculados}/${total} acertos`);
+
+            return res.json({
+                success: true,
+                message: 'Resultado atualizado com sucesso!',
+                resultado: {
+                    id: provaRealizada._id,
+                    nota: provaRealizada.nota,
+                    acertos: provaRealizada.acertos,
+                    total: provaRealizada.total
+                }
+            });
+        }
+
+        return res.status(404).json({
+            success: false,
+            error: 'Resultado não encontrado'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao atualizar resultado:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao atualizar resultado: ' + error.message
+        });
+    }
+});
+
+// ============ ROTAS DE NOTIFICAÇÃO (ORDEM CORRETA) ============
+
+// =========================================================
+// 1. ROTAS ESPECÍFICAS (SEM PARÂMETROS)
+// =========================================================
+
+// Contador de notificações não lidas
+app.get('/api/notificacoes/nao-lidas/contador', authenticateToken, async (req, res) => {
+    try {
+        const Notificacao = require('./models/Notificacao');
+        const count = await Notificacao.countDocuments({
+            usuarioId: req.userId,
+            lida: false
+        });
+
+        res.json({
+            success: true,
+            count: count
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao contar notificações:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Marcar todas como lidas
+app.put('/api/notificacoes/marcar-todas-lidas', authenticateToken, async (req, res) => {
+    try {
+        const NotificationService = require('./services/notification-service');
+        const notificationService = new NotificationService();
+        const result = await notificationService.marcarTodasComoLidas(req.userId);
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Erro ao marcar todas como lidas:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ROTA PARA USUÁRIO LIMPAR SUAS NOTIFICAÇÕES
+app.delete('/api/notificacoes/limpar-minhas', authenticateToken, async (req, res) => {
+    try {
+        const usuarioId = req.userId;
+        const Notificacao = require('./models/Notificacao');
+        
+        console.log(`🗑️ Usuário ${usuarioId} excluindo todas as suas notificações`);
+        
+        const resultado = await Notificacao.deleteMany({ 
+            usuarioId: usuarioId 
+        });
+        
+        console.log(`✅ ${resultado.deletedCount} notificações excluídas`);
+        
+        res.json({
+            success: true,
+            message: `${resultado.deletedCount} notificação(ões) excluída(s) com sucesso!`,
+            total: resultado.deletedCount
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao limpar notificações:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao limpar notificações: ' + error.message
+        });
+    }
+});
+
+// =========================================================
+// 2. ROTA PARA BUSCAR TODAS AS NOTIFICAÇÕES (COM PAGINAÇÃO)
+// =========================================================
+
+// ============ ROTA PARA BUSCAR TODAS AS NOTIFICAÇÕES DO USUÁRIO ============
+app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
+    try {
+        // ✅ IMPORTAR O MODELO AQUI
+        const Notificacao = require('./models/Notificacao');
+        
+        const { pagina = 1, limite = 50, filtro } = req.query;
+        const usuarioId = req.userId;
+        
+        console.log(`📋 Buscando todas as notificações do usuário ${usuarioId} - Página: ${pagina}, Limite: ${limite}`);
+        
+        const skip = (parseInt(pagina) - 1) * parseInt(limite);
+        
+        // Construir query
+        let query = { usuarioId: usuarioId };
+        
+        // Aplicar filtro se houver
+        if (filtro && filtro !== 'todas') {
+            if (filtro === 'nao_lidas') {
+                query.lida = false;
+            } else if (filtro === 'lidas') {
+                query.lida = true;
+            } else if (filtro.startsWith('tipo:')) {
+                query.tipo = filtro.replace('tipo:', '');
+            }
+        }
+        
+        // Buscar notificações com paginação
+        const [notificacoes, total] = await Promise.all([
+            Notificacao.find(query)
+                .sort({ createdAt: -1, prioridade: -1 })
+                .skip(skip)
+                .limit(parseInt(limite))
+                .lean(),
+            Notificacao.countDocuments(query)
+        ]);
+        
+        // Buscar estatísticas
+        const [totalNaoLidas, totalPorTipo] = await Promise.all([
+            Notificacao.countDocuments({ usuarioId: usuarioId, lida: false }),
+            Notificacao.aggregate([
+                { $match: { usuarioId: usuarioId } },
+                { $group: { _id: "$tipo", count: { $sum: 1 } } }
+            ])
+        ]);
+        
+        // Formatar estatísticas por tipo
+        const porTipo = {};
+        totalPorTipo.forEach(item => {
+            porTipo[item._id] = item.count;
+        });
+        
+        console.log(`✅ Encontradas ${notificacoes.length} notificações (total: ${total})`);
+        
+        res.json({
+            success: true,
+            notificacoes: notificacoes,
+            paginacao: {
+                pagina: parseInt(pagina),
+                limite: parseInt(limite),
+                total: total,
+                totalPaginas: Math.ceil(total / parseInt(limite))
+            },
+            estatisticas: {
+                total: total,
+                naoLidas: totalNaoLidas,
+                lidas: total - totalNaoLidas,
+                porTipo: porTipo
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar todas as notificações:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// =========================================================
+// 3. ROTA BASE (SEM PARÂMETROS)
+// =========================================================
+
+// Buscar notificações do usuário logado (versão simples)
+app.get('/api/notificacoes', authenticateToken, async (req, res) => {
+    try {
+        const { apenasNaoLidas, limite } = req.query;
+        const NotificationService = require('./services/notification-service');
+        const notificationService = new NotificationService();
+        
+        const result = await notificationService.buscarNotificacoes(
+            req.userId, 
+            apenasNaoLidas === 'true',
+            parseInt(limite) || 50
+        );
+
+        res.json(result);
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar notificações:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// =========================================================
+// 4. ROTAS COM PARÂMETROS (:id) - POR ÚLTIMO
+// =========================================================
+
+// Marcar notificação específica como lida
+app.put('/api/notificacoes/:id/lida', authenticateToken, async (req, res) => {
+    try {
+        const NotificationService = require('./services/notification-service');
+        const notificationService = new NotificationService();
+        const result = await notificationService.marcarComoLida(req.params.id, req.userId);
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Erro ao marcar como lida:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Deletar notificação específica
+app.delete('/api/notificacoes/:id', authenticateToken, async (req, res) => {
+    try {
+        const NotificationService = require('./services/notification-service');
+        const notificationService = new NotificationService();
+        const result = await notificationService.deletarNotificacao(req.params.id, req.userId);
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Erro ao deletar notificação:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
