@@ -8207,6 +8207,72 @@ app.post('/api/admin/backups/restaurar/:arquivo', authenticateToken, isSuperAdmi
     }
 });
 
+// ============ ROTA DE DOWNLOAD DE BACKUP (VERSÃO CORRIGIDA) ============
+app.get('/api/admin/backups/download/:arquivo', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { arquivo } = req.params;
+        
+        console.log(`📥 Admin ${req.userId} tentando baixar backup: ${arquivo}`);
+        
+        // Validar nome do arquivo (segurança)
+        if (arquivo.includes('..') || arquivo.includes('/') || arquivo.includes('\\')) {
+            console.warn(`🚫 Tentativa de path traversal: ${arquivo}`);
+            return res.status(400).json({
+                success: false,
+                error: 'Nome de arquivo inválido'
+            });
+        }
+        
+        const backupPath = path.join(__dirname, 'backups', arquivo);
+        console.log('📁 Caminho do arquivo:', backupPath);
+        
+        // Verificar se o arquivo existe
+        if (!fs.existsSync(backupPath)) {
+            console.warn(`❌ Arquivo não encontrado: ${backupPath}`);
+            return res.status(404).json({
+                success: false,
+                error: 'Arquivo de backup não encontrado'
+            });
+        }
+        
+        // Obter estatísticas do arquivo
+        const stats = fs.statSync(backupPath);
+        console.log(`📊 Tamanho: ${stats.size} bytes`);
+        
+        // Configurar headers para download
+        res.setHeader('Content-Type', 'application/gzip');
+        res.setHeader('Content-Disposition', `attachment; filename="${arquivo}"`);
+        res.setHeader('Content-Length', stats.size);
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        
+        // Enviar o arquivo
+        const fileStream = fs.createReadStream(backupPath);
+        fileStream.pipe(res);
+        
+        fileStream.on('error', (error) => {
+            console.error('❌ Erro ao enviar arquivo:', error);
+            if (!res.headersSent) {
+                res.status(500).json({
+                    success: false,
+                    error: 'Erro ao enviar arquivo'
+                });
+            }
+        });
+        
+        fileStream.on('end', () => {
+            console.log(`✅ Download concluído: ${arquivo}`);
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao baixar backup:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao baixar backup: ' + error.message
+        });
+    }
+});
+
 // Confirmar restauração
 app.post('/api/admin/backups/confirmar-restauracao', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
@@ -8266,6 +8332,51 @@ app.post('/api/admin/backups/confirmar-restauracao', authenticateToken, isSuperA
     } catch (error) {
         console.error('❌ Erro na restauração:', error);
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ EXCLUIR BACKUP ============
+app.delete('/api/admin/backups/excluir/:arquivo', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { arquivo } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} excluindo backup: ${arquivo}`);
+        
+        // Validar nome do arquivo (segurança)
+        if (arquivo.includes('..') || arquivo.includes('/') || arquivo.includes('\\')) {
+            console.warn(`🚫 Tentativa de path traversal: ${arquivo}`);
+            return res.status(400).json({
+                success: false,
+                error: 'Nome de arquivo inválido'
+            });
+        }
+        
+        const backupPath = path.join(__dirname, 'backups', arquivo);
+        
+        // Verificar se o arquivo existe
+        if (!fs.existsSync(backupPath)) {
+            return res.status(404).json({
+                success: false,
+                error: 'Arquivo de backup não encontrado'
+            });
+        }
+        
+        // Excluir o arquivo
+        fs.unlinkSync(backupPath);
+        
+        console.log(`✅ Backup excluído com sucesso: ${arquivo}`);
+        
+        res.json({
+            success: true,
+            message: 'Backup excluído com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir backup:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao excluir backup: ' + error.message
+        });
     }
 });
 
@@ -9809,6 +9920,8 @@ app.put('/api/admin/professores/:id/reativar', authenticateToken, isSuperAdmin, 
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+
 
 // ============ FRONTEND ESTÁTICO ============
 app.use(express.static(path.join(__dirname, '..', 'frontend')));

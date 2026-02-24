@@ -10000,85 +10000,481 @@ class AdminPanel {
         this.openModal();
     }
 
+    // ============ BACKUPS E RESTAURAÇÃO ============
+
+    async loadBackups() {
+        const contentArea = document.getElementById('contentArea');
+        
+        contentArea.innerHTML = `
+            <div class="backups-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="backups-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>Backups do Sistema</h1>
+                            <p>Gerencie backups e restaure dados quando necessário</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.carregarBackups()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-header btn-primary" onclick="admin.criarBackup()">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Novo Backup</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE ESTATÍSTICAS -->
+                <div class="stats-cards" id="statsBackups">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="statTotalBackups">0</span>
+                            <span class="stat-label">Total de Backups</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <i class="fas fa-hdd"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="statEspacoTotal">0 MB</span>
+                            <span class="stat-label">Espaço Ocupado</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="statUltimoBackup">-</span>
+                            <span class="stat-label">Último Backup</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="statBackupsSemana">0</span>
+                            <span class="stat-label">Esta Semana</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABELA DE BACKUPS -->
+                <div class="table-professional">
+                    <div class="table-header">
+                        <div class="table-title">
+                            <i class="fas fa-list"></i>
+                            <h3>Backups Disponíveis</h3>
+                        </div>
+                        <div class="table-info">
+                            <span class="items-counter" id="itemsCounterBackup">0 backups</span>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="data-table" id="tabelaBackups">
+                            <thead>
+                                <tr>
+                                    <th>Nome do Arquivo</th>
+                                    <th>Data de Criação</th>
+                                    <th>Tamanho</th>
+                                    <th>Registros</th>
+                                    <th class="actions-header">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaBackupsBody">
+                                <tr>
+                                    <td colspan="5" class="loading-row">
+                                        <div class="loading-spinner-small">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <span>Carregando backups...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- INFORMAÇÕES SOBRE BACKUPS -->
+                <div class="info-cards">
+                    <div class="info-card info-security">
+                        <div class="info-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="info-content">
+                            <h4>🔒 Segurança dos Dados</h4>
+                            <p>Os backups são armazenados no servidor e incluem todas as coleções: usuários, turmas, provas, resultados e matrículas autorizadas.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card info-tip">
+                        <div class="info-icon">
+                            <i class="fas fa-lightbulb"></i>
+                        </div>
+                        <div class="info-content">
+                            <h4>💡 Dicas de Backup</h4>
+                            <ul style="margin: 5px 0 0 20px; color: #4b5563;">
+                                <li>Faça backups antes de grandes alterações</li>
+                                <li>Mantenha backups periódicos</li>
+                                <li>Ao restaurar, todos os dados atuais são substituídos</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .backups-container {
+                    padding: 24px;
+                    max-width: 1400px;
+                    margin: 0 auto;
+                }
+
+                .backups-header {
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .backups-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -50px;
+                    right: -50px;
+                    width: 200px;
+                    height: 200px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 50%;
+                }
+
+                .backups-header::after {
+                    content: '';
+                    position: absolute;
+                    bottom: -80px;
+                    left: -80px;
+                    width: 300px;
+                    height: 300px;
+                    background: rgba(255,255,255,0.05);
+                    border-radius: 50%;
+                }
+
+                /* Estilos reutilizam as classes existentes */
+            </style>
+        `;
+        
+        await this.carregarBackups();
+    }
+
+    async carregarBackups() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch('/api/admin/backups', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.backups = data.backups || [];
+                this.renderizarTabelaBackups();
+                this.atualizarEstatisticasBackups();
+            } else {
+                throw new Error(data.error || 'Erro ao carregar backups');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar backups:', error);
+            this.mostrarErroBackup(error.message);
+        }
+    }
+
+    renderizarTabelaBackups() {
+        const tbody = document.getElementById('tabelaBackupsBody');
+        if (!tbody) return;
+        
+        if (!this.backups || this.backups.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 60px;">
+                        <i class="fas fa-database" style="font-size: 48px; color: #d1d5db; margin-bottom: 15px;"></i>
+                        <h3 style="color: #6b7280; margin-bottom: 5px;">Nenhum backup encontrado</h3>
+                        <p style="color: #9ca3af;">Crie seu primeiro backup clicando em "Novo Backup"</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let html = '';
+        this.backups.forEach((backup, index) => {
+            const data = new Date(backup.data);
+            const dataFormatada = data.toLocaleDateString('pt-BR') + ' ' + 
+                                data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            html += `
+                <tr>
+                    <td>
+                        <strong>${backup.nome}</strong>
+                    </td>
+                    <td>${dataFormatada}</td>
+                    <td>${backup.tamanho}</td>
+                    <td>
+                        <span class="status-badge success">
+                            <i class="fas fa-check-circle"></i> Completo
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-icon" onclick="admin.baixarBackup('${backup.nome}')" title="Baixar backup">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <button class="btn-icon warning" onclick="admin.restaurarBackup('${backup.nome}')" title="Restaurar">
+                                <i class="fas fa-undo-alt"></i>
+                            </button>
+                            <button class="btn-icon danger" onclick="admin.excluirBackup('${backup.nome}')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tbody.innerHTML = html;
+        document.getElementById('itemsCounterBackup').textContent = `${this.backups.length} backups`;
+    }
+
+    atualizarEstatisticasBackups() {
+        if (!this.backups || this.backups.length === 0) {
+            document.getElementById('statTotalBackups').textContent = '0';
+            document.getElementById('statEspacoTotal').textContent = '0 MB';
+            document.getElementById('statUltimoBackup').textContent = '-';
+            document.getElementById('statBackupsSemana').textContent = '0';
+            return;
+        }
+        
+        document.getElementById('statTotalBackups').textContent = this.backups.length;
+        
+        // Calcular espaço total
+        let espacoTotal = 0;
+        this.backups.forEach(backup => {
+            const tamanho = parseFloat(backup.tamanho);
+            if (!isNaN(tamanho)) espacoTotal += tamanho;
+        });
+        document.getElementById('statEspacoTotal').textContent = espacoTotal.toFixed(2) + ' MB';
+        
+        // Último backup
+        const ultimo = new Date(this.backups[0].data);
+        document.getElementById('statUltimoBackup').textContent = 
+            ultimo.toLocaleDateString('pt-BR');
+        
+        // Backups da semana
+        const umaSemana = new Date();
+        umaSemana.setDate(umaSemana.getDate() - 7);
+        const backupsSemana = this.backups.filter(b => new Date(b.data) > umaSemana).length;
+        document.getElementById('statBackupsSemana').textContent = backupsSemana;
+    }
+
+    mostrarErroBackup(mensagem) {
+        const tbody = document.getElementById('tabelaBackupsBody');
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 60px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px;"></i>
+                        <h3 style="color: #7f1d1d; margin-bottom: 5px;">Erro ao carregar backups</h3>
+                        <p style="color: #6b7280;">${mensagem}</p>
+                        <button onclick="admin.carregarBackups()" style="
+                            margin-top: 15px;
+                            padding: 8px 20px;
+                            background: #10b981;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    // ============ FUNÇÕES DE BACKUP ============
+
     async criarBackup() {
         try {
-            this.showToast('Criando backup...', 'info');
+            this.showToast('🔄 Criando backup...', 'info');
 
-            const response = await fetch(`${this.apiBase}/backups/criar`, {
+            const response = await fetch('/api/admin/backups/criar', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                headers: { 
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Content-Type': 'application/json'
+                }
             });
 
             const data = await response.json();
 
             if (data.success) {
-                this.showToast('Backup criado com sucesso!', 'success');
-                this.loadBackups();
+                this.showToast('✅ Backup criado com sucesso!', 'success');
+                await this.carregarBackups(); // Recarregar lista
             } else {
                 throw new Error(data.error || 'Erro ao criar backup');
             }
 
         } catch (error) {
-            console.error('Erro ao criar backup:', error);
-            this.showToast('Erro: ' + error.message, 'error');
+            console.error('❌ Erro ao criar backup:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
     }
 
     async restaurarBackup(arquivo) {
         const confirmar = await this.confirmar(
-            'Restaurar Backup',
-            `Tem certeza que deseja restaurar o backup <strong>${arquivo}</strong>?<br><br>
-            <span style="color: #dc3545; font-weight: bold;">⚠️ ATENÇÃO:</span><br>
-            Todos os dados atuais serão substituídos pelos dados do backup.<br>
+            '⚠️ Restaurar Backup',
+            `<strong style="color: #dc3545;">ATENÇÃO!</strong><br><br>
+            Você está prestes a restaurar o backup <strong>${arquivo}</strong>.<br><br>
+            <strong>Todos os dados atuais serão SUBSTITUÍDOS pelos dados do backup.</strong><br><br>
             Esta ação não pode ser desfeita.`
         );
 
         if (!confirmar) return;
 
         try {
-            this.showToast('Restaurando backup...', 'info');
+            this.showToast('🔄 Restaurando backup...', 'info');
 
-            const response = await fetch(`${this.apiBase}/backups/restaurar/${arquivo}`, {
+            const response = await fetch(`/api/admin/backups/restaurar/${arquivo}`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                headers: { 
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Content-Type': 'application/json'
+                }
             });
 
             const data = await response.json();
 
             if (data.success) {
-                this.showToast('Backup restaurado com sucesso! Recarregando sistema...', 'success');
-                setTimeout(() => window.location.reload(), 3000);
+                this.showToast('✅ Backup restaurado com sucesso! Recarregando...', 'success');
+                setTimeout(() => window.location.reload(), 2000);
             } else {
                 throw new Error(data.error || 'Erro ao restaurar backup');
             }
 
         } catch (error) {
-            console.error('Erro ao restaurar backup:', error);
-            this.showToast('Erro: ' + error.message, 'error');
+            console.error('❌ Erro ao restaurar backup:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
     }
 
+    // ============ EXCLUIR BACKUP ============
     async excluirBackup(arquivo) {
         const confirmar = await this.confirmar(
-            'Excluir Backup',
-            `Tem certeza que deseja excluir o backup <strong>${arquivo}</strong>?`
+            '🗑️ Excluir Backup',
+            `Tem certeza que deseja excluir o backup <strong>${arquivo}</strong>?<br><br>
+            Esta ação não pode ser desfeita.`
         );
 
         if (!confirmar) return;
 
         try {
-            // Implementar exclusão de backup
-            this.showToast('Backup excluído!', 'success');
-            this.loadBackups();
+            this.showToast('🗑️ Excluindo backup...', 'info');
+
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/backups/excluir/${arquivo}`, {
+                method: 'DELETE',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showToast('✅ Backup excluído com sucesso!', 'success');
+                await this.carregarBackups(); // Recarregar a lista
+            } else {
+                throw new Error(data.error || 'Erro ao excluir backup');
+            }
+
         } catch (error) {
-            console.error('Erro ao excluir backup:', error);
-            this.showToast('Erro: ' + error.message, 'error');
+            console.error('❌ Erro ao excluir backup:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
     }
 
-    baixarBackup(arquivo) {
-        window.location.href = `/backups/${arquivo}`;
+    // ============ BAIXAR BACKUP (VERSÃO CORRIGIDA) ============
+    async baixarBackup(arquivo) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            if (!token) {
+                this.showToast('❌ Token não encontrado. Faça login novamente.', 'error');
+                return;
+            }
+            
+            this.showToast('📥 Preparando download...', 'info');
+            
+            // Usar fetch em vez de redirecionamento
+            const response = await fetch(`/api/admin/backups/download/${arquivo}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Erro ao baixar backup' }));
+                throw new Error(error.error || `Erro ${response.status}`);
+            }
+            
+            // Obter o blob do arquivo
+            const blob = await response.blob();
+            
+            // Criar URL para download
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = arquivo;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            this.showToast('✅ Download concluído!', 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao baixar backup:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
     }
+
 }
 
 // ============================================
