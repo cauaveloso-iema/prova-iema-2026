@@ -17,6 +17,7 @@ const fs = require('fs');
 const Groq = require("groq-sdk");
 const http = require('http'); // <-- LINHA ADICIONADA
 
+
 // ============ CRIAR DIRETÓRIOS NECESSÁRIOS PRIMEIRO ============
 const dirs = [
     path.join(__dirname, 'logs'),
@@ -57,6 +58,9 @@ const loggerService = new LoggerService(server); // <-- LINHA ADICIONADA
 // IMPORTE O EMAIL SERVICE
 const EmailService = require('./email-service-resend');
 const emailService = new EmailService();
+
+// IMPORTE MATRICULA AUTORIZADAS
+const matriculasManager = require('./matriculas-autorizados');
 
 // ============ MIDDLEWARES DE SEGURANÇA ============
 app.use(helmet({
@@ -621,6 +625,7 @@ app.post('/api/auth/register', [
       }
     }
     
+    // ========== VALIDAÇÃO PARA PROFESSORES ==========
     if (role === 'professor') {
         // ✅ LISTA COMPLETA DE EIXOS PERMITIDOS
         const eixosPermitidos = [
@@ -659,20 +664,25 @@ app.post('/api/auth/register', [
             });
         }
         
-        // VALIDAÇÃO DE MATRÍCULA AUTORIZADA PARA PROFESSORES
+        // 🔴 VALIDAÇÃO DE MATRÍCULA AUTORIZADA USANDO O ARQUIVO JSON
         console.log('🔍 Verificando matrícula de professor:', matriculaNumeros);
         
-        if (!professorAuth.isProfessorAuthorized(matriculaNumeros)) {
+        // Verificar se a matrícula está na lista de autorizadas
+        const autorizada = matriculasManager.verificarMatricula(matriculaNumeros);
+        const nomeProfessor = autorizada ? matriculasManager.obterNome(matriculaNumeros) : null;
+        
+        if (!autorizada) {
+            console.log('❌ Matrícula NÃO autorizada:', matriculaNumeros);
             return res.status(403).json({
                 success: false,
                 error: 'Matrícula não autorizada para cadastro como professor. Entre em contato com a administração.'
             });
         }
         
-        console.log('✅ Matrícula autorizada para professor:', matriculaNumeros);
+        console.log('✅ Matrícula autorizada para professor:', matriculaNumeros, ' - Nome:', nomeProfessor);
     }
     
-    // Validação para alunos
+    // ========== VALIDAÇÃO PARA ALUNOS ==========
     if (role === 'aluno') {
         if (!curso) {
             return res.status(400).json({
@@ -9376,6 +9386,426 @@ app.delete('/api/notificacoes/:id', authenticateToken, async (req, res) => {
         res.json(result);
     } catch (error) {
         console.error('❌ Erro ao deletar notificação:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+// ============ ROTAS PARA MATRÍCULAS AUTORIZADAS (APENAS ADMIN) ============
+
+
+// LISTAR todas as matrículas autorizadas
+app.get('/api/admin/matriculas-autorizadas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { busca } = req.query;
+        
+        console.log(`📋 Admin ${req.userId} acessando matrículas autorizadas`);
+        
+        let matriculas = matriculasManager.listar();
+        
+        // Aplicar busca se houver
+        if (busca) {
+            matriculas = matriculasManager.buscar(busca);
+        }
+        
+        res.json({
+            success: true,
+            matriculas: matriculas,
+            total: matriculas.length,
+            totalGeral: matriculasManager.listar().length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ADICIONAR nova matrícula
+app.post('/api/admin/matriculas-autorizadas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { matricula, nome } = req.body;
+        
+        // Validações
+        if (!matricula) {
+            return res.status(400).json({
+                success: false,
+                error: 'Matrícula é obrigatória'
+            });
+        }
+        
+        const matriculaStr = matricula.toString().replace(/\D/g, '');
+        
+        if (matriculaStr.length !== 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Matrícula inválida. Deve conter exatamente 6 dígitos.'
+            });
+        }
+        
+        if (!nome || nome.trim().length < 3) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nome é obrigatório e deve ter pelo menos 3 caracteres'
+            });
+        }
+        
+        const resultado = matriculasManager.adicionar(matriculaStr, nome.toUpperCase().trim());
+        
+        if (!resultado.success) {
+            return res.status(400).json({
+                success: false,
+                error: resultado.error
+            });
+        }
+        
+        console.log(`✅ Admin ${req.userId} adicionou matrícula ${matriculaStr}`);
+        
+        res.json({
+            success: true,
+            message: 'Matrícula autorizada com sucesso!',
+            matricula: resultado.matricula
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// EDITAR matrícula
+app.put('/api/admin/matriculas-autorizadas/:matricula', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { matricula } = req.params;
+        const { novaMatricula, nome } = req.body;
+        
+        if (!novaMatricula) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nova matrícula é obrigatória'
+            });
+        }
+        
+        const novaMatriculaStr = novaMatricula.toString().replace(/\D/g, '');
+        
+        if (novaMatriculaStr.length !== 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Matrícula inválida. Deve conter exatamente 6 dígitos.'
+            });
+        }
+        
+        if (!nome || nome.trim().length < 3) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nome é obrigatório'
+            });
+        }
+        
+        const resultado = matriculasManager.editar(matricula, novaMatriculaStr, nome.toUpperCase().trim());
+        
+        if (!resultado.success) {
+            return res.status(404).json({
+                success: false,
+                error: resultado.error
+            });
+        }
+        
+        console.log(`✅ Admin ${req.userId} editou matrícula ${matricula} → ${novaMatriculaStr}`);
+        
+        res.json({
+            success: true,
+            message: 'Matrícula atualizada com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// EXCLUIR matrícula
+app.delete('/api/admin/matriculas-autorizadas/:matricula', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { matricula } = req.params;
+        
+        const resultado = matriculasManager.excluir(matricula);
+        
+        if (!resultado.success) {
+            return res.status(404).json({
+                success: false,
+                error: resultado.error
+            });
+        }
+        
+        console.log(`✅ Admin ${req.userId} excluiu matrícula ${matricula}`);
+        
+        res.json({
+            success: true,
+            message: 'Matrícula excluída com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ROTA PÚBLICA PARA VERIFICAR MATRÍCULA (usada no cadastro)
+app.get('/api/matriculas-autorizadas/verificar/:matricula', async (req, res) => {
+    try {
+        const { matricula } = req.params;
+        const matriculaStr = matricula.toString().replace(/\D/g, '');
+        
+        const autorizada = matriculasManager.verificarMatricula(matriculaStr);
+        const nome = autorizada ? matriculasManager.obterNome(matriculaStr) : null;
+        
+        res.json({
+            success: true,
+            autorizada: autorizada,
+            matricula: matriculaStr,
+            nome: nome
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ ROTA PARA BUSCAR PROFESSORES CADASTRADOS ============
+app.get('/api/admin/professores-cadastrados', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        console.log(`📋 Admin ${req.userId} buscando professores cadastrados`);
+        
+        // Buscar todos os usuários com role = 'professor'
+        const professores = await User.find({ 
+            role: 'professor',
+        }).select('nome email matricula ativo createdAt'); 
+        
+        // Criar um mapa de matrículas para consulta rápida
+        const professoresMap = {};
+        professores.forEach(prof => {
+            professoresMap[prof.matricula] = {
+                id: prof._id,
+                nome: prof.nome,
+                email: prof.email,
+                ativo: prof.ativo,
+                createdAt: prof.createdAt // 👈 INCLUIR DATA DE CRIAÇÃO
+            };
+        });
+        
+        console.log(`✅ Encontrados ${professores.length} professores`);
+        
+        res.json({
+            success: true,
+            professores: professores,
+            mapa: professoresMap,
+            total: professores.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar professores:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao buscar professores: ' + error.message
+        });
+    }
+});
+
+// ============ ROTAS PARA GERENCIAR PROFESSORES ============
+
+// LISTAR todos os professores (com filtros)
+app.get('/api/admin/professores', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { status, busca } = req.query;
+        
+        let query = { role: 'professor' };
+        
+        // Filtrar por status
+        if (status === 'ativos') {
+            query.ativo = true;
+        } else if (status === 'inativos') {
+            query.ativo = false;
+        }
+        
+        // Busca por nome, email ou matrícula
+        if (busca) {
+            query.$or = [
+                { nome: { $regex: busca, $options: 'i' } },
+                { email: { $regex: busca, $options: 'i' } },
+                { matricula: { $regex: busca, $options: 'i' } }
+            ];
+        }
+        
+        const professores = await User.find(query)
+            .select('nome email matricula eixo ativo createdAt ultimoAcesso')
+            .sort({ nome: 1 });
+        
+        console.log(`📋 Admin ${req.userId} listou ${professores.length} professores`);
+        
+        res.json({
+            success: true,
+            professores,
+            total: professores.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar professores:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ATIVAR/INATIVAR professor (toggle status)
+app.put('/api/admin/professores/:id/toggle-status', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ativo } = req.body; // true = ativar, false = inativar
+        
+        console.log(`🔄 Admin ${req.userId} alterando status do professor ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        
+        const professor = await User.findById(id);
+        
+        if (!professor) {
+            return res.status(404).json({
+                success: false,
+                error: 'Professor não encontrado'
+            });
+        }
+        
+        if (professor.role !== 'professor') {
+            return res.status(400).json({
+                success: false,
+                error: 'Este usuário não é um professor'
+            });
+        }
+        
+        professor.ativo = ativo;
+        await professor.save();
+        
+        console.log(`✅ Professor ${professor.nome} agora está ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        
+        res.json({
+            success: true,
+            message: `Professor ${ativo ? 'ativado' : 'inativado'} com sucesso!`,
+            professor: {
+                id: professor._id,
+                nome: professor.nome,
+                ativo: professor.ativo
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao alterar status:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// EXCLUIR professor (apenas se não tiver provas/turmas)
+app.delete('/api/admin/professores/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} tentando excluir professor ${id}`);
+        
+        const professor = await User.findById(id);
+        
+        if (!professor) {
+            return res.status(404).json({
+                success: false,
+                error: 'Professor não encontrado'
+            });
+        }
+        
+        if (professor.role !== 'professor') {
+            return res.status(400).json({
+                success: false,
+                error: 'Este usuário não é um professor'
+            });
+        }
+        
+        // Verificar se o professor tem provas ou turmas associadas
+        const [provas, turmas] = await Promise.all([
+            Prova.countDocuments({ userId: id }),
+            Turma.countDocuments({ professorId: id })
+        ]);
+        
+        if (provas > 0 || turmas > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Este professor possui provas ou turmas associadas',
+                detalhes: {
+                    provas,
+                    turmas
+                },
+                sugestao: 'Inative o professor em vez de excluí-lo'
+            });
+        }
+        
+        // Se não tiver vínculos, pode excluir
+        await User.findByIdAndDelete(id);
+        
+        console.log(`✅ Professor ${professor.nome} excluído permanentemente`);
+        
+        res.json({
+            success: true,
+            message: 'Professor excluído permanentemente!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir professor:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// REATIVAR professor inativo
+app.put('/api/admin/professores/:id/reativar', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🔄 Admin ${req.userId} reativando professor ${id}`);
+        
+        const professor = await User.findById(id);
+        
+        if (!professor) {
+            return res.status(404).json({
+                success: false,
+                error: 'Professor não encontrado'
+            });
+        }
+        
+        professor.ativo = true;
+        await professor.save();
+        
+        console.log(`✅ Professor ${professor.nome} reativado!`);
+        
+        res.json({
+            success: true,
+            message: 'Professor reativado com sucesso!',
+            professor: {
+                id: professor._id,
+                nome: professor.nome,
+                ativo: true
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao reativar professor:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

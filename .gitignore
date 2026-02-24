@@ -29,6 +29,7 @@ Thumbs.db
 
 # DADOS SENSÍVEIS - NUNCA COMMITAR
 backend/matriculas-autorizados.js
+backend/matriculas-data.json
 backend/security/config/
 security-keys-backup.txt
 *.key

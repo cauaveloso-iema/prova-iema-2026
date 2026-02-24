@@ -7652,6 +7652,1754 @@ class AdminPanel {
             `;
         } 
     
+    
+    // ============ MATRÍCULAS AUTORIZADAS ============
+
+    // ============ MATRÍCULAS AUTORIZADAS - VERSÃO PROFISSIONAL ============
+    async loadMatriculas() {
+        const contentArea = document.getElementById('contentArea');
+        
+        contentArea.innerHTML = `
+            <div class="matriculas-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="matriculas-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>Matrículas Autorizadas</h1>
+                            <p>Gerencie as matrículas que podem se cadastrar como professores</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.carregarMatriculas()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-header btn-primary" onclick="admin.abrirModalMatricula()">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Nova Matrícula</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE ESTATÍSTICAS -->
+                <div class="stats-cards" id="statsMatriculas">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="statTotalMatriculas">0</span>
+                            <span class="stat-label">Total de Matrículas</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="statProfessoresCadastrados">0</span>
+                            <span class="stat-label">Professores Cadastrados</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="statUltimaAtualizacao">-</span>
+                            <span class="stat-label">Última Atualização</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BARRA DE FILTROS AVANÇADA -->
+                <div class="filters-card">
+                    <div class="filters-header">
+                        <div class="filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <h3>Filtros e Busca</h3>
+                        </div>
+                        <span class="filters-badge" id="resultadosEncontrados">72 resultados</span>
+                    </div>
+                    
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label><i class="fas fa-search"></i> Buscar matrícula ou nome</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="buscaMatricula" 
+                                    placeholder="Ex: 110102 ou CAUA VELOSO..." 
+                                    oninput="admin.buscarMatriculas()"
+                                    autocomplete="off">
+                                <i class="fas fa-search input-icon"></i>
+                                <button class="input-clear" onclick="admin.limparBuscaMatricula()" style="display: none;" id="clearBusca">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-filter"></i> Filtrar por</label>
+                            <select id="filtroStatusMatricula" class="filter-select" onchange="admin.filtrarMatriculasPorStatus()">
+                                <option value="todas">Todas as matrículas</option>
+                                <option value="comProfessor">Com professor cadastrado</option>
+                                <option value="semProfessor">Sem professor cadastrado</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-actions">
+                            <button class="btn-filter" onclick="admin.limparFiltrosMatriculas()">
+                                <i class="fas fa-eraser"></i> Limpar filtros
+                            </button>
+                            <button class="btn-filter btn-export" onclick="admin.exportarMatriculasCSV()">
+                                <i class="fas fa-download"></i> Exportar CSV
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- TAGS DE FILTROS ATIVOS -->
+                    <div class="active-filters" id="activeFilters" style="display: none;">
+                        <span class="active-filters-label">Filtros ativos:</span>
+                        <div class="filter-tags" id="filterTags"></div>
+                        <button class="clear-all-filters" onclick="admin.limparFiltrosMatriculas()">Limpar todos</button>
+                    </div>
+                </div>
+
+                <!-- TABELA DE MATRÍCULAS PROFISSIONAL -->
+                <div class="table-professional">
+                    <div class="table-header">
+                        <div class="table-title">
+                            <i class="fas fa-list"></i>
+                            <h3>Lista de Matrículas Autorizadas</h3>
+                        </div>
+                        <div class="table-info">
+                            <span class="items-per-page">
+                                <label>Mostrar:</label>
+                                <select onchange="admin.mudarItensPorPagina(this.value)">
+                                    <option value="10">10</option                                ><option value="25" selected>25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </span>
+                            <span class="items-counter" id="itemsCounter">1-25 de 72</span>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="data-table" id="tabelaMatriculas">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" onclick="admin.ordenarPor('matricula')">
+                                        Matrícula <i class="fas fa-sort" id="sort-matricula"></i>
+                                    </th>
+                                    <th class="sortable" onclick="admin.ordenarPor('nome')">
+                                        Nome do Professor <i class="fas fa-sort" id="sort-nome"></i>
+                                    </th>
+                                    <th>Status</th>
+                                    <th>Cadastro</th>
+                                    <th class="actions-header">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaMatriculasBody">
+                                <tr>
+                                    <td colspan="5" class="loading-row">
+                                        <div class="loading-spinner-small">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <span>Carregando matrículas...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- PAGINAÇÃO PROFISSIONAL -->
+                    <div class="pagination-professional">
+                        <div class="pagination-info">
+                            <span id="paginationInfo">Mostrando 1 a 25 de 72 registros</span>
+                        </div>
+                        <div class="pagination-controls">
+                            <button class="btn-pagination" onclick="admin.paginaAnterior()" id="btnPaginaAnterior" disabled>
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="pagination-pages" id="paginationPages">
+                                <button class="btn-page active">1</button>
+                                <button class="btn-page">2</button>
+                                <button class="btn-page">3</button>
+                                <span class="pagination-ellipsis">...</span>
+                                <button class="btn-page">8</button>
+                            </div>
+                            <button class="btn-pagination" onclick="admin.proximaPagina()" id="btnPaginaProxima">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INFORMAÇÕES ADICIONAIS -->
+                <div class="info-cards">
+                    <div class="info-card info-security">
+                        <div class="info-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="info-content">
+                            <h4>🔒 Acesso Restrito</h4>
+                            <p>Apenas administradores podem visualizar e gerenciar esta lista. As matrículas aqui cadastradas são as únicas permitidas para registro de novos professores.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card info-tip">
+                        <div class="info-icon">
+                            <i class="fas fa-lightbulb"></i>
+                        </div>
+                        <div class="info-content">
+                            <h4>💡 Dica Rápida</h4>
+                            <p>Ao adicionar uma nova matrícula, use o nome completo do professor em maiúsculas para padronizar. Ex: MARIA DA SILVA</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                /* ===== ESTILOS PROFISSIONAIS PARA MATRÍCULAS ===== */
+                .matriculas-container {
+                    padding: 24px;
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                }
+
+                /* Header Profissional */
+                .matriculas-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .matriculas-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -50px;
+                    right: -50px;
+                    width: 200px;
+                    height: 200px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 50%;
+                }
+
+                .matriculas-header::after {
+                    content: '';
+                    position: absolute;
+                    bottom: -80px;
+                    left: -80px;
+                    width: 300px;
+                    height: 300px;
+                    background: rgba(255,255,255,0.05);
+                    border-radius: 50%;
+                }
+
+                .header-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    position: relative;
+                    z-index: 2;
+                }
+
+                .header-icon {
+                    width: 70px;
+                    height: 70px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.2);
+                }
+
+                .header-text h1 {
+                    color: white;
+                    font-size: 28px;
+                    font-weight: 600;
+                    margin: 0 0 5px;
+                }
+
+                .header-text p {
+                    color: rgba(255,255,255,0.9);
+                    font-size: 14px;
+                    margin: 0;
+                }
+
+                .btn-header {
+                    padding: 12px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    border: none;
+                    position: relative;
+                    z-index: 2;
+                }
+
+                .btn-header.btn-primary {
+                    background: white;
+                    color: #667eea;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                }
+
+                .btn-header.btn-primary:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+                }
+
+                .btn-header.btn-refresh {
+                    background: rgba(255,255,255,0.15);
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    backdrop-filter: blur(5px);
+                    padding: 12px;
+                }
+
+                .btn-header.btn-refresh:hover {
+                    background: rgba(255,255,255,0.25);
+                    transform: rotate(180deg);
+                }
+
+                /* Stats Cards */
+                .stats-cards {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+
+                .stat-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    transition: all 0.3s;
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+
+                .stat-card:hover {
+                    transform: translateY(-4px);
+                    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+                }
+
+                .stat-icon {
+                    width: 60px;
+                    height: 60px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                    color: white;
+                }
+
+                .stat-content {
+                    flex: 1;
+                }
+
+                .stat-value {
+                    display: block;
+                    font-size: 28px;
+                    font-weight: 700;
+                    color: #1f2937;
+                    line-height: 1.2;
+                }
+
+                .stat-label {
+                    font-size: 13px;
+                    color: #6b7280;
+                }
+
+                /* Filtros Card */
+                .filters-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+
+                .filters-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+
+                .filters-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+
+                .filters-title i {
+                    font-size: 18px;
+                    color: #667eea;
+                    background: #f0f4ff;
+                    padding: 8px;
+                    border-radius: 10px;
+                }
+
+                .filters-title h3 {
+                    margin: 0;
+                    font-size: 16px;
+                    color: #374151;
+                }
+
+                .filters-badge {
+                    background: #667eea;
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+
+                .filters-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 1fr auto;
+                    gap: 15px;
+                    margin-bottom: 20px;
+                }
+
+                .filter-group {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 5px;
+                }
+
+                .filter-group label {
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #4b5563;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+
+                .input-wrapper {
+                    position: relative;
+                }
+
+                .input-wrapper input {
+                    width: 100%;
+                    padding: 10px 35px 10px 40px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    transition: all 0.3s;
+                }
+
+                .input-wrapper input:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    box-shadow: 0 0 0 4px rgba(102,126,234,0.1);
+                }
+
+                .input-icon {
+                    position: absolute;
+                    left: 15px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #9ca3af;
+                    font-size: 14px;
+                }
+
+                .input-clear {
+                    position: absolute;
+                    right: 10px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background: none;
+                    border: none;
+                    color: #9ca3af;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    transition: all 0.2s;
+                }
+
+                .input-clear:hover {
+                    background: #f3f4f6;
+                    color: #4b5563;
+                }
+
+                .filter-select {
+                    width: 100%;
+                    padding: 10px 15px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    background: white;
+                    cursor: pointer;
+                }
+
+                .filter-actions {
+                    display: flex;
+                    gap: 10px;
+                    align-items: flex-end;
+                }
+
+                .btn-filter {
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    background: #f3f4f6;
+                    color: #4b5563;
+                    white-space: nowrap;
+                }
+
+                .btn-filter:hover {
+                    background: #e5e7eb;
+                }
+
+                .btn-filter.btn-export {
+                    background: #10b981;
+                    color: white;
+                }
+
+                .btn-filter.btn-export:hover {
+                    background: #059669;
+                }
+
+                .active-filters {
+                    margin-top: 15px;
+                    padding: 15px;
+                    background: #f9fafb;
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                }
+
+                .active-filters-label {
+                    font-size: 12px;
+                    color: #6b7280;
+                    font-weight: 500;
+                }
+
+                .filter-tags {
+                    display: flex;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    flex: 1;
+                }
+
+                .filter-tag {
+                    background: white;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 30px;
+                    padding: 4px 12px;
+                    font-size: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+
+                .filter-tag i {
+                    color: #9ca3af;
+                    cursor: pointer;
+                }
+
+                .filter-tag i:hover {
+                    color: #ef4444;
+                }
+
+                .clear-all-filters {
+                    background: none;
+                    border: none;
+                    color: #667eea;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+
+                /* Tabela Profissional */
+                .table-professional {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    overflow: hidden;
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+
+                .table-header {
+                    padding: 16px 20px;
+                    background: #f9fafb;
+                    border-bottom: 1px solid #e5e7eb;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+
+                .table-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+
+                .table-title i {
+                    color: #667eea;
+                    font-size: 16px;
+                }
+
+                .table-title h3 {
+                    margin: 0;
+                    font-size: 15px;
+                    color: #374151;
+                }
+
+                .table-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                }
+
+                .items-per-page {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 13px;
+                    color: #6b7280;
+                }
+
+                .items-per-page select {
+                    padding: 5px 8px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    background: white;
+                }
+
+                .items-counter {
+                    font-size: 13px;
+                    color: #6b7280;
+                    font-weight: 500;
+                }
+
+                .data-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+
+                .data-table th {
+                    padding: 15px 20px;
+                    text-align: left;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #4b5563;
+                    background: #f9fafb;
+                    border-bottom: 2px solid #e5e7eb;
+                }
+
+                .data-table th.sortable {
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+
+                .data-table th.sortable:hover {
+                    background: #f3f4f6;
+                }
+
+                .data-table td {
+                    padding: 15px 20px;
+                    border-bottom: 1px solid #e5e7eb;
+                    font-size: 14px;
+                    color: #1f2937;
+                }
+
+                .data-table tr:hover td {
+                    background: #f9fafb;
+                }
+
+                .actions-header {
+                    width: 100px;
+                }
+
+                .status-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    padding: 4px 10px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+
+                .status-badge.success {
+                    background: #d1fae5;
+                    color: #065f46;
+                }
+
+                .status-badge.warning {
+                    background: #fef3c7;
+                    color: #92400e;
+                }
+
+                .status-badge.info {
+                    background: #dbeafe;
+                    color: #1e40af;
+                }
+
+                .cadastro-info {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                }
+
+                .cadastro-data {
+                    font-size: 12px;
+                    color: #6b7280;
+                }
+
+                .cadastro-por {
+                    font-size: 11px;
+                    color: #9ca3af;
+                }
+
+                .loading-row td {
+                    padding: 60px;
+                    text-align: center;
+                }
+
+                .loading-spinner-small {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 10px;
+                    color: #6b7280;
+                }
+
+                .loading-spinner-small i {
+                    font-size: 20px;
+                    color: #667eea;
+                }
+
+                /* Paginação */
+                .pagination-professional {
+                    padding: 16px 20px;
+                    border-top: 1px solid #e5e7eb;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }
+
+                .pagination-info {
+                    font-size: 13px;
+                    color: #6b7280;
+                }
+
+                .pagination-controls {
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                }
+
+                .btn-pagination {
+                    width: 38px;
+                    height: 38px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #4b5563;
+                    transition: all 0.2s;
+                }
+
+                .btn-pagination:hover:not(:disabled) {
+                    background: #f3f4f6;
+                    border-color: #667eea;
+                    color: #667eea;
+                }
+
+                .btn-pagination:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                .pagination-pages {
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                }
+
+                .btn-page {
+                    min-width: 38px;
+                    height: 38px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #4b5563;
+                    transition: all 0.2s;
+                }
+
+                .btn-page:hover {
+                    background: #f3f4f6;
+                    border-color: #667eea;
+                    color: #667eea;
+                }
+
+                .btn-page.active {
+                    background: #667eea;
+                    border-color: #667eea;
+                    color: white;
+                }
+
+                .pagination-ellipsis {
+                    color: #6b7280;
+                    font-size: 13px;
+                    padding: 0 5px;
+                }
+
+                /* Info Cards */
+                .info-cards {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 20px;
+                    margin-top: 30px;
+                }
+
+                .info-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    display: flex;
+                    gap: 15px;
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+
+                .info-card.info-security {
+                    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+                }
+
+                .info-card.info-tip {
+                    background: linear-gradient(135deg, #fefce8, #fef9c3);
+                }
+
+                .info-icon {
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 20px;
+                    flex-shrink: 0;
+                }
+
+                .info-security .info-icon {
+                    background: #fee2e2;
+                    color: #b91c1c;
+                }
+
+                .info-tip .info-icon {
+                    background: #fef9c3;
+                    color: #854d0e;
+                }
+
+                .info-content h4 {
+                    margin: 0 0 8px;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+
+                .info-content p {
+                    margin: 0;
+                    font-size: 13px;
+                    color: #4b5563;
+                    line-height: 1.5;
+                }
+
+                /* Responsividade */
+                @media (max-width: 1024px) {
+                    .filters-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .info-cards {
+                        grid-template-columns: 1fr;
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .matriculas-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+                    
+                    .header-left {
+                        width: 100%;
+                    }
+                    
+                    .header-actions {
+                        width: 100%;
+                        display: flex;
+                        gap: 10px;
+                    }
+                    
+                    .btn-header {
+                        flex: 1;
+                    }
+                    
+                    .stats-cards {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .pagination-professional {
+                        flex-direction: column;
+                        align-items: stretch;
+                    }
+                    
+                    .pagination-controls {
+                        justify-content: center;
+                    }
+                }
+            </style>
+        `;
+        
+        await this.carregarMatriculas();
+    }
+
+    // ============ EXCLUIR MATRÍCULA (VERSÃO REAL) ============
+    async excluirMatricula(matricula) {
+        const item = this.matriculas.find(m => m.matricula === matricula);
+        
+        if (!item) return;
+        
+        // 🔴 VERIFICAR SE TEM PROFESSOR CADASTRADO
+        if (item.cadastrado) {
+            this.showToast('❌ Não é possível excluir matrícula de um professor já cadastrado', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            'Excluir Matrícula',
+            `Tem certeza que deseja excluir a matrícula <strong>${matricula}</strong> de <strong>${item?.nome || 'desconhecido'}</strong>?<br><br>
+            Este professor não poderá mais se cadastrar no sistema.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/matriculas-autorizadas/${matricula}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Matrícula excluída!', 'success');
+                await this.carregarMatriculas(); // Recarregar com dados reais
+            } else {
+                throw new Error(data.error || 'Erro ao excluir');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ CARREGAR MATRÍCULAS (VERSÃO REAL) ============
+    async carregarMatriculas() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Mostrar loading
+            this.mostrarLoadingTabela();
+            
+            // Buscar matrículas autorizadas E professores cadastrados em paralelo
+            const [matriculasRes, professoresRes] = await Promise.all([
+                fetch('/api/admin/matriculas-autorizadas', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch('/api/admin/professores-cadastrados', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+            
+            const matriculasData = await matriculasRes.json();
+            const professoresData = await professoresRes.json();
+            
+            if (!matriculasData.success) {
+                throw new Error(matriculasData.error || 'Erro ao carregar matrículas');
+            }
+            
+            // Processar dados
+            this.matriculas = matriculasData.matriculas || [];
+            this.professoresMap = professoresData.mapa || {};
+
+            // Adicionar informação REAL de cadastro
+            this.matriculas = this.matriculas.map(matricula => {
+                const professorInfo = this.professoresMap[matricula.matricula] || null;
+                return {
+                    ...matricula,
+                    cadastrado: !!professorInfo,
+                    professorInfo: professorInfo, // Agora inclui nome, email, id, ativo e createdAt
+                    professorAtivo: professorInfo ? professorInfo.ativo : null
+                };
+            });
+            
+            // Filtrar e ordenar
+            this.matriculasFiltradas = [...this.matriculas];
+            this.paginaAtual = 1;
+            this.itensPorPagina = 25;
+            
+            // Atualizar estatísticas com dados REAIS
+            this.atualizarEstatisticasMatriculas();
+            
+            // Renderizar tabela
+            this.renderizarTabelaMatriculas();
+            this.atualizarPaginacao();
+            
+            // Atualizar contador de resultados
+            document.getElementById('resultadosEncontrados').textContent = 
+                `${this.matriculasFiltradas.length} resultados`;
+            
+            console.log('✅ Matrículas carregadas com dados REAIS:', {
+                total: this.matriculas.length,
+                cadastrados: this.matriculas.filter(m => m.cadastrado).length,
+                pendentes: this.matriculas.filter(m => !m.cadastrado).length
+            });
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar matrículas:', error);
+            this.mostrarErroTabela(error.message);
+        }
+    }
+
+    // ============ FORMATAR DATA PARA EXIBIÇÃO ============
+    formatarData(dataISO) {
+        if (!dataISO) return '—';
+        
+        try {
+            const data = new Date(dataISO);
+            
+            // Verificar se é uma data válida
+            if (isNaN(data.getTime())) return '—';
+            
+            // Formatar: DD/MM/AAAA HH:MM
+            return data.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (error) {
+            console.error('Erro ao formatar data:', error);
+            return '—';
+        }
+    }
+
+    mostrarLoadingTabela() {
+        const tbody = document.getElementById('tabelaMatriculasBody');
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr class="loading-row">
+                    <td colspan="5">
+                        <div class="loading-spinner-small">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Carregando matrículas...</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+
+    atualizarEstatisticasMatriculas() {
+        const total = this.matriculas.length;
+        const cadastrados = this.matriculas.filter(m => m.cadastrado).length;
+        const pendentes = total - cadastrados;
+        
+        document.getElementById('statTotalMatriculas').textContent = total;
+        document.getElementById('statProfessoresCadastrados').textContent = cadastrados;
+        
+        const agora = new Date();
+        document.getElementById('statUltimaAtualizacao').textContent = 
+            agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ============ RENDERIZAR TABELA COM DADOS REAIS (VERSÃO CORRIGIDA) ============
+    renderizarTabelaMatriculas() {
+        const tbody = document.getElementById('tabelaMatriculasBody');
+        if (!tbody) return;
+        
+        const inicio = (this.paginaAtual - 1) * this.itensPorPagina;
+        const fim = inicio + this.itensPorPagina;
+        const paginaMatriculas = this.matriculasFiltradas.slice(inicio, fim);
+        
+        if (paginaMatriculas.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 60px;">
+                        <i class="fas fa-inbox" style="font-size: 48px; color: #d1d5db; margin-bottom: 15px;"></i>
+                        <h3 style="color: #6b7280; margin-bottom: 5px;">Nenhuma matrícula encontrada</h3>
+                        <p style="color: #9ca3af;">Tente ajustar os filtros de busca</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let html = '';
+        paginaMatriculas.forEach((item, index) => {
+            const cadastrado = item.cadastrado;
+            const statusClass = cadastrado ? 'success' : 'warning';
+            const statusText = cadastrado ? 'Professor cadastrado' : 'Aguardando cadastro';
+            const statusIcon = cadastrado ? 'fa-check-circle' : 'fa-clock';
+            
+            const professorInfo = item.professorInfo;
+            
+            // 🔴 CORREÇÃO AQUI: Verificar status ATIVO corretamente
+            let professorAtivo = false;
+            let statusProfessorClass = 'secondary';
+            let statusProfessorText = 'Desconhecido';
+            
+            if (professorInfo) {
+                // Verificar o campo 'ativo' - pode vir de diferentes formas
+                if (professorInfo.ativo === true || professorInfo.ativo === 'true' || professorInfo.ativo === 1) {
+                    professorAtivo = true;
+                    statusProfessorClass = 'success';
+                    statusProfessorText = 'Ativo';
+                } else if (professorInfo.ativo === false || professorInfo.ativo === 'false' || professorInfo.ativo === 0) {
+                    professorAtivo = false;
+                    statusProfessorClass = 'secondary';
+                    statusProfessorText = 'Inativo';
+                } else {
+                    // Se não veio informação, considerar como ativo? (default)
+                    professorAtivo = true;
+                    statusProfessorClass = 'success';
+                    statusProfessorText = 'Ativo (default)';
+                }
+                
+                // Log para debug (remover depois)
+                console.log(`Professor ${professorInfo.nome}: ativo =`, professorInfo.ativo, '→', professorAtivo ? 'ATIVO' : 'INATIVO');
+            }
+            
+            html += `
+                <tr>
+                    <td><strong>${item.matricula}</strong></td>
+                    <td>
+                        ${item.nome || 'Nome não informado'}
+                        ${professorInfo ? `<br><small style="color: #6b7280; font-size: 11px;">${professorInfo.nome}</small>` : ''}
+                    </td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            <i class="fas ${statusIcon}"></i>
+                            ${statusText}
+                        </span>
+                        ${professorInfo ? `
+                            <br>
+                            <span class="status-badge ${statusProfessorClass}" style="margin-top: 5px;">
+                                <i class="fas fa-circle"></i>
+                                ${statusProfessorText}
+                            </span>
+                        ` : ''}
+                    </td>
+                    <td>
+                        <div class="cadastro-info">
+                            ${professorInfo ? `
+                                <span class="cadastro-data"><i class="fas fa-envelope"></i> ${professorInfo.email || '—'}</span>
+                                <span class="cadastro-data" style="margin-top: 3px;">
+                                    <i class="fas fa-calendar-alt"></i> ${this.formatarData(professorInfo.createdAt)}
+                                </span>
+                                <span class="cadastro-por" style="margin-top: 3px;">
+                                    <i class="fas fa-id-card"></i> ID: ${professorInfo.id?.substring(0,8)}...
+                                </span>
+                            ` : '—'}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="action-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            <!-- Botão Editar Matrícula (sempre disponível) -->
+                            <button class="btn-icon" onclick="admin.editarMatricula('${item.matricula}')" title="Editar matrícula">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            
+                            ${cadastrado ? `
+                                <!-- AÇÕES DO PROFESSOR (quando já cadastrado) -->
+                                ${professorAtivo ? `
+                                    <button class="btn-icon warning" onclick="admin.toggleStatusProfessor('${professorInfo.id}', '${professorInfo.nome}', true)" 
+                                            title="Inativar professor (bloquear acesso)">
+                                        <i class="fas fa-pause-circle"></i>
+                                    </button>
+                                ` : `
+                                    <button class="btn-icon success" onclick="admin.toggleStatusProfessor('${professorInfo.id}', '${professorInfo.nome}', false)" 
+                                            title="Reativar professor">
+                                        <i class="fas fa-play-circle"></i>
+                                    </button>
+                                `}
+                                
+                                <button class="btn-icon danger" onclick="admin.excluirProfessor('${professorInfo.id}', '${professorInfo.nome}')" 
+                                        title="Excluir permanentemente (apenas se não tiver vínculos)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : `
+                                <!-- APENAS EXCLUIR MATRÍCULA (quando não cadastrado) -->
+                                <button class="btn-icon danger" onclick="admin.excluirMatricula('${item.matricula}')" 
+                                        title="Excluir matrícula (professor ainda não cadastrado)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            `}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tbody.innerHTML = html;
+        
+        // Atualizar contadores
+        const total = this.matriculasFiltradas.length;
+        const inicioExibicao = (this.paginaAtual - 1) * this.itensPorPagina + 1;
+        const fimExibicao = Math.min(this.paginaAtual * this.itensPorPagina, total);
+        
+        document.getElementById('itemsCounter').textContent = 
+            `${inicioExibicao}-${fimExibicao} de ${total}`;
+        document.getElementById('paginationInfo').textContent = 
+            `Mostrando ${inicioExibicao} a ${fimExibicao} de ${total} registros`;
+    }
+
+
+    atualizarPaginacao() {
+        const total = this.matriculasFiltradas.length;
+        const totalPaginas = Math.ceil(total / this.itensPorPagina);
+        
+        document.getElementById('btnPaginaAnterior').disabled = this.paginaAtual === 1;
+        document.getElementById('btnPaginaProxima').disabled = this.paginaAtual === totalPaginas;
+        
+        // Gerar botões de página
+        const container = document.getElementById('paginationPages');
+        let html = '';
+        
+        // Sempre mostrar primeira página
+        html += `<button class="btn-page ${this.paginaAtual === 1 ? 'active' : ''}" 
+            onclick="admin.irParaPagina(1)">1</button>`;
+        
+        if (totalPaginas > 7) {
+            if (this.paginaAtual > 3) {
+                html += '<span class="pagination-ellipsis">...</span>';
+            }
+            
+            // Páginas ao redor da atual
+            for (let i = Math.max(2, this.paginaAtual - 1); 
+                i <= Math.min(totalPaginas - 1, this.paginaAtual + 1); i++) {
+                if (i > 1 && i < totalPaginas) {
+                    html += `<button class="btn-page ${this.paginaAtual === i ? 'active' : ''}" 
+                        onclick="admin.irParaPagina(${i})">${i}</button>`;
+                }
+            }
+            
+            if (this.paginaAtual < totalPaginas - 2) {
+                html += '<span class="pagination-ellipsis">...</span>';
+            }
+            
+            // Última página
+            if (totalPaginas > 1) {
+                html += `<button class="btn-page ${this.paginaAtual === totalPaginas ? 'active' : ''}" 
+                    onclick="admin.irParaPagina(${totalPaginas})">${totalPaginas}</button>`;
+            }
+        } else {
+            // Mostrar todas as páginas
+            for (let i = 2; i <= totalPaginas; i++) {
+                html += `<button class="btn-page ${this.paginaAtual === i ? 'active' : ''}" 
+                    onclick="admin.irParaPagina(${i})">${i}</button>`;
+            }
+        }
+        
+        container.innerHTML = html;
+    }
+
+    async buscarMatriculas() {
+        const termo = document.getElementById('buscaMatricula')?.value || '';
+        
+        // Mostrar botão de limpar
+        const clearBtn = document.getElementById('clearBusca');
+        if (clearBtn) {
+            clearBtn.style.display = termo ? 'flex' : 'none';
+        }
+        
+        if (!termo) {
+            this.matriculasFiltradas = [...this.matriculas];
+        } else {
+            const termoLower = termo.toLowerCase();
+            this.matriculasFiltradas = this.matriculas.filter(m => 
+                m.matricula.includes(termo) || 
+                (m.nome && m.nome.toLowerCase().includes(termoLower))
+            );
+        }
+        
+        this.paginaAtual = 1;
+        this.renderizarTabelaMatriculas();
+        this.atualizarPaginacao();
+        
+        document.getElementById('resultadosEncontrados').textContent = 
+            `${this.matriculasFiltradas.length} resultados`;
+    }
+
+    limparBuscaMatricula() {
+        document.getElementById('buscaMatricula').value = '';
+        document.getElementById('clearBusca').style.display = 'none';
+        this.buscarMatriculas();
+    }
+
+    
+    filtrarMatriculasPorStatus() {
+        const filtro = document.getElementById('filtroStatusMatricula')?.value || 'todas';
+        
+        if (filtro === 'todas') {
+            this.matriculasFiltradas = [...this.matriculas];
+        } else {
+            const buscarCadastrados = filtro === 'comProfessor';
+            this.matriculasFiltradas = this.matriculas.filter(m => 
+                m.cadastrado === buscarCadastrados
+            );
+        }
+        
+        this.paginaAtual = 1;
+        this.renderizarTabelaMatriculas();
+        this.atualizarPaginacao();
+        
+        document.getElementById('resultadosEncontrados').textContent = 
+            `${this.matriculasFiltradas.length} resultados`;
+    }
+
+
+    limparFiltrosMatriculas() {
+        document.getElementById('buscaMatricula').value = '';
+        document.getElementById('clearBusca').style.display = 'none';
+        document.getElementById('filtroStatusMatricula').value = 'todas';
+        
+        this.matriculasFiltradas = [...this.matriculas];
+        this.paginaAtual = 1;
+        this.renderizarTabelaMatriculas();
+        this.atualizarPaginacao();
+        
+        document.getElementById('resultadosEncontrados').textContent = 
+            `${this.matriculasFiltradas.length} resultados`;
+    }
+
+    mudarItensPorPagina(quantidade) {
+        this.itensPorPagina = parseInt(quantidade);
+        this.paginaAtual = 1;
+        this.renderizarTabelaMatriculas();
+        this.atualizarPaginacao();
+    }
+
+    irParaPagina(pagina) {
+        if (pagina >= 1 && pagina <= Math.ceil(this.matriculasFiltradas.length / this.itensPorPagina)) {
+            this.paginaAtual = pagina;
+            this.renderizarTabelaMatriculas();
+            this.atualizarPaginacao();
+        }
+    }
+
+    paginaAnterior() {
+        if (this.paginaAtual > 1) {
+            this.paginaAtual--;
+            this.renderizarTabelaMatriculas();
+            this.atualizarPaginacao();
+        }
+    }
+
+    proximaPagina() {
+        const totalPaginas = Math.ceil(this.matriculasFiltradas.length / this.itensPorPagina);
+        if (this.paginaAtual < totalPaginas) {
+            this.paginaAtual++;
+            this.renderizarTabelaMatriculas();
+            this.atualizarPaginacao();
+        }
+    }
+
+    ordenarPor(campo) {
+        // Alternar ordem
+        this.ordenacao = this.ordenacao || {};
+        this.ordenacao[campo] = this.ordenacao[campo] === 'asc' ? 'desc' : 'asc';
+        
+        // Atualizar ícones
+        document.querySelectorAll('.sortable i').forEach(i => i.className = 'fas fa-sort');
+        document.getElementById(`sort-${campo}`).className = 
+            `fas fa-sort-${this.ordenacao[campo] === 'asc' ? 'up' : 'down'}`;
+        
+        // Ordenar
+        this.matriculasFiltradas.sort((a, b) => {
+            let valA = a[campo] || '';
+            let valB = b[campo] || '';
+            
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+            
+            if (valA < valB) return this.ordenacao[campo] === 'asc' ? -1 : 1;
+            if (valA > valB) return this.ordenacao[campo] === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        this.paginaAtual = 1;
+        this.renderizarTabelaMatriculas();
+        this.atualizarPaginacao();
+    }
+
+    exportarMatriculasCSV() {
+        if (!this.matriculasFiltradas || this.matriculasFiltradas.length === 0) {
+            this.showToast('❌ Nenhuma matrícula para exportar', 'error');
+            return;
+        }
+        
+        const headers = ['Matrícula', 'Nome (Lista)', 'Status', 'Professor Vinculado', 'Email'];
+        const rows = this.matriculasFiltradas.map(m => {
+            const status = m.cadastrado ? 'Professor cadastrado' : 'Aguardando cadastro';
+            const professorNome = m.cadastrado ? (m.professorInfo?.nome || '—') : '—';
+            const professorEmail = m.cadastrado ? (m.professorInfo?.email || '—') : '—';
+            
+            return [
+                m.matricula,
+                m.nome || '—',
+                status,
+                professorNome,
+                professorEmail
+            ];
+        });
+        
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+        
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `matriculas-${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+        this.showToast('✅ Matrículas exportadas com sucesso!', 'success');
+    }
+
+    mostrarErroTabela(mensagem) {
+        const tbody = document.getElementById('tabelaMatriculasBody');
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 60px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px;"></i>
+                        <h3 style="color: #7f1d1d; margin-bottom: 5px;">Erro ao carregar</h3>
+                        <p style="color: #6b7280;">${mensagem}</p>
+                        <button onclick="admin.carregarMatriculas()" style="
+                            margin-top: 15px;
+                            padding: 8px 20px;
+                            background: #667eea;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+
+    abrirModalMatricula(matriculaExistente = null) {
+        const isEdit = !!matriculaExistente;
+        let matriculaData = null;
+        
+        if (isEdit) {
+            matriculaData = this.matriculas.find(m => m.matricula === matriculaExistente);
+        }
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <form id="matriculaForm">
+                <div class="form-group">
+                    <label>Matrícula (6 dígitos)</label>
+                    <input type="text" id="matriculaInput" class="form-control" 
+                        value="${matriculaData?.matricula || ''}" 
+                        maxlength="6" pattern="\\d{6}" 
+                        placeholder="Ex: 123456" ${isEdit ? 'readonly' : ''} required>
+                    <small style="color: #6c757d;">Apenas números, 6 dígitos</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Nome do Professor</label>
+                    <input type="text" id="nomeMatriculaInput" class="form-control" 
+                        value="${matriculaData?.nome || ''}" 
+                        placeholder="Ex: JOÃO DA SILVA" required>
+                </div>
+                
+                <div class="info-card" style="margin-top: 10px;">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>Importante:</strong> Esta matrícula será usada no cadastro de professores.
+                        O nome deve corresponder ao documento oficial.
+                    </div>
+                </div>
+            </form>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = isEdit ? 
+            '<i class="fas fa-edit"></i> Editar Matrícula' : 
+            '<i class="fas fa-plus"></i> Nova Matrícula';
+        
+        document.getElementById('modalSaveBtn').onclick = () => this.salvarMatricula(isEdit ? matriculaExistente : null);
+        
+        this.openModal();
+    }
+
+    async salvarMatricula(matriculaAntiga = null) {
+        try {
+            const matricula = document.getElementById('matriculaInput').value.replace(/\D/g, '');
+            const nome = document.getElementById('nomeMatriculaInput').value.trim();
+            
+            if (!matricula || matricula.length !== 6) {
+                this.showToast('❌ Matrícula inválida. Deve ter 6 dígitos.', 'error');
+                return;
+            }
+            
+            if (!nome) {
+                this.showToast('❌ Nome do professor é obrigatório', 'error');
+                return;
+            }
+            
+            const token = localStorage.getItem('auth_token');
+            
+            let response;
+            
+            if (matriculaAntiga) {
+                // Editar
+                response = await fetch(`/api/admin/matriculas-autorizadas/${matriculaAntiga}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        novaMatricula: matricula,
+                        nome: nome
+                    })
+                });
+            } else {
+                // Criar
+                response = await fetch('/api/admin/matriculas-autorizadas', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ matricula, nome })
+                });
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(matriculaAntiga ? '✅ Matrícula atualizada!' : '✅ Matrícula adicionada!', 'success');
+                this.closeModal();
+                await this.carregarMatriculas();
+            } else {
+                throw new Error(data.error || 'Erro ao salvar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    async editarMatricula(matricula) {
+        this.abrirModalMatricula(matricula);
+    }
+
+    
+    // ============ GERENCIAR PROFESSORES ============
+
+    async carregarProfessores(filtros = {}) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            let url = '/api/admin/professores?';
+            const params = new URLSearchParams();
+            
+            if (filtros.status) params.append('status', filtros.status);
+            if (filtros.busca) params.append('busca', filtros.busca);
+            
+            url += params.toString();
+            
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.professores = data.professores || [];
+                this.renderizarTabelaProfessores();
+                return this.professores;
+            } else {
+                throw new Error(data.error || 'Erro ao carregar professores');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar professores:', error);
+            this.showToast('❌ ' + error.message, 'error');
+            return [];
+        }
+    }
+
+    // ============ ALTERAR STATUS DO PROFESSOR (ATIVAR/INATIVAR) ============
+    async toggleStatusProfessor(professorId, nome, ativoAtual) {
+        const novoStatus = !ativoAtual;
+        const acao = novoStatus ? 'ativar' : 'inativar';
+        
+        const confirmar = await this.confirmar(
+            `${acao === 'ativar' ? '✅' : '⏸️'} ${acao === 'ativar' ? 'Ativar' : 'Inativar'} Professor`,
+            `Tem certeza que deseja <strong>${acao}</strong> o professor <strong>${nome}</strong>?<br><br>
+            ${acao === 'inativar' 
+                ? '⚠️ O professor não poderá mais acessar o sistema até ser reativado.' 
+                : '✅ O professor voltará a ter acesso ao sistema.'}`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast(`🔄 ${acao === 'ativar' ? 'Ativando' : 'Inativando'} professor...`, 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/professores/${professorId}/toggle-status`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ativo: novoStatus })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(`✅ ${data.message}`, 'success');
+                await this.carregarProfessores(); // Recarregar lista
+                await this.carregarMatriculas(); // Atualizar status nas matrículas
+            } else {
+                throw new Error(data.error || `Erro ao ${acao} professor`);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ EXCLUIR PROFESSOR (APENAS SE NÃO TIVER VÍNCULOS) ============
+    async excluirProfessor(professorId, nome) {
+        const confirmar = await this.confirmar(
+            '🗑️ EXCLUIR PERMANENTEMENTE',
+            `<strong style="color: #dc3545;">ATENÇÃO!</strong><br><br>
+            Você está prestes a excluir PERMANENTEMENTE o professor <strong>${nome}</strong>.<br><br>
+            Esta ação <strong>NÃO PODE SER DESFEITA</strong> e removerá todos os dados do professor.<br><br>
+            Recomendamos <strong>inativar</strong> em vez de excluir.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🗑️ Excluindo professor...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/professores/${professorId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Professor excluído permanentemente!', 'success');
+                await this.carregarProfessores(); // Recarregar lista
+                await this.carregarMatriculas(); // Atualizar status nas matrículas
+            } else {
+                if (data.detalhes) {
+                    // Mostrar erro detalhado com sugestão
+                    const erroMsg = `${data.error}\n\n📊 Provas: ${data.detalhes.provas}\n🏫 Turmas: ${data.detalhes.turmas}\n\n💡 Sugestão: ${data.sugestao || 'Inative o professor'}`;
+                    this.showToast(erroMsg, 'error');
+                } else {
+                    throw new Error(data.error || 'Erro ao excluir professor');
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ RENDERIZAR TABELA DE PROFESSORES ============
+    renderizarTabelaProfessores() {
+        // Você pode criar uma nova seção no admin para gerenciar professores
+        // ou integrar na tabela de matrículas com ações adicionais
+        console.log('Professores carregados:', this.professores);
+    }
+
     async loadConfiguracoes() {
         const contentArea = document.getElementById('contentArea');
         contentArea.innerHTML = `
@@ -8206,8 +9954,50 @@ class AdminPanel {
         this.showToast('Funcionalidade em desenvolvimento', 'info');
     }
 
-    abrirModalMatricula() {
-        this.showToast('Funcionalidade em desenvolvimento', 'info');
+    abrirModalMatricula(matriculaExistente = null) {
+        const isEdit = !!matriculaExistente;
+        let matriculaData = null;
+        
+        if (isEdit) {
+            matriculaData = this.matriculas.find(m => m.matricula === matriculaExistente);
+        }
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <form id="matriculaForm">
+                <div class="form-group">
+                    <label>Matrícula (6 dígitos)</label>
+                    <input type="text" id="matriculaInput" class="form-control" 
+                        value="${matriculaData?.matricula || ''}" 
+                        maxlength="6" pattern="\\d{6}" 
+                        placeholder="Ex: 123456" ${isEdit ? 'readonly' : ''} required>
+                    <small style="color: #6c757d;">Apenas números, 6 dígitos</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Nome do Professor</label>
+                    <input type="text" id="nomeMatriculaInput" class="form-control" 
+                        value="${matriculaData?.nome || ''}" 
+                        placeholder="Ex: JOÃO DA SILVA" required>
+                </div>
+                
+                <div class="info-card" style="margin-top: 10px;">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>Importante:</strong> Esta matrícula será usada no cadastro de professores.
+                        O nome deve corresponder ao documento oficial.
+                    </div>
+                </div>
+            </form>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = isEdit ? 
+            '<i class="fas fa-edit"></i> Editar Matrícula' : 
+            '<i class="fas fa-plus"></i> Nova Matrícula';
+        
+        document.getElementById('modalSaveBtn').onclick = () => this.salvarMatricula(isEdit ? matriculaExistente : null);
+        
+        this.openModal();
     }
 
     async criarBackup() {
