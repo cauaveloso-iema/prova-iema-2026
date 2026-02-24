@@ -585,6 +585,7 @@ class AdminPanel {
         }
     }
 
+    // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (CORRIGIDO) ============
     gerarLinhasUsuarios(usuarios) {
         if (!usuarios || usuarios.length === 0) {
             return `
@@ -607,9 +608,9 @@ class AdminPanel {
                 <td>
                     <span class="role-badge ${user.role === 'super_admin' ? 'admin' : user.role}">
                         ${user.role === 'super_admin' ? '👑 Super Admin' : 
-                          user.role === 'admin' ? '👑 Admin' : 
-                          user.role === 'professor' ? '👨‍🏫 Professor' : 
-                          '👨‍🎓 Aluno'}
+                        user.role === 'admin' ? '👑 Admin' : 
+                        user.role === 'professor' ? '👨‍🏫 Professor' : 
+                        '👨‍🎓 Aluno'}
                     </span>
                 </td>
                 <td>${user.matricula || '-'}</td>
@@ -657,6 +658,24 @@ class AdminPanel {
         `;
     }
 
+    // ============ EDITAR USUÁRIO ============
+    editarUsuario(usuarioId) {
+        console.log('✏️ Editando usuário:', usuarioId);
+        
+        // Encontrar o usuário na lista
+        const usuario = this.usuarios.find(u => u._id === usuarioId || u.id === usuarioId);
+        
+        if (!usuario) {
+            this.showToast('❌ Usuário não encontrado', 'error');
+            return;
+        }
+        
+        console.log('📋 Dados do usuário:', usuario);
+        
+        // Abrir modal com os dados do usuário
+        this.abrirModalUsuario(usuarioId);
+    }
+
     filtrarUsuarios() {
         this.filtros.usuarios.search = document.getElementById('searchUsuarios')?.value || '';
         this.filtros.usuarios.role = document.getElementById('filterRole')?.value || 'todos';
@@ -693,8 +712,16 @@ class AdminPanel {
 
     // ============ MODAL USUÁRIO ============
 
+    // ============ ABRIR MODAL DE USUÁRIO (CORRIGIDO) ============
     abrirModalUsuario(usuarioId = null) {
-        const usuario = usuarioId ? this.usuarios.find(u => u._id === usuarioId) : null;
+        console.log('🔍 Abrindo modal para usuário ID:', usuarioId);
+        
+        // Buscar usuário se tiver ID
+        let usuario = null;
+        if (usuarioId) {
+            usuario = this.usuarios.find(u => u._id === usuarioId || u.id === usuarioId);
+            console.log('👤 Usuário encontrado:', usuario);
+        }
 
         const modalBody = document.getElementById('modalBody');
         modalBody.innerHTML = `
@@ -738,7 +765,7 @@ class AdminPanel {
                 </div>
 
                 <!-- Campos específicos para Aluno -->
-                <div id="alunoFields" class="role-specific" style="${usuario?.role === 'aluno' || (!usuario && 'aluno') ? 'display: block;' : 'display: none;'}">
+                <div id="alunoFields" class="role-specific" style="${usuario?.role === 'aluno' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
                             <label>Curso</label>
@@ -803,13 +830,19 @@ class AdminPanel {
                 </div>
                 ` : ''}
                 
-                <!-- Status removido - todos os usuários são criados como ATIVOS -->
+                <!-- Campo hidden para o status (sempre ativo) -->
                 <input type="hidden" id="userStatus" value="true">
             </form>
         `;
 
-        document.getElementById('modalTitle').innerHTML = usuario ? '<i class="fas fa-edit"></i> Editar Usuário' : '<i class="fas fa-user-plus"></i> Novo Usuário';
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarUsuario(usuario?._id);
+        // Título do modal
+        document.getElementById('modalTitle').innerHTML = usuario ? 
+            '<i class="fas fa-edit"></i> Editar Usuário' : 
+            '<i class="fas fa-user-plus"></i> Novo Usuário';
+        
+        // Configurar botão salvar
+        document.getElementById('modalSaveBtn').onclick = () => this.salvarUsuario(usuario?._id || usuario?.id);
+        
         this.openModal();
     }
 
@@ -832,8 +865,11 @@ class AdminPanel {
         document.getElementById('userPassword').value = this.gerarSenha();
     }
 
+    // ============ SALVAR USUÁRIO ============
     async salvarUsuario(id = null) {
         try {
+            console.log('💾 Salvando usuário. ID:', id);
+            
             const role = document.getElementById('userRole').value;
             
             const dados = {
@@ -845,6 +881,7 @@ class AdminPanel {
                 matricula: document.getElementById('userMatricula').value || undefined
             };
 
+            // Campos específicos por role
             if (role === 'aluno') {
                 dados.curso = document.getElementById('userCurso').value;
                 dados.turma = document.getElementById('userTurma').value;
@@ -855,9 +892,13 @@ class AdminPanel {
                 dados.titulacao = document.getElementById('userTitulacao').value || undefined;
             }
 
+            // Se for criação (sem ID), adicionar senha
             if (!id) {
                 dados.password = document.getElementById('userPassword').value;
+                dados.forcePasswordChange = true; // Forçar troca de senha no primeiro login
             }
+
+            console.log('📤 Dados a serem enviados:', dados);
 
             const url = id ? `${this.apiBase}/usuarios/${id}` : `${this.apiBase}/usuarios`;
             const method = id ? 'PUT' : 'POST';
@@ -876,21 +917,28 @@ class AdminPanel {
             if (data.success) {
                 this.showToast(id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!', 'success');
                 this.closeModal();
-                this.loadUsuarios();
-                this.carregarDadosReais();
+                this.loadUsuarios(); // Recarregar a lista
+                this.carregarDadosReais(); // Atualizar dashboard
             } else {
                 throw new Error(data.error || 'Erro ao salvar usuário');
             }
 
         } catch (error) {
-            console.error('Erro ao salvar usuário:', error);
+            console.error('❌ Erro ao salvar usuário:', error);
             this.showToast('Erro: ' + error.message, 'error');
         }
     }
+    
 
+    // ============ RESETAR SENHA ============
     async resetarSenha(usuarioId) {
-        const usuario = this.usuarios.find(u => u._id === usuarioId);
-        if (!usuario) return;
+        console.log('🔑 Resetando senha do usuário:', usuarioId);
+        
+        const usuario = this.usuarios.find(u => u._id === usuarioId || u.id === usuarioId);
+        if (!usuario) {
+            this.showToast('❌ Usuário não encontrado', 'error');
+            return;
+        }
 
         const novaSenha = this.gerarSenha();
 
@@ -916,19 +964,26 @@ class AdminPanel {
             const data = await response.json();
 
             if (data.success) {
-                this.showToast(`Senha resetada! Nova senha: ${novaSenha}`, 'success');
+                this.showToast(`✅ Senha resetada! Nova senha: ${novaSenha}`, 'success');
             } else {
                 throw new Error(data.error || 'Erro ao resetar senha');
             }
 
         } catch (error) {
-            console.error('Erro ao resetar senha:', error);
+            console.error('❌ Erro ao resetar senha:', error);
             this.showToast('Erro: ' + error.message, 'error');
         }
     }
 
+    // ============ EXCLUIR USUÁRIO ============
     async excluirUsuario(usuarioId) {
-        const usuario = this.usuarios.find(u => u._id === usuarioId);
+        console.log('🗑️ Excluindo usuário:', usuarioId);
+        
+        const usuario = this.usuarios.find(u => u._id === usuarioId || u.id === usuarioId);
+        if (!usuario) {
+            this.showToast('❌ Usuário não encontrado', 'error');
+            return;
+        }
 
         const confirmar = await this.confirmar(
             `Excluir usuário ${usuario.nome}?`,
@@ -948,15 +1003,15 @@ class AdminPanel {
             const data = await response.json();
 
             if (data.success) {
-                this.showToast('Usuário excluído com sucesso!', 'success');
-                this.loadUsuarios();
-                this.carregarDadosReais();
+                this.showToast('✅ Usuário excluído com sucesso!', 'success');
+                this.loadUsuarios(); // Recarregar a lista
+                this.carregarDadosReais(); // Atualizar dashboard
             } else {
                 throw new Error(data.error || 'Erro ao excluir usuário');
             }
 
         } catch (error) {
-            console.error('Erro ao excluir usuário:', error);
+            console.error('❌ Erro ao excluir usuário:', error);
             this.showToast('Erro: ' + error.message, 'error');
         }
     }
@@ -1609,208 +1664,287 @@ class AdminPanel {
         }
     }
 
-    // ============ NOVA PROVA COM SELETOR DE PROFESSOR ============
+    // ============ NOVA PROVA (VERSÃO PROFISSIONAL) ============
     async carregarNovaProva() {
         const contentArea = document.getElementById('contentArea');
         
-        // Primeiro insere o HTML
         contentArea.innerHTML = `
-            <div class="section">
-                <div class="section-header">
-                    <h2><i class="fas fa-plus-circle"></i> Nova Prova</h2>
-                    <button class="btn-secondary" onclick="admin.switchSection('provas')">
-                        <i class="fas fa-arrow-left"></i> Voltar
-                    </button>
+            <div class="prova-professional-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="prova-header-gradient">
+                    <div class="header-content">
+                        <div class="header-icon">
+                            <i class="fas fa-magic"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>Criar Nova Prova com IA</h1>
+                            <p>Preencha os dados abaixo e a inteligência artificial criará as questões automaticamente</p>
+                        </div>
+                        <button class="btn-voltar" onclick="admin.switchSection('provas')">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </button>
+                    </div>
+                    
+                    <!-- Status Steps -->
+                    <div class="progress-steps">
+                        <div class="step active" id="step1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">Configuração</div>
+                        </div>
+                        <div class="step" id="step2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Geração</div>
+                        </div>
+                        <div class="step" id="step3">
+                            <div class="step-number">3</div>
+                            <div class="step-label">Revisão</div>
+                        </div>
+                        <div class="step" id="step4">
+                            <div class="step-number">4</div>
+                            <div class="step-label">Publicação</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Alertas -->
-                <div id="alertProvaAdmin" class="alert" style="display: none;"></div>
+                <div id="alertProvaAdmin" class="alert-professional" style="display: none;"></div>
 
-                <!-- Formulário de Nova Prova -->
-                <div class="form-container" style="margin-top: 20px;">
+                <!-- Formulário Principal -->
+                <div class="form-professional-card" id="formCard">
+                    <div class="card-header">
+                        <div class="header-title">
+                            <i class="fas fa-cog"></i>
+                            <h2>Configurações da Prova</h2>
+                        </div>
+                        <span class="badge-novo">NOVA</span>
+                    </div>
+
                     <form id="formNovaProvaAdmin">
-                        <div class="form-grid" style="grid-template-columns: repeat(3, 1fr);">
-                            <!-- Tema da Prova -->
-                            <div class="form-group" style="grid-column: span 3;">
+                        <!-- Linha 1: Tema (Full Width) -->
+                        <div class="form-row full-width">
+                            <div class="form-group tema-group">
                                 <label class="form-label">
-                                    <i class="fas fa-lightbulb"></i> Tema da Prova
+                                    <i class="fas fa-lightbulb"></i>
+                                    <span>Tema da Prova <span class="required">*</span></span>
                                 </label>
-                                <textarea 
-                                    id="temaProvaAdmin" 
-                                    class="form-control" 
-                                    placeholder="Ex: 'Equações do 2º grau', 'Segunda Guerra Mundial', 'Fotossíntese'..."
-                                    required
-                                    rows="3"
-                                ></textarea>
-                                <small style="color: #6c757d; display: block; margin-top: 5px;">
-                                    Seja específico para melhores resultados.
-                                </small>
-                            </div>
-
-                            <!-- Título -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-heading"></i> Título da Prova
-                                </label>
-                                <input 
-                                    type="text" 
-                                    id="tituloProvaAdmin" 
-                                    class="form-control" 
-                                    placeholder="Ex: Prova Bimestral"
-                                    required
-                                >
-                            </div>
-
-                            <!-- Período Letivo -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-calendar-week"></i> Período Letivo
-                                </label>
-                                <select id="periodoProvaAdmin" class="form-control" required>
-                                    <option value="">Selecione...</option>
-                                    <option value="1">1º Período</option>
-                                    <option value="2">2º Período</option>
-                                    <option value="3">3º Período</option>
-                                    <option value="4">4º Período</option>
-                                </select>
-                            </div>
-
-                            <!-- Professor Responsável -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-chalkboard-teacher"></i> Professor Responsável
-                                </label>
-                                <select id="professorProvaAdmin" class="form-control" required>
-                                    <option value="">Carregando professores...</option>
-                                </select>
-                                <small style="color: #6c757d;">A prova será atribuída a este professor</small>
-                            </div>
-
-                            <!-- Tipo de Prova -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-file-alt"></i> Tipo de Prova
-                                </label>
-                                <select id="tipoProvaAdmin" class="form-control" required onchange="admin.mudarTipoProvaAdmin()">
-                                    <option value="simples">Prova Simples (5 alternativas)</option>
-                                    <option value="enem">Formato ENEM (com texto base)</option>
-                                    <option value="adaptada">🎯 Prova Adaptada (3 alternativas)</option>
-                                </select>
-                            </div>
-
-                            <!-- Quantidade -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-question-circle"></i> Quantidade
-                                </label>
-                                <select id="quantidadeQuestoesAdmin" class="form-control" required>
-                                    <option value="5">5 questões</option>
-                                    <option value="10" selected>10 questões</option>
-                                    <option value="15">15 questões</option>
-                                    <option value="20">20 questões</option>
-                                </select>
-                            </div>
-
-                            <!-- Dificuldade -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-chart-line"></i> Dificuldade
-                                </label>
-                                <select id="dificuldadeAdmin" class="form-control" required>
-                                    <option value="facil">Fácil</option>
-                                    <option value="media" selected>Médio</option>
-                                    <option value="dificil">Difícil</option>
-                                </select>
-                            </div>
-
-                            <!-- Turma -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-school"></i> Turma
-                                </label>
-                                <select id="turmaProvaAdmin" class="form-control" required>
-                                    <option value="">Carregando turmas...</option>
-                                </select>
-                            </div>
-
-                            <!-- Data Limite -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-calendar-alt"></i> Data Limite
-                                </label>
-                                <input type="date" id="dataLimiteAdmin" class="form-control">
-                            </div>
-
-                            <!-- Horário Início -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-clock"></i> Horário Início
-                                </label>
-                                <input type="time" id="horarioInicioAdmin" class="form-control" value="08:00" required>
-                            </div>
-
-                            <!-- Horário Término -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-clock"></i> Horário Término
-                                </label>
-                                <input type="time" id="horarioTerminoAdmin" class="form-control" value="09:30" required>
-                            </div>
-
-                            <!-- Duração Calculada -->
-                            <div class="form-group" style="grid-column: span 3;">
-                                <label class="form-label">
-                                    <i class="fas fa-hourglass-half"></i> Duração Calculada
-                                </label>
-                                <div id="duracaoCalculadaAdmin" style="
-                                    padding: 10px;
-                                    background: #f3f4f6;
-                                    border-radius: 6px;
-                                    font-weight: 600;
-                                    color: #0d6efd;
-                                    text-align: center;
-                                ">
-                                    Calculando...
+                                <div class="input-wrapper">
+                                    <textarea 
+                                        id="temaProvaAdmin" 
+                                        class="form-control tema-input" 
+                                        placeholder="Ex: 'Equações do 2º grau', 'Segunda Guerra Mundial', 'Fotossíntese'..."
+                                        required
+                                        rows="2"
+                                    ></textarea>
+                                    <div class="input-hint">
+                                        <i class="fas fa-info-circle"></i>
+                                        Seja específico para melhores resultados
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Seção de Anexos (ENEM) -->
-                        <div id="secaoAnexosAdmin" class="secao-anexos-container" style="display: none; margin-top: 30px;">
-                            <div class="info-card" style="background: #cce5ff; color: #004085;">
-                                <i class="fas fa-paperclip"></i>
-                                <div>
-                                    <strong>Materiais de Referência</strong>
-                                    <p style="margin: 5px 0 0 0;">Adicione arquivos, textos ou links para a IA usar como base</p>
+                        <!-- Linha 2: Título e Período -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-heading"></i>
+                                    <span>Título <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper">
+                                    <input 
+                                        type="text" 
+                                        id="tituloProvaAdmin" 
+                                        class="form-control" 
+                                        placeholder="Ex: Prova Bimestral"
+                                        required
+                                    >
                                 </div>
                             </div>
 
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-week"></i>
+                                    <span>Período <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper">
+                                    <select id="periodoProvaAdmin" class="form-control" required>
+                                        <option value="" disabled selected>Selecione...</option>
+                                        <option value="1">1º Período</option>
+                                        <option value="2">2º Período</option>
+                                        <option value="3">3º Período</option>
+                                        <option value="4">4º Período</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Linha 3: Professor e Turma -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-chalkboard-teacher"></i>
+                                    <span>Professor Responsável <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper select-wrapper">
+                                    <select id="professorProvaAdmin" class="form-control" required>
+                                        <option value="" disabled selected>Carregando professores...</option>
+                                    </select>
+                                    <i class="fas fa-chevron-down select-arrow"></i>
+                                </div>
+                                <div class="input-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    A prova será atribuída a este professor
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-school"></i>
+                                    <span>Turma <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper select-wrapper">
+                                    <select id="turmaProvaAdmin" class="form-control" required>
+                                        <option value="" disabled selected>Carregando turmas...</option>
+                                    </select>
+                                    <i class="fas fa-chevron-down select-arrow"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Linha 4: Tipo e Quantidade -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-file-alt"></i>
+                                    <span>Tipo de Prova <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper select-wrapper">
+                                    <select id="tipoProvaAdmin" class="form-control" required onchange="admin.mudarTipoProvaAdmin()">
+                                        <option value="simples">📝 Simples (5 alternativas)</option>
+                                        <option value="enem">🎯 Formato ENEM (com texto base)</option>
+                                        <option value="adaptada">♿ Adaptada (3 alternativas)</option>
+                                    </select>
+                                    <i class="fas fa-chevron-down select-arrow"></i>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-question-circle"></i>
+                                    <span>Quantidade <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper select-wrapper">
+                                    <select id="quantidadeQuestoesAdmin" class="form-control" required>
+                                        <option value="5">5 questões</option>
+                                        <option value="10" selected>10 questões</option>
+                                        <option value="15">15 questões</option>
+                                        <option value="20">20 questões</option>
+                                        <option value="25">25 questões</option>
+                                        <option value="30">30 questões</option>
+                                    </select>
+                                    <i class="fas fa-chevron-down select-arrow"></i>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-chart-line"></i>
+                                    <span>Dificuldade <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper select-wrapper">
+                                    <select id="dificuldadeAdmin" class="form-control" required>
+                                        <option value="facil">🟢 Fácil</option>
+                                        <option value="media" selected>🟡 Médio</option>
+                                        <option value="dificil">🔴 Difícil</option>
+                                    </select>
+                                    <i class="fas fa-chevron-down select-arrow"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Linha 5: Datas e Horários -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    <span>Data Limite</span>
+                                </label>
+                                <div class="input-wrapper">
+                                    <input type="date" id="dataLimiteAdmin" class="form-control">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Horário Início <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper">
+                                    <input type="time" id="horarioInicioAdmin" class="form-control" value="08:00" required>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Horário Término <span class="required">*</span></span>
+                                </label>
+                                <div class="input-wrapper">
+                                    <input type="time" id="horarioTerminoAdmin" class="form-control" value="09:30" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Duração Calculada -->
+                        <div class="duracao-card">
+                            <div class="duracao-icon">
+                                <i class="fas fa-hourglass-half"></i>
+                            </div>
+                            <div class="duracao-content">
+                                <span class="duracao-label">Duração da Prova</span>
+                                <span class="duracao-valor" id="duracaoCalculadaAdmin">Calculando...</span>
+                            </div>
+                        </div>
+
+                        <!-- Seção de Anexos (ENEM) -->
+                        <div id="secaoAnexosAdmin" class="anexos-section" style="display: none;">
+                            <div class="anexos-header">
+                                <div class="anexos-title">
+                                    <i class="fas fa-paperclip"></i>
+                                    <h3>Materiais de Referência</h3>
+                                </div>
+                                <p class="anexos-subtitle">Adicione arquivos, textos ou links para a IA usar como base</p>
+                            </div>
+
                             <!-- Tabs de Anexos -->
-                            <div style="display: flex; gap: 5px; margin: 15px 0;">
-                                <button type="button" class="btn-filter active" onclick="admin.mostrarTabAnexoAdmin('upload')">
-                                    <i class="fas fa-upload"></i> Upload
+                            <div class="anexos-tabs">
+                                <button type="button" class="anexo-tab active" onclick="admin.mostrarTabAnexoAdmin('upload')">
+                                    <i class="fas fa-upload"></i>
+                                    Upload
                                 </button>
-                                <button type="button" class="btn-filter" onclick="admin.mostrarTabAnexoAdmin('texto')">
-                                    <i class="fas fa-file-alt"></i> Texto
+                                <button type="button" class="anexo-tab" onclick="admin.mostrarTabAnexoAdmin('texto')">
+                                    <i class="fas fa-file-alt"></i>
+                                    Texto
                                 </button>
-                                <button type="button" class="btn-filter" onclick="admin.mostrarTabAnexoAdmin('link')">
-                                    <i class="fas fa-link"></i> Link
+                                <button type="button" class="anexo-tab" onclick="admin.mostrarTabAnexoAdmin('link')">
+                                    <i class="fas fa-link"></i>
+                                    Link
                                 </button>
                             </div>
 
                             <!-- Tab Upload -->
-                            <div id="tab-upload-admin" class="tab-anexo-content" style="display: block;">
-                                <div class="drop-zone" 
+                            <div id="tab-upload-admin" class="anexo-tab-content active">
+                                <div class="upload-area" 
                                     onclick="document.getElementById('fileInputAdmin').click()"
                                     ondrop="admin.handleDropAdmin(event)"
                                     ondragover="admin.handleDragOverAdmin(event)"
-                                    ondragleave="admin.handleDragLeaveAdmin(event)"
-                                    style="border: 2px dashed #dee2e6; padding: 30px; text-align: center; border-radius: 8px; cursor: pointer;">
-                                    <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; color: #0d6efd;"></i>
+                                    ondragleave="admin.handleDragLeaveAdmin(event)">
+                                    <i class="fas fa-cloud-upload-alt"></i>
                                     <h4>Arraste arquivos ou clique para selecionar</h4>
                                     <p>PDF, imagens, TXT, DOC, DOCX (até 10MB)</p>
-                                    <button type="button" class="btn-primary">
-                                        <i class="fas fa-folder-open"></i> Selecionar Arquivos
+                                    <button type="button" class="btn-upload">
+                                        <i class="fas fa-folder-open"></i>
+                                        Selecionar Arquivos
                                     </button>
                                 </div>
                                 <input type="file" id="fileInputAdmin" multiple style="display: none;" 
@@ -1818,86 +1952,1012 @@ class AdminPanel {
                             </div>
 
                             <!-- Tab Texto -->
-                            <div id="tab-texto-admin" class="tab-anexo-content" style="display: none;">
+                            <div id="tab-texto-admin" class="anexo-tab-content">
                                 <div class="form-group">
                                     <label>Título do Texto</label>
-                                    <input type="text" id="textoTituloAdmin" class="form-control">
+                                    <input type="text" id="textoTituloAdmin" class="form-control" placeholder="Ex: Artigo sobre fotossíntese">
                                 </div>
                                 <div class="form-group">
                                     <label>Conteúdo</label>
-                                    <textarea id="textoConteudoAdmin" class="form-control" rows="4"></textarea>
+                                    <textarea id="textoConteudoAdmin" class="form-control" rows="4" placeholder="Cole o texto completo aqui..."></textarea>
                                 </div>
-                                <button type="button" class="btn-success" onclick="admin.adicionarTextoAdmin()">
+                                <button type="button" class="btn-add-anexo" onclick="admin.adicionarTextoAdmin()">
+                                    <i class="fas fa-plus"></i>
                                     Adicionar Texto
                                 </button>
                             </div>
 
                             <!-- Tab Link -->
-                            <div id="tab-link-admin" class="tab-anexo-content" style="display: none;">
+                            <div id="tab-link-admin" class="anexo-tab-content">
                                 <div class="form-group">
                                     <label>Título</label>
-                                    <input type="text" id="linkTituloAdmin" class="form-control">
+                                    <input type="text" id="linkTituloAdmin" class="form-control" placeholder="Ex: Artigo da NASA">
                                 </div>
                                 <div class="form-group">
                                     <label>URL</label>
                                     <input type="url" id="linkURLAdmin" class="form-control" placeholder="https://...">
                                 </div>
-                                <button type="button" class="btn-success" onclick="admin.adicionarLinkAdmin()">
+                                <button type="button" class="btn-add-anexo" onclick="admin.adicionarLinkAdmin()">
+                                    <i class="fas fa-plus"></i>
                                     Adicionar Link
                                 </button>
                             </div>
 
                             <!-- Lista de Anexos -->
-                            <div style="margin-top: 20px;">
-                                <h4><i class="fas fa-list-check"></i> Materiais Adicionados <span id="contadorAnexosAdmin">0</span></h4>
-                                <div id="listaAnexosAdmin" style="min-height: 50px;">
-                                    <div id="emptyAnexosAdmin" style="text-align: center; padding: 20px;">
-                                        <i class="fas fa-inbox"></i>
-                                        <p>Nenhum material adicionado</p>
-                                    </div>
+                            <div class="anexos-lista" id="listaAnexosAdmin">
+                                <div id="emptyAnexosAdmin" class="empty-anexos">
+                                    <i class="fas fa-inbox"></i>
+                                    <p>Nenhum material adicionado</p>
                                 </div>
                             </div>
+                            <div class="anexos-counter" id="contadorAnexosAdmin">0</div>
                         </div>
 
                         <!-- Informações IA -->
-                        <div class="info-card" style="margin-top: 20px;">
-                            <h4><i class="fas fa-robot"></i> Sobre a IA</h4>
-                            <p>A prova será gerada automaticamente usando inteligência artificial e atribuída ao professor selecionado.</p>
+                        <div class="info-ia-card">
+                            <div class="ia-icon">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="ia-content">
+                                <h4>Sobre a Inteligência Artificial</h4>
+                                <p>A prova será gerada automaticamente usando IA com questões de múltipla escolha, adaptadas ao tema e dificuldade selecionados.</p>
+                                <ul class="ia-features">
+                                    <li><i class="fas fa-check-circle"></i> Questões personalizadas</li>
+                                    <li><i class="fas fa-check-circle"></i> Respostas com explicações</li>
+                                    <li><i class="fas fa-check-circle"></i> Nível de dificuldade ajustado</li>
+                                </ul>
+                            </div>
                         </div>
 
                         <!-- Botão Gerar -->
-                        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 20px;" id="btnGerarProvaAdmin">
-                            <i class="fas fa-magic"></i> Gerar Prova com IA
+                        <button type="submit" class="btn-generate" id="btnGerarProvaAdmin">
+                            <i class="fas fa-magic"></i>
+                            <span>Gerar Prova com IA</span>
+                            <i class="fas fa-arrow-right"></i>
                         </button>
                     </form>
+                </div>
 
-                    <!-- Preview das Questões -->
-                    <div id="previewQuestoesAdmin" class="preview-container" style="display: none; margin-top: 30px;">
-                        <h3><i class="fas fa-eye"></i> Pré-visualização da Prova</h3>
-                        <div id="questoesPreviewAdmin"></div>
-                        <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="btn-success" onclick="admin.publicarProvaAdmin()" style="flex: 1;">
-                                <i class="fas fa-paper-plane"></i> Publicar Prova
-                            </button>
-                            <button class="btn-warning" onclick="admin.abrirEdicaoQuestoesPreview()" style="flex: 1; background: #f59e0b;">
-                                <i class="fas fa-edit"></i> Editar Questões
-                            </button>
-                            <button class="btn-danger" onclick="admin.regenerarProvaAdmin()" style="flex: 1;">
-                                <i class="fas fa-redo"></i> Regenerar
-                            </button>
-                            <button class="btn-secondary" onclick="admin.cancelarProvaAdmin()" style="flex: 1;">
-                                <i class="fas fa-times"></i> Cancelar
-                            </button>
+                <!-- Preview das Questões -->
+                <div id="previewQuestoesAdmin" class="preview-professional-card" style="display: none;">
+                    <div class="preview-header">
+                        <div class="preview-title">
+                            <i class="fas fa-eye"></i>
+                            <h2>Pré-visualização da Prova</h2>
                         </div>
+                        <span class="preview-badge" id="questoesCount">0 questões</span>
+                    </div>
+
+                    <div class="questoes-container" id="questoesPreviewAdmin"></div>
+
+                    <div class="preview-actions">
+                        <button class="btn-preview btn-publish" onclick="admin.publicarProvaAdmin()">
+                            <i class="fas fa-paper-plane"></i>
+                            Publicar Prova
+                        </button>
+                        <button class="btn-preview btn-edit" onclick="admin.abrirEdicaoQuestoesPreview()">
+                            <i class="fas fa-edit"></i>
+                            Editar Questões
+                        </button>
+                        <button class="btn-preview btn-regenerate" onclick="admin.regenerarProvaAdmin()">
+                            <i class="fas fa-redo"></i>
+                            Regenerar
+                        </button>
+                        <button class="btn-preview btn-cancel" onclick="admin.cancelarProvaAdmin()">
+                            <i class="fas fa-times"></i>
+                            Cancelar
+                        </button>
                     </div>
                 </div>
             </div>
+
+            <style>
+                .prova-professional-container {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+
+                /* Header Gradient */
+                .prova-header-gradient {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                    color: white;
+                    position: relative;
+                    overflow: hidden;
+                    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+                }
+
+                .prova-header-gradient::before {
+                    content: '';
+                    position: absolute;
+                    top: -50px;
+                    right: -50px;
+                    width: 200px;
+                    height: 200px;
+                    background: rgba(255, 255, 255, 0.1);
+                    border-radius: 50%;
+                }
+
+                .prova-header-gradient::after {
+                    content: '';
+                    position: absolute;
+                    bottom: -80px;
+                    left: -80px;
+                    width: 300px;
+                    height: 300px;
+                    background: rgba(255, 255, 255, 0.05);
+                    border-radius: 50%;
+                }
+
+                .header-content {
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    position: relative;
+                    z-index: 2;
+                    flex-wrap: wrap;
+                }
+
+                .header-icon {
+                    width: 70px;
+                    height: 70px;
+                    background: rgba(255, 255, 255, 0.2);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 30px;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.3);
+                }
+
+                .header-text {
+                    flex: 1;
+                }
+
+                .header-text h1 {
+                    margin: 0;
+                    font-size: 28px;
+                    font-weight: 600;
+                }
+
+                .header-text p {
+                    margin: 5px 0 0;
+                    opacity: 0.9;
+                    font-size: 14px;
+                }
+
+                .btn-voltar {
+                    background: rgba(255, 255, 255, 0.15);
+                    border: 1px solid rgba(255, 255, 255, 0.3);
+                    color: white;
+                    padding: 12px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    backdrop-filter: blur(10px);
+                }
+
+                .btn-voltar:hover {
+                    background: rgba(255, 255, 255, 0.25);
+                    transform: translateX(-5px);
+                }
+
+                /* Progress Steps */
+                .progress-steps {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-top: 40px;
+                    position: relative;
+                    z-index: 2;
+                    max-width: 600px;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+
+                .progress-steps::before {
+                    content: '';
+                    position: absolute;
+                    top: 15px;
+                    left: 0;
+                    right: 0;
+                    height: 2px;
+                    background: rgba(255, 255, 255, 0.2);
+                    z-index: 1;
+                }
+
+                .step {
+                    position: relative;
+                    z-index: 2;
+                    text-align: center;
+                    flex: 1;
+                }
+
+                .step-number {
+                    width: 32px;
+                    height: 32px;
+                    background: rgba(255, 255, 255, 0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: 600;
+                    margin: 0 auto 8px;
+                    border: 2px solid transparent;
+                    transition: all 0.3s;
+                }
+
+                .step.active .step-number {
+                    background: white;
+                    color: #667eea;
+                    border-color: white;
+                    box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+                }
+
+                .step-label {
+                    font-size: 12px;
+                    opacity: 0.8;
+                }
+
+                .step.active .step-label {
+                    opacity: 1;
+                    font-weight: 600;
+                }
+
+                /* Form Card */
+                .form-professional-card {
+                    background: white;
+                    border-radius: 24px;
+                    padding: 30px;
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+                    margin-bottom: 30px;
+                    border: 1px solid rgba(0, 0, 0, 0.05);
+                }
+
+                .card-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 30px;
+                    padding-bottom: 20px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+
+                .header-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+
+                .header-title i {
+                    font-size: 24px;
+                    color: #667eea;
+                    background: #f0f4ff;
+                    padding: 10px;
+                    border-radius: 12px;
+                }
+
+                .header-title h2 {
+                    margin: 0;
+                    font-size: 20px;
+                    color: #333;
+                }
+
+                .badge-novo {
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+
+                /* Form Layout */
+                .form-row {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 20px;
+                }
+
+                .form-row.full-width {
+                    grid-template-columns: 1fr;
+                }
+
+                .form-group {
+                    position: relative;
+                }
+
+                .form-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 8px;
+                    font-weight: 500;
+                    color: #4a5568;
+                    font-size: 14px;
+                }
+
+                .form-label i {
+                    color: #667eea;
+                    font-size: 14px;
+                }
+
+                .required {
+                    color: #ef4444;
+                    margin-left: 4px;
+                }
+
+                .input-wrapper {
+                    position: relative;
+                }
+
+                .form-control {
+                    width: 100%;
+                    padding: 12px 16px;
+                    border: 2px solid #e2e8f0;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    transition: all 0.3s;
+                    background: white;
+                }
+
+                .form-control:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+                }
+
+                .tema-input {
+                    min-height: 80px;
+                    resize: vertical;
+                }
+
+                .input-hint {
+                    margin-top: 6px;
+                    font-size: 12px;
+                    color: #94a3b8;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+
+                /* Select Wrapper */
+                .select-wrapper {
+                    position: relative;
+                }
+
+                .select-wrapper select {
+                    appearance: none;
+                    padding-right: 40px;
+                }
+
+                .select-arrow {
+                    position: absolute;
+                    right: 16px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #94a3b8;
+                    pointer-events: none;
+                    font-size: 12px;
+                }
+
+                /* Duração Card */
+                .duracao-card {
+                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    border-radius: 16px;
+                    padding: 20px;
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    margin: 30px 0 20px;
+                    border: 1px solid #dee2e6;
+                }
+
+                .duracao-icon {
+                    width: 60px;
+                    height: 60px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 24px;
+                }
+
+                .duracao-content {
+                    flex: 1;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+
+                .duracao-label {
+                    font-size: 16px;
+                    font-weight: 500;
+                    color: #4a5568;
+                }
+
+                .duracao-valor {
+                    font-size: 24px;
+                    font-weight: 700;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                }
+
+                /* Anexos Section */
+                .anexos-section {
+                    background: #f8fafc;
+                    border-radius: 20px;
+                    padding: 25px;
+                    margin: 20px 0;
+                    border: 2px dashed #cbd5e0;
+                }
+
+                .anexos-header {
+                    margin-bottom: 20px;
+                }
+
+                .anexos-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin-bottom: 5px;
+                }
+
+                .anexos-title i {
+                    font-size: 20px;
+                    color: #667eea;
+                }
+
+                .anexos-title h3 {
+                    margin: 0;
+                    font-size: 18px;
+                    color: #333;
+                }
+
+                .anexos-subtitle {
+                    margin: 0;
+                    color: #718096;
+                    font-size: 14px;
+                }
+
+                .anexos-tabs {
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: 20px;
+                    border-bottom: 2px solid #e2e8f0;
+                    padding-bottom: 10px;
+                }
+
+                .anexo-tab {
+                    padding: 8px 20px;
+                    background: none;
+                    border: none;
+                    border-radius: 30px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #718096;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                }
+
+                .anexo-tab i {
+                    font-size: 14px;
+                }
+
+                .anexo-tab:hover {
+                    color: #667eea;
+                    background: #f0f4ff;
+                }
+
+                .anexo-tab.active {
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                }
+
+                .anexo-tab-content {
+                    display: none;
+                }
+
+                .anexo-tab-content.active {
+                    display: block;
+                }
+
+                .upload-area {
+                    background: white;
+                    border: 3px dashed #cbd5e0;
+                    border-radius: 16px;
+                    padding: 40px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                }
+
+                .upload-area:hover {
+                    border-color: #667eea;
+                    background: #f0f4ff;
+                }
+
+                .upload-area i {
+                    font-size: 48px;
+                    color: #667eea;
+                    margin-bottom: 15px;
+                }
+
+                .upload-area h4 {
+                    margin: 0 0 5px;
+                    color: #333;
+                }
+
+                .upload-area p {
+                    margin: 0 0 20px;
+                    color: #718096;
+                    font-size: 14px;
+                }
+
+                .btn-upload {
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    border: none;
+                    padding: 12px 30px;
+                    border-radius: 40px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                }
+
+                .btn-upload:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+                }
+
+                .btn-add-anexo {
+                    width: 100%;
+                    padding: 12px;
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    color: white;
+                    border: none;
+                    border-radius: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                }
+
+                .btn-add-anexo:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+                }
+
+                .anexos-lista {
+                    margin-top: 20px;
+                    min-height: 50px;
+                }
+
+                .empty-anexos {
+                    text-align: center;
+                    padding: 20px;
+                    color: #94a3b8;
+                }
+
+                .empty-anexos i {
+                    font-size: 32px;
+                    margin-bottom: 10px;
+                    opacity: 0.5;
+                }
+
+                .empty-anexos p {
+                    margin: 0;
+                    font-size: 14px;
+                }
+
+                .anexos-counter {
+                    margin-top: 15px;
+                    text-align: right;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #667eea;
+                }
+
+                /* Info IA Card */
+                .info-ia-card {
+                    background: linear-gradient(135deg, #f0f9ff, #e6f0ff);
+                    border-radius: 20px;
+                    padding: 25px;
+                    margin: 30px 0 20px;
+                    display: flex;
+                    gap: 20px;
+                    border: 1px solid #b3d9ff;
+                }
+
+                .ia-icon {
+                    width: 70px;
+                    height: 70px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 30px;
+                    flex-shrink: 0;
+                }
+
+                .ia-content {
+                    flex: 1;
+                }
+
+                .ia-content h4 {
+                    margin: 0 0 10px;
+                    color: #333;
+                    font-size: 18px;
+                }
+
+                .ia-content p {
+                    margin: 0 0 15px;
+                    color: #4a5568;
+                    font-size: 14px;
+                    line-height: 1.6;
+                }
+
+                .ia-features {
+                    list-style: none;
+                    padding: 0;
+                    margin: 0;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }
+
+                .ia-features li {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 13px;
+                    color: #2d3748;
+                }
+
+                .ia-features i {
+                    color: #10b981;
+                    font-size: 14px;
+                }
+
+                /* Botão Gerar */
+                .btn-generate {
+                    width: 100%;
+                    padding: 18px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    border: none;
+                    border-radius: 50px;
+                    font-size: 18px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 12px;
+                    transition: all 0.3s;
+                    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+                    margin-top: 30px;
+                }
+
+                .btn-generate:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 20px 40px rgba(102, 126, 234, 0.4);
+                }
+
+                .btn-generate:disabled {
+                    opacity: 0.7;
+                    cursor: not-allowed;
+                    transform: none;
+                }
+
+                /* Preview Card */
+                .preview-professional-card {
+                    background: white;
+                    border-radius: 24px;
+                    padding: 30px;
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+                    border: 1px solid #e2e8f0;
+                    animation: slideUp 0.5s ease-out;
+                }
+
+                .preview-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 25px;
+                    padding-bottom: 20px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+
+                .preview-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+
+                .preview-title i {
+                    font-size: 24px;
+                    color: #667eea;
+                    background: #f0f4ff;
+                    padding: 10px;
+                    border-radius: 12px;
+                }
+
+                .preview-title h2 {
+                    margin: 0;
+                    font-size: 20px;
+                    color: #333;
+                }
+
+                .preview-badge {
+                    background: #f0f4ff;
+                    color: #667eea;
+                    padding: 6px 15px;
+                    border-radius: 30px;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+
+                .questoes-container {
+                    max-height: 600px;
+                    overflow-y: auto;
+                    padding: 10px;
+                    margin-bottom: 25px;
+                }
+
+                .questao-preview-item {
+                    background: #f8fafc;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 20px;
+                    border-left: 4px solid #667eea;
+                    animation: fadeIn 0.5s ease-out;
+                }
+
+                .questao-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                }
+
+                .questao-numero {
+                    background: #667eea;
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+
+                .questao-tipo {
+                    padding: 4px 12px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+
+                .tipo-simples { background: #dbeafe; color: #1e40af; }
+                .tipo-enem { background: #fef3c7; color: #92400e; }
+                .tipo-adaptada { background: #d1fae5; color: #065f46; }
+
+                .questao-pergunta {
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #333;
+                    margin-bottom: 15px;
+                    line-height: 1.6;
+                }
+
+                .opcoes-preview {
+                    margin-bottom: 15px;
+                }
+
+                .opcao-preview {
+                    padding: 10px 15px;
+                    margin-bottom: 8px;
+                    border: 2px solid #e2e8f0;
+                    border-radius: 10px;
+                    font-size: 14px;
+                    color: #4a5568;
+                    transition: all 0.3s;
+                }
+
+                .opcao-preview.correta {
+                    background: #d1fae5;
+                    border-color: #10b981;
+                    color: #065f46;
+                    font-weight: 500;
+                }
+
+                .preview-actions {
+                    display: flex;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    justify-content: center;
+                    padding-top: 20px;
+                    border-top: 2px solid #f0f0f0;
+                }
+
+                .btn-preview {
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    flex: 1;
+                    min-width: 150px;
+                    justify-content: center;
+                }
+
+                .btn-publish {
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    color: white;
+                }
+
+                .btn-edit {
+                    background: linear-gradient(135deg, #f59e0b, #d97706);
+                    color: white;
+                }
+
+                .btn-regenerate {
+                    background: linear-gradient(135deg, #ef4444, #dc2626);
+                    color: white;
+                }
+
+                .btn-cancel {
+                    background: #e2e8f0;
+                    color: #4a5568;
+                }
+
+                .btn-preview:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+                }
+
+                /* Alert Professional */
+                .alert-professional {
+                    padding: 16px 24px;
+                    border-radius: 12px;
+                    margin-bottom: 20px;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    animation: slideIn 0.3s ease-out;
+                    border-left: 4px solid transparent;
+                }
+
+                .alert-professional.alert-success {
+                    background: #d1fae5;
+                    border-color: #10b981;
+                    color: #065f46;
+                }
+
+                .alert-professional.alert-error {
+                    background: #fee2e2;
+                    border-color: #ef4444;
+                    color: #7f1d1d;
+                }
+
+                .alert-professional.alert-info {
+                    background: #dbeafe;
+                    border-color: #3b82f6;
+                    color: #1e40af;
+                }
+
+                .alert-professional i {
+                    font-size: 20px;
+                }
+
+                /* Animações */
+                @keyframes slideUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(30px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+
+                @keyframes slideIn {
+                    from {
+                        opacity: 0;
+                        transform: translateX(-20px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                }
+
+                @keyframes fadeIn {
+                    from {
+                        opacity: 0;
+                        transform: translateY(10px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+
+                /* Responsividade */
+                @media (max-width: 768px) {
+                    .prova-header-gradient {
+                        padding: 20px;
+                    }
+
+                    .header-content {
+                        flex-direction: column;
+                        text-align: center;
+                    }
+
+                    .progress-steps {
+                        display: none;
+                    }
+
+                    .form-row {
+                        grid-template-columns: 1fr;
+                    }
+
+                    .duracao-content {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 10px;
+                    }
+
+                    .preview-actions {
+                        flex-direction: column;
+                    }
+
+                    .btn-preview {
+                        width: 100%;
+                    }
+
+                    .info-ia-card {
+                        flex-direction: column;
+                        align-items: center;
+                        text-align: center;
+                    }
+
+                    .ia-features {
+                        justify-content: center;
+                    }
+                }
+            </style>
         `;
 
         // Configurar eventos
         this.configurarEventosProvaAdmin();
         
-        // ===== CORREÇÃO: Carregar dados APÓS o HTML estar no DOM =====
+        // Carregar dados após o HTML estar no DOM
         setTimeout(() => {
             this.carregarTurmasParaProva();
             this.carregarProfessoresParaProva();
@@ -2468,46 +3528,43 @@ class AdminPanel {
         }
     }
 
-    // ============ MOSTRAR PREVIEW DAS QUESTÕES ============
+    // ============ MOSTRAR PREVIEW DAS QUESTÕES (VERSÃO PROFISSIONAL) ============
     mostrarPreviewQuestoesAdmin(questoes) {
         const container = document.getElementById('questoesPreviewAdmin');
         const preview = document.getElementById('previewQuestoesAdmin');
+        const questoesCount = document.getElementById('questoesCount');
         
         if (!questoes || questoes.length === 0) {
-            container.innerHTML = '<p style="color: #dc3545;">Nenhuma questão gerada</p>';
+            container.innerHTML = '<p style="color: #dc3545; text-align: center; padding: 40px;">Nenhuma questão gerada</p>';
             return;
         }
+        
+        // Atualizar contador
+        if (questoesCount) {
+            questoesCount.textContent = `${questoes.length} ${questoes.length === 1 ? 'questão' : 'questões'}`;
+        }
+        
+        // Atualizar steps
+        document.getElementById('step1').classList.remove('active');
+        document.getElementById('step2').classList.add('active');
+        document.getElementById('step3').classList.add('active');
         
         let html = '';
         
         questoes.forEach((q, i) => {
-            const tipo = q.tipo === 'enem' ? 'ENEM' : (q.tipo === 'adaptada' ? '🎯 ADAPTADA' : 'SIMPLES');
-            const cor = q.tipo === 'enem' ? '#0dcaf0' : (q.tipo === 'adaptada' ? '#198754' : '#0d6efd');
+            const tipo = q.tipo === 'enem' ? 'ENEM' : (q.tipo === 'adaptada' ? 'ADAPTADA' : 'SIMPLES');
+            const tipoClass = q.tipo === 'enem' ? 'tipo-enem' : (q.tipo === 'adaptada' ? 'tipo-adaptada' : 'tipo-simples');
             
             html += `
-                <div style="
-                    background: #f8f9fa;
-                    border-left: 4px solid ${cor};
-                    padding: 15px;
-                    margin-bottom: 15px;
-                    border-radius: 4px;
-                ">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                        <strong>Questão ${i + 1}</strong>
-                        <span style="background: ${cor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">
-                            ${tipo}
-                        </span>
+                <div class="questao-preview-item">
+                    <div class="questao-header">
+                        <span class="questao-numero">Questão ${i + 1}</span>
+                        <span class="questao-tipo ${tipoClass}">${tipo}</span>
                     </div>
-                    <p>${q.pergunta || q.enunciado || 'Pergunta'}</p>
-                    <div style="margin-top: 10px;">
+                    <div class="questao-pergunta">${q.pergunta || q.enunciado || 'Pergunta'}</div>
+                    <div class="opcoes-preview">
                         ${q.opcoes.map((opcao, idx) => `
-                            <div style="
-                                padding: 8px;
-                                margin: 5px 0;
-                                background: ${idx === q.respostaCorreta ? '#d4edda' : 'white'};
-                                border: 1px solid ${idx === q.respostaCorreta ? '#28a745' : '#dee2e6'};
-                                border-radius: 4px;
-                            ">
+                            <div class="opcao-preview ${idx === q.respostaCorreta ? 'correta' : ''}">
                                 ${opcao}
                                 ${idx === q.respostaCorreta ? ' ✓' : ''}
                             </div>
@@ -2520,8 +3577,8 @@ class AdminPanel {
         container.innerHTML = html;
         preview.style.display = 'block';
         
-        // Rolar até o preview
-        preview.scrollIntoView({ behavior: 'smooth' });
+        // Rolar até o preview suavemente
+        preview.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // ============ ABRIR EDIÇÃO DE QUESTÕES (VERSÃO COMPLETA) ============
@@ -2857,10 +3914,14 @@ class AdminPanel {
             const token = localStorage.getItem('auth_token');
             
             // Mostrar loading no botão
-            const btnPublicar = document.querySelector('#previewQuestoesAdmin .btn-success');
+            const btnPublicar = document.querySelector('#previewQuestoesAdmin .btn-publish');
             const originalText = btnPublicar.innerHTML;
             btnPublicar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publicando...';
             btnPublicar.disabled = true;
+            
+            // Atualizar step
+            document.getElementById('step3').classList.remove('active');
+            document.getElementById('step4').classList.add('active');
             
             const response = await fetch(`/api/professor/provas/${this.provaGeradaAdmin.id}/publicar`, {
                 method: 'POST',
@@ -2879,6 +3940,12 @@ class AdminPanel {
                 document.getElementById('formNovaProvaAdmin').reset();
                 document.getElementById('previewQuestoesAdmin').style.display = 'none';
                 
+                // Resetar steps
+                document.getElementById('step1').classList.add('active');
+                document.getElementById('step2').classList.remove('active');
+                document.getElementById('step3').classList.remove('active');
+                document.getElementById('step4').classList.remove('active');
+                
                 this.anexosAdmin = [];
                 this.arquivosParaUploadAdmin = [];
                 this.atualizarListaAnexosAdmin();
@@ -2887,7 +3954,6 @@ class AdminPanel {
                 // Voltar para lista de provas após 2 segundos
                 setTimeout(() => {
                     this.switchSection('provas');
-                    // Recarregar a lista de provas
                     this.loadProvas();
                 }, 2000);
             } else {
@@ -2896,8 +3962,11 @@ class AdminPanel {
             
         } catch (error) {
             this.mostrarAlertaAdmin('❌ ' + error.message, 'error');
+            // Resetar step
+            document.getElementById('step3').classList.add('active');
+            document.getElementById('step4').classList.remove('active');
         } finally {
-            const btnPublicar = document.querySelector('#previewQuestoesAdmin .btn-success');
+            const btnPublicar = document.querySelector('#previewQuestoesAdmin .btn-publish');
             if (btnPublicar) {
                 btnPublicar.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar Prova';
                 btnPublicar.disabled = false;
@@ -2940,6 +4009,13 @@ class AdminPanel {
     cancelarProvaAdmin() {
         document.getElementById('previewQuestoesAdmin').style.display = 'none';
         this.provaGeradaAdmin = null;
+        
+        // Resetar steps
+        document.getElementById('step1').classList.add('active');
+        document.getElementById('step2').classList.remove('active');
+        document.getElementById('step3').classList.remove('active');
+        document.getElementById('step4').classList.remove('active');
+        
         this.mostrarAlertaAdmin('❌ Geração cancelada', 'info');
     }
 
