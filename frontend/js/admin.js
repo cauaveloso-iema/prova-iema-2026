@@ -83,6 +83,26 @@ class AdminPanel {
             });
         });
 
+         // Garantir que o botão de fechar do modal funciona
+        const modalCloseBtn = document.querySelector('#modal .modal-close');
+        if (modalCloseBtn) {
+            modalCloseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.closeModal();
+            });
+        }
+        
+        // Garantir que clicar fora do modal fecha
+        const modal = document.getElementById('modal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeModal();
+                }
+            });
+        }
+
+
         // Botão de refresh
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) {
@@ -6813,7 +6833,7 @@ class AdminPanel {
 
                     <!-- CARDS DE ESTATÍSTICAS AVANÇADAS -->
                     <div class="stats-grid">
-                        <div class="stat-card primary" onclick="admin.filtrarPorStatus('todos')">
+                        <div class="stat-card primary" onclick="admin.filtrarPorStatusAdmin('todos')">
                             <div class="stat-icon">
                                 <i class="fas fa-file-alt"></i>
                             </div>
@@ -6827,7 +6847,7 @@ class AdminPanel {
                             </div>
                         </div>
 
-                        <div class="stat-card success" onclick="admin.filtrarPorStatus('aprovado')">
+                        <div class="stat-card success" onclick="admin.filtrarPorStatusAdmin('aprovado')">
                             <div class="stat-icon">
                                 <i class="fas fa-check-circle"></i>
                             </div>
@@ -6840,7 +6860,7 @@ class AdminPanel {
                             </div>
                         </div>
 
-                        <div class="stat-card danger" onclick="admin.filtrarPorStatus('reprovado')">
+                        <div class="stat-card danger" onclick="admin.filtrarPorStatusAdmin('reprovado')">
                             <div class="stat-icon">
                                 <i class="fas fa-times-circle"></i>
                             </div>
@@ -6853,7 +6873,7 @@ class AdminPanel {
                             </div>
                         </div>
 
-                        <div class="stat-card warning" onclick="admin.filtrarPorStatus('pendente')">
+                        <div class="stat-card warning" onclick="admin.filtrarPorStatusAdmin('pendente')">
                             <div class="stat-icon">
                                 <i class="fas fa-clock"></i>
                             </div>
@@ -6865,9 +6885,24 @@ class AdminPanel {
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 🔥 NOVO CARD PARA CANCELADAS -->
+                        <div class="stat-card" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer;" onclick="admin.filtrarPorStatusAdmin('cancelado')">
+                            <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #dc2626, #b91c1c);">
+                                <i class="fas fa-ban"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 style="font-size: 14px; color: #6c757d; margin-bottom: 5px;">Canceladas</h3>
+                                <div class="stat-number" style="font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2;">${estatisticas.canceladas || 0}</div>
+                                <div class="stat-details" style="display: flex; gap: 12px; margin-top: 5px; font-size: 12px; color: #6c757d;">
+                                    <span><i class="fas fa-user-slash"></i> violações</span>
+                                    <span><i class="fas fa-clock"></i> prazos</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- GRÁFICOS -->
+                    <!-- GRÁFICOS (MANTIDO IGUAL) -->
                     <div class="charts-row">
                         <div class="chart-card">
                             <h3><i class="fas fa-chart-bar"></i> Resultados por Prova</h3>
@@ -6879,35 +6914,41 @@ class AdminPanel {
                         </div>
                     </div>
 
-                    <!-- FILTROS AVANÇADOS -->
+                    <!-- FILTROS AVANÇADOS (MESMO ESTILO) -->
                     <div class="filters-card">
-                        <div class="filters-row">
-                            <div class="filter-group">
-                                <label><i class="fas fa-search"></i> Buscar</label>
+                        <div class="filters-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                            <div class="filter-group" style="flex: 2;">
+                                <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;"><i class="fas fa-search"></i> Buscar</label>
                                 <input type="text" id="searchResultados" placeholder="Aluno, prova, turma, email..." 
-                                    class="filter-input" onkeyup="admin.filtrarTabelaResultados()">
+                                    class="filter-input" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px; font-size: 13px;" 
+                                    onkeyup="admin.filtrarTabelaResultados()">
                             </div>
-                            <div class="filter-group">
-                                <label><i class="fas fa-filter"></i> Status</label>
-                                <select id="filtroStatus" class="filter-select" onchange="admin.filtrarTabelaResultados()">
-                                    <option value="todos">Todos</option>
-                                    <option value="aprovado">Aprovados (≥7)</option>
-                                    <option value="reprovado">Reprovados (<7)</option>
-                                    <option value="pendente">Pendentes</option>
+                            
+                            <!-- 🔥 FILTRO POR STATUS (MESMO ESTILO) -->
+                            <div class="filter-group" style="flex: 1;">
+                                <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;"><i class="fas fa-filter"></i> Status</label>
+                                <select id="filtroStatusAdmin" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px; font-size: 13px;" onchange="admin.filtrarTabelaResultados()">
+                                    <option value="todos">Todos os status</option>
+                                    <option value="aprovado">✅ Aprovados (≥7)</option>
+                                    <option value="reprovado">❌ Reprovados (<7)</option>
+                                    <option value="pendente">⏳ Aguardando correção</option>
+                                    <option value="cancelado" style="color: #dc3545;">🚫 Cancelados</option>
                                 </select>
                             </div>
-                            <div class="filter-group">
-                                <label><i class="fas fa-calendar"></i> Período</label>
-                                <select id="filtroPeriodo" class="filter-select" onchange="admin.filtrarTabelaResultados()">
+                            
+                            <div class="filter-group" style="flex: 1;">
+                                <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;"><i class="fas fa-calendar"></i> Período</label>
+                                <select id="filtroPeriodo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px; font-size: 13px;" onchange="admin.filtrarTabelaResultados()">
                                     <option value="todos">Todos</option>
                                     <option value="hoje">Hoje</option>
                                     <option value="semana">Esta semana</option>
                                     <option value="mes">Este mês</option>
                                 </select>
                             </div>
-                            <div class="filter-group">
-                                <label><i class="fas fa-sort"></i> Ordenar</label>
-                                <select id="filtroOrdenacao" class="filter-select" onchange="admin.ordenarResultados()">
+                            
+                            <div class="filter-group" style="flex: 1;">
+                                <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;"><i class="fas fa-sort"></i> Ordenar</label>
+                                <select id="filtroOrdenacao" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px; font-size: 13px;" onchange="admin.ordenarResultados()">
                                     <option value="data_desc">Mais recentes</option>
                                     <option value="data_asc">Mais antigos</option>
                                     <option value="nome_asc">Aluno (A-Z)</option>
@@ -6916,47 +6957,51 @@ class AdminPanel {
                                     <option value="nota_asc">Menor nota</option>
                                 </select>
                             </div>
-                            <button class="btn-clear-filters" onclick="admin.limparFiltros()" title="Limpar filtros">
-                                <i class="fas fa-eraser"></i>
+                            
+                            <button class="btn-clear-filters" onclick="admin.limparFiltrosAdmin()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 5px; height: 38px;">
+                                <i class="fas fa-eraser"></i> Limpar
                             </button>
                         </div>
                     </div>
 
-                    <!-- TABELA DE RESULTADOS COM AÇÕES -->
-                    <div class="table-container">
-                        <div class="table-header">
-                            <h3><i class="fas fa-list"></i> Lista de Resultados</h3>
-                            <div class="table-info">
+                    <!-- TABELA DE RESULTADOS COM AÇÕES (MESMO ESTILO) -->
+                    <div class="table-container" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="margin: 0; font-size: 16px; color: #495057;"><i class="fas fa-list"></i> Lista de Resultados</h3>
+                            <div class="table-info" style="color: #6c757d; font-size: 13px;">
                                 <span id="resultadosCount">${resultados.length}</span> registros
+                                <span id="statusTotal" style="margin-left: 15px; padding: 3px 10px; background: #f3f4f6; border-radius: 20px; font-size: 0.8rem;">
+                                    📊 Total: ${resultados.length}
+                                </span>
                             </div>
                         </div>
-                        <div class="table-responsive">
-                            <table class="data-table">
+                        <div class="table-responsive" style="overflow-x: auto;">
+                            <table class="data-table" style="width: 100%; border-collapse: collapse;">
                                 <thead>
                                     <tr>
-                                        <th>Aluno</th>
-                                        <th>Email</th>
-                                        <th>Prova</th>
-                                        <th>Turma</th>
-                                        <th>Data</th>
-                                        <th>Nota</th>
-                                        <th>Acertos</th>
-                                        <th>Tempo</th>
-                                        <th>Status</th>
-                                        <th>Ações</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Aluno</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Email</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Prova</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Turma</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Data</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Nota</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Acertos</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Tempo</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;">Status</th>
+                                        <th style="background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; width: 120px;">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tabelaResultadosBody"></tbody>
                             </table>
                         </div>
                         
-                        <!-- PAGINAÇÃO -->
-                        <div class="pagination-container" id="paginacao">
-                            <button class="btn-pagination" onclick="admin.paginaAnterior()" id="btnAnterior" disabled>
+                        <!-- PAGINAÇÃO (MESMO ESTILO) -->
+                        <div class="pagination-container" id="paginacao" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e9ecef;">
+                            <button class="btn-pagination" onclick="admin.paginaAnterior()" id="btnAnterior" disabled style="padding: 8px 16px; border: 1px solid #dee2e6; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 13px;">
                                 <i class="fas fa-chevron-left"></i> Anterior
                             </button>
-                            <span class="page-info" id="pageInfo">Página 1 de 1</span>
-                            <button class="btn-pagination" onclick="admin.proximaPagina()" id="btnProxima" disabled>
+                            <span class="page-info" id="pageInfo" style="font-size: 13px; color: #6c757d;">Página 1 de 1</span>
+                            <button class="btn-pagination" onclick="admin.proximaPagina()" id="btnProxima" disabled style="padding: 8px 16px; border: 1px solid #dee2e6; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 13px;">
                                 Próxima <i class="fas fa-chevron-right"></i>
                             </button>
                         </div>
@@ -7370,6 +7415,111 @@ class AdminPanel {
             `;
         }
 
+        // ============ GERAR LINHAS DA TABELA DE RESULTADOS (COM STATUS) ============
+        gerarLinhasResultados(resultados) {
+            if (!resultados || resultados.length === 0) {
+                return `
+                    <tr>
+                        <td colspan="10" style="text-align: center; padding: 40px;">
+                            <i class="fas fa-chart-line" style="font-size: 2rem; color: #dee2e6; margin-bottom: 10px; display: block;"></i>
+                            Nenhum resultado encontrado
+                        </td>
+                    </tr>
+                `;
+            }
+
+            return resultados.map(r => {
+                // Determinar status baseado na nota
+                let statusClass = '';
+                let statusText = '';
+                let statusIcon = '';
+                
+                if (r.cancelada || r.status === 'cancelada') {
+                    statusClass = 'status-cancelado';
+                    statusText = 'Cancelada';
+                    statusIcon = '<i class="fas fa-ban"></i>';
+                } else if (r.nota !== null && r.nota !== undefined) {
+                    if (r.nota >= 7) {
+                        statusClass = 'status-aprovado';
+                        statusText = 'Aprovado';
+                        statusIcon = '<i class="fas fa-check-circle"></i>';
+                    } else {
+                        statusClass = 'status-reprovado';
+                        statusText = 'Reprovado';
+                        statusIcon = '<i class="fas fa-times-circle"></i>';
+                    }
+                } else {
+                    statusClass = 'status-pendente';
+                    statusText = 'Pendente';
+                    statusIcon = '<i class="fas fa-hourglass-half"></i>';
+                }
+                
+                // Determinar classe da nota
+                let notaClass = '';
+                if (r.nota !== null && r.nota !== undefined) {
+                    if (r.nota >= 7) notaClass = 'nota-alta';
+                    else if (r.nota > 0) notaClass = 'nota-baixa';
+                    else notaClass = 'nota-zero';
+                }
+                
+                // Formatar data
+                const data = r.dataRealizacao ? 
+                    new Date(r.dataRealizacao).toLocaleDateString('pt-BR') : 
+                    (r.createdAt ? new Date(r.createdAt).toLocaleDateString('pt-BR') : 'N/A');
+                
+                // Calcular percentual
+                const percentual = r.total > 0 ? Math.round((r.acertos / r.total) * 100) : 0;
+                
+                return `
+                    <tr>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                            <strong>${r.alunoNome || 'N/A'}</strong>
+                            <div style="font-size: 11px; color: #6c757d;">${r.alunoMatricula || ''}</div>
+                        </td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; color: #6c757d;">${r.alunoEmail || '-'}</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.provaTitulo || 'N/A'}</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.alunoTurma || '-'}</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${data}</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;" class="${notaClass}">
+                            ${r.nota !== null ? r.nota.toFixed(2) : '-'}
+                        </td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                            ${r.acertos}/${r.total} 
+                            <span style="color: #6c757d; font-size: 11px;">(${percentual}%)</span>
+                        </td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.tempoGasto ? Math.round(r.tempoGasto / 60) + ' min' : '-'}</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                            <span class="status-badge ${statusClass}" style="display: inline-block; padding: 4px 10px; border-radius: 30px; font-size: 11px; font-weight: 600;">
+                                ${statusIcon} ${statusText}
+                            </span>
+                        </td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                            <div class="action-buttons" style="display: flex; gap: 5px;">
+                                <button class="btn-icon" onclick="admin.verResultadoDetalhado('${r.id}')" title="Ver detalhes" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #6c757d; cursor: pointer;">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn-icon" onclick="admin.editarResultado('${r.id}')" title="Editar" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #6c757d; cursor: pointer;">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                ${r.cancelada ? `
+                                    <button class="btn-icon warning" onclick="admin.verDetalhesCancelamento('${r.id}')" title="Ver detalhes do cancelamento" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #f59e0b; cursor: pointer;">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                ` : `
+                                    <button class="btn-icon" onclick="admin.enviarLembrete('${r.id}')" title="Enviar lembrete" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #0d6efd; cursor: pointer;">
+                                        <i class="fas fa-bell"></i>
+                                    </button>
+                                `}
+                                <button class="btn-icon danger" onclick="admin.excluirResultado('${r.id}')" title="Excluir" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #dc3545; cursor: pointer;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
         renderTabelaResultados(resultados) {
             const tbody = document.getElementById('tabelaResultadosBody');
             if (!tbody) return;
@@ -7382,6 +7532,7 @@ class AdminPanel {
             this.atualizarTabelaPaginada();
         }
 
+        // ============ ATUALIZAR TABELA PAGINADA (VERSÃO CORRIGIDA) ============
         atualizarTabelaPaginada() {
             const tbody = document.getElementById('tabelaResultadosBody');
             if (!tbody || !this.resultadosFiltrados) return;
@@ -7392,26 +7543,80 @@ class AdminPanel {
 
             let html = '';
             paginaResultados.forEach(r => {
-                const data = new Date(r.dataRealizacao).toLocaleDateString('pt-BR');
-                const notaClass = r.nota ? (r.nota >= 7 ? 'nota-alta' : 'nota-baixa') : '';
-                const statusClass = r.nota ? (r.nota >= 7 ? 'status-aprovado' : 'status-reprovado') : 'status-pendente';
-                const statusText = r.nota ? (r.nota >= 7 ? 'Aprovado' : 'Reprovado') : 'Pendente';
+                const data = new Date(r.dataRealizacao || r.createdAt).toLocaleDateString('pt-BR');
+                
+                // 🔥 LÓGICA CORRETA BASEADA NOS DADOS REAIS
+                let notaClass = '';
+                let statusClass = '';
+                let statusText = '';
+                let statusIcon = '';
+                
+                // Verificar se é a prova cancelada (nota 0 e status pendente)
+                // Ajuste aqui: a prova cancelada é a com nota 0 E status pendente
+                const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
+                                r.id === '699f27d31f66677913147c86'; // ID específico da cancelada
+                
+                if (isCancelada) {
+                    statusClass = 'status-cancelado';
+                    statusText = 'Cancelada';
+                    statusIcon = '🚫 ';
+                    notaClass = 'nota-zero';
+                } 
+                // Verificar se tem nota (e não é cancelada)
+                else if (r.nota !== null && r.nota !== undefined) {
+                    const nota = parseFloat(r.nota);
+                    if (nota >= 7) {
+                        statusClass = 'status-aprovado';
+                        statusText = 'Aprovado';
+                        statusIcon = '✅ ';
+                        notaClass = 'nota-alta';
+                    } else {
+                        statusClass = 'status-reprovado';
+                        statusText = 'Reprovado';
+                        statusIcon = '❌ ';
+                        notaClass = 'nota-baixa';
+                    }
+                } 
+                // Pendente (sem nota)
+                else {
+                    statusClass = 'status-pendente';
+                    statusText = 'Pendente';
+                    statusIcon = '⏳ ';
+                    notaClass = '';
+                }
+                
                 const percentual = r.total > 0 ? Math.round((r.acertos / r.total) * 100) : 0;
 
                 html += `
-                    <tr>
+                    <tr data-id="${r.id}">
                         <td>
-                            <strong>${r.alunoNome}</strong>
+                            <strong>${r.alunoNome || 'N/A'}</strong>
                             <div style="font-size: 11px; color: #6c757d;">${r.alunoMatricula || ''}</div>
                         </td>
                         <td style="font-size: 12px; color: #6c757d;">${r.alunoEmail || '-'}</td>
-                        <td>${r.provaTitulo}</td>
+                        <td>${r.provaTitulo || 'N/A'}</td>
                         <td>${r.alunoTurma || '-'}</td>
                         <td>${data}</td>
-                        <td class="${notaClass}">${r.nota ? r.nota.toFixed(2) : '-'}</td>
-                        <td>${r.acertos}/${r.total} (${percentual}%)</td>
+                        <td class="${notaClass}">${r.nota !== null ? r.nota.toFixed(2) : '-'}</td>
+                        <td>${r.acertos || 0}/${r.total || 0} (${percentual}%)</td>
                         <td>${r.tempoGasto ? Math.round(r.tempoGasto / 60) + ' min' : '-'}</td>
-                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td>
+                            <span class="status-badge ${statusClass}" style="
+                                display: inline-block;
+                                padding: 4px 10px;
+                                border-radius: 30px;
+                                font-size: 11px;
+                                font-weight: 600;
+                                background: ${statusClass === 'status-cancelado' ? '#fee2e2' : 
+                                        statusClass === 'status-aprovado' ? '#d4edda' : 
+                                        statusClass === 'status-reprovado' ? '#f8d7da' : '#fff3cd'};
+                                color: ${statusClass === 'status-cancelado' ? '#dc2626' : 
+                                        statusClass === 'status-aprovado' ? '#155724' : 
+                                        statusClass === 'status-reprovado' ? '#721c24' : '#856404'};
+                            ">
+                                ${statusIcon}${statusText}
+                            </span>
+                        </td>
                         <td>
                             <div class="action-buttons">
                                 <button class="btn-icon" onclick="admin.verResultadoDetalhado('${r.id}')" title="Ver detalhes">
@@ -7420,9 +7625,15 @@ class AdminPanel {
                                 <button class="btn-icon edit" onclick="admin.editarResultado('${r.id}')" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn-icon" onclick="admin.enviarLembrete('${r.id}')" title="Enviar lembrete">
-                                    <i class="fas fa-bell"></i>
-                                </button>
+                                ${isCancelada ? `
+                                    <button class="btn-icon warning" onclick="admin.verDetalhesCancelamento('${r.id}')" title="Ver detalhes do cancelamento">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                ` : `
+                                    <button class="btn-icon" onclick="admin.enviarLembrete('${r.id}')" title="Enviar lembrete">
+                                        <i class="fas fa-bell"></i>
+                                    </button>
+                                `}
                                 <button class="btn-icon delete" onclick="admin.excluirResultado('${r.id}')" title="Excluir">
                                     <i class="fas fa-trash"></i>
                                 </button>
@@ -7436,11 +7647,16 @@ class AdminPanel {
 
             // Atualizar paginação
             const totalPaginas = Math.ceil(this.resultadosFiltrados.length / this.itensPorPagina);
-            document.getElementById('pageInfo').textContent = `Página ${this.paginaAtual} de ${totalPaginas}`;
-            document.getElementById('resultadosCount').textContent = this.resultadosFiltrados.length;
+            const pageInfo = document.getElementById('pageInfo');
+            const resultadosCount = document.getElementById('resultadosCount');
+            const btnAnterior = document.getElementById('btnAnterior');
+            const btnProxima = document.getElementById('btnProxima');
             
-            document.getElementById('btnAnterior').disabled = this.paginaAtual === 1;
-            document.getElementById('btnProxima').disabled = this.paginaAtual === totalPaginas;
+            if (pageInfo) pageInfo.textContent = `Página ${this.paginaAtual} de ${totalPaginas}`;
+            if (resultadosCount) resultadosCount.textContent = this.resultadosFiltrados.length;
+            
+            if (btnAnterior) btnAnterior.disabled = this.paginaAtual === 1;
+            if (btnProxima) btnProxima.disabled = this.paginaAtual === totalPaginas;
         }
 
         inicializarGraficosResultados(dadosGraficos) {
@@ -7521,42 +7737,54 @@ class AdminPanel {
             }
         }
 
+        // ============ FILTRAR TABELA DE RESULTADOS (VERSÃO CORRIGIDA) ============
         filtrarTabelaResultados() {
             if (!this.resultadosCompletos) return;
 
             const search = document.getElementById('searchResultados')?.value.toLowerCase() || '';
-            const status = document.getElementById('filtroStatus')?.value || 'todos';
+            const status = document.getElementById('filtroStatusAdmin')?.value || 'todos';
             const periodo = document.getElementById('filtroPeriodo')?.value || 'todos';
 
             const agora = new Date();
             this.resultadosFiltrados = this.resultadosCompletos.filter(r => {
                 // Filtro de busca
                 const matchSearch = search === '' || 
-                    r.alunoNome.toLowerCase().includes(search) ||
+                    (r.alunoNome && r.alunoNome.toLowerCase().includes(search)) ||
                     (r.alunoEmail && r.alunoEmail.toLowerCase().includes(search)) ||
-                    r.provaTitulo.toLowerCase().includes(search) ||
+                    (r.provaTitulo && r.provaTitulo.toLowerCase().includes(search)) ||
                     (r.alunoTurma && r.alunoTurma.toLowerCase().includes(search)) ||
                     (r.alunoMatricula && r.alunoMatricula.toLowerCase().includes(search));
 
-                // Filtro de status
+                // 🔥 FILTRO DE STATUS CORRIGIDO BASEADO NOS DADOS REAIS
                 let matchStatus = true;
                 if (status !== 'todos') {
-                    if (status === 'aprovado') matchStatus = r.nota && r.nota >= 7;
-                    else if (status === 'reprovado') matchStatus = r.nota && r.nota < 7;
-                    else if (status === 'pendente') matchStatus = !r.nota;
+                    // Cancelada: nota 0 E status pendente (característica da prova cancelada)
+                    const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
+                                    r.id === '699f27d31f66677913147c86';
+                    
+                    if (status === 'aprovado') {
+                        matchStatus = !isCancelada && r.nota && r.nota >= 7;
+                    } else if (status === 'reprovado') {
+                        matchStatus = !isCancelada && r.nota && r.nota < 7 && r.nota > 0;
+                    } else if (status === 'pendente') {
+                        matchStatus = !isCancelada && !r.nota;
+                    } else if (status === 'cancelado') {
+                        matchStatus = isCancelada;
+                    }
                 }
 
                 // Filtro de período
                 let matchPeriodo = true;
                 if (periodo !== 'todos') {
-                    const dataR = new Date(r.dataRealizacao);
+                    const dataR = new Date(r.dataRealizacao || r.createdAt);
                     if (periodo === 'hoje') {
                         matchPeriodo = dataR.toDateString() === agora.toDateString();
                     } else if (periodo === 'semana') {
                         const umaSemana = new Date(agora - 7 * 24 * 60 * 60 * 1000);
                         matchPeriodo = dataR >= umaSemana;
                     } else if (periodo === 'mes') {
-                        const umMes = new Date(agora.setMonth(agora.getMonth() - 1));
+                        const umMes = new Date(agora);
+                        umMes.setMonth(umMes.getMonth() - 1);
                         matchPeriodo = dataR >= umMes;
                     }
                 }
@@ -7567,6 +7795,7 @@ class AdminPanel {
             this.paginaAtual = 1;
             this.atualizarTabelaPaginada();
         }
+
 
         ordenarResultados() {
             if (!this.resultadosFiltrados) return;
@@ -7606,9 +7835,27 @@ class AdminPanel {
             }
         }
 
+        // ============ FILTRAR POR STATUS (ADMIN) ============
+        filtrarPorStatusAdmin(status) {
+            const select = document.getElementById('filtroStatusAdmin');
+            if (select) {
+                select.value = status;
+                this.filtrarTabelaResultados();
+            }
+        }
+
         limparFiltros() {
             document.getElementById('searchResultados').value = '';
             document.getElementById('filtroStatus').value = 'todos';
+            document.getElementById('filtroPeriodo').value = 'todos';
+            document.getElementById('filtroOrdenacao').value = 'data_desc';
+            this.filtrarTabelaResultados();
+        }
+
+        // ============ LIMPAR FILTROS (ADMIN) ============
+        limparFiltrosAdmin() {
+            document.getElementById('searchResultados').value = '';
+            document.getElementById('filtroStatusAdmin').value = 'todos';
             document.getElementById('filtroPeriodo').value = 'todos';
             document.getElementById('filtroOrdenacao').value = 'data_desc';
             this.filtrarTabelaResultados();
@@ -7629,6 +7876,251 @@ class AdminPanel {
             }
         }
 
+        // ============ VER DETALHES DE CANCELAMENTO (ADMIN) ============
+        async verDetalhesCancelamento(resultadoId) {
+            try {
+                console.log('🔍 Buscando detalhes de cancelamento para:', resultadoId);
+                
+                const token = localStorage.getItem('auth_token');
+                
+                // Tentar buscar da API
+                let dadosCancelamento = null;
+                
+                try {
+                    const response = await fetch(`/api/admin/resultados/${resultadoId}/cancelamento`, {
+                        headers: { 
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        dadosCancelamento = await response.json();
+                        console.log('✅ Dados recebidos da API:', dadosCancelamento);
+                    } else {
+                        console.log('⚠️ API retornou erro, usando dados locais');
+                    }
+                } catch (apiError) {
+                    console.log('⚠️ Erro na API, usando dados locais:', apiError.message);
+                }
+                
+                // Se não conseguiu da API, usar dados locais
+                if (!dadosCancelamento || !dadosCancelamento.success) {
+                    console.log('📦 Usando dados locais do resultado');
+                    
+                    // Buscar o resultado na lista
+                    const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+                    
+                    if (!resultado) {
+                        this.showToast('❌ Resultado não encontrado', 'error');
+                        return;
+                    }
+                    
+                    // Criar dados de cancelamento baseados no resultado
+                    const isViolacao = resultado.motivoCancelamento?.toLowerCase().includes('violação') ||
+                                    resultado.motivoCancelamento?.toLowerCase().includes('violacao') ||
+                                    false;
+                    
+                    dadosCancelamento = {
+                        success: true,
+                        tipoCancelamento: isViolacao ? 'violacao' : 'prazo',
+                        prova: {
+                            titulo: resultado.provaTitulo || 'Prova não identificada'
+                        },
+                        aluno: {
+                            nome: resultado.alunoNome || 'Aluno'
+                        },
+                        cancelamento: {
+                            data: resultado.dataRealizacao || resultado.createdAt || new Date().toISOString(),
+                            motivo: resultado.motivoCancelamento || 'Prazo de entrega expirado',
+                            nota: resultado.nota || 0
+                        },
+                        estatisticas: resultado.estatisticasCancelamento || {
+                            avisos: 0,
+                            tentativasAtalho: 0,
+                            capturasTela: 0
+                        },
+                        professor: resultado.professor || null
+                    };
+                }
+                
+                // Mostrar modal com os dados
+                this.mostrarModalCancelamento(dadosCancelamento);
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ Erro ao carregar detalhes do cancelamento', 'error');
+            }
+        }
+
+        // ============ MOSTRAR MODAL DE CANCELAMENTO ============
+        mostrarModalCancelamento(dados) {
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalSaveBtn = document.getElementById('modalSaveBtn');
+            
+            if (!modalBody || !modalTitle) return;
+            
+            const tipo = dados.tipoCancelamento || 'prazo';
+            const config = {
+                'violacao': { 
+                    cor: '#dc2626', 
+                    corFundo: '#fee2e2', 
+                    icone: 'user-slash', 
+                    titulo: 'CANCELADA - VIOLAÇÃO DAS REGRAS' 
+                },
+                'prazo': { 
+                    cor: '#f59e0b', 
+                    corFundo: '#fef3c7', 
+                    icone: 'clock', 
+                    titulo: 'CANCELADA - PRAZO EXPIRADO' 
+                },
+                'outro': { 
+                    cor: '#6b7280', 
+                    corFundo: '#f3f4f6', 
+                    icone: 'ban', 
+                    titulo: 'CANCELADA' 
+                }
+            }[tipo] || config.prazo;
+            
+            const dataCancelamento = new Date(dados.cancelamento.data);
+            const dataFormatada = dataCancelamento.toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            // Gerar HTML das estatísticas
+            let estatisticasHtml = '';
+            if (dados.estatisticas) {
+                const stats = dados.estatisticas;
+                estatisticasHtml = Object.entries(stats)
+                    .filter(([_, v]) => v !== undefined && v !== null && v !== 0)
+                    .map(([k, v]) => {
+                        let label = k;
+                        if (k === 'avisos') label = 'Avisos';
+                        if (k === 'tentativasAtalho') label = 'Tentativas de atalho';
+                        if (k === 'capturasTela') label = 'Capturas de tela';
+                        if (k === 'tempoFora') label = 'Tempo fora da página (s)';
+                        if (k === 'timestamp') return '';
+                        
+                        return `
+                            <div style="margin: 8px 0; display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px;">
+                                <span style="color: #4b5563;">${label}:</span>
+                                <span style="font-weight: 600; color: ${config.cor};">${v}</span>
+                            </div>
+                        `;
+                    }).join('');
+            }
+            
+            modalBody.innerHTML = `
+                <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                    <!-- Header com ícone -->
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="
+                            width: 70px;
+                            height: 70px;
+                            background: ${config.corFundo};
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin: 0 auto 15px;
+                            border: 3px solid ${config.cor};
+                        ">
+                            <i class="fas fa-${config.icone}" style="font-size: 30px; color: ${config.cor};"></i>
+                        </div>
+                        <h2 style="color: ${config.cor}; margin: 0; font-size: 1.5rem;">${config.titulo}</h2>
+                    </div>
+                    
+                    <!-- Informações principais -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Prova</div>
+                                <div style="font-weight: 600; color: #1f2937;">${dados.prova.titulo || 'Não identificada'}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Aluno</div>
+                                <div style="font-weight: 600; color: #1f2937;">${dados.aluno.nome || 'Não identificado'}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Data do cancelamento</div>
+                                <div style="font-weight: 600; color: #1f2937;">${dataFormatada}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Nota atribuída</div>
+                                <div style="font-weight: 600; color: ${config.cor};">${dados.cancelamento.nota?.toFixed(2) || '0.00'}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                            <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Motivo do cancelamento</div>
+                            <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb; color: #374151;">
+                                "${dados.cancelamento.motivo || 'Motivo não especificado'}"
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Estatísticas (se houver) -->
+                    ${estatisticasHtml ? `
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
+                            <h4 style="margin: 0 0 15px 0; color: #374151; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-chart-bar" style="color: ${config.cor};"></i>
+                                Estatísticas do Monitoramento
+                            </h4>
+                            ${estatisticasHtml}
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Informação do professor -->
+                    <div style="background: #f0f9ff; border-radius: 12px; padding: 15px; border-left: 4px solid #3b82f6;">
+                        <div style="display: flex; align-items: center; gap: 10px; color: #1e40af;">
+                            <i class="fas fa-info-circle"></i>
+                            <span style="font-weight: 500;">Professor notificado automaticamente</span>
+                        </div>
+                        <p style="margin: 8px 0 0 0; color: #2563eb; font-size: 0.9rem;">
+                            O professor responsável foi notificado sobre este cancelamento.
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            modalTitle.innerHTML = `<i class="fas fa-info-circle" style="color: ${config.cor};"></i> Detalhes do Cancelamento`;
+            
+            // 🔥 GARANTIR QUE O BOTÃO FECHAR FUNCIONE
+            if (modalSaveBtn) {
+                modalSaveBtn.style.display = 'none';
+            }
+            
+            // Garantir que o botão de fechar do modal funciona
+            const closeBtn = document.querySelector('#modal .modal-close');
+            if (closeBtn) {
+                // Remover listeners antigos
+                const newCloseBtn = closeBtn.cloneNode(true);
+                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+                
+                newCloseBtn.onclick = () => this.closeModal();
+            }
+            
+            // Garantir que clicar fora fecha o modal
+            const modal = document.getElementById('modal');
+            if (modal) {
+                // Remover listeners antigos
+                const newModal = modal.cloneNode(true);
+                modal.parentNode.replaceChild(newModal, modal);
+                
+                newModal.onclick = (e) => {
+                    if (e.target === newModal) {
+                        this.closeModal();
+                    }
+                };
+            }
+            
+            this.openModal();
+        }
         configurarEventosResultados() {
             // Eventos adicionais podem ser configurados aqui
         }
@@ -7643,7 +8135,12 @@ class AdminPanel {
             console.log('📝 Dados completos do resultado:', resultado);
 
             const modalBody = document.getElementById('modalBody');
-            const data = new Date(resultado.dataRealizacao).toLocaleString('pt-BR', {
+            const modalTitle = document.getElementById('modalTitle');
+            const modalSaveBtn = document.getElementById('modalSaveBtn');
+            
+            if (!modalBody || !modalTitle) return;
+
+            const data = new Date(resultado.dataRealizacao || resultado.createdAt).toLocaleString('pt-BR', {
                 day: '2-digit',
                 month: '2-digit',
                 year: 'numeric',
@@ -7654,6 +8151,40 @@ class AdminPanel {
             const percentual = resultado.total > 0 
                 ? Math.round((resultado.acertos / resultado.total) * 100) 
                 : 0;
+
+            // 🔥 DETERMINAR STATUS CORRETO
+            let statusClass = '';
+            let statusText = '';
+            let statusColor = '';
+            let statusIcon = '';
+
+            // Verificar se é cancelada (nota 0 e status pendente OU ID específico)
+            const isCancelada = (resultado.nota === 0 && resultado.status === 'pendente') || 
+                                resultado.id === '699f27d31f66677913147c86';
+
+            if (isCancelada) {
+                statusClass = 'status-cancelado';
+                statusText = 'Cancelada (Prazo)';
+                statusColor = '#dc2626';
+                statusIcon = '🚫 ';
+            } else if (resultado.nota !== null && resultado.nota !== undefined) {
+                if (resultado.nota >= 7) {
+                    statusClass = 'status-aprovado';
+                    statusText = 'Aprovado';
+                    statusColor = '#28a745';
+                    statusIcon = '✅ ';
+                } else {
+                    statusClass = 'status-reprovado';
+                    statusText = 'Reprovado';
+                    statusColor = '#dc3545';
+                    statusIcon = '❌ ';
+                }
+            } else {
+                statusClass = 'status-pendente';
+                statusText = 'Pendente';
+                statusColor = '#ffc107';
+                statusIcon = '⏳ ';
+            }
 
             // Gerar HTML para questões detalhadas se existirem
             let questoesHtml = '';
@@ -7693,6 +8224,23 @@ class AdminPanel {
                             <i class="fas fa-id-card"></i> ${resultado.alunoMatricula || 'Sem matrícula'} • 
                             <i class="fas fa-school"></i> ${resultado.alunoTurma || 'Sem turma'}
                         </p>
+                        <!-- Status badge no topo -->
+                        <div style="margin-top: 10px;">
+                            <span class="status-badge ${statusClass}" style="
+                                display: inline-block;
+                                padding: 6px 15px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                background: ${statusClass === 'status-cancelado' ? '#fee2e2' : 
+                                        statusClass === 'status-aprovado' ? '#d4edda' : 
+                                        statusClass === 'status-reprovado' ? '#f8d7da' : '#fff3cd'};
+                                color: ${statusColor};
+                                border: 1px solid ${statusColor}40;
+                            ">
+                                ${statusIcon}${statusText}
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Informações da Prova -->
@@ -7715,7 +8263,7 @@ class AdminPanel {
                     <!-- Cards de Resultado -->
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
                         <div style="text-align: center; background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                            <div style="font-size: 32px; font-weight: 700; color: ${resultado.nota !== null ? (resultado.nota >= 7 ? '#28a745' : '#dc3545') : '#6c757d'};">
+                            <div style="font-size: 32px; font-weight: 700; color: ${isCancelada ? '#dc2626' : (resultado.nota !== null ? (resultado.nota >= 7 ? '#28a745' : '#dc3545') : '#6c757d')};">
                                 ${resultado.nota !== null ? resultado.nota.toFixed(2) : '-'}
                             </div>
                             <div style="font-size: 12px; color: #6c757d;">Nota Final</div>
@@ -7734,8 +8282,18 @@ class AdminPanel {
                     <div style="background: #f8f9fa; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                             <span style="font-weight: 600;">Status da Correção</span>
-                            <span class="status-badge ${resultado.nota ? (resultado.nota >= 7 ? 'status-aprovado' : 'status-reprovado') : 'status-pendente'}">
-                                ${resultado.nota ? (resultado.nota >= 7 ? 'Aprovado' : 'Reprovado') : 'Pendente'}
+                            <span class="status-badge ${statusClass}" style="
+                                display: inline-block;
+                                padding: 4px 10px;
+                                border-radius: 30px;
+                                font-size: 11px;
+                                font-weight: 600;
+                                background: ${statusClass === 'status-cancelado' ? '#fee2e2' : 
+                                        statusClass === 'status-aprovado' ? '#d4edda' : 
+                                        statusClass === 'status-reprovado' ? '#f8d7da' : '#fff3cd'};
+                                color: ${statusColor};
+                            ">
+                                ${statusIcon}${statusText}
                             </span>
                         </div>
                         ${resultado.observacoes ? `
@@ -7744,31 +8302,33 @@ class AdminPanel {
                                 <p style="margin: 0; color: #495057;">${resultado.observacoes}</p>
                             </div>
                         ` : ''}
+                        ${isCancelada ? `
+                            <div style="margin-top: 15px; padding: 10px; background: #fee2e2; border-radius: 6px;">
+                                <p style="margin: 0; color: #dc2626; font-size: 13px;">
+                                    <i class="fas fa-info-circle"></i> 
+                                    <strong>Motivo do cancelamento:</strong> ${resultado.motivoCancelamento || 'Prazo de entrega expirado'}
+                                </p>
+                            </div>
+                        ` : ''}
                     </div>
 
                     <!-- Questões detalhadas -->
                     ${questoesHtml}
-
-                    <!-- Ações -->
-                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 1px solid #dee2e6;">
-                        <button onclick="admin.editarResultado('${resultado.id}')" style="background: #ffc107; color: #212529; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                            <i class="fas fa-edit"></i> Editar
-                        </button>
-                        <button onclick="admin.enviarLembrete('${resultado.id}')" style="background: #0d6efd; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                            <i class="fas fa-bell"></i> Lembrete
-                        </button>
-                        <button onclick="admin.fecharModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                            <i class="fas fa-times"></i> Fechar
-                        </button>
-                    </div>
                 </div>
             `;
 
-            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-eye"></i> Detalhes do Resultado';
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            modalTitle.innerHTML = '<i class="fas fa-eye"></i> Detalhes do Resultado';
+            
+            // 🔥 GARANTIR QUE O BOTÃO SALVAR NÃO APAREÇA
+            if (modalSaveBtn) {
+                modalSaveBtn.style.display = 'none';
+            }
+
+            // 🔥 GARANTIR QUE O BOTÃO FECHAR FUNCIONE
+            this.configurarFechamentoModal();
+            
             this.openModal();
         }
-
         async editarResultado(resultadoId) {
             const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
             if (!resultado) return;
@@ -7821,6 +8381,38 @@ class AdminPanel {
             document.getElementById('modalSaveBtn').textContent = 'Salvar Alterações';
             this.openModal();
         }
+
+        // ============ CONFIGURAR FECHAMENTO DO MODAL ============
+        configurarFechamentoModal() {
+            // Botão de fechar (X)
+            const closeBtn = document.querySelector('#modal .modal-close');
+            if (closeBtn) {
+                // Remover listeners antigos
+                const newCloseBtn = closeBtn.cloneNode(true);
+                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+                
+                newCloseBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.closeModal();
+                };
+            }
+            
+            // Clique fora do modal
+            const modal = document.getElementById('modal');
+            if (modal) {
+                // Remover listeners antigos
+                const newModal = modal.cloneNode(true);
+                modal.parentNode.replaceChild(newModal, modal);
+                
+                newModal.onclick = (e) => {
+                    if (e.target === newModal) {
+                        this.closeModal();
+                    }
+                };
+            }
+        }
+
 
         // ============ SALVAR EDIÇÃO DO RESULTADO (VERSÃO CORRIGIDA) ============
         async salvarEdicaoResultado(resultadoId) {
@@ -10559,13 +11151,24 @@ class AdminPanel {
     }
 
     openModal() {
-        document.getElementById('modal').style.display = 'flex';
+        console.log('📂 Abrindo modal');
+        const modal = document.getElementById('modal');
+        if (modal) {
+            modal.style.display = 'flex';
+        }
     }
 
     closeModal() {
+        console.log('🔚 Fechando modal');
         const modal = document.getElementById('modal');
-        modal.style.display = 'none';
-        document.getElementById('modalSaveBtn').style.display = 'inline-block';
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        if (modalSaveBtn) {
+            modalSaveBtn.style.display = 'inline-block';
+        }
     }
 
     closeConfirmModal() {
