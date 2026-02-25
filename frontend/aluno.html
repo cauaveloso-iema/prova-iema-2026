@@ -833,7 +833,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                 <h2><i class="fas fa-check-circle"></i> Provas Concluídas</h2>
                 
-                <!-- FILTROS POR EIXO/DISCIPLINA E PERÍODO -->
+                <!-- FILTROS COMBINADOS: EIXO + PERÍODO + STATUS -->
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <!-- Filtro por Eixo/Disciplina (existente) -->
                     <div style="position: relative; min-width: 250px;">
@@ -885,7 +885,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </select>
                     </div>
                     
-                    <!-- 🔴 FILTRO POR PERÍODO (AO LADO) -->
+                    <!-- FILTRO POR PERÍODO -->
                     <div style="position: relative; min-width: 150px;">
                         <select id="filtroPeriodoProvas" style="
                             padding: 10px 35px 10px 15px;
@@ -909,6 +909,30 @@ document.addEventListener('DOMContentLoaded', function() {
                         </select>
                     </div>
                     
+                    <!-- 🔥 NOVO: FILTRO POR STATUS (COM OPÇÃO DE CANCELADAS) -->
+                    <div style="position: relative; min-width: 200px;">
+                        <select id="filtroStatusProvas" style="
+                            padding: 10px 35px 10px 15px;
+                            border: 2px solid #e5e7eb;
+                            border-radius: 8px;
+                            font-size: 0.95rem;
+                            background: white url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E') no-repeat right 12px center;
+                            appearance: none;
+                            -webkit-appearance: none;
+                            -moz-appearance: none;
+                            cursor: pointer;
+                            outline: none;
+                            transition: border-color 0.3s;
+                            width: 100%;
+                            border-left: 3px solid #6b7280;
+                        ">
+                            <option value="todos">📋 Todos os status</option>
+                            <option value="concluidas" style="color: #10b981; font-weight: 500;">✅ Concluídas</option>
+                            <option value="aguardando" style="color: #f59e0b; font-weight: 500;">⏳ Aguardando correção</option>
+                            <option value="canceladas" style="color: #ef4444; font-weight: 600;">❌ Canceladas</option>
+                        </select>
+                    </div>
+                    
                     <span id="contadorProvasFiltradas" style="
                         background: #4f46e5;
                         color: white;
@@ -919,6 +943,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         display: inline-flex;
                         align-items: center;
                         gap: 5px;
+                        white-space: nowrap;
                     ">
                         <i class="fas fa-file-alt"></i>
                         <span id="contadorNumerico">0</span> provas
@@ -1462,7 +1487,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // ========== FUNÇÃO PARA APLICAR FILTRO E RENDERIZAR (COM PERÍODO) ==========
+        // ========== FUNÇÃO PARA APLICAR FILTRO (COM STATUS) ==========
         function aplicarFiltroEStatus(provas) {
             const container = document.getElementById('provasConcluidas');
             if (!container) return;
@@ -1470,8 +1495,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Pegar valores dos filtros
             const filtroEixo = document.getElementById('filtroEixoProvasConcluidas')?.value || 'todos';
             const filtroPeriodo = document.getElementById('filtroPeriodoProvas')?.value || 'todos';
+            const filtroStatus = document.getElementById('filtroStatusProvas')?.value || 'todos';
             
-            console.log('🔍 Aplicando filtros:', { eixo: filtroEixo, periodo: filtroPeriodo });
+            console.log('🔍 Aplicando filtros:', { 
+                eixo: filtroEixo, 
+                periodo: filtroPeriodo,
+                status: filtroStatus 
+            });
             
             // APLICAR FILTROS
             let provasFiltradas = provas;
@@ -1523,12 +1553,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
             
-            // 🔴 FILTRO POR PERÍODO
+            // FILTRO POR PERÍODO
             if (filtroPeriodo !== 'todos') {
                 provasFiltradas = provasFiltradas.filter(prova => 
                     prova.periodo === filtroPeriodo || 
                     (prova.periodo && prova.periodo.toString() === filtroPeriodo)
                 );
+            }
+            
+            // 🔥 NOVO: FILTRO POR STATUS
+            if (filtroStatus !== 'todos') {
+                if (filtroStatus === 'concluidas') {
+                    provasFiltradas = provasFiltradas.filter(p => 
+                        !p.cancelada && p.dataRealizacao && p.notaLiberada && p.nota !== null
+                    );
+                } else if (filtroStatus === 'aguardando') {
+                    provasFiltradas = provasFiltradas.filter(p =>
+                        !p.cancelada && p.dataRealizacao && (!p.notaLiberada || p.nota === null)
+                    );
+                } else if (filtroStatus === 'canceladas') {
+                    provasFiltradas = provasFiltradas.filter(p => p.cancelada);
+                }
             }
             
             // ATUALIZAR CONTADOR
@@ -1537,7 +1582,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 contadorSpan.innerText = provasFiltradas.length;
             }
             
-            // SEPARAR POR STATUS
+            // SEPARAR POR STATUS (para organização visual)
             const provasConcluidas = provasFiltradas.filter(p => 
                 !p.cancelada && p.dataRealizacao && p.notaLiberada && p.nota !== null
             );
@@ -1551,18 +1596,38 @@ document.addEventListener('DOMContentLoaded', function() {
             // LIMPAR CONTAINER
             container.innerHTML = '';
             
-            // RENDERIZAR AGUARDANDO CORREÇÃO
-            if (provasAguardando.length > 0) {
+            // 🔥 SE O FILTRO ATIVO FOR "CANCELADAS", MOSTRAR APENAS CANCELADAS
+            if (filtroStatus === 'canceladas') {
+                if (provasCanceladas.length > 0) {
+                    renderizarProvasCanceladas(provasCanceladas);
+                } else {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-ban" style="color: #ef4444; font-size: 3rem; margin-bottom: 15px;"></i>
+                            <h3 style="color: #ef4444;">Nenhuma prova cancelada</h3>
+                            <p>Não há provas canceladas com os filtros selecionados.</p>
+                        </div>
+                    `;
+                }
+                return;
+            }
+            
+            // RENDERIZAR AGUARDANDO CORREÇÃO (se filtro não for "concluidas")
+            if (filtroStatus === 'todos' && provasAguardando.length > 0) {
+                renderizarProvasAguardandoCorrecao(provasAguardando);
+            } else if (filtroStatus === 'aguardando' && provasAguardando.length > 0) {
                 renderizarProvasAguardandoCorrecao(provasAguardando);
             }
             
-            // RENDERIZAR CONCLUÍDAS
-            if (provasConcluidas.length > 0) {
-                atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
+            // RENDERIZAR CONCLUÍDAS (se filtro não for "aguardando")
+            if (filtroStatus === 'todos' || filtroStatus === 'concluidas') {
+                if (provasConcluidas.length > 0) {
+                    atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
+                }
             }
             
-            // RENDERIZAR CANCELADAS
-            if (provasCanceladas.length > 0) {
+            // RENDERIZAR CANCELADAS (se filtro for "todos")
+            if (filtroStatus === 'todos' && provasCanceladas.length > 0) {
                 renderizarProvasCanceladas(provasCanceladas);
             }
             
@@ -2918,7 +2983,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }).join('');
         }
 
-        // Função para verificar e cancelar provas expiradas automaticamente
+        // ============ VERIFICAR E CANCELAR PROVAS COM HORÁRIO ENCERRADO (NOVA) ============
         async function verificarECancelarProvasExpiradas() {
             try {
                 const token = localStorage.getItem('auth_token');
@@ -2940,11 +3005,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 const provasPendentes = data.provas || [];
                 const hoje = new Date();
                 
-                // Para cada prova pendente, verificar se expirou
+                // DATA ATUAL PARA VERIFICAÇÃO DE HORÁRIO
+                const ano = hoje.getFullYear();
+                const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+                const dia = String(hoje.getDate()).padStart(2, '0');
+                
+                let provasCanceladas = 0;
+                
                 for (const prova of provasPendentes) {
                     // Pular se já está cancelada ou finalizada
                     if (prova.status === 'cancelada' || prova.status === 'finalizada') continue;
                     
+                    // ============================================
+                    // VERIFICAÇÃO 1: DATA LIMITE (EXISTENTE)
+                    // ============================================
                     if (prova.dataLimite) {
                         const dataLimiteObj = new Date(prova.dataLimite);
                         const dataLimiteFimDia = new Date(dataLimiteObj);
@@ -2952,12 +3026,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Se a prova expirou (hoje > data limite fim do dia)
                         if (hoje > dataLimiteFimDia) {
-                            console.log(`⚠️ Prova "${prova.titulo}" expirou! Cancelando automaticamente...`);
+                            console.log(`⚠️ Prova "${prova.titulo}" expirou (data limite)! Cancelando...`);
                             
-                            // CORREÇÃO: Garantir que respostas seja array vazio, não string
                             const respostasCorretas = [];
                             
-                            // Chamar API para cancelar automaticamente
                             const cancelResponse = await fetch(`${API_BASE_URL}/provas/${prova._id}/cancelar`, {
                                 method: 'POST',
                                 headers: {
@@ -2972,7 +3044,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         motivo: 'prazo_expirado',
                                         acao: 'cancelamento_automatico'
                                     },
-                                    respostasAtuais: respostasCorretas, // ARRAY VAZIO CORRETO
+                                    respostasAtuais: respostasCorretas,
                                     tempoTotal: 0
                                 })
                             });
@@ -2980,22 +3052,131 @@ document.addEventListener('DOMContentLoaded', function() {
                             const cancelData = await cancelResponse.json();
                             
                             if (cancelData.success) {
-                                console.log(`✅ Prova cancelada: ${cancelData.message}`);
+                                provasCanceladas++;
+                                console.log(`✅ Prova cancelada (data): ${cancelData.message}`);
+                            }
+                            
+                            continue; // Pular para próxima prova (já cancelada)
+                        }
+                    }
+                    
+                    // ============================================
+                    // VERIFICAÇÃO 2: HORÁRIO DO DIA (NOVA)
+                    // ============================================
+                    if (prova.horarioInicio && prova.horarioTermino) {
+                        // Criar data de término para HOJE (usando o horário da prova)
+                        const terminoProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00`);
+                        
+                        // 🔥 LOG PARA DEBUG
+                        console.log(`⏰ Verificando horário:`, {
+                            prova: prova.titulo,
+                            horarioTermino: prova.horarioTermino,
+                            terminoProva: terminoProva.toLocaleString('pt-BR'),
+                            agora: hoje.toLocaleString('pt-BR'),
+                            passou: hoje > terminoProva ? 'SIM' : 'NÃO'
+                        });
+                        
+                        // SE JÁ PASSOU DO HORÁRIO DE TÉRMINO
+                        if (hoje > terminoProva) {
+                            console.log(`🚫 Prova "${prova.titulo}" - horário encerrado às ${prova.horarioTermino}`);
+                            
+                            const respostasCorretas = [];
+                            
+                            const cancelResponse = await fetch(`${API_BASE_URL}/provas/${prova._id}/cancelar`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    motivo: `Horário da prova encerrado às ${prova.horarioTermino} - Cancelamento automático`,
+                                    estatisticas: {
+                                        horarioTermino: prova.horarioTermino,
+                                        dataCancelamento: hoje.toISOString(),
+                                        motivo: 'horario_encerrado',
+                                        acao: 'cancelamento_automatico_horario',
+                                        horarioVerificado: `${ano}-${mes}-${dia}`
+                                    },
+                                    respostasAtuais: respostasCorretas,
+                                    tempoTotal: 0
+                                })
+                            });
+                            
+                            const cancelData = await cancelResponse.json();
+                            
+                            if (cancelData.success) {
+                                provasCanceladas++;
+                                console.log(`✅ Prova cancelada (horário): ${cancelData.message}`);
+                                
+                                // Mostrar notificação
+                                mostrarNotificacaoHorarioEncerrado(prova.titulo, prova.horarioTermino);
                             } else {
                                 console.error(`❌ Falha ao cancelar: ${cancelData.error}`);
                             }
-                            
-                            // Atualizar a interface após 2 segundos
-                            setTimeout(() => {
-                                carregarProvasPendentes();
-                                carregarProvasConcluidas();
-                            }, 2000);
                         }
                     }
                 }
+                
+                if (provasCanceladas > 0) {
+                    console.log(`✅ ${provasCanceladas} prova(s) cancelada(s) (${provasCanceladas} por horário)`);
+                    
+                    // Atualizar a interface após 2 segundos
+                    setTimeout(() => {
+                        carregarProvasPendentes();
+                        carregarProvasConcluidas();
+                    }, 2000);
+                }
+                
             } catch (error) {
                 console.error('Erro ao verificar provas expiradas:', error);
             }
+        }
+
+        // ============ NOTIFICAÇÃO DE HORÁRIO ENCERRADO ============
+        function mostrarNotificacaoHorarioEncerrado(tituloProva, horarioTermino) {
+            // Criar notificação
+            const notificacao = document.createElement('div');
+            notificacao.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background: linear-gradient(135deg, #f59e0b, #d97706);
+                color: white;
+                padding: 15px 25px;
+                border-radius: 12px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                animation: slideInRight 0.3s ease;
+                max-width: 400px;
+                border-left: 4px solid #fff;
+            `;
+            
+            notificacao.innerHTML = `
+                <div style="background: rgba(255,255,255,0.2); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-clock" style="font-size: 1.2rem;"></i>
+                </div>
+                <div style="flex: 1;">
+                    <strong style="font-size: 1rem; display: block; margin-bottom: 5px;">⏰ Horário Encerrado</strong>
+                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">
+                        A prova "${tituloProva.length > 50 ? tituloProva.substring(0, 47) + '...' : tituloProva}" 
+                        foi cancelada porque o horário terminou às ${horarioTermino}.
+                    </p>
+                </div>
+                <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; opacity: 0.7;">&times;</button>
+            `;
+            
+            document.body.appendChild(notificacao);
+            
+            // Remover após 8 segundos
+            setTimeout(() => {
+                if (notificacao.parentNode) {
+                    notificacao.style.animation = 'slideOutRight 0.3s ease';
+                    setTimeout(() => notificacao.remove(), 300);
+                }
+            }, 8000);
         }
 
         // Função para ver detalhes completos do cancelamento
@@ -3238,11 +3419,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Adicionar verificação periódica de provas expiradas
         function iniciarVerificacaoPeriodica() {
-            // Verificar a cada minuto se há provas expiradas
-            setInterval(verificarECancelarProvasExpiradas, 60000); // 60 segundos
+            console.log('🔄 Iniciando verificações periódicas (data limite + horário)...');
+            
+            // Verificar a cada 30 segundos
+            setInterval(() => {
+                console.log('⏱️ Executando verificação de expiração...');
+                verificarECancelarProvasExpiradas(); // Agora verifica data E horário
+            }, 30000); // 30 segundos
             
             // Verificar imediatamente ao carregar
-            setTimeout(verificarECancelarProvasExpiradas, 3000);
+            setTimeout(() => {
+                verificarECancelarProvasExpiradas();
+            }, 3000);
+        }
+
+        // ============ ADICIONAR ANIMAÇÕES (se não existirem) ============
+        if (!document.querySelector('#animacoesNotificacoes')) {
+            const animacoesStyle = document.createElement('style');
+            animacoesStyle.id = 'animacoesNotificacoes';
+            animacoesStyle.textContent = `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOutRight {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(animacoesStyle);
         }
 
         // LOCALIZAR ESTA FUNÇÃO e MODIFICAR a lógica de comparação:
@@ -4473,6 +4678,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
             });
+
+            // 🔥 NOVO: Evento do filtro de status
+            const filtroStatus = document.getElementById('filtroStatusProvas');
+            if (filtroStatus) {
+                filtroStatus.addEventListener('change', function() {
+                    const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
+                    aplicarFiltroEStatus(backup);
+                });
+            }
+            
+            // 🔥 NOVO: Evento do filtro de período (se não existir)
+            const filtroPeriodo = document.getElementById('filtroPeriodoProvas');
+            if (filtroPeriodo) {
+                filtroPeriodo.addEventListener('change', function() {
+                    const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
+                    aplicarFiltroEStatus(backup);
+                });
+            }
 
              // Inicializar filtros de período
             const filtroPeriodoProvas = document.getElementById('filtroPeriodoProvas');

@@ -2816,7 +2816,7 @@ async function obterDimensoesImagem(caminhoArquivo) {
     }
 }
 
-// ============ ROTA PARA ALUNO RESPONDER PROVA (COM VERIFICAÇÃO DE DUPLICATA) ============
+// ============ ROTA PARA ALUNO RESPONDER PROVA - VERSÃO SEM TRANSAÇÃO ============
 app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.id;
@@ -2888,12 +2888,9 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     
     const user = await User.findById(alunoId);
     
-    // USAR TRANSAÇÃO PARA GARANTIR CONSISTÊNCIA
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    
+    // 🔥 REMOVIDA A TRANSAÇÃO - OPERAÇÕES SEPARADAS
     try {
-      // SALVAR APENAS NO MODELO Resultado (principal)
+      // SALVAR NO MODELO Resultado (principal)
       const resultado = new Resultado({
         userId: alunoId,
         provaId: provaId,
@@ -2909,13 +2906,8 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
         dataCriacao: new Date()
       });
       
-      await resultado.save({ session });
+      await resultado.save();
       console.log(`✅ Resultado salvo com ID: ${resultado._id} (nota: ${notaCalculada.toFixed(2)})`);
-      
-      // OPCIONAL: Salvar também em ProvaRealizada se necessário, mas vamos evitar duplicata
-      // Se precisar manter compatibilidade, podemos salvar mas com flag
-      
-      await session.commitTransaction();
       
       // ATUALIZAR ESTATÍSTICAS DA PROVA
       prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
@@ -2939,10 +2931,8 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
       });
       
     } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
+      console.error('❌ Erro ao salvar resultado:', error);
+      throw error; // Propagar o erro para o catch externo
     }
     
   } catch (error) {
@@ -2966,7 +2956,7 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
         
         const alunoId = req.userId;
         
-        // ========== 🔴 BUSCAR DADOS DO ALUNO DIRETAMENTE DO BANCO ==========
+        // Buscar dados do aluno
         const aluno = await User.findById(alunoId).select('precisaAcessibilidade condicaoAcessibilidade role nome email');
         
         if (!aluno) {
@@ -2976,7 +2966,6 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
             });
         }
         
-        // 🔥 PEGAR A FLAG DIRETAMENTE DO BANCO, NÃO DO TOKEN!
         const precisaAcessibilidade = aluno.precisaAcessibilidade === true;
         
         // Buscar turmas do aluno
@@ -2992,13 +2981,19 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
             });
         }
         
+        // 🔥 CORREÇÃO: Buscar TODAS as turmas com seus status
+        const turmasMap = {};
+        turmas.forEach(turma => {
+            turmasMap[turma._id.toString()] = turma.ativa;
+        });
+                
         // Buscar TODAS as provas ativas das turmas do aluno
         const provas = await Prova.find({
             turmaId: { $in: turmaIds },
             status: 'ativa',
             publicada: true
         })
-        .populate('turmaId', 'nome disciplina')
+        .populate('turmaId', 'nome disciplina ativa') // 🔥 INCLUIR ativa no populate
         .populate('userId', 'nome')
         .select('+tipoProva +adaptada +alternativas +titulo +conteudo +duracaoMinutos +dataLimite +horarioInicio +horarioTermino +quantidadeQuestoes +dificuldade +codigo')
         .lean();
@@ -3007,6 +3002,14 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
         const hoje = new Date();
         
         for (const prova of provas) {
+            
+            // 🔥 CORREÇÃO: Verificar se a turma está ativa
+            const turmaAtiva = prova.turmaId ? prova.turmaId.ativa : true;
+            
+            if (!turmaAtiva) {
+                console.log(`⏸️ Prova ${prova.titulo} ignorada - turma inativa`);
+                continue; // Pular provas de turmas inativas
+            }
             
             // Detectar se é adaptada
             const isAdaptada = 
@@ -3017,7 +3020,7 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
                 prova.alternativas === 3 ||
                 false;
             
-            // 🔥 FILTRO USANDO A FLAG DO BANCO DE DADOS
+            // Filtro de acessibilidade
             if (isAdaptada && !precisaAcessibilidade) {
                 continue;
             }
@@ -3079,7 +3082,8 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
                         turma: prova.turmaId ? {
                             id: prova.turmaId._id,
                             nome: prova.turmaId.nome,
-                            disciplina: prova.turmaId.disciplina
+                            disciplina: prova.turmaId.disciplina,
+                            ativa: prova.turmaId.ativa // 🔥 INCLUIR STATUS DA TURMA
                         } : null,
                         professor: prova.userId ? prova.userId.nome : 'Professor',
                         codigo: prova.codigo,
@@ -3090,13 +3094,15 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
                         alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
                         
                         diasRestantes: diasRestantes,
-                        expiraHoje: diasRestantes === 0
+                        expiraHoje: diasRestantes === 0,
+                        
+                        // 🔥 NOVO: Informação sobre status da turma
+                        turmaAtiva: turmaAtiva
                     });
                 }
             }
         }
-        
-        // 🔥 INCLUIR DADOS DO ALUNO NA RESPOSTA
+                
         res.json({ 
             success: true, 
             provas: provasPendentes,

@@ -3749,3 +3749,119 @@ code {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Estilo para quando o filtro de canceladas está ativo */
+#filtroStatusProvas option[value="canceladas"] {
+    background-color: #fee2e2;
+    color: #dc2626;
+    font-weight: 600;
+}
+
+#filtroStatusProvas:has(option[value="canceladas"]:checked) {
+    border-left-color: #ef4444;
+    background: linear-gradient(90deg, #fef2f2 0%, white 30%);
+}
+
+/* Hover nos selects */
+#filtroEixoProvasConcluidas:hover,
+#filtroPeriodoProvas:hover,
+#filtroStatusProvas:hover {
+    border-color: #4f46e5;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
+}
+
+/* Estilo para o contador quando filtrando canceladas */
+#filtroStatusProvas option[value="canceladas"]:checked ~ #contadorProvasFiltradas {
+    background: #ef4444;
+}
+
+/* Indicador de questão respondida */
+.indicador-resposta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: #10b981;
+    color: white;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    margin-left: 8px;
+}
+
+/* Botões do menu rápido */
+.btn-questao-rapida {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #e5e7eb;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.btn-questao-rapida.respondida {
+    background: #10b981;
+    color: white;
+    border-color: #059669;
+}
+
+.btn-questao-rapida.respondida::after {
+    content: '✓';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    color: #10b981;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #10b981;
+}
+
+.btn-questao-rapida.atual {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+}
+
+.btn-questao-rapida:hover {
+    transform: scale(1.1);
+    border-color: #4f46e5;
+}
+
+/* Menu rápido */
+.menu-questoes-rapido {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 1000;
+    width: 280px;
+    max-height: 400px;
+    overflow-y: auto;
+    border: 2px solid #e5e7eb;
+}
+
+.menu-questoes-rapido h4 {
+    margin: 0 0 15px 0;
+    color: #374151;
+    font-size: 1rem;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.questoes-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+}

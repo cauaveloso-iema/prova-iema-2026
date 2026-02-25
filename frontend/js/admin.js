@@ -1023,170 +1023,431 @@ class AdminPanel {
         
         try {
             const { search, eixo, page, limit } = this.filtros.turmas;
+            
+            // MOSTRAR LOADING
+            contentArea.innerHTML = `
+                <div style="text-align: center; padding: 60px;">
+                    <div class="spinner" style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #667eea; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                    <p style="color: #6b7280;">Carregando turmas...</p>
+                </div>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            `;
+
+            // BUSCAR DADOS REAIS DO BACKEND
+            console.log('📡 Buscando turmas do backend...');
             const response = await fetch(
                 `${this.apiBase}/turmas?search=${search}&eixo=${eixo}&page=${page}&limit=${limit}`,
-                { headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` } }
+                { 
+                    headers: { 
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                        'Content-Type': 'application/json'
+                    } 
+                }
             );
             
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+            
             const data = await response.json();
+            console.log('📦 Dados recebidos:', data);
 
             if (!data.success) throw new Error(data.error || 'Erro ao carregar turmas');
 
-            this.turmas = data.turmas;
+            // ARMAZENAR DADOS NO OBJETO PRINCIPAL
+            this.turmas = data.turmas || [];
+            
+            // BUSCAR PROFESSORES PARA OS SELECTS
+            await this.carregarProfessoresParaSelect();
 
-            // Calcular estatísticas para o header
+            // CALCULAR ESTATÍSTICAS REAIS
+            const totalTurmas = this.turmas.length;
+            const turmasAtivas = this.turmas.filter(t => t.ativa === true).length;
+            const turmasInativas = this.turmas.filter(t => t.ativa === false).length;
             const totalAlunos = this.turmas.reduce((acc, t) => acc + (t.totalAlunos || 0), 0);
-            const turmasAtivas = this.turmas.filter(t => t.ativa !== false).length;
+            const totalProvas = this.turmas.reduce((acc, t) => acc + (t.totalProvas || 0), 0);
+            const alunosComAcessibilidade = this.turmas.reduce((acc, t) => acc + (t.alunosComAcessibilidade || 0), 0);
+            const mediaAlunosPorTurma = totalTurmas > 0 ? (totalAlunos / totalTurmas).toFixed(1) : 0;
 
-            contentArea.innerHTML = `
-                <div class="section">
-                    <div class="section-header">
-                        <h2><i class="fas fa-school"></i> Gerenciar Turmas</h2>
-                        <button class="btn-primary" onclick="admin.abrirModalTurma()">
-                            <i class="fas fa-plus"></i> Nova Turma
+            // RENDERIZAR HTML COMPLETO
+            contentArea.innerHTML = this.renderTurmasHTML({
+                search, eixo, page, limit,
+                totalTurmas, turmasAtivas, turmasInativas, totalAlunos, totalProvas, 
+                alunosComAcessibilidade, mediaAlunosPorTurma,
+                pagination: data.pagination,
+                turmas: this.turmas
+            });
+
+            // ATUALIZAR BADGES E CONTADORES
+            this.atualizarBadgesTurmas();
+
+            console.log('✅ Turmas carregadas com sucesso:', this.turmas.length);
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar turmas:', error);
+            contentArea.innerHTML = this.renderErroTurmas ? 
+                this.renderErroTurmas(error.message) : 
+                this.renderErroPadrao(error.message);
+        }
+    }
+
+    // ============ RENDERIZAR ERRO PADRÃO ============
+    renderErroPadrao(mensagem) {
+        return `
+            <div class="error-container" style="text-align: center; padding: 60px; background: white; border-radius: 16px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 20px;"></i>
+                <h3 style="color: #721c24;">Erro ao carregar turmas</h3>
+                <p style="color: #6c757d;">${mensagem}</p>
+                <button onclick="admin.loadTurmas()" style="background: #667eea; color: white; border: none; padding: 10px 30px; border-radius: 8px; cursor: pointer; font-size: 14px; margin-top: 20px;">
+                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                </button>
+            </div>
+        `;
+    }
+
+    // ============ RENDERIZAR ERRO TURMAS ============
+    renderErroTurmas(mensagem) {
+        return this.renderErroPadrao(mensagem);
+    }
+
+    // ============ RENDERIZAR HTML DAS TURMAS ============
+    renderTurmasHTML({ search, eixo, totalTurmas, turmasAtivas, turmasInativas, totalAlunos, totalProvas, alunosComAcessibilidade, mediaAlunosPorTurma, pagination, turmas }) {
+        return `
+            <div class="turmas-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="turmas-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-school"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>Gerenciar Turmas</h1>
+                            <p>Gerencie todas as turmas do sistema, professores e alunos matriculados</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.atualizarTurmas()" title="Atualizar dados">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-header btn-primary" onclick="admin.abrirModalTurma()">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Nova Turma</span>
                         </button>
                     </div>
+                </div>
 
-                    <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
-                        <div class="stat-card" style="padding: 15px;">
-                            <div class="stat-icon" style="width: 40px; height: 40px; font-size: 20px;">
-                                <i class="fas fa-school"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3>Total</h3>
-                                <div class="stat-number" style="font-size: 24px;">${this.turmas.length}</div>
-                            </div>
+                <!-- CARDS DE ESTATÍSTICAS COM DADOS REAIS -->
+                <div class="stats-grid" id="statsTurmas">
+                    <div class="stat-card primary" onclick="admin.filtrarPorStatus('todas')">
+                        <div class="stat-icon">
+                            <i class="fas fa-school"></i>
                         </div>
-                        <div class="stat-card" style="padding: 15px;">
-                            <div class="stat-icon" style="width: 40px; height: 40px; font-size: 20px; background: #198754;">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3>Ativas</h3>
-                                <div class="stat-number" style="font-size: 24px;">${turmasAtivas}</div>
-                            </div>
-                        </div>
-                        <div class="stat-card" style="padding: 15px;">
-                            <div class="stat-icon" style="width: 40px; height: 40px; font-size: 20px; background: #ffc107;">
-                                <i class="fas fa-users"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3>Alunos</h3>
-                                <div class="stat-number" style="font-size: 24px;">${totalAlunos}</div>
-                            </div>
-                        </div>
-                        <div class="stat-card" style="padding: 15px;">
-                            <div class="stat-icon" style="width: 40px; height: 40px; font-size: 20px; background: #0dcaf0;">
-                                <i class="fas fa-chart-line"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3>Média</h3>
-                                <div class="stat-number" style="font-size: 24px;">${this.turmas.length ? (totalAlunos / this.turmas.length).toFixed(1) : 0}</div>
-                            </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Total de Turmas</span>
+                            <span class="stat-value" id="totalTurmas">${totalTurmas}</span>
+                            <span class="stat-detail" id="turmasAtivas">${turmasAtivas} ativas • ${turmasInativas} inativas</span>
                         </div>
                     </div>
 
-                    <div class="filters-bar" style="margin-bottom: 20px;">
+                    <div class="stat-card success" onclick="admin.filtrarPorStatus('ativas')">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Turmas Ativas</span>
+                            <span class="stat-value" id="turmasAtivasCount">${turmasAtivas}</span>
+                            <span class="stat-detail">Clique para filtrar</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card warning" onclick="admin.filtrarPorStatus('inativas')">
+                        <div class="stat-icon">
+                            <i class="fas fa-pause-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Turmas Inativas</span>
+                            <span class="stat-value" id="turmasInativasCount">${turmasInativas}</span>
+                            <span class="stat-detail">Clique para filtrar</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card info" onclick="admin.filtrarPorAcessibilidade()">
+                        <div class="stat-icon">
+                            <i class="fas fa-wheelchair"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Acessibilidade</span>
+                            <span class="stat-value" id="alunosAcessibilidade">${alunosComAcessibilidade}</span>
+                            <span class="stat-detail">alunos com necessidades</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BARRA DE FILTROS -->
+                <div class="filters-card">
+                    <div class="filters-header">
+                        <div class="filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <h3>Filtros e Busca</h3>
+                        </div>
+                        <span class="filters-badge" id="resultadosEncontrados">${turmas.length} turmas encontradas</span>
+                    </div>
+                    
+                    <div class="filters-grid">
                         <div class="filter-group">
                             <label><i class="fas fa-search"></i> Buscar turma</label>
-                            <input type="text" id="searchTurmas" placeholder="Nome ou disciplina..." 
-                                   value="${search}" oninput="admin.filtrarTurmas()" class="form-control">
+                            <div class="input-wrapper">
+                                <input type="text" id="searchTurmas" 
+                                    placeholder="Nome da turma, disciplina ou código..." 
+                                    value="${search}" 
+                                    onkeyup="admin.filtrarTurmas()"
+                                    autocomplete="off">
+                                <i class="fas fa-search input-icon"></i>
+                                ${search ? `
+                                    <button class="input-clear" onclick="admin.limparBuscaTurmas()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
+                        
                         <div class="filter-group">
                             <label><i class="fas fa-sitemap"></i> Eixo</label>
-                            <select id="filterEixo" class="form-control" onchange="admin.filtrarTurmas()">
-                                <option value="todos" ${eixo === 'todos' ? 'selected' : ''}>Todos</option>
-                                <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>Natureza</option>
-                                <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>Humanas</option>
-                                <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>Linguagens</option>
-                                <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>Desenvolvimento</option>
-                                <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>Gestão</option>
-                                <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>Turismo</option>
-                                <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>Ambiente</option>
+                            <select id="filterEixo" class="filter-select" onchange="admin.filtrarTurmas()">
+                                <option value="todos" ${eixo === 'todos' ? 'selected' : ''}>Todos os eixos</option>
+                                <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
+                                <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
+                                <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
+                                <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
+                                <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
+                                <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
+                                <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
                             </select>
                         </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-circle"></i> Status</label>
+                            <select id="filterStatusTurma" class="filter-select" onchange="admin.filtrarTurmas()">
+                                <option value="todos" selected>Todas</option>
+                                <option value="ativas">Ativas</option>
+                                <option value="inativas">Inativas</option>
+                            </select>
+                        </div>
+                        
                         <div class="filter-actions">
                             <button class="btn-filter" onclick="admin.limparFiltrosTurmas()">
                                 <i class="fas fa-eraser"></i> Limpar
                             </button>
+                            <button class="btn-filter btn-export" onclick="admin.exportarTurmasCSV()">
+                                <i class="fas fa-download"></i> Exportar
+                            </button>
                         </div>
                     </div>
 
-                    <div class="cards-grid">
-                        ${this.gerarCardsTurmas(data.turmas)}
-                    </div>
-
-                    ${this.gerarPaginacao(data.pagination, 'turmas')}
+                    <!-- TAGS DE FILTROS ATIVOS -->
+                    ${this.gerarTagsFiltrosAtivos(search, eixo)}
                 </div>
-            `;
 
-        } catch (error) {
-            console.error('Erro ao carregar turmas:', error);
-            contentArea.innerHTML = `
-                <div class="error-container">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Erro ao carregar turmas</h3>
-                    <p>${error.message}</p>
-                    <button class="btn-primary" onclick="admin.loadTurmas()">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
+                <!-- CARDS DAS TURMAS -->
+                <div class="turmas-cards-grid" id="turmasCardsGrid">
+                    ${this.gerarCardsTurmasProfissional(turmas)}
                 </div>
-            `;
-        }
+
+                <!-- PAGINAÇÃO -->
+                ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'turmas') : ''}
+            </div>
+
+            <style>
+                .turmas-container { padding: 24px; max-width: 1400px; margin: 0 auto; font-family: 'Inter', -apple-system, sans-serif; }
+                .turmas-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; padding: 30px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3); position: relative; overflow: hidden; }
+                .turmas-header::before { content: ''; position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: rgba(255,255,255,0.1); border-radius: 50%; }
+                .turmas-header::after { content: ''; position: absolute; bottom: -80px; left: -80px; width: 300px; height: 300px; background: rgba(255,255,255,0.05); border-radius: 50%; }
+                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
+                .header-icon { width: 70px; height: 70px; background: rgba(255,255,255,0.15); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; color: white; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
+                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
+                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
+                .btn-header { padding: 12px 24px; border-radius: 40px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.3s; border: none; position: relative; z-index: 2; }
+                .btn-header.btn-primary { background: white; color: #667eea; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
+                .btn-header.btn-refresh { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(5px); padding: 12px; }
+                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
+                .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+                .stat-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; transition: all 0.3s; border: 1px solid rgba(0,0,0,0.05); cursor: pointer; }
+                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .stat-card.primary .stat-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
+                .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
+                .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+                .stat-icon { width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; }
+                .stat-content { flex: 1; }
+                .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
+                .stat-detail { font-size: 11px; color: #9ca3af; }
+                .filters-card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.05); }
+                .filters-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0; }
+                .filters-title { display: flex; align-items: center; gap: 10px; }
+                .filters-title i { font-size: 18px; color: #667eea; background: #f0f4ff; padding: 8px; border-radius: 10px; }
+                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                .filters-badge { background: #667eea; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+                .filters-grid { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 15px; margin-bottom: 20px; }
+                .filter-group { display: flex; flex-direction: column; gap: 5px; }
+                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; display: flex; align-items: center; gap: 5px; }
+                .input-wrapper { position: relative; }
+                .input-wrapper input { width: 100%; padding: 10px 35px 10px 40px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; transition: all 0.3s; }
+                .input-wrapper input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 4px rgba(102,126,234,0.1); }
+                .input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 14px; }
+                .input-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #9ca3af; cursor: pointer; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+                .input-clear:hover { background: #f3f4f6; color: #4b5563; }
+                .filter-select { width: 100%; padding: 10px 15px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; background: white; cursor: pointer; }
+                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+                .btn-filter { padding: 10px 20px; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.3s; background: #f3f4f6; color: #4b5563; white-space: nowrap; }
+                .btn-filter:hover { background: #e5e7eb; }
+                .btn-filter.btn-export { background: #10b981; color: white; }
+                .btn-filter.btn-export:hover { background: #059669; }
+                .active-filters { margin-top: 15px; padding: 15px; background: #f9fafb; border-radius: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+                .active-filters-label { font-size: 12px; color: #6b7280; font-weight: 500; }
+                .filter-tags { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+                .filter-tag { background: white; border: 1px solid #e5e7eb; border-radius: 30px; padding: 4px 12px; font-size: 12px; display: flex; align-items: center; gap: 5px; }
+                .filter-tag i { color: #9ca3af; cursor: pointer; }
+                .filter-tag i:hover { color: #ef4444; }
+                .clear-all-filters { background: none; border: none; color: #667eea; font-size: 12px; font-weight: 600; cursor: pointer; }
+                .turmas-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; margin-bottom: 30px; }
+                .pagination-professional { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+                .pagination-info { font-size: 13px; color: #6b7280; }
+                .pagination-controls { display: flex; gap: 8px; }
+                .btn-page { width: 38px; height: 38px; border: 1px solid #e5e7eb; background: white; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #4b5563; transition: all 0.2s; }
+                .btn-page:hover:not(:disabled) { background: #f3f4f6; border-color: #667eea; color: #667eea; }
+                .btn-page.active { background: #667eea; border-color: #667eea; color: white; }
+                .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+                .page-ellipsis { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; color: #9ca3af; }
+                .empty-state { grid-column: 1 / -1; text-align: center; padding: 60px; background: white; border-radius: 16px; }
+                .empty-state i { font-size: 64px; color: #d1d5db; margin-bottom: 20px; }
+                .empty-state h3 { color: #374151; margin-bottom: 10px; }
+                .empty-state p { color: #6b7280; margin-bottom: 20px; }
+                .btn-empty-state { padding: 12px 30px; background: #667eea; color: white; border: none; border-radius: 40px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+                .btn-empty-state:hover { background: #5a67d8; transform: translateY(-2px); }
+                .error-container { text-align: center; padding: 60px; background: white; border-radius: 16px; }
+                .error-container i { font-size: 48px; color: #dc3545; margin-bottom: 20px; }
+                .error-container h3 { color: #721c24; margin-bottom: 10px; }
+                .error-container p { color: #6c757d; margin-bottom: 20px; }
+                .error-container button { background: #667eea; color: white; border: none; padding: 10px 30px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+                @media (max-width: 1024px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .filters-grid { grid-template-columns: 1fr; } }
+                @media (max-width: 768px) { .turmas-header { flex-direction: column; align-items: flex-start; } .header-actions { width: 100%; display: flex; gap: 10px; } .btn-header { flex: 1; } .stats-grid { grid-template-columns: 1fr; } .turmas-cards-grid { grid-template-columns: 1fr; } .pagination-professional { flex-direction: column; gap: 15px; } }
+            </style>
+        `;
     }
 
-    gerarCardsTurmas(turmas) {
+    // ============ GERAR CARDS DAS TURMAS COM BOTÃO ATIVAR/INATIVAR ============
+    gerarCardsTurmasProfissional(turmas) {
         if (!turmas || turmas.length === 0) {
             return `
-                <div class="empty-state" style="grid-column: 1 / -1;">
+                <div class="empty-state">
                     <i class="fas fa-school"></i>
                     <h3>Nenhuma turma encontrada</h3>
-                    <p>Clique em "Nova Turma" para começar.</p>
+                    <p>Não há turmas cadastradas com os filtros selecionados.</p>
+                    <button class="btn-empty-state" onclick="admin.abrirModalTurma()">
+                        <i class="fas fa-plus-circle"></i>
+                        Criar Nova Turma
+                    </button>
                 </div>
             `;
         }
 
         return turmas.map(turma => {
             const eixoColor = this.getEixoColor(turma.eixo);
+            const percentualAlunos = turma.capacidadeMaxima ? 
+                Math.min(100, Math.round((turma.totalAlunos || 0) / turma.capacidadeMaxima * 100)) : 
+                (turma.totalAlunos || 0) > 0 ? Math.min(100, Math.round((turma.totalAlunos || 0) / 40 * 100)) : 0;
+            
+            const professor = turma.professor || {};
+            const professorNome = professor.nome || 'Não atribuído';
+            const professorEmail = professor.email || '';
+            const professorIniciais = professorNome.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            
+            const dataCriacao = turma.dataCriacao || turma.createdAt ? 
+                new Date(turma.dataCriacao || turma.createdAt).toLocaleDateString('pt-BR') : 'N/A';
             
             return `
-                <div class="turma-card">
-                    <div class="card-header" style="background: linear-gradient(135deg, ${eixoColor}, ${eixoColor}dd);">
-                        <h3>${turma.nome}</h3>
-                        <span class="status-badge ${turma.ativa ? 'active' : 'inactive'}">
-                            ${turma.ativa ? 'Ativa' : 'Inativa'}
+                <div class="turma-card-professional" data-turma-id="${turma.id}" data-status="${turma.ativa ? 'ativa' : 'inativa'}" style="background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: all 0.3s; border: 1px solid rgba(0,0,0,0.05); position: relative; opacity: ${turma.ativa ? 1 : 0.8};">
+                    <div class="card-header-gradient" style="background: linear-gradient(135deg, ${eixoColor}, ${eixoColor}dd); padding: 20px; color: white; position: relative; overflow: hidden;">
+                        <div class="card-header-content" style="display: flex; justify-content: space-between; align-items: flex-start; position: relative; z-index: 2;">
+                            <h3 style="margin: 0; font-size: 18px; font-weight: 600; flex: 1;">${turma.nome}</h3>
+                            <span class="status-badge-modern" style="padding: 4px 10px; border-radius: 30px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.2); backdrop-filter: blur(5px);">
+                                <i class="fas fa-circle" style="font-size: 8px; margin-right: 4px; color: ${turma.ativa ? '#10b981' : '#ef4444'};"></i>
+                                ${turma.ativa ? 'Ativa' : 'Inativa'}
+                            </span>
+                        </div>
+                        <span class="codigo-badge" style="display: inline-block; margin-top: 8px; padding: 4px 12px; background: rgba(0,0,0,0.1); border-radius: 30px; font-size: 11px; font-family: monospace;">
+                            <i class="fas fa-hashtag"></i> ${turma.codigo || 'SEM CÓDIGO'}
                         </span>
                     </div>
-                    <div class="card-body">
-                        <p><i class="fas fa-book"></i> ${turma.disciplina || 'Disciplina não definida'}</p>
-                        <p><i class="fas fa-sitemap"></i> ${turma.eixo || 'Eixo não definido'}</p>
-                        <p><i class="fas fa-chalkboard-teacher"></i> ${turma.professor?.nome || 'Professor não atribuído'}</p>
+                    
+                    <div class="card-body" style="padding: 20px;">
+                        <div class="info-row" style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #4b5563; font-size: 14px;">
+                            <i class="fas fa-book" style="width: 20px; color: #667eea;"></i>
+                            <span><strong>Disciplina:</strong> ${turma.disciplina || 'Não definida'}</span>
+                        </div>
                         
-                        <div class="stats-mini">
-                            <div class="stat-mini-item">
-                                <span class="number">${turma.totalAlunos || 0}</span>
-                                <span class="label">Alunos</span>
+                        <div class="info-row" style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #4b5563; font-size: 14px;">
+                            <i class="fas fa-sitemap" style="width: 20px; color: #667eea;"></i>
+                            <span><strong>Eixo:</strong> ${this.getEixoLabel(turma.eixo)}</span>
+                        </div>
+                        
+                        <div class="professor-info" style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #f9fafb; border-radius: 10px; margin: 15px 0;">
+                            <div class="professor-avatar" style="width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">
+                                ${professorIniciais || '?'}
                             </div>
-                            <div class="stat-mini-item">
-                                <span class="number">${turma.totalProvas || 0}</span>
-                                <span class="label">Provas</span>
-                            </div>
-                            <div class="stat-mini-item">
-                                <span class="number">${turma.alunosComAcessibilidade || 0}</span>
-                                <span class="label">Acessibilidade</span>
+                            <div class="professor-details" style="flex: 1;">
+                                <div class="professor-nome" style="font-weight: 600; color: #1f2937; font-size: 14px;">
+                                    <i class="fas fa-chalkboard-teacher"></i> ${professorNome}
+                                </div>
+                                ${professorEmail ? `<div class="professor-email" style="font-size: 11px; color: #6b7280;">${professorEmail}</div>` : ''}
                             </div>
                         </div>
                         
-                        <p class="codigo">Código: <strong>${turma.codigo}</strong></p>
+                        <div class="mini-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0;">
+                            <div class="mini-stat" style="text-align: center; padding: 8px; background: #f9fafb; border-radius: 10px;">
+                                <span class="number" style="display: block; font-size: 18px; font-weight: 700; color: #1f2937;">${turma.totalAlunos || 0}</span>
+                                <span class="label" style="font-size: 10px; color: #6b7280;">Alunos</span>
+                            </div>
+                            <div class="mini-stat" style="text-align: center; padding: 8px; background: #f9fafb; border-radius: 10px;">
+                                <span class="number" style="display: block; font-size: 18px; font-weight: 700; color: #1f2937;">${turma.totalProvas || 0}</span>
+                                <span class="label" style="font-size: 10px; color: #6b7280;">Provas</span>
+                            </div>
+                            <div class="mini-stat" style="text-align: center; padding: 8px; background: #f9fafb; border-radius: 10px;">
+                                <span class="number" style="display: block; font-size: 18px; font-weight: 700; color: #1f2937;">${turma.alunosComAcessibilidade || 0}</span>
+                                <span class="label" style="font-size: 10px; color: #6b7280;">Acessib.</span>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-container" style="margin: 15px 0;">
+                            <div class="progress-label" style="display: flex; justify-content: space-between; font-size: 11px; color: #6b7280; margin-bottom: 5px;">
+                                <span>Ocupação</span>
+                                <span>${percentualAlunos}%</span>
+                            </div>
+                            <div class="progress-bar" style="height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden;">
+                                <div class="progress-fill" style="height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 3px; width: ${percentualAlunos}%;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="info-row" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0; color: #4b5563; font-size: 14px;">
+                            <i class="fas fa-calendar-alt" style="width: 20px; color: #667eea;"></i>
+                            <span><strong>Criada em:</strong> ${dataCriacao}</span>
+                        </div>
                     </div>
-                    <div class="card-footer">
-                        <button class="btn-icon" onclick="admin.verTurma('${turma.id}')" title="Ver detalhes">
+                    
+                    <div class="card-footer-actions" style="display: flex; border-top: 1px solid #e5e7eb;">
+                        <button class="footer-action-btn" onclick="admin.verTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Ver detalhes">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="btn-icon" onclick="admin.editarTurma('${turma.id}')" title="Editar">
+                        <button class="footer-action-btn" onclick="admin.editarTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Editar">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn-icon danger" onclick="admin.excluirTurma('${turma.id}')" title="Excluir">
+                        <button class="footer-action-btn ${turma.ativa ? 'warning' : 'success'}" onclick="admin.toggleStatusTurma('${turma.id}', ${turma.ativa})" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="${turma.ativa ? 'Inativar' : 'Ativar'}">
+                            <i class="fas ${turma.ativa ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
+                        </button>
+                        <button class="footer-action-btn danger" onclick="admin.excluirTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Excluir">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -1195,143 +1456,133 @@ class AdminPanel {
         }).join('');
     }
 
-    getEixoColor(eixo) {
-        const cores = {
-            'natureza': '#10b981',
-            'humanas': '#8b5cf6',
-            'linguagens': '#f59e0b',
-            'desenvolvimento': '#3b82f6',
-            'gestao': '#6b7280',
-            'turismo': '#ef4444',
-            'ambiente': '#14b8a6'
-        };
-        return cores[eixo] || '#0d6efd';
-    }
-
-    filtrarTurmas() {
-        this.filtros.turmas.search = document.getElementById('searchTurmas')?.value || '';
-        this.filtros.turmas.eixo = document.getElementById('filterEixo')?.value || 'todos';
-        this.filtros.turmas.page = 1;
-        this.loadTurmas();
-    }
-
-    limparFiltrosTurmas() {
-        this.filtros.turmas = { search: '', eixo: 'todos', page: 1, limit: 10 };
-        this.loadTurmas();
-    }
-
-    abrirModalTurma(turmaId = null) {
-        const turma = turmaId ? this.turmas.find(t => t.id === turmaId) : null;
-
-        const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
-            <form id="turmaForm">
-                <div class="form-group">
-                    <label>Nome da Turma</label>
-                    <input type="text" id="turmaNome" class="form-control" value="${turma?.nome || ''}" required>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Disciplina</label>
-                        <input type="text" id="turmaDisciplina" class="form-control" value="${turma?.disciplina || ''}" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Eixo</label>
-                        <select id="turmaEixo" class="form-control">
-                            <option value="">Selecione...</option>
-                            <option value="natureza" ${turma?.eixo === 'natureza' ? 'selected' : ''}>Natureza</option>
-                            <option value="humanas" ${turma?.eixo === 'humanas' ? 'selected' : ''}>Humanas</option>
-                            <option value="linguagens" ${turma?.eixo === 'linguagens' ? 'selected' : ''}>Linguagens</option>
-                            <option value="desenvolvimento" ${turma?.eixo === 'desenvolvimento' ? 'selected' : ''}>Desenvolvimento</option>
-                            <option value="gestao" ${turma?.eixo === 'gestao' ? 'selected' : ''}>Gestão</option>
-                            <option value="turismo" ${turma?.eixo === 'turismo' ? 'selected' : ''}>Turismo</option>
-                            <option value="ambiente" ${turma?.eixo === 'ambiente' ? 'selected' : ''}>Ambiente</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Professor</label>
-                    <select id="turmaProfessor" class="form-control">
-                        <option value="">Selecione um professor...</option>
-                        ${this.gerarOptionsProfessores(turma?.professor?.id)}
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Descrição (opcional)</label>
-                    <textarea id="turmaDescricao" class="form-control" rows="3">${turma?.descricao || ''}</textarea>
-                </div>
-
-                <div class="form-check">
-                    <input type="checkbox" id="turmaAtiva" ${turma?.ativa !== false ? 'checked' : ''}>
-                    <label for="turmaAtiva">Turma ativa</label>
-                </div>
-            </form>
-        `;
-
-        // Carregar lista de professores
-        this.carregarProfessoresSelect(turma?.professor?.id);
-
-        document.getElementById('modalTitle').innerHTML = turma ? '<i class="fas fa-edit"></i> Editar Turma' : '<i class="fas fa-plus"></i> Nova Turma';
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarTurma(turma?.id);
-        this.openModal();
-    }
-
-    gerarOptionsProfessores(professorSelecionadoId) {
-        // Placeholder - será preenchido dinamicamente
-        return '';
-    }
-
-    async carregarProfessoresSelect(professorSelecionadoId = null) {
+    // ============ ATUALIZAR TURMAS ============
+    async atualizarTurmas() {
+        const refreshBtn = document.querySelector('.btn-header.btn-refresh i');
+        
         try {
-            const response = await fetch(`${this.apiBase}/usuarios?role=professor&limit=100`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                const select = document.getElementById('turmaProfessor');
-                if (select) {
-                    select.innerHTML = '<option value="">Selecione um professor...</option>';
-                    
-                    const professores = data.usuarios || [];
-                    professores.forEach(prof => {
-                        const option = document.createElement('option');
-                        option.value = prof._id;
-                        option.textContent = `${prof.nome} - ${prof.email}`;
-                        if (prof._id === professorSelecionadoId) {
-                            option.selected = true;
-                        }
-                        select.appendChild(option);
-                    });
-                }
+            if (refreshBtn) {
+                refreshBtn.className = 'fas fa-spinner fa-spin';
             }
+            
+            this.showToast('🔄 Atualizando turmas...', 'info');
+            await this.loadTurmas();
+            await this.carregarDadosReais(); // Atualizar dashboard também
+            this.showToast('✅ Turmas atualizadas com sucesso!', 'success');
+            
         } catch (error) {
-            console.error('Erro ao carregar professores:', error);
+            console.error('Erro ao atualizar:', error);
+            this.showToast('❌ Erro ao atualizar turmas', 'error');
+        } finally {
+            if (refreshBtn) {
+                setTimeout(() => {
+                    refreshBtn.className = 'fas fa-sync-alt';
+                }, 500);
+            }
         }
     }
 
+    // ============ ABRIR MODAL TURMA ============
+    abrirModalTurma(turmaId = null) {
+        console.log('📝 Abrindo modal turma. ID:', turmaId);
+        
+        const turma = turmaId ? this.turmas.find(t => t.id === turmaId) : null;
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
+                <div style="padding: 20px;">
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nome da Turma</label>
+                        <input type="text" id="turmaNome" class="form-control" value="${turma?.nome || ''}" 
+                            style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;" required>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div class="form-group">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Disciplina</label>
+                            <input type="text" id="turmaDisciplina" class="form-control" value="${turma?.disciplina || ''}" 
+                                style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;" required>
+                        </div>
+                        <div class="form-group">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Eixo</label>
+                            <select id="turmaEixo" class="form-control" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                                <option value="">Selecione...</option>
+                                <option value="natureza" ${turma?.eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
+                                <option value="humanas" ${turma?.eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
+                                <option value="linguagens" ${turma?.eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
+                                <option value="desenvolvimento" ${turma?.eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
+                                <option value="gestao" ${turma?.eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
+                                <option value="turismo" ${turma?.eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
+                                <option value="ambiente" ${turma?.eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Professor</label>
+                        <select id="turmaProfessor" class="form-control" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                            <option value="">Selecione um professor...</option>
+                            ${this.professores ? this.professores.map(p => 
+                                `<option value="${p._id}" ${turma?.professor?.id === p._id ? 'selected' : ''}>${p.nome} - ${p.email}</option>`
+                            ).join('') : ''}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Descrição (opcional)</label>
+                        <textarea id="turmaDescricao" class="form-control" rows="3" 
+                                style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">${turma?.descricao || ''}</textarea>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                        <input type="checkbox" id="turmaAtiva" ${turma?.ativa !== false ? 'checked' : ''}>
+                        <label for="turmaAtiva">Turma ativa</label>
+                    </div>
+                    
+                    <div style="background: #f0f4ff; padding: 10px; border-radius: 8px; font-size: 13px; color: #1e40af;">
+                        <i class="fas fa-info-circle"></i> O código da turma será gerado automaticamente.
+                    </div>
+                </div>
+            </form>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = turma ? 
+            '<i class="fas fa-edit"></i> Editar Turma' : 
+            '<i class="fas fa-plus"></i> Nova Turma';
+        
+        document.getElementById('modalSaveBtn').onclick = () => this.salvarTurma(turmaId);
+        document.getElementById('modalSaveBtn').style.display = 'inline-block';
+        
+        this.openModal();
+        console.log('✅ Modal aberto');
+    }
+
+    // ============ SALVAR TURMA ============
     async salvarTurma(id = null) {
+        console.log('💾 Salvando turma. ID:', id);
+        
         try {
             const dados = {
-                nome: document.getElementById('turmaNome').value,
-                disciplina: document.getElementById('turmaDisciplina').value,
-                eixo: document.getElementById('turmaEixo').value,
-                professorId: document.getElementById('turmaProfessor').value || null,
-                descricao: document.getElementById('turmaDescricao').value || undefined,
-                ativa: document.getElementById('turmaAtiva').checked
+                nome: document.getElementById('turmaNome')?.value,
+                disciplina: document.getElementById('turmaDisciplina')?.value,
+                eixo: document.getElementById('turmaEixo')?.value,
+                professorId: document.getElementById('turmaProfessor')?.value || null,
+                descricao: document.getElementById('turmaDescricao')?.value || undefined,
+                ativa: document.getElementById('turmaAtiva')?.checked || false
             };
-
-            if (!dados.nome || !dados.disciplina) {
-                throw new Error('Nome e disciplina são obrigatórios');
+            
+            // Validação
+            if (!dados.nome || !dados.disciplina || !dados.eixo) {
+                this.showToast('❌ Nome, disciplina e eixo são obrigatórios', 'error');
+                return;
             }
-
+            
+            this.showToast('🔄 Salvando...', 'info');
+            
             const url = id ? `${this.apiBase}/turmas/${id}` : `${this.apiBase}/turmas`;
             const method = id ? 'PUT' : 'POST';
-
+            
             const response = await fetch(url, {
                 method,
                 headers: {
@@ -1340,220 +1591,597 @@ class AdminPanel {
                 },
                 body: JSON.stringify(dados)
             });
-
+            
             const data = await response.json();
-
+            console.log('📦 Resposta do servidor:', data);
+            
             if (data.success) {
-                this.showToast(id ? 'Turma atualizada com sucesso!' : 'Turma criada com sucesso!', 'success');
+                this.showToast(id ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
                 this.closeModal();
-                this.loadTurmas();
-                this.carregarDadosReais();
+                
+                // ATUALIZAR TODAS AS ABAS
+                await this.loadTurmas(); // Recarregar lista
+                await this.carregarDadosReais(); // Atualizar dashboard
+                
+                // Se estiver na aba de provas ou resultados, recarregar
+                if (this.currentSection === 'provas') {
+                    await this.loadProvas();
+                } else if (this.currentSection === 'resultados') {
+                    await this.loadResultados();
+                }
             } else {
-                throw new Error(data.error || 'Erro ao salvar turma');
+                throw new Error(data.error || 'Erro ao salvar');
             }
-
+            
         } catch (error) {
-            console.error('Erro ao salvar turma:', error);
-            this.showToast('Erro: ' + error.message, 'error');
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
     }
 
     // ============ VER DETALHES DA TURMA ============
-    verTurma(turmaId) {
-        const turma = this.turmas.find(t => t.id === turmaId);
-        if (!turma) return;
-
-        let dataCriacao = 'Não informada';
+    async verTurma(turmaId) {
+        console.log('👁️ Ver turma:', turmaId);
         
-        const possiveisCamposData = [
-            turma.dataCriacao,
-            turma.createdAt,
-            turma.criadoEm,
-            turma.created_at,
-            turma.criado_em,
-            turma.dataCadastro
-        ];
-        
-        for (const campo of possiveisCamposData) {
-            if (!campo) continue;
+        try {
+            // Primeiro tenta encontrar na lista local
+            const turma = this.turmas.find(t => t.id === turmaId);
+            if (!turma) {
+                this.showToast('❌ Turma não encontrada', 'error');
+                return;
+            }
+            
+            this.showToast('🔄 Carregando detalhes...', 'info');
+            
+            // Tenta buscar dados completos
+            let turmaCompleta = turma;
             
             try {
-                if (campo && campo.$date) {
-                    const date = new Date(campo.$date);
-                    if (!isNaN(date.getTime())) {
-                        dataCriacao = date.toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        break;
+                const response = await fetch(`${this.apiBase}/turmas/${turmaId}`, {
+                    headers: { 
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                        'Accept': 'application/json'
                     }
-                }
-                else if (typeof campo === 'string') {
-                    const date = new Date(campo);
-                    if (!isNaN(date.getTime())) {
-                        dataCriacao = date.toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        break;
-                    }
-                }
-                else if (typeof campo === 'number') {
-                    const date = new Date(campo);
-                    if (!isNaN(date.getTime())) {
-                        dataCriacao = date.toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        break;
-                    }
-                }
-                else if (campo instanceof Date) {
-                    if (!isNaN(campo.getTime())) {
-                        dataCriacao = campo.toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        break;
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.turma) {
+                        turmaCompleta = data.turma;
                     }
                 }
             } catch (e) {
-                continue;
+                console.log('⚠️ Usando dados locais (erro na API):', e.message);
             }
-        }
-
-        if (dataCriacao === 'Não informada' && turma._id && turma._id.length === 24) {
-            try {
-                const timestamp = parseInt(turma._id.substring(0, 8), 16) * 1000;
-                if (!isNaN(timestamp)) {
-                    const date = new Date(timestamp);
-                    dataCriacao = date.toLocaleDateString('pt-BR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
+            
+            // Formatar data
+            let dataCriacao = 'Não informada';
+            if (turmaCompleta.createdAt || turmaCompleta.dataCriacao) {
+                const data = new Date(turmaCompleta.createdAt || turmaCompleta.dataCriacao);
+                if (!isNaN(data.getTime())) {
+                    dataCriacao = data.toLocaleDateString('pt-BR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
                     });
                 }
-            } catch (e) {}
+            }
+            
+            const professor = turmaCompleta.professor || {};
+            
+            // Montar HTML
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                    <h3 style="margin: 0 0 20px; color: #1f2937; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-school" style="color: #667eea;"></i>
+                        ${turmaCompleta.nome}
+                    </h3>
+                    
+                    <div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280;">Disciplina</div>
+                                <div style="font-size: 16px; font-weight: 600;">${turmaCompleta.disciplina || 'Não definida'}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280;">Eixo</div>
+                                <div style="font-size: 16px; font-weight: 600;">${this.getEixoLabel(turmaCompleta.eixo)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280;">Código</div>
+                                <div style="font-size: 16px; font-family: monospace;">${turmaCompleta.codigo || 'N/A'}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280;">Status</div>
+                                <div><span style="display: inline-block; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; background: ${turmaCompleta.ativa ? '#d1fae5' : '#fee2e2'}; color: ${turmaCompleta.ativa ? '#065f46' : '#991b1b'};">${turmaCompleta.ativa ? 'Ativa' : 'Inativa'}</span></div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280;">Data de Criação</div>
+                                <div style="font-size: 14px;">${dataCriacao}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280;">Professor</div>
+                                <div style="font-size: 14px; font-weight: 600;">${professor.nome || 'Não atribuído'}</div>
+                                ${professor.email ? `<div style="font-size: 12px; color: #6b7280;">${professor.email}</div>` : ''}
+                            </div>
+                        </div>
+                        
+                        ${turmaCompleta.descricao ? `
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">Descrição</div>
+                                <div style="font-size: 14px; color: #1f2937;">${turmaCompleta.descricao}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <h4 style="margin: 20px 0 15px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-chart-bar" style="color: #667eea;"></i>
+                        Estatísticas
+                    </h4>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+                        <div style="background: #f9fafb; border-radius: 12px; padding: 15px; text-align: center;">
+                            <div style="font-size: 28px; font-weight: 700; color: #667eea;">${turmaCompleta.totalAlunos || 0}</div>
+                            <div style="font-size: 12px; color: #6b7280;">Alunos</div>
+                        </div>
+                        <div style="background: #f9fafb; border-radius: 12px; padding: 15px; text-align: center;">
+                            <div style="font-size: 28px; font-weight: 700; color: #10b981;">${turmaCompleta.totalProvas || 0}</div>
+                            <div style="font-size: 12px; color: #6b7280;">Provas</div>
+                        </div>
+                        <div style="background: #f9fafb; border-radius: 12px; padding: 15px; text-align: center;">
+                            <div style="font-size: 28px; font-weight: 700; color: #f59e0b;">${turmaCompleta.alunosComAcessibilidade || 0}</div>
+                            <div style="font-size: 12px; color: #6b7280;">Acessibilidade</div>
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin: 20px 0 15px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-users" style="color: #667eea;"></i>
+                        Alunos Matriculados (${turmaCompleta.alunos?.length || 0})
+                    </h4>
+                    
+                    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px;">
+                        ${this.gerarListaAlunosHTML(turmaCompleta.alunos)}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-eye"></i> Detalhes da Turma';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro ao ver turma:', error);
+            this.showToast('❌ Erro ao carregar detalhes: ' + error.message, 'error');
         }
-
-        const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
-            <div style="padding: 10px;">
-                <h3 style="margin: 0 0 20px 0; color: #495057;">${turma.nome}</h3>
-                
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <p><strong><i class="fas fa-book"></i> Disciplina:</strong> ${turma.disciplina || 'Não definida'}</p>
-                    <p><strong><i class="fas fa-sitemap"></i> Eixo:</strong> ${turma.eixo || 'Não definido'}</p>
-                    <p><strong><i class="fas fa-chalkboard-teacher"></i> Professor:</strong> ${turma.professor?.nome || 'Não atribuído'}</p>
-                    <p><strong><i class="fas fa-hashtag"></i> Código:</strong> <code>${turma.codigo}</code></p>
-                    <p><strong><i class="fas fa-calendar"></i> Data de Criação:</strong> <span style="font-weight: bold; color: #0d6efd;">${dataCriacao}</span></p>
-                    <p><strong><i class="fas fa-circle"></i> Status:</strong> 
-                        <span class="status-badge ${turma.ativa ? 'active' : 'inactive'}">
-                            ${turma.ativa ? 'Ativa' : 'Inativa'}
-                        </span>
-                    </p>
-                    ${turma.descricao ? `<p><strong><i class="fas fa-align-left"></i> Descrição:</strong> ${turma.descricao}</p>` : ''}
-                </div>
-
-                <h4 style="margin: 20px 0 10px 0;">📊 Estatísticas</h4>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #0d6efd;">${turma.totalAlunos || 0}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Alunos</div>
-                    </div>
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #198754;">${turma.totalProvas || 0}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Provas</div>
-                    </div>
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${turma.alunosComAcessibilidade || 0}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Acessibilidade</div>
-                    </div>
-                </div>
-
-                <h4 style="margin: 20px 0 10px 0;">👥 Alunos Matriculados</h4>
-                <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 8px; padding: 10px;">
-                    ${this.gerarListaAlunos(turma.alunos)}
-                </div>
-            </div>
-        `;
-
-        document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> Detalhes da Turma`;
-        document.getElementById('modalSaveBtn').style.display = 'none';
-        this.openModal();
     }
 
-    gerarListaAlunos(alunos) {
+    // ============ GERAR LISTA DE ALUNOS HTML ============
+    gerarListaAlunosHTML(alunos) {
         if (!alunos || alunos.length === 0) {
-            return '<p style="color: #6c757d; text-align: center;">Nenhum aluno matriculado</p>';
+            return '<p style="text-align: center; padding: 30px; color: #6b7280;">Nenhum aluno matriculado</p>';
         }
-
+        
         return alunos.map(aluno => `
-            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid #e9ecef;">
-                <div style="width: 30px; height: 30px; background: #0d6efd; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 15px; border-bottom: 1px solid #e5e7eb;">
+                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
                     ${aluno.nome ? aluno.nome.charAt(0).toUpperCase() : '?'}
                 </div>
                 <div style="flex: 1;">
-                    <div style="font-weight: 600;">${aluno.nome || 'Aluno'}</div>
-                    <div style="font-size: 11px; color: #6c757d;">${aluno.email || ''}</div>
+                    <div style="font-weight: 600; color: #1f2937;">${aluno.nome || 'Aluno'}</div>
+                    <div style="font-size: 12px; color: #6b7280;">${aluno.email || ''} • ${aluno.matricula || 'Sem matrícula'}</div>
                 </div>
-                ${aluno.precisaAcessibilidade ? '<span class="badge-acessibilidade" title="Acessibilidade"><i class="fas fa-wheelchair"></i></span>' : ''}
+                ${aluno.precisaAcessibilidade ? 
+                    '<span style="background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 20px; font-size: 11px;"><i class="fas fa-wheelchair"></i></span>' : 
+                    ''}
             </div>
         `).join('');
     }
 
+    // ============ EDITAR TURMA ============
     editarTurma(turmaId) {
         this.abrirModalTurma(turmaId);
     }
 
-    async excluirTurma(turmaId) {
+    // ============ ATIVAR/INATIVAR TURMA (VERSÃO CORRIGIDA) ============
+    async toggleStatusTurma(turmaId, ativoAtual) {
         const turma = this.turmas.find(t => t.id === turmaId);
         if (!turma) return;
-
+        
+        const novoStatus = !ativoAtual;
+        const acao = novoStatus ? 'ativar' : 'inativar';
+        
         const confirmar = await this.confirmar(
-            `Excluir turma ${turma.nome}?`,
-            `Esta ação não pode ser desfeita. Todas as provas associadas também serão excluídas.`
+            `${novoStatus ? '✅' : '⏸️'} ${novoStatus ? 'Ativar' : 'Inativar'} Turma`,
+            `<strong style="color: ${novoStatus ? '#28a745' : '#dc3545'};">${novoStatus ? 'ATENÇÃO!' : 'IMPORTANTE!'}</strong><br><br>
+            Tem certeza que deseja <strong>${acao}</strong> a turma <strong>${turma.nome}</strong>?<br><br>
+            ${!novoStatus ? 
+                '⚠️ <strong>Consequências de inativar uma turma:</strong><br>' +
+                '• Alunos não poderão acessar provas desta turma<br>' +
+                '• Professores não poderão criar novas provas<br>' +
+                '• Provas existentes ficarão indisponíveis<br>' +
+                '• Resultados ainda estarão visíveis no histórico' : 
+                '✅ <strong>Benefícios de ativar a turma:</strong><br>' +
+                '• Alunos poderão acessar as provas novamente<br>' +
+                '• Professores poderão criar novas provas<br>' +
+                '• Todas as funcionalidades serão restauradas'
+            }<br><br>
+            <span style="color: #6c757d;">Esta ação será registrada no sistema.</span>`
         );
 
         if (!confirmar) return;
 
         try {
-            this.showToast('Excluindo turma...', 'info');
+            this.showToast(`🔄 ${acao === 'ativar' ? 'Ativando' : 'Inativando'} turma...`, 'info');
 
-            const response = await fetch(`/api/turmas/${turmaId}`, {
-                method: 'DELETE',
+            // 1. ATUALIZAR STATUS DA TURMA NO BACKEND
+            const response = await fetch(`${this.apiBase}/turmas/${turmaId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                },
+                body: JSON.stringify({ 
+                    ativa: novoStatus
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || `Erro ao ${acao} turma`);
+            }
+
+            // 2. BUSCAR TODAS AS PROVAS DA TURMA
+            const provasResponse = await fetch(`${this.apiBase}/provas?turmaId=${turmaId}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            });
+            
+            const provasData = await provasResponse.json();
+            
+            if (provasData.success && provasData.provas && provasData.provas.length > 0) {
+                console.log(`📚 Encontradas ${provasData.provas.length} provas para atualizar`);
+                
+                // 3. ATUALIZAR CADA PROVA (remover da lista de provas pendentes dos alunos)
+                for (const prova of provasData.provas) {
+                    // Atualizar status da prova baseado no status da turma
+                    // Se a turma estiver inativa, as provas devem ficar indisponíveis
+                    // Se a turma estiver ativa, as provas voltam a ficar disponíveis
+                    
+                    await fetch(`/api/professor/provas/${prova.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                        },
+                        body: JSON.stringify({ 
+                            turmaAtiva: novoStatus,
+                            disponivel: novoStatus
+                        })
+                    });
+                    
+                    console.log(`   ✅ Prova ${prova.titulo} ${novoStatus ? 'reativada' : 'desativada'}`);
+                }
+            }
+
+            // 4. NOTIFICAÇÃO DE SUCESSO
+            this.showToast(`✅ Turma ${acao}da com sucesso!`, 'success');
+            
+            // 5. MOSTRAR NOTIFICAÇÃO DETALHADA
+            this.mostrarNotificacaoSistema(
+                novoStatus ? 'success' : 'warning',
+                `Turma ${novoStatus ? 'Ativada' : 'Inativada'}: ${turma.nome}`,
+                `${novoStatus ? 
+                    `✅ A turma foi ativada. ${provasData.provas?.length || 0} provas foram reativadas.` : 
+                    `⏸️ A turma foi inativada. ${provasData.provas?.length || 0} provas foram desativadas. Alunos não poderão acessá-las.`
+                }`,
+                6000
+            );
+
+            // 6. ATUALIZAR TODAS AS INTERFACES
+            await this.loadTurmas(); // Recarregar lista de turmas
+            await this.carregarDadosReais(); // Atualizar dashboard
+            
+            // Atualizar provas se a aba estiver aberta
+            if (this.currentSection === 'provas') {
+                await this.loadProvas();
+            }
+            
+            // Atualizar resultados se a aba estiver aberta
+            if (this.currentSection === 'resultados') {
+                await this.loadResultados();
+            }
+
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            
+            // Notificação de erro
+            this.mostrarNotificacaoSistema(
+                'error',
+                `❌ Erro ao ${acao} Turma`,
+                `Não foi possível ${acao} a turma "${turma.nome}". Erro: ${error.message}`,
+                8000
+            );
+            
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ EXCLUIR TURMA ============
+    async excluirTurma(turmaId) {
+        const turma = this.turmas.find(t => t.id === turmaId);
+        if (!turma) return;
+
+        const confirmar = await this.confirmar(
+            '🗑️ Excluir Turma',
+            `Tem certeza que deseja excluir a turma <strong>${turma.nome}</strong>?<br><br>
+            <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span><br>
+            Todas as provas e resultados associados também serão excluídos.`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            this.showToast('🗑️ Excluindo turma...', 'info');
+
+            const response = await fetch(`${this.apiBase}/turmas/${turmaId}`, {
+                method: 'DELETE',
+                headers: { 
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Content-Type': 'application/json'
+                }
             });
 
             const data = await response.json();
 
             if (data.success) {
-                this.showToast('Turma excluída com sucesso!', 'success');
-                this.loadTurmas();
-                this.carregarDadosReais();
+                this.showToast('✅ Turma excluída com sucesso!', 'success');
+                
+                // ATUALIZAR TODAS AS ABAS
+                await this.loadTurmas(); // Recarregar lista
+                await this.carregarDadosReais(); // Atualizar dashboard
+                
+                // Se estiver na aba de provas ou resultados, recarregar
+                if (this.currentSection === 'provas') {
+                    await this.loadProvas();
+                } else if (this.currentSection === 'resultados') {
+                    await this.loadResultados();
+                }
             } else {
                 throw new Error(data.error || 'Erro ao excluir turma');
             }
 
         } catch (error) {
-            console.error('Erro ao excluir turma:', error);
-            this.showToast('Erro: ' + error.message, 'error');
+            console.error('❌ Erro ao excluir turma:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
     }
+
+    // ============ FILTRAR TURMAS ============
+    filtrarTurmas() {
+        const search = document.getElementById('searchTurmas')?.value || '';
+        const eixo = document.getElementById('filterEixo')?.value || 'todos';
+        const status = document.getElementById('filterStatusTurma')?.value || 'todos';
+        
+        this.filtros.turmas.search = search;
+        this.filtros.turmas.eixo = eixo;
+        this.filtros.turmas.page = 1;
+        
+        // Filtrar localmente por status
+        let turmasFiltradas = [...this.turmas];
+        
+        if (status === 'ativas') {
+            turmasFiltradas = turmasFiltradas.filter(t => t.ativa === true);
+        } else if (status === 'inativas') {
+            turmasFiltradas = turmasFiltradas.filter(t => t.ativa === false);
+        }
+        
+        // Atualizar contador
+        const resultadosSpan = document.getElementById('resultadosEncontrados');
+        if (resultadosSpan) {
+            resultadosSpan.textContent = `${turmasFiltradas.length} turmas encontradas`;
+        }
+        
+        // Renderizar apenas as filtradas
+        const cardsGrid = document.getElementById('turmasCardsGrid');
+        if (cardsGrid) {
+            cardsGrid.innerHTML = this.gerarCardsTurmasProfissional(turmasFiltradas);
+        }
+        
+        // Atualizar tags de filtros ativos
+        const activeFiltersDiv = document.querySelector('.active-filters');
+        if (activeFiltersDiv) {
+            activeFiltersDiv.innerHTML = this.gerarTagsFiltrosAtivos(search, eixo);
+        }
+    }
+
+    // ============ LIMPAR BUSCA ============
+    limparBuscaTurmas() {
+        document.getElementById('searchTurmas').value = '';
+        this.filtrarTurmas();
+    }
+
+    // ============ LIMPAR FILTROS ============
+    limparFiltrosTurmas() {
+        this.filtros.turmas = { search: '', eixo: 'todos', page: 1, limit: 10 };
+        
+        const searchInput = document.getElementById('searchTurmas');
+        const eixoSelect = document.getElementById('filterEixo');
+        const statusSelect = document.getElementById('filterStatusTurma');
+        
+        if (searchInput) searchInput.value = '';
+        if (eixoSelect) eixoSelect.value = 'todos';
+        if (statusSelect) statusSelect.value = 'todos';
+        
+        this.loadTurmas();
+    }
+
+    // ============ FILTRAR POR STATUS ============
+    filtrarPorStatus(status) {
+        const statusSelect = document.getElementById('filterStatusTurma');
+        if (statusSelect) {
+            if (status === 'ativas' || status === 'inativas') {
+                statusSelect.value = status;
+            } else {
+                statusSelect.value = 'todos';
+            }
+        }
+        this.filtrarTurmas();
+    }
+
+    // ============ FILTRAR POR ACESSIBILIDADE ============
+    filtrarPorAcessibilidade() {
+        const turmasComAcessibilidade = this.turmas.filter(t => (t.alunosComAcessibilidade || 0) > 0);
+        
+        if (turmasComAcessibilidade.length > 0) {
+            this.mostrarNotificacaoSistema(
+                'info',
+                '👆 Turmas com Acessibilidade',
+                `${turmasComAcessibilidade.length} turmas possuem alunos que necessitam de acessibilidade.`,
+                5000
+            );
+        } else {
+            this.showToast('ℹ️ Nenhuma turma com alunos de acessibilidade', 'info');
+        }
+    }
+
+    // ============ EXPORTAR TURMAS CSV ============
+    exportarTurmasCSV() {
+        if (!this.turmas || this.turmas.length === 0) {
+            this.showToast('❌ Nenhuma turma para exportar', 'error');
+            return;
+        }
+
+        try {
+            const headers = ['Nome', 'Código', 'Disciplina', 'Eixo', 'Professor', 'Email Professor', 'Status', 'Total Alunos', 'Total Provas', 'Alunos com Acessibilidade', 'Data Criação'];
+            let csvContent = headers.join(',') + '\n';
+
+            this.turmas.forEach(t => {
+                const professor = t.professor || {};
+                const linha = [
+                    `"${t.nome || ''}"`,
+                    `"${t.codigo || ''}"`,
+                    `"${t.disciplina || ''}"`,
+                    `"${this.getEixoLabel(t.eixo) || ''}"`,
+                    `"${professor.nome || 'Não atribuído'}"`,
+                    `"${professor.email || ''}"`,
+                    `"${t.ativa ? 'Ativa' : 'Inativa'}"`,
+                    t.totalAlunos || 0,
+                    t.totalProvas || 0,
+                    t.alunosComAcessibilidade || 0,
+                    `"${t.createdAt ? new Date(t.createdAt).toLocaleDateString('pt-BR') : ''}"`
+                ].join(',');
+                csvContent += linha + '\n';
+            });
+
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `turmas-${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            this.showToast('✅ Turmas exportadas com sucesso!', 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao exportar:', error);
+            this.showToast('❌ Erro ao exportar turmas', 'error');
+        }
+    }
+
+    // ============ ATUALIZAR BADGES ============
+    atualizarBadgesTurmas() {
+        const badges = { 'badge-turmas': this.turmas.length };
+        for (const [id, valor] of Object.entries(badges)) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = valor;
+        }
+    }
+
+    // ============ GERAR TAGS DE FILTROS ATIVOS ============
+    gerarTagsFiltrosAtivos(search, eixo) {
+        if (!search && eixo === 'todos') return '';
+        
+        let tags = '<div class="active-filters"><span class="active-filters-label"><i class="fas fa-filter"></i> Filtros ativos:</span><div class="filter-tags">';
+        
+        if (search) {
+            tags += `<span class="filter-tag"><i class="fas fa-search"></i> "${search}" <i class="fas fa-times" onclick="document.getElementById('searchTurmas').value=''; admin.filtrarTurmas()"></i></span>`;
+        }
+        
+        if (eixo !== 'todos') {
+            const eixoLabels = { 'natureza': 'Natureza', 'humanas': 'Humanas', 'linguagens': 'Linguagens', 'desenvolvimento': 'Desenvolvimento', 'gestao': 'Gestão', 'turismo': 'Turismo', 'ambiente': 'Ambiente' };
+            tags += `<span class="filter-tag"><i class="fas fa-sitemap"></i> ${eixoLabels[eixo] || eixo} <i class="fas fa-times" onclick="document.getElementById('filterEixo').value='todos'; admin.filtrarTurmas()"></i></span>`;
+        }
+        
+        tags += '</div><button class="clear-all-filters" onclick="admin.limparFiltrosTurmas()">Limpar todos</button></div>';
+        return tags;
+    }
+
+    // ============ MÉTODOS AUXILIARES ============
+    getEixoLabel(eixo) {
+        const labels = { 'natureza': '🌿 Natureza', 'humanas': '📜 Humanas', 'linguagens': '📚 Linguagens', 'desenvolvimento': '💻 Desenvolvimento', 'gestao': '📊 Gestão', 'turismo': '✈️ Turismo', 'ambiente': '🌱 Ambiente' };
+        return labels[eixo] || eixo || 'Não definido';
+    }
+
+    getEixoColor(eixo) {
+        const cores = { 'natureza': '#10b981', 'humanas': '#8b5cf6', 'linguagens': '#f59e0b', 'desenvolvimento': '#3b82f6', 'gestao': '#6b7280', 'turismo': '#ef4444', 'ambiente': '#14b8a6' };
+        return cores[eixo] || '#667eea';
+    }
+
+    // ============ CARREGAR PROFESSORES PARA SELECT ============
+    async carregarProfessoresParaSelect() {
+        try {
+            const response = await fetch(`${this.apiBase}/usuarios?role=professor&limit=100`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.professores = data.usuarios || [];
+                console.log(`✅ ${this.professores.length} professores carregados`);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar professores:', error);
+        }
+    }
+
+    // ============ GERAR PAGINAÇÃO PROFISSIONAL ============
+    gerarPaginacaoProfissional(pagination, tipo) {
+        if (!pagination || pagination.pages <= 1) return '';
+        
+        const paginaAtual = pagination.page;
+        const totalPaginas = pagination.pages;
+        const inicio = (paginaAtual - 1) * pagination.limit + 1;
+        const fim = Math.min(paginaAtual * pagination.limit, pagination.total);
+        
+        let botoes = '';
+        
+        if (paginaAtual > 3) {
+            botoes += `<button class="btn-page" onclick="admin.mudarPagina('${tipo}', 1)">1</button>`;
+            if (paginaAtual > 4) botoes += '<span class="page-ellipsis">...</span>';
+        }
+        
+        for (let i = Math.max(1, paginaAtual - 2); i <= Math.min(totalPaginas, paginaAtual + 2); i++) {
+            botoes += `<button class="btn-page ${i === paginaAtual ? 'active' : ''}" onclick="admin.mudarPagina('${tipo}', ${i})">${i}</button>`;
+        }
+        
+        if (paginaAtual < totalPaginas - 2) {
+            if (paginaAtual < totalPaginas - 3) botoes += '<span class="page-ellipsis">...</span>';
+            botoes += `<button class="btn-page" onclick="admin.mudarPagina('${tipo}', ${totalPaginas})">${totalPaginas}</button>`;
+        }
+        
+        return `
+            <div class="pagination-professional">
+                <div class="pagination-info">Mostrando ${inicio} a ${fim} de ${pagination.total} turmas</div>
+                <div class="pagination-controls">
+                    <button class="btn-page" ${paginaAtual === 1 ? 'disabled' : ''} onclick="admin.mudarPagina('${tipo}', ${paginaAtual - 1})"><i class="fas fa-chevron-left"></i></button>
+                    ${botoes}
+                    <button class="btn-page" ${paginaAtual === totalPaginas ? 'disabled' : ''} onclick="admin.mudarPagina('${tipo}', ${paginaAtual + 1})"><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+        `;
+    }
+
 
     // ============ PROVAS ============
 
