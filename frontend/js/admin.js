@@ -6578,6 +6578,7 @@ class AdminPanel {
                     this.renderTabelaResultados(resultados);
                     this.inicializarGraficosResultados(dadosGraficos);
                     this.configurarEventosResultados();
+                    this.atualizarContadoresCards(); 
                 }, 100);
 
             } catch (error) {
@@ -6824,6 +6825,11 @@ class AdminPanel {
                             </button>
                             <button class="btn-header" onclick="admin.exportarResultadosCSV()" title="Exportar CSV">
                                 <i class="fas fa-file-csv"></i> CSV
+                            </button>
+                            <!-- 🔥 NOVO BOTÃO -->
+                            <button class="btn-header" style="background: #10b981; color: white; border: none;" 
+                                    onclick="admin.liberarTodasNotas()" title="Liberar todas as notas pendentes">
+                                <i class="fas fa-lock-open"></i> Liberar Todas
                             </button>
                             <button class="btn-header refresh" onclick="admin.loadResultados()" title="Atualizar">
                                 <i class="fas fa-sync-alt"></i> Atualizar
@@ -7415,6 +7421,105 @@ class AdminPanel {
             `;
         }
 
+        // ============ ATUALIZAR CONTADORES DOS CARDS (VERSÃO CORRIGIDA) ============
+        atualizarContadoresCards() {
+            if (!this.resultadosCompletos) return;
+            
+            const resultados = this.resultadosCompletos;
+            
+            // Calcular estatísticas com a mesma lógica dos filtros
+            let aprovados = 0;
+            let reprovados = 0;
+            let pendentes = 0;
+            let canceladas = 0;
+            
+            resultados.forEach(r => {
+                const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
+                                    r.cancelada === true || 
+                                    r.motivoCancelamento;
+                
+                if (isCancelada) {
+                    canceladas++;
+                }
+                else if (r.nota !== null && r.nota !== undefined) {
+                    if (r.notaLiberada === true) {
+                        if (r.nota >= 7) {
+                            aprovados++;
+                        } else {
+                            reprovados++;
+                        }
+                    } else {
+                        // Tem nota mas não foi liberada = aguardando correção
+                        pendentes++;
+                    }
+                } else {
+                    // Não tem nota = pendente
+                    pendentes++;
+                }
+            });
+            
+            // Atualizar os cards por posição
+            const statsNumbers = document.querySelectorAll('.stat-number');
+            
+            if (statsNumbers.length >= 5) {
+                statsNumbers[0].textContent = resultados.length;      // Total
+                statsNumbers[1].textContent = aprovados;              // Aprovados
+                statsNumbers[2].textContent = reprovados;             // Reprovados
+                statsNumbers[3].textContent = pendentes;              // Pendentes
+                if (statsNumbers[4]) statsNumbers[4].textContent = canceladas; // Canceladas
+                
+                console.log('✅ Cards atualizados:', { 
+                    total: resultados.length, 
+                    aprovados, 
+                    reprovados, 
+                    pendentes, 
+                    canceladas 
+                });
+            }
+            
+            // Atualizar média e taxa de aprovação
+            const notasValidas = resultados.filter(r => 
+                !((r.nota === 0 && r.status === 'pendente') || 
+                r.cancelada === true || 
+                r.motivoCancelamento) && 
+                r.nota !== null && 
+                r.notaLiberada === true
+            ).map(r => r.nota);
+            
+            const mediaGeral = notasValidas.length > 0 
+                ? (notasValidas.reduce((a, b) => a + b, 0) / notasValidas.length).toFixed(2)
+                : '0.00';
+            
+            const taxaAprovacao = notasValidas.length > 0 
+                ? Math.round((aprovados / notasValidas.length) * 100)
+                : 0;
+            
+            // Atualizar os textos dos cards
+            const mediaElement = document.querySelector('.stat-card.danger .stat-details span:last-child');
+            if (mediaElement) {
+                mediaElement.innerHTML = `<i class="fas fa-chart-line"></i> Média: ${mediaGeral}`;
+            }
+            
+            const taxaElement = document.querySelector('.stat-card.success .stat-details span:last-child');
+            if (taxaElement) {
+                taxaElement.innerHTML = `<i class="fas fa-percent"></i> ${taxaAprovacao}%`;
+            }
+            
+            // Atualizar alunos e provas
+            const totalAlunos = new Set(resultados.map(r => r.alunoId)).size;
+            const totalProvas = new Set(resultados.map(r => r.provaId)).size;
+            
+            const alunosElement = document.querySelector('.stat-card.primary .stat-details span:first-child');
+            const provasElement = document.querySelector('.stat-card.primary .stat-details span:last-child');
+            
+            if (alunosElement) {
+                alunosElement.innerHTML = `<i class="fas fa-users"></i> ${totalAlunos} alunos`;
+            }
+            if (provasElement) {
+                provasElement.innerHTML = `<i class="fas fa-tasks"></i> ${totalProvas} provas`;
+            }
+        }
+
         // ============ GERAR LINHAS DA TABELA DE RESULTADOS (COM STATUS) ============
         gerarLinhasResultados(resultados) {
             if (!resultados || resultados.length === 0) {
@@ -7532,7 +7637,7 @@ class AdminPanel {
             this.atualizarTabelaPaginada();
         }
 
-        // ============ ATUALIZAR TABELA PAGINADA (VERSÃO CORRIGIDA) ============
+        // ============ ATUALIZAR TABELA PAGINADA (COM STATUS CORRETO) ============
         atualizarTabelaPaginada() {
             const tbody = document.getElementById('tabelaResultadosBody');
             if (!tbody || !this.resultadosFiltrados) return;
@@ -7545,27 +7650,33 @@ class AdminPanel {
             paginaResultados.forEach(r => {
                 const data = new Date(r.dataRealizacao || r.createdAt).toLocaleDateString('pt-BR');
                 
-                // 🔥 LÓGICA CORRETA BASEADA NOS DADOS REAIS
+                // 🔥 LÓGICA CORRETA DE STATUS
                 let notaClass = '';
                 let statusClass = '';
                 let statusText = '';
                 let statusIcon = '';
                 
-                // Verificar se é a prova cancelada (nota 0 e status pendente)
-                // Ajuste aqui: a prova cancelada é a com nota 0 E status pendente
+                // Verificar se é cancelada
                 const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
-                                r.id === '699f27d31f66677913147c86'; // ID específico da cancelada
-                
+                                    r.cancelada === true || 
+                                    r.motivoCancelamento;
+
                 if (isCancelada) {
                     statusClass = 'status-cancelado';
                     statusText = 'Cancelada';
                     statusIcon = '🚫 ';
                     notaClass = 'nota-zero';
                 } 
-                // Verificar se tem nota (e não é cancelada)
-                else if (r.nota !== null && r.nota !== undefined) {
-                    const nota = parseFloat(r.nota);
-                    if (nota >= 7) {
+                // Aguardando correção (tem nota MAS notaLiberada é false)
+                else if (r.nota !== null && r.nota !== undefined && r.notaLiberada === false) {
+                    statusClass = 'status-pendente';
+                    statusText = 'Aguardando';
+                    statusIcon = '⏳ ';
+                    notaClass = '';
+                }
+                // Corrigida (tem nota E notaLiberada é true)
+                else if (r.nota !== null && r.nota !== undefined && r.notaLiberada === true) {
+                    if (r.nota >= 7) {
                         statusClass = 'status-aprovado';
                         statusText = 'Aprovado';
                         statusIcon = '✅ ';
@@ -7588,7 +7699,7 @@ class AdminPanel {
                 const percentual = r.total > 0 ? Math.round((r.acertos / r.total) * 100) : 0;
 
                 html += `
-                    <tr data-id="${r.id}">
+                    <tr>
                         <td>
                             <strong>${r.alunoNome || 'N/A'}</strong>
                             <div style="font-size: 11px; color: #6c757d;">${r.alunoMatricula || ''}</div>
@@ -7618,13 +7729,23 @@ class AdminPanel {
                             </span>
                         </td>
                         <td>
-                            <div class="action-buttons">
+                            <div class="action-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
                                 <button class="btn-icon" onclick="admin.verResultadoDetalhado('${r.id}')" title="Ver detalhes">
                                     <i class="fas fa-eye"></i>
                                 </button>
+                                
                                 <button class="btn-icon edit" onclick="admin.editarResultado('${r.id}')" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </button>
+                                
+                                ${!isCancelada && r.nota !== null && r.notaLiberada === false ? `
+                                    <button class="btn-icon" style="background: #10b981; color: white;" 
+                                            onclick="admin.liberarNota('${r.id}')" 
+                                            title="Liberar nota para o aluno">
+                                        <i class="fas fa-lock-open"></i>
+                                    </button>
+                                ` : ''}
+                                
                                 ${isCancelada ? `
                                     <button class="btn-icon warning" onclick="admin.verDetalhesCancelamento('${r.id}')" title="Ver detalhes do cancelamento">
                                         <i class="fas fa-info-circle"></i>
@@ -7634,6 +7755,7 @@ class AdminPanel {
                                         <i class="fas fa-bell"></i>
                                     </button>
                                 `}
+                                
                                 <button class="btn-icon delete" onclick="admin.excluirResultado('${r.id}')" title="Excluir">
                                     <i class="fas fa-trash"></i>
                                 </button>
@@ -7737,7 +7859,136 @@ class AdminPanel {
             }
         }
 
-        // ============ FILTRAR TABELA DE RESULTADOS (VERSÃO CORRIGIDA) ============
+        // ============ LIBERAR NOTA PARA O ALUNO ============
+        async liberarNota(resultadoId) {
+            try {
+                const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+                if (!resultado) {
+                    this.showToast('❌ Resultado não encontrado', 'error');
+                    return;
+                }
+
+                const confirmar = await this.confirmar(
+                    '✅ Liberar Nota',
+                    `Deseja realmente liberar a nota <strong>${resultado.nota}</strong> para o aluno <strong>${resultado.alunoNome}</strong>?<br><br>
+                    Após liberada, o aluno poderá ver sua nota imediatamente.`
+                );
+
+                if (!confirmar) return;
+
+                this.showToast('🔄 Liberando nota...', 'info');
+
+                const token = localStorage.getItem('auth_token');
+                
+                const response = await fetch(`/api/admin/resultados/${resultadoId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        nota: resultado.nota,
+                        acertos: resultado.acertos,
+                        total: resultado.total,
+                        tempoGasto: resultado.tempoGasto,
+                        observacoes: resultado.observacoes,
+                        notaLiberada: true,  // <-- LIBERAR A NOTA
+                        status: resultado.nota >= 7 ? 'aprovado' : 'reprovado'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Atualizar localmente
+                    resultado.notaLiberada = true;
+                    resultado.status = resultado.nota >= 7 ? 'aprovado' : 'reprovado';
+                    
+                    this.showToast('✅ Nota liberada com sucesso!', 'success');
+                    
+                    // Recarregar a tabela
+                    this.filtrarTabelaResultados();
+                    this.atualizarContadoresCards();
+                } else {
+                    throw new Error(data.error || 'Erro ao liberar nota');
+                }
+
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            }
+        }
+
+        // ============ LIBERAR TODAS AS NOTAS PENDENTES ============
+        async liberarTodasNotas() {
+            const pendentes = this.resultadosCompletos?.filter(r => 
+                !((r.nota === 0 && r.status === 'pendente') || 
+                r.cancelada === true || 
+                r.motivoCancelamento) && 
+                r.nota !== null && 
+                r.notaLiberada === false
+            );
+
+            if (!pendentes || pendentes.length === 0) {
+                this.showToast('ℹ️ Nenhuma nota pendente para liberar', 'info');
+                return;
+            }
+
+            const confirmar = await this.confirmar(
+                '📢 Liberar Todas as Notas',
+                `Deseja liberar <strong>${pendentes.length} nota(s)</strong> pendente(s)?<br><br>
+                Esta ação não pode ser desfeita.`
+            );
+
+            if (!confirmar) return;
+
+            this.showToast(`🔄 Liberando ${pendentes.length} notas...`, 'info');
+
+            let sucessos = 0;
+            let erros = 0;
+
+            for (const resultado of pendentes) {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    
+                    const response = await fetch(`/api/admin/resultados/${resultado.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            nota: resultado.nota,
+                            acertos: resultado.acertos,
+                            total: resultado.total,
+                            tempoGasto: resultado.tempoGasto,
+                            observacoes: resultado.observacoes,
+                            notaLiberada: true,
+                            status: resultado.nota >= 7 ? 'aprovado' : 'reprovado'
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        resultado.notaLiberada = true;
+                        resultado.status = resultado.nota >= 7 ? 'aprovado' : 'reprovado';
+                        sucessos++;
+                    } else {
+                        erros++;
+                    }
+                } catch (error) {
+                    console.error('Erro ao liberar:', error);
+                    erros++;
+                }
+            }
+
+            this.showToast(`✅ ${sucessos} notas liberadas, ${erros} erros`, 'success');
+            this.filtrarTabelaResultados();
+            this.atualizarContadoresCards();
+        }
+
+        // ============ FILTRAR TABELA DE RESULTADOS (COM STATUS CORRETO) ============
         filtrarTabelaResultados() {
             if (!this.resultadosCompletos) return;
 
@@ -7755,19 +8006,22 @@ class AdminPanel {
                     (r.alunoTurma && r.alunoTurma.toLowerCase().includes(search)) ||
                     (r.alunoMatricula && r.alunoMatricula.toLowerCase().includes(search));
 
-                // 🔥 FILTRO DE STATUS CORRIGIDO BASEADO NOS DADOS REAIS
+                // 🔥 FILTRO DE STATUS CORRIGIDO
                 let matchStatus = true;
+                
+                // Verificar se é cancelada
+                const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
+                                    r.cancelada === true || 
+                                    r.motivoCancelamento;
+                
                 if (status !== 'todos') {
-                    // Cancelada: nota 0 E status pendente (característica da prova cancelada)
-                    const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
-                                    r.id === '699f27d31f66677913147c86';
-                    
                     if (status === 'aprovado') {
-                        matchStatus = !isCancelada && r.nota && r.nota >= 7;
+                        matchStatus = !isCancelada && r.nota && r.nota >= 7 && r.notaLiberada === true;
                     } else if (status === 'reprovado') {
-                        matchStatus = !isCancelada && r.nota && r.nota < 7 && r.nota > 0;
+                        matchStatus = !isCancelada && r.nota && r.nota < 7 && r.notaLiberada === true;
                     } else if (status === 'pendente') {
-                        matchStatus = !isCancelada && !r.nota;
+                        // AGUARDANDO CORREÇÃO = tem nota E notaLiberada false
+                        matchStatus = !isCancelada && r.nota !== null && r.nota !== undefined && r.notaLiberada === false;
                     } else if (status === 'cancelado') {
                         matchStatus = isCancelada;
                     }
@@ -7794,8 +8048,10 @@ class AdminPanel {
 
             this.paginaAtual = 1;
             this.atualizarTabelaPaginada();
+            if (typeof this.atualizarContadoresCards === 'function') {
+                this.atualizarContadoresCards();
+            }
         }
-
 
         ordenarResultados() {
             if (!this.resultadosFiltrados) return;
@@ -8481,7 +8737,10 @@ class AdminPanel {
 
                 this.showToast('✅ Resultado atualizado com sucesso!', 'success');
                 this.closeModal();
-                this.atualizarTabelaPaginada();
+
+                // 🔥 FORÇAR ATUALIZAÇÃO DA TABELA E CARDS
+                this.filtrarTabelaResultados();
+                this.atualizarContadoresCards(); // <-- ADICIONAR ESTA LINHA
 
             } catch (error) {
                 console.error('❌ Erro ao salvar resultado:', error);
