@@ -7421,6 +7421,145 @@ class AdminPanel {
             `;
         }
 
+        // ============ ENVIAR LEMBRETE (VERSÃO FINAL QUE FUNCIONA) ============
+        async enviarLembrete(resultadoId) {
+            try {
+                console.log('📧 Enviando lembrete para resultado:', resultadoId);
+                
+                // Buscar dados do resultado - primeiro tenta do this.resultadosCompletos
+                let resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+                
+                // Se não encontrar, busca da API
+                if (!resultado) {
+                    console.log('📡 Resultado não encontrado localmente, buscando da API...');
+                    const token = localStorage.getItem('auth_token');
+                    
+                    const response = await fetch('/api/admin/todos-resultados', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    resultado = data.resultados?.find(r => r.id === resultadoId);
+                    
+                    if (!resultado) {
+                        this.showToast('❌ Resultado não encontrado', 'error');
+                        return;
+                    }
+                }
+                
+                const alunoId = resultado.alunoId;
+                const alunoNome = resultado.alunoNome;
+                const provaTitulo = resultado.provaTitulo;
+                const provaId = resultado.provaId;
+                
+                if (!alunoId) {
+                    this.showToast('❌ ID do aluno não encontrado', 'error');
+                    return;
+                }
+                
+                // Confirmar envio
+                const confirmar = await this.confirmar(
+                    '📧 Enviar Lembrete',
+                    `Deseja enviar um lembrete para o aluno <strong>${alunoNome}</strong> sobre a prova <strong>${provaTitulo}</strong>?`
+                );
+                
+                if (!confirmar) return;
+                
+                this.showToast('📧 Enviando lembrete...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                
+                const notificacaoBody = {
+                    usuarioId: alunoId,
+                    tipo: 'sistema',
+                    titulo: '📝 Lembrete de Prova',
+                    mensagem: `O professor enviou um lembrete sobre a prova "${provaTitulo}".`,
+                    icone: '📧',
+                    cor: '#3b82f6',
+                    link: `/aluno.html?prova=${provaId}`,
+                    prioridade: 1
+                };
+                
+                console.log('📤 Enviando notificação:', notificacaoBody);
+                
+                const notificacaoResponse = await fetch('/api/notificacoes', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(notificacaoBody)
+                });
+                
+                const notificacaoData = await notificacaoResponse.json();
+                
+                if (notificacaoData.success) {
+                    this.showToast('✅ Lembrete enviado com sucesso!', 'success');
+                    
+                    // Mostrar modal de confirmação
+                    this.mostrarConfirmacaoLembrete(alunoNome, provaTitulo);
+                } else {
+                    throw new Error(notificacaoData.error || 'Erro ao criar notificação');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao enviar lembrete:', error);
+                this.showToast('❌ Erro: ' + error.message, 'error');
+            }
+        }
+
+        // ============ MODAL DE CONFIRMAÇÃO ============
+        mostrarConfirmacaoLembrete(alunoNome, provaTitulo) {
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalSaveBtn = document.getElementById('modalSaveBtn');
+            
+            modalBody.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                    <div style="
+                        width: 60px;
+                        height: 60px;
+                        background: #10b981;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin: 0 auto 15px;
+                    ">
+                        <i class="fas fa-check" style="font-size: 30px; color: white;"></i>
+                    </div>
+                    <h3 style="margin: 0 0 10px; color: #1f2937;">✅ Lembrete Enviado!</h3>
+                    <p style="color: #6b7280; margin-bottom: 5px;"><strong>Aluno:</strong> ${alunoNome}</p>
+                    <p style="color: #6b7280;"><strong>Prova:</strong> ${provaTitulo}</p>
+                    <p style="color: #9ca3af; font-size: 0.85rem; margin-top: 15px;">
+                        <i class="fas fa-bell"></i> O aluno receberá uma notificação no sistema.
+                    </p>
+                </div>
+            `;
+            
+            modalTitle.innerHTML = '<i class="fas fa-envelope"></i> Lembrete Enviado';
+            modalSaveBtn.style.display = 'none';
+            this.openModal();
+            
+            // Fechar automaticamente após 2 segundos
+            setTimeout(() => {
+                this.closeModal();
+            }, 2000);
+        }
+        // ============ CONFIGURAR FECHAMENTO DO MODAL (VERSÃO SIMPLES) ============
+        configurarFechamentoModalSimples() {
+            const closeBtn = document.querySelector('#modal .modal-close');
+            if (closeBtn) {
+                const newCloseBtn = closeBtn.cloneNode(true);
+                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+                
+                newCloseBtn.onclick = (e) => {
+                    e.preventDefault();
+                    this.closeModal();
+                };
+            }
+        }
+
         // ============ ATUALIZAR CONTADORES DOS CARDS (VERSÃO CORRIGIDA) ============
         atualizarContadoresCards() {
             if (!this.resultadosCompletos) return;
@@ -8745,16 +8884,6 @@ class AdminPanel {
             } catch (error) {
                 console.error('❌ Erro ao salvar resultado:', error);
                 this.showToast('❌ Erro ao salvar: ' + error.message, 'error');
-            }
-        }
-
-        async enviarLembrete(resultadoId) {
-            const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
-            if (!resultado) return;
-
-            if (confirm(`Enviar lembrete para ${resultado.alunoNome} (${resultado.alunoEmail || 'email não cadastrado'}) sobre a prova "${resultado.provaTitulo}"?`)) {
-                // Aqui você faria uma chamada API para enviar o lembrete
-                this.showToast('📧 Lembrete enviado com sucesso!', 'success');
             }
         }
 

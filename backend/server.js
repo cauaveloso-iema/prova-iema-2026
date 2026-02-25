@@ -9323,6 +9323,105 @@ app.get('/api/notificacoes/nao-lidas/contador', authenticateToken, async (req, r
     }
 });
 
+// ============ ROTA PARA CRIAR NOTIFICAÇÃO (ADICIONAR ESTA ROTA) ============
+app.post('/api/notificacoes', authenticateToken, async (req, res) => {
+    try {
+        const { usuarioId, tipo, titulo, mensagem, icone, cor, link, prioridade } = req.body;
+        
+        console.log(`📝 Criando notificação para usuário ${usuarioId}: ${titulo}`);
+        
+        // Verificar se o modelo Notificacao existe
+        let Notificacao;
+        try {
+            Notificacao = mongoose.model('Notificacao');
+        } catch {
+            // Criar schema se não existir
+            const NotificacaoSchema = new mongoose.Schema({
+                usuarioId: { 
+                    type: mongoose.Schema.Types.ObjectId, 
+                    ref: 'User', 
+                    required: true 
+                },
+                tipo: { 
+                    type: String, 
+                    enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema'], 
+                    default: 'sistema' 
+                },
+                titulo: { 
+                    type: String, 
+                    required: true 
+                },
+                mensagem: { 
+                    type: String, 
+                    required: true 
+                },
+                icone: { 
+                    type: String, 
+                    default: '📋' 
+                },
+                cor: { 
+                    type: String, 
+                    default: '#3b82f6' 
+                },
+                link: { 
+                    type: String, 
+                    default: null 
+                },
+                lida: { 
+                    type: Boolean, 
+                    default: false 
+                },
+                prioridade: { 
+                    type: String, 
+                    enum: ['baixa', 'media', 'alta'], 
+                    default: 'media' 
+                },
+                dataEnvio: { 
+                    type: Date, 
+                    default: Date.now 
+                }
+            }, {
+                timestamps: true
+            });
+            
+            Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
+            console.log('✅ Modelo Notificacao criado');
+        }
+
+        // Criar a notificação
+        const notificacao = new Notificacao({
+            usuarioId,
+            tipo,
+            titulo,
+            mensagem,
+            icone,
+            cor,
+            link,
+            prioridade
+        });
+        
+        await notificacao.save();
+
+        console.log(`✅ Notificação criada com ID: ${notificacao._id}`);
+        
+        res.json({ 
+            success: true, 
+            notificacao: { 
+                id: notificacao._id, 
+                titulo: notificacao.titulo, 
+                mensagem: notificacao.mensagem 
+            } 
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao criar notificação:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao criar notificação: ' + error.message 
+        });
+    }
+});
+
 // Marcar todas como lidas
 app.put('/api/notificacoes/marcar-todas-lidas', authenticateToken, async (req, res) => {
     try {
@@ -9364,6 +9463,8 @@ app.delete('/api/notificacoes/limpar-minhas', authenticateToken, async (req, res
         });
     }
 });
+
+
 
 // =========================================================
 // 2. ROTA PARA BUSCAR TODAS AS NOTIFICAÇÕES (COM PAGINAÇÃO)
