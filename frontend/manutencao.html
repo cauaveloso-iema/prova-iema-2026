@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema em Manutenção</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: spin 10s linear infinite;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        .message-box {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-left: 4px solid #ffc107;
+            text-align: left;
+        }
+
+        .message-box i {
+            color: #ffc107;
+            margin-right: 10px;
+        }
+
+        .timer {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-top: 20px;
+        }
+
+        .timer span {
+            font-weight: bold;
+            color: #ffc107;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 30px;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-outline:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            p {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🔧</div>
+        <h1>Sistema em Manutenção</h1>
+        <p>Estamos realizando melhorias para oferecer uma experiência ainda melhor.</p>
+        
+        <div class="message-box" id="messageBox">
+            <i class="fas fa-info-circle"></i>
+            <span id="mensagemManutencao">O sistema está temporariamente indisponível para manutenção programada.</span>
+        </div>
+
+        <div class="timer">
+            <i class="far fa-clock"></i>
+            <span id="contador">Carregando...</span>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button class="btn" onclick="verificarNovamente()">
+                <i class="fas fa-sync-alt"></i> Verificar novamente
+            </button>
+            <button class="btn btn-outline" onclick="sair()">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+        </div>
+
+        <p style="font-size: 0.9rem; margin-top: 30px; opacity: 0.6;">
+            <i class="far fa-clock"></i> Última verificação: <span id="ultimaVerificacao">agora</span>
+        </p>
+    </div>
+
+    <script>
+        // Função para buscar status do sistema
+        async function verificarStatus() {
+            try {
+                const response = await fetch('/api/sistema/status');
+                const data = await response.json();
+                
+                if (data.modoManutencao) {
+                    // Ainda em manutenção, atualizar contador
+                    atualizarContador();
+                } else {
+                    // Manutenção encerrada, redirecionar para login
+                    window.location.href = '/login.html';
+                }
+            } catch (error) {
+                console.error('Erro ao verificar status:', error);
+                document.getElementById('mensagemManutencao').innerHTML = 
+                    'Não foi possível verificar o status do sistema. Tente novamente mais tarde.';
+            }
+        }
+
+        // Função para atualizar contador
+        function atualizarContador() {
+            const contador = document.getElementById('contador');
+            const dataLimite = new Date();
+            dataLimite.setHours(dataLimite.getHours() + 2); // Exemplo: previsão de 2 horas
+            
+            const agora = new Date();
+            const diff = dataLimite - agora;
+            
+            if (diff > 0) {
+                const horas = Math.floor(diff / (1000 * 60 * 60));
+                const minutos = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                
+                if (horas > 0) {
+                    contador.innerHTML = `Previsão de retorno: ${horas}h ${minutos}min`;
+                } else {
+                    contador.innerHTML = `Previsão de retorno: ${minutos} minutos`;
+                }
+            } else {
+                contador.innerHTML = 'Previsão de retorno: em breve';
+            }
+        }
+
+        // Função para verificar novamente
+        function verificarNovamente() {
+            document.getElementById('ultimaVerificacao').innerHTML = 'agora';
+            verificarStatus();
+        }
+
+        // Função para sair
+        function sair() {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            window.location.href = '/login.html';
+        }
+
+        // Atualizar contador a cada minuto
+        setInterval(atualizarContador, 60000);
+        
+        // Verificar status ao carregar a página
+        verificarStatus();
+        
+        // Atualizar timestamp
+        setInterval(() => {
+            document.getElementById('ultimaVerificacao').innerHTML = 
+                new Date().toLocaleTimeString();
+        }, 1000);
+    </script>
+    <script src="https://kit.fontawesome.com/your-kit-id.js" crossorigin="anonymous"></script>
+</body>
+</html>

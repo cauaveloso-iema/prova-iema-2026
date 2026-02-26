@@ -1,3 +1,12 @@
+// ============================================================================
+// SERVIDOR PROVA IEMA 2026
+// ============================================================================
+// Descrição: Backend do sistema de provas online do IEMA
+// Ambiente: Desenvolvimento/Produção
+// Versão: 1.0.0
+// Autor: Equipe de Desenvolvimento
+// ============================================================================
+
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -11,14 +20,23 @@ const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const professorAuth = require('./security/professor-auth');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-require('./email-service-resend');  // Fix para Render
+require('./email-service-resend');
 const multer = require('multer');
 const fs = require('fs');
 const Groq = require("groq-sdk");
-const http = require('http'); // <-- LINHA ADICIONADA
+const http = require('http');
+const cookieParser = require('cookie-parser');
 
+// ============================================================================
+// INICIALIZAÇÃO DO EXPRESS E SERVIDOR
+// ============================================================================
+const app = express();
+const PORT = process.env.PORT || 10000;
+const server = http.createServer(app);
 
-// ============ CRIAR DIRETÓRIOS NECESSÁRIOS PRIMEIRO ============
+// ============================================================================
+// CRIAÇÃO DE DIRETÓRIOS NECESSÁRIOS
+// ============================================================================
 const dirs = [
     path.join(__dirname, 'logs'),
     path.join(__dirname, 'backups'),
@@ -33,36 +51,31 @@ dirs.forEach(dir => {
     }
 });
 
-// Logo após require('dotenv')
+// ============================================================================
+// LOGS DE DEPURAÇÃO INICIAL
+// ============================================================================
 console.log('📁 Diretório atual:', __dirname);
 console.log('🔍 Procurando .env em:', path.join(__dirname, '..', '.env'));
 console.log('🔑 Chave encontrada?:', process.env.OPENROUTER_API_KEY ? '✅ Sim' : '❌ Não');
 console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Configurada' : '❌ Não configurada');
 
-// ============ CRIAR INSTÂNCIA DO EXPRESS ============
-const app = express();
-const PORT = process.env.PORT || 10000;
-
-// ============ CRIAR SERVIDOR HTTP ============
-const server = http.createServer(app); // <-- LINHA ADICIONADA
-
-// ============ IMPORTAR ROTAS (DEPOIS DE CRIAR O APP) ============
+// ============================================================================
+// IMPORTAÇÃO DE SERVIÇOS
+// ============================================================================
 const monitoramentoRoutes = require('./routes/monitoramento');
-
-// ============ IMPORTAR SERVIÇO DE LOGS ============
-const LoggerService = require('./services/logger-service'); // <-- LINHA ADICIONADA
-
-// ============ INICIALIZAR LOGGER SERVICE ============
-const loggerService = new LoggerService(server); // <-- LINHA ADICIONADA
-
-// IMPORTE O EMAIL SERVICE
+const LoggerService = require('./services/logger-service');
 const EmailService = require('./email-service-resend');
-const emailService = new EmailService();
-
-// IMPORTE MATRICULA AUTORIZADAS
 const matriculasManager = require('./matriculas-autorizados');
 
-// ============ MIDDLEWARES DE SEGURANÇA ============
+// ============================================================================
+// INICIALIZAÇÃO DOS SERVIÇOS
+// ============================================================================
+const loggerService = new LoggerService(server);
+const emailService = new EmailService();
+
+// ============================================================================
+// MIDDLEWARES GLOBAIS
+// ============================================================================
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
@@ -70,6 +83,7 @@ app.use(helmet({
 }));
 
 app.use(compression());
+
 app.use(cors({
   origin: true,
   credentials: true,
@@ -80,11 +94,58 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cookieParser()); 
 
-// ============ REGISTRAR ROTAS DE MONITORAMENTO (DEPOIS DOS MIDDLEWARES) ============
-app.use('/api/admin/monitoramento', monitoramentoRoutes);
+// ============ MIDDLEWARE DE AUTENTICAÇÃO GLOBAL ============
+// Middleware de autenticação JWT (global)
+app.use((req, res, next) => {
+    // Rotas que NÃO precisam de autenticação
+    const rotasPublicas = [
+        '/api/auth/login',
+        '/api/auth/register',
+        '/api/auth/reset-password',
+        '/api/health',
+        '/api/test',
+        '/api/health-check',
+        '/api/matriculas-autorizadas/verificar',
+        '/login.html',
+        '/register.html',
+        '/recuperar-senha.html',
+        '/trocar-senha.html',
+        '/css/',
+        '/js/',
+        '/uploads/'
+    ];
+    
+    // Se for rota pública, não precisa autenticar
+    if (rotasPublicas.some(rota => req.path.startsWith(rota))) {
+        return next();
+    }
+    
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-// ============ SESSÃO COM MONGODB ============
+    if (!token) {
+        // Sem token, segue sem dados do usuário
+        req.user = null;
+        return next();
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            req.user = null;
+        } else {
+            req.userId = user.id;
+            req.userRole = user.role;
+            req.userNome = user.nome;
+        }
+        next();
+    });
+});
+
+// ============================================================================
+// CONFIGURAÇÃO DE SESSÃO
+// ============================================================================
 app.use(session({
   secret: process.env.SESSION_SECRET || 'sessao_secreta_provisoria',
   resave: false,
@@ -100,75 +161,51 @@ app.use(session({
   }
 }));
 
-// ============ IMPORTAR MODELOS ============
+// ============================================================================
+// ROTAS DE MONITORAMENTO
+// ============================================================================
+app.use('/api/admin/monitoramento', monitoramentoRoutes);
+
+// ============================================================================
+// CONFIGURAÇÃO GROQ
+// ============================================================================
+let groq;
+if (process.env.GROQ_API_KEY) {
+  groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  console.log('✅ Groq configurado com sucesso');
+} else {
+  console.warn('⚠️ Groq API key não configurada');
+}
+
+// ============================================================================
+// IMPORTAÇÃO DE MODELOS (ARQUIVOS EXTERNOS)
+// ============================================================================
 const User = require('./models/User');
 const Prova = require('./models/Prova');
 const Turma = require('./models/Turma');
 
-// ============ CONFIGURAÇÃO GROQ ============
-let groq;
-if (process.env.GROQ_API_KEY) {
-  groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-  });
-  console.log('✅ Groq configurado com sucesso');
-} else {
-  console.warn('⚠️  Groq API key não configurada');
-}
+// ============================================================================
+// DEFINIÇÃO DE MODELOS INLINE
+// ============================================================================
 
-
-// ============ MODELO CONFIG (ADICIONAR AQUI, JUNTO COM OS OUTROS MODELOS) ============
+// Modelo Config
 let Config;
 try {
   Config = mongoose.model('Config');
   console.log('✅ Modelo Config já existe');
 } catch {
   const ConfigSchema = new mongoose.Schema({
-    chave: { 
-      type: String, 
-      required: true,
-      unique: true,
-      trim: true
-    },
-    valor: {
-      type: mongoose.Schema.Types.Mixed,
-      required: true
-    },
-    tipo: {
-      type: String,
-      enum: ['string', 'number', 'boolean', 'object', 'array'],
-      default: 'string'
-    },
-    descricao: {
-      type: String,
-      default: ''
-    },
-    categoria: {
-      type: String,
-      enum: ['geral', 'sistema', 'seguranca', 'provas', 'email', 'backups', 'logs', 'aparencia'],
-      default: 'geral'
-    },
-    publico: {
-      type: Boolean,
-      default: false
-    },
-    editavel: {
-      type: Boolean,
-      default: true
-    },
-    atualizadoPor: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    atualizadoEm: {
-      type: Date,
-      default: Date.now
-    }
-  }, {
-    timestamps: true
-  });
+    chave: { type: String, required: true, unique: true, trim: true },
+    valor: { type: mongoose.Schema.Types.Mixed, required: true },
+    tipo: { type: String, enum: ['string', 'number', 'boolean', 'object', 'array'], default: 'string' },
+    descricao: { type: String, default: '' },
+    categoria: { type: String, enum: ['geral', 'sistema', 'seguranca', 'provas', 'email', 'backups', 'logs', 'aparencia'], default: 'geral' },
+    publico: { type: Boolean, default: false },
+    editavel: { type: Boolean, default: true },
+    atualizadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    atualizadoEm: { type: Date, default: Date.now }
+  }, { timestamps: true });
 
-  // Índices para busca rápida
   ConfigSchema.index({ chave: 1 }, { unique: true });
   ConfigSchema.index({ categoria: 1 });
   ConfigSchema.index({ atualizadoEm: -1 });
@@ -177,178 +214,66 @@ try {
   console.log('✅ Modelo Config criado com sucesso!');
 }
 
-
-// ============ CRIAR MODELOS INLINE (SE NÃO EXISTIREM COMO ARQUIVOS) ============
-
-// 1. MODELO Resultado
+// Modelo Resultado
 let Resultado;
 try {
   Resultado = mongoose.model('Resultado');
 } catch {
   const ResultadoSchema = new mongoose.Schema({
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    provaId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Prova',
-      required: true
-    },
-    alunoNome: {
-      type: String,
-      required: true
-    },
-    respostas: {
-      type: [String],
-      default: []
-    },
-    nota: {
-      type: Number,
-      default: null
-    },
-    acertos: {
-      type: Number,
-      default: 0
-    },
-    total: {
-      type: Number,
-      required: true
-    },
-    porcentagem: {
-      type: String,
-      default: '0.0'
-    },
-    tempoGasto: {
-      type: Number,
-      default: 0
-    },
-    resultadoDetalhado: {
-      type: [Object],
-      default: []
-    },
-    dataCriacao: {
-      type: Date,
-      default: Date.now
-    },
-    notaLiberada: {
-      type: Boolean,
-      default: false
-    },
-    cancelada: {
-      type: Boolean,
-      default: false
-    },
-    motivoCancelamento: {
-      type: String,
-      default: null
-    },
-    flagViolacao: {
-      type: Boolean,
-      default: false
-    },
-    estatisticasCancelamento: {
-      type: Object,
-      default: null
-    },
-    motivoCancelamentoTipo: {
-      type: String,
-      enum: ['violacao', 'prazo_expirado', 'outro', null],
-      default: null
-    },
-    status: {
-      type: String,
-      enum: ['pendente', 'corrigida', 'cancelada', null],
-      default: null
-    }
-  }, {
-    timestamps: true
-  });
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    provaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Prova', required: true },
+    alunoNome: { type: String, required: true },
+    respostas: { type: [String], default: [] },
+    nota: { type: Number, default: null },
+    acertos: { type: Number, default: 0 },
+    total: { type: Number, required: true },
+    porcentagem: { type: String, default: '0.0' },
+    tempoGasto: { type: Number, default: 0 },
+    resultadoDetalhado: { type: [Object], default: [] },
+    dataCriacao: { type: Date, default: Date.now },
+    notaLiberada: { type: Boolean, default: false },
+    cancelada: { type: Boolean, default: false },
+    motivoCancelamento: { type: String, default: null },
+    flagViolacao: { type: Boolean, default: false },
+    estatisticasCancelamento: { type: Object, default: null },
+    motivoCancelamentoTipo: { type: String, enum: ['violacao', 'prazo_expirado', 'outro', null], default: null },
+    status: { type: String, enum: ['pendente', 'corrigida', 'cancelada', null], default: null }
+  }, { timestamps: true });
 
   ResultadoSchema.index({ userId: 1, provaId: 1 }, { unique: true });
   Resultado = mongoose.model('Resultado', ResultadoSchema);
 }
 
-// 2. MODELO ProvaRealizada
+// Modelo ProvaRealizada
 let ProvaRealizada;
 try {
   ProvaRealizada = mongoose.model('ProvaRealizada');
 } catch {
   const ProvaRealizadaSchema = new mongoose.Schema({
-    provaId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Prova',
-      required: true
-    },
-    alunoId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    respostas: {
-      type: [String],
-      default: []
-    },
-    nota: {
-      type: Number,
-      default: null
-    },
-    tempoGasto: {
-      type: Number,
-      default: 0
-    },
-    dataRealizacao: {
-      type: Date,
-      default: Date.now
-    },
-    status: {
-      type: String,
-      enum: ['pendente', 'em_andamento', 'finalizada', 'corrigida', 'cancelada'],
-      default: 'pendente'
-    },
-    notaLiberada: {
-      type: Boolean,
-      default: false
-    },
-    resultadoDetalhado: {
-      type: [Object],
-      default: []
-    },
-    cancelada: {
-      type: Boolean,
-      default: false
-    },
-    motivoCancelamento: {
-      type: String,
-      default: null
-    },
-    flagViolacao: {
-      type: Boolean,
-      default: false
-    },
-    estatisticasCancelamento: {
-      type: Object,
-      default: null
-    },
-    motivoCancelamentoTipo: {
-      type: String,
-      enum: ['violacao', 'prazo_expirado', 'outro', null],
-      default: null
-    },
-    sincronizadoEm: {
-      type: Date,
-      default: null
-    }
-  }, {
-    timestamps: true
-  });
+    provaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Prova', required: true },
+    alunoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    respostas: { type: [String], default: [] },
+    nota: { type: Number, default: null },
+    tempoGasto: { type: Number, default: 0 },
+    dataRealizacao: { type: Date, default: Date.now },
+    status: { type: String, enum: ['pendente', 'em_andamento', 'finalizada', 'corrigida', 'cancelada'], default: 'pendente' },
+    notaLiberada: { type: Boolean, default: false },
+    resultadoDetalhado: { type: [Object], default: [] },
+    cancelada: { type: Boolean, default: false },
+    motivoCancelamento: { type: String, default: null },
+    flagViolacao: { type: Boolean, default: false },
+    estatisticasCancelamento: { type: Object, default: null },
+    motivoCancelamentoTipo: { type: String, enum: ['violacao', 'prazo_expirado', 'outro', null], default: null },
+    sincronizadoEm: { type: Date, default: null }
+  }, { timestamps: true });
 
   ProvaRealizadaSchema.index({ provaId: 1, alunoId: 1 }, { unique: true });
   ProvaRealizada = mongoose.model('ProvaRealizada', ProvaRealizadaSchema);
 }
 
-// ============ FUNÇÃO PARA TESTAR MODELOS GROQ ============
+// ============================================================================
+// FUNÇÃO PARA TESTAR MODELOS GROQ
+// ============================================================================
 async function testarModelosDisponiveis() {
   if (!groq) return;
   
@@ -388,7 +313,7 @@ async function testarModelosDisponiveis() {
       } else if (error.message.includes('not found')) {
         console.log(`  ❌ ${modelo} - Não encontrado`);
       } else {
-        console.log(`  ⚠️  ${modelo} - Erro: ${error.message.substring(0, 50)}`);
+        console.log(`  ⚠️ ${modelo} - Erro: ${error.message.substring(0, 50)}`);
       }
     }
     
@@ -403,7 +328,9 @@ async function testarModelosDisponiveis() {
   return modelosFuncionais;
 }
 
-// ============ CONEXÃO COM MONGODB ============
+// ============================================================================
+// CONEXÃO COM MONGODB
+// ============================================================================
 const connectToDatabase = async () => {
   const ENV = process.env.NODE_ENV || 'development';
   const IS_PRODUCTION = ENV === 'production';
@@ -426,11 +353,11 @@ const connectToDatabase = async () => {
   } else {
     connectionUri = process.env.MONGODB_URI;
     databaseType = 'Configuração padrão';
-    console.log('⚙️  Usando configuração padrão do .env');
+    console.log('⚙️ Usando configuração padrão do .env');
   }
   
   const safeUri = connectionUri ? connectionUri.replace(/\/\/[^@]+@/, '//***@') : 'Não configurada';
-  console.log(`🗄️  URI: ${safeUri}`);
+  console.log(`🗄️ URI: ${safeUri}`);
   console.log(`📊 Tipo: ${databaseType}`);
   console.log('='.repeat(60));
   
@@ -460,7 +387,6 @@ const connectToDatabase = async () => {
     console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
     console.log('='.repeat(60));
     
-    // Testar modelos após conectar
     if (groq) {
       setTimeout(() => testarModelosDisponiveis(), 2000);
     }
@@ -488,10 +414,50 @@ const connectToDatabase = async () => {
   }
 };
 
-// Conectar ao banco de dados
+// Executar conexão com o banco de dados
 connectToDatabase();
 
-// ============ MIDDLEWARE DE AUTENTICAÇÃO ============
+// ============================================================================
+// CONFIGURAÇÃO DO MULTER PARA UPLOAD DE ARQUIVOS
+// ============================================================================
+const uploadStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const uploadDir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+    }
+});
+
+const uploadMiddleware = multer({ 
+    storage: uploadStorage,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB
+    },
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/;
+        const ext = path.extname(file.originalname).toLowerCase();
+        const mimetype = allowedTypes.test(file.mimetype);
+        
+        if (mimetype || allowedTypes.test(ext)) {
+            return cb(null, true);
+        } else {
+            cb(new Error('Tipo de arquivo não permitido'));
+        }
+    }
+});
+
+// ============================================================================
+// MIDDLEWARES PERSONALIZADOS
+// ============================================================================
+
+// Middleware de autenticação JWT
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -518,7 +484,7 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Middleware para validar inputs
+// Middleware de validação de inputs
 const validateInputs = (validations) => {
   return async (req, res, next) => {
     await Promise.all(validations.map(validation => validation.run(req)));
@@ -535,7 +501,23 @@ const validateInputs = (validations) => {
   };
 };
 
-// ============ ROTA DE REGISTRO CORRIGIDA ============
+// ============================================================================
+// ROTAS PÚBLICAS
+// ============================================================================
+
+// ============ CONFIGURAÇÃO DE UPLOAD DE ARQUIVOS ============
+const fileUpload = require('express-fileupload');
+app.use(fileUpload({
+    useTempFiles: false,
+    createParentPath: true,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB
+    },
+    abortOnLimit: true,
+    responseOnLimit: "Arquivo muito grande. Máximo 10MB."
+}));
+
+// ============ ROTA PÚBLICA DE REGISTRO ============
 app.post('/api/auth/register', [
   check('nome').not().isEmpty().withMessage('Nome é obrigatório'),
   check('email').isEmail().withMessage('Email inválido'),
@@ -846,56 +828,7 @@ app.post('/api/auth/register', [
   }
 });
 
-// ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO - CORRIGIDA COM TURMA! ============
-app.get('/api/auth/me', authenticateToken, async (req, res) => {
-  try {
-    // 🔥 BUSCAR TODOS OS CAMPOS, INCLUINDO ACESSIBILIDADE
-    const user = await User.findById(req.userId)
-      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade +acessibilidadeAprovadaPor');
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'Usuário não encontrado'
-      });
-    }
-    
-    res.json({
-      success: true,
-      user: {
-        id: user._id,
-        nome: user.nome,
-        email: user.email,
-        cpf: user.cpf,
-        role: user.role,
-        eixo: user.eixo,
-        matricula: user.matricula,
-        curso: user.curso,
-        turma: user.turma,    
-        periodo: user.periodo,
-        departamento: user.departamento,
-        titulacao: user.titulacao,
-        
-        // 🔥 CAMPOS DE ACESSIBILIDADE
-        precisaAcessibilidade: user.precisaAcessibilidade === true,
-        condicaoAcessibilidade: user.condicaoAcessibilidade,
-        outraCondicao: user.outraCondicao,
-        dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade
-      }
-    });
-    
-  } catch (error) {
-    console.error('Erro ao buscar usuário:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erro ao buscar informações do usuário'
-    });
-  }
-});
-
-
-// ========== ROTA DE LOGIN CORRIGIDA (VERSÃO FINAL) ==========
-// ========== ROTA DE LOGIN - VERSÃO FINAL LIMPA ==========
+// ============ ROTA PÚBLICA DE LOGIN ============
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password, cpf } = req.body;
@@ -951,6 +884,14 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
     
+    // ============ NOVO: Definir cookie HTTP-only ============
+    res.cookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 horas
+    });
+    
     // Redirecionamento baseado na necessidade de trocar senha
     let redirectTo = '';
     
@@ -996,6 +937,355 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ success: false, error: 'Erro no servidor: ' + error.message });
   }
 });
+
+// ============ MIDDLEWARE DE MANUTENÇÃO (COM LOG ÚNICO) ============
+const manutencaoMiddleware = async (req, res, next) => {
+    // Rotas que SEMPRE devem funcionar (públicas)
+    const rotasPublicas = [
+        '/api/auth/login',
+        '/api/auth/register',
+        '/api/auth/reset-password',
+        '/api/health',
+        '/api/test',
+        '/api/health-check',
+        '/api/matriculas-autorizadas/verificar',
+        '/api/sistema/status',
+        '/login.html',
+        '/register.html',
+        '/recuperar-senha.html',
+        '/trocar-senha.html',
+        '/manutencao.html',
+        '/css/',
+        '/js/',
+        '/uploads/'
+    ];
+    
+    // Se for rota pública, libera SEMPRE
+    if (rotasPublicas.some(rota => req.path.startsWith(rota))) {
+        return next();
+    }
+    
+    try {
+        // Buscar configuração de manutenção
+        const configManutencao = await Config.findOne({ chave: 'sistema.modoManutencao' });
+        const modoManutencao = configManutencao ? configManutencao.valor : false;
+        
+        // Se NÃO estiver em manutenção, libera tudo
+        if (!modoManutencao) {
+            return next();
+        }
+        
+        // ===== EM MANUTENÇÃO =====
+        
+        // Variável para controlar se já logou nesta requisição
+        let logged = false;
+        
+        // VERIFICAÇÃO 1: Token no header (para APIs)
+        const token = req.headers.authorization?.split(' ')[1];
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                if (decoded.role === 'admin' || decoded.role === 'super_admin') {
+                    if (!logged) {
+                        logged = true;
+                    }
+                    req.userId = decoded.id;
+                    req.userRole = decoded.role;
+                    req.userNome = decoded.nome;
+                    return next();
+                }
+            } catch (err) {
+                // Token inválido, ignora
+            }
+        }
+        
+        // VERIFICAÇÃO 2: Cookie (para páginas HTML)
+        const cookieToken = req.cookies?.auth_token;
+        if (cookieToken) {
+            try {
+                const decoded = jwt.verify(cookieToken, process.env.JWT_SECRET);
+                if (decoded.role === 'admin' || decoded.role === 'super_admin') {
+                    if (!logged) {
+                        logged = true;
+                    }
+                    req.userId = decoded.id;
+                    req.userRole = decoded.role;
+                    req.userNome = decoded.nome;
+                    return next();
+                }
+            } catch (err) {
+                // Cookie inválido, ignora
+            }
+        }
+        
+        // VERIFICAÇÃO 3: Sessão (fallback)
+        if (req.session?.userId) {
+            try {
+                const user = await User.findById(req.session.userId).select('role nome');
+                if (user && (user.role === 'admin' || user.role === 'super_admin')) {
+                    if (!logged) {
+                        logged = true;
+                    }
+                    req.userId = user._id;
+                    req.userRole = user.role;
+                    req.userNome = user.nome;
+                    return next();
+                }
+            } catch (err) {
+                // Erro na sessão, ignora
+            }
+        }
+        
+        // ===== SE CHEGOU AQUI, NÃO É ADMIN =====
+        
+        // Buscar mensagem personalizada
+        const configMensagem = await Config.findOne({ chave: 'sistema.manutencaoMensagem' });
+        const mensagem = configMensagem ? configMensagem.valor : 'Sistema em manutenção. Volte mais tarde.';
+        
+        // Se for requisição de API, retornar JSON
+        if (req.path.startsWith('/api/')) {
+            return res.status(503).json({
+                success: false,
+                error: mensagem,
+                modoManutencao: true
+            });
+        }
+        
+        // Se for requisição de página HTML, redirecionar
+        return res.redirect('/manutencao.html');
+        
+    } catch (error) {
+        console.error('❌ Erro no middleware de manutenção:', error);
+        next();
+    }
+};
+
+// APLICAR O MIDDLEWARE (UMA ÚNICA VEZ!)
+app.use(manutencaoMiddleware);
+
+// ============ ROTA PARA VERIFICAR STATUS DO SISTEMA ============
+app.get('/api/sistema/status', async (req, res) => {
+    try {
+        const [configManutencao, configMensagem] = await Promise.all([
+            Config.findOne({ chave: 'sistema.modoManutencao' }),
+            Config.findOne({ chave: 'sistema.manutencaoMensagem' })
+        ]);
+        
+        res.json({
+            success: true,
+            modoManutencao: configManutencao ? configManutencao.valor : false,
+            mensagem: configMensagem ? configMensagem.valor : 'Sistema em manutenção. Volte mais tarde.',
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao verificar status:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ ROTA DE LOGOUT ============
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('auth_token');
+  res.json({ success: true });
+});
+
+// ============ ROTA PÚBLICA DE UPLOAD TEMPORÁRIO ============
+app.post('/api/upload/temp', authenticateToken, uploadMiddleware.single('arquivo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhum arquivo enviado'
+      });
+    }
+
+    const file = req.file;
+    
+    // Criar URL para o arquivo
+    const fileUrl = `/uploads/${file.filename}`;
+    
+    // Determinar tipo do arquivo
+    let fileType = 'outro';
+    const ext = path.extname(file.originalname).toLowerCase();
+    
+    if (['.pdf'].includes(ext)) {
+      fileType = 'pdf';
+    } else if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
+      fileType = 'imagem';
+    } else if (['.txt', '.doc', '.docx'].includes(ext)) {
+      fileType = 'texto';
+    }
+    
+    res.json({
+      success: true,
+      file: {
+        nome: file.originalname,
+        nomeArquivo: file.filename,
+        tamanho: file.size,
+        tipo: fileType,
+        url: fileUrl,
+        mimetype: file.mimetype
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no upload:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao fazer upload do arquivo: ' + error.message
+    });
+  }
+});
+
+// ============ FUNÇÃO AUXILIAR PÚBLICA ============
+async function processarAnexosParaIA(anexos) {
+  try {
+    if (!anexos || anexos.length === 0) {
+      return "Nenhum anexo fornecido.";
+    }
+    
+    console.log(`📂 Processando ${anexos.length} anexos para IA...`);
+    
+    let contextoFormatado = `## 📎 INFORMAÇÕES DOS ANEXOS FORNECIDOS:\n\n`;
+    
+    for (let i = 0; i < anexos.length; i++) {
+      const anexo = anexos[i];
+      contextoFormatado += `### ANEXO ${i + 1}: ${anexo.titulo || 'Sem título'}\n`;
+      contextoFormatado += `- **Tipo:** ${anexo.tipo}\n`;
+      
+      if (anexo.tipo === 'texto' && anexo.conteudo) {
+        // Limitar o conteúdo para não exceder tokens
+        const conteudoLimitado = anexo.conteudo.length > 5000 
+          ? anexo.conteudo.substring(0, 5000) + "... [conteúdo truncado]" 
+          : anexo.conteudo;
+        
+        contextoFormatado += `- **Conteúdo:**\n${conteudoLimitado}\n\n`;
+        
+        // ANALISAR O CONTEÚDO PARA DETECTAR PADRÕES
+        const conteudoLower = conteudoLimitado.toLowerCase();
+        
+        // Detectar se é uma questão de exemplo
+        if (conteudoLower.includes('questão') || 
+            conteudoLower.includes('prova') || 
+            conteudoLower.includes('exercício') ||
+            conteudoLower.includes('enem')) {
+          contextoFormatado += `⚠️ **DETECTADO:** Este anexo parece conter questões/exercícios. Use como referência para o estilo desejado.\n\n`;
+        }
+        
+        // Detectar tipo de problema
+        if (conteudoLower.includes('lucro') || 
+            conteudoLower.includes('custo') || 
+            conteudoLower.includes('receita') ||
+            conteudoLower.includes('venda') ||
+            conteudoLower.includes('preço')) {
+          contextoFormatado += `💰 **DETECTADO:** Este anexo envolve problemas financeiros/comerciais. Foque nesse estilo.\n\n`;
+        }
+        
+      } else if (anexo.tipo === 'pdf' || anexo.tipo === 'outro') {
+        contextoFormatado += `- **Arquivo:** ${anexo.nomeArquivo}\n`;
+        contextoFormatado += `- **URL/Referência:** ${anexo.url || 'N/A'}\n`;
+        contextoFormatado += `⚠️ **OBS:** Este é um arquivo ${anexo.tipo.toUpperCase()}. Use o nome/título como referência temática.\n\n`;
+      
+      } else if (anexo.tipo === 'link') {
+        contextoFormatado += `- **Link:** ${anexo.url || anexo.conteudo}\n`;
+        
+        // Extrair domínio para contexto
+        try {
+          const urlObj = new URL(anexo.url);
+          contextoFormatado += `- **Domínio:** ${urlObj.hostname}\n`;
+          
+          // Analisar domínio para contexto
+          if (urlObj.hostname.includes('qconcursos.com') || 
+              urlObj.hostname.includes('enem')) {
+            contextoFormatado += `📚 **DETECTADO:** Site de questões. Gerar questões no estilo ENEM/provas.\n\n`;
+          }
+        } catch (e) {
+          contextoFormatado += `- **Conteúdo do link:** ${anexo.conteudo || 'Link fornecido'}\n\n`;
+        }
+      
+      } else if (anexo.tipo === 'imagem') {
+        contextoFormatado += `- **Imagem:** ${anexo.nomeArquivo}\n`;
+        contextoFormatado += `- **Descrição:** ${anexo.titulo || 'Imagem de referência'}\n\n`;
+      }
+      
+      contextoFormatado += `---\n\n`;
+    }
+    
+    // ADICIONAR INSTRUÇÕES CLARAS SOBRE COMO USAR OS ANEXOS
+    contextoFormatado += `## 📝 INSTRUÇÕES PARA USAR OS ANEXOS:\n\n`;
+    contextoFormatado += `1. **ANALISE os anexos acima** - Eles mostram o ESTILO de questão que quero\n`;
+    contextoFormatado += `2. **COPIE a ESTRUTURA** - Use o mesmo formato de problema\n`;
+    contextoFormatado += `3. **USE os CONCEITOS** - Lucro, custo, receita, preço de venda\n`;
+    contextoFormatado += `4. **SIGA o EXEMPLO** - Problema de negócio com duas situações comparadas\n`;
+    contextoFormatado += `5. **NÃO copie exatamente** - Crie variações, mas mantenha o estilo\n\n`;
+    
+    console.log(`✅ Contexto de anexos formatado: ${contextoFormatado.length} caracteres`);
+    
+    return contextoFormatado;
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar anexos para IA:', error);
+    return "Erro ao processar anexos fornecidos.";
+  }
+}
+
+// ============================================================================
+// ROTAS PRIVADAS
+// ============================================================================
+
+// ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO - CORRIGIDA COM TURMA! ============
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    // 🔥 BUSCAR TODOS OS CAMPOS, INCLUINDO ACESSIBILIDADE
+    const user = await User.findById(req.userId)
+      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade +acessibilidadeAprovadaPor');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'Usuário não encontrado'
+      });
+    }
+    
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        nome: user.nome,
+        email: user.email,
+        cpf: user.cpf,
+        role: user.role,
+        eixo: user.eixo,
+        matricula: user.matricula,
+        curso: user.curso,
+        turma: user.turma,    
+        periodo: user.periodo,
+        departamento: user.departamento,
+        titulacao: user.titulacao,
+        
+        // 🔥 CAMPOS DE ACESSIBILIDADE
+        precisaAcessibilidade: user.precisaAcessibilidade === true,
+        condicaoAcessibilidade: user.condicaoAcessibilidade,
+        outraCondicao: user.outraCondicao,
+        dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao buscar usuário:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar informações do usuário'
+    });
+  }
+});
+
+
+
 
 // ============ ROTA PARA ATUALIZAR DADOS DO USUÁRIO ============
 app.put('/api/users/me', authenticateToken, async (req, res) => {
@@ -1110,157 +1400,6 @@ const uploadMultiple = upload.fields([
   { name: 'imagens', maxCount: 10 }
 ]);
 
-// ============ FUNÇÃO PARA CARREGAR ANEXOS DE REFERÊNCIA ============
-async function processarAnexosParaIA(anexos) {
-  try {
-    if (!anexos || anexos.length === 0) {
-      return "Nenhum anexo fornecido.";
-    }
-    
-    console.log(`📂 Processando ${anexos.length} anexos para IA...`);
-    
-    let contextoFormatado = `## 📎 INFORMAÇÕES DOS ANEXOS FORNECIDOS:\n\n`;
-    
-    for (let i = 0; i < anexos.length; i++) {
-      const anexo = anexos[i];
-      contextoFormatado += `### ANEXO ${i + 1}: ${anexo.titulo || 'Sem título'}\n`;
-      contextoFormatado += `- **Tipo:** ${anexo.tipo}\n`;
-      
-      if (anexo.tipo === 'texto' && anexo.conteudo) {
-        // Limitar o conteúdo para não exceder tokens
-        const conteudoLimitado = anexo.conteudo.length > 5000 
-          ? anexo.conteudo.substring(0, 5000) + "... [conteúdo truncado]" 
-          : anexo.conteudo;
-        
-        contextoFormatado += `- **Conteúdo:**\n${conteudoLimitado}\n\n`;
-        
-        // ANALISAR O CONTEÚDO PARA DETECTAR PADRÕES
-        const conteudoLower = conteudoLimitado.toLowerCase();
-        
-        // Detectar se é uma questão de exemplo
-        if (conteudoLower.includes('questão') || 
-            conteudoLower.includes('prova') || 
-            conteudoLower.includes('exercício') ||
-            conteudoLower.includes('enem')) {
-          contextoFormatado += `⚠️ **DETECTADO:** Este anexo parece conter questões/exercícios. Use como referência para o estilo desejado.\n\n`;
-        }
-        
-        // Detectar tipo de problema
-        if (conteudoLower.includes('lucro') || 
-            conteudoLower.includes('custo') || 
-            conteudoLower.includes('receita') ||
-            conteudoLower.includes('venda') ||
-            conteudoLower.includes('preço')) {
-          contextoFormatado += `💰 **DETECTADO:** Este anexo envolve problemas financeiros/comerciais. Foque nesse estilo.\n\n`;
-        }
-        
-      } else if (anexo.tipo === 'pdf' || anexo.tipo === 'outro') {
-        contextoFormatado += `- **Arquivo:** ${anexo.nomeArquivo}\n`;
-        contextoFormatado += `- **URL/Referência:** ${anexo.url || 'N/A'}\n`;
-        contextoFormatado += `⚠️ **OBS:** Este é um arquivo ${anexo.tipo.toUpperCase()}. Use o nome/título como referência temática.\n\n`;
-      
-      } else if (anexo.tipo === 'link') {
-        contextoFormatado += `- **Link:** ${anexo.url || anexo.conteudo}\n`;
-        
-        // Extrair domínio para contexto
-        try {
-          const urlObj = new URL(anexo.url);
-          contextoFormatado += `- **Domínio:** ${urlObj.hostname}\n`;
-          
-          // Analisar domínio para contexto
-          if (urlObj.hostname.includes('qconcursos.com') || 
-              urlObj.hostname.includes('enem')) {
-            contextoFormatado += `📚 **DETECTADO:** Site de questões. Gerar questões no estilo ENEM/provas.\n\n`;
-          }
-        } catch (e) {
-          contextoFormatado += `- **Conteúdo do link:** ${anexo.conteudo || 'Link fornecido'}\n\n`;
-        }
-      
-      } else if (anexo.tipo === 'imagem') {
-        contextoFormatado += `- **Imagem:** ${anexo.nomeArquivo}\n`;
-        contextoFormatado += `- **Descrição:** ${anexo.titulo || 'Imagem de referência'}\n\n`;
-      }
-      
-      contextoFormatado += `---\n\n`;
-    }
-    
-    // ADICIONAR INSTRUÇÕES CLARAS SOBRE COMO USAR OS ANEXOS
-    contextoFormatado += `## 📝 INSTRUÇÕES PARA USAR OS ANEXOS:\n\n`;
-    contextoFormatado += `1. **ANALISE os anexos acima** - Eles mostram o ESTILO de questão que quero\n`;
-    contextoFormatado += `2. **COPIE a ESTRUTURA** - Use o mesmo formato de problema\n`;
-    contextoFormatado += `3. **USE os CONCEITOS** - Lucro, custo, receita, preço de venda\n`;
-    contextoFormatado += `4. **SIGA o EXEMPLO** - Problema de negócio com duas situações comparadas\n`;
-    contextoFormatado += `5. **NÃO copie exatamente** - Crie variações, mas mantenha o estilo\n\n`;
-    
-    console.log(`✅ Contexto de anexos formatado: ${contextoFormatado.length} caracteres`);
-    
-    return contextoFormatado;
-    
-  } catch (error) {
-    console.error('❌ Erro ao processar anexos para IA:', error);
-    return "Erro ao processar anexos fornecidos.";
-  }
-}
-
-// Rota para upload temporário de arquivos
-app.post('/api/upload/temp', authenticateToken, upload.single('arquivo'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'Nenhum arquivo enviado'
-      });
-    }
-
-    const file = req.file;
-    
-    // Criar URL para o arquivo
-    const fileUrl = `/uploads/${file.filename}`;
-    
-    // Determinar tipo do arquivo
-    let fileType = 'outro';
-    const ext = path.extname(file.originalname).toLowerCase();
-    
-    if (['.pdf'].includes(ext)) {
-      fileType = 'pdf';
-    } else if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
-      fileType = 'imagem';
-    } else if (['.txt', '.doc', '.docx'].includes(ext)) {
-      fileType = 'texto';
-    }
-    
-    res.json({
-      success: true,
-      file: {
-        nome: file.originalname,
-        nomeArquivo: file.filename,
-        tamanho: file.size,
-        tipo: fileType,
-        url: fileUrl,
-        mimetype: file.mimetype
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Erro no upload:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erro ao fazer upload do arquivo: ' + error.message
-    });
-  }
-});
-
-// Configurar upload de arquivos com express-fileupload
-const fileUpload = require('express-fileupload');
-app.use(fileUpload({
-    useTempFiles: false,
-    createParentPath: true,
-    limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB
-    },
-    abortOnLimit: true,
-    responseOnLimit: "Arquivo muito grande. Máximo 10MB."
-}));
 
 // ============ ROTA PARA PUBLICAR PROVA ============
 app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (req, res) => {
