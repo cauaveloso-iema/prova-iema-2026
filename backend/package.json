@@ -30,7 +30,11 @@
     "multer": "^2.0.2",
     "nodemailer": "^7.0.12",
     "openai": "^4.20.0",
+    "qrcode": "^1.5.4",
     "resend": "^6.8.0",
+    "sms-dispatch": "^1.1.3",
+    "speakeasy": "^2.0.0",
+    "twilio": "^5.12.2",
     "ws": "^8.19.0"
   },
   "devDependencies": {

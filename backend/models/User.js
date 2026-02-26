@@ -183,7 +183,7 @@ superUserLastAction: {
   departamento: String,
   titulacao: String,
   
-  // Controle de login
+  // ========== CAMPOS DE CONTROLE DE LOGIN E 2FA ==========
   loginAttempts: {
     type: Number,
     default: 0
@@ -194,6 +194,48 @@ superUserLastAction: {
   lastLogin: {
     type: Date
   },
+  
+  // ========== NOVOS CAMPOS PARA 2FA (ADICIONAR AQUI) ==========
+  telefoneVerificado: {
+    type: Boolean,
+    default: false
+  },
+  
+  twoFactorEnabled: {
+    type: Boolean,
+    default: false
+  },
+  
+  twoFactorSecret: {
+    type: String,
+    select: false  // Não retornar por padrão
+  },
+  
+  twoFactorBackupCodes: {
+    type: [String],
+    select: false
+  },
+
+  twoFactorBackupCodesShown: {
+  type: Boolean,
+  default: false
+},
+  
+  twoFactorTempSecret: {
+    type: String,
+    select: false  // Para ativação temporária
+  },
+  
+  lastOtpRequest: {
+    type: Date,
+    default: null
+  },
+  
+  otpRequestCount: {
+    type: Number,
+    default: 0
+  },
+  
   dataCadastro: {
     type: Date,
     default: Date.now

@@ -1071,7 +1071,28 @@
                 });
                 
                 const dados = await resposta.json();
+                console.log('📦 Resposta do servidor:', dados);
                 
+                // ========== CASO 1: PRECISA DE 2FA ==========
+                if (dados.requiresTwoFactor) {
+                    console.log('🔐 2FA necessário - redirecionando para validação');
+                    
+                    // Salvar token temporário para usar na página de validação
+                    sessionStorage.setItem('2fa_token', dados.token);
+                    sessionStorage.setItem('2fa_userId', dados.userId);
+                    sessionStorage.setItem('2fa_message', dados.message || 'Código 2FA necessário');
+                    
+                    // Mostrar mensagem e redirecionar
+                    mostrarAlerta('🔐 ' + (dados.message || 'Código 2FA necessário'), 'info');
+                    
+                    setTimeout(() => {
+                        window.location.href = '/validar-2fa.html';
+                    }, 1500);
+                    
+                    return;
+                }
+                
+                // ========== CASO 2: LOGIN BEM-SUCEDIDO (SEM 2FA) ==========
                 if (dados.success) {
                     mostrarAlerta('✅ Login realizado! Redirecionando...', 'success');
                     
@@ -1105,8 +1126,10 @@
                     }, 1000);
                     
                 } else {
+                    // ========== CASO 3: ERRO DE LOGIN ==========
                     mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro no login'));
                 }
+                
             } catch (erro) {
                 console.error('Erro no login:', erro);
                 mostrarAlerta('❌ Erro de conexão com o servidor');

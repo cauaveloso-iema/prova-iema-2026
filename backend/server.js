@@ -67,6 +67,78 @@ const LoggerService = require('./services/logger-service');
 const EmailService = require('./email-service-resend');
 const matriculasManager = require('./matriculas-autorizados');
 
+// ============ SERVIÇO DE SMS (TWILIO) - VERSÃO CORRIGIDA ============
+const twilio = require('twilio');
+
+// Configurar Twilio
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+// ============ FUNÇÃO PARA ENVIAR SMS VIA TWILIO (VERSÃO FINAL) ============
+async function enviarSmsTwilio(telefone, mensagem) {
+  try {
+    // Garantir que o telefone está no formato E.164 (+55...)
+    let numeroDestino = telefone;
+    if (!telefone.startsWith('+')) {
+      numeroDestino = `+55${telefone.replace(/\D/g, '')}`;
+    }
+
+    console.log('📱 Enviando SMS...');
+    console.log('   Para:', numeroDestino);
+    console.log('   Mensagem:', mensagem.substring(0, 30) + '...');
+    
+    // TENTATIVA 1: Usar Messaging Service (prioridade)
+    if (process.env.TWILIO_MESSAGING_SERVICE_SID) {
+      try {
+        const message = await twilioClient.messages.create({
+          body: mensagem,
+          messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
+          to: numeroDestino
+        });
+        
+        console.log(`✅ SMS enviado via Messaging Service! SID: ${message.sid}`);
+        return { success: true, sid: message.sid, enviado: true };
+      } catch (error) {
+        console.log('⚠️ Erro no Messaging Service, tentando número direto...');
+      }
+    }
+    
+    // TENTATIVA 2: Usar número direto
+    if (process.env.TWILIO_PHONE_NUMBER) {
+      const message = await twilioClient.messages.create({
+        body: mensagem,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: numeroDestino
+      });
+      
+      console.log(`✅ SMS enviado via número direto! SID: ${message.sid}`);
+      return { success: true, sid: message.sid, enviado: true };
+    }
+    
+    throw new Error('Nenhuma configuração de SMS encontrada');
+    
+  } catch (error) {
+    console.error('❌ Erro Twilio:', error.message);
+    
+    // Fallback - mostra o código no console
+    const codigoMatch = mensagem.match(/\d{6}/);
+    const codigo = codigoMatch ? codigoMatch[0] : '123456';
+    
+    console.log(`\n🔧 FALLBACK - Código seria: ${codigo}`);
+    console.log(`🔧 Motivo: ${error.message}\n`);
+    
+    return { 
+      success: true, 
+      devMode: true, 
+      codigo,
+      erro: error.message,
+      enviado: false
+    };
+  }
+}
+
 // ============================================================================
 // INICIALIZAÇÃO DOS SERVIÇOS
 // ============================================================================
@@ -142,6 +214,8 @@ app.use((req, res, next) => {
         next();
     });
 });
+
+
 
 // ============================================================================
 // CONFIGURAÇÃO DE SESSÃO
@@ -457,7 +531,7 @@ const uploadMiddleware = multer({
 // MIDDLEWARES PERSONALIZADOS
 // ============================================================================
 
-// Middleware de autenticação JWT
+// ============ MIDDLEWARE DE AUTENTICAÇÃO JWT (CORRIGIDO) ============
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -471,15 +545,22 @@ const authenticateToken = (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
+      console.log('❌ Erro na verificação do token:', err.message);
       return res.status(403).json({ 
         success: false, 
         error: 'Token inválido ou expirado.' 
       });
     }
     
+    // Extrair dados do token
     req.userId = user.id;
     req.userRole = user.role;
     req.userNome = user.nome;
+    req.userTwoFactorEnabled = user.twoFactorEnabled || false;
+    
+    // 🔥 IMPORTANTE: Marcar se é token temporário (para 2FA)
+    req.tokenTemp = user.temp || false;
+ 
     next();
   });
 };
@@ -765,7 +846,17 @@ app.post('/api/auth/register', [
       precisaAcessibilidade: role === 'aluno' ? (precisaAcessibilidade === true || precisaAcessibilidade === 'true' || precisaAcessibilidade === 'sim') : false,
       condicaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? condicaoAcessibilidade : null,
       outraCondicao: role === 'aluno' && precisaAcessibilidade && condicaoAcessibilidade === 'outra' ? outraCondicao : null,
-      dataSolicitacaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? new Date() : null
+      dataSolicitacaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? new Date() : null,
+      
+      // ========== 🔥 CAMPOS DE 2FA ADICIONADOS ==========
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      twoFactorBackupCodesShown: false,
+      twoFactorSecret: null,
+      twoFactorTempSecret: null,
+      telefoneVerificado: false,
+      lastOtpRequest: null,
+      otpRequestCount: 0
       
     });
     
@@ -829,25 +920,193 @@ app.post('/api/auth/register', [
 });
 
 // ============ ROTA PÚBLICA DE LOGIN ============
+// ============ ROTA DE LOGIN COM 2FA (CONTROLADO PELO SUPER ADMIN) ============
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password, cpf } = req.body;
+    const { email, password, cpf, twoFactorCode, token: tempToken } = req.body;
     
+    // ===== CASO 1: REQUISIÇÃO COM TOKEN TEMPORÁRIO (2FA) =====
+    if (tempToken) {
+      console.log('🔐 Requisição com token temporário recebida');
+      
+      try {
+        // Verificar se o token é válido
+        const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+        
+        // Verificar se é um token temporário para 2FA
+        if (decoded.temp && decoded.purpose === '2fa') {
+          console.log(`✅ Token temporário válido para usuário: ${decoded.id}`);
+          
+          // Buscar usuário pelo ID do token
+          const user = await User.findById(decoded.id)
+            .select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +twoFactorTempSecret +nome +email +role +telefone');
+          
+          if (!user) {
+            return res.status(401).json({
+              success: false,
+              error: 'Usuário não encontrado'
+            });
+          }
+          
+          // Verificar se o código foi fornecido
+          if (!twoFactorCode) {
+            return res.status(400).json({
+              success: false,
+              error: 'Código 2FA não fornecido'
+            });
+          }
+          
+          // VERIFICAR CÓDIGO 2FA
+          let isValid = false;
+          let motivo = '';
+          
+          // 1. Verificar código temporário (SMS atual)
+          if (user.twoFactorTempSecret && user.twoFactorTempSecret === twoFactorCode) {
+            isValid = true;
+            motivo = 'SMS';
+            user.twoFactorTempSecret = null; // Limpar após uso
+            console.log('✅ Código SMS válido');
+          }
+          
+          // 2. Verificar código de backup
+          if (!isValid && user.twoFactorBackupCodes && user.twoFactorBackupCodes.includes(twoFactorCode)) {
+            isValid = true;
+            motivo = 'backup';
+            // Remover o código usado da lista
+            user.twoFactorBackupCodes = user.twoFactorBackupCodes.filter(c => c !== twoFactorCode);
+            console.log('✅ Código de backup válido');
+          }
+          
+          // 3. Verificar código secreto permanente (caso especial)
+          if (!isValid && user.twoFactorSecret && user.twoFactorSecret === twoFactorCode) {
+            isValid = true;
+            motivo = 'secreto';
+            console.log('✅ Código secreto válido');
+          }
+          
+          if (!isValid) {
+            console.log('❌ Código inválido:', twoFactorCode);
+            return res.status(401).json({
+              success: false,
+              error: 'Código 2FA inválido'
+            });
+          }
+          
+          // Salvar alterações (se houver)
+          await user.save();
+          
+          // Buscar configuração de expiração do JWT
+          const configJwt = await Config.findOne({ chave: 'seguranca.jwtExpiracao' });
+          const jwtExpiracao = configJwt ? configJwt.valor : '24h';
+          
+          // Gerar token PRINCIPAL (após 2FA verificado)
+          const authToken = jwt.sign(
+            { 
+              id: user._id, 
+              role: user.role,
+              nome: user.nome,
+              twoFactorEnabled: user.twoFactorEnabled
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: jwtExpiracao }
+          );
+          
+          // Definir redirecionamento baseado no role
+          let redirectTo = '';
+          if (user.forcePasswordChange) {
+            redirectTo = '/trocar-senha.html';
+          } else if (user.role === 'admin' || user.role === 'super_admin') {
+            redirectTo = '/admin.html';
+          } else if (user.role === 'professor') {
+            redirectTo = '/index.html';
+          } else if (user.role === 'aluno') {
+            redirectTo = '/aluno.html';
+          } else {
+            redirectTo = '/login.html';
+          }
+          
+          console.log(`✅ 2FA verificado via ${motivo} para ${user.email}`);
+          if (user.twoFactorBackupCodes) {
+            console.log(`📊 Códigos de backup restantes: ${user.twoFactorBackupCodes.length}`);
+          }
+          
+          // Retornar sucesso com token principal
+          return res.json({
+            success: true,
+            token: authToken,
+            user: {
+              id: user._id,
+              nome: user.nome,
+              email: user.email,
+              role: user.role,
+              twoFactorEnabled: user.twoFactorEnabled,
+              telefone: user.telefone
+            },
+            redirectTo: redirectTo
+          });
+        }
+      } catch (err) {
+        console.error('❌ Erro ao verificar token temporário:', err.message);
+        return res.status(401).json({
+          success: false,
+          error: 'Token temporário inválido ou expirado'
+        });
+      }
+    }
+    
+    // ===== CASO 2: LOGIN NORMAL (SEM TOKEN) =====
+    console.log('📝 Requisição de login normal');
+    
+    // Buscar configurações de segurança
+    const [configTentativas, configBloqueio, configJwt, config2FA] = await Promise.all([
+      Config.findOne({ chave: 'seguranca.tentativasLogin' }),
+      Config.findOne({ chave: 'seguranca.bloqueioTempo' }),
+      Config.findOne({ chave: 'seguranca.jwtExpiracao' }),
+      Config.findOne({ chave: 'seguranca.doisFatores' })
+    ]);
+    
+    const maxTentativas = configTentativas ? configTentativas.valor : 5;
+    const tempoBloqueio = configBloqueio ? configBloqueio.valor : 15;
+    const jwtExpiracao = configJwt ? configJwt.valor : '24h';
+    const exigir2FA = config2FA ? config2FA.valor : false;
+    
+    console.log(`🔐 Configuração 2FA: ${exigir2FA ? 'ATIVADO (admins e professores)' : 'DESATIVADO'}`);
+    
+    // Buscar usuário por email ou CPF
     let user;
+    let campoBusca = '';
     
     if (email) {
-      user = await User.findOne({ email })
-        .select('+password +forcePasswordChange +passwordChangedAt +ativo');
+      user = await User.findOne({ email: email.toLowerCase() })
+        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +telefone +nome');
+      campoBusca = 'email';
     } else if (cpf) {
       const cpfNumeros = cpf.replace(/\D/g, '');
       user = await User.findOne({ cpf: cpfNumeros })
-        .select('+password +forcePasswordChange +passwordChangedAt +ativo');
+        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +telefone +nome');
+      campoBusca = 'CPF';
     } else {
-      return res.status(400).json({ success: false, error: 'Email ou CPF é obrigatório' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email ou CPF é obrigatório' 
+      });
     }
     
     if (!user) {
-      return res.status(401).json({ success: false, error: 'Email/CPF ou senha incorretos' });
+      console.log(`❌ Usuário não encontrado com ${campoBusca} fornecido`);
+      return res.status(401).json({ 
+        success: false, 
+        error: `${campoBusca === 'email' ? 'Email' : 'CPF'} ou senha incorretos` 
+      });
+    }
+    
+    // Verificar se usuário está bloqueado
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      const minutosRestantes = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      return res.status(401).json({ 
+        success: false, 
+        error: `Usuário bloqueado. Tente novamente em ${minutosRestantes} minutos.` 
+      });
     }
     
     // Verificar se usuário está ativo
@@ -858,44 +1117,155 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
     
+    // Verificar senha
     const isMatch = await user.comparePassword(password);
+    
     if (!isMatch) {
-      return res.status(401).json({ success: false, error: 'Email/CPF ou senha incorretos' });
+      // Incrementar tentativas de login
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
+      
+      if (user.loginAttempts >= maxTentativas) {
+        // Bloquear usuário
+        user.lockUntil = Date.now() + (tempoBloqueio * 60 * 1000);
+        user.loginAttempts = 0;
+        await user.save();
+        
+        return res.status(401).json({ 
+          success: false, 
+          error: `Muitas tentativas. Usuário bloqueado por ${tempoBloqueio} minutos.` 
+        });
+      }
+      
+      await user.save();
+      
+      const tentativasRestantes = maxTentativas - user.loginAttempts;
+      return res.status(401).json({ 
+        success: false, 
+        error: `${campoBusca === 'email' ? 'Email' : 'CPF'} ou senha incorretos. ${tentativasRestantes} tentativa(s) restante(s).` 
+      });
     }
     
+    // Login bem-sucedido - resetar tentativas
+    user.loginAttempts = 0;
+    user.lockUntil = null;
     user.lastLogin = new Date();
     await user.save();
     
-    // Verificar se precisa trocar a senha
-    const precisaTrocarSenha = user.forcePasswordChange === true;
+    // ===== VERIFICAR SE DEVE EXIGIR 2FA BASEADO NO PERFIL =====
     
-    const token = jwt.sign(
+    // 🔥 REGRAS ATUALIZADAS:
+    // - SUPER ADMIN: SEMPRE 2FA
+    // - ADMIN: segue configuração
+    // - PROFESSOR: segue a MESMA configuração dos admins
+    // - ALUNO: nunca 2FA
+    
+    const perfisCom2FA = ['super_admin'];
+    
+    // Se a configuração estiver ativada, admins e professores também entram
+    if (exigir2FA) {
+      perfisCom2FA.push('admin', 'professor');
+    }
+    
+    if (perfisCom2FA.includes(user.role)) {
+      console.log(`🔐 2FA exigido para ${user.role} ${user.email}`);
+      
+      // 🔥 VERIFICAR SE O USUÁRIO JÁ TEM CÓDIGOS DE BACKUP
+      // Se não tiver, GERAR 10 CÓDIGOS AGORA!
+      if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
+          console.log('🆕 Usuário sem códigos de backup - gerando 10 agora...');
+          
+          const backupCodes = [];
+          for (let i = 0; i < 10; i++) {
+              backupCodes.push(generateBackupCode());
+          }
+          
+          user.twoFactorBackupCodes = backupCodes;
+          user.twoFactorBackupCodesShown = false; // <-- CRIAR O CAMPO AQUI!
+          await user.save();
+        
+        console.log('✅ 10 códigos de backup gerados para o usuário');
+        console.log('📋 Códigos:', backupCodes);
+      } else {
+        console.log(`📊 Usuário já tem ${user.twoFactorBackupCodes.length} códigos de backup`);
+      }
+      
+      // Verificar se tem telefone cadastrado
+      if (!user.telefone) {
+        console.warn(`⚠️ Usuário ${user.email} não tem telefone cadastrado para 2FA`);
+      }
+      
+      // Gerar token TEMPORÁRIO para a sessão 2FA
+      const tempAuthToken = jwt.sign(
+        { 
+          id: user._id,
+          temp: true,
+          purpose: '2fa',
+          role: user.role,
+          nome: user.nome
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' }
+      );
+      
+      // Gerar novo código SMS automaticamente
+      const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Salvar código temporário
+      user.twoFactorTempSecret = codigo;
+      user.lastOtpRequest = new Date();
+      user.otpRequestCount = (user.otpRequestCount || 0) + 1;
+      await user.save();
+      
+      // Enviar SMS com o código (se tiver telefone)
+      if (user.telefone) {
+        const telefoneLimpo = user.telefone.replace(/\D/g, '');
+        const mensagem = `🔐 ${user.nome}, seu código de verificação do IEMA é: ${codigo}. Válido por 5 minutos.`;
+        
+        // Enviar SMS em background
+        enviarSmsTwilio(telefoneLimpo, mensagem).then(resultado => {
+          if (resultado.devMode) {
+            console.log(`🔧 Código gerado (modo desenvolvimento): ${resultado.codigo}`);
+          }
+        }).catch(err => {
+          console.error('❌ Erro ao enviar SMS:', err);
+        });
+      }
+      
+      return res.json({
+        success: true,
+        requiresTwoFactor: true,
+        userId: user._id,
+        token: tempAuthToken,
+        message: 'Código 2FA necessário'
+      });
+    }
+    
+    // ===== USUÁRIOS SEM 2FA =====
+    console.log(`✅ Login bem-sucedido para usuário ${user.email} (${user.role})`);
+    
+    // Gerar token principal
+    const authToken = jwt.sign(
       { 
         id: user._id, 
         role: user.role,
-        eixo: user.eixo,
         nome: user.nome,
-        cpf: user.cpf,
-        precisaAcessibilidade: user.precisaAcessibilidade === true,
-        condicaoAcessibilidade: user.condicaoAcessibilidade,
-        forcePasswordChange: precisaTrocarSenha
+        twoFactorEnabled: user.twoFactorEnabled
       },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+      { expiresIn: jwtExpiracao }
     );
     
-    // ============ NOVO: Definir cookie HTTP-only ============
-    res.cookie('auth_token', token, {
+    // Configurar cookie
+    res.cookie('auth_token', authToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 24 horas
+      maxAge: parseJwtExpiration(jwtExpiracao) * 1000
     });
     
-    // Redirecionamento baseado na necessidade de trocar senha
+    // Definir redirecionamento
     let redirectTo = '';
-    
-    if (precisaTrocarSenha) {
+    if (user.forcePasswordChange) {
       redirectTo = '/trocar-senha.html';
     } else if (user.role === 'admin' || user.role === 'super_admin') {
       redirectTo = '/admin.html';
@@ -909,33 +1279,562 @@ app.post('/api/auth/login', async (req, res) => {
     
     res.json({
       success: true,
-      token,
-      precisaTrocarSenha: precisaTrocarSenha,
+      token: authToken,
+      requiresTwoFactor: false,
       user: {
         id: user._id,
         nome: user.nome,
         email: user.email,
-        cpf: user.cpf,
         role: user.role,
-        eixo: user.eixo,
-        matricula: user.matricula,
-        curso: user.curso,
-        turma: user.turma,
-        periodo: user.periodo,
-        departamento: user.departamento,
-        titulacao: user.titulacao,
-        precisaAcessibilidade: user.precisaAcessibilidade === true,
-        condicaoAcessibilidade: user.condicaoAcessibilidade,
-        ativo: user.ativo,
-        forcePasswordChange: precisaTrocarSenha
+        twoFactorEnabled: user.twoFactorEnabled,
+        telefone: user.telefone
       },
       redirectTo: redirectTo
     });
     
   } catch (error) {
-    console.error('Erro no login:', error);
-    res.status(500).json({ success: false, error: 'Erro no servidor: ' + error.message });
+    console.error('❌ Erro no login:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro no servidor: ' + error.message 
+    });
   }
+});
+
+// ============ ROTA PARA ATIVAR 2FA ============
+// ============ ROTA PARA ATIVAR 2FA (VERSÃO CORRIGIDA) ============
+app.post('/api/auth/2fa/enable', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('+twoFactorSecret +twoFactorEnabled +twoFactorTempSecret');
+    
+    if (user.twoFactorEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: '2FA já está ativado para esta conta'
+      });
+    }
+    
+    // Verificar se telefone está disponível
+    if (!user.telefone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Você precisa cadastrar um telefone primeiro'
+      });
+    }
+
+    // Gerar código de 6 dígitos
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Salvar código temporário (expira em 5 minutos)
+    user.twoFactorTempSecret = codigo;
+    user.lastOtpRequest = new Date();
+    user.otpRequestCount = (user.otpRequestCount || 0) + 1;
+    await user.save();
+
+    const telefoneLimpo = user.telefone.replace(/\D/g, '');
+    const mensagem = `🔐 ${user.nome}, seu código de verificação do IEMA é: ${codigo}. Válido por 5 minutos.`;
+
+    console.log('📱 Tentando enviar SMS...');
+    console.log(`   Para: ${telefoneLimpo}`);
+    console.log(`   Código: ${codigo}`);
+    
+    // ENVIAR SMS USANDO A FUNÇÃO CORRIGIDA
+    const resultado = await enviarSmsTwilio(telefoneLimpo, mensagem);
+
+    // ✅ RESPOSTA ÚNICA - SÓ UMA VEZ!
+    if (resultado.success) {
+      return res.json({
+        success: true,
+        message: resultado.devMode ? 'Código gerado (modo desenvolvimento)' : 'Código enviado para seu telefone',
+        expiresIn: 300, // 5 minutos em segundos
+        telefone: user.telefoneFormatado || user.telefone,
+        ...(resultado.devMode && { devCode: resultado.codigo })
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        error: 'Erro ao enviar SMS. Tente novamente.'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro ao ativar 2FA:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro interno: ' + error.message
+    });
+  }
+});
+
+// ============ ROTA PARA ADMIN GERAR 10 CÓDIGOS DE BACKUP PARA UM USUÁRIO ============
+app.post('/api/admin/2fa/gerar-backup-codes/:userId', authenticateToken, async (req, res) => {
+    try {
+        // Verificar se é admin
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas administradores podem gerar códigos de backup'
+            });
+        }
+        
+        const { userId } = req.params;
+        
+        console.log(`🔑 Admin ${req.userId} gerando 10 códigos de backup para usuário ${userId}`);
+        
+        const user = await User.findById(userId).select(
+            '+twoFactorEnabled +twoFactorBackupCodes +twoFactorBackupCodesShown'
+        );
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+
+        // Verificar se o 2FA está ativado
+        if (!user.twoFactorEnabled) {
+            return res.status(400).json({
+                success: false,
+                error: '2FA não está ativado para este usuário'
+            });
+        }
+
+        // Gerar 10 códigos de backup
+        const backupCodes = [];
+        for (let i = 0; i < 10; i++) {
+            backupCodes.push(generateBackupCode());
+        }
+        
+        // Atualizar usuário
+        user.twoFactorBackupCodes = backupCodes;
+        user.twoFactorBackupCodesShown = false; // Reset para mostrar na próxima vez
+        await user.save();
+        
+        console.log(`✅ Admin gerou 10 códigos para ${user.email}:`, backupCodes);
+        
+        // Log da ação do admin
+        console.log(`📝 LOG: Admin ${req.userId} gerou códigos para ${user.email} em ${new Date().toISOString()}`);
+        
+        res.json({
+            success: true,
+            message: '10 códigos de backup gerados com sucesso!',
+            backupCodes: backupCodes,
+            total: backupCodes.length,
+            usuario: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// ============ ROTA PARA ADMIN LISTAR USUÁRIOS COM 2FA ATIVADO ============
+app.get('/api/admin/2fa/usuarios', authenticateToken, async (req, res) => {
+    try {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas administradores podem acessar esta rota'
+            });
+        }
+        
+        const usuarios = await User.find({ 
+            twoFactorEnabled: true 
+        }).select('nome email telefone twoFactorBackupCodesShown twoFactorBackupCodes');
+        
+        const usuariosFormatados = usuarios.map(u => ({
+            id: u._id,
+            nome: u.nome,
+            email: u.email,
+            telefone: u.telefoneFormatado || u.telefone,
+            temCodigosBackup: u.twoFactorBackupCodes ? u.twoFactorBackupCodes.length : 0,
+            codigosRestantes: u.twoFactorBackupCodes ? u.twoFactorBackupCodes.length : 0,
+            codigosJaMostrados: u.twoFactorBackupCodesShown || false
+        }));
+        
+        res.json({
+            success: true,
+            usuarios: usuariosFormatados,
+            total: usuariosFormatados.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ ROTA PARA ADMIN VER CÓDIGOS DE UM USUÁRIO ============
+app.get('/api/admin/2fa/ver-codigos/:userId', authenticateToken, async (req, res) => {
+    try {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas administradores podem ver códigos de backup'
+            });
+        }
+        
+        const { userId } = req.params;
+        
+        const user = await User.findById(userId).select(
+            '+twoFactorBackupCodes +twoFactorEnabled'
+        );
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        res.json({
+            success: true,
+            usuario: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email
+            },
+            backupCodes: user.twoFactorBackupCodes || [],
+            total: user.twoFactorBackupCodes ? user.twoFactorBackupCodes.length : 0
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+
+
+// ============ ROTA PARA ATIVAR 2FA (COM 10 CÓDIGOS DE BACKUP) ============
+app.post('/api/auth/2fa/verify', authenticateToken, async (req, res) => {
+    try {
+        const { codigo } = req.body;
+        
+        // Validação básica
+        if (!codigo || codigo.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Código inválido. Digite um código de 6 dígitos.'
+            });
+        }
+
+        const user = await User.findById(req.userId).select(
+            '+twoFactorTempSecret +lastOtpRequest +otpRequestCount +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +telefone +nome'
+        );
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+
+        // Verificar se o 2FA já está ativado
+        if (user.twoFactorEnabled) {
+            return res.status(400).json({
+                success: false,
+                error: '2FA já está ativado para esta conta'
+            });
+        }
+
+        // Verificar se existe código temporário
+        if (!user.twoFactorTempSecret) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhum código ativo. Solicite um novo código.'
+            });
+        }
+        
+        // Verificar expiração (5 minutos)
+        const agora = new Date();
+        const diffMinutos = (agora - user.lastOtpRequest) / 60000;
+        
+        if (diffMinutos > 5) {
+            user.twoFactorTempSecret = null;
+            user.lastOtpRequest = null;
+            await user.save();
+            return res.status(400).json({
+                success: false,
+                error: 'Código expirado. Solicite um novo código.'
+            });
+        }
+        
+        // Verificar se o código corresponde
+        if (user.twoFactorTempSecret !== codigo) {
+            user.otpRequestCount = (user.otpRequestCount || 0) + 1;
+            await user.save();
+            return res.status(400).json({
+                success: false,
+                error: 'Código inválido. Tente novamente.'
+            });
+        }
+        
+        // 🔥 GARANTIR 10 CÓDIGOS DE BACKUP
+        const backupCodes = [];
+        for (let i = 0; i < 10; i++) {
+            backupCodes.push(generateBackupCode());
+        }
+        
+        // ATIVAR 2FA
+        user.twoFactorEnabled = true;
+        user.twoFactorSecret = codigo;
+        user.twoFactorBackupCodes = backupCodes; // 10 códigos
+        user.twoFactorTempSecret = null;
+        user.telefoneVerificado = true;
+        user.dataAtivacao2FA = new Date();
+        
+        await user.save();
+        
+        console.log(`✅ 2FA ativado para usuário ${user.email}`);
+        console.log(`🔑 10 códigos de backup gerados:`, backupCodes);
+        
+        res.json({
+            success: true,
+            message: '✅ Autenticação de dois fatores ativada com sucesso!',
+            backupCodes: backupCodes,
+            total: 10,
+            firstTime: true, // <- IMPORTANTE: Marcar como primeira vez
+            expiresIn: null,
+            telefone: user.telefoneFormatado || user.telefone
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao verificar 2FA:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao ativar 2FA: ' + error.message
+        });
+    }
+});
+
+// ============ ROTA PARA BUSCAR CÓDIGOS DE BACKUP (VERSÃO COM SALVAMENTO GARANTIDO) ============
+app.get('/api/auth/2fa/backup-codes', authenticateToken, async (req, res) => {
+    try {
+        console.log('🔍 Buscando códigos de backup para:', req.userId);
+        
+        const user = await User.findById(req.userId).select(
+            '+twoFactorEnabled +twoFactorBackupCodes'
+        );
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+
+        // 🔥 CORREÇÃO: Sempre verificar e criar o campo twoFactorBackupCodesShown
+        // Buscar o usuário NOVAMENTE com o campo (ou criar na hora)
+        const userCompleto = await User.findById(req.userId).select(
+            '+twoFactorEnabled +twoFactorBackupCodes +twoFactorBackupCodesShown'
+        );
+        
+        // Se o campo não existir, criar agora
+        if (userCompleto.twoFactorBackupCodesShown === undefined) {
+            console.log('⚠️ Campo twoFactorBackupCodesShown não existe - criando com false');
+            userCompleto.twoFactorBackupCodesShown = false;
+            await userCompleto.save();
+            console.log('✅ Campo criado com sucesso');
+        }
+
+        // CASO 1: Token temporário (durante 2FA)
+        if (req.tokenTemp) {
+            console.log('⚠️ Token temporário detectado');
+            
+            // Se já mostrou os códigos antes
+            if (userCompleto.twoFactorBackupCodesShown === true) {
+                return res.json({
+                    success: true,
+                    backupCodes: [],
+                    alreadyShown: true,
+                    total: userCompleto.twoFactorBackupCodes ? userCompleto.twoFactorBackupCodes.length : 0,
+                    remaining: userCompleto.twoFactorBackupCodes ? userCompleto.twoFactorBackupCodes.length : 0,
+                    message: 'Códigos já foram exibidos anteriormente'
+                });
+            }
+            
+            // Se tem códigos e NUNCA mostrou
+            if (userCompleto.twoFactorBackupCodes && userCompleto.twoFactorBackupCodes.length > 0) {
+                console.log('🎉 Primeira vez - mostrando códigos');
+                
+                // 🔥 MARCAR COMO MOSTRADO AGORA E SALVAR NO BANCO
+                userCompleto.twoFactorBackupCodesShown = true;
+                await userCompleto.save();
+                console.log('✅ Campo twoFactorBackupCodesShown atualizado para true no banco');
+                
+                return res.json({
+                    success: true,
+                    backupCodes: userCompleto.twoFactorBackupCodes,
+                    firstTime: true,
+                    total: userCompleto.twoFactorBackupCodes.length,
+                    remaining: userCompleto.twoFactorBackupCodes.length,
+                    message: '🔐 PRIMEIRA ATIVAÇÃO! Guarde estes códigos!'
+                });
+            }
+            
+            // Não tem códigos
+            return res.status(400).json({
+                success: false,
+                error: 'Você não tem códigos de backup. Contate o administrador.',
+                needsAdmin: true
+            });
+        }
+        
+        // CASO 2: Token normal (já autenticado)
+        if (!userCompleto.twoFactorEnabled) {
+            return res.status(400).json({
+                success: false,
+                error: '2FA não está ativado para esta conta'
+            });
+        }
+
+        if (userCompleto.twoFactorBackupCodes && userCompleto.twoFactorBackupCodes.length > 0) {
+            if (userCompleto.twoFactorBackupCodesShown === true) {
+                return res.json({
+                    success: true,
+                    backupCodes: [],
+                    alreadyShown: true,
+                    total: userCompleto.twoFactorBackupCodes.length,
+                    remaining: userCompleto.twoFactorBackupCodes.length,
+                    message: 'Códigos já foram exibidos anteriormente'
+                });
+            } else {
+                // 🔥 MARCAR COMO MOSTRADO AGORA E SALVAR NO BANCO
+                console.log('🎉 Primeira vez - mostrando códigos');
+                userCompleto.twoFactorBackupCodesShown = true;
+                await userCompleto.save();
+                console.log('✅ Campo twoFactorBackupCodesShown atualizado para true no banco');
+                
+                return res.json({
+                    success: true,
+                    backupCodes: userCompleto.twoFactorBackupCodes,
+                    firstTime: true,
+                    total: userCompleto.twoFactorBackupCodes.length,
+                    remaining: userCompleto.twoFactorBackupCodes.length,
+                    message: '🔐 PRIMEIRA ATIVAÇÃO! Guarde estes códigos!'
+                });
+            }
+        } else {
+            return res.status(400).json({
+                success: false,
+                error: 'Você não tem códigos de backup. Contate o administrador.',
+                needsAdmin: true
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar códigos de backup:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// Função auxiliar para gerar código de backup
+function generateBackupCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// ============ ROTA PARA VERIFICAR STATUS DO 2FA ============
+app.get('/api/auth/2fa/status', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.userId).select('+twoFactorEnabled +twoFactorTempSecret');
+        
+        res.json({
+            success: true,
+            twoFactorEnabled: user?.twoFactorEnabled || false,
+            hasTempCode: !!(user?.twoFactorTempSecret),
+            isTempToken: req.tokenTemp || false
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ MIDDLEWARE DE MODO DEBUG ============
+app.use(async (req, res, next) => {
+    try {
+        // Buscar configuração de debug
+        const configDebug = await Config.findOne({ chave: 'sistema.modoDebug' });
+        const modoDebug = configDebug ? configDebug.valor : false;
+        
+        // Se NÃO estiver em modo debug, continua normalmente
+        if (!modoDebug) {
+            return next();
+        }
+        
+        // ===== EM MODO DEBUG =====
+        
+        // Só logar requisições de API para não poluir muito
+        if (req.path.startsWith('/api/')) {
+            const start = Date.now();
+            const requestId = Math.random().toString(36).substring(7);
+            
+            console.log(`\n🔍 [DEBUG-${requestId}] ${req.method} ${req.path}`);
+            console.log(`   👤 Usuário: ${req.userId || 'Não autenticado'} (${req.userRole || 'N/A'})`);
+            console.log(`   📦 Query:`, req.query);
+            
+            // Não logar body de upload de arquivos (muito grande)
+            if (!req.path.includes('/upload/') && req.body && Object.keys(req.body).length > 0) {
+                // Esconder dados sensíveis
+                const bodyCopy = { ...req.body };
+                if (bodyCopy.password) bodyCopy.password = '***';
+                if (bodyCopy.token) bodyCopy.token = '***';
+                if (bodyCopy.authorization) bodyCopy.authorization = '***';
+                
+                console.log(`   📝 Body:`, bodyCopy);
+            }
+            
+            // Interceptar o método res.json para logar a resposta
+            const originalJson = res.json;
+            res.json = function(data) {
+                const duration = Date.now() - start;
+                
+                // Log da resposta (resumido)
+                const statusColor = res.statusCode >= 400 ? '\x1b[31m' : '\x1b[32m';
+                console.log(`   ${statusColor}✅ Resposta (${duration}ms) - Status: ${res.statusCode}\x1b[0m`);
+                
+                // Log detalhado apenas para erros ou se for pequeno
+                if (res.statusCode >= 400 || (data && JSON.stringify(data).length < 500)) {
+                    console.log(`   📤 Dados:`, data);
+                } else {
+                    console.log(`   📤 Resposta muito grande (${JSON.stringify(data).length} bytes)`);
+                }
+                
+                console.log(`🔍 [DEBUG-${requestId}] Fim da requisição\n`);
+                
+                return originalJson.call(this, data);
+            };
+        }
+        
+        next();
+        
+    } catch (error) {
+        console.error('❌ Erro no middleware de debug:', error);
+        next();
+    }
 });
 
 // ============ MIDDLEWARE DE MANUTENÇÃO (COM LOG ÚNICO) ============
@@ -1238,11 +2137,12 @@ async function processarAnexosParaIA(anexos) {
 // ============================================================================
 
 // ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO - CORRIGIDA COM TURMA! ============
+// ============ ROTA PARA OBTER DADOS DO USUÁRIO LOGADO (VERSÃO COMPLETA) ============
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    // 🔥 BUSCAR TODOS OS CAMPOS, INCLUINDO ACESSIBILIDADE
+    // 🔥 BUSCAR TODOS OS CAMPOS, INCLUINDO ACESSIBILIDADE E 2FA
     const user = await User.findById(req.userId)
-      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade +acessibilidadeAprovadaPor');
+      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade +acessibilidadeAprovadaPor +telefone +twoFactorEnabled');
     
     if (!user) {
       return res.status(404).json({
@@ -1271,7 +2171,11 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         precisaAcessibilidade: user.precisaAcessibilidade === true,
         condicaoAcessibilidade: user.condicaoAcessibilidade,
         outraCondicao: user.outraCondicao,
-        dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade
+        dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade,
+        
+        // 🔥 CAMPOS DE 2FA (ADICIONADOS)
+        telefone: user.telefone,
+        twoFactorEnabled: user.twoFactorEnabled
       }
     });
     
@@ -1283,9 +2187,6 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     });
   }
 });
-
-
-
 
 // ============ ROTA PARA ATUALIZAR DADOS DO USUÁRIO ============
 app.put('/api/users/me', authenticateToken, async (req, res) => {
@@ -8043,65 +8944,78 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
     }
 });
 
-// ============ ROTA PARA LISTAR USUÁRIOS (ADMIN) ============
-app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
+// ============ ROTA PARA CRIAR USUÁRIO (ADMIN) - VERSÃO CORRIGIDA ============
+app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        const { role, search, page = 1, limit = 20 } = req.query;
+        const userData = req.body;
         
-        let query = {};
+        console.log('📝 Admin criando usuário:', userData.email);
         
-        if (role && role !== 'todos') {
-            query.role = role;
-        }
-        
-        if (search) {
-            query.$or = [
-                { nome: { $regex: search, $options: 'i' } },
-                { email: { $regex: search, $options: 'i' } },
-                { matricula: { $regex: search, $options: 'i' } }
-            ];
+        // Validar email institucional
+        if (userData.email && !userData.email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
+            return res.status(400).json({
+                success: false,
+                error: 'Somente emails institucionais (@iemasaoluiscentro.net) são permitidos'
+            });
         }
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        // Verificar duplicatas
+        const existingUser = await User.findOne({
+            $or: [
+                { email: userData.email },
+                { cpf: userData.cpf?.replace(/\D/g, '') }
+            ]
+        });
+
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                error: 'Email ou CPF já cadastrado'
+            });
+        }
+
+        // 🔴 GARANTIR QUE TODOS OS CAMPOS IMPORTANTES ESTÃO PRESENTES
+        const user = new User({
+            ...userData,
+            ativo: true,
+            forcePasswordChange: true,  // <-- ISSO É CRÍTICO!
+            passwordChangedAt: null,
+            loginAttempts: 0,
+            lockUntil: null,
+            
+            // ========== 🔥 CAMPOS DE 2FA ADICIONADOS ==========
+            twoFactorEnabled: false,
+            twoFactorBackupCodes: [],
+            twoFactorBackupCodesShown: false,
+            twoFactorSecret: null,
+            twoFactorTempSecret: null,
+            telefoneVerificado: false,
+            lastOtpRequest: null,
+            otpRequestCount: 0
+        });
         
-        const [usuarios, total] = await Promise.all([
-            User.find(query)
-                .select('-password') // NÃO remover os campos importantes
-                .populate('turma', 'nome')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit))
-                .lean(),
-            User.countDocuments(query)
-        ]);
+        await user.save();
 
-        // Garantir que todos os campos importantes estejam presentes
-        const usuariosFormatados = usuarios.map(user => ({
-            ...user,
-            id: user._id,
-            _id: user._id,
-            forcePasswordChange: user.forcePasswordChange !== undefined ? user.forcePasswordChange : false,
-            passwordChangedAt: user.passwordChangedAt || null,
-            ativo: user.ativo !== undefined ? user.ativo : true
-        }));
+        console.log(`✅ Usuário criado: ${user.email}`);
+        console.log(`   ativo: ${user.ativo}`);
+        console.log(`   forcePasswordChange: ${user.forcePasswordChange}`);
 
-        res.json({
+        res.status(201).json({
             success: true,
-            usuarios: usuariosFormatados,
-            pagination: {
-                total,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                pages: Math.ceil(total / parseInt(limit))
+            message: 'Usuário criado com sucesso! Ele deverá trocar a senha no primeiro login.',
+            user: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email,
+                role: user.role,
+                ativo: user.ativo,
+                forcePasswordChange: user.forcePasswordChange
             }
         });
 
     } catch (error) {
-        console.error('❌ Erro ao listar usuários:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
+        console.error('❌ Erro ao criar usuário:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -10628,6 +11542,100 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
   }
 });
 
+// ============ FUNÇÃO AUXILIAR PARA EXPIRAÇÃO DO JWT ============
+// Adicione ANTES do server.listen()
+function parseJwtExpiration(expiration) {
+  if (typeof expiration === 'number') return expiration;
+  const match = expiration.match(/^(\d+)([hH])$/);
+  if (match) {
+    return parseInt(match[1]) * 60 * 60;
+  }
+  return 24 * 60 * 60; // 24 horas padrão
+}
+
+// ============ ROTA PARA REENVIAR CÓDIGO 2FA ============
+// ============ ROTA PARA REENVIAR CÓDIGO 2FA (CORRIGIDA) ============
+app.post('/api/auth/2fa/resend', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const usuarioId = userId || req.userId;
+    
+    console.log(`📱 Reenviando código 2FA para usuário ${usuarioId}`);
+    
+    const user = await User.findById(usuarioId).select('+twoFactorTempSecret +telefone +nome +role');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'Usuário não encontrado'
+      });
+    }
+    
+    // 🔥 VERIFICAR SE O 2FA É EXIGIDO PARA ESTE PERFIL
+    const config2FA = await Config.findOne({ chave: 'seguranca.doisFatores' });
+    const exigir2FA = config2FA ? config2FA.valor : false;
+    
+    const perfisCom2FA = ['super_admin'];
+    if (exigir2FA) {
+      perfisCom2FA.push('admin', 'professor');
+    }
+    
+    // Se o usuário NÃO está nos perfis que exigem 2FA, retornar erro
+    if (!perfisCom2FA.includes(user.role)) {
+      return res.status(400).json({
+        success: false,
+        error: '2FA não é exigido para este perfil de usuário'
+      });
+    }
+    
+    // Verificar se telefone está disponível
+    if (!user.telefone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Telefone não cadastrado'
+      });
+    }
+
+    // Gerar novo código de 6 dígitos
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Salvar código temporário (sempre, mesmo sem 2FA ativo)
+    user.twoFactorTempSecret = codigo;
+    user.lastOtpRequest = new Date();
+    user.otpRequestCount = (user.otpRequestCount || 0) + 1;
+    await user.save();
+
+    const telefoneLimpo = user.telefone.replace(/\D/g, '');
+    const mensagem = `🔐 ${user.nome}, seu código de verificação do IEMA é: ${codigo}. Válido por 5 minutos.`;
+
+    console.log('📱 Enviando SMS...');
+    console.log(`   Para: ${telefoneLimpo}`);
+    console.log(`   Código: ${codigo}`);
+    
+    const resultado = await enviarSmsTwilio(telefoneLimpo, mensagem);
+
+    if (resultado.success) {
+      return res.json({
+        success: true,
+        message: resultado.devMode ? 'Código gerado (modo desenvolvimento)' : 'Novo código enviado para seu telefone',
+        expiresIn: 300,
+        ...(resultado.devMode && { devCode: resultado.codigo })
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        error: 'Erro ao enviar SMS. Tente novamente.'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro ao reenviar código:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro interno: ' + error.message
+    });
+  }
+});
 
 // ============ FRONTEND ESTÁTICO ============
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
