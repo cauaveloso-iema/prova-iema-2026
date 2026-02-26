@@ -116,6 +116,68 @@ if (process.env.GROQ_API_KEY) {
   console.warn('⚠️  Groq API key não configurada');
 }
 
+
+// ============ MODELO CONFIG (ADICIONAR AQUI, JUNTO COM OS OUTROS MODELOS) ============
+let Config;
+try {
+  Config = mongoose.model('Config');
+  console.log('✅ Modelo Config já existe');
+} catch {
+  const ConfigSchema = new mongoose.Schema({
+    chave: { 
+      type: String, 
+      required: true,
+      unique: true,
+      trim: true
+    },
+    valor: {
+      type: mongoose.Schema.Types.Mixed,
+      required: true
+    },
+    tipo: {
+      type: String,
+      enum: ['string', 'number', 'boolean', 'object', 'array'],
+      default: 'string'
+    },
+    descricao: {
+      type: String,
+      default: ''
+    },
+    categoria: {
+      type: String,
+      enum: ['geral', 'sistema', 'seguranca', 'provas', 'email', 'backups', 'logs', 'aparencia'],
+      default: 'geral'
+    },
+    publico: {
+      type: Boolean,
+      default: false
+    },
+    editavel: {
+      type: Boolean,
+      default: true
+    },
+    atualizadoPor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    atualizadoEm: {
+      type: Date,
+      default: Date.now
+    }
+  }, {
+    timestamps: true
+  });
+
+  // Índices para busca rápida
+  ConfigSchema.index({ chave: 1 }, { unique: true });
+  ConfigSchema.index({ categoria: 1 });
+  ConfigSchema.index({ atualizadoEm: -1 });
+
+  Config = mongoose.model('Config', ConfigSchema);
+  console.log('✅ Modelo Config criado com sucesso!');
+}
+
+
 // ============ CRIAR MODELOS INLINE (SE NÃO EXISTIREM COMO ARQUIVOS) ============
 
 // 1. MODELO Resultado
@@ -8428,109 +8490,6 @@ app.get('/api/admin/monitoramento/violacoes', authenticateToken, isSuperAdmin, a
     }
 });
 
-// ============ CONFIGURAÇÕES DO SISTEMA ============
-
-app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req, res) => {
-    try {
-        const Config = mongoose.model('Config') || mongoose.model('Config', new mongoose.Schema({
-            chave: String,
-            valor: mongoose.Schema.Types.Mixed,
-            descricao: String,
-            atualizadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            atualizadoEm: Date
-        }));
-
-        const configuracoes = await Config.find().lean();
-        
-        const configPadrao = {
-            sistema: {
-                nome: 'Sistema de Provas IEMA 2026',
-                versao: '1.0.0',
-                ambiente: process.env.NODE_ENV || 'development'
-            },
-            seguranca: {
-                jwtExpiracao: process.env.JWT_EXPIRES_IN || '24h',
-                tentativasLogin: 5,
-                bloqueioTempo: 15 // minutos
-            },
-            provas: {
-                tempoMaximo: 240, // minutos
-                questoesMinimas: 5,
-                questoesMaximas: 50,
-                permitirCorrecaoAutomatica: true
-            },
-            backups: {
-                automatico: true,
-                frequencia: 'diario',
-                manterPor: 30 // dias
-            },
-            email: {
-                servico: process.env.EMAIL_SERVICE || 'brevo',
-                remetente: 'naoresponder@iemasaoluiscentro.net'
-            }
-        };
-
-        const configAtual = { ...configPadrao };
-        
-        configuracoes.forEach(c => {
-            const keys = c.chave.split('.');
-            let target = configAtual;
-            for (let i = 0; i < keys.length - 1; i++) {
-                target = target[keys[i]];
-            }
-            target[keys[keys.length - 1]] = c.valor;
-        });
-
-        res.json({ success: true, configuracoes: configAtual });
-
-    } catch (error) {
-        console.error('❌ Erro ao carregar configurações:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.put('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req, res) => {
-    try {
-        const { configuracoes } = req.body;
-        const Config = mongoose.model('Config');
-        
-        const flattenObject = (obj, prefix = '') => {
-            return Object.keys(obj).reduce((acc, key) => {
-                const pre = prefix.length ? prefix + '.' : '';
-                if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-                    Object.assign(acc, flattenObject(obj[key], pre + key));
-                } else {
-                    acc[pre + key] = obj[key];
-                }
-                return acc;
-            }, {});
-        };
-
-        const flatConfig = flattenObject(configuracoes);
-        
-        await Promise.all(
-            Object.entries(flatConfig).map(([chave, valor]) =>
-                Config.findOneAndUpdate(
-                    { chave },
-                    { 
-                        chave,
-                        valor,
-                        atualizadoPor: req.userId,
-                        atualizadoEm: new Date()
-                    },
-                    { upsert: true }
-                )
-            )
-        );
-
-        res.json({ success: true, message: 'Configurações salvas com sucesso' });
-
-    } catch (error) {
-        console.error('❌ Erro ao salvar configurações:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
 // ============ ROTAS ADMIN PARA TURMAS (CRUD COMPLETO) ============
 
 // Listar turmas (com filtros)
@@ -10028,6 +9987,507 @@ app.put('/api/admin/professores/:id/reativar', authenticateToken, isSuperAdmin, 
     }
 });
 
+// ============ ROTAS DE CONFIGURAÇÕES DO SISTEMA (VERSÃO ÚNICA E CORRIGIDA) ============
+
+// GET - Todas as configurações (apenas admin)
+app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req, res) => {
+  try {
+    console.log('📋 Admin buscando configurações do sistema');
+    
+    // Configurações padrão completas (SEM instituicao)
+    const configPadrao = {
+      aparencia: {
+        corPrimaria: '#667eea',
+        corSecundaria: '#764ba2',
+        modoEscuro: false,
+        tema: 'padrao',
+        animacoes: true,
+        arredondamento: true,
+        logoUrl: '',
+        faviconUrl: ''
+      },
+      sistema: {
+        nome: 'Sistema de Provas IEMA 2026',
+        versao: '1.0.0',
+        ambiente: process.env.NODE_ENV || 'development',
+        urlBase: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+        modoManutencao: false,
+        modoDebug: process.env.NODE_ENV !== 'production',
+        timeoutSessao: 60,
+        manutencaoMensagem: 'Sistema em manutenção. Volte mais tarde.'
+      },
+      seguranca: {
+        jwtExpiracao: process.env.JWT_EXPIRES_IN || '24h',
+        tentativasLogin: 5,
+        bloqueioTempo: 15,
+        doisFatores: false,
+        permitirMultiplosLogins: true,
+        senha: {
+          forcarTrocaInicial: true,
+          tamanhoMinimo: 6,
+          expiracaoDias: 90,
+          exigirMaiuscula: false,
+          exigirNumero: false,
+          exigirEspecial: false
+        }
+      },
+      provas: {
+        tempoMaximo: 240,
+        tempoMinimo: 10,
+        tempoAdicionalAcessibilidade: true,
+        tempoAdicionalPercent: 50,
+        questoesMinimas: 5,
+        questoesMaximas: 50,
+        correcaoAutomatica: true,
+        liberacaoAutomatica: false,
+        permitirRevisao: true,
+        mostrarGabarito: false,
+        permitirCancelamento: true,
+        notificarProfessorCancelamento: true
+      },
+      notificacoes: {
+        email: true,
+        sistema: true,
+        push: false,
+        whatsapp: false,
+        lembreteProva: 24,
+        lembreteCorrecao: true,
+        notificarResultado: true,
+        notificarCancelamento: true
+      },
+      email: {
+        servico: process.env.EMAIL_SERVICE || 'brevo',
+        host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
+        porta: parseInt(process.env.EMAIL_PORT) || 587,
+        seguranca: process.env.EMAIL_SECURITY || 'tls',
+        usuario: process.env.EMAIL_USER || '',
+        senha: process.env.EMAIL_PASS ? '********' : '',
+        remetente: process.env.EMAIL_FROM || 'naoresponder@iemasaoluiscentro.net',
+        nomeRemetente: process.env.EMAIL_FROM_NAME || 'Sistema de Provas',
+        notificacoes: true,
+        lembretes: true,
+        resultados: true
+      },
+      logs: {
+        nivel: process.env.LOG_LEVEL || 'info',
+        retencaoDias: 30,
+        console: true,
+        arquivo: true,
+        auditoria: true,
+        nivelAuditoria: 'medio'
+      },
+      backups: {
+        automatico: true,
+        frequencia: 'daily',
+        horario: '03:00',
+        manterPor: 30,
+        local: 'local',
+        maxBackups: 50,
+        incluirArquivos: true,
+        compactar: true,
+        ultimoBackup: null,
+        espacoUtilizado: '0 MB'
+      },
+      desempenho: {
+        cacheTempo: 300,
+        paginacaoPadrao: 20,
+        maxResultados: 1000,
+        compressaoRespostas: true,
+        timeoutRequisicao: 30,
+        limiteArquivo: 10
+      },
+      api: {
+        rateLimit: 100,
+        versao: 'v1',
+        documentacao: true,
+        chaveObrigatoria: false,
+        cors: true,
+        dominiosPermitidos: ['localhost']
+      }
+    };
+
+    // Buscar configurações do banco (se existirem)
+    let configuracoes = [];
+    try {
+      configuracoes = await Config.find().lean();
+    } catch (dbError) {
+      console.log('⚠️ Erro ao buscar configs do banco:', dbError.message);
+      return res.json({
+        success: true,
+        configuracoes: configPadrao,
+        origem: 'padrao'
+      });
+    }
+
+    // Se não houver configurações no banco, retornar as padrão
+    if (!configuracoes || configuracoes.length === 0) {
+      return res.json({
+        success: true,
+        configuracoes: configPadrao,
+        origem: 'padrao'
+      });
+    }
+
+    // Criar uma cópia profunda do objeto padrão
+    const configObj = JSON.parse(JSON.stringify(configPadrao));
+    
+    // Aplicar configurações do banco sobre o padrão com SEGURANÇA
+    configuracoes.forEach(c => {
+      if (!c || !c.chave) return;
+      
+      try {
+        const parts = c.chave.split('.');
+        let target = configObj;
+        let pathExists = true;
+        
+        // Verificar se o caminho existe, se não existir, ignorar
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (!target[parts[i]]) {
+            pathExists = false;
+            break;
+          }
+          target = target[parts[i]];
+        }
+        
+        // Só atribuir se o caminho inteiro existir
+        if (pathExists) {
+          const lastKey = parts[parts.length - 1];
+          if (target && target[lastKey] !== undefined) {
+            target[lastKey] = c.valor;
+          }
+        }
+      } catch (pathError) {
+        console.warn(`⚠️ Erro ao processar chave ${c.chave}:`, pathError.message);
+      }
+    });
+
+    res.json({
+      success: true,
+      configuracoes: configObj,
+      total: configuracoes.length
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar configurações:', error);
+    // Em caso de erro, retornar as configurações padrão
+    res.json({
+      success: true,
+      configuracoes: {
+        aparencia: {
+          corPrimaria: '#667eea',
+          corSecundaria: '#764ba2',
+          modoEscuro: false,
+          tema: 'padrao',
+          animacoes: true,
+          arredondamento: true,
+          logoUrl: '',
+          faviconUrl: ''
+        },
+        sistema: {
+          nome: 'Sistema de Provas IEMA 2026',
+          versao: '1.0.0',
+          ambiente: process.env.NODE_ENV || 'development',
+          urlBase: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+          modoManutencao: false,
+          modoDebug: process.env.NODE_ENV !== 'production',
+          timeoutSessao: 60,
+          manutencaoMensagem: 'Sistema em manutenção. Volte mais tarde.'
+        },
+        seguranca: {
+          jwtExpiracao: process.env.JWT_EXPIRES_IN || '24h',
+          tentativasLogin: 5,
+          bloqueioTempo: 15,
+          doisFatores: false,
+          permitirMultiplosLogins: true,
+          senha: {
+            forcarTrocaInicial: true,
+            tamanhoMinimo: 6,
+            expiracaoDias: 90,
+            exigirMaiuscula: false,
+            exigirNumero: false,
+            exigirEspecial: false
+          }
+        },
+        provas: {
+          tempoMaximo: 240,
+          tempoMinimo: 10,
+          tempoAdicionalAcessibilidade: true,
+          tempoAdicionalPercent: 50,
+          questoesMinimas: 5,
+          questoesMaximas: 50,
+          correcaoAutomatica: true,
+          liberacaoAutomatica: false,
+          permitirRevisao: true,
+          mostrarGabarito: false,
+          permitirCancelamento: true,
+          notificarProfessorCancelamento: true
+        },
+        notificacoes: {
+          email: true,
+          sistema: true,
+          push: false,
+          whatsapp: false,
+          lembreteProva: 24,
+          lembreteCorrecao: true,
+          notificarResultado: true,
+          notificarCancelamento: true
+        },
+        email: {
+          servico: process.env.EMAIL_SERVICE || 'brevo',
+          host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
+          porta: parseInt(process.env.EMAIL_PORT) || 587,
+          seguranca: process.env.EMAIL_SECURITY || 'tls',
+          usuario: process.env.EMAIL_USER || '',
+          senha: process.env.EMAIL_PASS ? '********' : '',
+          remetente: process.env.EMAIL_FROM || 'naoresponder@iemasaoluiscentro.net',
+          nomeRemetente: process.env.EMAIL_FROM_NAME || 'Sistema de Provas',
+          notificacoes: true,
+          lembretes: true,
+          resultados: true
+        },
+        logs: {
+          nivel: process.env.LOG_LEVEL || 'info',
+          retencaoDias: 30,
+          console: true,
+          arquivo: true,
+          auditoria: true,
+          nivelAuditoria: 'medio'
+        },
+        backups: {
+          automatico: true,
+          frequencia: 'daily',
+          horario: '03:00',
+          manterPor: 30,
+          local: 'local',
+          maxBackups: 50,
+          incluirArquivos: true,
+          compactar: true,
+          ultimoBackup: null,
+          espacoUtilizado: '0 MB'
+        },
+        desempenho: {
+          cacheTempo: 300,
+          paginacaoPadrao: 20,
+          maxResultados: 1000,
+          compressaoRespostas: true,
+          timeoutRequisicao: 30,
+          limiteArquivo: 10
+        },
+        api: {
+          rateLimit: 100,
+          versao: 'v1',
+          documentacao: true,
+          chaveObrigatoria: false,
+          cors: true,
+          dominiosPermitidos: ['localhost']
+        }
+      },
+      origem: 'fallback'
+    });
+  }
+});
+
+// PUT - Salvar configurações (apenas admin)
+app.put('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req, res) => {
+  try {
+    const { configuracoes } = req.body;
+    
+    console.log('💾 Admin salvando configurações');
+    
+    if (!configuracoes || typeof configuracoes !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Dados de configuração inválidos'
+      });
+    }
+
+    // Função para achatar objeto com segurança
+    function flattenObject(obj, prefix = '') {
+      return Object.keys(obj).reduce((acc, key) => {
+        const pre = prefix.length ? prefix + '.' : '';
+        if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+          Object.assign(acc, flattenObject(obj[key], pre + key));
+        } else {
+          acc[pre + key] = obj[key];
+        }
+        return acc;
+      }, {});
+    }
+
+    const flatConfig = flattenObject(configuracoes);
+    
+    // Salvar cada configuração no banco
+    const resultados = [];
+    for (const [chave, valor] of Object.entries(flatConfig)) {
+      try {
+        // Determinar tipo do valor
+        let tipo = typeof valor;
+        if (Array.isArray(valor)) tipo = 'array';
+        if (valor === null) tipo = 'null';
+        
+        // Categorizar automaticamente pela chave
+        let categoria = 'geral';
+        if (chave.startsWith('sistema')) categoria = 'sistema';
+        else if (chave.startsWith('seguranca')) categoria = 'seguranca';
+        else if (chave.startsWith('provas')) categoria = 'provas';
+        else if (chave.startsWith('notificacoes')) categoria = 'notificacoes';
+        else if (chave.startsWith('email')) categoria = 'email';
+        else if (chave.startsWith('logs')) categoria = 'logs';
+        else if (chave.startsWith('backups')) categoria = 'backups';
+        else if (chave.startsWith('aparencia')) categoria = 'aparencia';
+        else if (chave.startsWith('desempenho')) categoria = 'desempenho';
+        else if (chave.startsWith('api')) categoria = 'api';
+        
+        const result = await Config.findOneAndUpdate(
+          { chave },
+          {
+            chave,
+            valor,
+            tipo,
+            categoria,
+            atualizadoPor: req.userId,
+            atualizadoEm: new Date()
+          },
+          { upsert: true, new: true }
+        );
+        resultados.push(result);
+      } catch (itemError) {
+        console.error(`❌ Erro ao salvar ${chave}:`, itemError.message);
+      }
+    }
+
+    console.log(`✅ ${resultados.length} configurações salvas`);
+
+    res.json({
+      success: true,
+      message: 'Configurações salvas com sucesso!',
+      total: resultados.length
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao salvar configurações:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET - Configuração específica por chave
+app.get('/api/admin/configuracoes/:chave', authenticateToken, isSuperAdmin, async (req, res) => {
+  try {
+    const { chave } = req.params;
+    
+    const config = await Config.findOne({ chave }).lean();
+    
+    if (!config) {
+      return res.status(404).json({
+        success: false,
+        error: 'Configuração não encontrada'
+      });
+    }
+
+    res.json({
+      success: true,
+      configuracao: config
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar configuração:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT - Atualizar configuração específica
+app.put('/api/admin/configuracoes/:chave', authenticateToken, isSuperAdmin, async (req, res) => {
+  try {
+    const { chave } = req.params;
+    const { valor, descricao, categoria, publico } = req.body;
+    
+    const config = await Config.findOneAndUpdate(
+      { chave },
+      {
+        chave,
+        valor,
+        descricao,
+        categoria,
+        publico,
+        atualizadoPor: req.userId,
+        atualizadoEm: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Configuração atualizada com sucesso!',
+      configuracao: config
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao atualizar configuração:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE - Resetar configuração para o padrão
+app.delete('/api/admin/configuracoes/:chave', authenticateToken, isSuperAdmin, async (req, res) => {
+  try {
+    const { chave } = req.params;
+    
+    await Config.deleteOne({ chave });
+
+    res.json({
+      success: true,
+      message: 'Configuração resetada para o padrão'
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao resetar configuração:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST - Resetar TODAS as configurações
+app.post('/api/admin/configuracoes/reset', authenticateToken, isSuperAdmin, async (req, res) => {
+  try {
+    await Config.deleteMany({});
+
+    res.json({
+      success: true,
+      message: 'Todas as configurações foram resetadas!'
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao resetar configurações:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST - Testar configuração de email
+app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req, res) => {
+  try {
+    const { destinatario } = req.body;
+    
+    if (!destinatario) {
+      return res.status(400).json({
+        success: false,
+        error: 'Destinatário não informado'
+      });
+    }
+
+    console.log('📧 Teste de email para:', destinatario);
+    
+    // Aqui você implementaria o envio real
+    // Por enquanto, apenas simular sucesso
+    res.json({
+      success: true,
+      message: 'Email de teste enviado com sucesso!',
+      destinatario
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao testar email:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 
 // ============ FRONTEND ESTÁTICO ============

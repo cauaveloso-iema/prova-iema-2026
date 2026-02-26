@@ -3865,3 +3865,51 @@ code {
     grid-template-columns: repeat(5, 1fr);
     gap: 8px;
 }
+
+/* Modo Escuro */
+body.dark-mode {
+  background-color: #1a1a1a;
+  color: #f0f0f0;
+}
+
+body.dark-mode .sidebar {
+  background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%);
+  border-right: 1px solid #404040;
+}
+
+body.dark-mode .main-content {
+  background-color: #1a1a1a;
+}
+
+body.dark-mode .card,
+body.dark-mode .stat-card,
+body.dark-mode .filters-card,
+body.dark-mode .table-professional,
+body.dark-mode .config-card,
+body.dark-mode .modal-content {
+  background-color: #2d2d2d;
+  border-color: #404040;
+  color: #f0f0f0;
+}
+
+body.dark-mode .form-control,
+body.dark-mode .filter-select,
+body.dark-mode .btn-filter {
+  background-color: #3d3d3d;
+  border-color: #505050;
+  color: #f0f0f0;
+}
+
+body.dark-mode .table-header,
+body.dark-mode .data-table th {
+  background-color: #333333;
+  color: #f0f0f0;
+}
+
+body.dark-mode .data-table td {
+  border-bottom-color: #404040;
+}
+
+body.dark-mode .data-table tr:hover td {
+  background-color: #3a3a3a;
+}

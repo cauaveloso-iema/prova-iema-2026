@@ -41,6 +41,10 @@ class AdminPanel {
         await this.loadSection('dashboard');
         this.startAutoRefresh();
         this.carregarDadosReais();
+        
+        // 👇 ADICIONAR ESTAS LINHAS
+        this.aplicarModoEscuro(this.getConfiguracoesPadrao());
+        this.criarBotaoModoEscuro();
     }
 
     async checkAuth() {
@@ -7426,13 +7430,39 @@ class AdminPanel {
             try {
                 console.log('📧 Enviando lembrete para resultado:', resultadoId);
                 
+                // 🔴 PASSO 1: VERIFICAR CONFIGURAÇÕES ANTES DE TUDO
+                const token = localStorage.getItem('auth_token');
+                
+                // Buscar configurações atuais
+                const configResponse = await fetch('/api/admin/configuracoes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!configResponse.ok) {
+                    throw new Error('Erro ao buscar configurações');
+                }
+                
+                const configData = await configResponse.json();
+                const notificacoesHabilitadas = configData.configuracoes?.notificacoes?.sistema !== false;
+                
+                console.log('📋 Configurações de notificação:', {
+                    sistema: configData.configuracoes?.notificacoes?.sistema,
+                    habilitadas: notificacoesHabilitadas
+                });
+                
+                // Se notificações do sistema estiverem desabilitadas, NÃO ENVIAR
+                if (!notificacoesHabilitadas) {
+                    this.showToast('⚠️ Notificações do sistema estão desabilitadas nas configurações', 'warning');
+                    console.log('🚫 Bloqueado: notificações do sistema desabilitadas');
+                    return;
+                }
+                
                 // Buscar dados do resultado - primeiro tenta do this.resultadosCompletos
                 let resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
                 
                 // Se não encontrar, busca da API
                 if (!resultado) {
                     console.log('📡 Resultado não encontrado localmente, buscando da API...');
-                    const token = localStorage.getItem('auth_token');
                     
                     const response = await fetch('/api/admin/todos-resultados', {
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -7466,8 +7496,6 @@ class AdminPanel {
                 if (!confirmar) return;
                 
                 this.showToast('📧 Enviando lembrete...', 'info');
-                
-                const token = localStorage.getItem('auth_token');
                 
                 const notificacaoBody = {
                     usuarioId: alunoId,
@@ -11008,95 +11036,2123 @@ class AdminPanel {
         console.log('Professores carregados:', this.professores);
     }
 
+    // ============ CONFIGURAÇÕES DO SISTEMA (VERSÃO CORRIGIDA - SEM INSTITUIÇÃO) ============
     async loadConfiguracoes() {
         const contentArea = document.getElementById('contentArea');
+        
+        // Mostrar loading
         contentArea.innerHTML = `
-            <div class="section">
-                <div class="section-header">
-                    <h2><i class="fas fa-cog"></i> Configurações do Sistema</h2>
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                <p style="color: #495057;">Carregando configurações...</p>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+
+        try {
+            // Buscar configurações do backend
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/configuracoes', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            const config = data.success ? data.configuracoes : this.getConfiguracoesPadrao();
+
+            // Aplicar modo escuro se estiver ativado
+            this.aplicarModoEscuro(config);
+
+            contentArea.innerHTML = `
+                <div class="configuracoes-container">
+                    <!-- HEADER PROFISSIONAL -->
+                    <div class="configuracoes-header">
+                        <div class="header-left">
+                            <div class="header-icon">
+                                <i class="fas fa-cog"></i>
+                            </div>
+                            <div class="header-text">
+                                <h1>Configurações do Sistema</h1>
+                                <p>Gerencie as configurações globais do sistema</p>
+                            </div>
+                        </div>
+                        
+                        <div class="header-actions">
+                            <button class="btn-header btn-refresh" onclick="admin.carregarConfiguracoes()" title="Atualizar">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button class="btn-header btn-primary" onclick="admin.salvarConfiguracoes()" id="btnSalvarConfig">
+                                <i class="fas fa-save"></i>
+                                <span>Salvar Alterações</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- MENSAGEM DE STATUS -->
+                    <div id="configStatus" class="status-message" style="display: none;"></div>
+
+                    <!-- TABS DE CONFIGURAÇÃO -->
+                    <div class="config-tabs">
+                        <button class="tab-btn active" onclick="admin.mudarTabConfig('aparencia')">
+                            <i class="fas fa-paint-brush"></i> Aparência
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('sistema')">
+                            <i class="fas fa-server"></i> Sistema
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('seguranca')">
+                            <i class="fas fa-shield-alt"></i> Segurança
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('provas')">
+                            <i class="fas fa-file-alt"></i> Provas
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('notificacoes')">
+                            <i class="fas fa-bell"></i> Notificações
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('email')">
+                            <i class="fas fa-envelope"></i> Email
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('logs')">
+                            <i class="fas fa-history"></i> Logs
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('backups')">
+                            <i class="fas fa-database"></i> Backups
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('desempenho')">
+                            <i class="fas fa-tachometer-alt"></i> Desempenho
+                        </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('api')">
+                            <i class="fas fa-code"></i> API
+                        </button>
+                    </div>
+
+                    <!-- CONTEÚDO DAS TABS -->
+                    <div id="configContent" class="config-content">
+                        ${this.renderConfigAparencia(config)}
+                    </div>
+
+                    <!-- BOTÕES DE AÇÃO (RODAPÉ) -->
+                    <div class="config-actions">
+                        <button class="btn-secondary" onclick="admin.resetarConfiguracoes()">
+                            <i class="fas fa-undo"></i> Restaurar Padrões
+                        </button>
+                        <button class="btn-primary" onclick="admin.salvarConfiguracoes()">
+                            <i class="fas fa-save"></i> Salvar Configurações
+                        </button>
+                    </div>
                 </div>
-                <div class="info-card" style="background: #fff3cd; color: #856404;">
-                    <i class="fas fa-tools"></i>
-                    <div>
-                        <strong>Módulo em desenvolvimento</strong>
-                        <p style="margin: 5px 0 0 0;">Em breve você poderá configurar parâmetros globais do sistema.</p>
+
+                <style>
+                    .configuracoes-container {
+                        padding: 24px;
+                        max-width: 1400px;
+                        margin: 0 auto;
+                        font-family: 'Inter', -apple-system, sans-serif;
+                    }
+
+                    .configuracoes-header {
+                        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+                        border-radius: 20px;
+                        padding: 30px;
+                        margin-bottom: 30px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        flex-wrap: wrap;
+                        gap: 20px;
+                        box-shadow: 0 10px 30px rgba(75, 85, 99, 0.3);
+                        position: relative;
+                        overflow: hidden;
+                    }
+
+                    .configuracoes-header::before {
+                        content: '';
+                        position: absolute;
+                        top: -50px;
+                        right: -50px;
+                        width: 200px;
+                        height: 200px;
+                        background: rgba(255,255,255,0.1);
+                        border-radius: 50%;
+                    }
+
+                    .header-left {
+                        display: flex;
+                        align-items: center;
+                        gap: 20px;
+                        position: relative;
+                        z-index: 2;
+                    }
+
+                    .header-icon {
+                        width: 70px;
+                        height: 70px;
+                        background: rgba(255,255,255,0.15);
+                        border-radius: 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 32px;
+                        color: white;
+                        backdrop-filter: blur(10px);
+                        border: 1px solid rgba(255,255,255,0.2);
+                    }
+
+                    .header-text h1 {
+                        color: white;
+                        font-size: 28px;
+                        font-weight: 600;
+                        margin: 0 0 5px;
+                    }
+
+                    .header-text p {
+                        color: rgba(255,255,255,0.9);
+                        font-size: 14px;
+                        margin: 0;
+                    }
+
+                    .btn-header {
+                        padding: 12px 24px;
+                        border-radius: 40px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        transition: all 0.3s;
+                        border: none;
+                        position: relative;
+                        z-index: 2;
+                    }
+
+                    .btn-header.btn-primary {
+                        background: white;
+                        color: #4b5563;
+                        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                    }
+
+                    .btn-header.btn-primary:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+                    }
+
+                    .btn-header.btn-refresh {
+                        background: rgba(255,255,255,0.15);
+                        color: white;
+                        border: 1px solid rgba(255,255,255,0.3);
+                        backdrop-filter: blur(5px);
+                        padding: 12px;
+                    }
+
+                    .btn-header.btn-refresh:hover {
+                        background: rgba(255,255,255,0.25);
+                        transform: rotate(180deg);
+                    }
+
+                    .status-message {
+                        padding: 16px 24px;
+                        border-radius: 12px;
+                        margin-bottom: 20px;
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        animation: slideIn 0.3s ease-out;
+                    }
+
+                    .status-message.success {
+                        background: #d1fae5;
+                        border-left: 4px solid #10b981;
+                        color: #065f46;
+                    }
+
+                    .status-message.error {
+                        background: #fee2e2;
+                        border-left: 4px solid #ef4444;
+                        color: #7f1d1d;
+                    }
+
+                    .status-message i {
+                        font-size: 20px;
+                    }
+
+                    .config-tabs {
+                        display: flex;
+                        gap: 8px;
+                        margin-bottom: 25px;
+                        background: white;
+                        padding: 12px;
+                        border-radius: 16px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                        overflow-x: auto;
+                        flex-wrap: wrap;
+                    }
+
+                    .tab-btn {
+                        padding: 10px 16px;
+                        border: none;
+                        background: none;
+                        border-radius: 30px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        font-size: 13px;
+                        font-weight: 500;
+                        color: #6b7280;
+                        transition: all 0.3s;
+                        white-space: nowrap;
+                    }
+
+                    .tab-btn i {
+                        font-size: 14px;
+                    }
+
+                    .tab-btn:hover {
+                        background: #f3f4f6;
+                        color: #4b5563;
+                    }
+
+                    .tab-btn.active {
+                        background: #4b5563;
+                        color: white;
+                    }
+
+                    .config-content {
+                        background: white;
+                        border-radius: 16px;
+                        padding: 30px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                        margin-bottom: 25px;
+                    }
+
+                    .config-section {
+                        display: none;
+                    }
+
+                    .config-section.active {
+                        display: block;
+                        animation: fadeIn 0.3s ease-out;
+                    }
+
+                    .section-title {
+                        font-size: 18px;
+                        font-weight: 600;
+                        color: #1f2937;
+                        margin: 0 0 20px;
+                        padding-bottom: 15px;
+                        border-bottom: 2px solid #f0f0f0;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    }
+
+                    .section-title i {
+                        color: #6b7280;
+                        font-size: 20px;
+                    }
+
+                    .config-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+                        gap: 25px;
+                    }
+
+                    .config-card {
+                        background: #f9fafb;
+                        border-radius: 12px;
+                        padding: 20px;
+                        border: 1px solid #e5e7eb;
+                    }
+
+                    .config-card h4 {
+                        margin: 0 0 15px;
+                        font-size: 15px;
+                        color: #374151;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+
+                    .config-card h4 i {
+                        color: #6b7280;
+                        font-size: 16px;
+                    }
+
+                    .form-group {
+                        margin-bottom: 20px;
+                    }
+
+                    .form-group label {
+                        display: block;
+                        font-size: 13px;
+                        font-weight: 500;
+                        color: #4b5563;
+                        margin-bottom: 6px;
+                    }
+
+                    .form-group label i {
+                        margin-right: 5px;
+                        color: #6b7280;
+                        font-size: 12px;
+                    }
+
+                    .form-control {
+                        width: 100%;
+                        padding: 10px 12px;
+                        border: 2px solid #e5e7eb;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        transition: all 0.3s;
+                        background: white;
+                    }
+
+                    .form-control:focus {
+                        outline: none;
+                        border-color: #6b7280;
+                        box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
+                    }
+
+                    .form-control[type="color"] {
+                        height: 42px;
+                        padding: 4px;
+                    }
+
+                    .form-row {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 15px;
+                    }
+
+                    .checkbox-group {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin-bottom: 12px;
+                    }
+
+                    .checkbox-group input[type="checkbox"] {
+                        width: 18px;
+                        height: 18px;
+                        cursor: pointer;
+                    }
+
+                    .checkbox-group label {
+                        margin-bottom: 0;
+                        cursor: pointer;
+                    }
+
+                    .input-hint {
+                        margin-top: 5px;
+                        font-size: 11px;
+                        color: #9ca3af;
+                    }
+
+                    .info-box {
+                        background: #eef2ff;
+                        border-radius: 8px;
+                        padding: 12px 15px;
+                        margin: 15px 0;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        font-size: 13px;
+                        color: #1e40af;
+                    }
+
+                    .info-box i {
+                        font-size: 18px;
+                    }
+
+                    .config-actions {
+                        display: flex;
+                        justify-content: flex-end;
+                        gap: 15px;
+                        margin-top: 25px;
+                    }
+
+                    .btn-primary, .btn-secondary {
+                        padding: 12px 28px;
+                        border: none;
+                        border-radius: 40px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        transition: all 0.3s;
+                    }
+
+                    .btn-primary {
+                        background: linear-gradient(135deg, #4b5563, #374151);
+                        color: white;
+                        box-shadow: 0 4px 10px rgba(75, 85, 99, 0.3);
+                    }
+
+                    .btn-primary:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 15px rgba(75, 85, 99, 0.4);
+                    }
+
+                    .btn-secondary {
+                        background: #f3f4f6;
+                        color: #4b5563;
+                    }
+
+                    .btn-secondary:hover {
+                        background: #e5e7eb;
+                    }
+
+                    /* Modo Escuro */
+                    body.dark-mode {
+                        background-color: #1a1a1a;
+                        color: #f0f0f0;
+                    }
+
+                    body.dark-mode .sidebar {
+                        background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%);
+                        border-right: 1px solid #404040;
+                    }
+
+                    body.dark-mode .main-content {
+                        background-color: #1a1a1a;
+                    }
+
+                    body.dark-mode .config-tabs,
+                    body.dark-mode .config-content,
+                    body.dark-mode .config-card {
+                        background-color: #2d2d2d;
+                        border-color: #404040;
+                        color: #f0f0f0;
+                    }
+
+                    body.dark-mode .form-control {
+                        background-color: #3d3d3d;
+                        border-color: #505050;
+                        color: #f0f0f0;
+                    }
+
+                    body.dark-mode .section-title {
+                        color: #f0f0f0;
+                        border-bottom-color: #404040;
+                    }
+
+                    body.dark-mode .info-box {
+                        background: #1e3a5f;
+                        color: #e6f7ff;
+                    }
+
+                    @keyframes slideIn {
+                        from { opacity: 0; transform: translateY(-10px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+
+                    @media (max-width: 768px) {
+                        .config-grid {
+                            grid-template-columns: 1fr;
+                        }
+                        
+                        .form-row {
+                            grid-template-columns: 1fr;
+                        }
+                        
+                        .config-actions {
+                            flex-direction: column;
+                        }
+                        
+                        .btn-primary, .btn-secondary {
+                            width: 100%;
+                            justify-content: center;
+                        }
+                    }
+                </style>
+            `;
+
+            // Inicializar eventos
+            this.configAtual = config;
+            this.inicializarEventosConfig();
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar configurações:', error);
+            contentArea.innerHTML = `
+                <div class="error-container" style="text-align: center; padding: 60px; background: white; border-radius: 16px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 64px; color: #dc3545; margin-bottom: 20px;"></i>
+                    <h2 style="color: #721c24;">Erro ao carregar configurações</h2>
+                    <p style="color: #6c757d; margin-bottom: 25px;">${error.message}</p>
+                    <button class="btn-primary" onclick="admin.loadConfiguracoes()" style="background: #0d6efd; color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                        <i class="fas fa-sync-alt"></i> Tentar novamente
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // ============ RENDERIZAR CONFIGURAÇÕES DE APARÊNCIA ============
+    renderConfigAparencia(config) {
+        return `
+            <div class="config-section active" id="config-aparencia">
+                <h3 class="section-title">
+                    <i class="fas fa-paint-brush"></i> Aparência do Sistema
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-palette"></i> Cores</h4>
+                        
+                        <div class="form-group">
+                            <label><i class="fas fa-palette"></i> Cor Primária</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="color" id="config_cor_primaria" class="form-control" 
+                                    value="${config?.aparencia?.corPrimaria || '#667eea'}" 
+                                    style="width: 60px; height: 42px;">
+                                <input type="text" class="form-control" id="config_cor_primaria_text" 
+                                    value="${config?.aparencia?.corPrimaria || '#667eea'}" 
+                                    oninput="document.getElementById('config_cor_primaria').value = this.value">
+                            </div>
+                            <div class="input-hint">Cor principal do sistema (botões, links, etc)</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label><i class="fas fa-palette"></i> Cor Secundária</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="color" id="config_cor_secundaria" class="form-control" 
+                                    value="${config?.aparencia?.corSecundaria || '#764ba2'}" 
+                                    style="width: 60px; height: 42px;">
+                                <input type="text" class="form-control" id="config_cor_secundaria_text" 
+                                    value="${config?.aparencia?.corSecundaria || '#764ba2'}" 
+                                    oninput="document.getElementById('config_cor_secundaria').value = this.value">
+                            </div>
+                            <div class="input-hint">Cor secundária (destaques, gradientes)</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label><i class="fas fa-paint-brush"></i> Tema</label>
+                            <select id="config_tema" class="form-control" onchange="admin.mudarTema(this.value)">
+                                <option value="padrao" ${config?.aparencia?.tema === 'padrao' ? 'selected' : ''}>🎨 Padrão</option>
+                                <option value="escuro" ${config?.aparencia?.tema === 'escuro' ? 'selected' : ''}>🌙 Escuro</option>
+                                <option value="claro" ${config?.aparencia?.tema === 'claro' ? 'selected' : ''}>☀️ Claro</option>
+                                <option value="contraste" ${config?.aparencia?.tema === 'contraste' ? 'selected' : ''}>♿ Alto Contraste</option>
+                            </select>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_modo_escuro" ${config?.aparencia?.modoEscuro ? 'checked' : ''}>
+                            <label for="config_modo_escuro"><i class="fas fa-moon"></i> Habilitar Modo Escuro</label>
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-font"></i> Identidade Visual</h4>
+                        
+                        <div class="form-group">
+                            <label><i class="fas fa-font"></i> Nome do Sistema</label>
+                            <input type="text" id="config_nome_sistema" class="form-control" 
+                                value="${config?.sistema?.nome || 'Sistema de Provas IEMA 2026'}" 
+                                placeholder="Nome do sistema">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label><i class="fas fa-image"></i> Logo URL (opcional)</label>
+                            <input type="text" id="config_logo_url" class="form-control" 
+                                value="${config?.aparencia?.logoUrl || ''}" 
+                                placeholder="https://exemplo.com/logo.png">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label><i class="fas fa-favicon"></i> Favicon URL (opcional)</label>
+                            <input type="text" id="config_favicon_url" class="form-control" 
+                                value="${config?.aparencia?.faviconUrl || ''}" 
+                                placeholder="https://exemplo.com/favicon.ico">
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_animacoes" ${config?.aparencia?.animacoes !== false ? 'checked' : ''}>
+                            <label for="config_animacoes"><i class="fas fa-film"></i> Habilitar Animações</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_arredondamento" ${config?.aparencia?.arredondamento !== false ? 'checked' : ''}>
+                            <label for="config_arredondamento"><i class="fas fa-circle"></i> Cantos Arredondados</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+}
+
+    // ============ RENDERIZAR CONFIGURAÇÕES DO SISTEMA ============
+    renderConfigSistema(config) {
+        return `
+            <div class="config-section active" id="config-sistema">
+                <h3 class="section-title">
+                    <i class="fas fa-server"></i> Configurações do Sistema
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-info-circle"></i> Informações do Sistema</h4>
+                        
+                        <div class="form-group">
+                            <label>Versão do Sistema</label>
+                            <input type="text" class="form-control" value="${config.sistema?.versao || '1.0.0'}" readonly disabled>
+                            <div class="input-hint">Versão atual do sistema</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Ambiente</label>
+                            <select id="config_ambiente" class="form-control">
+                                <option value="development" ${config.sistema?.ambiente === 'development' ? 'selected' : ''}>🛠️ Desenvolvimento</option>
+                                <option value="production" ${config.sistema?.ambiente === 'production' ? 'selected' : ''}>🚀 Produção</option>
+                                <option value="homologation" ${config.sistema?.ambiente === 'homologation' ? 'selected' : ''}>🧪 Homologação</option>
+                            </select>
+                            <div class="input-hint">⚠️ Altere apenas se souber o que está fazendo</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>URL Base</label>
+                            <input type="text" id="config_url_base" class="form-control" 
+                                value="${config.sistema?.urlBase || window.location.origin}" 
+                                placeholder="https://seudominio.com">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Timeout da Sessão (minutos)</label>
+                            <input type="number" id="config_timeout_sessao" class="form-control" 
+                                value="${config.sistema?.timeoutSessao || 60}" min="5" max="1440">
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-tools"></i> Modos de Operação</h4>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_manutencao" ${config.sistema?.modoManutencao ? 'checked' : ''}>
+                            <label for="config_manutencao"><i class="fas fa-tools"></i> Modo de Manutenção</label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Mensagem de Manutenção</label>
+                            <textarea id="config_mensagem_manutencao" class="form-control" rows="3">${config.sistema?.manutencaoMensagem || 'Sistema em manutenção. Volte mais tarde.'}</textarea>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_debug" ${config.sistema?.modoDebug ? 'checked' : ''}>
+                            <label for="config_debug"><i class="fas fa-bug"></i> Modo Debug</label>
+                        </div>
+                        
+                        <div class="info-box">
+                            <i class="fas fa-info-circle"></i>
+                            <span>O modo debug exibe informações técnicas e pode ajudar na resolução de problemas</span>
+                        </div>
                     </div>
                 </div>
             </div>
         `;
     }
 
-    adicionarLogServidor(log) {
-        const consoleOutput = document.getElementById('consoleOutput');
-        if (!consoleOutput) return;
-        
-        const linha = document.createElement('div');
-        linha.className = 'console-line';
-        
-        const data = new Date(log.timestamp);
-        const hora = data.toLocaleTimeString('pt-BR', { hour12: false });
-        
-        // Determinar ícone e cor baseado no tipo
-        let icone = 'ℹ️';
-        let tipo = 'info';
-        let cor = '#0dcaf0';
-        
-        // Verificar mensagens específicas do terminal
-        const mensagem = log.message || '';
-        
-        if (mensagem.includes('❌') || mensagem.includes('Error') || mensagem.includes('erro') || log.type === 'error') {
-            icone = '❌';
-            tipo = 'error';
-            cor = '#dc3545';
-        }
-        else if (mensagem.includes('⚠️') || mensagem.includes('warn') || log.type === 'warn') {
-            icone = '⚠️';
-            tipo = 'warn';
-            cor = '#ffc107';
-        }
-        else if (mensagem.includes('✅') || mensagem.includes('sucesso') || log.type === 'success') {
-            icone = '✅';
-            tipo = 'success';
-            cor = '#28a745';
-        }
-        else if (mensagem.includes('🔍') || mensagem.includes('Testando') || log.type === 'debug') {
-            icone = '🔍';
-            tipo = 'debug';
-            cor = '#6f42c1';
-        }
-        else if (mensagem.includes('📁') || mensagem.includes('📊') || mensagem.includes('📝') || mensagem.includes('🚀')) {
-            icone = '📌';
-            tipo = 'system';
-            cor = '#6c757d';
-        }
-        
-        linha.innerHTML = `
-            <span class="console-timestamp" style="color: #6c757d; min-width: 80px;">[${hora}]</span>
-            <span class="console-level ${tipo}" style="color: ${cor}; min-width: 70px;">${icone} [${tipo.toUpperCase()}]</span>
-            <span class="console-message" style="color: ${tipo === 'error' ? '#f8d7da' : '#f8f9fa'};">${this.escapeHtml(mensagem)}</span>
+    // ============ RENDERIZAR CONFIGURAÇÕES DE SEGURANÇA ============
+    renderConfigSeguranca(config) {
+        return `
+            <div class="config-section active" id="config-seguranca">
+                <h3 class="section-title">
+                    <i class="fas fa-shield-alt"></i> Configurações de Segurança
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-lock"></i> Autenticação</h4>
+                        
+                        <div class="form-group">
+                            <label>Tempo de expiração do token (horas)</label>
+                            <input type="number" id="config_jwt_expira" class="form-control" 
+                                value="${parseInt(config.seguranca?.jwtExpiracao) || 24}" min="1" max="720">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Tentativas de login permitidas</label>
+                            <input type="number" id="config_tentativas_login" class="form-control" 
+                                value="${config.seguranca?.tentativasLogin || 5}" min="1" max="20">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Tempo de bloqueio (minutos)</label>
+                            <input type="number" id="config_bloqueio_tempo" class="form-control" 
+                                value="${config.seguranca?.bloqueioTempo || 15}" min="1" max="1440">
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_permitir_multiplos_logins" ${config.seguranca?.permitirMultiplosLogins !== false ? 'checked' : ''}>
+                            <label for="config_permitir_multiplos_logins"><i class="fas fa-users"></i> Permitir múltiplos logins</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_2fa" ${config.seguranca?.doisFatores ? 'checked' : ''}>
+                            <label for="config_2fa"><i class="fas fa-mobile-alt"></i> Exigir 2FA para admins</label>
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-key"></i> Política de Senhas</h4>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_senha_forcar_troca" ${config.seguranca?.senha?.forcarTrocaInicial !== false ? 'checked' : ''}>
+                            <label>Forçar troca de senha no primeiro acesso</label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Tamanho mínimo da senha</label>
+                            <input type="number" id="config_senha_tamanho" class="form-control" 
+                                value="${config.seguranca?.senha?.tamanhoMinimo || 6}" min="4" max="20">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Expiração da senha (dias)</label>
+                            <input type="number" id="config_senha_expiracao" class="form-control" 
+                                value="${config.seguranca?.senha?.expiracaoDias || 90}" min="0" max="365">
+                            <div class="input-hint">0 = nunca expira</div>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_senha_maiuscula" ${config.seguranca?.senha?.exigirMaiuscula ? 'checked' : ''}>
+                            <label>Exigir letra maiúscula</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_senha_numero" ${config.seguranca?.senha?.exigirNumero ? 'checked' : ''}>
+                            <label>Exigir número</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_senha_especial" ${config.seguranca?.senha?.exigirEspecial ? 'checked' : ''}>
+                            <label>Exigir caractere especial</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
-        
-        consoleOutput.appendChild(linha);
-        
-        // Limitar número de linhas
-        while (consoleOutput.children.length > 500) {
-            consoleOutput.removeChild(consoleOutput.firstChild);
-        }
-        
-        // Auto scroll se ativado
-        if (document.getElementById('autoScrollConsole')?.checked) {
-            consoleOutput.scrollTop = consoleOutput.scrollHeight;
-        }
-        
-        // Atualizar estatísticas
-        this.atualizarStatsConsole();
     }
 
-    escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    // ============ RENDERIZAR CONFIGURAÇÕES DE PROVAS ============
+    renderConfigProvas(config) {
+        return `
+            <div class="config-section active" id="config-provas">
+                <h3 class="section-title">
+                    <i class="fas fa-file-alt"></i> Configurações de Provas
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-clock"></i> Temporização</h4>
+                        
+                        <div class="form-group">
+                            <label>Tempo máximo padrão (minutos)</label>
+                            <input type="number" id="config_tempo_maximo" class="form-control" 
+                                value="${config.provas?.tempoMaximo || 240}" min="10" max="1440">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Tempo mínimo (minutos)</label>
+                            <input type="number" id="config_tempo_minimo" class="form-control" 
+                                value="${config.provas?.tempoMinimo || 10}" min="5" max="120">
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_tempo_adicional" ${config.provas?.tempoAdicionalAcessibilidade !== false ? 'checked' : ''}>
+                            <label><i class="fas fa-wheelchair"></i> Tempo adicional para acessibilidade</label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Percentual adicional (%)</label>
+                            <input type="number" id="config_tempo_adicional_percent" class="form-control" 
+                                value="${config.provas?.tempoAdicionalPercent || 50}" min="10" max="200" step="10">
+                            <div class="input-hint">Percentual adicional de tempo para alunos com acessibilidade</div>
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-question-circle"></i> Questões</h4>
+                        
+                        <div class="form-group">
+                            <label>Mínimo de questões por prova</label>
+                            <input type="number" id="config_questoes_min" class="form-control" 
+                                value="${config.provas?.questoesMinimas || 5}" min="1" max="20">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Máximo de questões por prova</label>
+                            <input type="number" id="config_questoes_max" class="form-control" 
+                                value="${config.provas?.questoesMaximas || 50}" min="10" max="200">
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-robot"></i> Correção</h4>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_correcao_automatica" ${config.provas?.correcaoAutomatica !== false ? 'checked' : ''}>
+                            <label><i class="fas fa-robot"></i> Correção automática</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_liberacao_automatica" ${config.provas?.liberacaoAutomatica ? 'checked' : ''}>
+                            <label><i class="fas fa-lock-open"></i> Liberação automática de notas</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_permitir_revisao" ${config.provas?.permitirRevisao !== false ? 'checked' : ''}>
+                            <label><i class="fas fa-eye"></i> Permitir revisão após correção</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_mostrar_gabarito" ${config.provas?.mostrarGabarito ? 'checked' : ''}>
+                            <label><i class="fas fa-check-circle"></i> Mostrar gabarito após prova</label>
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-ban"></i> Cancelamento</h4>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_permitir_cancelamento" ${config.provas?.permitirCancelamento !== false ? 'checked' : ''}>
+                            <label>Permitir cancelamento automático</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_notificar_professor_cancelamento" ${config.provas?.notificarProfessorCancelamento !== false ? 'checked' : ''}>
+                            <label>Notificar professor sobre cancelamentos</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ RENDERIZAR CONFIGURAÇÕES DE NOTIFICAÇÕES ============
+    renderConfigNotificacoes(config) {
+        return `
+            <div class="config-section active" id="config-notificacoes">
+                <h3 class="section-title">
+                    <i class="fas fa-bell"></i> Configurações de Notificações
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-bell"></i> Canais de Notificação</h4>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_notificacao_email" ${config.notificacoes?.email !== false ? 'checked' : ''}>
+                            <label><i class="fas fa-envelope"></i> Notificações por Email</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_notificacao_sistema" ${config.notificacoes?.sistema !== false ? 'checked' : ''}>
+                            <label><i class="fas fa-bell"></i> Notificações no Sistema</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_notificacao_push" ${config.notificacoes?.push ? 'checked' : ''}>
+                            <label><i class="fas fa-mobile-alt"></i> Notificações Push</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_notificacao_whatsapp" ${config.notificacoes?.whatsapp ? 'checked' : ''}>
+                            <label><i class="fab fa-whatsapp"></i> Notificações WhatsApp</label>
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-clock"></i> Lembretes</h4>
+                        
+                        <div class="form-group">
+                            <label>Lembrete de prova (horas antes)</label>
+                            <input type="number" id="config_lembrete_prova" class="form-control" 
+                                value="${config.notificacoes?.lembreteProva || 24}" min="1" max="168">
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_lembrete_correcao" ${config.notificacoes?.lembreteCorrecao !== false ? 'checked' : ''}>
+                            <label>Lembrar professor sobre correções pendentes</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_notificar_resultado" ${config.notificacoes?.notificarResultado !== false ? 'checked' : ''}>
+                            <label>Notificar quando resultado for liberado</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_notificar_cancelamento" ${config.notificacoes?.notificarCancelamento !== false ? 'checked' : ''}>
+                            <label>Notificar sobre cancelamentos</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ RENDERIZAR CONFIGURAÇÕES DE EMAIL ============
+    renderConfigEmail(config) {
+        return `
+            <div class="config-section active" id="config-email">
+                <h3 class="section-title">
+                    <i class="fas fa-envelope"></i> Configurações de Email
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-server"></i> Servidor SMTP</h4>
+                        
+                        <div class="form-group">
+                            <label>Serviço de Email</label>
+                            <select id="config_email_servico" class="form-control" onchange="admin.atualizarCamposEmail()">
+                                <option value="brevo" ${config.email?.servico === 'brevo' ? 'selected' : ''}>📧 Brevo (Recomendado)</option>
+                                <option value="gmail" ${config.email?.servico === 'gmail' ? 'selected' : ''}>📧 Gmail</option>
+                                <option value="outlook" ${config.email?.servico === 'outlook' ? 'selected' : ''}>📧 Outlook</option>
+                                <option value="custom" ${config.email?.servico === 'custom' ? 'selected' : ''}>⚙️ Personalizado</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Host SMTP</label>
+                            <input type="text" id="config_email_host" class="form-control" 
+                                value="${config.email?.host || 'smtp-relay.brevo.com'}" 
+                                placeholder="smtp.exemplo.com">
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Porta</label>
+                                <input type="number" id="config_email_porta" class="form-control" 
+                                    value="${config.email?.porta || 587}" min="1" max="65535">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Segurança</label>
+                                <select id="config_email_seguranca" class="form-control">
+                                    <option value="tls" ${config.email?.seguranca === 'tls' ? 'selected' : ''}>TLS</option>
+                                    <option value="ssl" ${config.email?.seguranca === 'ssl' ? 'selected' : ''}>SSL</option>
+                                    <option value="none" ${config.email?.seguranca === 'none' ? 'selected' : ''}>Nenhuma</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Usuário</label>
+                            <input type="text" id="config_email_usuario" class="form-control" 
+                                value="${config.email?.usuario || ''}" 
+                                placeholder="seuemail@exemplo.com">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" id="config_email_senha" class="form-control" 
+                                value="${config.email?.senha ? '********' : ''}" 
+                                placeholder="••••••••">
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-paper-plane"></i> Envio de Emails</h4>
+                        
+                        <div class="form-group">
+                            <label>Remetente</label>
+                            <input type="email" id="config_email_remetente" class="form-control" 
+                                value="${config.email?.remetente || 'naoresponder@iemasaoluiscentro.net'}" 
+                                placeholder="naoresponder@seudominio.com">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Nome do Remetente</label>
+                            <input type="text" id="config_email_nome" class="form-control" 
+                                value="${config.email?.nomeRemetente || 'Sistema de Provas IEMA'}" 
+                                placeholder="Sistema de Provas">
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_email_notificacoes" ${config.email?.notificacoes !== false ? 'checked' : ''}>
+                            <label>Habilitar notificações por email</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_email_lembretes" ${config.email?.lembretes !== false ? 'checked' : ''}>
+                            <label>Enviar lembretes por email</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_email_resultados" ${config.email?.resultados !== false ? 'checked' : ''}>
+                            <label>Notificar quando resultados forem liberados</label>
+                        </div>
+                        
+                        <button class="btn-secondary" style="width: 100%; margin-top: 15px;" onclick="admin.testarConfigEmail()">
+                            <i class="fas fa-paper-plane"></i> Testar Configuração
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ RENDERIZAR CONFIGURAÇÕES DE LOGS ============
+    renderConfigLogs(config) {
+        return `
+            <div class="config-section active" id="config-logs">
+                <h3 class="section-title">
+                    <i class="fas fa-history"></i> Configurações de Logs
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-filter"></i> Nível de Log</h4>
+                        
+                        <div class="form-group">
+                            <label>Nível de Log</label>
+                            <select id="config_log_level" class="form-control">
+                                <option value="error" ${config.logs?.nivel === 'error' ? 'selected' : ''}>❌ Apenas Erros</option>
+                                <option value="warn" ${config.logs?.nivel === 'warn' ? 'selected' : ''}>⚠️ Erros e Avisos</option>
+                                <option value="info" ${config.logs?.nivel === 'info' ? 'selected' : ''}>ℹ️ Informações</option>
+                                <option value="debug" ${config.logs?.nivel === 'debug' ? 'selected' : ''}>🔍 Debug (Completo)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Dias para manter logs</label>
+                            <input type="number" id="config_log_retention" class="form-control" 
+                                value="${config.logs?.retencaoDias || 30}" min="1" max="365">
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_log_console" ${config.logs?.console !== false ? 'checked' : ''}>
+                            <label for="config_log_console"><i class="fas fa-terminal"></i> Log no Console</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_log_arquivo" ${config.logs?.arquivo !== false ? 'checked' : ''}>
+                            <label for="config_log_arquivo"><i class="fas fa-file-alt"></i> Salvar em Arquivo</label>
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-clipboard-list"></i> Auditoria</h4>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_log_auditoria" ${config.logs?.auditoria !== false ? 'checked' : ''}>
+                            <label>Habilitar Log de Auditoria</label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Nível de Auditoria</label>
+                            <select id="config_log_auditoria_nivel" class="form-control">
+                                <option value="baixo" ${config.logs?.nivelAuditoria === 'baixo' ? 'selected' : ''}>📋 Baixo (apenas ações críticas)</option>
+                                <option value="medio" ${config.logs?.nivelAuditoria === 'medio' ? 'selected' : ''}>📊 Médio (ações importantes)</option>
+                                <option value="alto" ${config.logs?.nivelAuditoria === 'alto' ? 'selected' : ''}>🔍 Alto (todas as ações)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="info-box">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Os logs de auditoria registram todas as ações importantes dos usuários</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ RENDERIZAR CONFIGURAÇÕES DE BACKUP ============
+    renderConfigBackup(config) {
+        const ultimoBackup = config.backups?.ultimoBackup ? new Date(config.backups.ultimoBackup).toLocaleString('pt-BR') : 'Nunca';
+        
+        return `
+            <div class="config-section active" id="config-backup">
+                <h3 class="section-title">
+                    <i class="fas fa-database"></i> Configurações de Backup
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-clock"></i> Backup Automático</h4>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_backup_auto" ${config.backups?.automatico !== false ? 'checked' : ''}>
+                            <label>Habilitar backup automático</label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Frequência</label>
+                            <select id="config_backup_frequencia" class="form-control">
+                                <option value="hourly" ${config.backups?.frequencia === 'hourly' ? 'selected' : ''}>⏰ A cada hora</option>
+                                <option value="daily" ${config.backups?.frequencia === 'daily' ? 'selected' : ''}>📅 Diário</option>
+                                <option value="weekly" ${config.backups?.frequencia === 'weekly' ? 'selected' : ''}>📆 Semanal</option>
+                                <option value="monthly" ${config.backups?.frequencia === 'monthly' ? 'selected' : ''}>📅 Mensal</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Horário (para backups diários)</label>
+                            <input type="time" id="config_backup_horario" class="form-control" 
+                                value="${config.backups?.horario || '03:00'}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Manter backups por (dias)</label>
+                            <input type="number" id="config_backup_retention" class="form-control" 
+                                value="${config.backups?.manterPor || 30}" min="1" max="365">
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-hdd"></i> Armazenamento</h4>
+                        
+                        <div class="form-group">
+                            <label>Local de armazenamento</label>
+                            <select id="config_backup_local" class="form-control">
+                                <option value="local" ${config.backups?.local === 'local' ? 'selected' : ''}>💾 Local (servidor)</option>
+                                <option value="s3" ${config.backups?.local === 's3' ? 'selected' : ''}>☁️ AWS S3</option>
+                                <option value="google" ${config.backups?.local === 'google' ? 'selected' : ''}>☁️ Google Drive</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Máximo de backups para manter</label>
+                            <input type="number" id="config_backup_max" class="form-control" 
+                                value="${config.backups?.maxBackups || 50}" min="1" max="1000">
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_backup_incluir_arquivos" ${config.backups?.incluirArquivos !== false ? 'checked' : ''}>
+                            <label>Incluir arquivos de upload</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_backup_compactar" ${config.backups?.compactar !== false ? 'checked' : ''}>
+                            <label>Compactar backups</label>
+                        </div>
+                        
+                        <div class="info-box">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Último backup: ${ultimoBackup}</span>
+                        </div>
+                        
+                        <div class="info-box" style="background: #e6f7ff; color: #0050b3;">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Espaço utilizado: ${config.backups?.espacoUtilizado || '0 MB'}</span>
+                        </div>
+                        
+                        <button class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="admin.fazerBackupAgora()">
+                            <i class="fas fa-play"></i> Fazer Backup Agora
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ RENDERIZAR CONFIGURAÇÕES DE DESEMPENHO ============
+    renderConfigDesempenho(config) {
+        return `
+            <div class="config-section active" id="config-desempenho">
+                <h3 class="section-title">
+                    <i class="fas fa-tachometer-alt"></i> Configurações de Desempenho
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-rocket"></i> Otimização</h4>
+                        
+                        <div class="form-group">
+                            <label>Tempo de cache (segundos)</label>
+                            <input type="number" id="config_cache_tempo" class="form-control" 
+                                value="${config.desempenho?.cacheTempo || 300}" min="0" max="3600">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Pagination padrão (itens por página)</label>
+                            <input type="number" id="config_paginacao_padrao" class="form-control" 
+                                value="${config.desempenho?.paginacaoPadrao || 20}" min="5" max="100">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Máximo de resultados por consulta</label>
+                            <input type="number" id="config_max_resultados" class="form-control" 
+                                value="${config.desempenho?.maxResultados || 1000}" min="100" max="10000">
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_compressao" ${config.desempenho?.compressaoRespostas !== false ? 'checked' : ''}>
+                            <label>Comprimir respostas (gzip)</label>
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-hourglass-half"></i> Timeouts</h4>
+                        
+                        <div class="form-group">
+                            <label>Timeout de requisição (segundos)</label>
+                            <input type="number" id="config_timeout_requisicao" class="form-control" 
+                                value="${config.desempenho?.timeoutRequisicao || 30}" min="5" max="120">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Limite de upload (MB)</label>
+                            <input type="number" id="config_limite_arquivo" class="form-control" 
+                                value="${config.desempenho?.limiteArquivo || 10}" min="1" max="100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ RENDERIZAR CONFIGURAÇÕES DE API ============
+    renderConfigAPI(config) {
+        return `
+            <div class="config-section active" id="config-api">
+                <h3 class="section-title">
+                    <i class="fas fa-code"></i> Configurações da API
+                </h3>
+                
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h4><i class="fas fa-server"></i> Geral</h4>
+                        
+                        <div class="form-group">
+                            <label>Rate Limit (requisições por minuto)</label>
+                            <input type="number" id="config_rate_limit" class="form-control" 
+                                value="${config.api?.rateLimit || 100}" min="10" max="1000">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Versão da API</label>
+                            <input type="text" id="config_api_versao" class="form-control" 
+                                value="${config.api?.versao || 'v1'}" readonly disabled>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_api_documentacao" ${config.api?.documentacao !== false ? 'checked' : ''}>
+                            <label>Habilitar documentação da API</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_api_chave_obrigatoria" ${config.api?.chaveObrigatoria ? 'checked' : ''}>
+                            <label>Exigir chave de API</label>
+                        </div>
+                    </div>
+
+                    <div class="config-card">
+                        <h4><i class="fas fa-globe"></i> CORS</h4>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="config_api_cors" ${config.api?.cors !== false ? 'checked' : ''}>
+                            <label>Habilitar CORS</label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Domínios Permitidos (um por linha)</label>
+                            <textarea id="config_api_dominios" class="form-control" rows="4">${(config.api?.dominiosPermitidos || ['localhost']).join('\n')}</textarea>
+                            <div class="input-hint">Use * para permitir todos (não recomendado)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ CONFIGURAÇÕES PADRÃO ============
+    getConfiguracoesPadrao() {
+        return {
+            aparencia: {
+                corPrimaria: '#667eea',
+                corSecundaria: '#764ba2',
+                modoEscuro: false,
+                tema: 'padrao',
+                animacoes: true,
+                arredondamento: true,
+                logoUrl: '',
+                faviconUrl: ''
+            },
+            sistema: {
+                nome: 'Sistema de Provas IEMA 2026',
+                versao: '1.0.0',
+                ambiente: 'production',
+                urlBase: window.location.origin,
+                modoManutencao: false,
+                modoDebug: false,
+                timeoutSessao: 60,
+                manutencaoMensagem: 'Sistema em manutenção. Volte mais tarde.'
+            },
+            seguranca: {
+                jwtExpiracao: '24h',
+                tentativasLogin: 5,
+                bloqueioTempo: 15,
+                doisFatores: false,
+                permitirMultiplosLogins: true,
+                senha: {
+                    forcarTrocaInicial: true,
+                    tamanhoMinimo: 6,
+                    expiracaoDias: 90,
+                    exigirMaiuscula: false,
+                    exigirNumero: false,
+                    exigirEspecial: false
+                }
+            },
+            provas: {
+                tempoMaximo: 240,
+                tempoMinimo: 10,
+                tempoAdicionalAcessibilidade: true,
+                tempoAdicionalPercent: 50,
+                questoesMinimas: 5,
+                questoesMaximas: 50,
+                correcaoAutomatica: true,
+                liberacaoAutomatica: false,
+                permitirRevisao: true,
+                mostrarGabarito: false,
+                permitirCancelamento: true,
+                notificarProfessorCancelamento: true
+            },
+            notificacoes: {
+                email: true,
+                sistema: true,
+                push: false,
+                whatsapp: false,
+                lembreteProva: 24,
+                lembreteCorrecao: true,
+                notificarResultado: true,
+                notificarCancelamento: true
+            },
+            email: {
+                servico: 'brevo',
+                host: 'smtp-relay.brevo.com',
+                porta: 587,
+                seguranca: 'tls',
+                usuario: '',
+                senha: '',
+                remetente: 'naoresponder@iemasaoluiscentro.net',
+                nomeRemetente: 'Sistema de Provas IEMA',
+                notificacoes: true,
+                lembretes: true,
+                resultados: true
+            },
+            logs: {
+                nivel: 'info',
+                retencaoDias: 30,
+                console: true,
+                arquivo: true,
+                auditoria: true,
+                nivelAuditoria: 'medio'
+            },
+            backups: {
+                automatico: true,
+                frequencia: 'daily',
+                horario: '03:00',
+                manterPor: 30,
+                local: 'local',
+                maxBackups: 50,
+                incluirArquivos: true,
+                compactar: true,
+                ultimoBackup: null,
+                espacoUtilizado: '0 MB'
+            },
+            desempenho: {
+                cacheTempo: 300,
+                paginacaoPadrao: 20,
+                maxResultados: 1000,
+                compressaoRespostas: true,
+                timeoutRequisicao: 30,
+                limiteArquivo: 10
+            },
+            api: {
+                rateLimit: 100,
+                versao: 'v1',
+                documentacao: true,
+                chaveObrigatoria: false,
+                cors: true,
+                dominiosPermitidos: ['localhost']
+            }
+        };
+    }
+
+    // ============ MUDAR ABA DE CONFIGURAÇÃO (VERSÃO CORRIGIDA COM MAPEAMENTO) ============
+    mudarTabConfig(tab) {
+        console.log(`🔄 Mudando para aba: ${tab}`);
+        
+        // Mapeamento de nomes de abas para IDs de seção
+        const mapaAbas = {
+            'aparencia': 'config-aparencia',
+            'sistema': 'config-sistema',
+            'seguranca': 'config-seguranca',
+            'provas': 'config-provas',
+            'notificacoes': 'config-notificacoes',
+            'email': 'config-email',
+            'logs': 'config-logs',
+            'backups': 'config-backup',      // <-- CORREÇÃO AQUI!
+            'desempenho': 'config-desempenho',
+            'api': 'config-api'
+        };
+        
+        // Remover active de todas as abas
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        
+        // Remover active de todas as seções
+        document.querySelectorAll('.config-section').forEach(section => section.classList.remove('active'));
+        
+        // Ativar a aba clicada
+        const tabs = document.querySelectorAll('.tab-btn');
+        for (let btn of tabs) {
+            if (btn.textContent.toLowerCase().includes(tab.toLowerCase()) || 
+                (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tab))) {
+                btn.classList.add('active');
+                break;
+            }
+        }
+        
+        // Mostrar a seção correspondente usando o mapa
+        const sectionId = mapaAbas[tab] || `config-${tab}`;
+        const section = document.getElementById(sectionId);
+        
+        if (section) {
+            section.classList.add('active');
+            console.log(`✅ Seção encontrada e ativada: ${sectionId}`);
+        } else {
+            console.log(`❌ Seção não encontrada: ${sectionId}`);
+            console.log(`🔄 Recriando conteúdo para resolver o problema...`);
+            this.recriarConteudoConfig(tab);
+            return;
+        }
+        
+        // Se for a tab de email, atualizar campos
+        if (tab === 'email') {
+            this.atualizarCamposEmail();
+        }
+    }
+
+    // ============ RECRIAR CONTEÚDO DE CONFIGURAÇÃO ============
+    recriarConteudoConfig(tabAtiva = 'aparencia') {
+        console.log(`🔄 Recriando conteúdo para aba: ${tabAtiva}`);
+        
+        const configContent = document.getElementById('configContent');
+        if (!configContent) return;
+        
+        // Usar configurações atuais ou padrão
+        const config = this.configAtual || this.getConfiguracoesPadrao();
+        
+        // Recriar todas as seções
+        let html = '';
+        
+        // Lista de todas as abas
+        const tabs = ['aparencia', 'sistema', 'seguranca', 'provas', 'notificacoes', 'email', 'logs', 'backups', 'desempenho', 'api'];
+        
+        tabs.forEach(tab => {
+            switch(tab) {
+                case 'aparencia':
+                    html += this.renderConfigAparencia(config);
+                    break;
+                case 'sistema':
+                    html += this.renderConfigSistema(config);
+                    break;
+                case 'seguranca':
+                    html += this.renderConfigSeguranca(config);
+                    break;
+                case 'provas':
+                    html += this.renderConfigProvas(config);
+                    break;
+                case 'notificacoes':
+                    html += this.renderConfigNotificacoes(config);
+                    break;
+                case 'email':
+                    html += this.renderConfigEmail(config);
+                    break;
+                case 'logs':
+                    html += this.renderConfigLogs(config);
+                    break;
+                case 'backups':
+                    html += this.renderConfigBackup(config);
+                    break;
+                case 'desempenho':
+                    html += this.renderConfigDesempenho(config);
+                    break;
+                case 'api':
+                    html += this.renderConfigAPI(config);
+                    break;
+            }
+        });
+        
+        configContent.innerHTML = html;
+        
+        // Ativar a aba correta
+        document.querySelectorAll('.config-section').forEach(section => {
+            section.classList.remove('active');
+            if (section.id === `config-${tabAtiva}`) {
+                section.classList.add('active');
+            }
+        });
+        
+        // Ativar o botão da aba correta
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.textContent.toLowerCase().includes(tabAtiva) || 
+                (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabAtiva))) {
+                btn.classList.add('active');
+            }
+        });
+        
+        // Reinicializar eventos
+        this.inicializarEventosConfig();
+        
+        // Se for a tab de email, atualizar campos
+        if (tabAtiva === 'email') {
+            this.atualizarCamposEmail();
+        }
+        
+        console.log(`✅ Conteúdo recriado com sucesso, aba ativa: ${tabAtiva}`);
+        return true;
+    }
+
+    // ============ CRIAR SEÇÃO DE CONFIGURAÇÃO DINAMICAMENTE ============
+    criarSecaoConfiguracao(tab) {
+        console.log(`🔄 Criando seção para: ${tab}`);
+        
+        const configContent = document.getElementById('configContent');
+        if (!configContent) return;
+        
+        let html = '';
+        
+        switch(tab) {
+            case 'sistema':
+                html = this.renderConfigSistema(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            case 'seguranca':
+                html = this.renderConfigSeguranca(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            case 'provas':
+                html = this.renderConfigProvas(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            case 'notificacoes':
+                html = this.renderConfigNotificacoes(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            case 'email':
+                html = this.renderConfigEmail(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            case 'logs':
+                html = this.renderConfigLogs(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            case 'backups':
+                html = this.renderConfigBackup(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            case 'desempenho':
+                html = this.renderConfigDesempenho(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            case 'api':
+                html = this.renderConfigAPI(this.configAtual || this.getConfiguracoesPadrao());
+                break;
+            default:
+                return;
+        }
+        
+        // Inserir o HTML no content
+        configContent.innerHTML = html;
+        
+        // Reinicializar eventos
+        this.inicializarEventosConfig();
+    }
+
+    // ============ ATUALIZAR CAMPOS DE EMAIL ============
+    atualizarCamposEmail() {
+        const servico = document.getElementById('config_email_servico')?.value;
+        const hostField = document.getElementById('config_email_host');
+        const portaField = document.getElementById('config_email_porta');
+        
+        if (!hostField || !portaField) return;
+        
+        if (servico === 'brevo') {
+            hostField.value = 'smtp-relay.brevo.com';
+            portaField.value = 587;
+            hostField.readOnly = true;
+            portaField.readOnly = true;
+        } else if (servico === 'gmail') {
+            hostField.value = 'smtp.gmail.com';
+            portaField.value = 587;
+            hostField.readOnly = true;
+            portaField.readOnly = true;
+        } else if (servico === 'outlook') {
+            hostField.value = 'smtp-mail.outlook.com';
+            portaField.value = 587;
+            hostField.readOnly = true;
+            portaField.readOnly = true;
+        } else {
+            hostField.readOnly = false;
+            portaField.readOnly = false;
+        }
+    }
+
+    // ============ INICIALIZAR EVENTOS ============
+    inicializarEventosConfig() {
+        // Sincronizar campos de cor
+        const corPrimaria = document.getElementById('config_cor_primaria');
+        const corPrimariaText = document.getElementById('config_cor_primaria_text');
+        if (corPrimaria && corPrimariaText) {
+            corPrimaria.addEventListener('input', (e) => {
+                corPrimariaText.value = e.target.value;
+            });
+            corPrimariaText.addEventListener('input', (e) => {
+                if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+                    corPrimaria.value = e.target.value;
+                }
+            });
+        }
+        
+        const corSecundaria = document.getElementById('config_cor_secundaria');
+        const corSecundariaText = document.getElementById('config_cor_secundaria_text');
+        if (corSecundaria && corSecundariaText) {
+            corSecundaria.addEventListener('input', (e) => {
+                corSecundariaText.value = e.target.value;
+            });
+            corSecundariaText.addEventListener('input', (e) => {
+                if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+                    corSecundaria.value = e.target.value;
+                }
+            });
+        }
+        
+        // Evento para modo escuro
+        const modoEscuro = document.getElementById('config_modo_escuro');
+        if (modoEscuro) {
+            modoEscuro.addEventListener('change', (e) => {
+                // Aplicar imediatamente (visual)
+                if (e.target.checked) {
+                    document.body.classList.add('dark-mode');
+                    localStorage.setItem('adminModoEscuro', 'true');
+                } else {
+                    document.body.classList.remove('dark-mode');
+                    localStorage.setItem('adminModoEscuro', 'false');
+                }
+                
+                // Atualizar botão flutuante se existir
+                const btn = document.getElementById('btnModoEscuroAdmin');
+                if (btn) {
+                    if (e.target.checked) {
+                        btn.innerHTML = '<i class="fas fa-sun"></i>';
+                        btn.style.background = '#f59e0b';
+                    } else {
+                        btn.innerHTML = '<i class="fas fa-moon"></i>';
+                        btn.style.background = '#4b5563';
+                    }
+                }
+            });
+        }
+        
+        // Evento para tema
+        const tema = document.getElementById('config_tema');
+        if (tema) {
+            tema.addEventListener('change', (e) => {
+                this.mudarTema(e.target.value);
+            });
+        }
+    }
+
+    // ============ APLICAR MODO ESCURO ============
+    aplicarModoEscuro(config) {
+        // Verificar se estamos na página admin
+        if (!window.location.pathname.includes('admin.html')) return;
+        
+        const modoEscuro = config?.aparencia?.modoEscuro || 
+                        localStorage.getItem('adminModoEscuro') === 'true';
+        
+        if (modoEscuro) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+        
+        console.log('🌙 Modo escuro admin:', modoEscuro ? 'ativado' : 'desativado');
+    }
+
+    toggleModoEscuro() {
+        // Verificar se estamos na página admin
+        if (!window.location.pathname.includes('admin.html')) return;
+        
+        const ativo = document.body.classList.contains('dark-mode');
+        
+        if (ativo) {
+            document.body.classList.remove('dark-mode');
+            localStorage.setItem('adminModoEscuro', 'false');
+        } else {
+            document.body.classList.add('dark-mode');
+            localStorage.setItem('adminModoEscuro', 'true');
+        }
+        
+        // Atualizar o checkbox nas configurações se ele existir
+        const checkbox = document.getElementById('config_modo_escuro');
+        if (checkbox) {
+            checkbox.checked = !ativo;
+        }
+        
+        this.showToast(ativo ? '☀️ Modo claro ativado' : '🌙 Modo escuro ativado', 'info');
+    }
+
+    // ============ CRIAR BOTÃO FLUTUANTE DE MODO ESCURO ============
+    criarBotaoModoEscuro() {
+        // Verificar se estamos na página admin
+        if (!window.location.pathname.includes('admin.html')) return;
+        
+        // Verificar se já existe
+        if (document.getElementById('btnModoEscuroAdmin')) return;
+        
+        const btn = document.createElement('button');
+        btn.id = 'btnModoEscuroAdmin';
+        btn.innerHTML = '<i class="fas fa-moon"></i>';
+        btn.setAttribute('title', 'Alternar modo escuro');
+        btn.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #4b5563;
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s;
+        `;
+        
+        // Atualizar ícone baseado no estado atual
+        if (document.body.classList.contains('dark-mode')) {
+            btn.innerHTML = '<i class="fas fa-sun"></i>';
+            btn.style.background = '#f59e0b';
+        }
+        
+        btn.onclick = () => {
+            this.toggleModoEscuro();
+            
+            // Atualizar ícone e cor
+            if (document.body.classList.contains('dark-mode')) {
+                btn.innerHTML = '<i class="fas fa-sun"></i>';
+                btn.style.background = '#f59e0b';
+            } else {
+                btn.innerHTML = '<i class="fas fa-moon"></i>';
+                btn.style.background = '#4b5563';
+            }
+        };
+        
+        document.body.appendChild(btn);
+    }
+
+
+    // ============ MUDAR TEMA ============
+    mudarTema(tema) {
+        // Remove todas as classes de tema
+        document.body.classList.remove('tema-escuro', 'tema-claro', 'tema-contraste');
+        
+        switch(tema) {
+            case 'escuro':
+                document.body.classList.add('tema-escuro');
+                document.getElementById('config_modo_escuro').checked = true;
+                break;
+            case 'claro':
+                document.body.classList.remove('dark-mode');
+                document.getElementById('config_modo_escuro').checked = false;
+                break;
+            case 'contraste':
+                document.body.classList.add('tema-contraste');
+                break;
+        }
+    }
+
+    // ============ SALVAR CONFIGURAÇÕES ============
+    async salvarConfiguracoes() {
+        try {
+            this.mostrarStatus('💾 Salvando configurações...', 'info');
+            
+            // Coletar todos os valores dos campos
+            const configuracoes = {
+                aparencia: {
+                    corPrimaria: document.getElementById('config_cor_primaria')?.value,
+                    corSecundaria: document.getElementById('config_cor_secundaria')?.value,
+                    modoEscuro: document.getElementById('config_modo_escuro')?.checked || false,
+                    tema: document.getElementById('config_tema')?.value || 'padrao',
+                    animacoes: document.getElementById('config_animacoes')?.checked !== false,
+                    arredondamento: document.getElementById('config_arredondamento')?.checked !== false,
+                    logoUrl: document.getElementById('config_logo_url')?.value || '',
+                    faviconUrl: document.getElementById('config_favicon_url')?.value || ''
+                },
+                sistema: {
+                    nome: document.getElementById('config_nome_sistema')?.value,
+                    ambiente: document.getElementById('config_ambiente')?.value,
+                    urlBase: document.getElementById('config_url_base')?.value,
+                    modoManutencao: document.getElementById('config_manutencao')?.checked || false,
+                    modoDebug: document.getElementById('config_debug')?.checked || false,
+                    timeoutSessao: parseInt(document.getElementById('config_timeout_sessao')?.value) || 60,
+                    manutencaoMensagem: document.getElementById('config_mensagem_manutencao')?.value
+                },
+                seguranca: {
+                    jwtExpiracao: parseInt(document.getElementById('config_jwt_expira')?.value) + 'h' || '24h',
+                    tentativasLogin: parseInt(document.getElementById('config_tentativas_login')?.value) || 5,
+                    bloqueioTempo: parseInt(document.getElementById('config_bloqueio_tempo')?.value) || 15,
+                    doisFatores: document.getElementById('config_2fa')?.checked || false,
+                    permitirMultiplosLogins: document.getElementById('config_permitir_multiplos_logins')?.checked !== false,
+                    senha: {
+                        forcarTrocaInicial: document.getElementById('config_senha_forcar_troca')?.checked !== false,
+                        tamanhoMinimo: parseInt(document.getElementById('config_senha_tamanho')?.value) || 6,
+                        expiracaoDias: parseInt(document.getElementById('config_senha_expiracao')?.value) || 90,
+                        exigirMaiuscula: document.getElementById('config_senha_maiuscula')?.checked || false,
+                        exigirNumero: document.getElementById('config_senha_numero')?.checked || false,
+                        exigirEspecial: document.getElementById('config_senha_especial')?.checked || false
+                    }
+                },
+                provas: {
+                    tempoMaximo: parseInt(document.getElementById('config_tempo_maximo')?.value) || 240,
+                    tempoMinimo: parseInt(document.getElementById('config_tempo_minimo')?.value) || 10,
+                    tempoAdicionalAcessibilidade: document.getElementById('config_tempo_adicional')?.checked !== false,
+                    tempoAdicionalPercent: parseInt(document.getElementById('config_tempo_adicional_percent')?.value) || 50,
+                    questoesMinimas: parseInt(document.getElementById('config_questoes_min')?.value) || 5,
+                    questoesMaximas: parseInt(document.getElementById('config_questoes_max')?.value) || 50,
+                    correcaoAutomatica: document.getElementById('config_correcao_automatica')?.checked !== false,
+                    liberacaoAutomatica: document.getElementById('config_liberacao_automatica')?.checked || false,
+                    permitirRevisao: document.getElementById('config_permitir_revisao')?.checked !== false,
+                    mostrarGabarito: document.getElementById('config_mostrar_gabarito')?.checked || false,
+                    permitirCancelamento: document.getElementById('config_permitir_cancelamento')?.checked !== false,
+                    notificarProfessorCancelamento: document.getElementById('config_notificar_professor_cancelamento')?.checked !== false
+                },
+                notificacoes: {
+                    email: document.getElementById('config_notificacao_email')?.checked !== false,
+                    sistema: document.getElementById('config_notificacao_sistema')?.checked !== false,
+                    push: document.getElementById('config_notificacao_push')?.checked || false,
+                    whatsapp: document.getElementById('config_notificacao_whatsapp')?.checked || false,
+                    lembreteProva: parseInt(document.getElementById('config_lembrete_prova')?.value) || 24,
+                    lembreteCorrecao: document.getElementById('config_lembrete_correcao')?.checked !== false,
+                    notificarResultado: document.getElementById('config_notificar_resultado')?.checked !== false,
+                    notificarCancelamento: document.getElementById('config_notificar_cancelamento')?.checked !== false
+                },
+                email: {
+                    servico: document.getElementById('config_email_servico')?.value,
+                    host: document.getElementById('config_email_host')?.value,
+                    porta: parseInt(document.getElementById('config_email_porta')?.value) || 587,
+                    seguranca: document.getElementById('config_email_seguranca')?.value,
+                    usuario: document.getElementById('config_email_usuario')?.value,
+                    senha: document.getElementById('config_email_senha')?.value === '********' ? null : document.getElementById('config_email_senha')?.value,
+                    remetente: document.getElementById('config_email_remetente')?.value,
+                    nomeRemetente: document.getElementById('config_email_nome')?.value,
+                    notificacoes: document.getElementById('config_email_notificacoes')?.checked !== false,
+                    lembretes: document.getElementById('config_email_lembretes')?.checked !== false,
+                    resultados: document.getElementById('config_email_resultados')?.checked !== false
+                },
+                logs: {
+                    nivel: document.getElementById('config_log_level')?.value,
+                    retencaoDias: parseInt(document.getElementById('config_log_retention')?.value) || 30,
+                    console: document.getElementById('config_log_console')?.checked !== false,
+                    arquivo: document.getElementById('config_log_arquivo')?.checked !== false,
+                    auditoria: document.getElementById('config_log_auditoria')?.checked !== false,
+                    nivelAuditoria: document.getElementById('config_log_auditoria_nivel')?.value || 'medio'
+                },
+                backups: {
+                    automatico: document.getElementById('config_backup_auto')?.checked !== false,
+                    frequencia: document.getElementById('config_backup_frequencia')?.value,
+                    horario: document.getElementById('config_backup_horario')?.value,
+                    manterPor: parseInt(document.getElementById('config_backup_retention')?.value) || 30,
+                    local: document.getElementById('config_backup_local')?.value,
+                    maxBackups: parseInt(document.getElementById('config_backup_max')?.value) || 50,
+                    incluirArquivos: document.getElementById('config_backup_incluir_arquivos')?.checked !== false,
+                    compactar: document.getElementById('config_backup_compactar')?.checked !== false
+                },
+                desempenho: {
+                    cacheTempo: parseInt(document.getElementById('config_cache_tempo')?.value) || 300,
+                    paginacaoPadrao: parseInt(document.getElementById('config_paginacao_padrao')?.value) || 20,
+                    maxResultados: parseInt(document.getElementById('config_max_resultados')?.value) || 1000,
+                    compressaoRespostas: document.getElementById('config_compressao')?.checked !== false,
+                    timeoutRequisicao: parseInt(document.getElementById('config_timeout_requisicao')?.value) || 30,
+                    limiteArquivo: parseInt(document.getElementById('config_limite_arquivo')?.value) || 10
+                },
+                api: {
+                    rateLimit: parseInt(document.getElementById('config_rate_limit')?.value) || 100,
+                    versao: document.getElementById('config_api_versao')?.value || 'v1',
+                    documentacao: document.getElementById('config_api_documentacao')?.checked !== false,
+                    chaveObrigatoria: document.getElementById('config_api_chave_obrigatoria')?.checked || false,
+                    cors: document.getElementById('config_api_cors')?.checked !== false,
+                    dominiosPermitidos: document.getElementById('config_api_dominios')?.value?.split('\n').map(d => d.trim()).filter(d => d) || ['localhost']
+                }
+            };
+
+            // Enviar para o backend
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/configuracoes', {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ configuracoes })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.mostrarStatus('✅ Configurações salvas com sucesso!', 'success');
+                
+                // 👇 ADICIONAR ESTA LINHA
+                this.aplicarModoEscuro(configuracoes);
+                
+                setTimeout(() => {
+                    document.getElementById('configStatus').style.display = 'none';
+                }, 3000);
+            } else {
+                throw new Error(data.error || 'Erro ao salvar configurações');
+            }
+
+        } catch (error) {
+            console.error('❌ Erro ao salvar configurações:', error);
+            this.mostrarStatus('❌ Erro: ' + error.message, 'error');
+        }
+    }
+
+    // ============ RESETAR CONFIGURAÇÕES ============
+    async resetarConfiguracoes() {
+        const confirmar = await this.confirmar(
+            '🔄 Resetar Configurações',
+            `Tem certeza que deseja restaurar todas as configurações para os valores padrão?<br><br>
+            <span style="color: #dc3545;">Esta ação não pode ser desfeita!</span>`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            this.mostrarStatus('🔄 Restaurando configurações padrão...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/configuracoes/reset', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.mostrarStatus('✅ Configurações restauradas!', 'success');
+                
+                // Recarregar a página de configurações
+                setTimeout(() => {
+                    this.loadConfiguracoes();
+                }, 1000);
+            } else {
+                throw new Error(data.error || 'Erro ao resetar configurações');
+            }
+
+        } catch (error) {
+            console.error('❌ Erro ao resetar configurações:', error);
+            this.mostrarStatus('❌ Erro: ' + error.message, 'error');
+        }
+    }
+
+    // ============ TESTAR CONFIGURAÇÃO DE EMAIL ============
+    async testarConfigEmail() {
+        try {
+            this.mostrarStatus('📧 Enviando email de teste...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const destinatario = document.getElementById('config_email_remetente')?.value;
+            
+            if (!destinatario) {
+                this.mostrarStatus('❌ Defina um remetente primeiro', 'error');
+                return;
+            }
+            
+            const response = await fetch('/api/admin/testar-email', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ destinatario })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.mostrarStatus('✅ Email de teste enviado com sucesso!', 'success');
+            } else {
+                throw new Error(data.error || 'Erro ao enviar email de teste');
+            }
+
+            setTimeout(() => {
+                document.getElementById('configStatus').style.display = 'none';
+            }, 3000);
+
+        } catch (error) {
+            console.error('❌ Erro no teste de email:', error);
+            this.mostrarStatus('❌ Erro: ' + error.message, 'error');
+        }
+    }
+
+    // ============ FAZER BACKUP AGORA ============
+    async fazerBackupAgora() {
+        try {
+            this.mostrarStatus('🔄 Iniciando backup manual...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/backups/criar', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.mostrarStatus('✅ Backup criado com sucesso!', 'success');
+                
+                // Atualizar informações do último backup
+                const infoBox = document.querySelector('#config-backup .info-box');
+                if (infoBox) {
+                    infoBox.innerHTML = `
+                        <i class="fas fa-info-circle"></i>
+                        <span>Último backup: ${new Date().toLocaleString('pt-BR')}</span>
+                    `;
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao criar backup');
+            }
+
+            setTimeout(() => {
+                document.getElementById('configStatus').style.display = 'none';
+            }, 3000);
+
+        } catch (error) {
+            console.error('❌ Erro ao fazer backup:', error);
+            this.mostrarStatus('❌ Erro: ' + error.message, 'error');
+        }
+    }
+
+    // ============ MOSTRAR STATUS ============
+    mostrarStatus(mensagem, tipo = 'info') {
+        const statusEl = document.getElementById('configStatus');
+        if (!statusEl) return;
+        
+        const icones = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            info: 'fa-info-circle',
+            warning: 'fa-exclamation-triangle'
+        };
+        
+        statusEl.innerHTML = `
+            <i class="fas ${icones[tipo] || 'fa-info-circle'}"></i>
+            <span>${mensagem}</span>
+        `;
+        
+        statusEl.className = `status-message ${tipo}`;
+        statusEl.style.display = 'flex';
+    }
+
+    // ============ RECARREGAR CONFIGURAÇÕES ============
+    async carregarConfiguracoes() {
+        await this.loadConfiguracoes();
     }
     // ==================== EXECUÇÃO DE COMANDOS ====================
     async executarComando() {
