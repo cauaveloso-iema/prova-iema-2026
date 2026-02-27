@@ -1568,9 +1568,10 @@
             
             if (notificacoes.length === 0) {
                 lista.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #6c757d;">
-                        <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
-                        <p>Nenhuma notificação</p>
+                    <div class="notificacoes-empty">
+                        <i class="fas fa-bell-slash"></i>
+                        <h4>Nenhuma notificação</h4>
+                        <p>Você está em dia! 🎉</p>
                     </div>
                 `;
                 return;
@@ -1586,71 +1587,96 @@
                             diffMin < 60 ? `há ${diffMin} min` : 
                             `há ${Math.floor(diffMin/60)} h`;
                 
-                const bgColor = notif.lida ? 'white' : '#eff6ff';
-                const borderLeft = notif.lida ? '' : 'border-left: 3px solid #3b82f6;';
+                const isSolicitacaoBackup = notif.tipo === 'solicitacao_backup' || 
+                                            (notif.titulo && notif.titulo.includes('backup')) ||
+                                            (notif.mensagem && notif.mensagem.includes('códigos de backup'));
+                
+                // Adicionar badge especial para solicitações de backup
+                const tipoBadge = isSolicitacaoBackup ? 
+                    '<span class="notificacao-tipo-badge"><i class="fas fa-key"></i> SOLICITAÇÃO BACKUP</span>' : '';
                 
                 html += `
-                    <div class="notificacao-item" data-id="${notif._id}" data-link="${notif.link || '#'}" style="
-                        padding: 12px 15px;
-                        border-bottom: 1px solid #e5e7eb;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                        display: flex;
-                        gap: 12px;
-                        background: ${bgColor};
-                        ${borderLeft}
-                    ">
-                        <div class="notificacao-icone" style="
-                            width: 36px;
-                            height: 36px;
-                            border-radius: 8px;
-                            background: ${notif.cor || '#0d6efd'};
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: white;
-                            font-size: 1rem;
-                            flex-shrink: 0;
-                        ">
-                            ${notif.icone || '📋'}
+                    <div class="notificacao-item ${notif.lida ? '' : 'nao-lida'}" 
+                        data-id="${notif._id}"
+                        data-tipo="${notif.tipo || 'normal'}"
+                        data-dados='${JSON.stringify(notif.dados || {})}'
+                        data-usuario-id="${notif.dados?.solicitanteId || ''}"
+                        data-usuario-nome="${notif.dados?.solicitanteNome || ''}"
+                        style="cursor: pointer;">
+                        
+                        <div class="notificacao-icone" style="background: ${notif.cor || (isSolicitacaoBackup ? '#f59e0b' : '#0d6efd')};">
+                            ${notif.icone || (isSolicitacaoBackup ? '🔑' : '📋')}
                         </div>
-                        <div class="notificacao-conteudo" style="flex: 1;">
-                            <div style="font-weight: 600; margin-bottom: 3px; font-size: 0.9rem; color: #1f2937;">
+                        
+                        <div class="notificacao-conteudo">
+                            <div class="notificacao-titulo">
                                 ${notif.titulo}
+                                ${tipoBadge}
                             </div>
-                            <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">
+                            <div class="notificacao-mensagem">
                                 ${notif.mensagem}
                             </div>
-                            <div style="font-size: 0.65rem; color: #9ca3af;">
-                                <i class="far fa-clock"></i> ${tempoTexto}
+                            <div class="notificacao-meta">
+                                <span><i class="far fa-clock"></i> ${tempoTexto}</span>
+                                ${isSolicitacaoBackup ? '<span><i class="fas fa-user-graduate"></i> Professor</span>' : ''}
                             </div>
                         </div>
+                        
+                        <button class="btn-excluir-notificacao" onclick="excluirNotificacao('${notif._id}', event)">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
                 `;
             });
             
             lista.innerHTML = html;
             
-            // Adicionar eventos de clique aos itens
+            // Adicionar eventos de clique diferenciados
             document.querySelectorAll('.notificacao-item').forEach(item => {
                 item.addEventListener('click', async function(e) {
+                    // Não abrir se clicou no botão de excluir
+                    if (e.target.closest('.btn-excluir-notificacao')) return;
+                    
                     const id = this.dataset.id;
-                    const link = this.dataset.link;
+                    const tipo = this.dataset.tipo;
+                    const usuarioId = this.dataset.usuarioId;
+                    const usuarioNome = this.dataset.usuarioNome;
+                    const dados = this.dataset.dados ? JSON.parse(this.dataset.dados) : {};
                     
                     try {
                         const token = localStorage.getItem('auth_token');
+                        
+                        // Marcar como lida
                         await fetch(`/api/notificacoes/${id}/lida`, {
                             method: 'PUT',
                             headers: { 'Authorization': `Bearer ${token}` }
                         });
                         
-                        document.getElementById('notificacoesDropdown').classList.remove('show');
-                        
-                        if (link && link !== '#') {
-                            window.location.href = link;
+                        // SE FOR SOLICITAÇÃO DE BACKUP, ABRIR MODAL ESPECIAL
+                        if (tipo === 'solicitacao_backup' || (dados && dados.solicitanteId)) {
+                            console.log('🔑 Abrindo modal de geração de códigos para:', usuarioNome || dados.solicitanteNome);
+                            
+                            // Fechar dropdown
+                            document.getElementById('notificacoesDropdown')?.classList.remove('show');
+                            
+                            // Perguntar se quer gerar códigos
+                            const confirmar = confirm(`🔐 Gerar 10 novos códigos de backup para o professor ${usuarioNome || dados.solicitanteNome}?`);
+                            
+                            if (confirmar) {
+                                await gerarCodigosBackupParaProfessor(
+                                    usuarioId || dados.solicitanteId, 
+                                    usuarioNome || dados.solicitanteNome
+                                );
+                            }
+                        } 
+                        // SE TIVER LINK, REDIRECIONAR
+                        else if (this.dataset.link && this.dataset.link !== '#') {
+                            window.location.href = this.dataset.link;
                         }
                         
+                        // Atualizar badge
                         atualizarBadge();
+                        
                     } catch (error) {
                         console.error('❌ Erro:', error);
                     }
@@ -1747,7 +1773,280 @@
                 }
             }
         }
-        
+
+        // ============================================
+        // FUNÇÃO PARA GERAR CÓDIGOS DE BACKUP (ADMIN)
+        // ============================================
+
+        async function gerarCodigosBackupParaProfessor(professorId, professorNome) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                console.log(`🔑 Gerando 10 códigos de backup para professor: ${professorNome} (${professorId})`);
+                
+                const response = await fetch(`/api/admin/2fa/gerar-backup-codes/${professorId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('✅ Códigos gerados:', data.backupCodes);
+                    
+                    // Mostrar modal com os códigos
+                    mostrarCodigosBackupGerados(data.backupCodes, professorNome, professorId);
+                    
+                    // Atualizar badge de notificações
+                    if (typeof atualizarBadge === 'function') {
+                        atualizarBadge();
+                    }
+                    
+                    return data;
+                } else {
+                    throw new Error(data.error || 'Erro ao gerar códigos');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                alert(`❌ Erro ao gerar códigos: ${error.message}`);
+            }
+        }
+
+        // ============================================
+        // FUNÇÃO PARA MOSTRAR CÓDIGOS GERADOS EM MODAL
+        // ============================================
+
+        function mostrarCodigosBackupGerados(codigos, professorNome, professorId) {
+            // Criar modal se não existir
+            let modal = document.getElementById('modalBackupCodes');
+            
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'modalBackupCodes';
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 600px;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <h2><i class="fas fa-key"></i> Códigos de Backup Gerados</h2>
+                            <button class="modal-close" onclick="document.getElementById('modalBackupCodes').style.display='none'">&times;</button>
+                        </div>
+                        <div class="modal-body" style="padding: 25px;">
+                            <div id="backupCodesContent"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn-cancel" onclick="document.getElementById('modalBackupCodes').style.display='none'">Fechar</button>
+                            <button class="btn-save" id="downloadBackupCodesBtn" style="background: #10b981;">
+                                <i class="fas fa-download"></i> Baixar Códigos
+                            </button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            const content = document.getElementById('backupCodesContent') || (() => {
+                const div = document.createElement('div');
+                div.id = 'backupCodesContent';
+                modal.querySelector('.modal-body').appendChild(div);
+                return div;
+            })();
+            
+            // HTML dos códigos
+            let codigosHtml = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 10px;"></i>
+                    <h3 style="color: #059669; margin-bottom: 5px;">10 códigos gerados com sucesso!</h3>
+                    <p style="color: #4b5563; margin-bottom: 5px;">
+                        Para: <strong>${professorNome}</strong>
+                    </p>
+                    <p style="color: #ef4444; font-size: 0.9rem; margin-top: 5px;">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        Guarde estes códigos em local seguro. Cada código pode ser usado apenas UMA vez.
+                    </p>
+                </div>
+                
+                <div style="
+                    background: #f8fafc;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border: 2px dashed #cbd5e1;
+                ">
+                    <div style="
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 12px;
+                    ">
+            `;
+            
+            codigos.forEach((codigo, index) => {
+                codigosHtml += `
+                    <div style="
+                        background: white;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 10px;
+                        padding: 15px 10px;
+                        text-align: center;
+                        font-family: 'SF Mono', 'Fira Code', monospace;
+                        font-size: 16px;
+                        font-weight: 600;
+                        letter-spacing: 2px;
+                        color: #059669;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                        position: relative;
+                    " 
+                    onclick="copiarCodigoBackup('${codigo}', this)"
+                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 16px rgba(5,150,105,0.2)';"
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';"
+                    >
+                        ${codigo}
+                        <span style="
+                            position: absolute;
+                            top: -8px;
+                            right: -8px;
+                            background: #059669;
+                            color: white;
+                            font-size: 0.6rem;
+                            padding: 2px 6px;
+                            border-radius: 12px;
+                            font-weight: normal;
+                        ">${index + 1}</span>
+                    </div>
+                `;
+            });
+            
+            codigosHtml += `
+                    </div>
+                </div>
+                
+                <div style="background: #e6f7e6; border-left: 4px solid #10b981; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <p style="margin: 0; color: #065f46; font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i> 
+                        Os códigos foram salvos no perfil do professor. O professor poderá visualizá-los 
+                        apenas uma vez, no momento do primeiro acesso.
+                    </p>
+                </div>
+            `;
+            
+            content.innerHTML = codigosHtml;
+            
+            // Configurar botão de download
+            const downloadBtn = document.getElementById('downloadBackupCodesBtn') || modal.querySelector('.btn-save');
+            if (downloadBtn) {
+                downloadBtn.onclick = () => baixarCodigosBackup(codigos, professorNome);
+            }
+            
+            // Mostrar modal
+            modal.style.display = 'flex';
+            
+            // Adicionar função global para copiar
+            window.copiarCodigoBackup = (codigo, element) => {
+                navigator.clipboard.writeText(codigo);
+                
+                // Feedback visual
+                const originalText = element.innerText;
+                element.innerText = '✓ COPIADO!';
+                element.style.background = '#10b981';
+                element.style.color = 'white';
+                
+                setTimeout(() => {
+                    element.innerText = originalText;
+                    element.style.background = 'white';
+                    element.style.color = '#059669';
+                }, 1500);
+            };
+        }
+
+        // ============================================
+        // FUNÇÃO PARA BAIXAR CÓDIGOS COMO ARQUIVO
+        // ============================================
+
+        function baixarCodigosBackup(codigos, professorNome) {
+            const data = new Date().toLocaleString('pt-BR');
+            
+            const conteudo = [
+                '='.repeat(60),
+                '🔐 CÓDIGOS DE BACKUP - SISTEMA IEMA 2026',
+                '='.repeat(60),
+                '',
+                `Professor: ${professorNome}`,
+                `Data: ${data}`,
+                '',
+                '⚠️ IMPORTANTE:',
+                '• Cada código pode ser usado apenas UMA vez',
+                '• Guarde em local seguro',
+                '• Não compartilhe com ninguém',
+                '',
+                '📋 CÓDIGOS:',
+                '='.repeat(40),
+                '',
+                ...codigos.map((c, i) => `${String(i+1).padStart(2, '0')}. ${c}`),
+                '',
+                '='.repeat(40),
+                'Sistema de Provas IEMA 2026',
+                '='.repeat(40)
+            ].join('\n');
+            
+            const blob = new Blob([conteudo], { type: 'text/plain;charset=utf-8' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup-codes-${professorNome.replace(/\s+/g, '_')}.txt`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            alert('📥 Download iniciado!');
+        }
+
+        // ============================================
+        // FUNÇÃO PARA EXCLUIR NOTIFICAÇÃO ESPECÍFICA
+        // ============================================
+
+        async function excluirNotificacao(id, event) {
+            event.stopPropagation();
+            
+            if (!confirm('🗑️ Deseja excluir esta notificação?')) return;
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const response = await fetch(`/api/notificacoes/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Remover elemento da lista
+                    event.target.closest('.notificacao-item').remove();
+                    
+                    // Atualizar badge
+                    atualizarBadge();
+                    
+                    // Se lista ficar vazia, mostrar mensagem
+                    const lista = document.getElementById('notificacoesLista');
+                    if (lista && lista.children.length === 0) {
+                        lista.innerHTML = `
+                            <div class="notificacoes-empty">
+                                <i class="fas fa-bell-slash"></i>
+                                <h4>Nenhuma notificação</h4>
+                                <p>Você está em dia! 🎉</p>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Erro ao excluir:', error);
+                alert('❌ Erro ao excluir notificação');
+            }
+        }
+
         // ============================================
         // CONFIGURAÇÃO DOS ELEMENTOS
         // ============================================
