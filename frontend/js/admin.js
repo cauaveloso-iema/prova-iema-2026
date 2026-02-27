@@ -11798,42 +11798,79 @@ class AdminPanel {
                     <div class="config-card">
                         <h4><i class="fas fa-key"></i> Política de Senhas</h4>
                         
-                        <div class="checkbox-group">
+                        <!-- FORÇAR TROCA DE SENHA NO PRIMEIRO ACESSO -->
+                        <div class="checkbox-group" style="margin-bottom: 15px;">
                             <input type="checkbox" id="config_senha_forcar_troca" ${config.seguranca?.senha?.forcarTrocaInicial !== false ? 'checked' : ''}>
-                            <label>Forçar troca de senha no primeiro acesso</label>
+                            <label for="config_senha_forcar_troca">
+                                <i class="fas fa-sync-alt"></i> Forçar troca de senha no primeiro acesso
+                            </label>
                         </div>
                         
+                        <!-- TAMANHO MÍNIMO DA SENHA -->
                         <div class="form-group">
-                            <label>Tamanho mínimo da senha</label>
+                            <label><i class="fas fa-text-height"></i> Tamanho mínimo da senha</label>
                             <input type="number" id="config_senha_tamanho" class="form-control" 
                                 value="${config.seguranca?.senha?.tamanhoMinimo || 6}" min="4" max="20">
+                            <div class="input-hint">Mínimo de 4, máximo de 20 caracteres</div>
                         </div>
                         
+                        <!-- EXPIRAÇÃO DA SENHA (DIAS) -->
                         <div class="form-group">
-                            <label>Expiração da senha (dias)</label>
+                            <label><i class="fas fa-hourglass-half"></i> Expiração da senha (dias)</label>
                             <input type="number" id="config_senha_expiracao" class="form-control" 
                                 value="${config.seguranca?.senha?.expiracaoDias || 90}" min="0" max="365">
                             <div class="input-hint">0 = nunca expira</div>
                         </div>
                         
+                        <!-- EXIGIR LETRA MAIÚSCULA -->
                         <div class="checkbox-group">
                             <input type="checkbox" id="config_senha_maiuscula" ${config.seguranca?.senha?.exigirMaiuscula ? 'checked' : ''}>
-                            <label>Exigir letra maiúscula</label>
+                            <label for="config_senha_maiuscula">
+                                <i class="fas fa-uppercase"></i> Exigir letra maiúscula
+                            </label>
                         </div>
                         
+                        <!-- EXIGIR NÚMERO -->
                         <div class="checkbox-group">
                             <input type="checkbox" id="config_senha_numero" ${config.seguranca?.senha?.exigirNumero ? 'checked' : ''}>
-                            <label>Exigir número</label>
+                            <label for="config_senha_numero">
+                                <i class="fas fa-hashtag"></i> Exigir número
+                            </label>
                         </div>
                         
+                        <!-- EXIGIR CARACTERE ESPECIAL -->
                         <div class="checkbox-group">
                             <input type="checkbox" id="config_senha_especial" ${config.seguranca?.senha?.exigirEspecial ? 'checked' : ''}>
-                            <label>Exigir caractere especial</label>
+                            <label for="config_senha_especial">
+                                <i class="fas fa-exclamation"></i> Exigir caractere especial
+                            </label>
+                        </div>
+                        
+                        <!-- BADGE DE FORÇA DA SENHA (apenas visual) -->
+                        <div class="info-box" style="margin-top: 15px; background: #eef2ff; color: #1e40af;">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>
+                                <strong>Requisitos ativos:</strong> 
+                                ${this.contarRequisitosSenha(config.seguranca?.senha)}
+                            </span>
                         </div>
                     </div>
                 </div>
             </div>
         `;
+    }
+
+    // ============ FUNÇÃO AUXILIAR PARA CONTAR REQUISITOS ============
+    contarRequisitosSenha(senhaConfig) {
+        if (!senhaConfig) return 'Nenhum';
+        
+        const requisitos = [];
+        if (senhaConfig.tamanhoMinimo > 0) requisitos.push(`${senhaConfig.tamanhoMinimo} caracteres`);
+        if (senhaConfig.exigirMaiuscula) requisitos.push('maiúscula');
+        if (senhaConfig.exigirNumero) requisitos.push('número');
+        if (senhaConfig.exigirEspecial) requisitos.push('caractere especial');
+        
+        return requisitos.length > 0 ? requisitos.join(' + ') : 'Apenas tamanho mínimo';
     }
 
     // ============ RENDERIZAR CONFIGURAÇÕES DE PROVAS ============

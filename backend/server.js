@@ -830,7 +830,54 @@ app.post('/api/auth/register', [
         }
     }
     
-    // CRIAR USUÁRIO COM TODOS OS CAMPOS
+    // 🔥 ========== VALIDAÇÃO DE POLÍTICA DE SENHAS ========== 🔥
+    // Buscar configurações de senha
+    const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
+        Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
+        Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
+        Config.findOne({ chave: 'seguranca.senha.exigirNumero' }),
+        Config.findOne({ chave: 'seguranca.senha.exigirEspecial' })
+    ]);
+
+    const tamanhoMinimo = configSenhaTamanho?.valor || 6;
+    const exigirMaiuscula = configSenhaMaiuscula?.valor || false;
+    const exigirNumero = configSenhaNumero?.valor || false;
+    const exigirEspecial = configSenhaEspecial?.valor || false;
+
+    // Validar tamanho mínimo
+    if (password.length < tamanhoMinimo) {
+        return res.status(400).json({
+            success: false,
+            error: `A senha deve ter no mínimo ${tamanhoMinimo} caracteres`
+        });
+    }
+
+    // Validar letra maiúscula
+    if (exigirMaiuscula && !/[A-Z]/.test(password)) {
+        return res.status(400).json({
+            success: false,
+            error: 'A senha deve conter pelo menos uma letra maiúscula'
+        });
+    }
+
+    // Validar número
+    if (exigirNumero && !/[0-9]/.test(password)) {
+        return res.status(400).json({
+            success: false,
+            error: 'A senha deve conter pelo menos um número'
+        });
+    }
+
+    // Validar caractere especial
+    if (exigirEspecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+        return res.status(400).json({
+            success: false,
+            error: 'A senha deve conter pelo menos um caractere especial (!@#$%...)'
+        });
+    }
+    
+    // ========== CRIAR USUÁRIO ==========
+    // USUÁRIO SE CADASTROU - NÃO FORÇAR TROCA DE SENHA
     const user = new User({
       nome,
       email,
@@ -839,7 +886,7 @@ app.post('/api/auth/register', [
       telefone: telefoneNumeros,
       matricula: matricula || undefined,
       ativo: true,
-      forcePasswordChange: false, // Registro normal não força troca de senha
+      forcePasswordChange: false, // ✅ CORRETO: Usuário escolheu a senha
       role,
       eixo: role === 'professor' ? eixo : null,
       curso: role === 'aluno' ? curso : undefined,
@@ -873,6 +920,7 @@ app.post('/api/auth/register', [
     console.log(`   🏫 Turma: ${user.turma}`);     
     console.log(`   🎯 Eixo: ${user.eixo}`);
     console.log(`   ♿ Acessibilidade: ${user.precisaAcessibilidade ? 'Sim' : 'Não'}`);
+    console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange} (NÃO forçado - cadastro normal)`);
     
     const token = jwt.sign(
       { 
@@ -9378,7 +9426,7 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
     }
 });
 
-// ============ CRIAR NOVO USUÁRIO (VOCÊ JÁ TEM, MAS VAMOS GARANTIR) ============
+// ============ ADMIN CRIAR NOVO USUÁRIO ============
 app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const userData = req.body;
@@ -9431,12 +9479,56 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
             }
         }
 
+        // 🔥 VALIDAR POLÍTICA DE SENHAS NA SENHA GERADA PELO ADMIN
+        const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
+            Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirNumero' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirEspecial' })
+        ]);
+
+        const tamanhoMinimo = configSenhaTamanho?.valor || 6;
+        const exigirMaiuscula = configSenhaMaiuscula?.valor || false;
+        const exigirNumero = configSenhaNumero?.valor || false;
+        const exigirEspecial = configSenhaEspecial?.valor || false;
+
+        // Validar tamanho mínimo
+        if (userData.password.length < tamanhoMinimo) {
+            return res.status(400).json({
+                success: false,
+                error: `A senha deve ter no mínimo ${tamanhoMinimo} caracteres`
+            });
+        }
+
+        if (exigirMaiuscula && !/[A-Z]/.test(userData.password)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A senha deve conter pelo menos uma letra maiúscula'
+            });
+        }
+
+        if (exigirNumero && !/[0-9]/.test(userData.password)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A senha deve conter pelo menos um número'
+            });
+        }
+
+        if (exigirEspecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(userData.password)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A senha deve conter pelo menos um caractere especial (!@#$%...)'
+            });
+        }
+
+        // ========== CRIAR USUÁRIO ==========
+        // ADMIN CRIOU - FORÇAR TROCA DE SENHA NO PRIMEIRO LOGIN
         const user = new User({
             ...userData,
             cpf: userData.cpf?.replace(/\D/g, ''),
             telefone: userData.telefone?.replace(/\D/g, ''),
             ativo: true,
-            forcePasswordChange: true,
+            forcePasswordChange: true, // ✅ FORÇAR TROCA - admin criou
             passwordChangedAt: null,
             loginAttempts: 0,
             lockUntil: null,
@@ -9452,9 +9544,8 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
         
         await user.save();
 
-        console.log(`✅ Usuário criado: ${user.email}`);
-        console.log(`   Role: ${user.role}`);
-        console.log(`   forcePasswordChange: ${user.forcePasswordChange}`);
+        console.log(`✅ Usuário criado pelo admin: ${user.email}`);
+        console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange} (FORÇADO - criado por admin)`);
 
         res.status(201).json({
             success: true,
@@ -9618,7 +9709,7 @@ app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
     }
 });
 
-// ============ RESETAR SENHA DO USUÁRIO ============
+// ============ ADMIN RESETAR SENHA ============
 app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
@@ -9633,6 +9724,48 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             });
         }
         
+        // 🔥 VALIDAR POLÍTICA DE SENHAS
+        const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
+            Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirNumero' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirEspecial' })
+        ]);
+
+        const tamanhoMinimo = configSenhaTamanho?.valor || 6;
+        const exigirMaiuscula = configSenhaMaiuscula?.valor || false;
+        const exigirNumero = configSenhaNumero?.valor || false;
+        const exigirEspecial = configSenhaEspecial?.valor || false;
+
+        // Validar tamanho mínimo
+        if (novaSenha.length < tamanhoMinimo) {
+            return res.status(400).json({
+                success: false,
+                error: `A nova senha deve ter no mínimo ${tamanhoMinimo} caracteres`
+            });
+        }
+
+        if (exigirMaiuscula && !/[A-Z]/.test(novaSenha)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve conter pelo menos uma letra maiúscula'
+            });
+        }
+
+        if (exigirNumero && !/[0-9]/.test(novaSenha)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve conter pelo menos um número'
+            });
+        }
+
+        if (exigirEspecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(novaSenha)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve conter pelo menos um caractere especial (!@#$%...)'
+            });
+        }
+        
         const user = await User.findById(id);
         
         if (!user) {
@@ -9642,13 +9775,15 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             });
         }
         
-        // Atualizar senha e forçar troca no próximo login
+        // ========== ATUALIZAR SENHA ==========
+        // ADMIN RESETOU - FORÇAR TROCA NO PRÓXIMO LOGIN
         user.password = novaSenha;
-        user.forcePasswordChange = true;
+        user.forcePasswordChange = true; // ✅ FORÇAR TROCA - admin resetou
         user.passwordChangedAt = null;
         await user.save();
         
         console.log(`✅ Senha resetada para usuário ${user.email}`);
+        console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange} (FORÇADO - admin resetou)`);
         
         // Criar notificação para o usuário
         try {
@@ -9670,7 +9805,8 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         
         res.json({
             success: true,
-            message: 'Senha resetada com sucesso! O usuário deverá trocar a senha no próximo login.'
+            message: 'Senha resetada com sucesso! O usuário deverá trocar a senha no próximo login.',
+            novaSenha: novaSenha // Opcional: retornar a senha para o admin
         });
         
     } catch (error) {
@@ -10692,13 +10828,6 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
             });
         }
         
-        if (novaSenha.length < 6) {
-            return res.status(400).json({
-                success: false,
-                error: 'A nova senha deve ter no mínimo 6 caracteres'
-            });
-        }
-        
         // Buscar usuário com senha
         const user = await User.findById(userId).select('+password +forcePasswordChange');
         
@@ -10725,10 +10854,53 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
                 error: 'A nova senha deve ser diferente da senha atual'
             });
         }
+
+        // 🔥 VALIDAR POLÍTICA DE SENHAS
+        const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
+            Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirNumero' }),
+            Config.findOne({ chave: 'seguranca.senha.exigirEspecial' })
+        ]);
+
+        const tamanhoMinimo = configSenhaTamanho?.valor || 6;
+        const exigirMaiuscula = configSenhaMaiuscula?.valor || false;
+        const exigirNumero = configSenhaNumero?.valor || false;
+        const exigirEspecial = configSenhaEspecial?.valor || false;
+
+        // Validar tamanho mínimo
+        if (novaSenha.length < tamanhoMinimo) {
+            return res.status(400).json({
+                success: false,
+                error: `A nova senha deve ter no mínimo ${tamanhoMinimo} caracteres`
+            });
+        }
+
+        if (exigirMaiuscula && !/[A-Z]/.test(novaSenha)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve conter pelo menos uma letra maiúscula'
+            });
+        }
+
+        if (exigirNumero && !/[0-9]/.test(novaSenha)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve conter pelo menos um número'
+            });
+        }
+
+        if (exigirEspecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(novaSenha)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve conter pelo menos um caractere especial (!@#$%...)'
+            });
+        }
         
-        // Atualizar senha
+        // ========== ATUALIZAR SENHA ==========
+        // USUÁRIO TROCOU - REMOVER FLAG DE FORÇAR TROCA
         user.password = novaSenha;
-        user.forcePasswordChange = false; // <-- REMOVER A FLAG
+        user.forcePasswordChange = false; // ✅ REMOVER FLAG - usuário trocou
         user.passwordChangedAt = new Date();
         
         await user.save();
