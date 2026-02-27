@@ -67,6 +67,12 @@ const LoggerService = require('./services/logger-service');
 const EmailService = require('./email-service-resend');
 const matriculasManager = require('./matriculas-autorizados');
 
+// ============================================================================
+// CONFIGURAÇÃO DO QR CODE (TOTP)
+// ============================================================================
+const speakeasy = require('speakeasy');
+const QRCode = require('qrcode');
+
 // ============ SERVIÇO DE SMS (TWILIO) - VERSÃO CORRIGIDA ============
 const twilio = require('twilio');
 
@@ -956,7 +962,7 @@ app.post('/api/auth/login', async (req, res) => {
             });
           }
           
-          // VERIFICAR CÓDIGO 2FA
+          // ========== VERIFICAÇÃO DE CÓDIGO 2FA CORRIGIDA ==========
           let isValid = false;
           let motivo = '';
           
@@ -968,7 +974,68 @@ app.post('/api/auth/login', async (req, res) => {
             console.log('✅ Código SMS válido');
           }
           
-          // 2. Verificar código de backup
+          // 2. Verificar código TOTP (QR Code - Google Authenticator)
+          if (!isValid && (user.twoFactorSecret || user.twoFactorTempSecret)) {
+            try {
+              const speakeasy = require('speakeasy');
+              
+              // 🔴 TENTAR PRIMEIRO COM SEGREDO TEMPORÁRIO (QR CODE ACABOU DE SER GERADO)
+              if (user.twoFactorTempSecret) {
+                const verified = speakeasy.totp.verify({
+                  secret: user.twoFactorTempSecret,
+                  encoding: 'base32',
+                  token: twoFactorCode,
+                  window: 1
+                });
+                
+                if (verified) {
+                  isValid = true;
+                  motivo = 'TOTP (QR Code) - Temporário';
+                  console.log('✅ Código TOTP temporário válido');
+                  
+                  // Se for primeira ativação (2FA ainda não ativado)
+                  if (!user.twoFactorEnabled) {
+                    // Gerar 10 códigos de backup
+                    const backupCodes = [];
+                    for (let i = 0; i < 10; i++) {
+                      backupCodes.push(generateBackupCode());
+                    }
+                    
+                    user.twoFactorEnabled = true;
+                    user.twoFactorSecret = user.twoFactorTempSecret;
+                    user.twoFactorBackupCodes = backupCodes;
+                    user.twoFactorTempSecret = null;
+                    await user.save();
+                    console.log('✅ 2FA ativado com sucesso via QR Code');
+                  } else {
+                    // Se já estiver ativado, apenas limpa o temporário
+                    user.twoFactorTempSecret = null;
+                    await user.save();
+                  }
+                }
+              }
+              
+              // 🔴 SE NÃO FUNCIONOU COM TEMPORÁRIO, TENTAR COM PERMANENTE
+              if (!isValid && user.twoFactorSecret && user.twoFactorEnabled) {
+                const verified = speakeasy.totp.verify({
+                  secret: user.twoFactorSecret,
+                  encoding: 'base32',
+                  token: twoFactorCode,
+                  window: 1
+                });
+                
+                if (verified) {
+                  isValid = true;
+                  motivo = 'TOTP (QR Code) - Permanente';
+                  console.log('✅ Código TOTP permanente válido');
+                }
+              }
+            } catch (error) {
+              console.error('❌ Erro ao verificar TOTP:', error.message);
+            }
+          }
+          
+          // 3. Verificar código de backup
           if (!isValid && user.twoFactorBackupCodes && user.twoFactorBackupCodes.includes(twoFactorCode)) {
             isValid = true;
             motivo = 'backup';
@@ -977,7 +1044,7 @@ app.post('/api/auth/login', async (req, res) => {
             console.log('✅ Código de backup válido');
           }
           
-          // 3. Verificar código secreto permanente (caso especial)
+          // 4. Verificar código secreto permanente (caso especial - mantido para compatibilidade)
           if (!isValid && user.twoFactorSecret && user.twoFactorSecret === twoFactorCode) {
             isValid = true;
             motivo = 'secreto';
@@ -1965,6 +2032,218 @@ app.use(async (req, res, next) => {
     } catch (error) {
         console.error('❌ Erro no middleware de debug:', error);
         next();
+    }
+});
+
+// ============ GERAR QR CODE PARA 2FA (CHAMADO PELA PÁGINA VALIDAR) ============
+app.post('/api/auth/2fa/generate-qr', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('+twoFactorTempSecret');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'Usuário não encontrado'
+      });
+    }
+
+    // 🔴 GERAR NOVO SEGREDO (ÚNICO PARA ESTA SESSÃO)
+    const speakeasy = require('speakeasy');
+    const generated = speakeasy.generateSecret({
+      name: `IEMA:${user.email}`,
+      issuer: 'Sistema de Provas IEMA'
+    });
+    
+    const novoSegredo = generated.base32;
+    
+    // 🔴 SALVAR COMO TEMPORÁRIO (SUBSTITUI O ANTERIOR)
+    user.twoFactorTempSecret = novoSegredo;
+    await user.save();
+    
+    console.log(`✅ NOVO QR CODE gerado para ${user.email}: ${novoSegredo.substring(0, 10)}...`);
+
+    // Gerar QR Code
+    const otpauth = speakeasy.otpauthURL({
+      secret: novoSegredo,
+      label: user.email,
+      issuer: 'IEMA',
+      encoding: 'base32'
+    });
+
+    const qrCodeUrl = await QRCode.toDataURL(otpauth);
+
+    res.json({
+      success: true,
+      qrCode: qrCodeUrl,
+      secret: novoSegredo,
+      message: '✅ QR Code gerado - válido apenas para esta sessão'
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao gerar QR Code:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao gerar QR Code: ' + error.message
+    });
+  }
+});
+
+// ============ VERIFICAR CÓDIGO TOTP (QR CODE) ============
+app.post('/api/auth/2fa/verify-totp', authenticateToken, async (req, res) => {
+    try {
+        const { codigo } = req.body;
+        const user = await User.findById(req.userId).select(
+            '+twoFactorTempSecret +twoFactorEnabled'
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+
+        // 🔴 VERIFICAR SE TEM UM SEGREDO TEMPORÁRIO
+        if (!user.twoFactorTempSecret) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhum QR Code ativo. Gere um novo QR Code primeiro.'
+            });
+        }
+
+        // 🔴 USAR O SEGREDO TEMPORÁRIO QUE FOI SALVO
+        const verified = speakeasy.totp.verify({
+            secret: user.twoFactorTempSecret,  // USA O MESMO QUE FOI GERADO!
+            encoding: 'base32',
+            token: codigo,
+            window: 1
+        });
+
+        if (!verified) {
+            return res.status(401).json({
+                success: false,
+                error: 'Código TOTP inválido'
+            });
+        }
+
+        // SE FOR PRIMEIRA ATIVAÇÃO (twoFactorEnabled false)
+        if (!user.twoFactorEnabled) {
+            // Gerar 10 códigos de backup
+            const backupCodes = [];
+            for (let i = 0; i < 10; i++) {
+                backupCodes.push(generateBackupCode());
+            }
+
+            // ATIVAR 2FA (mover temp secret para permanent)
+            user.twoFactorEnabled = true;
+            user.twoFactorSecret = user.twoFactorTempSecret; // SALVA COMO PERMANENTE
+            user.twoFactorBackupCodes = backupCodes;
+            user.twoFactorTempSecret = null; // LIMPA O TEMPORÁRIO
+            user.dataAtivacao2FA = new Date();
+            
+            await user.save();
+
+            return res.json({
+                success: true,
+                message: '✅ 2FA ativado com sucesso!',
+                backupCodes: backupCodes,
+                firstTime: true
+            });
+        }
+
+        // 🔴 SE JÁ ESTIVER ATIVADO, SÓ VALIDA E LIMPA O TEMPORÁRIO
+        user.twoFactorTempSecret = null; // LIMPA PARA O PRÓXIMO ACESSO
+        await user.save();
+
+        res.json({
+            success: true,
+            message: '✅ Código válido!'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// ============ VALIDAR LOGIN COM TOTP ============
+app.post('/api/auth/2fa/validate-totp', authenticateToken, async (req, res) => {
+    try {
+        const { codigo } = req.body;
+        const user = await User.findById(req.userId).select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes');
+
+        if (!user || !user.twoFactorEnabled) {
+            return res.status(401).json({
+                success: false,
+                error: '2FA não está ativado para esta conta'
+            });
+        }
+
+        // Verificar código TOTP
+        const verified = speakeasy.totp.verify({
+            secret: user.twoFactorSecret,
+            encoding: 'base32',
+            token: codigo,
+            window: 1
+        });
+
+        if (!verified) {
+            return res.status(401).json({
+                success: false,
+                error: 'Código TOTP inválido'
+            });
+        }
+
+        // Buscar configuração de expiração do JWT
+        const configJwt = await Config.findOne({ chave: 'seguranca.jwtExpiracao' });
+        const jwtExpiracao = configJwt ? configJwt.valor : '24h';
+
+        // Gerar token PRINCIPAL
+        const authToken = jwt.sign(
+            { 
+                id: user._id, 
+                role: user.role,
+                nome: user.nome,
+                twoFactorEnabled: user.twoFactorEnabled
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: jwtExpiracao }
+        );
+
+        // Definir redirecionamento
+        let redirectTo = '';
+        if (user.forcePasswordChange) {
+            redirectTo = '/trocar-senha.html';
+        } else if (user.role === 'admin' || user.role === 'super_admin') {
+            redirectTo = '/admin.html';
+        } else if (user.role === 'professor') {
+            redirectTo = '/index.html';
+        } else if (user.role === 'aluno') {
+            redirectTo = '/aluno.html';
+        }
+
+        res.json({
+            success: true,
+            token: authToken,
+            user: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email,
+                role: user.role,
+                twoFactorEnabled: user.twoFactorEnabled
+            },
+            redirectTo: redirectTo
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao validar TOTP:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
     }
 });
 
@@ -12140,7 +12419,7 @@ app.post('/api/auth/2fa/resend', authenticateToken, async (req, res) => {
     await user.save();
 
     const telefoneLimpo = user.telefone.replace(/\D/g, '');
-    const mensagem = `🔐 ${user.nome}, seu código de verificação do IEMA é: ${codigo}. Válido por 5 minutos.`;
+    const mensagem = `🔐 ${user.nome}, seu código de verificação do SISTEMA DE PROVAS é: ${codigo}. Válido por 5 minutos.`;
 
     console.log('📱 Enviando SMS...');
     console.log(`   Para: ${telefoneLimpo}`);

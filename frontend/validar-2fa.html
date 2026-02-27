@@ -672,6 +672,9 @@
                     <button class="tab active" id="tabSms">
                         <i class="fas fa-sms"></i> SMS
                     </button>
+                    <button class="tab" id="tabQrCode">          <!-- 🔥 NOVO -->
+                        <i class="fas fa-qrcode"></i> QR Code
+                    </button>
                     <button class="tab" id="tabBackup">
                         <i class="fas fa-key"></i> Backup
                     </button>
@@ -696,6 +699,49 @@
                         <i class="fas fa-check-circle"></i> Verificar com Backup
                     </button>
                 </form>
+
+                <form id="qrForm" class="hidden">
+                <div class="qr-container" style="text-align: center; margin-bottom: 20px;">
+                    <div id="qrCodeDisplay" style="
+                        width: 200px;
+                        height: 200px;
+                        margin: 0 auto 15px;
+                        background: #f8fafc;
+                        border-radius: 16px;
+                        padding: 10px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border: 2px solid #e2e8f0;
+                    ">
+                        <i class="fas fa-qrcode" style="font-size: 60px; color: #1e2b4f; opacity: 0.5;"></i>
+                    </div>
+                    <p style="color: #4b5563; font-size: 0.9rem; margin-bottom: 10px;">
+                        Escaneie com Google Authenticator ou Microsoft Authenticator
+                    </p>
+                    <div class="secret-box" id="secretKeyDisplay" style="
+                        background: #f1f5f9;
+                        padding: 12px;
+                        border-radius: 8px;
+                        font-family: monospace;
+                        font-size: 14px;
+                        letter-spacing: 2px;
+                        cursor: pointer;
+                        border: 2px dashed #cbd5e1;
+                        margin: 15px 0;
+                        display: none;
+                        word-break: break-all;
+                    " onclick="window.twoFactorInstance?.copiarChave()"></div>
+                </div>
+                
+                <div class="form-group">
+                    <input type="text" id="qrCode" placeholder="Digite o código de 6 dígitos" 
+                        maxlength="6" inputmode="numeric" autocomplete="off" required>
+                </div>
+                <button type="submit" class="btn-primary" id="qrBtn">
+                    <i class="fas fa-qrcode"></i> Verificar com App
+                </button>
+            </form>
 
                 <div id="backupWarning" class="warning-box hidden">
                     <i class="fas fa-exclamation-triangle"></i>
@@ -738,6 +784,7 @@
                 this.timerInterval = null;
                 this.resendCooldown = false;
                 this.backupCodes = [];
+                this.qrData = null;
                 
                 if (!this.token || !this.userId) {
                     this.showAlert('Sessão expirada', 'error');
@@ -762,11 +809,13 @@
                     if (el) el.addEventListener(event, handler);
                 };
 
+                // Tabs
                 addListener('tabSms', 'click', () => {
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                     document.getElementById('tabSms')?.classList.add('active');
                     document.getElementById('smsForm')?.classList.remove('hidden');
                     document.getElementById('backupForm')?.classList.add('hidden');
+                    document.getElementById('qrForm')?.classList.add('hidden');
                 });
 
                 addListener('tabBackup', 'click', () => {
@@ -774,8 +823,22 @@
                     document.getElementById('tabBackup')?.classList.add('active');
                     document.getElementById('smsForm')?.classList.add('hidden');
                     document.getElementById('backupForm')?.classList.remove('hidden');
+                    document.getElementById('qrForm')?.classList.add('hidden');
                 });
 
+                addListener('tabQrCode', 'click', () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.getElementById('tabQrCode')?.classList.add('active');
+                    document.getElementById('smsForm')?.classList.add('hidden');
+                    document.getElementById('backupForm')?.classList.add('hidden');
+                    document.getElementById('qrForm')?.classList.remove('hidden');
+                    
+                    if (typeof this.gerarQRCode === 'function') {
+                        this.gerarQRCode();
+                    }
+                });
+
+                // Formulários
                 addListener('smsForm', 'submit', (e) => {
                     e.preventDefault();
                     this.verifyCode('sms');
@@ -786,12 +849,19 @@
                     this.verifyCode('backup');
                 });
 
+                addListener('qrForm', 'submit', (e) => {
+                    e.preventDefault();
+                    this.verifyCode('qr');
+                });
+
+                // Botões
                 addListener('resendBtn', 'click', () => this.resendCode());
                 addListener('backBtn', 'click', () => {
                     sessionStorage.clear();
                     window.location.href = '/login.html';
                 });
 
+                // Input masks
                 addListener('smsCode', 'input', (e) => {
                     e.target.value = e.target.value.replace(/\D/g, '').substring(0, 6);
                 });
@@ -799,6 +869,195 @@
                 addListener('backupCode', 'input', (e) => {
                     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 8);
                 });
+
+                addListener('qrCode', 'input', (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, '').substring(0, 6);
+                });
+            }
+
+            // ============ FUNÇÃO PARA VERIFICAR STATUS DO 2FA ============
+            async get2FAStatus() {
+                try {
+                    const response = await fetch('/api/auth/2fa/status', {
+                        headers: { 'Authorization': `Bearer ${this.token}` }
+                    });
+                    const data = await response.json();
+                    return data;
+                } catch (e) {
+                    console.error('Erro ao verificar status 2FA:', e);
+                    return { twoFactorEnabled: false };
+                }
+            }
+
+            // ============ FUNÇÃO CORRIGIDA DE VERIFICAÇÃO ============
+            async verifyCode(type) {
+                // Determinar código e botão baseado no tipo
+                let code, btnId, endpoint;
+                
+                if (type === 'sms') {
+                    code = document.getElementById('smsCode')?.value;
+                    btnId = 'smsBtn';
+                    endpoint = '/api/auth/login'; // SMS sempre usa login
+                } else if (type === 'backup') {
+                    code = document.getElementById('backupCode')?.value;
+                    btnId = 'backupBtn';
+                    endpoint = '/api/auth/login'; // Backup sempre usa login
+                } else if (type === 'qr') {
+                    code = document.getElementById('qrCode')?.value;
+                    btnId = 'qrBtn';
+                    
+                    // 🔴 CORREÇÃO CRÍTICA: Verificar se 2FA já está ativado
+                    const status = await this.get2FAStatus();
+                    
+                    if (status.twoFactorEnabled) {
+                        // Se já está ativado, usar endpoint de LOGIN
+                        endpoint = '/api/auth/login';
+                        console.log('✅ 2FA já ativado - usando endpoint /api/auth/login');
+                    } else {
+                        // Se é primeira ativação, usar endpoint de VERIFY
+                        endpoint = '/api/auth/2fa/verify-totp';
+                        console.log('🆕 Primeira ativação - usando endpoint /api/auth/2fa/verify-totp');
+                    }
+                }
+
+                // Validar código
+                if (!code || (type !== 'backup' && code.length < 6) || (type === 'backup' && code.length < 8)) {
+                    this.showAlert('Código inválido', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById(btnId);
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+                btn.disabled = true;
+
+                try {
+                    console.log(`🔍 Verificando código ${type} no endpoint: ${endpoint}`);
+                    
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            token: this.token,
+                            twoFactorCode: code
+                        })
+                    });
+
+                    const data = await response.json();
+                    console.log('📦 Resposta:', data);
+                    
+                    if (data.success) {
+                        this.showAlert('✅ Acesso autorizado!', 'success');
+                        
+                        // Salvar token principal
+                        localStorage.setItem('auth_token', data.token);
+                        
+                        // Salvar dados do usuário
+                        try {
+                            const userRes = await fetch('/api/auth/me', {
+                                headers: { 'Authorization': `Bearer ${data.token}` }
+                            });
+                            const userData = await userRes.json();
+                            if (userData.success) {
+                                localStorage.setItem('user_data', JSON.stringify(userData.user));
+                            }
+                        } catch (e) {
+                            // Fallback: extrair do token
+                            const payload = JSON.parse(atob(data.token.split('.')[1]));
+                            localStorage.setItem('user_data', JSON.stringify({
+                                id: payload.id,
+                                nome: payload.nome || 'Usuário',
+                                role: payload.role || 'aluno'
+                            }));
+                        }
+
+                        // Limpar sessão temporária
+                        sessionStorage.clear();
+
+                        // Redirecionar baseado no role
+                        setTimeout(() => {
+                            const user = JSON.parse(localStorage.getItem('user_data') || '{}');
+                            if (user.role === 'admin' || user.role === 'super_admin') {
+                                window.location.href = '/admin.html';
+                            } else if (user.role === 'professor') {
+                                window.location.href = '/index.html';
+                            } else {
+                                window.location.href = '/aluno.html';
+                            }
+                        }, 1500);
+
+                    } else {
+                        throw new Error(data.error || 'Código inválido');
+                    }
+                } catch (error) {
+                    this.showAlert(error.message, 'error');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }
+
+            async gerarQRCode() {
+                try {
+                    console.log('📱 Gerando QR Code...');
+                    
+                    const qrDisplay = document.getElementById('qrCodeDisplay');
+                    const secretDisplay = document.getElementById('secretKeyDisplay');
+                    
+                    if (!qrDisplay) return;
+                    
+                    qrDisplay.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 40px; color: #1e2b4f;"></i>';
+                    
+                    const response = await fetch('/api/auth/2fa/generate-qr', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${this.token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.qrData = data;
+                        
+                        qrDisplay.innerHTML = `<img src="${data.qrCode}" style="width: 100%; height: 100%;" alt="QR Code">`;
+                        
+                        if (secretDisplay) {
+                            secretDisplay.textContent = data.secret;
+                            secretDisplay.style.display = 'block';
+                        }
+                        
+                        console.log('✅ QR Code gerado com sucesso');
+                    } else {
+                        throw new Error(data.error || 'Erro ao gerar QR Code');
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao gerar QR Code:', error);
+                    const qrDisplay = document.getElementById('qrCodeDisplay');
+                    if (qrDisplay) {
+                        qrDisplay.innerHTML = `
+                            <div style="color: #ef4444; text-align: center;">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 40px;"></i>
+                                <p style="font-size: 0.8rem; margin-top: 10px;">Erro ao gerar QR Code</p>
+                                <button onclick="window.twoFactorInstance?.gerarQRCode()" style="
+                                    margin-top: 10px;
+                                    padding: 8px 16px;
+                                    background: #3b82f6;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 6px;
+                                    cursor: pointer;
+                                ">
+                                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+            }
+
+            copiarChave() {
+                if (this.qrData?.secret) {
+                    navigator.clipboard.writeText(this.qrData.secret);
+                    this.showAlert('✅ Chave copiada!', 'success');
+                }
             }
 
             mostrarMensagemJaExibido(quantidade) {
@@ -877,7 +1136,7 @@
                     });
 
                     const data = await response.json();
-                    console.log('📦 Resposta:', data);
+                    console.log('📦 Resposta backup:', data);
 
                     if (data.success) {
                         if (data.firstTime && data.backupCodes?.length > 0) {
@@ -1032,78 +1291,6 @@
                 }
             }
 
-            async verifyCode(type) {
-                const code = type === 'sms' 
-                    ? document.getElementById('smsCode')?.value
-                    : document.getElementById('backupCode')?.value;
-
-                if (!code || code.length < 6) {
-                    this.showAlert('Código inválido', 'error');
-                    return;
-                }
-
-                const btn = document.getElementById(type === 'sms' ? 'smsBtn' : 'backupBtn');
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
-                btn.disabled = true;
-
-                try {
-                    const response = await fetch('/api/auth/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            token: this.token,
-                            twoFactorCode: code
-                        })
-                    });
-
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        this.showAlert('✅ Acesso autorizado!', 'success');
-                        
-                        localStorage.setItem('auth_token', data.token);
-                        
-                        try {
-                            const userRes = await fetch('/api/auth/me', {
-                                headers: { 'Authorization': `Bearer ${data.token}` }
-                            });
-                            const userData = await userRes.json();
-                            if (userData.success) {
-                                localStorage.setItem('user_data', JSON.stringify(userData.user));
-                            }
-                        } catch (e) {
-                            const payload = JSON.parse(atob(data.token.split('.')[1]));
-                            localStorage.setItem('user_data', JSON.stringify({
-                                id: payload.id,
-                                nome: payload.nome || 'Usuário',
-                                role: payload.role || 'aluno'
-                            }));
-                        }
-
-                        sessionStorage.clear();
-
-                        setTimeout(() => {
-                            const user = JSON.parse(localStorage.getItem('user_data') || '{}');
-                            if (user.role === 'admin' || user.role === 'super_admin') {
-                                window.location.href = '/admin.html';
-                            } else if (user.role === 'professor') {
-                                window.location.href = '/index.html';
-                            } else {
-                                window.location.href = '/aluno.html';
-                            }
-                        }, 1500);
-
-                    } else {
-                        throw new Error(data.error || 'Código inválido');
-                    }
-                } catch (error) {
-                    this.showAlert(error.message, 'error');
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }
-            }
-
             downloadBackupCodes() {
                 if (this.backupCodes.length === 0) {
                     this.showAlert('Nenhum código disponível', 'error');
@@ -1138,14 +1325,13 @@
 
             async contactAdmin() {
                 try {
-                    // Desabilitar botão para evitar múltiplos cliques
                     const btn = document.getElementById('contactAdminBtn');
                     if (btn) {
                         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
                         btn.disabled = true;
                     }
                     
-                    console.log('📨 Enviando solicitação de novos códigos para o admin...');
+                    console.log('📨 Enviando solicitação de novos códigos...');
                     
                     const response = await fetch('/api/backup/solicitar', {
                         method: 'POST',
@@ -1158,9 +1344,8 @@
                     const data = await response.json();
                     
                     if (data.success) {
-                        this.showAlert('✅ Solicitação enviada! Os administradores serão notificados.', 'success');
+                        this.showAlert('✅ Solicitação enviada!', 'success');
                         
-                        // Reabilitar botão após 30 segundos (para evitar spam)
                         setTimeout(() => {
                             if (btn) {
                                 btn.innerHTML = '<i class="fas fa-envelope"></i> Solicitar novos códigos';
@@ -1172,10 +1357,9 @@
                     }
                     
                 } catch (error) {
-                    console.error('❌ Erro ao contatar admin:', error);
+                    console.error('❌ Erro:', error);
                     this.showAlert(`❌ ${error.message}`, 'error');
                     
-                    // Reabilitar botão imediatamente em caso de erro
                     const btn = document.getElementById('contactAdminBtn');
                     if (btn) {
                         btn.innerHTML = '<i class="fas fa-envelope"></i> Solicitar novos códigos';
