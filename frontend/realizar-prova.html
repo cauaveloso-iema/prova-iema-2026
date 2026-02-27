@@ -1204,30 +1204,27 @@
                 // Detectar QUALQUER tecla que possa causar refresh
                 const teclasRefresh = ['F5', 'F11', 'F12'];
                 const isRefreshKey = teclasRefresh.includes(e.key);
-                
-                // Detectar combinações de teclas para refresh (SEM CHANCE!)
+
+                // Detectar combinações de teclas para refresh
                 const isCtrlR = (e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R');
                 const isCtrlShiftR = (e.ctrlKey && e.shiftKey && (e.key === 'r' || e.key === 'R'));
                 const isCtrlF5 = (e.ctrlKey && e.key === 'F5');
-                
-                // Detectar tecla R sozinha também (alguns navegadores permitem)
                 const isJustR = (e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey;
-                
+
                 if (isRefreshKey || isCtrlR || isCtrlShiftR || isCtrlF5 || isJustR) {
                     e.preventDefault();
                     e.stopPropagation();
                     
                     this.refreshTentativas++;
-                    console.log(`🚨 Tentativa de refresh BLOQUEADA: ${this.refreshTentativas}`);
+                    console.log(`🚨 Tentativa de refresh: ${this.refreshTentativas}`);
                     
-                    // CANCELAR IMEDIATAMENTE NA PRIMEIRA TENTATIVA
                     if (this.refreshTentativas >= this.maxRefreshTentativas) {
-                        console.log('💀 CANCELANDO PROVA POR TENTATIVA DE REFRESH');
+                        console.log('💀 CANCELANDO PROVA POR SEGUNDA TENTATIVA DE REFRESH');
                         this.monitoramento?.cancelarProvaPorRefresh('Tentativa de atualizar/recarregar a página');
+                    } else {
+                        console.log('⚠️ Primeira tentativa de refresh - apenas aviso');
+                        this.mostrarAvisoRefreshCritico();
                     }
-                    
-                    // Mostrar aviso MESMO na primeira tentativa
-                    this.mostrarAvisoRefreshCritico();
                     
                     return false;
                 }
@@ -1400,7 +1397,7 @@
             aviso.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
                     <i class="fas fa-skull-crossbones" style="font-size: 1.5rem;"></i>
-                    <span>🚫 ATUALIZAÇÃO BLOQUEADA! Qualquer nova tentativa CANCELARÁ a prova!</span>
+                    <span>🚫 ATUALIZAÇÃO BLOQUEADA! Prova Cancelada!</span>
                     <i class="fas fa-skull-crossbones" style="font-size: 1.5rem;"></i>
                 </div>
             `;
@@ -1817,7 +1814,7 @@
         sairDaProva() {
             // Marcar prova como cancelada
             if (monitoramento) {
-                monitoramento.cancelarProva();
+                monitoramento.cancelarProva('Usuário saiu voluntariamente da prova');
             } else {
                 // Limpar dados da prova
                 if (prova && prova._id) {
@@ -1832,7 +1829,8 @@
                 }
                 
                 // Redirecionar para aluno.html com motivo
-                window.location.href = '/aluno.html?prova_abandonada=true';
+                window.location.href = '/aluno.html?prova_abandonada=true&motivo=' + 
+                    encodeURIComponent('Usuário saiu voluntariamente da prova');
             }
         }
         
@@ -2269,7 +2267,7 @@
         }
         
         registrarPerdaFoco() {
-            // 🔥 NOVO: Verificar se modal de confirmação está aberto
+            // 🔥 VERIFICAR SE MODAL DE CONFIRMAÇÃO ESTÁ ABERTO
             const modalConfirmacao = document.querySelector('.modal-saida.active') || 
                                     document.querySelector('.modal-warning.active');
             
@@ -2278,7 +2276,7 @@
                 return;
             }
             
-            // 🔥 NOVO: Verificar se está no processo de finalização
+            // 🔥 VERIFICAR SE ESTÁ NO PROCESSO DE FINALIZAÇÃO
             if (this.provaSendoFinalizada) {
                 console.log('♿ Perda de foco ignorada (prova sendo finalizada)');
                 return;
@@ -2298,7 +2296,7 @@
             console.log('⚠️ Perda de foco registrada: ' + this.avisos + '/' + this.maxAvisos);
             
             if (this.avisos >= this.maxAvisos) {
-                this.cancelarProva();
+                this.cancelarProva('Excesso de perdas de foco da página');
                 return;
             }
             
@@ -2306,7 +2304,7 @@
         }
         
         registrarTentativaAtalho(tipo) {
-            // 🔥 NOVO: Verificar se modal de confirmação está aberto
+            // 🔥 VERIFICAR SE MODAL DE CONFIRMAÇÃO ESTÁ ABERTO
             const modalConfirmacao = document.querySelector('.modal-saida.active') || 
                                     document.querySelector('.modal-warning.active');
             
@@ -2315,7 +2313,7 @@
                 return;
             }
             
-            // 🔥 NOVO: Verificar se está no processo de finalização
+            // 🔥 VERIFICAR SE ESTÁ NO PROCESSO DE FINALIZAÇÃO
             if (this.provaSendoFinalizada) {
                 console.log('♿ Atalho "' + tipo + '" ignorado (prova sendo finalizada)');
                 return;
@@ -2348,7 +2346,7 @@
             console.log('⌨️ Tentativa de atalho: ' + this.tentativasAtalho + '/' + this.maxTentativasAtalho);
             
             if (this.tentativasAtalho >= this.maxTentativasAtalho) {
-                this.cancelarProva();
+                this.cancelarProva('Excesso de tentativas de atalhos bloqueados');
             }
         }
         
@@ -2365,7 +2363,7 @@
             console.log('📸 Captura de tela: ' + this.screenshots + '/' + this.maxScreenshots);
             
             if (this.screenshots >= this.maxScreenshots) {
-                this.cancelarProva();
+                this.cancelarProva('Excesso de capturas de tela');
             }
         }
         
@@ -2399,23 +2397,23 @@
             const saidaModal = document.getElementById('saidaModal');
             if (saidaModal) saidaModal.classList.remove('active');
             
-            // Registrar no servidor
-            this.cancelarProvaNoServidor(motivo);
+            // Registrar no servidor - PASSANDO O MOTIVO!
+            this.monitoramento?.cancelarProvaNoServidor(motivo);
             
             // Mostrar tela de cancelamento
             const cancelStats = document.getElementById('cancelStats');
             if (cancelStats) {
                 cancelStats.innerHTML = `
                     <div class="stat">
-                        <div class="stat-value">${this.avisos}</div>
+                        <div class="stat-value">${this.monitoramento?.avisos || 0}</div>
                         <div class="stat-label">Avisos</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-value">${this.tentativasAtalho}</div>
+                        <div class="stat-value">${this.monitoramento?.tentativasAtalho || 0}</div>
                         <div class="stat-label">Atalhos</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-value">${this.screenshots}</div>
+                        <div class="stat-value">${this.monitoramento?.screenshots || 0}</div>
                         <div class="stat-label">Capturas</div>
                     </div>
                     <div class="stat">
@@ -2432,17 +2430,8 @@
                 localStorage.removeItem(`hora_entrada_${prova._id}`);
             }
             
-            // Bloquear tela completamente e redirecionar para aluno.html
-            setTimeout(() => {
-                // Sair do fullscreen
-                if (document.exitFullscreen) {
-                    document.exitFullscreen().catch(() => {});
-                }
-                
-                // Redirecionar para aluno.html
-                window.location.href = '/aluno.html?prova_cancelada=true&motivo=' + 
-                    encodeURIComponent(motivo || 'Tentativa de atualizar a página');
-            }, 30000); // 30 segundos
+            // Chamar a função que mostra a tela de cancelamento
+            bloquearTelaCompletamente(30);
         }
         
         mostrarModalAviso() {
@@ -2477,12 +2466,10 @@
             messageElement.textContent = messages[Math.min(this.avisos - 1, messages.length - 1)];
             modal.classList.add('active');
             
-            // CORREÇÃO: Sempre começar do 5
             let countdown = 5;
             countdownElement.textContent = countdown;
             countdownElement.classList.add('blink');
             
-            // CORREÇÃO: Limpar timer anterior se existir
             if (this.timerPerdaFoco) {
                 clearInterval(this.timerPerdaFoco);
             }
@@ -2495,7 +2482,6 @@
                     clearInterval(this.timerPerdaFoco);
                     countdownElement.classList.remove('blink');
                     
-                    // 🔥 VERIFICAR NOVAMENTE SE NÃO HÁ MODAL DE CONFIRMAÇÃO
                     const modalConfirmacaoAinda = document.querySelector('.modal-saida.active') || 
                                                 document.querySelector('.modal-warning.active');
                     
@@ -2506,19 +2492,15 @@
                         return;
                     }
                     
-                    this.cancelarProva();
+                    this.cancelarProva('Tempo esgotado sem retorno à página');
                 }
             }, 1000);
             
-            // CORREÇÃO: Configurar botão de retorno corretamente
             const btnReturn = document.getElementById('btnReturn');
-            
-            // Remover listeners anteriores
             const newBtnReturn = btnReturn.cloneNode(true);
             btnReturn.parentNode.replaceChild(newBtnReturn, btnReturn);
             
             document.getElementById('btnReturn').addEventListener('click', () => {
-                // Ativar flag de acessibilidade para este clique
                 window.acessibilidadeAtiva = true;
                 window.acessibilidadeClicada = true;
                 
@@ -2531,7 +2513,6 @@
                 this.isModalOpen = false;
                 this.ativarFullScreenInicial();
                 
-                // Desativar flag após o clique
                 setTimeout(() => {
                     window.acessibilidadeAtiva = false;
                     window.acessibilidadeClicada = false;
@@ -2631,8 +2612,9 @@
             }
         }
         
-        cancelarProva() {
+        cancelarProva(motivo = 'Múltiplas violações das regras da prova') {
             console.log('🛑 Cancelando prova por violação das regras...');
+            console.log('📝 Motivo do cancelamento:', motivo);
             
             // Permitir saída pelo sistema de bloqueio
             if (this.bloqueioNavegacao) {
@@ -2645,13 +2627,11 @@
                 this.timerPerdaFoco = null;
             }
             
-            // CORREÇÃO: Limpar timer da prova principal
             if (window.timerInterval) {
                 clearInterval(window.timerInterval);
                 window.timerInterval = null;
             }
             
-            // CORREÇÃO: Limpar timer de cancelamento anterior se existir
             if (window.cancelTimer) {
                 clearInterval(window.cancelTimer);
                 window.cancelTimer = null;
@@ -2662,14 +2642,14 @@
                 modal.classList.remove('active');
             }
             
-            // Atualizar motivo
+            // Atualizar motivo na tela
             const motivoElement = document.getElementById('cancelReason');
             if (motivoElement) {
-                motivoElement.textContent = 'Múltiplas violações das regras da prova';
+                motivoElement.textContent = motivo;
             }
             
-            // CHAMAR FUNÇÃO PARA CANCELAR PROVA NO SERVIDOR
-            this.cancelarProvaNoServidor();
+            // CHAMAR FUNÇÃO PARA CANCELAR PROVA NO SERVIDOR COM MOTIVO!
+            this.cancelarProvaNoServidor(motivo);
             
             const cancelStats = document.getElementById('cancelStats');
             if (cancelStats) {
@@ -2689,11 +2669,10 @@
                 `;
             }
             
-            // CORREÇÃO: Sempre chamar com 30 segundos para garantir consistência
             bloquearTelaCompletamente(30);
         }
 
-        async cancelarProvaNoServidor() {
+        async cancelarProvaNoServidor(motivo = 'Múltiplas violações das regras da prova') {
             try {
                 const token = localStorage.getItem('auth_token');
                 const authToken = token;
@@ -2704,10 +2683,11 @@
                 }
                 
                 console.log('📤 Enviando cancelamento da prova ' + prova._id + ' para o servidor...');
+                console.log('📝 Motivo do cancelamento:', motivo);
                 
                 const dadosCancelamento = {
                     provaId: prova._id,
-                    motivo: 'Múltiplas violações das regras da prova',
+                    motivo: motivo,
                     estatisticas: {
                         avisos: this.avisos,
                         tentativasAtalho: this.tentativasAtalho,
@@ -2731,12 +2711,13 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    console.log('✅ Prova cancelada no servidor com sucesso! Nota: 0.0');
+                    console.log('✅ Prova cancelada no servidor com sucesso! Motivo:', motivo);
                     
                     localStorage.removeItem('prova_' + prova._id);
                     localStorage.removeItem('tempo_prova_' + prova._id);
+                    localStorage.removeItem('hora_entrada_' + prova._id);
                     
-                    await this.enviarNotificacaoCancelamento();
+                    await this.enviarNotificacaoCancelamento(motivo);
                     
                 } else {
                     console.error('❌ Erro ao cancelar prova no servidor:', data.error);
@@ -2747,15 +2728,19 @@
             }
         }
 
-        async enviarNotificacaoCancelamento() {
+        async enviarNotificacaoCancelamento(motivo) {
             try {
                 const token = localStorage.getItem('auth_token');
+                
+                const motivoFinal = motivo || 'Múltiplas violações das regras da prova';
+                
+                console.log('📧 Enviando notificação de cancelamento com motivo:', motivoFinal);
                 
                 const dadosNotificacao = {
                     provaId: prova._id,
                     provaTitulo: prova.titulo,
                     alunoId: prova ? prova.alunoId : null,
-                    motivo: 'Múltiplas violações das regras da prova',
+                    motivo: motivoFinal,
                     estatisticas: {
                         avisos: this.avisos,
                         tentativasAtalho: this.tentativasAtalho,
@@ -2773,7 +2758,7 @@
                     body: JSON.stringify(dadosNotificacao)
                 });
                 
-                console.log('📧 Notificação de cancelamento enviada para o professor');
+                console.log('📧 Notificação de cancelamento enviada com motivo:', motivoFinal);
                 
             } catch (error) {
                 console.error('❌ Erro ao enviar notificação:', error);
@@ -2820,6 +2805,13 @@
     let monitoramento = null;
     let questaoAtualIndex = 0;
     let totalQuestoes = 0;
+
+    // 🔥 CARREGAR ESTADO DE FINALIZAÇÃO DO LOCALSTORAGE
+    let provaFinalizada = localStorage.getItem('provaFinalizada_' + (prova?._id || '')) === 'true';
+    window.provaFinalizada = provaFinalizada;
+
+    console.log(`🔍 Estado inicial: provaFinalizada = ${provaFinalizada}`);
+
 
     // ============ FUNÇÃO PARA MARCAR ELEMENTOS SEGUROS GLOBALMENTE ============
     function marcarElementosSegurosGlobalmente() {
@@ -3879,8 +3871,31 @@
     }
     
     async function finalizarProva() {
-        // ============ CONFIGURAÇÃO INICIAL ============
+
+         // ============ VERIFICAR SE JÁ FOI FINALIZADA ============
+        if (provaFinalizada) {
+            console.log('⏭️ Prova já foi finalizada anteriormente');
+            
+            // 🔥 VERIFICAR SE O LOCALSTORAGE TEM A MARCAÇÃO
+            const finalizadaStorage = localStorage.getItem('provaFinalizada_' + prova._id) === 'true';
+            if (finalizadaStorage) {
+                console.log('✅ Prova marcada como finalizada no localStorage');
+                
+                // Já redirecionar direto
+                mostrarAlertaSeguro('Você já finalizou esta prova anteriormente. Redirecionando...');
+                setTimeout(() => {
+                    window.location.href = '/aluno.html?prova_finalizada=true&prova_id=' + encodeURIComponent(prova._id);
+                }, 2000);
+                return;
+            }
+        }
+        
         console.log('🚀 INICIANDO PROCESSO DE FINALIZAÇÃO DA PROVA');
+        
+        // Marcar que a prova está sendo finalizada (EM MEMÓRIA E LOCALSTORAGE)
+        provaFinalizada = true;
+        window.provaFinalizada = true;
+        localStorage.setItem('provaFinalizada_' + prova._id, 'true');
         
         // 🔥 VARIÁVEL DE CONTROLE PARA SABER SE FOI CANCELADO PELO USUÁRIO
         let canceladoPeloUsuario = false;
@@ -4218,6 +4233,7 @@
             localStorage.removeItem(`prova_${prova._id}`);
             localStorage.removeItem(`tempo_prova_${prova._id}`);
             localStorage.removeItem(`hora_entrada_${prova._id}`);
+            localStorage.removeItem(`provaFinalizada_${prova._id}`); 
             
             console.log('🗑️ Dados locais removidos');
             
@@ -4336,10 +4352,64 @@
             }
         }
         
+        // ============ EVENTO BEFOREUNLOAD COM SEND BEACON ============
+        // ============ EVENTO BEFOREUNLOAD CORRIGIDO COM LOCALSTORAGE ============
         window.addEventListener('beforeunload', function(e) {
-            if (prova && Object.keys(respostas).length > 0) {
+            // 🔥 VERIFICAR PRIMEIRO NO LOCALSTORAGE (MAIS CONFIÁVEL)
+            if (prova && prova._id) {
+                const finalizadaStorage = localStorage.getItem('provaFinalizada_' + prova._id) === 'true';
+                
+                if (finalizadaStorage || window.provaFinalizada === true) {
+                    console.log('✅ Prova já finalizada (verificado no localStorage) - beforeunload ignorado');
+                    return;
+                }
+            }
+            
+            // 🔥 VERIFICAR SE ESTÁ NO PROCESSO DE FINALIZAÇÃO
+            if (monitoramento && monitoramento.provaSendoFinalizada === true) {
+                console.log('✅ Prova sendo finalizada - beforeunload ignorado');
+                return;
+            }
+            
+            // Só prosseguir se realmente tiver respostas não enviadas
+            if (prova && prova._id && Object.keys(respostas).length > 0) {
+                // Mostrar mensagem de aviso
                 e.preventDefault();
-                e.returnValue = 'Você tem respostas não enviadas. A prova será perdida.';
+                e.returnValue = '⚠️ Você tem respostas não enviadas! Se sair agora, a prova será perdida.';
+                
+                // USAR SENDBEACON PARA ENVIAR CANCELAMENTO EM BACKGROUND
+                // MAS SÓ ENVIA SE A PROVA NÃO FOI FINALIZADA (VERIFICAÇÃO EXTRA)
+                const finalizadaStorage = localStorage.getItem('provaFinalizada_' + prova._id) === 'true';
+                
+                if (!finalizadaStorage && !window.provaFinalizada && !(monitoramento && monitoramento.provaSendoFinalizada)) {
+                    try {
+                        const token = localStorage.getItem('auth_token');
+                        if (token) {
+                            const dadosCancelamento = {
+                                provaId: prova._id,
+                                motivo: 'Usuário saiu da página antes de finalizar',
+                                estatisticas: {
+                                    avisos: monitoramento ? monitoramento.avisos : 0,
+                                    tentativasAtalho: monitoramento ? monitoramento.tentativasAtalho : 0,
+                                    capturasTela: monitoramento ? monitoramento.screenshots : 0,
+                                    timestamp: new Date().toISOString()
+                                },
+                                respostasAtuais: respostas,
+                                tempoTotal: tempoTotal
+                            };
+                            
+                            const blob = new Blob([JSON.stringify(dadosCancelamento)], { type: 'application/json' });
+                            navigator.sendBeacon(
+                                `${API_BASE_URL}/provas/${prova._id}/cancelar?token=${encodeURIComponent(token)}`,
+                                blob
+                            );
+                            console.log('📤 Requisição de cancelamento enviada via sendBeacon');
+                        }
+                    } catch (error) {
+                        console.error('❌ Erro ao enviar cancelamento via sendBeacon:', error);
+                    }
+                }
+                
                 return e.returnValue;
             }
         });

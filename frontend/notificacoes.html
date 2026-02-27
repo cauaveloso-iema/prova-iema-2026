@@ -636,6 +636,9 @@
                 } else if (notif.tipo === 'resultado_editado') {
                     tipoClasse = 'resultado_editado';
                     tipoTexto = 'Resultado Editado';
+                } else if (notif.tipo === 'cancelamento') {
+                    tipoClasse = 'cancelamento';
+                    tipoTexto = 'Cancelamento';
                 } else {
                     tipoTexto = 'Sistema';
                 }
@@ -647,6 +650,46 @@
                 if (dados.provaTitulo) infoExtra.push(`Prova: ${dados.provaTitulo}`);
                 if (dados.alunoNome) infoExtra.push(`Aluno: ${dados.alunoNome}`);
                 if (dados.adminNome) infoExtra.push(`Admin: ${dados.adminNome}`);
+                
+                // 🔥 DADOS DA TURMA (NOVO)
+                const turma = dados.turma || {};
+                let turmaHtml = '';
+                
+                if (turma.nome) {
+                    turmaHtml = `
+                        <div class="notificacao-turma-info" style="
+                            margin-top: 10px;
+                            padding: 8px 12px;
+                            background: #f8fafc;
+                            border-radius: 8px;
+                            border-left: 3px solid ${notif.cor || '#667eea'};
+                            font-size: 0.85rem;
+                            display: flex;
+                            flex-wrap: wrap;
+                            align-items: center;
+                            gap: 15px;
+                        ">
+                            <span style="display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-school" style="color: ${notif.cor || '#667eea'};"></i>
+                                <strong>Turma:</strong> ${turma.nome}
+                            </span>
+                            
+                            ${turma.disciplina ? `
+                                <span style="display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-book" style="color: ${notif.cor || '#667eea'};"></i>
+                                    <strong>Disciplina:</strong> ${turma.disciplina}
+                                </span>
+                            ` : ''}
+                            
+                            ${turma.codigo ? `
+                                <span style="display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-hashtag" style="color: ${notif.cor || '#667eea'};"></i>
+                                    <strong>Código:</strong> ${turma.codigo}
+                                </span>
+                            ` : ''}
+                        </div>
+                    `;
+                }
                 
                 html += `
                     <div class="notificacao-item-page ${classeLida}" data-id="${notif._id}">
@@ -672,6 +715,8 @@
                                     ${infoExtra.map(item => `<span><i class="fas fa-info-circle"></i> ${item}</span>`).join('')}
                                 </div>
                             ` : ''}
+                            
+                            ${turmaHtml}
                         </div>
                         
                         <div class="notificacao-acoes">
@@ -691,7 +736,7 @@
             
             lista.innerHTML = html;
         }
-        
+                
         function atualizarPaginacao(paginacao) {
             if (!paginacao || paginacao.totalPaginas <= 1) {
                 document.getElementById('paginacao').style.display = 'none';

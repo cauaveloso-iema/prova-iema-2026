@@ -209,16 +209,22 @@ app.use((req, res, next) => {
         return next();
     }
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) {
-            req.user = null;
-        } else {
-            req.userId = user.id;
-            req.userRole = user.role;
-            req.userNome = user.nome;
-        }
-        next();
-    });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+      if (err) {
+          // Silenciar erro de token expirado (é normal)
+          if (err.name === 'TokenExpiredError') {
+              // Não logar nada
+          } else {
+              console.log('❌ Erro na verificação do token:', err.message);
+          }
+          req.user = null;
+      } else {
+          req.userId = user.id;
+          req.userRole = user.role;
+          req.userNome = user.nome;
+      }
+      next();
+  });
 });
 
 
@@ -3465,8 +3471,55 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       });
     }
 
+    // 🔥 ========== VALIDAÇÕES DAS CONFIGURAÇÕES DE PROVAS ========== 🔥
+    
+    // Buscar configurações de tempo
+    const [configTempoMax, configTempoMin, configQuestoesMin, configQuestoesMax] = await Promise.all([
+      Config.findOne({ chave: 'provas.tempoMaximo' }),
+      Config.findOne({ chave: 'provas.tempoMinimo' }),
+      Config.findOne({ chave: 'provas.questoesMinimas' }),
+      Config.findOne({ chave: 'provas.questoesMaximas' })
+    ]);
+
+    const tempoMaximo = configTempoMax?.valor || 240; // Padrão: 240 minutos (4 horas)
+    const tempoMinimo = configTempoMin?.valor || 10;  // Padrão: 10 minutos
+    const questoesMinimas = configQuestoesMin?.valor || 5;  // Padrão: 5 questões
+    const questoesMaximas = configQuestoesMax?.valor || 50; // Padrão: 50 questões
+
+    // Validar duração da prova
+    if (duracaoMinutos < tempoMinimo) {
+      return res.status(400).json({
+        success: false,
+        error: `A prova deve ter no mínimo ${tempoMinimo} minutos de duração (configurado pelo administrador)`
+      });
+    }
+
+    if (duracaoMinutos > tempoMaximo) {
+      return res.status(400).json({
+        success: false,
+        error: `A prova não pode ter mais que ${tempoMaximo} minutos de duração (configurado pelo administrador)`
+      });
+    }
+
+    // Validar quantidade de questões
+    if (quantidadeQuestoes < questoesMinimas) {
+      return res.status(400).json({
+        success: false,
+        error: `A prova deve ter no mínimo ${questoesMinimas} questões (configurado pelo administrador)`
+      });
+    }
+
+    if (quantidadeQuestoes > questoesMaximas) {
+      return res.status(400).json({
+        success: false,
+        error: `A prova não pode ter mais que ${questoesMaximas} questões (configurado pelo administrador)`
+      });
+    }
+
     console.log(`🤖 Professor ${req.userId} solicitando prova tipo ${tipoProva} sobre: "${conteudo}"`);
     console.log(`📎 Anexos recebidos: ${anexos.length}`);
+    
+    // 🔥 FIM DAS VALIDAÇÕES - SE CHEGOU AQUI, PASSOU EM TODAS AS VALIDAÇÕES
 
     // ========== LÓGICA PARA PROVA ADAPTADA ==========
     let alunosDestino = [];
@@ -4240,6 +4293,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     console.log(`✅ ${req.userRole === 'admin' ? 'Admin' : 'Professor'} ${req.userId} criou prova ${prova._id} do tipo ${tipoProva} (área: ${areaDetectada})`);
     console.log(`👨‍🏫 Professor atribuído: ${professorDaProva}`);
     console.log(`🎯 Alunos alvo: ${alunosDestino.length} alunos`);
+    console.log(`⏱️ Duração: ${duracaoMinutos} minutos (validada pelas configurações)`);
 
     let mensagemSucesso = '';
     if (tipoProva === 'adaptada' || adaptada === true) {
@@ -4376,7 +4430,7 @@ async function obterDimensoesImagem(caminhoArquivo) {
     }
 }
 
-// ============ ROTA PARA ALUNO RESPONDER PROVA - VERSÃO SEM TRANSAÇÃO ============
+// ============ ROTA PARA ALUNO RESPONDER PROVA - VERSÃO SEM NOTIFICAÇÃO ============
 app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.id;
@@ -4385,7 +4439,6 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     
     console.log(`📤 Aluno ${alunoId} enviando respostas para prova ${provaId}`);
     
-    // VALIDAR ENTRADA
     if (!respostas || !Array.isArray(respostas)) {
       return res.status(400).json({ 
         success: false, 
@@ -4401,7 +4454,7 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
       });
     }
     
-    // Verificar se já existe QUALQUER registro (Resultado OU ProvaRealizada)
+    // Verificar se já existe resultado
     const [resultadoExistente, provaRealizadaExistente] = await Promise.all([
       Resultado.findOne({ provaId, userId: alunoId }),
       ProvaRealizada.findOne({ provaId, alunoId })
@@ -4425,7 +4478,6 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
       
       if (respostaAluno && typeof respostaAluno === 'string') {
         const respostaAlunoUpper = respostaAluno.toUpperCase().trim();
-        
         if (respostaAlunoUpper === respostaCorretaLetra) {
           acertos++;
           correto = true;
@@ -4448,52 +4500,87 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     
     const user = await User.findById(alunoId);
     
-    // 🔥 REMOVIDA A TRANSAÇÃO - OPERAÇÕES SEPARADAS
-    try {
-      // SALVAR NO MODELO Resultado (principal)
-      const resultado = new Resultado({
-        userId: alunoId,
-        provaId: provaId,
-        alunoNome: user ? user.nome : 'Aluno',
-        respostas: respostas,
-        nota: notaCalculada.toFixed(2),
-        acertos: acertos,
-        total: prova.questoes.length,
-        porcentagem: ((acertos / prova.questoes.length) * 100).toFixed(1),
-        tempoGasto: tempoGasto || 0,
-        resultadoDetalhado: resultadoDetalhado,
-        notaLiberada: false,
-        dataCriacao: new Date()
-      });
-      
-      await resultado.save();
-      console.log(`✅ Resultado salvo com ID: ${resultado._id} (nota: ${notaCalculada.toFixed(2)})`);
-      
-      // ATUALIZAR ESTATÍSTICAS DA PROVA
-      prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
-      
-      if (prova.mediaNotas) {
-        const somaTotal = prova.mediaNotas * (prova.totalParticipantes - 1);
-        prova.mediaNotas = (somaTotal + notaCalculada) / prova.totalParticipantes;
+    // BUSCAR CONFIGURAÇÕES
+    const [configCorrecaoAutomatica, configLiberacaoAutomatica] = await Promise.all([
+      Config.findOne({ chave: 'provas.correcaoAutomatica' }),
+      Config.findOne({ chave: 'provas.liberacaoAutomatica' })
+    ]);
+    
+    const correcaoAutomatica = configCorrecaoAutomatica?.valor !== false;
+    const liberacaoAutomatica = configLiberacaoAutomatica?.valor || false;
+    
+    console.log(`⚙️ Configurações de correção:`);
+    console.log(`   - Correção automática: ${correcaoAutomatica ? 'ATIVADA' : 'DESATIVADA'}`);
+    console.log(`   - Liberação automática: ${liberacaoAutomatica ? 'ATIVADA' : 'DESATIVADA'}`);
+    
+    let notaLiberada = false;
+    let status = 'pendente';
+    
+    if (correcaoAutomatica) {
+      if (liberacaoAutomatica) {
+        notaLiberada = true;
+        status = 'corrigida';
       } else {
-        prova.mediaNotas = notaCalculada;
+        notaLiberada = false;
+        status = 'pendente';
+        console.log(`⏳ Nota calculada mas não liberada (liberação automática desativada)`);
       }
-      prova.mediaNotas = parseFloat(prova.mediaNotas.toFixed(2));
-      
-      await prova.save();
-      
-      console.log(`📈 Aluno ${alunoId} finalizou a prova ${provaId}. Nota: ${notaCalculada.toFixed(2)}`);
-      
-      res.json({ 
-        success: true, 
-        message: 'Prova finalizada com sucesso! Aguarde a liberação do professor.',
-        tempoGasto: tempoGasto || 0
-      });
-      
-    } catch (error) {
-      console.error('❌ Erro ao salvar resultado:', error);
-      throw error; // Propagar o erro para o catch externo
+    } else {
+      notaLiberada = false;
+      status = 'pendente';
     }
+    
+    // SALVAR RESULTADO
+    const resultado = new Resultado({
+      userId: alunoId,
+      provaId: provaId,
+      alunoNome: user ? user.nome : 'Aluno',
+      respostas: respostas,
+      nota: notaCalculada.toFixed(2),
+      acertos: acertos,
+      total: prova.questoes.length,
+      porcentagem: ((acertos / prova.questoes.length) * 100).toFixed(1),
+      tempoGasto: tempoGasto || 0,
+      resultadoDetalhado: resultadoDetalhado,
+      notaLiberada: notaLiberada,
+      status: status,
+      dataCriacao: new Date()
+    });
+    
+    await resultado.save();
+    console.log(`✅ Resultado salvo com ID: ${resultado._id} (nota: ${notaCalculada.toFixed(2)})`);
+    
+    // ATUALIZAR ESTATÍSTICAS DA PROVA
+    prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
+    
+    if (prova.mediaNotas) {
+      const somaTotal = prova.mediaNotas * (prova.totalParticipantes - 1);
+      prova.mediaNotas = (somaTotal + notaCalculada) / prova.totalParticipantes;
+    } else {
+      prova.mediaNotas = notaCalculada;
+    }
+    prova.mediaNotas = parseFloat(prova.mediaNotas.toFixed(2));
+    
+    await prova.save();
+    
+    console.log(`📈 Aluno ${alunoId} finalizou a prova ${provaId}. Nota: ${notaCalculada.toFixed(2)}`);
+    
+    // 🔥 REMOVIDA A NOTIFICAÇÃO QUE ESTAVA CAUSANDO ERRO!
+    
+    let mensagemResposta = 'Prova finalizada com sucesso! ';
+    if (notaLiberada) {
+      mensagemResposta += `Sua nota é ${notaCalculada.toFixed(2)}.`;
+    } else {
+      mensagemResposta += 'Aguarde a liberação do professor.';
+    }
+    
+    res.json({ 
+      success: true, 
+      message: mensagemResposta,
+      notaLiberada: notaLiberada,
+      nota: notaLiberada ? notaCalculada.toFixed(2) : null,
+      tempoGasto: tempoGasto || 0
+    });
     
   } catch (error) {
     console.error('❌ Erro detalhado ao finalizar prova:', error);
@@ -6114,7 +6201,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       }
     }
     
-    // VERIFICAÇÃO DE HORÁRIO - VERSÃO CORRIGIDA USANDO DATA LIMITE
+    // ========== VERIFICAÇÃO DE HORÁRIO ==========
     if (prova.horarioInicio && prova.horarioTermino) {
       // Usar data LOCAL, não UTC
       const agora = new Date();
@@ -6150,6 +6237,35 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       console.log('✅ PROVA DISPONÍVEL!');
     }
     
+    // 🔥 ========== APLICAR TEMPO ADICIONAL PARA ACESSIBILIDADE ========== 🔥
+    let duracaoFinal = prova.duracaoMinutos;
+    
+    if (isAdaptada && precisaAcessibilidade) {
+      // Buscar configurações de tempo adicional
+      const configTempoAdicional = await Config.findOne({ 
+        chave: 'provas.tempoAdicionalAcessibilidade' 
+      });
+      const configPercent = await Config.findOne({ 
+        chave: 'provas.tempoAdicionalPercent' 
+      });
+      
+      const tempoAdicionalHabilitado = configTempoAdicional?.valor !== false;
+      const percentAdicional = configPercent?.valor || 50;
+      
+      if (tempoAdicionalHabilitado) {
+        // Calcular tempo adicional
+        const tempoOriginal = prova.duracaoMinutos || 60;
+        const acrescimo = Math.round(tempoOriginal * (percentAdicional / 100));
+        duracaoFinal = tempoOriginal + acrescimo;
+        
+        console.log(`⏱️ TEMPO ADICIONAL APLICADO:`);
+        console.log(`   Original: ${tempoOriginal} minutos`);
+        console.log(`   Percentual adicional: ${percentAdicional}%`);
+        console.log(`   Acréscimo: ${acrescimo} minutos`);
+        console.log(`   Duração final: ${duracaoFinal} minutos`);
+      }
+    }
+    
     // ========== GERAR TOKEN ESPECÍFICO PARA A PROVA ==========
     // Calcular expiração baseada no término da prova
     let expiracaoToken;
@@ -6181,7 +6297,8 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
         access: 'prova',
         iat: Math.floor(Date.now() / 1000),
         exp: expiracaoToken,
-        adaptada: isAdaptada
+        adaptada: isAdaptada,
+        duracaoMinutos: duracaoFinal // Duração com possível tempo adicional
       },
       process.env.JWT_SECRET
     );
@@ -6199,7 +6316,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
         id: prova._id,
         titulo: prova.titulo,
         conteudo: prova.conteudo,
-        duracaoMinutos: prova.duracaoMinutos,
+        duracaoMinutos: duracaoFinal, // Duração com possível tempo adicional
         quantidadeQuestoes: prova.quantidadeQuestoes,
         dataLimite: prova.dataLimite,
         horarioInicio: prova.horarioInicio,
@@ -6209,6 +6326,10 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
         adaptada: isAdaptada,
         tipoProva: isAdaptada ? 'adaptada' : (prova.tipoProva || 'simples'),
         alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
+        
+        // ========== INFORMAÇÕES DE TEMPO ADICIONAL ==========
+        tempoAdicionalAplicado: (isAdaptada && precisaAcessibilidade && duracaoFinal !== prova.duracaoMinutos),
+        duracaoOriginal: prova.duracaoMinutos,
         
         // ========== TEMPO RESTANTE ==========
         tempoRestanteMinutos: prova.horarioTermino ? 
@@ -7816,233 +7937,228 @@ app.get('/api/monitor/logs/:provaId', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ ROTA PARA CANCELAR PROVA (AUTOMÁTICO) ============
+// ============ ROTA PARA CANCELAR PROVA (VERSÃO FINAL COM MOTIVO CORRETO) ============
 app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) => {
     try {
         const provaId = req.params.provaId;
         const alunoId = req.userId;
         const { motivo, estatisticas, respostasAtuais, tempoTotal } = req.body;
         
-        console.log(`🚫 Cancelando prova ${provaId} do aluno ${alunoId}`);
-        console.log(`📝 Motivo: ${motivo}`);
+        console.log(`🚫 Tentativa de cancelamento - Prova: ${provaId}, Aluno: ${alunoId}`);
+        console.log(`📝 Motivo recebido: "${motivo}"`); // LOG PARA DEBUG
         
-        // Buscar prova
-        const prova = await Prova.findById(provaId);
-        if (!prova) {
+        // ========== VERIFICAR SE PROVA JÁ FOI FINALIZADA ==========
+        const [resultadoExistente, provaRealizadaExistente] = await Promise.all([
+            Resultado.findOne({ provaId, userId: alunoId }),
+            ProvaRealizada.findOne({ provaId, alunoId })
+        ]);
+        
+        if (resultadoExistente || provaRealizadaExistente) {
+            console.log(`⏭️ Prova já finalizada - cancelamento ignorado`);
+            return res.json({
+                success: true,
+                message: 'Prova já foi finalizada',
+                ignorado: true
+            });
+        }
+        
+        // ========== VERIFICAR SE JÁ FOI CANCELADA ==========
+        const [canceladaExistente, resultadoCanceladoExistente] = await Promise.all([
+            ProvaRealizada.findOne({ provaId, alunoId, cancelada: true }),
+            Resultado.findOne({ provaId, userId: alunoId, cancelada: true })
+        ]);
+        
+        if (canceladaExistente || resultadoCanceladoExistente) {
+            console.log(`⏭️ Prova já foi cancelada anteriormente`);
+            return res.json({
+                success: true,
+                message: 'Prova já foi cancelada',
+                ignorado: true
+            });
+        }
+        
+        // ========== VERIFICAR PERMISSÃO DE CANCELAMENTO ==========
+        const configPermitirCancelamento = await Config.findOne({ 
+            chave: 'provas.permitirCancelamento' 
+        });
+        const permitirCancelamento = configPermitirCancelamento?.valor !== false;
+        
+        if (!permitirCancelamento) {
+            return res.status(403).json({
+                success: false,
+                error: 'Cancelamento automático desabilitado'
+            });
+        }
+        
+        // ========== BUSCAR PROVA E ALUNO ==========
+        const [prova, aluno] = await Promise.all([
+            Prova.findById(provaId),
+            User.findById(alunoId)
+        ]);
+        
+        if (!prova || !aluno) {
             return res.status(404).json({
                 success: false,
-                error: 'Prova não encontrada'
+                error: 'Prova ou aluno não encontrado'
             });
         }
         
-        // Verificar se o aluno já realizou esta prova
-        const provaRealizadaExistente = await ProvaRealizada.findOne({
-            provaId: provaId,
-            alunoId: alunoId
-        });
-
-        // Verificar se já existe registro cancelado
-        const provaCanceladaExistente = await ProvaRealizada.findOne({
-            provaId: provaId,
-            alunoId: alunoId,
-            cancelada: true
-        });
-
-        if (provaCanceladaExistente) {
-            return res.status(400).json({
-                success: false,
-                error: 'Esta prova já foi cancelada anteriormente'
-            });
-        }
-
-        const resultadoCanceladoExistente = await Resultado.findOne({
-            provaId: provaId,
-            userId: alunoId,
-            cancelada: true
-        });
-
-        if (resultadoCanceladoExistente) {
-            return res.status(400).json({
-                success: false,
-                error: 'Esta prova já foi cancelada anteriormente'
-            });
-        }
-        
-        const resultadoExistente = await Resultado.findOne({
-            provaId: provaId,
-            userId: alunoId
-        });
-        
-        if (provaRealizadaExistente || resultadoExistente) {
-            return res.status(400).json({
-                success: false,
-                error: 'Esta prova já foi finalizada'
-            });
-        }
-        
-        // Buscar dados do aluno
-        const aluno = await User.findById(alunoId);
-        if (!aluno) {
-            return res.status(404).json({
-                success: false,
-                error: 'Aluno não encontrado'
-            });
-        }
-        
-        // CORREÇÃO 1: Garantir que respostas seja um array vazio, não string
+        // ========== PROCESSAR RESPOSTAS ==========
         let respostasArray = [];
         if (respostasAtuais) {
             try {
-                // Se for string JSON, parse
-                if (typeof respostasAtuais === 'string') {
-                    respostasArray = JSON.parse(respostasAtuais);
-                } 
-                // Se for array, usar diretamente
-                else if (Array.isArray(respostasAtuais)) {
-                    respostasArray = respostasAtuais;
-                }
-                // Garantir que seja array
-                if (!Array.isArray(respostasArray)) {
-                    respostasArray = [];
-                }
+                respostasArray = typeof respostasAtuais === 'string' 
+                    ? JSON.parse(respostasAtuais) 
+                    : (Array.isArray(respostasAtuais) ? respostasAtuais : []);
             } catch (e) {
-                console.error('Erro ao processar respostas:', e);
                 respostasArray = [];
             }
         }
         
-        // **CORREÇÃO MELHORADA**: Detectar violação de forma mais abrangente
+        // ========== DETECTAR TIPO DE CANCELAMENTO ==========
         const motivoLower = motivo.toLowerCase();
         const isViolacao = motivoLower.includes('violação') || 
                           motivoLower.includes('violacao') ||
-                          motivoLower.includes('violou') ||
-                          motivoLower.includes('viola') ||
                           motivoLower.includes('multiplas') ||
-                          motivoLower.includes('múltiplas') ||
-                          (estatisticas?.motivo && estatisticas.motivo.includes('violacao')) ||
-                          (estatisticas && estatisticas.avisos > 0);
+                          (estatisticas?.avisos > 0);
 
-        console.log(`⚠️  Tipo de cancelamento: ${isViolacao ? 'VIOLAÇÃO' : 'PRAZO EXPIRADO'}`);
-        console.log(`📝 Motivo analisado: "${motivo}"`);
-        console.log(`📊 Estatísticas:`, estatisticas);
-        
-        // Criar registro de prova CANCELADA com nota 0
+        console.log(`⚠️ Tipo de cancelamento: ${isViolacao ? 'VIOLAÇÃO' : 'PRAZO EXPIRADO'}`);
+
+        // ========== CRIAR REGISTROS DE CANCELAMENTO ==========
         const provaCancelada = new ProvaRealizada({
-            provaId: provaId,
-            alunoId: alunoId,
+            provaId,
+            alunoId,
             respostas: respostasArray,
-            nota: 0, // NOTA ZERO POR CANCELAMENTO
+            nota: 0,
             tempoGasto: tempoTotal || 0,
             dataRealizacao: new Date(),
             status: 'cancelada',
             notaLiberada: true,
-            
-            // USAR OS NOVOS CAMPOS
             cancelada: true,
-            motivoCancelamento: motivo,
+            motivoCancelamento: motivo, // 🔥 USAR O MOTIVO RECEBIDO!
             flagViolacao: isViolacao,
             estatisticasCancelamento: estatisticas,
             motivoCancelamentoTipo: isViolacao ? 'violacao' : 'prazo_expirado',
-            
             resultadoDetalhado: []
         });
         
-        await provaCancelada.save();
-        
-        // Criar também no Resultado para consistência
         const resultadoCancelado = new Resultado({
             userId: alunoId,
-            provaId: provaId,
+            provaId,
             alunoNome: aluno.nome,
             respostas: respostasArray,
             nota: 0,
             acertos: 0,
-            total: prova.questoes.length,
+            total: prova.questoes?.length || 0,
             porcentagem: '0.0',
             tempoGasto: tempoTotal || 0,
             resultadoDetalhado: [],
             notaLiberada: true,
-            
-            // USAR OS NOVOS CAMPOS
             cancelada: true,
-            motivoCancelamento: motivo,
+            motivoCancelamento: motivo, // 🔥 USAR O MOTIVO RECEBIDO!
             flagViolacao: isViolacao,
             estatisticasCancelamento: estatisticas,
             motivoCancelamentoTipo: isViolacao ? 'violacao' : 'prazo_expirado',
             status: 'cancelada'
         });
         
-        await resultadoCancelado.save();
+        await Promise.all([provaCancelada.save(), resultadoCancelado.save()]);
         
-        // Atualizar estatísticas da prova
+        console.log(`✅ Registros de cancelamento criados com motivo: "${motivo}"`);
+        
+        // ========== ATUALIZAR ESTATÍSTICAS DA PROVA ==========
         prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
-        
-        if (prova.mediaNotas) {
-            const somaTotal = prova.mediaNotas * (prova.totalParticipantes - 1);
-            prova.mediaNotas = (somaTotal + 0) / prova.totalParticipantes; // Adiciona nota 0
-        } else {
-            prova.mediaNotas = 0;
-        }
-        
-        prova.mediaNotas = parseFloat(prova.mediaNotas.toFixed(2));
+        prova.mediaNotas = prova.mediaNotas 
+            ? ((prova.mediaNotas * (prova.totalParticipantes - 1)) / prova.totalParticipantes).toFixed(2)
+            : 0;
         await prova.save();
         
-        // Buscar professor da prova para notificação
-        const professor = await User.findById(prova.userId);
-        
-        console.log(`✅ Prova cancelada com sucesso! Nota: 0.0`);
-        console.log(`📊 Aluno: ${aluno.nome} (${aluno.email})`);
-        console.log(`📚 Prova: ${prova.titulo}`);
-        console.log(`👨‍🏫 Professor: ${professor ? professor.nome : 'Não encontrado'}`);
-        console.log(`⚠️  Tipo de cancelamento: ${isViolacao ? 'VIOLAÇÃO' : 'PRAZO EXPIRADO'}`);
-  
-        
-        // Registrar log de cancelamento
-        console.log(`📝 LOG DE CANCELAMENTO:`, {
-            provaId: provaId,
-            alunoId: alunoId,
-            alunoNome: aluno.nome,
-            alunoEmail: aluno.email,
-            professorId: prova.userId,
-            professorEmail: professor ? professor.email : null,
-            motivo: motivo,
-            tipoViolacao: isViolacao,
-            estatisticas: estatisticas,
-            nota: 0,
-            timestamp: new Date().toISOString()
+        // ========== NOTIFICAR PROFESSOR (SÓ SE CANCELOU DE VERDADE) ==========
+        const configNotificarProfessor = await Config.findOne({ 
+            chave: 'provas.notificarProfessorCancelamento' 
         });
+        const notificarProfessor = configNotificarProfessor?.valor !== false;
+        
+        if (notificarProfessor && prova.userId) {
+            try {
+                const professor = await User.findById(prova.userId).select('nome email');
+                const turma = await Turma.findById(prova.turmaId).select('nome disciplina codigo');
+                
+                if (professor) {
+                    let Notificacao;
+                    try {
+                        Notificacao = mongoose.model('Notificacao');
+                    } catch (e) {
+                        const NotificacaoSchema = new mongoose.Schema({
+                            usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+                            tipo: { type: String, enum: ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'], default: 'sistema' },
+                            titulo: { type: String, required: true },
+                            mensagem: { type: String, required: true },
+                            icone: { type: String, default: '📋' },
+                            cor: { type: String, default: '#3b82f6' },
+                            link: { type: String, default: null },
+                            lida: { type: Boolean, default: false },
+                            prioridade: { type: Number, min: 1, max: 5, default: 3 },
+                            dados: { type: mongoose.Schema.Types.Mixed, default: null },
+                            dataEnvio: { type: Date, default: Date.now }
+                        }, { timestamps: true });
+                        
+                        Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
+                    }
+                    
+                    // 🔥 MENSAGEM COMPLETA PARA O PROFESSOR
+                    const mensagem = `${aluno.nome} - ${prova.titulo} (${turma?.nome || 'Turma não identificada'}) - Motivo: ${motivo}`;
+                    
+                    const notificacao = new Notificacao({
+                        usuarioId: professor._id,
+                        tipo: 'cancelamento',
+                        titulo: '🚫 Prova Cancelada',
+                        mensagem: mensagem,
+                        icone: '🚫',
+                        cor: isViolacao ? '#dc2626' : '#ef4444',
+                        link: `/index.html?prova=${provaId}`,
+                        prioridade: 5,
+                        dados: {
+                            alunoId,
+                            alunoNome: aluno.nome,
+                            alunoEmail: aluno.email,
+                            provaId,
+                            provaTitulo: prova.titulo,
+                            motivo: motivo, // 🔥 MOTIVO CORRETO NOS DADOS
+                            tipo: isViolacao ? 'violacao' : 'prazo',
+                            turma: turma ? {
+                                id: turma._id,
+                                nome: turma.nome,
+                                disciplina: turma.disciplina,
+                                codigo: turma.codigo
+                            } : null,
+                            estatisticas: estatisticas
+                        }
+                    });
+                    
+                    await notificacao.save();
+                    console.log(`✅ Professor notificado: ${professor.email} - Motivo: "${motivo}"`);
+                }
+            } catch (notifError) {
+                console.error('⚠️ Erro não crítico ao notificar professor:', notifError.message);
+            }
+        }
+        
+        console.log(`✅ Prova cancelada com sucesso: ${aluno.nome} - ${prova.titulo} - Motivo: "${motivo}"`);
         
         res.json({
             success: true,
-            message: isViolacao ? 
-                'Prova cancelada por violação das regras. Nota: 0.0' : 
-                'Prova cancelada automaticamente por expiração do prazo. Nota: 0.0',
+            message: isViolacao ? 'Prova cancelada por violação' : 'Prova cancelada por prazo',
+            motivo: motivo, // 🔥 RETORNAR O MOTIVO NA RESPOSTA
             nota: 0,
-            status: 'cancelada',
-            tipoViolacao: isViolacao,
-            motivo: motivo,
-            notificacaoEnviada: professor && professor.email ? true : false,
-            dados: {
-                aluno: {
-                    nome: aluno.nome,
-                    email: aluno.email
-                },
-                prova: {
-                    titulo: prova.titulo,
-                    id: prova._id
-                },
-                professor: professor ? {
-                    nome: professor.nome,
-                    email: professor.email
-                } : null
-            }
+            status: 'cancelada'
         });
         
     } catch (error) {
         console.error('❌ Erro ao cancelar prova:', error);
         res.status(500).json({
             success: false,
-            error: 'Erro interno ao cancelar prova: ' + error.message
+            error: 'Erro interno: ' + error.message
         });
     }
 });
@@ -11328,11 +11444,84 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
         console.log(`📝 Criando notificação para usuário ${usuarioId}: ${titulo}`);
         
         // Verificar se o modelo Notificacao existe
+        // ============ MODELO NOTIFICACAO CORRIGIDO ============
         let Notificacao;
         try {
             Notificacao = mongoose.model('Notificacao');
-        } catch {
-            // Criar schema se não existir
+            
+            // Verificar se o modelo já existe e se prioridade é Number
+            const schema = Notificacao.schema;
+            const prioridadePath = schema.path('prioridade');
+            
+            if (prioridadePath && prioridadePath.instance === 'Number') {
+                console.log('⚠️ Modelo Notificacao com prioridade NUMBER detectado! Corrigindo...');
+                
+                // Remover e recriar
+                delete mongoose.models.Notificacao;
+                delete mongoose.modelSchemas.Notificacao;
+                
+                const NotificacaoSchema = new mongoose.Schema({
+                    usuarioId: { 
+                        type: mongoose.Schema.Types.ObjectId, 
+                        ref: 'User', 
+                        required: true 
+                    },
+                    tipo: { 
+                        type: String, 
+                        enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema', 'solicitacao_backup'], 
+                        default: 'sistema' 
+                    },
+                    titulo: { 
+                        type: String, 
+                        required: true 
+                    },
+                    mensagem: { 
+                        type: String, 
+                        required: true 
+                    },
+                    icone: { 
+                        type: String, 
+                        default: '📋' 
+                    },
+                    cor: { 
+                        type: String, 
+                        default: '#3b82f6' 
+                    },
+                    link: { 
+                        type: String, 
+                        default: null 
+                    },
+                    lida: { 
+                        type: Boolean, 
+                        default: false 
+                    },
+                    prioridade: { 
+                        type: String,                        
+                        enum: ['baixa', 'media', 'alta'],    
+                        default: 'media' 
+                    },
+                    dados: { 
+                        type: mongoose.Schema.Types.Mixed, 
+                        default: null 
+                    },
+                    dataEnvio: { 
+                        type: Date, 
+                        default: Date.now 
+                    }
+                }, {
+                    timestamps: true
+                });
+                
+                Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
+                console.log('✅ Modelo Notificacao recriado com sucesso (prioridade como STRING)!');
+            } else {
+                console.log('✅ Modelo Notificacao já está correto');
+            }
+            
+        } catch (e) {
+            // Se não existir, criar
+            console.log('🆕 Criando modelo Notificacao...');
+            
             const NotificacaoSchema = new mongoose.Schema({
                 usuarioId: { 
                     type: mongoose.Schema.Types.ObjectId, 
@@ -11341,7 +11530,7 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
                 },
                 tipo: { 
                     type: String, 
-                    enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema'], 
+                    enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema', 'solicitacao_backup'], 
                     default: 'sistema' 
                 },
                 titulo: { 
@@ -11369,10 +11558,14 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
                     default: false 
                 },
                 prioridade: { 
-                      type: String,                        
-                      enum: ['baixa', 'media', 'alta'],    
-                      default: 'media' 
-                  },
+                    type: String,                        
+                    enum: ['baixa', 'media', 'alta'],    
+                    default: 'media' 
+                },
+                dados: { 
+                    type: mongoose.Schema.Types.Mixed, 
+                    default: null 
+                },
                 dataEnvio: { 
                     type: Date, 
                     default: Date.now 
@@ -11382,7 +11575,7 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
             });
             
             Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
-            console.log('✅ Modelo Notificacao criado');
+            console.log('✅ Modelo Notificacao criado com sucesso!');
         }
 
         // Criar a notificação

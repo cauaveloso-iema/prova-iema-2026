@@ -1,4 +1,3 @@
-// ============ backend/models/Notificacao.js ============
 const mongoose = require('mongoose');
 
 const NotificacaoSchema = new mongoose.Schema({
@@ -13,7 +12,7 @@ const NotificacaoSchema = new mongoose.Schema({
     // Tipo de notificação
     tipo: {
         type: String,
-        enum: ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema'],
+        enum: ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'],
         required: true
     },
     
