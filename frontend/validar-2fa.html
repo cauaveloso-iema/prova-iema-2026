@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validar 2FA - IEMA</title>
+    <title>Validar 2FA - Sistemas de Provas</title>
     <style>
         * {
             margin: 0;
@@ -1112,7 +1112,7 @@
 
                 const content = [
                     '='.repeat(50),
-                    'CÓDIGOS DE BACKUP - IEMA',
+                    'CÓDIGOS DE BACKUP - SISTEMA DE PROVAS',
                     '='.repeat(50),
                     '',
                     '⚠️ Guarde estes códigos em local seguro!',
@@ -1136,16 +1136,52 @@
                 this.showAlert('📥 Download iniciado!', 'success');
             }
 
-            contactAdmin() {
-                const assunto = encodeURIComponent('Solicitação de novos códigos de backup - 2FA');
-                const corpo = encodeURIComponent(
-                    `Preciso de novos códigos de backup para autenticação de dois fatores.\n\n` +
-                    `Meus códigos atuais se esgotaram.\n\n` +
-                    `Atenciosamente.`
-                );
-                
-                window.location.href = `mailto:admin@iemasaoluiscentro.net?subject=${assunto}&body=${corpo}`;
-                this.showAlert('📧 Cliente de email aberto', 'info');
+            async contactAdmin() {
+                try {
+                    // Desabilitar botão para evitar múltiplos cliques
+                    const btn = document.getElementById('contactAdminBtn');
+                    if (btn) {
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+                        btn.disabled = true;
+                    }
+                    
+                    console.log('📨 Enviando solicitação de novos códigos para o admin...');
+                    
+                    const response = await fetch('/api/backup/solicitar', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showAlert('✅ Solicitação enviada! Os administradores serão notificados.', 'success');
+                        
+                        // Reabilitar botão após 30 segundos (para evitar spam)
+                        setTimeout(() => {
+                            if (btn) {
+                                btn.innerHTML = '<i class="fas fa-envelope"></i> Solicitar novos códigos';
+                                btn.disabled = false;
+                            }
+                        }, 30000);
+                    } else {
+                        throw new Error(data.error || 'Erro ao enviar solicitação');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao contatar admin:', error);
+                    this.showAlert(`❌ ${error.message}`, 'error');
+                    
+                    // Reabilitar botão imediatamente em caso de erro
+                    const btn = document.getElementById('contactAdminBtn');
+                    if (btn) {
+                        btn.innerHTML = '<i class="fas fa-envelope"></i> Solicitar novos códigos';
+                        btn.disabled = false;
+                    }
+                }
             }
 
             showAlert(message, type) {

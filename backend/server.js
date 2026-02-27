@@ -1437,6 +1437,137 @@ app.post('/api/admin/2fa/gerar-backup-codes/:userId', authenticateToken, async (
     }
 });
 
+// ============ ROTA PARA SOLICITAR NOVOS CÓDIGOS DE BACKUP (VERSÃO FINAL) ============
+app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
+    try {
+        const usuarioId = req.userId;
+        
+        // Buscar dados do usuário que está solicitando
+        const usuario = await User.findById(usuarioId).select('nome email role');
+        
+        if (!usuario) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        console.log(`📨 Usuário ${usuario.nome} (${usuario.email}) solicitou novos códigos de backup`);
+        
+        // Buscar TODOS os admins
+        const admins = await User.find({ 
+            role: { $in: ['admin', 'super_admin'] } 
+        }).select('_id');
+        
+        if (admins.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Nenhum administrador encontrado para notificar'
+            });
+        }
+        
+        // GARANTIR que o modelo está correto ANTES de usar
+        let Notificacao;
+        try {
+            Notificacao = mongoose.model('Notificacao');
+            
+            // Verificação de segurança - se prioridade for Number, recriar
+            const schema = Notificacao.schema;
+            const prioridadePath = schema.path('prioridade');
+            
+            if (prioridadePath && prioridadePath.instance === 'Number') {
+                console.log('⚠️ Modelo com prioridade NUMBER detectado! Forçando recriação...');
+                
+                // Remover e recriar
+                delete mongoose.models.Notificacao;
+                delete mongoose.modelSchemas.Notificacao;
+                
+                const NotificacaoSchema = new mongoose.Schema({
+                    usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+                    tipo: { type: String, enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema', 'solicitacao_backup'], default: 'sistema' },
+                    titulo: { type: String, required: true },
+                    mensagem: { type: String, required: true },
+                    icone: { type: String, default: '📋' },
+                    cor: { type: String, default: '#3b82f6' },
+                    link: { type: String, default: null },
+                    lida: { type: Boolean, default: false },
+                    prioridade: { type: String, enum: ['baixa', 'media', 'alta'], default: 'media' },
+                    dados: { type: mongoose.Schema.Types.Mixed, default: null },
+                    dataEnvio: { type: Date, default: Date.now }
+                }, { timestamps: true });
+                
+                Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
+                console.log('✅ Modelo recriado com sucesso!');
+            }
+            
+        } catch (e) {
+            // Se não existir, criar
+            const NotificacaoSchema = new mongoose.Schema({
+                usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+                tipo: { type: String, enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema', 'solicitacao_backup'], default: 'sistema' },
+                titulo: { type: String, required: true },
+                mensagem: { type: String, required: true },
+                icone: { type: String, default: '📋' },
+                cor: { type: String, default: '#3b82f6' },
+                link: { type: String, default: null },
+                lida: { type: Boolean, default: false },
+                prioridade: { type: String, enum: ['baixa', 'media', 'alta'], default: 'media' },
+                dados: { type: mongoose.Schema.Types.Mixed, default: null },
+                dataEnvio: { type: Date, default: Date.now }
+            }, { timestamps: true });
+            
+            Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
+            console.log('✅ Modelo Notificacao criado');
+        }
+        
+        // Criar notificação para cada admin
+        const notificacoes = [];
+        
+        for (const admin of admins) {
+            try {
+                const notificacao = new Notificacao({
+                    usuarioId: admin._id,
+                    tipo: 'solicitacao_backup',  // <- Agora funciona!
+                    titulo: '🆕 Solicitação de novos códigos de backup',
+                    mensagem: `${usuario.nome} (${usuario.role}) está sem códigos de backup e solicita novos.`,
+                    icone: '🔑',
+                    cor: '#f59e0b',
+                    link: `/admin.html?section=usuarios&userId=${usuarioId}`,
+                    prioridade: 'alta',  // <- Agora funciona (string)
+                    dados: {
+                        solicitanteId: usuarioId,
+                        solicitanteNome: usuario.nome,
+                        solicitanteEmail: usuario.email,
+                        solicitanteRole: usuario.role,
+                        dataSolicitacao: new Date().toISOString()
+                    }
+                });
+                
+                await notificacao.save();
+                notificacoes.push(notificacao);
+                console.log(`✅ Notificação criada para admin ${admin._id}`);
+                
+            } catch (error) {
+                console.error(`❌ Erro ao notificar admin ${admin._id}:`, error.message);
+            }
+        }
+        
+        res.json({
+            success: true,
+            message: 'Solicitação enviada aos administradores',
+            notificacoesEnviadas: notificacoes.length,
+            totalAdmins: admins.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao solicitar backup:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
 // ============ ROTA PARA ADMIN LISTAR USUÁRIOS COM 2FA ATIVADO ============
 app.get('/api/admin/2fa/usuarios', authenticateToken, async (req, res) => {
     try {
@@ -8879,72 +9010,96 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
 
 // ============ GERENCIAMENTO DE USUÁRIOS ============
 
-// ============ ROTA PARA CRIAR USUÁRIO (ADMIN) - VERSÃO CORRIGIDA ============
-app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
+// ============================================================================
+// ROTAS DE GERENCIAMENTO DE USUÁRIOS (ADMIN)
+// ============================================================================
+
+// ============ LISTAR TODOS OS USUÁRIOS COM FILTROS E PAGINAÇÃO ============
+app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        const userData = req.body;
+        const { role, search, page = 1, limit = 10 } = req.query;
         
-        console.log('📝 Admin criando usuário:', userData.email);
+        console.log(`📋 Admin ${req.userId} listando usuários - Role: ${role}, Search: ${search}, Page: ${page}`);
         
-        // Validar email institucional
-        if (userData.email && !userData.email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
-            return res.status(400).json({
-                success: false,
-                error: 'Somente emails institucionais (@iemasaoluiscentro.net) são permitidos'
-            });
+        let query = {};
+        
+        // Filtrar por role
+        if (role && role !== 'todos') {
+            query.role = role;
         }
-
-        // Verificar duplicatas
-        const existingUser = await User.findOne({
-            $or: [
-                { email: userData.email },
-                { cpf: userData.cpf?.replace(/\D/g, '') }
-            ]
-        });
-
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                error: 'Email ou CPF já cadastrado'
-            });
-        }
-
-        // 🔴 GARANTIR QUE TODOS OS CAMPOS IMPORTANTES ESTÃO PRESENTES
-        const user = new User({
-            ...userData,
-            ativo: true,
-            forcePasswordChange: true,  // <-- ISSO É CRÍTICO!
-            passwordChangedAt: null,
-            loginAttempts: 0,
-            lockUntil: null
-        });
         
-        await user.save();
-
-        console.log(`✅ Usuário criado: ${user.email}`);
-        console.log(`   ativo: ${user.ativo}`);
-        console.log(`   forcePasswordChange: ${user.forcePasswordChange}`); // Deve ser TRUE
-
-        res.status(201).json({
+        // Busca por nome, email, matrícula ou CPF
+        if (search) {
+            query.$or = [
+                { nome: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { matricula: { $regex: search, $options: 'i' } },
+                { cpf: { $regex: search, $options: 'i' } }
+            ];
+        }
+        
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [usuarios, total] = await Promise.all([
+            User.find(query)
+                .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret')
+                .sort({ nome: 1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            User.countDocuments(query)
+        ]);
+        
+        // Formatar dados para o frontend
+        const usuariosFormatados = usuarios.map(user => ({
+            _id: user._id,
+            id: user._id,
+            nome: user.nome || '',
+            email: user.email || '',
+            cpf: user.cpf || '',
+            telefone: user.telefone || '',
+            matricula: user.matricula || '',
+            role: user.role || 'aluno',
+            eixo: user.eixo || null,
+            curso: user.curso || null,
+            turma: user.turma || null,
+            periodo: user.periodo || null,
+            departamento: user.departamento || null,
+            titulacao: user.titulacao || null,
+            ativo: user.ativo !== false,
+            forcePasswordChange: user.forcePasswordChange || false,
+            precisaAcessibilidade: user.precisaAcessibilidade || false,
+            condicaoAcessibilidade: user.condicaoAcessibilidade || null,
+            dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade || null,
+            twoFactorEnabled: user.twoFactorEnabled || false,
+            telefoneVerificado: user.telefoneVerificado || false,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt
+        }));
+        
+        console.log(`✅ ${usuariosFormatados.length} usuários encontrados (total: ${total})`);
+        
+        res.json({
             success: true,
-            message: 'Usuário criado com sucesso! Ele deverá trocar a senha no primeiro login.',
-            user: {
-                id: user._id,
-                nome: user.nome,
-                email: user.email,
-                role: user.role,
-                ativo: user.ativo,
-                forcePasswordChange: user.forcePasswordChange
+            usuarios: usuariosFormatados,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / parseInt(limit))
             }
         });
-
+        
     } catch (error) {
-        console.error('❌ Erro ao criar usuário:', error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error('❌ Erro ao listar usuários:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro interno ao listar usuários: ' + error.message 
+        });
     }
 });
 
-// ============ ROTA PARA CRIAR USUÁRIO (ADMIN) - VERSÃO CORRIGIDA ============
+// ============ CRIAR NOVO USUÁRIO (VOCÊ JÁ TEM, MAS VAMOS GARANTIR) ============
 app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const userData = req.body;
@@ -8974,16 +9129,38 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
             });
         }
 
-        // 🔴 GARANTIR QUE TODOS OS CAMPOS IMPORTANTES ESTÃO PRESENTES
+        // Validar campos obrigatórios baseado no role
+        if (userData.role === 'professor' && !userData.matricula) {
+            return res.status(400).json({
+                success: false,
+                error: 'Matrícula é obrigatória para professores'
+            });
+        }
+
+        if (userData.role === 'aluno') {
+            if (!userData.curso) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Curso é obrigatório para alunos'
+                });
+            }
+            if (!userData.turma) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Turma é obrigatória para alunos'
+                });
+            }
+        }
+
         const user = new User({
             ...userData,
+            cpf: userData.cpf?.replace(/\D/g, ''),
+            telefone: userData.telefone?.replace(/\D/g, ''),
             ativo: true,
-            forcePasswordChange: true,  // <-- ISSO É CRÍTICO!
+            forcePasswordChange: true,
             passwordChangedAt: null,
             loginAttempts: 0,
             lockUntil: null,
-            
-            // ========== 🔥 CAMPOS DE 2FA ADICIONADOS ==========
             twoFactorEnabled: false,
             twoFactorBackupCodes: [],
             twoFactorBackupCodesShown: false,
@@ -8997,7 +9174,7 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
         await user.save();
 
         console.log(`✅ Usuário criado: ${user.email}`);
-        console.log(`   ativo: ${user.ativo}`);
+        console.log(`   Role: ${user.role}`);
         console.log(`   forcePasswordChange: ${user.forcePasswordChange}`);
 
         res.status(201).json({
@@ -9019,35 +9196,268 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
     }
 });
 
-// Atualizar usuário
+// ============ BUSCAR USUÁRIO POR ID (PARA EDIÇÃO) ============
+app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🔍 Admin ${req.userId} buscando usuário ${id}`);
+        
+        const user = await User.findById(id)
+            .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret')
+            .lean();
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Usuário não encontrado' 
+            });
+        }
+        
+        res.json({
+            success: true,
+            user: {
+                _id: user._id,
+                id: user._id,
+                nome: user.nome || '',
+                email: user.email || '',
+                cpf: user.cpf || '',
+                telefone: user.telefone || '',
+                matricula: user.matricula || '',
+                role: user.role || 'aluno',
+                eixo: user.eixo || null,
+                curso: user.curso || null,
+                turma: user.turma || null,
+                periodo: user.periodo || null,
+                departamento: user.departamento || null,
+                titulacao: user.titulacao || null,
+                ativo: user.ativo !== false,
+                forcePasswordChange: user.forcePasswordChange || false,
+                precisaAcessibilidade: user.precisaAcessibilidade || false,
+                condicaoAcessibilidade: user.condicaoAcessibilidade || null,
+                dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade || null,
+                twoFactorEnabled: user.twoFactorEnabled || false,
+                telefoneVerificado: user.telefoneVerificado || false,
+                createdAt: user.createdAt
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar usuário:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao buscar usuário: ' + error.message 
+        });
+    }
+});
+
+// ============ ATUALIZAR USUÁRIO (VOCÊ JÁ TEM, MAS VAMOS MELHORAR) ============
 app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
         
+        console.log(`✏️ Admin ${req.userId} editando usuário ${id}`);
+        
         // Não permitir atualizar senha por esta rota
         delete updates.password;
         
-        const user = await User.findByIdAndUpdate(id, updates, { new: true })
-            .select('-password');
-        
-        if (!user) {
-            return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+        // Validar email institucional se estiver sendo atualizado
+        if (updates.email && !updates.email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
+            return res.status(400).json({
+                success: false,
+                error: 'Somente emails institucionais (@iemasaoluiscentro.net) são permitidos'
+            });
         }
-
-        res.json({ success: true, user });
+        
+        // Verificar se o usuário existe
+        const existingUser = await User.findById(id);
+        if (!existingUser) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Usuário não encontrado' 
+            });
+        }
+        
+        // Verificar duplicatas de email se estiver mudando
+        if (updates.email && updates.email !== existingUser.email) {
+            const emailExists = await User.findOne({ email: updates.email });
+            if (emailExists) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email já está em uso por outro usuário'
+                });
+            }
+        }
+        
+        // Verificar duplicatas de CPF se estiver mudando
+        if (updates.cpf) {
+            const cpfNumeros = updates.cpf.replace(/\D/g, '');
+            if (cpfNumeros !== existingUser.cpf) {
+                const cpfExists = await User.findOne({ cpf: cpfNumeros });
+                if (cpfExists) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'CPF já está em uso por outro usuário'
+                    });
+                }
+            }
+            updates.cpf = cpfNumeros;
+        }
+        
+        // Formatar telefone
+        if (updates.telefone) {
+            updates.telefone = updates.telefone.replace(/\D/g, '');
+        }
+        
+        const user = await User.findByIdAndUpdate(
+            id, 
+            updates, 
+            { new: true }
+        ).select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
+        
+        console.log(`✅ Usuário ${id} atualizado com sucesso`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Usuário atualizado com sucesso!',
+            user: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email,
+                role: user.role,
+                ativo: user.ativo
+            }
+        });
 
     } catch (error) {
         console.error('❌ Erro ao atualizar usuário:', error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao atualizar usuário: ' + error.message 
+        });
     }
 });
 
+// ============ RESETAR SENHA DO USUÁRIO ============
+app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { novaSenha } = req.body;
+        
+        console.log(`🔑 Admin ${req.userId} resetando senha do usuário ${id}`);
+        
+        if (!novaSenha || novaSenha.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'A nova senha deve ter no mínimo 6 caracteres'
+            });
+        }
+        
+        const user = await User.findById(id);
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Atualizar senha e forçar troca no próximo login
+        user.password = novaSenha;
+        user.forcePasswordChange = true;
+        user.passwordChangedAt = null;
+        await user.save();
+        
+        console.log(`✅ Senha resetada para usuário ${user.email}`);
+        
+        // Criar notificação para o usuário
+        try {
+            const Notificacao = mongoose.model('Notificacao');
+            const notificacao = new Notificacao({
+                usuarioId: user._id,
+                tipo: 'sistema',
+                titulo: '🔐 Senha resetada',
+                mensagem: 'Sua senha foi resetada pelo administrador. Você precisará trocá-la no próximo login.',
+                icone: '🔑',
+                cor: '#f59e0b',
+                link: '/trocar-senha.html',
+                prioridade: 'alta'
+            });
+            await notificacao.save();
+        } catch (notifError) {
+            console.warn('⚠️ Erro ao criar notificação:', notifError.message);
+        }
+        
+        res.json({
+            success: true,
+            message: 'Senha resetada com sucesso! O usuário deverá trocar a senha no próximo login.'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao resetar senha:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao resetar senha: ' + error.message 
+        });
+    }
+});
 
-// Deletar usuário
+// ============ ATIVAR/DESATIVAR USUÁRIO ============
+app.put('/api/admin/usuarios/:id/toggle-status', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ativo } = req.body;
+        
+        console.log(`🔄 Admin ${req.userId} alterando status do usuário ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        
+        const user = await User.findById(id);
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Impedir que desative a si mesmo
+        if (req.userId === id && !ativo) {
+            return res.status(400).json({
+                success: false,
+                error: 'Você não pode desativar seu próprio usuário'
+            });
+        }
+        
+        user.ativo = ativo;
+        await user.save();
+        
+        console.log(`✅ Usuário ${user.email} agora está ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        
+        res.json({
+            success: true,
+            message: `Usuário ${ativo ? 'ativado' : 'desativado'} com sucesso!`,
+            user: {
+                id: user._id,
+                nome: user.nome,
+                ativo: user.ativo
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao alterar status:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao alterar status: ' + error.message 
+        });
+    }
+});
+
+// ============ EXCLUIR USUÁRIO (VOCÊ JÁ TEM, MAS VAMOS MELHORAR) ============
 app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} tentando excluir usuário ${id}`);
         
         // Verificar se é o último admin
         if (req.userId === id) {
@@ -9059,31 +9469,155 @@ app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (re
 
         const user = await User.findById(id);
         if (!user) {
-            return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Usuário não encontrado' 
+            });
         }
 
         // Verificar se há dados relacionados
-        const [resultados, provasRealizadas, provasCriadas] = await Promise.all([
+        const [resultados, provasRealizadas, provasCriadas, turmasComoProfessor] = await Promise.all([
             Resultado.countDocuments({ userId: id }),
             ProvaRealizada.countDocuments({ alunoId: id }),
-            Prova.countDocuments({ userId: id })
+            Prova.countDocuments({ userId: id }),
+            Turma.countDocuments({ professorId: id })
         ]);
 
-        if (resultados > 0 || provasRealizadas > 0 || provasCriadas > 0) {
+        if (resultados > 0 || provasRealizadas > 0 || provasCriadas > 0 || turmasComoProfessor > 0) {
             return res.status(400).json({
                 success: false,
                 error: 'Este usuário possui dados associados. Não é possível excluir.',
-                estatisticas: { resultados, provasRealizadas, provasCriadas }
+                detalhes: { 
+                    resultados, 
+                    provasRealizadas, 
+                    provasCriadas,
+                    turmasComoProfessor
+                },
+                sugestao: 'Recomendamos desativar o usuário em vez de excluí-lo.'
             });
         }
 
         await User.findByIdAndDelete(id);
 
-        res.json({ success: true, message: 'Usuário excluído com sucesso' });
+        console.log(`✅ Usuário ${user.email} excluído permanentemente`);
+
+        res.json({ 
+            success: true, 
+            message: 'Usuário excluído com sucesso' 
+        });
 
     } catch (error) {
         console.error('❌ Erro ao deletar usuário:', error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao deletar usuário: ' + error.message 
+        });
+    }
+});
+
+// ============ BUSCAR PROFESSORES PARA SELECT (usado em várias partes) ============
+app.get('/api/admin/professores-lista', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        console.log(`📋 Admin ${req.userId} buscando lista de professores`);
+        
+        const professores = await User.find({ 
+            role: 'professor',
+            ativo: true
+        }).select('nome email matricula').sort({ nome: 1 }).lean();
+        
+        res.json({
+            success: true,
+            professores: professores.map(p => ({
+                id: p._id,
+                nome: p.nome,
+                email: p.email,
+                matricula: p.matricula
+            }))
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar professores:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao buscar professores: ' + error.message 
+        });
+    }
+});
+
+// ============ BUSCAR ALUNOS PARA SELECT ============
+app.get('/api/admin/alunos-lista', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { turmaId, curso } = req.query;
+        
+        let query = { role: 'aluno', ativo: true };
+        
+        if (turmaId) {
+            query.turma = turmaId;
+        }
+        
+        if (curso) {
+            query.curso = curso;
+        }
+        
+        const alunos = await User.find(query)
+            .select('nome email matricula turma curso')
+            .sort({ nome: 1 })
+            .lean();
+        
+        res.json({
+            success: true,
+            alunos: alunos.map(a => ({
+                id: a._id,
+                nome: a.nome,
+                email: a.email,
+                matricula: a.matricula,
+                turma: a.turma,
+                curso: a.curso
+            }))
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar alunos:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao buscar alunos: ' + error.message 
+        });
+    }
+});
+
+// ============ ESTATÍSTICAS DE USUÁRIOS ============
+app.get('/api/admin/usuarios/estatisticas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const [total, ativos, inativos, com2FA, comAcessibilidade] = await Promise.all([
+            User.countDocuments(),
+            User.countDocuments({ ativo: true }),
+            User.countDocuments({ ativo: false }),
+            User.countDocuments({ twoFactorEnabled: true }),
+            User.countDocuments({ precisaAcessibilidade: true })
+        ]);
+        
+        res.json({
+            success: true,
+            estatisticas: {
+                total,
+                ativos,
+                inativos,
+                com2FA,
+                comAcessibilidade,
+                porRole: {
+                    alunos: await User.countDocuments({ role: 'aluno' }),
+                    professores: await User.countDocuments({ role: 'professor' }),
+                    admins: await User.countDocuments({ role: { $in: ['admin', 'super_admin'] } })
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar estatísticas:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao buscar estatísticas: ' + error.message 
+        });
     }
 });
 
@@ -10384,10 +10918,10 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
                     default: false 
                 },
                 prioridade: { 
-                    type: String, 
-                    enum: ['baixa', 'media', 'alta'], 
-                    default: 'media' 
-                },
+                      type: String,                        
+                      enum: ['baixa', 'media', 'alta'],    
+                      default: 'media' 
+                  },
                 dataEnvio: { 
                     type: Date, 
                     default: Date.now 
@@ -11635,6 +12169,53 @@ app.post('/api/auth/2fa/resend', authenticateToken, async (req, res) => {
       error: 'Erro interno: ' + error.message
     });
   }
+});
+
+// ============ ROTA PARA ADMIN VER SOLICITAÇÕES DE BACKUP ============
+app.get('/api/admin/solicitacoes-backup', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const Notificacao = mongoose.model('Notificacao');
+        
+        // Buscar notificações do tipo solicitacao_backup não lidas
+        const solicitacoes = await Notificacao.find({
+            usuarioId: req.userId,
+            tipo: 'solicitacao_backup',
+            lida: false
+        }).sort({ createdAt: -1 }).lean();
+        
+        // Para cada solicitação, buscar dados completos do usuário
+        const solicitacoesCompletas = await Promise.all(solicitacoes.map(async (sol) => {
+            let usuario = null;
+            if (sol.dados && sol.dados.solicitanteId) {
+                usuario = await User.findById(sol.dados.solicitanteId)
+                    .select('nome email telefone twoFactorBackupCodes');
+            }
+            
+            return {
+                ...sol,
+                usuario: usuario ? {
+                    id: usuario._id,
+                    nome: usuario.nome,
+                    email: usuario.email,
+                    telefone: usuario.telefoneFormatado || usuario.telefone,
+                    codigosAtuais: usuario.twoFactorBackupCodes ? usuario.twoFactorBackupCodes.length : 0
+                } : null
+            };
+        }));
+        
+        res.json({
+            success: true,
+            solicitacoes: solicitacoesCompletas,
+            total: solicitacoesCompletas.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar solicitações:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
 });
 
 // ============ FRONTEND ESTÁTICO ============

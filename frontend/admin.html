@@ -875,6 +875,240 @@
             100% { transform: rotate(360deg); }
         }
 
+        /* ===== NOTIFICAÇÕES ===== */
+        .notificacoes-container {
+            position: relative;
+        }
+
+        .notificacoes-btn {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 40px;
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .notificacoes-btn:hover {
+            background: #e9ecef;
+        }
+
+        .notificacoes-btn.tem-notificacao {
+            background: #cce5ff;
+            border-color: #0d6efd;
+            animation: pulse-notification 2s infinite;
+        }
+
+        @keyframes pulse-notification {
+            0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(13, 110, 253, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+        }
+
+        .notificacoes-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #dc3545;
+            color: white;
+            font-size: 0.7rem;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 12px;
+            min-width: 20px;
+            text-align: center;
+            border: 2px solid white;
+        }
+
+        .notificacoes-dropdown {
+            position: absolute;
+            top: 50px;
+            right: 0;
+            width: 380px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+
+        .notificacoes-dropdown.show {
+            display: block !important;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .notificacoes-header {
+            background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-marcar-todas {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: none;
+        }
+
+        .btn-marcar-todas:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .notificacoes-lista {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8fafc;
+        }
+
+        .notificacao-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            gap: 12px;
+            position: relative;
+        }
+
+        .notificacao-item:hover {
+            background: #f1f5f9;
+            transform: translateX(5px);
+        }
+
+        .notificacao-item.nao-lida {
+            background: #eff6ff;
+            border-left: 3px solid #0d6efd;
+        }
+
+        .notificacao-icone {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .notificacao-conteudo {
+            flex: 1;
+        }
+
+        .notificacao-titulo {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+            color: #1f2937;
+        }
+
+        .notificacao-mensagem {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .notificacao-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.7rem;
+            color: #9ca3af;
+        }
+
+        .notificacao-meta i {
+            margin-right: 3px;
+        }
+
+        .btn-excluir-notificacao {
+            position: absolute;
+            top: 50%;
+            right: 10px;
+            transform: translateY(-50%);
+            background: #fee2e2;
+            color: #dc2626;
+            border: none;
+            border-radius: 6px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+
+        .btn-excluir-notificacao:hover {
+            opacity: 1;
+            background: #fecaca;
+        }
+
+        .notificacao-footer {
+            padding: 12px 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notificacao-footer a {
+            color: #0d6efd;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .notificacao-footer button {
+            background: none;
+            border: none;
+            color: #dc2626;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 0;
+        }
+
+        .notificacao-footer button:hover {
+            color: #b91c1c;
+        }
+
         /* ========== TOAST ========== */
         .toast-container {
             position: fixed;
@@ -1085,6 +1319,128 @@
                 </button>
                 <h1 class="page-title" id="pageTitle">Dashboard</h1>
                 <div class="header-actions">
+                    <!-- BOTÃO DE NOTIFICAÇÕES -->
+                    <div class="notificacoes-container">
+                        <button class="notificacoes-btn" id="notificacoesBtn" style="
+                            background: #f8f9fa;
+                            border: 1px solid #dee2e6;
+                            border-radius: 40px;
+                            padding: 8px 16px;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            position: relative;
+                        ">
+                            <i class="fas fa-bell"></i>
+                            <span>Notificações</span>
+                            <span class="notificacoes-badge" id="notificacoesBadge" style="
+                                position: absolute;
+                                top: -5px;
+                                right: -5px;
+                                background: #dc3545;
+                                color: white;
+                                font-size: 0.7rem;
+                                font-weight: bold;
+                                padding: 2px 6px;
+                                border-radius: 12px;
+                                min-width: 20px;
+                                text-align: center;
+                                border: 2px solid white;
+                                display: none;
+                            ">0</span>
+                        </button>
+                        
+                        <div class="notificacoes-dropdown" id="notificacoesDropdown" style="
+                            position: absolute;
+                            top: 50px;
+                            right: 0;
+                            width: 380px;
+                            background: white;
+                            border-radius: 16px;
+                            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                            display: none;
+                            z-index: 1000;
+                            overflow: hidden;
+                            border: 1px solid #e5e7eb;
+                        ">
+                            <div class="notificacoes-header" style="
+                                background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+                                color: white;
+                                padding: 16px 20px;
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                            ">
+                                <h3 style="margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-bell"></i> Notificações
+                                </h3>
+                                <button class="btn-marcar-todas" id="marcarTodasLidasBtn" style="
+                                    background: rgba(255,255,255,0.2);
+                                    border: 1px solid rgba(255,255,255,0.3);
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 0.8rem;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 5px;
+                                    border: none;
+                                ">
+                                    <i class="fas fa-check-double"></i> Marcar todas
+                                </button>
+                            </div>
+                            
+                            <div class="notificacoes-lista" id="notificacoesLista" style="
+                                max-height: 400px;
+                                overflow-y: auto;
+                                background: #f8fafc;
+                            ">
+                                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                    <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                                    <p>Carregando notificações...</p>
+                                </div>
+                            </div>
+                            
+                            <div class="notificacao-footer" style="
+                                padding: 12px 20px;
+                                background: white;
+                                border-top: 1px solid #e5e7eb;
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                            ">
+                                <a href="#" id="verTodasNotificacoes" style="
+                                    color: #0d6efd;
+                                    text-decoration: none;
+                                    font-size: 0.85rem;
+                                    font-weight: 500;
+                                    display: inline-flex;
+                                    align-items: center;
+                                    gap: 5px;
+                                ">
+                                    <i class="fas fa-eye"></i> Ver todas
+                                </a>
+                                
+                                <button id="limparNotificacoesBtn" style="
+                                    background: none;
+                                    border: none;
+                                    color: #dc2626;
+                                    font-size: 0.85rem;
+                                    font-weight: 500;
+                                    cursor: pointer;
+                                    display: inline-flex;
+                                    align-items: center;
+                                    gap: 5px;
+                                    padding: 0;
+                                ">
+                                    <i class="fas fa-trash"></i> Limpar todas
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="search-box">
                         <i class="fas fa-search"></i>
                         <input type="text" id="globalSearch" placeholder="Pesquisar...">
@@ -1143,37 +1499,909 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script src="js/admin.js"></script>
+
+    <!-- ============================================================================ -->
+    <!-- SISTEMA DE NOTIFICAÇÕES DO ADMIN - VERSÃO FUNCIONAL -->
+    <!-- ============================================================================ -->
     <script>
-        // Fallback de emergência caso o admin.js não carregue
-        document.addEventListener('DOMContentLoaded', function() {
-            if (typeof admin === 'undefined') {
-                console.error('❌ admin.js não carregou! Usando fallback...');
+    (function() {
+        console.log('🚀 Inicializando sistema de notificações...');
+        
+        // ============================================
+        // FUNÇÕES PRINCIPAIS
+        // ============================================
+        
+        // Função para atualizar o badge
+        async function atualizarBadge() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
                 
-                // Carregar dados básicos
-                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-                document.getElementById('adminNome').textContent = userData.nome || 'Admin';
-                document.getElementById('adminEmail').textContent = userData.email || 'admin@iemasaoluiscentro.net';
-                
-                // Logout
-                document.getElementById('logoutBtn').addEventListener('click', function() {
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('user_data');
-                    window.location.href = 'login.html';
+                const response = await fetch('/api/notificacoes/nao-lidas/contador', {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
-                // Data/Hora
-                function updateDateTime() {
-                    const now = new Date();
-                    document.getElementById('currentDatetime').textContent = 
-                        now.toLocaleString('pt-BR', { 
-                            dateStyle: 'short', 
-                            timeStyle: 'short' 
-                        });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const badge = document.getElementById('notificacoesBadge');
+                    if (badge) {
+                        if (data.count > 0) {
+                            badge.textContent = data.count > 99 ? '99+' : data.count;
+                            badge.style.display = 'inline';
+                            document.getElementById('notificacoesBtn')?.classList.add('tem-notificacao');
+                        } else {
+                            badge.style.display = 'none';
+                            document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+                        }
+                    }
                 }
-                updateDateTime();
-                setInterval(updateDateTime, 1000);
+            } catch (error) {
+                console.error('❌ Erro ao atualizar badge:', error);
             }
-        });
+        }
+        
+        // Função para carregar notificações
+        async function carregarNotificacoes() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
+                
+                const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderizarNotificacoes(data.notificacoes || []);
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar notificações:', error);
+            }
+        }
+        
+        // Função para renderizar notificações
+        function renderizarNotificacoes(notificacoes) {
+            const lista = document.getElementById('notificacoesLista');
+            if (!lista) return;
+            
+            if (notificacoes.length === 0) {
+                lista.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #6c757d;">
+                        <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                        <p>Nenhuma notificação</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            notificacoes.forEach(notif => {
+                const data = new Date(notif.createdAt);
+                const agora = new Date();
+                const diffMin = Math.floor((agora - data) / 60000);
+                
+                let tempoTexto = diffMin < 1 ? 'agora' : 
+                            diffMin < 60 ? `há ${diffMin} min` : 
+                            `há ${Math.floor(diffMin/60)} h`;
+                
+                const bgColor = notif.lida ? 'white' : '#eff6ff';
+                const borderLeft = notif.lida ? '' : 'border-left: 3px solid #3b82f6;';
+                
+                html += `
+                    <div class="notificacao-item" data-id="${notif._id}" data-link="${notif.link || '#'}" style="
+                        padding: 12px 15px;
+                        border-bottom: 1px solid #e5e7eb;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        display: flex;
+                        gap: 12px;
+                        background: ${bgColor};
+                        ${borderLeft}
+                    ">
+                        <div class="notificacao-icone" style="
+                            width: 36px;
+                            height: 36px;
+                            border-radius: 8px;
+                            background: ${notif.cor || '#0d6efd'};
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            color: white;
+                            font-size: 1rem;
+                            flex-shrink: 0;
+                        ">
+                            ${notif.icone || '📋'}
+                        </div>
+                        <div class="notificacao-conteudo" style="flex: 1;">
+                            <div style="font-weight: 600; margin-bottom: 3px; font-size: 0.9rem; color: #1f2937;">
+                                ${notif.titulo}
+                            </div>
+                            <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px;">
+                                ${notif.mensagem}
+                            </div>
+                            <div style="font-size: 0.65rem; color: #9ca3af;">
+                                <i class="far fa-clock"></i> ${tempoTexto}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            lista.innerHTML = html;
+            
+            // Adicionar eventos de clique aos itens
+            document.querySelectorAll('.notificacao-item').forEach(item => {
+                item.addEventListener('click', async function(e) {
+                    const id = this.dataset.id;
+                    const link = this.dataset.link;
+                    
+                    try {
+                        const token = localStorage.getItem('auth_token');
+                        await fetch(`/api/notificacoes/${id}/lida`, {
+                            method: 'PUT',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        
+                        document.getElementById('notificacoesDropdown').classList.remove('show');
+                        
+                        if (link && link !== '#') {
+                            window.location.href = link;
+                        }
+                        
+                        atualizarBadge();
+                    } catch (error) {
+                        console.error('❌ Erro:', error);
+                    }
+                });
+            });
+        }
+        
+        // ============================================
+        // FUNÇÕES DOS BOTÕES
+        // ============================================
+        
+        // Ver todas as notificações
+        async function verTodas() {
+            console.log('🔍 Redirecionando para notificacoes.html');
+            window.location.href = 'notificacoes.html';
+        }
+        
+        // Limpar todas as notificações
+        async function limparTodas() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const confirmacao = confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+                if (!confirmacao) return;
+                
+                // Mostrar loading
+                const btn = event?.currentTarget;
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+                    btn.disabled = true;
+                }
+                
+                const response = await fetch('/api/notificacoes/limpar-minhas', {
+                    method: 'DELETE',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    await atualizarBadge();
+                    
+                    // Fechar dropdown
+                    document.getElementById('notificacoesDropdown')?.classList.remove('show');
+                    
+                    alert(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`);
+                } else {
+                    throw new Error(data.error || 'Erro ao excluir');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                alert('❌ ' + error.message);
+            } finally {
+                // Restaurar botão
+                const btn = document.querySelector('.notificacao-footer button');
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-trash"></i> Limpar todas';
+                    btn.disabled = false;
+                }
+            }
+        }
+        
+        // Marcar todas como lidas
+        async function marcarTodas() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const btn = event?.currentTarget;
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Marcando...';
+                    btn.disabled = true;
+                }
+                
+                await fetch('/api/notificacoes/marcar-todas-lidas', {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                await atualizarBadge();
+                
+                if (document.getElementById('notificacoesDropdown')?.classList.contains('show')) {
+                    await carregarNotificacoes();
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+            } finally {
+                const btn = document.querySelector('.btn-marcar-todas');
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-check-double"></i> Marcar todas';
+                    btn.disabled = false;
+                }
+            }
+        }
+        
+        // ============================================
+        // CONFIGURAÇÃO DOS ELEMENTOS
+        // ============================================
+        
+        function configurarElementos() {
+            console.log('🔧 Configurando elementos...');
+            
+            // Botão principal de notificações
+            const btnNotificacoes = document.getElementById('notificacoesBtn');
+            if (btnNotificacoes) {
+                // Remover eventos antigos
+                const novoBtn = btnNotificacoes.cloneNode(true);
+                btnNotificacoes.parentNode.replaceChild(novoBtn, btnNotificacoes);
+                
+                novoBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🔔 Abrindo/fechando dropdown');
+                    
+                    const dropdown = document.getElementById('notificacoesDropdown');
+                    if (dropdown) {
+                        dropdown.classList.toggle('show');
+                        
+                        if (dropdown.classList.contains('show')) {
+                            carregarNotificacoes();
+                        }
+                    }
+                });
+            }
+            
+            // Fechar dropdown ao clicar fora
+            document.addEventListener('click', function(event) {
+                const dropdown = document.getElementById('notificacoesDropdown');
+                const btn = document.getElementById('notificacoesBtn');
+                
+                if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+            
+            // Configurar footer após um pequeno delay
+            setTimeout(() => {
+                const footer = document.querySelector('.notificacao-footer');
+                if (!footer) {
+                    console.warn('⚠️ Footer não encontrado, tentando novamente...');
+                    setTimeout(configurarFooter, 1000);
+                    return;
+                }
+                
+                configurarFooter();
+            }, 1000);
+        }
+        
+        function configurarFooter() {
+            const footer = document.querySelector('.notificacao-footer');
+            if (!footer) return;
+            
+            console.log('📋 Configurando footer do dropdown...');
+            
+            // LIMPAR TODO O FOOTER e recriar do zero
+            footer.innerHTML = `
+                <a href="#" style="
+                    color: #4f46e5;
+                    text-decoration: none;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                ">
+                    <i class="fas fa-eye"></i> Ver todas
+                </a>
+                
+                <button style="
+                    background: none;
+                    border: none;
+                    color: #dc2626;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    padding: 0;
+                ">
+                    <i class="fas fa-trash"></i> Limpar todas
+                </button>
+            `;
+            
+            // Adicionar eventos aos novos elementos
+            const linkVerTodas = footer.querySelector('a');
+            const btnLimparTodas = footer.querySelector('button');
+            
+            if (linkVerTodas) {
+                linkVerTodas.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    verTodas();
+                });
+                console.log('✅ Link "Ver todas" configurado');
+            }
+            
+            if (btnLimparTodas) {
+                btnLimparTodas.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    limparTodas();
+                });
+                console.log('✅ Botão "Limpar todas" configurado');
+            }
+            
+            // Configurar também o botão "Marcar todas" no header
+            const btnMarcarTodas = document.querySelector('.btn-marcar-todas, .notificacoes-header button');
+            if (btnMarcarTodas) {
+                const novoBtnMarcar = btnMarcarTodas.cloneNode(true);
+                btnMarcarTodas.parentNode.replaceChild(novoBtnMarcar, btnMarcarTodas);
+                
+                novoBtnMarcar.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    marcarTodas();
+                });
+                console.log('✅ Botão "Marcar todas" configurado');
+            }
+        }
+        
+        // ============================================
+        // INICIALIZAÇÃO
+        // ============================================
+        
+        function iniciar() {
+            console.log('🚀 Iniciando sistema de notificações...');
+            
+            // Aguardar admin estar disponível
+            if (typeof admin === 'undefined') {
+                console.log('⏳ Aguardando admin.js...');
+                setTimeout(iniciar, 500);
+                return;
+            }
+            
+            // Configurar elementos
+            configurarElementos();
+            
+            // Carregar badge inicial
+            atualizarBadge();
+            
+            // Atualizar a cada 30 segundos
+            setInterval(atualizarBadge, 30000);
+            
+            // Observar quando o dropdown abre
+            const dropdown = document.getElementById('notificacoesDropdown');
+            if (dropdown) {
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.target.classList.contains('show')) {
+                            console.log('📂 Dropdown aberto');
+                            carregarNotificacoes();
+                        }
+                    });
+                });
+                
+                observer.observe(dropdown, { attributes: true, attributeFilter: ['class'] });
+            }
+            
+            console.log('✅ Sistema de notificações inicializado com sucesso!');
+        }
+        
+        // Iniciar quando a página carregar
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', iniciar);
+        } else {
+            iniciar();
+        }
+    })();
     </script>
+
+    <!-- CSS adicional para garantir que os botões funcionem -->
+    <style>
+    .notificacao-footer a,
+    .notificacao-footer button,
+    .btn-marcar-todas,
+    .notificacoes-header button {
+        cursor: pointer !important;
+        transition: all 0.2s ease;
+    }
+
+    .notificacao-footer a:hover {
+        color: #6366f1 !important;
+        transform: translateX(3px);
+    }
+
+    .notificacao-footer button:hover {
+        color: #b91c1c !important;
+        background: #fee2e2 !important;
+    }
+
+    .notificacao-footer button:disabled,
+    .btn-marcar-todas:disabled {
+        opacity: 0.5;
+        cursor: not-allowed !important;
+    }
+
+    .notificacao-item {
+        transition: all 0.3s ease;
+    }
+
+    .notificacao-item:hover {
+        background: #f1f5f9 !important;
+        transform: translateX(5px);
+    }
+    </style>
+    <!-- CSS adicional para o dropdown -->
+    <style>
+    .notificacoes-dropdown.show {
+        display: block !important;
+        animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .notificacao-item:hover {
+        background: #f1f5f9 !important;
+        transform: translateX(5px);
+    }
+
+    .notificacoes-btn.tem-notificacao {
+        animation: pulse-notification 2s infinite;
+    }
+
+    @keyframes pulse-notification {
+        0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(255,255,255,0); }
+        100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    }
+    /* ============================================ */
+    /* SISTEMA DE NOTIFICAÇÕES - COMPLEMENTO        */
+    /* ============================================ */
+
+    /* Ajustes no botão existente */
+    .notificacoes-btn {
+        background: linear-gradient(135deg, #0d6efd, #0b5ed7) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 40px !important;
+        padding: 8px 20px !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        position: relative !important;
+        color: white !important;
+        font-weight: 500 !important;
+        box-shadow: 0 4px 10px rgba(13, 110, 253, 0.3) !important;
+    }
+
+    .notificacoes-btn i {
+        font-size: 1.1rem !important;
+    }
+
+    .notificacoes-btn:hover {
+        transform: translateY(-2px) scale(1.02) !important;
+        background: linear-gradient(135deg, #0b5ed7, #0a58ca) !important;
+        box-shadow: 0 6px 15px rgba(13, 110, 253, 0.4) !important;
+    }
+
+    .notificacoes-btn.tem-notificacao {
+        background: linear-gradient(135deg, #dc3545, #bb2d3b) !important;
+        animation: pulse-notification 2s infinite !important;
+    }
+
+    @keyframes pulse-notification {
+        0% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+        }
+        70% {
+            box-shadow: 0 0 0 12px rgba(220, 53, 69, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+        }
+    }
+
+    .notificacoes-badge {
+        position: absolute !important;
+        top: -5px !important;
+        right: -5px !important;
+        background: #ffc107 !important;
+        color: #1e1e1e !important;
+        font-size: 0.7rem !important;
+        font-weight: bold !important;
+        padding: 3px 6px !important;
+        border-radius: 20px !important;
+        min-width: 22px !important;
+        text-align: center !important;
+        border: 2px solid white !important;
+        box-shadow: 0 2px 8px rgba(255, 193, 7, 0.5) !important;
+        animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+    }
+
+    @keyframes bounce-in {
+        0% {
+            transform: scale(0);
+        }
+        50% {
+            transform: scale(1.2);
+        }
+        100% {
+            transform: scale(1);
+        }
+    }
+
+    /* Dropdown aprimorado */
+    .notificacoes-dropdown {
+        position: absolute !important;
+        top: 55px !important;
+        right: 0 !important;
+        width: 400px !important;
+        background: white !important;
+        border-radius: 20px !important;
+        box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3) !important;
+        display: none !important;
+        z-index: 9999 !important;
+        overflow: hidden !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .notificacoes-dropdown.show {
+        display: block !important;
+        animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px) scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    /* Header do dropdown */
+    .notificacoes-header {
+        background: linear-gradient(135deg, #0d6efd, #6610f2) !important;
+        color: white !important;
+        padding: 18px 22px !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .notificacoes-header h3 {
+        margin: 0 !important;
+        font-size: 1.1rem !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        font-weight: 600 !important;
+    }
+
+    .notificacoes-header h3 i {
+        font-size: 1.2rem !important;
+    }
+
+    .btn-marcar-todas {
+        background: rgba(255, 255, 255, 0.2) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        color: white !important;
+        padding: 6px 14px !important;
+        border-radius: 30px !important;
+        font-size: 0.8rem !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        border: none !important;
+        transition: all 0.2s ease !important;
+        font-weight: 500 !important;
+    }
+
+    .btn-marcar-todas:hover {
+        background: rgba(255, 255, 255, 0.3) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    /* Lista de notificações */
+    .notificacoes-lista {
+        max-height: 450px !important;
+        overflow-y: auto !important;
+        background: #ffffff !important;
+    }
+
+    /* Item de notificação */
+    .notificacao-item {
+        padding: 16px 22px !important;
+        border-bottom: 1px solid #edf2f7 !important;
+        cursor: pointer !important;
+        transition: all 0.3s ease !important;
+        display: flex !important;
+        gap: 15px !important;
+        position: relative !important;
+    }
+
+    .notificacao-item:hover {
+        background: #f8fafc !important;
+        transform: translateX(5px) !important;
+    }
+
+    .notificacao-item.nao-lida {
+        background: #f0f7ff !important;
+        border-left: 4px solid #0d6efd !important;
+    }
+
+    /* Ícone da notificação */
+    .notificacao-icone {
+        width: 42px !important;
+        height: 42px !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.2rem !important;
+        flex-shrink: 0 !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .notificacao-item:hover .notificacao-icone {
+        transform: scale(1.1) rotate(5deg) !important;
+    }
+
+    /* Conteúdo */
+    .notificacao-conteudo {
+        flex: 1 !important;
+    }
+
+    .notificacao-titulo {
+        font-weight: 600 !important;
+        margin-bottom: 5px !important;
+        font-size: 0.95rem !important;
+        color: #1f2937 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+
+    /* Badge de tipo (para solicitações de backup) */
+    .notificacao-tipo-badge {
+        background: #f59e0b !important;
+        color: white !important;
+        font-size: 0.65rem !important;
+        padding: 2px 8px !important;
+        border-radius: 12px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        margin-left: 5px !important;
+        font-weight: normal !important;
+    }
+
+    .notificacao-mensagem {
+        font-size: 0.85rem !important;
+        color: #4b5563 !important;
+        margin-bottom: 8px !important;
+        line-height: 1.5 !important;
+    }
+
+    .notificacao-meta {
+        display: flex !important;
+        align-items: center !important;
+        gap: 15px !important;
+        font-size: 0.7rem !important;
+        color: #94a3b8 !important;
+    }
+
+    .notificacao-meta span {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+    }
+
+    .notificacao-meta i {
+        font-size: 0.6rem !important;
+    }
+
+    /* Botão de excluir */
+    .btn-excluir-notificacao {
+        position: absolute !important;
+        top: 50% !important;
+        right: 15px !important;
+        transform: translateY(-50%) !important;
+        background: #fee2e2 !important;
+        color: #dc2626 !important;
+        border: none !important;
+        border-radius: 8px !important;
+        width: 32px !important;
+        height: 32px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        opacity: 0 !important;
+        transition: all 0.2s ease !important;
+        border: 1px solid #fecaca !important;
+    }
+
+    .notificacao-item:hover .btn-excluir-notificacao {
+        opacity: 1 !important;
+    }
+
+    .btn-excluir-notificacao:hover {
+        background: #fecaca !important;
+        transform: translateY(-50%) scale(1.1) !important;
+        color: #b91c1c !important;
+    }
+
+    /* Footer do dropdown */
+    .notificacao-footer {
+        padding: 14px 22px !important;
+        background: #f8fafc !important;
+        border-top: 1px solid #edf2f7 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+    }
+
+    .notificacao-footer a {
+        color: #0d6efd !important;
+        text-decoration: none !important;
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        padding: 6px 12px !important;
+        border-radius: 20px !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .notificacao-footer a:hover {
+        background: #e9ecef !important;
+    }
+
+    .notificacao-footer button {
+        background: none !important;
+        border: none !important;
+        color: #dc2626 !important;
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        padding: 6px 12px !important;
+        border-radius: 20px !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .notificacao-footer button:hover {
+        background: #fee2e2 !important;
+        color: #b91c1c !important;
+    }
+
+    .notificacao-footer button:disabled {
+        opacity: 0.5 !important;
+        cursor: not-allowed !important;
+    }
+
+    /* Estado vazio */
+    .notificacoes-empty {
+        text-align: center !important;
+        padding: 50px 20px !important;
+        color: #94a3b8 !important;
+    }
+
+    .notificacoes-empty i {
+        font-size: 4rem !important;
+        color: #cbd5e1 !important;
+        margin-bottom: 15px !important;
+        animation: float 3s ease-in-out infinite !important;
+    }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-8px); }
+    }
+
+    .notificacoes-empty h4 {
+        color: #334155 !important;
+        font-size: 1.2rem !important;
+        margin-bottom: 8px !important;
+        font-weight: 500 !important;
+    }
+
+    .notificacoes-empty p {
+        color: #94a3b8 !important;
+        font-size: 0.9rem !important;
+    }
+
+    /* Scrollbar personalizada */
+    .notificacoes-lista::-webkit-scrollbar {
+        width: 6px !important;
+    }
+
+    .notificacoes-lista::-webkit-scrollbar-track {
+        background: #f1f5f9 !important;
+    }
+
+    .notificacoes-lista::-webkit-scrollbar-thumb {
+        background: #94a3b8 !important;
+        border-radius: 10px !important;
+    }
+
+    .notificacoes-lista::-webkit-scrollbar-thumb:hover {
+        background: #64748b !important;
+    }
+
+    /* Responsividade */
+    @media (max-width: 768px) {
+        .notificacoes-dropdown {
+            width: 350px !important;
+            right: -80px !important;
+        }
+        
+        .notificacoes-btn {
+            padding: 8px 15px !important;
+        }
+        
+        .notificacoes-btn span {
+            display: none !important;
+        }
+        
+        .notificacoes-btn i {
+            margin: 0 !important;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .notificacoes-dropdown {
+            width: 300px !important;
+            right: -110px !important;
+        }
+    }
+    </style>
 </body>
 </html>
