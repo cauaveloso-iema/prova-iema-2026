@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "cors": "^2.8.5",
-    "resend": "^6.8.0"
+    "resend": "^6.8.0",
+    "web-push": "^3.6.7"
   }
 }

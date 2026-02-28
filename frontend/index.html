@@ -6,6 +6,9 @@
     <title>Dashboard Professor | Sistema de Provas</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Ícones para PWA -->
+    <link rel="icon" type="image/png" sizes="192x192" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
     <style>
         /* ===== VARIÁVEIS CSS ===== */
         :root {
@@ -1125,6 +1128,9 @@
 <!-- Sistema de Acessibilidade (SEGUNDO) -->
 <script src="js/acessibilidade.js"></script>
 
+<!-- 🔥 ADICIONAR ESTA LINHA - CLIENTE PUSH -->
+<script src="js/push-client.js"></script>
+
 <!-- Incluir o chatbot -->
 <script src="js/chatbot-frontend.js"></script>
 
@@ -1733,134 +1739,208 @@ window.addEventListener('scroll', function() {
 
             <!-- NOTIFICAÇÕES POSICIONADAS NO CANTO SUPERIOR DIREITO (fora do fluxo) -->
             <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
-                <div class="notificacoes-container">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" style="
-                        background: #4f46e5;
-                        border: 2px solid white;
-                        border-radius: 50%;
-                        width: 48px;
-                        height: 48px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                        color: white;
-                        font-size: 1.2rem;
-                        position: relative;
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                    ">
-                        <i class="fas fa-bell"></i>
-                        <span class="notificacoes-badge" id="notificacoesBadge" style="
-                            position: absolute;
-                            top: -5px;
-                            right: -5px;
-                            background: #dc3545;
-                            color: white;
-                            font-size: 0.7rem;
-                            font-weight: bold;
-                            padding: 2px 6px;
-                            border-radius: 12px;
-                            min-width: 20px;
-                            text-align: center;
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <!-- 🔥 INDICADOR DE PUSH (AO LADO DAS NOTIFICAÇÕES) - COR VERDE -->
+                    <div class="push-indicator-container" id="pushIndicatorContainer" style="display: none;">
+                        <div class="push-indicator" title="Push desativado pelo administrador">
+                            <i class="fas fa-bell-slash"></i>
+                            <span class="push-text">Push desativado</span>
+                        </div>
+                    </div>
+
+                    <div class="notificacoes-container">
+                        <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" style="
+                            background: #4f46e5;
                             border: 2px solid white;
-                            display: none;
-                        ">0</span>
-                    </button>
-                    
-                    <div class="notificacoes-dropdown" id="notificacoesDropdown" style="
-                        position: absolute;
-                        top: 60px;
-                        right: 0;
-                        width: 380px;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                        display: none;
-                        z-index: 10000;
-                        overflow: hidden;
-                        border: 1px solid #e5e7eb;
-                    ">
-                        <div class="notificacoes-header" style="
-                            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                            border-radius: 50%;
+                            width: 48px;
+                            height: 48px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            cursor: pointer;
+                            transition: all 0.3s;
                             color: white;
-                            padding: 18px 20px;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
+                            font-size: 1.2rem;
+                            position: relative;
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                         ">
-                            <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-bell"></i> Notificações
-                            </h3>
-                            <button onclick="marcarTodasLidas()" class="btn-marcar-todas" style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
+                            <i class="fas fa-bell"></i>
+                            <span class="notificacoes-badge" id="notificacoesBadge" style="
+                                position: absolute;
+                                top: -5px;
+                                right: -5px;
+                                background: #dc3545;
                                 color: white;
-                                padding: 6px 12px;
-                                border-radius: 20px;
-                                font-size: 0.8rem;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 5px;
-                                border: none;
-                            ">
-                                <i class="fas fa-check-double"></i> Marcar todas
-                            </button>
-                        </div>
+                                font-size: 0.7rem;
+                                font-weight: bold;
+                                padding: 2px 6px;
+                                border-radius: 12px;
+                                min-width: 20px;
+                                text-align: center;
+                                border: 2px solid white;
+                                display: none;
+                            ">0</span>
+                        </button>
                         
-                        <div class="notificacoes-lista" id="notificacoesLista" style="
-                            max-height: 400px;
-                            overflow-y: auto;
-                            background: #f8fafc;
-                        ">
-                            <!-- Notificações serão inseridas aqui -->
-                            <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
-                                <p style="font-size: 1rem;">Carregando notificações...</p>
-                            </div>
-                        </div>
-                        
-                        <!-- RODAPÉ DO DROPDOWN COM DOIS BOTÕES -->
-                        <div class="notificacao-footer" style="
-                            padding: 12px 20px;
+                        <div class="notificacoes-dropdown" id="notificacoesDropdown" style="
+                            position: absolute;
+                            top: 60px;
+                            right: 0;
+                            width: 380px;
                             background: white;
-                            border-top: 1px solid #e5e7eb;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
+                            border-radius: 16px;
+                            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                            display: none;
+                            z-index: 10000;
+                            overflow: hidden;
+                            border: 1px solid #e5e7eb;
                         ">
-                            <a href="#" onclick="verTodasNotificacoes(event)" style="
-                                color: #4f46e5;
-                                text-decoration: none;
-                                font-size: 0.9rem;
-                                font-weight: 500;
-                                display: inline-flex;
+                            <div class="notificacoes-header" style="
+                                background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                                color: white;
+                                padding: 18px 20px;
+                                display: flex;
+                                justify-content: space-between;
                                 align-items: center;
-                                gap: 5px;
                             ">
-                                <i class="fas fa-eye"></i> Ver todas
-                            </a>
+                                <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-bell"></i> Notificações
+                                </h3>
+                                <button onclick="marcarTodasLidas()" class="btn-marcar-todas" style="
+                                    background: rgba(255,255,255,0.2);
+                                    border: 1px solid rgba(255,255,255,0.3);
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 0.8rem;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 5px;
+                                    border: none;
+                                ">
+                                    <i class="fas fa-check-double"></i> Marcar todas
+                                </button>
+                            </div>
                             
-                            <!-- BOTÃO LIMPAR TODAS -->
-                            <button onclick="limparMinhasNotificacoes()" style="
-                                background: none;
-                                border: none;
-                                color: #dc2626;
-                                font-size: 0.9rem;
-                                font-weight: 500;
-                                cursor: pointer;
-                                display: inline-flex;
-                                align-items: center;
-                                gap: 5px;
-                                padding: 0;
+                            <div class="notificacoes-lista" id="notificacoesLista" style="
+                                max-height: 400px;
+                                overflow-y: auto;
+                                background: #f8fafc;
                             ">
-                                <i class="fas fa-trash"></i> Limpar todas
-                            </button>
+                                <!-- Notificações serão inseridas aqui -->
+                                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                    <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                                    <p style="font-size: 1rem;">Carregando notificações...</p>
+                                </div>
+                            </div>
+                            
+                            <!-- RODAPÉ DO DROPDOWN COM DOIS BOTÕES -->
+                            <div class="notificacao-footer" style="
+                                padding: 12px 20px;
+                                background: white;
+                                border-top: 1px solid #e5e7eb;
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                            ">
+                                <a href="#" onclick="verTodasNotificacoes(event)" style="
+                                    color: #4f46e5;
+                                    text-decoration: none;
+                                    font-size: 0.9rem;
+                                    font-weight: 500;
+                                    display: inline-flex;
+                                    align-items: center;
+                                    gap: 5px;
+                                ">
+                                    <i class="fas fa-eye"></i> Ver todas
+                                </a>
+                                
+                                <!-- BOTÃO LIMPAR TODAS -->
+                                <button onclick="limparMinhasNotificacoes()" style="
+                                    background: none;
+                                    border: none;
+                                    color: #dc2626;
+                                    font-size: 0.9rem;
+                                    font-weight: 500;
+                                    cursor: pointer;
+                                    display: inline-flex;
+                                    align-items: center;
+                                    gap: 5px;
+                                    padding: 0;
+                                ">
+                                    <i class="fas fa-trash"></i> Limpar todas
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <style>
+            /* ===== INDICADOR DE PUSH COR VERDE ===== */
+            .push-indicator-container {
+                margin-right: 5px;
+                animation: fadeIn 0.3s ease;
+            }
+
+            .push-indicator {
+                background: linear-gradient(135deg, #10b981, #059669) !important; /* VERDE */
+                border: 2px solid white;
+                border-radius: 30px;
+                padding: 8px 16px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: white;
+                font-size: 0.85rem;
+                font-weight: 500;
+                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); /* Sombra verde */
+                transition: all 0.3s;
+                cursor: help;
+            }
+
+            .push-indicator i {
+                font-size: 1rem;
+                color: white; /* Ícone branco */
+            }
+
+            .push-indicator:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 15px rgba(16, 185, 129, 0.4); /* Sombra verde mais forte */
+                background: linear-gradient(135deg, #059669, #047857) !important; /* Verde mais escuro no hover */
+            }
+
+            .push-indicator i.fa-bell-slash {
+                animation: gentle-shake 3s infinite;
+            }
+
+            @keyframes gentle-shake {
+                0%, 100% { transform: rotate(0); }
+                5% { transform: rotate(5deg); }
+                10% { transform: rotate(-5deg); }
+                15% { transform: rotate(3deg); }
+                20% { transform: rotate(-3deg); }
+                25% { transform: rotate(0); }
+            }
+
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateX(10px); }
+                to { opacity: 1; transform: translateX(0); }
+            }
+
+            /* Responsividade */
+            @media (max-width: 768px) {
+                .push-indicator .push-text {
+                    display: none;
+                }
+                
+                .push-indicator {
+                    padding: 8px 12px;
+                }
+            }
+            </style>
             
             <!-- Conteúdo da Aba Nova Prova -->
             <!-- Conteúdo da Aba Nova Prova -->
@@ -13551,5 +13631,99 @@ window.addEventListener('scroll', function() {
 
     </script>
     <div id="alertGeral" class="alert" style="display: none;"></div>
+
+    <script>
+    // Verificar status do push para alunos/professores (indicador ao lado das notificações)
+    document.addEventListener('DOMContentLoaded', async function() {
+        const indicator = document.getElementById('pushIndicatorContainer');
+        if (!indicator) return;
+        
+        async function verificarPush() {
+            try {
+                const response = await fetch('/api/push/status');
+                const data = await response.json();
+                
+                if (data.success && !data.pushAtivado) {
+                    indicator.style.display = 'block';
+                    console.log('🔕 Push desativado - mostrando indicador');
+                } else {
+                    indicator.style.display = 'none';
+                    console.log('🔔 Push ativado - indicador oculto');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao verificar push:', error);
+            }
+        }
+        
+        // Verificar agora
+        await verificarPush();
+        
+        // Verificar a cada 30 segundos (para quando admin alternar)
+        setInterval(verificarPush, 30000);
+    });
+    </script>
+
+    <style>
+    /* ===== INDICADOR DE PUSH ===== */
+    .push-indicator-container {
+        margin-right: 5px;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .push-indicator {
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 30px;
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: white;
+        font-size: 0.85rem;
+        font-weight: 500;
+        backdrop-filter: blur(5px);
+        transition: all 0.3s;
+        cursor: help;
+    }
+
+    .push-indicator i {
+        font-size: 1rem;
+        color: #ffc107;
+    }
+
+    .push-indicator:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px);
+    }
+
+    .push-indicator i.fa-bell-slash {
+        animation: gentle-shake 3s infinite;
+    }
+
+    @keyframes gentle-shake {
+        0%, 100% { transform: rotate(0); }
+        5% { transform: rotate(5deg); }
+        10% { transform: rotate(-5deg); }
+        15% { transform: rotate(3deg); }
+        20% { transform: rotate(-3deg); }
+        25% { transform: rotate(0); }
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateX(10px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Responsividade */
+    @media (max-width: 768px) {
+        .push-indicator .push-text {
+            display: none;
+        }
+        
+        .push-indicator {
+            padding: 8px 12px;
+        }
+    }
+    </style>
 </body>
 </html>

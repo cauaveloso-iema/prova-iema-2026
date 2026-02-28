@@ -357,6 +357,14 @@ try {
   ProvaRealizada = mongoose.model('ProvaRealizada', ProvaRealizadaSchema);
 }
 
+// ============ ROTAS DE PUSH ============
+const pushRoutes = require('./routes/push-routes');
+app.use('/api/push', pushRoutes);
+
+// ============ ROTAS DE CONFIGURAÇÕES DO ADMIN ============
+const adminConfigRoutes = require('./routes/admin-config');
+app.use('/api/admin', adminConfigRoutes);
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ
 // ============================================================================
@@ -11798,6 +11806,62 @@ app.delete('/api/notificacoes/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// ============ ROTA PARA ADMIN ATIVAR/DESATIVAR PUSH GLOBAL ============
+app.post('/api/push/admin/toggle', authenticateToken, async (req, res) => {
+    try {
+        // Verificar se é admin
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas administradores podem controlar o push global'
+            });
+        }
+
+        const { ativar } = req.body;
+        
+        // Buscar ou criar configuração push
+        let PushSettings;
+        try {
+            PushSettings = mongoose.model('PushSettings');
+        } catch (e) {
+            const PushSettingsSchema = new mongoose.Schema({
+                _id: { type: String, default: 'global' },
+                pushAtivado: { type: Boolean, default: false },
+                vapidPublicKey: { type: String, default: process.env.VAPID_PUBLIC_KEY || '' },
+                ultimaAlteracaoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                ultimaAlteracaoEm: { type: Date, default: Date.now }
+            }, { timestamps: true });
+            
+            PushSettings = mongoose.model('PushSettings', PushSettingsSchema);
+        }
+
+        // Atualizar configuração
+        const settings = await PushSettings.findByIdAndUpdate(
+            'global',
+            {
+                pushAtivado: ativar === true,
+                ultimaAlteracaoPor: req.userId,
+                ultimaAltaeracaoEm: new Date()
+            },
+            { upsert: true, new: true }
+        );
+
+        console.log(`✅ Push ${ativar ? 'ATIVADO' : 'DESATIVADO'} globalmente por admin ${req.userId}`);
+
+        res.json({
+            success: true,
+            pushAtivado: settings.pushAtivado,
+            message: `Push ${ativar ? 'ativado' : 'desativado'} com sucesso!`
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao alterar push global:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
 
 // ============ ROTAS PARA MATRÍCULAS AUTORIZADAS (APENAS ADMIN) ============
 

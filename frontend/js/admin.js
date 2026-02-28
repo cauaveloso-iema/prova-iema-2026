@@ -14142,6 +14142,64 @@ class AdminPanel {
         }
     }
 
+    // Adicione este método em AdminPanel (antes do último } da classe)
+    mostrarNotificacaoSistema(tipo, titulo, mensagem, duracao = 5000) {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            background: ${tipo === 'success' ? '#10b981' : tipo === 'warning' ? '#f59e0b' : tipo === 'error' ? '#ef4444' : '#3b82f6'};
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 400px;
+            animation: slideIn 0.3s ease;
+        `;
+        
+        toast.innerHTML = `
+            <div style="background: rgba(255,255,255,0.2); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                ${tipo === 'success' ? '✅' : tipo === 'warning' ? '⚠️' : tipo === 'error' ? '❌' : 'ℹ️'}
+            </div>
+            <div style="flex: 1;">
+                <strong style="display: block; margin-bottom: 3px;">${titulo}</strong>
+                <p style="margin: 0; font-size: 13px; opacity: 0.9;">${mensagem}</p>
+            </div>
+            <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; opacity: 0.7;">&times;</button>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, duracao);
+        
+        // Adicionar animações se não existirem
+        if (!document.querySelector('#notificacaoAnimations')) {
+            const style = document.createElement('style');
+            style.id = 'notificacaoAnimations';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+
     // ============ BAIXAR BACKUP (VERSÃO CORRIGIDA) ============
     async baixarBackup(arquivo) {
         try {

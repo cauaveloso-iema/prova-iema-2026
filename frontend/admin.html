@@ -12,7 +12,14 @@
     <!-- Chart.js para gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
+    <!-- 🔥 ADICIONAR ESTA LINHA - CLIENTE PUSH -->
+    <script src="js/push-client.js"></script>
+
     <link rel="stylesheet" href="css/dark-mode.css">
+
+    <!-- Ícones para PWA -->
+    <link rel="icon" type="image/png" sizes="192x192" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
     
     <style>
         * {
@@ -1441,6 +1448,28 @@
                         </div>
                     </div>
 
+                    <!-- 🔥 NOVO: BOTÃO DE CONTROLE GLOBAL PUSH -->
+                    <button id="btnPushGlobal" class="btn-push" style="
+                        background: linear-gradient(135deg, #6b7280, #4b5563);
+                        color: white;
+                        border: none;
+                        border-radius: 40px;
+                        padding: 8px 16px;
+                        font-size: 0.85rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        transition: all 0.3s;
+                        border: 1px solid rgba(255,255,255,0.2);
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        margin-left: 10px;
+                    ">
+                        <i class="fas fa-bell-slash"></i>
+                        <span>Push: Carregando...</span>
+                    </button>
+
                     <div class="search-box">
                         <i class="fas fa-search"></i>
                         <input type="text" id="globalSearch" placeholder="Pesquisar...">
@@ -2702,5 +2731,122 @@
         }
     }
     </style>
+    <script>
+    // Controle global de push (admin) - VERSÃO CORRIGIDA
+    document.addEventListener('DOMContentLoaded', async function() {
+        console.log('🔔 Inicializando controle de push admin...');
+        
+        // Verificar se é admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAdmin = userData.role === 'admin' || userData.role === 'super_admin';
+        
+        if (!isAdmin) {
+            console.log('⏭️ Usuário não é admin - ignorando');
+            return;
+        }
+        
+        const btnPush = document.getElementById('btnPushGlobal');
+        if (!btnPush) {
+            console.error('❌ Botão push não encontrado');
+            return;
+        }
+        
+        // Função para carregar status
+        async function carregarStatus() {
+            try {
+                console.log('📡 Buscando status do push...');
+                const response = await fetch('/api/push/status');
+                const data = await response.json();
+                
+                console.log('📦 Status recebido:', data);
+                
+                if (data.success) {
+                    if (data.pushAtivado) {
+                        btnPush.innerHTML = '<i class="fas fa-bell"></i> <span>Push Global ATIVADO</span>';
+                        btnPush.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                    } else {
+                        btnPush.innerHTML = '<i class="fas fa-bell-slash"></i> <span>Push Global DESATIVADO</span>';
+                        btnPush.style.background = 'linear-gradient(135deg, #6b7280, #4b5563)';
+                    }
+                } else {
+                    console.error('❌ Erro na resposta:', data);
+                    btnPush.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Erro ao carregar</span>';
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar status:', error);
+                btnPush.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Erro de conexão</span>';
+            }
+        }
+        
+        // Carregar status inicial
+        await carregarStatus();
+        
+        // Evento de clique
+        btnPush.addEventListener('click', async () => {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Buscar status atual para saber o novo estado
+                const statusResponse = await fetch('/api/push/status');
+                const statusData = await statusResponse.json();
+                
+                if (!statusData.success) {
+                    throw new Error('Não foi possível obter status atual');
+                }
+                
+                const novoEstado = !statusData.pushAtivado;
+                
+                // Mostrar loading
+                const originalHtml = btnPush.innerHTML;
+                btnPush.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Alterando...</span>';
+                btnPush.disabled = true;
+                
+                console.log(`🔄 Alterando push para: ${novoEstado ? 'ATIVADO' : 'DESATIVADO'}`);
+                
+                // Enviar requisição
+                const toggleResponse = await fetch('/api/push/admin/toggle', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ativar: novoEstado })
+                });
+                
+                const toggleData = await toggleResponse.json();
+                console.log('📦 Resposta toggle:', toggleData);
+                
+                if (toggleData.success) {
+                    await carregarStatus();
+                    
+                    // Mostrar toast de sucesso
+                    if (window.showToast) {
+                        window.showToast(`✅ Push ${novoEstado ? 'ativado' : 'desativado'}!`, 'success');
+                    } else {
+                        alert(`✅ Push ${novoEstado ? 'ativado' : 'desativado'} globalmente!`);
+                    }
+                } else {
+                    throw new Error(toggleData.error || 'Erro ao alterar status');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                
+                // Mostrar erro
+                if (window.showToast) {
+                    window.showToast('❌ ' + error.message, 'error');
+                } else {
+                    alert('❌ Erro: ' + error.message);
+                }
+                
+                // Recarregar status para garantir consistência
+                await carregarStatus();
+                
+            } finally {
+                btnPush.disabled = false;
+            }
+        });
+    });
+    </script>
 </body>
 </html>
