@@ -7,6 +7,8 @@
 
 const mongoose = require('mongoose');
 const Notificacao = require('../models/Notificacao');
+const EmailService = require('./email-service-resend');
+const emailService = new EmailService();
 
 // ============ MODELO CONFIG INLINE (para evitar erro de import) ============
 let Config;
@@ -190,9 +192,26 @@ class NotificationService {
 
             console.log(`✅ Notificação criada para aluno ${aluno.nome} (ID: ${notificacao._id})`);
 
-            // SE EMAIL ESTIVER HABILITADO, REGISTRAR QUE ENVIARIA
+            // SE EMAIL ESTIVER HABILITADO, ENVIAR EMAIL
             if (config.email) {
-                console.log(`📧 Email seria enviado para ${aluno.email || 'email não disponível'} sobre resultado ${tipoAcao}`);
+                try {
+                    const emailResult = await emailService.sendResultadoLiberado(
+                        aluno.email,
+                        aluno.nome,
+                        prova.titulo,
+                        resultado.nota,
+                        resultado.acertos,
+                        resultado.total
+                    );
+                    
+                    if (emailResult.success) {
+                        console.log(`📧 Email enviado para ${aluno.email} sobre resultado`);
+                    } else {
+                        console.warn(`⚠️ Falha no email para ${aluno.email}:`, emailResult.error);
+                    }
+                } catch (emailError) {
+                    console.error('❌ Erro ao enviar email:', emailError.message);
+                }
             }
 
             // SE PUSH ESTIVER HABILITADO (futuro)
@@ -389,8 +408,23 @@ class NotificationService {
 
             console.log(`✅ Lembrete de prova criado para aluno ${aluno.nome} (ID: ${notificacao._id})`);
 
+            // SE EMAIL ESTIVER HABILITADO, ENVIAR LEMBRETE
             if (config.email) {
-                console.log(`📧 Email de lembrete seria enviado para ${aluno.email || 'email não disponível'}`);
+                try {
+                    const emailResult = await emailService.sendLembreteProva(
+                        aluno.email,
+                        aluno.nome,
+                        prova.titulo,
+                        horasAntes,
+                        prova.dataInicio
+                    );
+                    
+                    if (emailResult.success) {
+                        console.log(`📧 Lembrete enviado para ${aluno.email}`);
+                    }
+                } catch (emailError) {
+                    console.error('❌ Erro ao enviar lembrete:', emailError.message);
+                }
             }
 
             return {

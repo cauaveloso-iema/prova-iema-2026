@@ -27,6 +27,7 @@ const Groq = require("groq-sdk");
 const http = require('http');
 const cookieParser = require('cookie-parser');
 
+
 // ============================================================================
 // INICIALIZAÇÃO DO EXPRESS E SERVIDOR
 // ============================================================================
@@ -269,6 +270,7 @@ if (process.env.GROQ_API_KEY) {
 const User = require('./models/User');
 const Prova = require('./models/Prova');
 const Turma = require('./models/Turma');
+const Notificacao = require('./models/Notificacao');  
 
 // ============================================================================
 // DEFINIÇÃO DE MODELOS INLINE
@@ -1567,6 +1569,7 @@ app.post('/api/admin/2fa/gerar-backup-codes/:userId', authenticateToken, async (
 });
 
 // ============ ROTA PARA SOLICITAR NOVOS CÓDIGOS DE BACKUP (VERSÃO FINAL) ============
+// ============ ROTA PARA SOLICITAR NOVOS CÓDIGOS DE BACKUP ============
 app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
     try {
         const usuarioId = req.userId;
@@ -1595,79 +1598,26 @@ app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
             });
         }
         
-        // GARANTIR que o modelo está correto ANTES de usar
-        let Notificacao;
-        try {
-            Notificacao = mongoose.model('Notificacao');
-            
-            // Verificação de segurança - se prioridade for Number, recriar
-            const schema = Notificacao.schema;
-            const prioridadePath = schema.path('prioridade');
-            
-            if (prioridadePath && prioridadePath.instance === 'Number') {
-                console.log('⚠️ Modelo com prioridade NUMBER detectado! Forçando recriação...');
-                
-                // Remover e recriar
-                delete mongoose.models.Notificacao;
-                delete mongoose.modelSchemas.Notificacao;
-                
-                const NotificacaoSchema = new mongoose.Schema({
-                    usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-                    tipo: { type: String, enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema', 'solicitacao_backup'], default: 'sistema' },
-                    titulo: { type: String, required: true },
-                    mensagem: { type: String, required: true },
-                    icone: { type: String, default: '📋' },
-                    cor: { type: String, default: '#3b82f6' },
-                    link: { type: String, default: null },
-                    lida: { type: Boolean, default: false },
-                    prioridade: { type: String, enum: ['baixa', 'media', 'alta'], default: 'media' },
-                    dados: { type: mongoose.Schema.Types.Mixed, default: null },
-                    dataEnvio: { type: Date, default: Date.now }
-                }, { timestamps: true });
-                
-                Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
-                console.log('✅ Modelo recriado com sucesso!');
-            }
-            
-        } catch (e) {
-            // Se não existir, criar
-            const NotificacaoSchema = new mongoose.Schema({
-                usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-                tipo: { type: String, enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema', 'solicitacao_backup'], default: 'sistema' },
-                titulo: { type: String, required: true },
-                mensagem: { type: String, required: true },
-                icone: { type: String, default: '📋' },
-                cor: { type: String, default: '#3b82f6' },
-                link: { type: String, default: null },
-                lida: { type: Boolean, default: false },
-                prioridade: { type: String, enum: ['baixa', 'media', 'alta'], default: 'media' },
-                dados: { type: mongoose.Schema.Types.Mixed, default: null },
-                dataEnvio: { type: Date, default: Date.now }
-            }, { timestamps: true });
-            
-            Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
-            console.log('✅ Modelo Notificacao criado');
-        }
-        
-        // Criar notificação para cada admin
+        // ✅ USANDO O MODELO IMPORTADO (sem recriar!)
         const notificacoes = [];
         
         for (const admin of admins) {
             try {
-                const notificacao = new Notificacao({
+                const notificacao = new Notificacao({  // ✅ Modelo correto!
                     usuarioId: admin._id,
-                    tipo: 'solicitacao_backup',  // <- Agora funciona!
+                    tipo: 'sistema',  // ✅ Usando um tipo válido do enum correto
                     titulo: '🆕 Solicitação de novos códigos de backup',
                     mensagem: `${usuario.nome} (${usuario.role}) está sem códigos de backup e solicita novos.`,
                     icone: '🔑',
                     cor: '#f59e0b',
                     link: `/admin.html?section=usuarios&userId=${usuarioId}`,
-                    prioridade: 'alta',  // <- Agora funciona (string)
+                    prioridade: 4,  // ✅ NÚMERO! (1-5)
                     dados: {
                         solicitanteId: usuarioId,
                         solicitanteNome: usuario.nome,
                         solicitanteEmail: usuario.email,
                         solicitanteRole: usuario.role,
+                        tipoSolicitacao: 'backup_codes',
                         dataSolicitacao: new Date().toISOString()
                     }
                 });
@@ -9920,7 +9870,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
                 icone: '🔑',
                 cor: '#f59e0b',
                 link: '/trocar-senha.html',
-                prioridade: 'alta'
+                prioridade: 4
             });
             await notificacao.save();
         } catch (notifError) {
@@ -11424,7 +11374,7 @@ app.put('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req
 // Contador de notificações não lidas
 app.get('/api/notificacoes/nao-lidas/contador', authenticateToken, async (req, res) => {
     try {
-        const Notificacao = require('./models/Notificacao');
+        // ✅ Usando o modelo importado do topo
         const count = await Notificacao.countDocuments({
             usuarioId: req.userId,
             lida: false
@@ -11444,158 +11394,58 @@ app.get('/api/notificacoes/nao-lidas/contador', authenticateToken, async (req, r
     }
 });
 
-// ============ ROTA PARA CRIAR NOTIFICAÇÃO (ADICIONAR ESTA ROTA) ============
+// ============ ROTA PARA CRIAR NOTIFICAÇÃO ============
 app.post('/api/notificacoes', authenticateToken, async (req, res) => {
     try {
-        const { usuarioId, tipo, titulo, mensagem, icone, cor, link, prioridade } = req.body;
+        const { usuarioId, tipo, titulo, mensagem, icone, cor, link, prioridade, dados } = req.body;
         
         console.log(`📝 Criando notificação para usuário ${usuarioId}: ${titulo}`);
         
-        // Verificar se o modelo Notificacao existe
-        // ============ MODELO NOTIFICACAO CORRIGIDO ============
-        let Notificacao;
-        try {
-            Notificacao = mongoose.model('Notificacao');
-            
-            // Verificar se o modelo já existe e se prioridade é Number
-            const schema = Notificacao.schema;
-            const prioridadePath = schema.path('prioridade');
-            
-            if (prioridadePath && prioridadePath.instance === 'Number') {
-                console.log('⚠️ Modelo Notificacao com prioridade NUMBER detectado! Corrigindo...');
-                
-                // Remover e recriar
-                delete mongoose.models.Notificacao;
-                delete mongoose.modelSchemas.Notificacao;
-                
-                const NotificacaoSchema = new mongoose.Schema({
-                    usuarioId: { 
-                        type: mongoose.Schema.Types.ObjectId, 
-                        ref: 'User', 
-                        required: true 
-                    },
-                    tipo: { 
-                        type: String, 
-                        enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema', 'solicitacao_backup'], 
-                        default: 'sistema' 
-                    },
-                    titulo: { 
-                        type: String, 
-                        required: true 
-                    },
-                    mensagem: { 
-                        type: String, 
-                        required: true 
-                    },
-                    icone: { 
-                        type: String, 
-                        default: '📋' 
-                    },
-                    cor: { 
-                        type: String, 
-                        default: '#3b82f6' 
-                    },
-                    link: { 
-                        type: String, 
-                        default: null 
-                    },
-                    lida: { 
-                        type: Boolean, 
-                        default: false 
-                    },
-                    prioridade: { 
-                        type: String,                        
-                        enum: ['baixa', 'media', 'alta'],    
-                        default: 'media' 
-                    },
-                    dados: { 
-                        type: mongoose.Schema.Types.Mixed, 
-                        default: null 
-                    },
-                    dataEnvio: { 
-                        type: Date, 
-                        default: Date.now 
-                    }
-                }, {
-                    timestamps: true
-                });
-                
-                Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
-                console.log('✅ Modelo Notificacao recriado com sucesso (prioridade como STRING)!');
-            } else {
-                console.log('✅ Modelo Notificacao já está correto');
-            }
-            
-        } catch (e) {
-            // Se não existir, criar
-            console.log('🆕 Criando modelo Notificacao...');
-            
-            const NotificacaoSchema = new mongoose.Schema({
-                usuarioId: { 
-                    type: mongoose.Schema.Types.ObjectId, 
-                    ref: 'User', 
-                    required: true 
-                },
-                tipo: { 
-                    type: String, 
-                    enum: ['lembrete', 'aviso', 'resultado', 'cancelamento', 'sistema', 'solicitacao_backup'], 
-                    default: 'sistema' 
-                },
-                titulo: { 
-                    type: String, 
-                    required: true 
-                },
-                mensagem: { 
-                    type: String, 
-                    required: true 
-                },
-                icone: { 
-                    type: String, 
-                    default: '📋' 
-                },
-                cor: { 
-                    type: String, 
-                    default: '#3b82f6' 
-                },
-                link: { 
-                    type: String, 
-                    default: null 
-                },
-                lida: { 
-                    type: Boolean, 
-                    default: false 
-                },
-                prioridade: { 
-                    type: String,                        
-                    enum: ['baixa', 'media', 'alta'],    
-                    default: 'media' 
-                },
-                dados: { 
-                    type: mongoose.Schema.Types.Mixed, 
-                    default: null 
-                },
-                dataEnvio: { 
-                    type: Date, 
-                    default: Date.now 
-                }
-            }, {
-                timestamps: true
+        // ✅ Validar se o tipo é um dos permitidos no enum
+        const tiposPermitidos = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
+        
+        if (!tiposPermitidos.includes(tipo)) {
+            return res.status(400).json({
+                success: false,
+                error: `Tipo inválido. Use um dos: ${tiposPermitidos.join(', ')}`
             });
-            
-            Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
-            console.log('✅ Modelo Notificacao criado com sucesso!');
+        }
+        
+        // ✅ Validar prioridade (deve ser número entre 1-5)
+        let prioridadeFinal = prioridade;
+        if (prioridade === undefined || prioridade === null) {
+            prioridadeFinal = 3; // default
+        } else if (typeof prioridade === 'string') {
+            // Se veio como string, tenta converter
+            const prioridadeNum = parseInt(prioridade);
+            if (isNaN(prioridadeNum) || prioridadeNum < 1 || prioridadeNum > 5) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Prioridade inválida. Deve ser um número entre 1 e 5'
+                });
+            }
+            prioridadeFinal = prioridadeNum;
+        } else if (typeof prioridade === 'number') {
+            if (prioridade < 1 || prioridade > 5) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Prioridade inválida. Deve ser um número entre 1 e 5'
+                });
+            }
+            prioridadeFinal = prioridade;
         }
 
-        // Criar a notificação
+        // ✅ Usando o modelo importado
         const notificacao = new Notificacao({
             usuarioId,
             tipo,
             titulo,
             mensagem,
-            icone,
-            cor,
-            link,
-            prioridade
+            icone: icone || '📋',
+            cor: cor || '#3b82f6',
+            link: link || null,
+            prioridade: prioridadeFinal,
+            dados: dados || {}
         });
         
         await notificacao.save();
@@ -11607,12 +11457,23 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
             notificacao: { 
                 id: notificacao._id, 
                 titulo: notificacao.titulo, 
-                mensagem: notificacao.mensagem 
+                mensagem: notificacao.mensagem,
+                tipo: notificacao.tipo,
+                prioridade: notificacao.prioridade
             } 
         });
 
     } catch (error) {
         console.error('❌ Erro ao criar notificação:', error);
+        
+        // Tratar erro de validação do mongoose
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                error: error.message
+            });
+        }
+        
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao criar notificação: ' + error.message 
@@ -11623,10 +11484,24 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
 // Marcar todas como lidas
 app.put('/api/notificacoes/marcar-todas-lidas', authenticateToken, async (req, res) => {
     try {
-        const NotificationService = require('./services/notification-service');
-        const notificationService = new NotificationService();
-        const result = await notificationService.marcarTodasComoLidas(req.userId);
-        res.json(result);
+        // ✅ Usando o modelo importado diretamente (mais eficiente)
+        const resultado = await Notificacao.updateMany(
+            { 
+                usuarioId: req.userId,
+                lida: false 
+            },
+            { 
+                lida: true,
+                lidaEm: new Date()
+            }
+        );
+
+        res.json({
+            success: true,
+            message: `${resultado.modifiedCount} notificações marcadas como lidas`,
+            modificadas: resultado.modifiedCount
+        });
+
     } catch (error) {
         console.error('❌ Erro ao marcar todas como lidas:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -11637,10 +11512,10 @@ app.put('/api/notificacoes/marcar-todas-lidas', authenticateToken, async (req, r
 app.delete('/api/notificacoes/limpar-minhas', authenticateToken, async (req, res) => {
     try {
         const usuarioId = req.userId;
-        const Notificacao = require('./models/Notificacao');
         
         console.log(`🗑️ Usuário ${usuarioId} excluindo todas as suas notificações`);
         
+        // ✅ Usando o modelo importado
         const resultado = await Notificacao.deleteMany({ 
             usuarioId: usuarioId 
         });
@@ -11662,8 +11537,6 @@ app.delete('/api/notificacoes/limpar-minhas', authenticateToken, async (req, res
     }
 });
 
-
-
 // =========================================================
 // 2. ROTA PARA BUSCAR TODAS AS NOTIFICAÇÕES (COM PAGINAÇÃO)
 // =========================================================
@@ -11671,9 +11544,6 @@ app.delete('/api/notificacoes/limpar-minhas', authenticateToken, async (req, res
 // ============ ROTA PARA BUSCAR TODAS AS NOTIFICAÇÕES DO USUÁRIO ============
 app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
     try {
-        // ✅ IMPORTAR O MODELO AQUI
-        const Notificacao = require('./models/Notificacao');
-        
         const { pagina = 1, limite = 50, filtro } = req.query;
         const usuarioId = req.userId;
         
@@ -11695,7 +11565,7 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
             }
         }
         
-        // Buscar notificações com paginação
+        // ✅ Usando o modelo importado
         const [notificacoes, total] = await Promise.all([
             Notificacao.find(query)
                 .sort({ createdAt: -1, prioridade: -1 })
@@ -11756,16 +11626,29 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
 app.get('/api/notificacoes', authenticateToken, async (req, res) => {
     try {
         const { apenasNaoLidas, limite } = req.query;
-        const NotificationService = require('./services/notification-service');
-        const notificationService = new NotificationService();
         
-        const result = await notificationService.buscarNotificacoes(
-            req.userId, 
-            apenasNaoLidas === 'true',
-            parseInt(limite) || 50
-        );
+        // ✅ Usando o modelo importado diretamente (mais simples)
+        let query = { usuarioId: req.userId };
+        if (apenasNaoLidas === 'true') {
+            query.lida = false;
+        }
+        
+        const notificacoes = await Notificacao.find(query)
+            .sort({ createdAt: -1, prioridade: -1 })
+            .limit(parseInt(limite) || 50)
+            .lean();
+        
+        const naoLidas = await Notificacao.countDocuments({
+            usuarioId: req.userId,
+            lida: false
+        });
 
-        res.json(result);
+        res.json({
+            success: true,
+            notificacoes: notificacoes,
+            total: notificacoes.length,
+            naoLidas: naoLidas
+        });
 
     } catch (error) {
         console.error('❌ Erro ao buscar notificações:', error);
@@ -11783,10 +11666,33 @@ app.get('/api/notificacoes', authenticateToken, async (req, res) => {
 // Marcar notificação específica como lida
 app.put('/api/notificacoes/:id/lida', authenticateToken, async (req, res) => {
     try {
-        const NotificationService = require('./services/notification-service');
-        const notificationService = new NotificationService();
-        const result = await notificationService.marcarComoLida(req.params.id, req.userId);
-        res.json(result);
+        const { id } = req.params;
+        
+        // ✅ Usando o modelo importado diretamente
+        const notificacao = await Notificacao.findOneAndUpdate(
+            { 
+                _id: id,
+                usuarioId: req.userId 
+            },
+            { 
+                lida: true,
+                lidaEm: new Date()
+            },
+            { new: true }
+        );
+
+        if (!notificacao) {
+            return res.status(404).json({
+                success: false,
+                error: 'Notificação não encontrada'
+            });
+        }
+
+        res.json({
+            success: true,
+            notificacao: notificacao
+        });
+
     } catch (error) {
         console.error('❌ Erro ao marcar como lida:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -11796,10 +11702,27 @@ app.put('/api/notificacoes/:id/lida', authenticateToken, async (req, res) => {
 // Deletar notificação específica
 app.delete('/api/notificacoes/:id', authenticateToken, async (req, res) => {
     try {
-        const NotificationService = require('./services/notification-service');
-        const notificationService = new NotificationService();
-        const result = await notificationService.deletarNotificacao(req.params.id, req.userId);
-        res.json(result);
+        const { id } = req.params;
+        
+        // ✅ Usando o modelo importado diretamente
+        const resultado = await Notificacao.findOneAndDelete({
+            _id: id,
+            usuarioId: req.userId
+        });
+
+        if (!resultado) {
+            return res.status(404).json({
+                success: false,
+                error: 'Notificação não encontrada'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Notificação deletada com sucesso',
+            deletado: true
+        });
+
     } catch (error) {
         console.error('❌ Erro ao deletar notificação:', error);
         res.status(500).json({ success: false, error: error.message });
