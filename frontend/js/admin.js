@@ -12030,7 +12030,7 @@ class AdminPanel {
         `;
     }
 
-    // ============ RENDERIZAR CONFIGURAÇÕES DE EMAIL ============
+    // ============ RENDERIZAR CONFIGURAÇÕES DE EMAIL (VERSÃO COM CAMPO DE TESTE) ============
     renderConfigEmail(config) {
         return `
             <div class="config-section active" id="config-email">
@@ -12045,7 +12045,8 @@ class AdminPanel {
                         <div class="form-group">
                             <label>Serviço de Email</label>
                             <select id="config_email_servico" class="form-control" onchange="admin.atualizarCamposEmail()">
-                                <option value="brevo" ${config.email?.servico === 'brevo' ? 'selected' : ''}>📧 Brevo (Recomendado)</option>
+                                <option value="brevo" ${config.email?.servico === 'brevo' ? 'selected' : ''}>📧 Brevo (Sendinblue)</option>
+                                <option value="resend" ${config.email?.servico === 'resend' ? 'selected' : ''}>✉️ Resend (API Key)</option>
                                 <option value="gmail" ${config.email?.servico === 'gmail' ? 'selected' : ''}>📧 Gmail</option>
                                 <option value="outlook" ${config.email?.servico === 'outlook' ? 'selected' : ''}>📧 Outlook</option>
                                 <option value="custom" ${config.email?.servico === 'custom' ? 'selected' : ''}>⚙️ Personalizado</option>
@@ -12084,10 +12085,11 @@ class AdminPanel {
                         </div>
                         
                         <div class="form-group">
-                            <label>Senha</label>
+                            <label>Senha / API Key</label>
                             <input type="password" id="config_email_senha" class="form-control" 
                                 value="${config.email?.senha ? '********' : ''}" 
                                 placeholder="••••••••">
+                            <div class="input-hint" id="senhaHint">Para Resend, use a API Key (re_...)</div>
                         </div>
                     </div>
 
@@ -12122,10 +12124,38 @@ class AdminPanel {
                             <input type="checkbox" id="config_email_resultados" ${config.email?.resultados !== false ? 'checked' : ''}>
                             <label>Notificar quando resultados forem liberados</label>
                         </div>
-                        
-                        <button class="btn-secondary" style="width: 100%; margin-top: 15px;" onclick="admin.testarConfigEmail()">
-                            <i class="fas fa-paper-plane"></i> Testar Configuração
-                        </button>
+
+                        <!-- ===== NOVO CAMPO DE TESTE ===== -->
+                        <div style="margin-top: 25px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                            <h4 style="margin: 0 0 15px 0; font-size: 14px; color: #374151;">
+                                <i class="fas fa-flask"></i> Teste de Envio
+                            </h4>
+                            
+                            <div class="form-group">
+                                <label>Email para teste</label>
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="email" id="config_email_teste" class="form-control" 
+                                        value="caua.veloso@iemasaoluiscentro.net" 
+                                        placeholder="email@exemplo.com"
+                                        style="flex: 1;">
+                                    <button class="btn-secondary" onclick="admin.testarConfigEmailComDestinatario()" 
+                                            style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                                        <i class="fas fa-paper-plane"></i> Enviar Teste
+                                    </button>
+                                </div>
+                                <div class="input-hint">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Enviará um email de teste para este endereço usando as configurações atuais
+                                </div>
+                            </div>
+                            
+                            <div class="info-box" style="margin-top: 10px; background: #e6f7ff; color: #0050b3;">
+                                <i class="fas fa-lightbulb"></i>
+                                <span>
+                                    <strong>Dica:</strong> Use <code>delivered@resend.dev</code> para testar sem enviar para email real
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -12695,32 +12725,98 @@ class AdminPanel {
         this.inicializarEventosConfig();
     }
 
-    // ============ ATUALIZAR CAMPOS DE EMAIL ============
+    // ============ ATUALIZAR CAMPOS DE EMAIL (VERSÃO COMPLETA COM AUTO PREENCHIMENTO) ============
     atualizarCamposEmail() {
         const servico = document.getElementById('config_email_servico')?.value;
         const hostField = document.getElementById('config_email_host');
         const portaField = document.getElementById('config_email_porta');
+        const segurancaField = document.getElementById('config_email_seguranca');
+        const usuarioField = document.getElementById('config_email_usuario');
+        const senhaField = document.getElementById('config_email_senha');
+        const remetenteField = document.getElementById('config_email_remetente');
+        const nomeField = document.getElementById('config_email_nome');
+        const senhaHint = document.getElementById('senhaHint');
         
         if (!hostField || !portaField) return;
         
-        if (servico === 'brevo') {
+        // Ativar/desativar campos (todos começam editáveis)
+        hostField.readOnly = false;
+        portaField.readOnly = false;
+        segurancaField.disabled = false;
+        usuarioField.readOnly = false;
+        
+        if (servico === 'resend') {
+            // 🔥 AUTO PREENCHIMENTO COMPLETO PARA RESEND (COM SENHA!)
+            hostField.value = 'smtp.resend.com';
+            portaField.value = '465';
+            segurancaField.value = 'ssl';
+            usuarioField.value = 'resend';
+            senhaField.value = 're_D3VHHpZd_MLCmsRGAWoRLxfYvT5xWxqCv'; // SUA API KEY
+            remetenteField.value = 'onboarding@resend.dev';
+            nomeField.value = 'Sistema de Provas IEMA';
+            
+            // Campos readonly (não devem ser alterados)
+            hostField.readOnly = true;
+            portaField.readOnly = true;
+            usuarioField.readOnly = true;
+            
+            if (senhaHint) {
+                senhaHint.innerHTML = '✅ Senha do Resend preenchida automaticamente';
+                senhaHint.style.color = '#28a745';
+            }
+            
+            console.log('✅ Configurações completas do Resend aplicadas (com senha!)');
+        } 
+        else if (servico === 'brevo') {
             hostField.value = 'smtp-relay.brevo.com';
-            portaField.value = 587;
+            portaField.value = '587';
+            segurancaField.value = 'tls';
+            usuarioField.value = '';
+            senhaField.value = ''; // Limpar senha
             hostField.readOnly = true;
             portaField.readOnly = true;
-        } else if (servico === 'gmail') {
+            if (senhaHint) {
+                senhaHint.innerHTML = 'Use sua SMTP key do Brevo';
+                senhaHint.style.color = '#6c757d';
+            }
+        }
+        else if (servico === 'gmail') {
             hostField.value = 'smtp.gmail.com';
-            portaField.value = 587;
+            portaField.value = '587';
+            segurancaField.value = 'tls';
+            usuarioField.value = '';
+            senhaField.value = ''; // Limpar senha
             hostField.readOnly = true;
             portaField.readOnly = true;
-        } else if (servico === 'outlook') {
+            if (senhaHint) {
+                senhaHint.innerHTML = 'Use senha de app (não a senha normal do Gmail)';
+                senhaHint.style.color = '#dc3545';
+            }
+        }
+        else if (servico === 'outlook') {
             hostField.value = 'smtp-mail.outlook.com';
-            portaField.value = 587;
+            portaField.value = '587';
+            segurancaField.value = 'tls';
+            usuarioField.value = '';
+            senhaField.value = ''; // Limpar senha
             hostField.readOnly = true;
             portaField.readOnly = true;
-        } else {
-            hostField.readOnly = false;
-            portaField.readOnly = false;
+            if (senhaHint) {
+                senhaHint.innerHTML = 'Use sua senha normal do Outlook';
+                senhaHint.style.color = '#6c757d';
+            }
+        }
+        else {
+            // Custom - todos editáveis
+            hostField.value = '';
+            portaField.value = '587';
+            segurancaField.value = 'tls';
+            usuarioField.value = '';
+            senhaField.value = ''; // Limpar senha
+            if (senhaHint) {
+                senhaHint.innerHTML = 'Configure manualmente';
+                senhaHint.style.color = '#6c757d';
+            }
         }
     }
 
@@ -13088,44 +13184,323 @@ class AdminPanel {
         }
     }
 
-    // ============ TESTAR CONFIGURAÇÃO DE EMAIL ============
+    // ============ TESTAR CONFIGURAÇÃO DE EMAIL (VERSÃO CORRIGIDA - USA ROTA QUE FUNCIONA) ============
     async testarConfigEmail() {
         try {
-            this.mostrarStatus('📧 Enviando email de teste...', 'info');
-            
-            const token = localStorage.getItem('auth_token');
-            const destinatario = document.getElementById('config_email_remetente')?.value;
+            const destinatario = document.getElementById('config_email_teste')?.value;
             
             if (!destinatario) {
-                this.mostrarStatus('❌ Defina um remetente primeiro', 'error');
+                this.showToast('❌ Digite um email para teste', 'error');
                 return;
             }
             
-            const response = await fetch('/api/admin/testar-email', {
+            this.showToast(`📧 Testando envio para ${destinatario}...`, 'info');
+            
+            // 🔥 USAR A MESMA ROTA QUE FUNCIONOU NO TESTE!
+            const response = await fetch('/api/auth/reset-password/request', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
+                    // Não precisa de token - rota pública
                 },
-                body: JSON.stringify({ destinatario })
+                body: JSON.stringify({
+                    identifier: destinatario
+                })
             });
 
             const data = await response.json();
 
             if (data.success) {
-                this.mostrarStatus('✅ Email de teste enviado com sucesso!', 'success');
+                this.showToast(`✅ Email de teste enviado para ${destinatario}!`, 'success');
+                
+                // Mostrar modal com o código gerado
+                this.mostrarConfirmacaoEmail(destinatario, data.devCode);
             } else {
                 throw new Error(data.error || 'Erro ao enviar email de teste');
             }
 
-            setTimeout(() => {
-                document.getElementById('configStatus').style.display = 'none';
-            }, 3000);
+        } catch (error) {
+            console.error('❌ Erro no teste de email:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ MODAL DE CONFIRMAÇÃO (VERSÃO ATUALIZADA) ============
+    mostrarConfirmacaoEmail(destinatario, codigoDev = null) {
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        
+        let codigoHtml = '';
+        if (codigoDev) {
+            codigoHtml = `
+                <div style="margin: 20px 0; background: #fef3c7; border: 2px solid #f59e0b; border-radius: 12px; padding: 20px;">
+                    <p style="margin: 0 0 10px; color: #92400e; font-weight: 600; font-size: 14px;">
+                        <i class="fas fa-flask"></i> MODO DESENVOLVIMENTO
+                    </p>
+                    <p style="margin: 0; font-size: 32px; font-family: monospace; font-weight: bold; color: #d97706; letter-spacing: 5px;">
+                        ${codigoDev}
+                    </p>
+                    <p style="margin: 10px 0 0; color: #92400e; font-size: 12px;">
+                        Use este código na página de recuperação de senha
+                    </p>
+                </div>
+            `;
+        }
+        
+        modalBody.innerHTML = `
+            <div style="padding: 30px; text-align: center;">
+                <div style="
+                    width: 80px;
+                    height: 80px;
+                    background: #10b981;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 20px;
+                    animation: pulse 2s infinite;
+                ">
+                    <i class="fas fa-check" style="font-size: 40px; color: white;"></i>
+                </div>
+                
+                <h3 style="margin: 0 0 10px; color: #1f2937;">✅ Email Enviado!</h3>
+                
+                <p style="color: #6b7280; margin-bottom: 15px;">
+                    O email foi enviado para:<br>
+                    <strong>${destinatario}</strong>
+                </p>
+                
+                ${codigoHtml}
+                
+                <div style="background: #f3f4f6; border-radius: 8px; padding: 15px; margin-top: 15px; text-align: left;">
+                    <p style="margin: 0 0 8px; font-weight: 600;">📋 Próximos passos:</p>
+                    <ul style="margin: 0; padding-left: 20px; color: #4b5563;">
+                        <li>Verifique sua caixa de entrada</li>
+                        <li>Verifique a pasta de SPAM</li>
+                        <li>O email pode levar alguns minutos</li>
+                    </ul>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 10px; background: #e6f7ff; border-radius: 8px; color: #0050b3; font-size: 13px;">
+                    <i class="fas fa-info-circle"></i> 
+                    Se não receber o email em 5 minutos, tente novamente.
+                </div>
+                
+                <style>
+                    @keyframes pulse {
+                        0% { transform: scale(1); }
+                        50% { transform: scale(1.1); }
+                        100% { transform: scale(1); }
+                    }
+                </style>
+            </div>
+        `;
+        
+        modalTitle.innerHTML = '<i class="fas fa-envelope"></i> Teste de Email';
+        modalSaveBtn.style.display = 'none';
+        
+        // Garantir que o botão de fechar funciona
+        const closeBtn = document.querySelector('#modal .modal-close');
+        if (closeBtn) {
+            const newCloseBtn = closeBtn.cloneNode(true);
+            closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+            newCloseBtn.onclick = () => this.closeModal();
+        }
+        
+        this.openModal();
+        
+        // Fechar automaticamente após 8 segundos
+        setTimeout(() => {
+            this.closeModal();
+        }, 8000);
+    }
+
+    // ============ TESTAR CONFIGURAÇÃO DE EMAIL COM DESTINATÁRIO (VERSÃO CORRIGIDA) ============
+    async testarConfigEmailComDestinatario() {
+        try {
+            const destinatario = document.getElementById('config_email_teste')?.value;
+            
+            if (!destinatario) {
+                this.showToast('❌ Digite um email para teste', 'error');
+                return;
+            }
+            
+            this.showToast(`📧 Enviando email de teste para ${destinatario}...`, 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // Criar mensagem personalizada
+            const nomeUsuario = destinatario.split('@')[0] || 'Administrador';
+            const dataAtual = new Date().toLocaleString('pt-BR');
+            
+            const mensagemHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>📧 Teste de Email</h1>
+                            <p>Sistema de Provas IEMA 2026</p>
+                        </div>
+                        <div class="content">
+                            <h2>Olá, ${nomeUsuario}!</h2>
+                            <p>Este é um <strong>email de teste</strong> enviado diretamente do painel administrativo.</p>
+                            <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0;">
+                                <p><strong>📋 Informações do teste:</strong></p>
+                                <p>• Data: ${dataAtual}</p>
+                                <p>• Destinatário: ${destinatario}</p>
+                                <p>• Serviço: Resend</p>
+                            </div>
+                            <p>✅ Se você recebeu este email, as configurações estão funcionando perfeitamente!</p>
+                        </div>
+                        <div class="footer">
+                            <p>Sistema de Provas IEMA 2026</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const response = await fetch('/api/admin/testar-email-enviar', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    destinatario: destinatario,
+                    assunto: '📧 Teste do Sistema de Provas IEMA',
+                    mensagem: mensagemHtml
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showToast(`✅ Email de teste enviado para ${destinatario}!`, 'success');
+                this.mostrarConfirmacaoEmailTeste(destinatario);
+            } else {
+                throw new Error(data.error || 'Erro ao enviar email');
+            }
 
         } catch (error) {
             console.error('❌ Erro no teste de email:', error);
-            this.mostrarStatus('❌ Erro: ' + error.message, 'error');
+            this.showToast('❌ ' + error.message, 'error');
         }
+    }
+
+    // ============ ENVIAR EMAIL DE BOAS-VINDAS (SEM CÓDIGO) ============
+    async enviarEmailBoasVindas(destinatario, nome) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const mensagemHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        body { font-family: Arial, sans-serif; }
+                        .welcome-box { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 30px; text-align: center; }
+                        .content { padding: 30px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="welcome-box">
+                        <h1>Bem-vindo ao Sistema de Provas IEMA! 🎉</h1>
+                    </div>
+                    <div class="content">
+                        <h2>Olá, ${nome}!</h2>
+                        <p>Seu cadastro foi realizado com sucesso no Sistema de Provas IEMA 2026.</p>
+                        <p>Agora você pode acessar o sistema e começar a usar todas as funcionalidades.</p>
+                        <p><strong>Link de acesso:</strong> <a href="${window.location.origin}">${window.location.origin}</a></p>
+                        <p>Em caso de dúvidas, entre em contato com a administração.</p>
+                        <hr>
+                        <p style="color: #666;">Este é um email automático, por favor não responda.</p>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const response = await fetch('/api/admin/enviar-email', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    destinatario: destinatario,
+                    assunto: '🎉 Bem-vindo ao Sistema de Provas IEMA',
+                    mensagem: mensagemHtml
+                })
+            });
+
+            const data = await response.json();
+            return data;
+
+        } catch (error) {
+            console.error('Erro:', error);
+            throw error;
+        }
+    }
+
+    // ============ MOSTRAR CONFIRMAÇÃO DE EMAIL DE TESTE ============
+    mostrarConfirmacaoEmailTeste(destinatario) {
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        
+        modalBody.innerHTML = `
+            <div style="padding: 30px; text-align: center;">
+                <div style="
+                    width: 80px;
+                    height: 80px;
+                    background: #10b981;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 20px;
+                ">
+                    <i class="fas fa-check" style="font-size: 40px; color: white;"></i>
+                </div>
+                
+                <h3 style="margin: 0 0 10px; color: #1f2937;">✅ Email Enviado!</h3>
+                
+                <p style="color: #6b7280; margin-bottom: 20px;">
+                    O email de teste foi enviado para:<br>
+                    <strong>${destinatario}</strong>
+                </p>
+                
+                <div style="background: #f3f4f6; border-radius: 8px; padding: 15px; text-align: left;">
+                    <p style="margin: 0 0 8px; font-weight: 600;">📋 O que foi testado:</p>
+                    <ul style="margin: 0; padding-left: 20px; color: #4b5563;">
+                        <li>✅ Configurações SMTP</li>
+                        <li>✅ Autenticação no Resend</li>
+                        <li>✅ Entrega de email</li>
+                    </ul>
+                    <p style="margin: 10px 0 0; color: #666; font-size: 13px;">
+                        Verifique sua caixa de entrada e spam.
+                    </p>
+                </div>
+            </div>
+        `;
+        
+        modalTitle.innerHTML = '<i class="fas fa-envelope"></i> Teste de Email';
+        modalSaveBtn.style.display = 'none';
+        this.openModal();
+        
+        setTimeout(() => this.closeModal(), 5000);
     }
 
     // ============ FAZER BACKUP AGORA ============
@@ -13187,9 +13562,35 @@ class AdminPanel {
         statusEl.style.display = 'flex';
     }
 
-    // ============ RECARREGAR CONFIGURAÇÕES ============
+    // ============ CARREGAR CONFIGURAÇÕES (ADICIONE ESTA PARTE) ============
     async carregarConfiguracoes() {
-        await this.loadConfiguracoes();
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/configuracoes', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const config = data.configuracoes;
+                
+                // Se for Resend e a senha não estiver preenchida, preencher automaticamente
+                if (config.email?.servico === 'resend' && !config.email?.senha) {
+                    config.email.senha = 're_D3VHHpZd_MLCmsRGAWoRLxfYvT5xWxqCv';
+                }
+                
+                this.configAtual = config;
+                this.aplicarConfiguracoesNosCampos(config);
+                
+                // Se for Resend, já aplicar auto preenchimento
+                if (config.email?.servico === 'resend') {
+                    setTimeout(() => this.atualizarCamposEmail(), 100);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar configurações:', error);
+        }
     }
     // ==================== EXECUÇÃO DE COMANDOS ====================
     async executarComando() {

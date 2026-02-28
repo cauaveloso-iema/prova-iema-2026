@@ -20,7 +20,7 @@ const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const professorAuth = require('./security/professor-auth');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-require('./email-service-resend');
+require('./email-service-resend-antigo');
 const multer = require('multer');
 const fs = require('fs');
 const Groq = require("groq-sdk");
@@ -65,7 +65,7 @@ console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Co
 // ============================================================================
 const monitoramentoRoutes = require('./routes/monitoramento');
 const LoggerService = require('./services/logger-service');
-const EmailService = require('./email-service-resend');
+const EmailService = require('./email-service');
 const matriculasManager = require('./matriculas-autorizados');
 
 // ============================================================================
@@ -8663,7 +8663,7 @@ app.get('/api/provas/offline/pending', authenticateToken, async (req, res) => {
     }
 });
 
-// ============ ROTAS DE RECUPERAÇÃO DE SENHA (VERSÃO ATUALIZADA COM BREVO) ============
+// ============ ROTAS DE RECUPERAÇÃO DE SENHA (VERSÃO ATUALIZADA COM SERVIÇO UNIFICADO) ============
 // Armazenar códigos temporariamente (em produção, use Redis)
 const resetCodes = new Map();
 
@@ -8739,8 +8739,18 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
         // Limpar códigos expirados
         cleanupExpiredCodes();
         
-        // ENVIAR EMAIL COM O NOVO SERVIÇO
-        console.log('\n🚀 Enviando email via:', process.env.EMAIL_SERVICE || 'Brevo');
+        // ===== ENVIAR EMAIL COM O SERVIÇO UNIFICADO =====
+        console.log('\n🚀 Inicializando serviço de email unificado...');
+        
+        // 🔥 USAR O NOVO SERVIÇO UNIFICADO
+        const EmailService = require('./email-service');
+        const emailService = new EmailService();
+        
+        // Inicializar o serviço (importante!)
+        await emailService.init();
+        
+        console.log('📧 Enviando email de recuperação via:', emailService.tipo || 'Resend');
+        
         const emailResult = await emailService.sendPasswordResetEmail(
             user.email,
             user.nome,
@@ -8749,8 +8759,8 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
         
         console.log('\n📊 RESULTADO DO ENVIO:');
         console.log('Sucesso:', emailResult.success ? '✅' : '❌');
-        console.log('Serviço:', emailResult.service);
-        console.log('ID:', emailResult.messageId);
+        console.log('Serviço:', emailResult.service || emailService.tipo || 'Resend');
+        console.log('ID:', emailResult.messageId || 'N/A');
         
         // Preparar resposta
         const response = {
@@ -12848,6 +12858,176 @@ app.get('/api/admin/solicitacoes-backup', authenticateToken, isSuperAdmin, async
         });
     }
 });
+
+// ============ ROTA PARA ENVIAR EMAIL DE TESTE ============
+app.post('/api/admin/testar-email-enviar', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { destinatario, assunto, mensagem } = req.body;
+        
+        if (!destinatario) {
+            return res.status(400).json({
+                success: false,
+                error: 'Destinatário não informado'
+            });
+        }
+
+        console.log(`\n📧 ===== TESTE DE EMAIL =====`);
+        console.log(`📨 Para: ${destinatario}`);
+        console.log(`📝 Assunto: ${assunto || 'Teste do Sistema'}`);
+
+        // Usar o novo serviço unificado
+        const EmailService = require('./email-service');
+        const emailService = new EmailService();
+        
+        // Inicializar o serviço
+        await emailService.init();
+
+        // Se não veio mensagem personalizada, usa a padrão
+        const html = mensagem || `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>📧 Teste de Email</h1>
+                </div>
+                <div class="content">
+                    <h2>Olá!</h2>
+                    <p>Este é um email de teste do Sistema de Provas IEMA.</p>
+                    <p><strong>Data:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+                    <p>✅ Se você recebeu este email, as configurações estão funcionando!</p>
+                </div>
+            </body>
+            </html>
+        `;
+
+        const resultado = await emailService.sendEmail({
+            to: destinatario,
+            subject: assunto || '📧 Teste do Sistema de Provas IEMA',
+            html: html
+        });
+
+        if (resultado.success) {
+            console.log(`✅ Email de teste enviado para ${destinatario}`);
+            res.json({
+                success: true,
+                message: 'Email de teste enviado com sucesso!',
+                destinatario: destinatario,
+                messageId: resultado.messageId
+            });
+        } else {
+            throw new Error(resultado.error || 'Erro ao enviar email');
+        }
+
+    } catch (error) {
+        console.error('❌ Erro ao enviar email de teste:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ ROTA PARA ENVIAR EMAIL DE BOAS-VINDAS ============
+app.post('/api/admin/enviar-email-boas-vindas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { destinatario, nome } = req.body;
+        
+        if (!destinatario) {
+            return res.status(400).json({
+                success: false,
+                error: 'Destinatário não informado'
+            });
+        }
+
+        const nomeDestino = nome || destinatario.split('@')[0] || 'Usuário';
+
+        console.log(`\n🎉 ===== EMAIL DE BOAS-VINDAS =====`);
+        console.log(`📨 Para: ${destinatario}`);
+        console.log(`👤 Nome: ${nomeDestino}`);
+
+        const EmailService = require('./email-service');
+        const emailService = new EmailService();
+        
+        await emailService.init();
+
+        const resultado = await emailService.sendWelcomeEmail(destinatario, nomeDestino);
+
+        if (resultado.success) {
+            console.log(`✅ Email de boas-vindas enviado para ${destinatario}`);
+            res.json({
+                success: true,
+                message: 'Email de boas-vindas enviado com sucesso!',
+                destinatario: destinatario,
+                messageId: resultado.messageId
+            });
+        } else {
+            throw new Error(resultado.error || 'Erro ao enviar email');
+        }
+
+    } catch (error) {
+        console.error('❌ Erro ao enviar email de boas-vindas:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ ROTA PARA TESTAR CONFIGURAÇÃO (VIA ADMIN) ============
+app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { destinatario } = req.body;
+        
+        if (!destinatario) {
+            return res.status(400).json({
+                success: false,
+                error: 'Destinatário não informado'
+            });
+        }
+
+        const EmailService = require('./email-service');
+        const emailService = new EmailService();
+        
+        await emailService.init();
+
+        // Enviar um email de teste simples
+        const resultado = await emailService.sendEmail({
+            to: destinatario,
+            subject: '🔧 Teste de Configuração - Sistema de Provas',
+            html: `
+                <h2>Teste de Configuração</h2>
+                <p>Se você recebeu este email, as configurações de email estão corretas!</p>
+                <p>Data: ${new Date().toLocaleString('pt-BR')}</p>
+            `
+        });
+
+        if (resultado.success) {
+            res.json({
+                success: true,
+                message: 'Email de teste enviado com sucesso!',
+                destinatario: destinatario
+            });
+        } else {
+            throw new Error(resultado.error || 'Erro ao enviar email');
+        }
+
+    } catch (error) {
+        console.error('❌ Erro ao testar email:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 
 // ============ FRONTEND ESTÁTICO ============
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
