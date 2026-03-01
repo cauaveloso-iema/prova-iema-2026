@@ -367,6 +367,10 @@ app.use('/api/push', pushRoutes);
 const adminConfigRoutes = require('./routes/admin-config');
 app.use('/api/admin', adminConfigRoutes);
 
+// ============ ROTAS DO CALENDÁRIO ============
+const calendarioRoutes = require('./routes/calendario-routes');
+app.use('/api/calendario', calendarioRoutes);
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ
 // ============================================================================
@@ -13027,6 +13031,23 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
         });
     }
 });
+
+// ============================================================================
+// VERIFICADOR AUTOMÁTICO DE NOTIFICAÇÕES (A CADA 1 MINUTO)
+// ============================================================================
+setInterval(async () => {
+    try {
+        const CalendarioNotificacaoService = require('./services/calendario-notificacao-service');
+        const service = new CalendarioNotificacaoService();
+        const resultado = await service.verificarNotificacoesCalendario();
+        
+        if (resultado.notificacoesEnviadas > 0) {
+            console.log(`✅ ${resultado.notificacoesEnviadas} notificações enviadas!`);
+        }
+    } catch (error) {
+        console.error('❌ Erro no verificador de notificações:', error);
+    }
+}, 60000); // 60 segundos = 1 minuto
 
 
 // ============ FRONTEND ESTÁTICO ============
