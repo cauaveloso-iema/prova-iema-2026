@@ -5,20 +5,21 @@ const fs = require('fs');
 
 class ProfessorAuthSystem {
   constructor() {
-    console.log('🔐 Inicializando sistema de autorização...');
+    console.log('='.repeat(60));
+    console.log('🔐 INICIALIZANDO SISTEMA DE AUTENTICAÇÃO DE PROFESSORES');
+    console.log('='.repeat(60));
     
     // Tenta carregar variáveis de várias formas
     this.loadEnvironmentVariables();
     
-    this.encryptionKey = process.env.AUTH_ENCRYPTION_KEY;
+    this.encryptionKey = process.env.AUTH_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY;
     this.hashSalt = process.env.AUTH_HASH_SALT;
     this.encryptedData = process.env.ENCRYPTED_MATRICULAS;
     
-    console.log('📊 Variáveis carregadas:', {
-      key: this.encryptionKey ? `✅ (${this.encryptionKey.length} chars)` : '❌',
-      salt: this.hashSalt ? `✅ (${this.hashSalt.length} chars)` : '❌',
-      data: this.encryptedData ? `✅ (${this.encryptedData.length} chars)` : '❌'
-    });
+    console.log('\n📊 VERIFICANDO VARIÁVEIS DE AMBIENTE:');
+    console.log(`   AUTH_ENCRYPTION_KEY: ${this.encryptionKey ? '✅' : '❌'} ${this.encryptionKey ? '(' + this.encryptionKey.length + ' chars)' : ''}`);
+    console.log(`   AUTH_HASH_SALT: ${this.hashSalt ? '✅' : '❌'} ${this.hashSalt ? '(' + this.hashSalt.length + ' chars)' : ''}`);
+    console.log(`   ENCRYPTED_MATRICULAS: ${this.encryptedData ? '✅' : '❌'} ${this.encryptedData ? '(' + this.encryptedData.length + ' chars)' : ''}`);
     
     this.authorizedMatriculas = null;
     
@@ -39,10 +40,11 @@ class ProfessorAuthSystem {
     for (const envPath of possiblePaths) {
       try {
         if (fs.existsSync(envPath)) {
-          console.log(`📁 Encontrado .env em: ${envPath}`);
+          console.log(`\n📁 Encontrado .env em: ${envPath}`);
           
           const envContent = fs.readFileSync(envPath, 'utf8');
           const lines = envContent.split('\n');
+          let count = 0;
           
           lines.forEach(line => {
             line = line.trim();
@@ -58,13 +60,14 @@ class ProfessorAuthSystem {
                 // Só define se não existir
                 if (!process.env[key]) {
                   process.env[key] = cleanValue;
+                  count++;
                 }
               }
             }
           });
           
           envLoaded = true;
-          console.log(`✅ .env carregado de: ${envPath}`);
+          console.log(`✅ ${count} variáveis carregadas de: ${envPath}`);
           break;
         }
       } catch (error) {
@@ -73,49 +76,66 @@ class ProfessorAuthSystem {
     }
     
     if (!envLoaded) {
-      console.error('❌ NÃO CONSEGUI CARREGAR NENHUM ARQUIVO .env!');
+      console.error('\n❌❌❌ ERRO CRÍTICO: NENHUM ARQUIVO .env ENCONTRADO!');
       console.log('📋 Locais verificados:', possiblePaths);
     }
   }
   
   initialize() {
-    console.log('🎯 Inicializando lista de matrículas...');
+    console.log('\n🎯 INICIALIZANDO LISTA DE MATRÍCULAS AUTORIZADAS...');
     
-    // SEÇÃO CRÍTICA: Se não carregou variáveis, usa fallback
+    // 🔥 VERIFICAÇÃO CRÍTICA: Sem as variáveis, o sistema NÃO funciona
     if (!this.encryptionKey || !this.encryptedData) {
-      console.warn('⚠️  Variáveis não carregadas - usando FALLBACK');
-      this.authorizedMatriculas = this.getFallbackMatriculas();
-      console.log(`✅ ${this.authorizedMatriculas.length} matrículas (fallback)`);
+      console.error('\n❌❌❌ ERRO CRÍTICO: Variáveis de ambiente não carregadas!');
+      console.error('   ⚠️  O sistema NÃO pode funcionar sem as matrículas autorizadas.');
+      console.error('   ⚠️  Nenhum professor poderá se cadastrar no sistema.');
+      console.error('\n   📌 Verifique se o arquivo .env contém:');
+      console.error('   - AUTH_ENCRYPTION_KEY ou ENCRYPTION_KEY');
+      console.error('   - ENCRYPTED_MATRICULAS');
+      console.error('   - AUTH_HASH_SALT (opcional, mas recomendado)');
+      
+      // Array vazio - nenhum professor conseguirá se cadastrar
+      this.authorizedMatriculas = [];
+      console.log('='.repeat(60));
       return;
     }
     
     try {
       // Tenta descriptografar
-      console.log('🔓 Tentando descriptografar...');
+      console.log('\n🔓 Tentando descriptografar matrículas...');
       this.authorizedMatriculas = this.decryptMatriculas();
       
-      if (this.authorizedMatriculas.length > 0) {
-        console.log(`✅ ${this.authorizedMatriculas.length} matrículas carregadas`);
-        console.log('📋 Amostra:', this.authorizedMatriculas.slice(0, 3));
+      if (this.authorizedMatriculas && this.authorizedMatriculas.length > 0) {
+        console.log(`\n✅ SUCESSO! ${this.authorizedMatriculas.length} matrículas carregadas!`);
+        console.log('📋 Amostra (primeiras 3):', this.authorizedMatriculas.slice(0, 3));
       } else {
-        console.error('❌ Descriptografou, mas lista vazia! Usando fallback...');
-        this.authorizedMatriculas = this.getFallbackMatriculas();
+        console.error('\n❌❌❌ ERRO CRÍTICO: Lista vazia após descriptografia!');
+        console.error('   Verifique o formato de ENCRYPTED_MATRICULAS no .env');
+        console.error('   Deve ser um array JSON de objetos {matricula, nome} criptografado');
+        this.authorizedMatriculas = [];
       }
       
     } catch (error) {
-      console.error('❌ Erro na descriptografia:', error.message);
-      console.log('🔄 Usando fallback devido ao erro...');
-      this.authorizedMatriculas = this.getFallbackMatriculas();
+      console.error('\n❌❌❌ ERRO CRÍTICO NA DESCRIPTOGRAFIA:', error.message);
+      console.error('   ⚠️  O sistema NÃO pode funcionar sem as matrículas autorizadas.');
+      console.error('   ⚠️  Nenhum professor poderá se cadastrar no sistema.');
+      console.error('\n   📌 Verifique se:');
+      console.error('   1. A ENCRYPTION_KEY está correta (32 bytes em hex)');
+      console.error('   2. A ENCRYPTED_MATRICULAS está no formato iv:encrypted:authTag');
+      console.error('   3. A chave corresponde aos dados criptografados');
+      
+      this.authorizedMatriculas = [];
     }
+    
+    console.log('='.repeat(60));
   }
   
   decryptMatriculas() {
-    // Formato: iv:encrypted:authTag
+    // Formato esperado: iv:encrypted:authTag
     const parts = this.encryptedData.split(':');
     
     if (parts.length !== 3) {
-      console.log('📝 Formato simples (CSV) detectado');
-      return this.encryptedData.split(',').map(m => m.trim());
+      throw new Error('Formato inválido de ENCRYPTED_MATRICULAS. Deve ser iv:encrypted:authTag');
     }
     
     const [ivHex, encryptedHex, authTagHex] = parts;
@@ -132,21 +152,38 @@ class ProfessorAuthSystem {
     let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     
-    return decrypted.split(',').map(m => m.trim());
+    // Parse como JSON para obter array de objetos
+    const parsed = JSON.parse(decrypted);
+    
+    // Se for array de objetos, extrair apenas as matrículas
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].matricula) {
+      return parsed.map(item => item.matricula);
+    }
+    
+    // Se for array de strings, retorna diretamente
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    
+    throw new Error('Formato de dados inválido após descriptografia');
   }
-  
   
   isProfessorAuthorized(matricula) {
     const matriculaStr = matricula.toString().trim();
     
     if (!this.authorizedMatriculas || this.authorizedMatriculas.length === 0) {
-      console.error('🚨 CRÍTICO: Sistema sem matrículas autorizadas!');
+      console.error(`\n🚫 BLOQUEADO: Sistema sem matrículas autorizadas!`);
+      console.error(`   Matrícula ${matriculaStr} NÃO pode ser cadastrada.`);
       return false;
     }
     
     const autorizado = this.authorizedMatriculas.includes(matriculaStr);
     
-    console.log(`🔐 ${matriculaStr} ${autorizado ? '✅' : '❌'} (${this.authorizedMatriculas.length} matrículas na lista)`);
+    if (autorizado) {
+      console.log(`\n✅ ${matriculaStr} - AUTORIZADO`);
+    } else {
+      console.log(`\n❌ ${matriculaStr} - NÃO AUTORIZADO`);
+    }
     
     return autorizado;
   }
@@ -155,9 +192,13 @@ class ProfessorAuthSystem {
     return {
       totalMatriculas: this.authorizedMatriculas ? this.authorizedMatriculas.length : 0,
       systemStatus: this.authorizedMatriculas && this.authorizedMatriculas.length > 0 ? 'active' : 'error',
-      sampleMatriculas: this.authorizedMatriculas ? this.authorizedMatriculas.slice(0, 3) : []
+      hasEncryptionKey: !!this.encryptionKey,
+      hasEncryptedData: !!this.encryptedData,
+      hasHashSalt: !!this.hashSalt
     };
   }
 }
 
-module.exports = new ProfessorAuthSystem();
+// Instância única
+const instance = new ProfessorAuthSystem();
+module.exports = instance;

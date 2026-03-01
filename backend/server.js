@@ -66,7 +66,7 @@ console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Co
 const monitoramentoRoutes = require('./routes/monitoramento');
 const LoggerService = require('./services/logger-service');
 const EmailService = require('./email-service');
-const matriculasManager = require('./matriculas-db');
+const matriculasManager = require('./matriculas/index');
 
 // ============================================================================
 // CONFIGURAÇÃO DO QR CODE (TOTP)

@@ -30,17 +30,17 @@ Thumbs.db
 # DADOS SENSÍVEIS - NUNCA COMMITAR
 backend/matriculas-autorizados.js
 backend/matriculas-data.json
+backend/matriculas/data/
+backend/matriculas/*.json
 backend/security/config/
 security-keys-backup.txt
 *.key
 *.enc
-
-# Variáveis de ambiente
-.env
-.env.local
-.env.*.local
+*.pem
+*.crt
 
 # Scripts temporários
 scripts/temp-*.js
+scripts/generate-encrypted-matriculas.js
 
-# O resto do seu .gitignore atual continua...
+backend/scripts/generate-encrypted-matriculas.js
