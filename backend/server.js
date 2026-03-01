@@ -819,8 +819,10 @@ app.post('/api/auth/register', [
         console.log('🔍 Verificando matrícula de professor:', matriculaNumeros);
         
         // Verificar se a matrícula está na lista de autorizadas
-        const autorizada = matriculasManager.verificarMatricula(matriculaNumeros);
+        const autorizada = matriculasManager.verificar(matriculaNumeros);
         const nomeProfessor = autorizada ? matriculasManager.obterNome(matriculaNumeros) : null;
+
+        console.log(`🔍 Resultado: ${autorizada ? '✅ AUTORIZADA' : '❌ NÃO AUTORIZADA'} - Nome: ${nomeProfessor || 'Não encontrado'}`);
         
         if (!autorizada) {
             console.log('❌ Matrícula NÃO autorizada:', matriculaNumeros);
