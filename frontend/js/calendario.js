@@ -10,14 +10,13 @@ class CalendarioAcademico {
         this.mesAtual = this.dataAtual.getMonth();
         this.anoAtual = this.dataAtual.getFullYear();
         this.usuario = JSON.parse(localStorage.getItem('user_data') || '{}');
-        this.filtros = {
-            tipo: 'todos',
-            professor: 'todos',
-            turma: 'todas'
-        };
-        this.professores = [];
-        this.turmas = [];
-        this.eventoEditando = null;
+        
+        // 🔥 VERIFICAR SE ALUNO ESTÁ TENTANDO ACESSAR
+        if (this.usuario.role === 'aluno') {
+            alert('⛔ Acesso negado! Apenas administradores e professores podem acessar o calendário.');
+            window.location.href = 'aluno.html';
+            return;
+        }
         
         console.log('📅 Inicializando Calendário Acadêmico...', this.usuario);
         console.log('👤 Role do usuário:', this.usuario.role);
@@ -31,9 +30,43 @@ class CalendarioAcademico {
 
     async init() {
         console.log('🚀 Iniciando calendário...');
+        
+        // 🔥 CONFIGURAR BOTÃO VOLTAR BASEADO NO ROLE
+        this.configurarBotaoVoltar();
+        
         await this.carregarDadosIniciais();
         this.renderizarCalendario();
         this.configurarEventListeners();
+    }
+
+    // ============ CONFIGURAR BOTÃO VOLTAR ============
+    configurarBotaoVoltar() {
+        const btnVoltar = document.getElementById('btnVoltarCalendario');
+        const textoBtn = document.getElementById('textoBotaoVoltar');
+        
+        if (!btnVoltar) return;
+        
+        // Remover evento anterior se existir
+        btnVoltar.replaceWith(btnVoltar.cloneNode(true));
+        const novoBtn = document.getElementById('btnVoltarCalendario');
+        
+        // Configurar baseado no role
+        if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin') {
+            textoBtn.textContent = 'Voltar ao Painel Admin';
+            novoBtn.addEventListener('click', () => {
+                window.location.href = 'admin.html';
+            });
+        } else if (this.usuario.role === 'professor') {
+            textoBtn.textContent = 'Voltar ao Painel Professor';
+            novoBtn.addEventListener('click', () => {
+                window.location.href = 'index.html';
+            });
+        } else {
+            textoBtn.textContent = 'Voltar';
+            novoBtn.addEventListener('click', () => {
+                window.location.href = 'aluno.html';
+            });
+        }
     }
 
     async carregarDadosIniciais() {
@@ -70,18 +103,17 @@ class CalendarioAcademico {
                 if (this.usuario.role === 'professor') {
                     // Professor vê apenas eventos que ele CRIOU
                     this.eventos = eventosCarregados.filter(e => e.criadoPor?.id === this.usuario.id);
-                    console.log(`👨‍🏫 Professor: filtrando apenas seus eventos (${this.eventos.length} encontrados)`);
+                    console.log(`👨‍🏫 Professor: ${this.eventos.length} eventos encontrados`);
                     
-                    // Para professor, o filtro de professor deve ficar invisível ou desabilitado
+                    // Para professor, o filtro de professor deve ficar invisível
                     const filtroProf = document.getElementById('filtroProfessor');
-                    if (filtroProf) {
-                        filtroProf.disabled = true;
-                        filtroProf.style.opacity = '0.5';
+                    if (filtroProf && filtroProf.parentElement) {
+                        filtroProf.parentElement.style.display = 'none';
                     }
                 } else {
                     // Admin vê todos os eventos
                     this.eventos = eventosCarregados;
-                    console.log(`👑 Admin: todos os eventos (${this.eventos.length} encontrados)`);
+                    console.log(`👑 Admin: ${this.eventos.length} eventos encontrados`);
                 }
             }
         } catch (error) {
@@ -116,24 +148,17 @@ class CalendarioAcademico {
                         });
                     }
                 }
-            } else {
-                // Para professor, esconder o filtro
-                const filtroProf = document.getElementById('filtroProfessor');
-                if (filtroProf && filtroProf.parentElement) {
-                    filtroProf.parentElement.style.display = 'none';
-                }
             }
         } catch (error) {
             console.error('❌ Erro ao carregar professores:', error);
         }
     }
 
-    // ============ CARREGAR TURMAS (CORRIGIDO PARA PROFESSOR) ============
     async carregarTurmas() {
         try {
             const token = localStorage.getItem('auth_token');
             
-            // 🔥 Usar a rota /api/turmas que funciona para professor
+            // Usar a rota /api/turmas que funciona para todos
             const response = await fetch('/api/turmas', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -141,17 +166,10 @@ class CalendarioAcademico {
             const data = await response.json();
             
             if (data.success) {
-                // Para admin, usa todas as turmas; para professor, só as dele
-                if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin') {
-                    this.turmas = data.turmas || [];
-                    console.log(`👑 Admin: ${this.turmas.length} turmas carregadas`);
-                } else {
-                    // Professor vê apenas suas turmas
-                    this.turmas = data.turmas || [];
-                    console.log(`👨‍🏫 Professor: ${this.turmas.length} turmas carregadas`);
-                }
+                this.turmas = data.turmas || [];
+                console.log(`✅ ${this.turmas.length} turmas carregadas`);
                 
-                // Atualizar o select de turmas
+                // Atualizar filtro de turmas
                 const selectTurma = document.getElementById('filtroTurma');
                 if (selectTurma) {
                     selectTurma.innerHTML = '<option value="todas">Todas as turmas</option>';
@@ -163,7 +181,7 @@ class CalendarioAcademico {
                     });
                 }
                 
-                // Também atualizar o select no modal de criação
+                // Atualizar select no modal de criação
                 const selectTurmaModal = document.getElementById('eventoTurma');
                 if (selectTurmaModal) {
                     selectTurmaModal.innerHTML = '<option value="">Selecione uma turma...</option>';
