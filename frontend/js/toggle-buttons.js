@@ -1,25 +1,28 @@
-// js/toggle-buttons.js - VERSÃO SEM FUNDO (APENAS O ÍCONE)
+// js/toggle-buttons.js
+// Script para controlar visibilidade dos ícones de acessibilidade e chatbot
+
 (function() {
     'use strict';
 
-    console.log('🎮 Inicializando botão de controle de ícones...');
+    console.log('🔘 Inicializando botão de controle de ícones...');
 
     // ============================================
     // CONFIGURAÇÕES
     // ============================================
     const CONFIG = {
-        buttonColor: 'transparent',  // Fundo transparente
-        buttonSize: '40px',           // Tamanho um pouco maior para o ícone
-        buttonPosition: 'left: 20px',
-        animationDuration: 300,
-        defaultHidden: false,
-        rememberState: true
+        buttonColor: 'transparent',    // Agora transparente
+        buttonSize: '40px',             // Tamanho do botão (aumentado um pouco)
+        buttonPosition: 'left: 20px',   // Posição
+        animationDuration: 300,          // Duração da animação em ms
+        defaultHidden: false,            // Começar com ícones escondidos? (false = mostrados)
+        rememberState: true              // Lembrar estado ao recarregar a página
     };
 
     // ============================================
     // CRIAR O BOTÃO
     // ============================================
     function criarBotao() {
+        // Verificar se já existe
         if (document.getElementById('toggle-buttons-btn')) return;
 
         const btn = document.createElement('button');
@@ -27,7 +30,7 @@
         btn.setAttribute('aria-label', 'Mostrar/esconder ícones de acessibilidade e chatbot');
         btn.setAttribute('title', 'Mostrar/esconder ícones de acessibilidade e chatbot');
         
-        // Estilo do botão - SEM FUNDO
+        // Estilo do botão - AGORA TRANSPARENTE
         Object.assign(btn.style, {
             position: 'fixed',
             bottom: '100px',
@@ -35,36 +38,34 @@
             width: CONFIG.buttonSize,
             height: CONFIG.buttonSize,
             borderRadius: '50%',
-            background: 'transparent',  // Fundo transparente
-            color: '#0D6EFD',           // Ícone azul
-            border: 'none',              // Sem borda
-            boxShadow: 'none',           // Sem sombra
+            background: 'transparent',     // Fundo transparente
+            color: '#0D6EFD',              // Ícone azul
+            border: 'none',                 // Sem borda
+            boxShadow: 'none',              // Sem sombra
             cursor: 'pointer',
             zIndex: '10000',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '32px',            // Ícone maior
-            transition: 'transform 0.2s ease, color 0.2s ease',
+            fontSize: '32px',               // Ícone maior
+            transition: 'all 0.3s ease',
             outline: 'none',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            padding: '0',                // Sem padding
-            margin: '0'                  // Sem margem
+            padding: '0',
+            margin: '0'
         });
 
-        // Ícone de controle
+        // Ícone de controle (🎮)
         btn.innerHTML = '🎮';
 
-        // Efeito hover sutil (apenas no ícone)
+        // Evento de hover (apenas muda a cor do ícone)
         btn.addEventListener('mouseenter', () => {
             btn.style.transform = 'scale(1.1)';
-            btn.style.color = '#4f46e5';  // Roxo no hover
+            btn.style.color = '#4f46e5';    // Roxo no hover
         });
 
         btn.addEventListener('mouseleave', () => {
             btn.style.transform = 'scale(1)';
-            btn.style.color = '#0D6EFD';  // Volta ao azul
+            btn.style.color = '#0D6EFD';    // Volta ao azul
         });
 
         return btn;
@@ -76,20 +77,32 @@
     function getIcones() {
         const icones = [];
 
-        const vlibrasBtn = document.querySelector('[vw-access-button]');
-        if (vlibrasBtn) icones.push(vlibrasBtn);
+        // VLibras - várias formas de selecionar
+        const vlibras = document.querySelector('div[vw], [vw-access-button], [vw-plugin-wrapper]');
+        if (vlibras) icones.push(vlibras);
 
-        const acessibilidadeBtn = document.querySelector('.accessibility-toggle, #accessibilityToggle');
-        if (acessibilidadeBtn) icones.push(acessibilidadeBtn);
+        // Botão de acessibilidade (várias classes possíveis)
+        const acessibilidade = document.querySelector(
+            '.acessibilidade-btn, .btn-acessibilidade, .accessibility-toggle, #accessibilityBtn, [class*="acessibilidade"] button, [class*="accessibility"] button'
+        );
+        if (acessibilidade) icones.push(acessibilidade);
 
-        const painelAcessibilidade = document.querySelector('.accessibility-panel, #accessibilityPanel');
+        // Painel de acessibilidade (quando aberto)
+        const painelAcessibilidade = document.querySelector(
+            '.acessibilidade-panel, .accessibility-panel, [class*="acessibilidade-panel"], [class*="accessibility-panel"]'
+        );
         if (painelAcessibilidade) icones.push(painelAcessibilidade);
 
-        const chatbotBtn = document.querySelector('.chatbot-toggle, #chatbotToggle');
+        // Chatbot (botão e container)
+        const chatbotBtn = document.querySelector('.chatbot-button, #chatbotBtn, [class*="chatbot-button"]');
         if (chatbotBtn) icones.push(chatbotBtn);
 
-        const chatbotContainer = document.querySelector('.chatbot-container, #chatbotContainer');
+        const chatbotContainer = document.querySelector('.chatbot-container, #chatbotContainer, [class*="chatbot-container"]');
         if (chatbotContainer) icones.push(chatbotContainer);
+
+        // Qualquer outro elemento que você queira controlar
+        const outros = document.querySelectorAll('.hide-on-toggle');
+        outros.forEach(el => icones.push(el));
 
         return icones;
     }
@@ -97,49 +110,53 @@
     // ============================================
     // MOSTRAR/ESCONDER ÍCONES
     // ============================================
-    let iconesVisiveis = !CONFIG.defaultHidden;
+    let iconesVisiveis = !CONFIG.defaultHidden; // true = visíveis, false = escondidos
 
-    window.toggleIcones = function(mostrar = null) {
+    function toggleIcones(mostrar = null) {
         const icones = getIcones();
         
         if (mostrar !== null) {
             iconesVisiveis = mostrar;
         } else {
-            iconesVisiveis = !iconesVisiveis;
+            iconesVisiveis = !iconesVisiveis; // alterna
         }
 
+        // Atualizar botão (apenas a cor do ícone muda)
         const btn = document.getElementById('toggle-buttons-btn');
         if (btn) {
-            // Muda apenas a cor do ícone baseado no estado
-            btn.style.color = iconesVisiveis ? '#0D6EFD' : '#6c757d';
-            // Opcional: muda o ícone se quiser
-            // btn.innerHTML = iconesVisiveis ? '🎮' : '🎯';
+            btn.innerHTML = '🎮';  // Mantém o mesmo ícone
+            btn.style.color = iconesVisiveis ? '#0D6EFD' : '#6c757d'; // Azul quando visível, cinza quando escondido
+            btn.style.background = 'transparent'; // Sempre transparente
         }
 
+        // Mostrar/esconder cada ícone com animação
         icones.forEach(icon => {
             if (!icon) return;
 
             if (iconesVisiveis) {
+                // Mostrar
                 icon.style.transition = `opacity ${CONFIG.animationDuration}ms ease, transform ${CONFIG.animationDuration}ms ease`;
                 icon.style.opacity = '1';
                 icon.style.transform = 'scale(1)';
                 icon.style.pointerEvents = 'auto';
                 icon.style.visibility = 'visible';
             } else {
+                // Esconder
                 icon.style.transition = `opacity ${CONFIG.animationDuration}ms ease, transform ${CONFIG.animationDuration}ms ease`;
                 icon.style.opacity = '0';
                 icon.style.transform = 'scale(0.5)';
                 icon.style.pointerEvents = 'none';
-                icon.style.visibility = 'visible';
+                icon.style.visibility = 'hidden';
             }
         });
 
+        // Salvar estado se configurado
         if (CONFIG.rememberState) {
             localStorage.setItem('iconesVisiveis', iconesVisiveis ? 'true' : 'false');
         }
 
         console.log(`🎮 Ícones ${iconesVisiveis ? 'visíveis' : 'escondidos'}`);
-    };
+    }
 
     // ============================================
     // CARREGAR ESTADO SALVO
@@ -154,20 +171,23 @@
     }
 
     // ============================================
-    // OBSERVAR MUDANÇAS NO DOM
+    // OBSERVAR MUDANÇAS NO DOM (para elementos que carregam depois)
     // ============================================
     function observarMudancas() {
         const observer = new MutationObserver(() => {
+            // Quando novos elementos aparecerem, aplicar o estado atual
             const icones = getIcones();
             icones.forEach(icon => {
                 if (!icon) return;
                 
+                // Aplicar estado atual sem animação
                 icon.style.transition = 'none';
                 icon.style.opacity = iconesVisiveis ? '1' : '0';
                 icon.style.transform = iconesVisiveis ? 'scale(1)' : 'scale(0.5)';
                 icon.style.pointerEvents = iconesVisiveis ? 'auto' : 'none';
-                icon.style.visibility = 'visible';
+                icon.style.visibility = iconesVisiveis ? 'visible' : 'hidden';
                 
+                // Restaurar transição após um pequeno delay
                 setTimeout(() => {
                     icon.style.transition = `opacity ${CONFIG.animationDuration}ms ease, transform ${CONFIG.animationDuration}ms ease`;
                 }, 50);
@@ -184,29 +204,34 @@
     // INICIALIZAR
     // ============================================
     function init() {
+        // Carregar estado salvo
         carregarEstadoSalvo();
 
+        // Criar e adicionar botão (transparente com ícone 🎮)
         const btn = criarBotao();
         document.body.appendChild(btn);
 
-        btn.addEventListener('click', () => {
-            window.toggleIcones();
-        });
+        // Evento de clique
+        btn.addEventListener('click', () => toggleIcones());
 
-        window.toggleIcones(iconesVisiveis);
+        // Aplicar estado inicial
+        toggleIcones(iconesVisiveis);
 
+        // Observar mudanças no DOM
         observarMudancas();
 
+        // Adicionar tecla de atalho (Ctrl+Shift+H)
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.shiftKey && e.key === 'H') {
                 e.preventDefault();
-                window.toggleIcones();
+                toggleIcones();
             }
         });
 
-        console.log('✅ Botão de controle inicializado - SEM FUNDO, apenas ícone');
+        console.log('✅ Botão de controle de ícones inicializado (🎮 transparente)');
     }
 
+    // Executar quando a página carregar
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
