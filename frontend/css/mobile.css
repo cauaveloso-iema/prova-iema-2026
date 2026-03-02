@@ -430,3 +430,165 @@
     width: auto !important;
     min-width: 80px !important;
 }
+
+
+/* ==================================================
+   BOTÕES DE ACESSIBILIDADE - TAMANHO PADRÃO
+   ================================================== */
+
+@media screen and (max-width: 768px) {
+    
+    /* ===== VLIBRAS ===== */
+    div[vw] {
+        position: fixed !important;
+        bottom: 90px !important;
+        left: 20px !important;
+        z-index: 9998 !important;
+        transform: scale(1) !important;
+    }
+    
+    [vw-access-button] {
+        width: 56px !important;
+        height: 56px !important;
+        min-width: 56px !important;
+        min-height: 56px !important;
+        max-width: 56px !important;
+        max-height: 56px !important;
+        border-radius: 16px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    
+    /* ===== BOTÃO DE ACESSIBILIDADE (VERDE) ===== */
+    .accessibility-toggle,
+    #accessibilityToggle {
+        position: fixed !important;
+        bottom: 20px !important;
+        left: 20px !important;
+        width: 56px !important;
+        height: 56px !important;
+        min-width: 56px !important;
+        min-height: 56px !important;
+        max-width: 56px !important;
+        max-height: 56px !important;
+        border-radius: 16px !important;
+        background: #10b981 !important; /* VERDE */
+        color: white !important;
+        font-size: 24px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 9999 !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important; /* Sombra verde */
+        cursor: pointer !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* ===== BOTÃO DO CHATBOT ===== */
+    .chatbot-toggle,
+    #chatbotToggle {
+        position: fixed !important;
+        bottom: 20px !important;
+        right: 20px !important;
+        width: 56px !important;
+        height: 56px !important;
+        min-width: 56px !important;
+        min-height: 56px !important;
+        max-width: 56px !important;
+        max-height: 56px !important;
+        border-radius: 16px !important;
+        background: #4f46e5 !important; /* ROXO (padrão) */
+        color: white !important;
+        font-size: 24px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 9999 !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
+        cursor: pointer !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* ===== BOTÃO DE CONTROLE (OLHO) ===== */
+    #toggle-buttons-btn {
+        position: fixed !important;
+        bottom: 100px !important;
+        left: 20px !important;
+        width: 56px !important;
+        height: 56px !important;
+        min-width: 56px !important;
+        min-height: 56px !important;
+        max-width: 56px !important;
+        max-height: 56px !important;
+        border-radius: 16px !important;
+        background: transparent !important;
+        color: #4f46e5 !important;
+        font-size: 32px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 10000 !important;
+        border: none !important;
+        box-shadow: none !important;
+        cursor: pointer !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* ===== AJUSTE DE POSIÇÕES EM CASCATA ===== */
+    .accessibility-toggle,
+    #accessibilityToggle {
+        bottom: 90px !important; /* Segundo botão */
+    }
+    
+    [vw-access-button] {
+        bottom: 160px !important; /* Terceiro botão */
+    }
+    
+    #toggle-buttons-btn {
+        bottom: 230px !important; /* Primeiro botão (topo) */
+    }
+    
+    /* ===== AJUSTE PARA QUANDO OS ÍCONES ESTIVEREM ESCONDIDOS ===== */
+    .accessibility-toggle[style*="opacity: 0"],
+    #accessibilityToggle[style*="opacity: 0"],
+    .chatbot-toggle[style*="opacity: 0"],
+    #chatbotToggle[style*="opacity: 0"],
+    [vw-access-button][style*="opacity: 0"] {
+        pointer-events: none !important;
+        transition: opacity 0.3s ease !important;
+    }
+    
+    /* ===== TELAS MUITO PEQUENAS ===== */
+    @media screen and (max-width: 480px) {
+        .accessibility-toggle,
+        #accessibilityToggle,
+        .chatbot-toggle,
+        #chatbotToggle,
+        [vw-access-button],
+        #toggle-buttons-btn {
+            width: 48px !important;
+            height: 48px !important;
+            min-width: 48px !important;
+            min-height: 48px !important;
+            font-size: 24px !important;
+        }
+        
+        .accessibility-toggle,
+        #accessibilityToggle {
+            bottom: 80px !important;
+        }
+        
+        [vw-access-button] {
+            bottom: 140px !important;
+        }
+        
+        #toggle-buttons-btn {
+            bottom: 200px !important;
+        }
+    }
+}

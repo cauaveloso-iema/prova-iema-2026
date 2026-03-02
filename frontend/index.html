@@ -13755,10 +13755,357 @@ window.addEventListener('scroll', function() {
     }
     </style>
 
+    <!-- ===== MENU MOBILE PARA PROFESSOR ===== -->
+    <div class="professor-mobile-menu">
+        <!-- Botão do menu hambúrguer -->
+        <button class="professor-mobile-menu-toggle" id="professorMobileMenuToggle">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <!-- Overlay -->
+        <div class="professor-mobile-overlay" id="professorMobileOverlay"></div>
+        
+        <!-- Sidebar mobile -->
+        <div class="professor-mobile-sidebar" id="professorMobileSidebar">
+            <div class="professor-mobile-sidebar-header">
+                <div class="professor-mobile-avatar">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+                <div class="professor-mobile-info">
+                    <h3 id="mobileProfessorNome">Professor</h3>
+                    <p id="mobileProfessorEmail">carregando...</p>
+                </div>
+                <button class="professor-mobile-close" id="professorMobileClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="professor-mobile-menu-items">
+                <a href="#" onclick="mostrarTabMobile('nova-prova'); return false;" class="mobile-menu-item active">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Nova Prova</span>
+                </a>
+                <a href="#" onclick="mostrarTabMobile('nova-turma'); return false;" class="mobile-menu-item">
+                    <i class="fas fa-plus"></i>
+                    <span>Nova Turma</span>
+                </a>
+                <a href="#" onclick="mostrarTabMobile('minhas-provas'); return false;" class="mobile-menu-item">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Minhas Provas</span>
+                </a>
+                <a href="#" onclick="mostrarTabMobile('turmas'); return false;" class="mobile-menu-item">
+                    <i class="fas fa-school"></i>
+                    <span>Minhas Turmas</span>
+                </a>
+                <a href="#" onclick="window.location.href='calendario.html'" class="mobile-menu-item">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Meu Calendário</span>
+                </a>
+                <a href="#" onclick="mostrarTabMobile('resultados-gerais'); return false;" class="mobile-menu-item">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Resultados</span>
+                </a>
+            </div>
+            
+            <div class="professor-mobile-sidebar-footer">
+                <button class="mobile-logout-btn" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Sair</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    /* ===== MENU MOBILE PROFESSOR ===== */
+    @media screen and (max-width: 768px) {
+        .professor-mobile-menu-toggle {
+            display: block !important;
+            position: fixed;
+            bottom: 100px;
+            left: 20px;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            border: 3px solid white;
+            border-radius: 16px;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 10001;
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            animation: pulse-mobile 2s infinite;
+        }
+
+        @keyframes pulse-mobile {
+            0% { transform: scale(1); box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 8px 25px rgba(79, 70, 229, 0.7); }
+            100% { transform: scale(1); box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4); }
+        }
+
+        .professor-mobile-menu-toggle:hover {
+            transform: scale(1.1) !important;
+            background: linear-gradient(135deg, #10b981, #059669) !important;
+        }
+
+        .professor-mobile-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(3px);
+            z-index: 10002;
+        }
+
+        .professor-mobile-overlay.active {
+            display: block !important;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .professor-mobile-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100vh;
+            background: linear-gradient(180deg, #1e1e2f 0%, #2d2d44 100%);
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10003;
+            overflow-y: auto;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .professor-mobile-sidebar.active {
+            transform: translateX(0);
+        }
+
+        .professor-mobile-sidebar-header {
+            padding: 25px 20px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            position: relative;
+            color: white;
+        }
+
+        .professor-mobile-avatar {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .professor-mobile-info h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .professor-mobile-info p {
+            margin: 5px 0 0;
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+
+        .professor-mobile-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 36px;
+            height: 36px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .professor-mobile-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .professor-mobile-menu-items {
+            padding: 15px 0;
+        }
+
+        .mobile-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 20px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.2s;
+            font-size: 1rem;
+            border-left: 3px solid transparent;
+        }
+
+        .mobile-menu-item i {
+            width: 24px;
+            font-size: 1.2rem;
+        }
+
+        .mobile-menu-item:hover,
+        .mobile-menu-item.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left-color: #10b981;
+        }
+
+        .mobile-menu-item.active {
+            background: linear-gradient(90deg, rgba(79, 70, 229, 0.2), transparent);
+        }
+
+        .professor-mobile-sidebar-footer {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .mobile-logout-btn {
+            width: 100%;
+            padding: 15px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            color: #ef4444;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+
+        .mobile-logout-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+            transform: translateY(-2px);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Ajustes para o conteúdo principal quando menu está aberto */
+        body.menu-aberto {
+            overflow: hidden;
+        }
+    }
+
+    /* Desktop - esconder elementos mobile */
+    @media screen and (min-width: 769px) {
+        .professor-mobile-menu-toggle,
+        .professor-mobile-overlay,
+        .professor-mobile-sidebar {
+            display: none !important;
+        }
+    }
+    </style>
+
+    <script>
+    // ===== FUNÇÕES DO MENU MOBILE =====
+    document.addEventListener('DOMContentLoaded', function() {
+        const menuToggle = document.getElementById('professorMobileMenuToggle');
+        const mobileSidebar = document.getElementById('professorMobileSidebar');
+        const mobileOverlay = document.getElementById('professorMobileOverlay');
+        const mobileClose = document.getElementById('professorMobileClose');
+        
+        if (menuToggle && mobileSidebar && mobileOverlay) {
+            // Abrir menu
+            menuToggle.addEventListener('click', function() {
+                mobileSidebar.classList.add('active');
+                mobileOverlay.classList.add('active');
+                document.body.classList.add('menu-aberto');
+            });
+            
+            // Fechar pelo overlay
+            mobileOverlay.addEventListener('click', function() {
+                mobileSidebar.classList.remove('active');
+                mobileOverlay.classList.remove('active');
+                document.body.classList.remove('menu-aberto');
+            });
+            
+            // Fechar pelo botão X
+            if (mobileClose) {
+                mobileClose.addEventListener('click', function() {
+                    mobileSidebar.classList.remove('active');
+                    mobileOverlay.classList.remove('active');
+                    document.body.classList.remove('menu-aberto');
+                });
+            }
+        }
+        
+        // Atualizar dados do professor no menu mobile
+        function atualizarMenuMobile() {
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const mobileNome = document.getElementById('mobileProfessorNome');
+            const mobileEmail = document.getElementById('mobileProfessorEmail');
+            
+            if (mobileNome) mobileNome.textContent = userData.nome || 'Professor';
+            if (mobileEmail) mobileEmail.textContent = userData.email || 'carregando...';
+        }
+        
+        // Chamar atualização
+        atualizarMenuMobile();
+        
+        // Observar mudanças no localStorage
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'user_data') {
+                atualizarMenuMobile();
+            }
+        });
+    });
+
+    // Função para mostrar tabs no mobile
+    function mostrarTabMobile(tabId) {
+        // Fechar menu mobile
+        const mobileSidebar = document.getElementById('professorMobileSidebar');
+        const mobileOverlay = document.getElementById('professorMobileOverlay');
+        
+        if (mobileSidebar && mobileOverlay) {
+            mobileSidebar.classList.remove('active');
+            mobileOverlay.classList.remove('active');
+            document.body.classList.remove('menu-aberto');
+        }
+        
+        // Chamar função original
+        if (typeof mostrarTab === 'function') {
+            mostrarTab(tabId);
+        }
+    }
+    </script>
+
         <!-- ===== MOBILE OPTIMIZATION ===== -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <link rel="stylesheet" href="css/mobile.css">
     <script src="js/toggle-buttons.js"></script>
-    
+
+        <!-- Botões arrastáveis -->
+    <script src="js/draggable.js"></script>
+
 </body>
 </html>
