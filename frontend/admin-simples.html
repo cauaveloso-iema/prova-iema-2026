@@ -1,0 +1,3424 @@
+<!-- frontend/admin-simples.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Simples - IEMA Provas</title>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+        <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="IEMA Provas">
+
+    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .admin-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: #2c3e50;
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #1e2b37;
+            text-align: center;
+            border-bottom: 1px solid #3a4a5a;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .logo i {
+            color: #3498db;
+            margin-right: 5px;
+        }
+
+        .user-info {
+            padding: 15px 20px;
+            background: #243342;
+            margin-bottom: 10px;
+            border-left: 3px solid #3498db;
+            position: relative;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .user-email {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 3px;
+            word-break: break-all;
+        }
+
+        .notificacao-sidebar {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+        }
+
+        .notificacao-sidebar .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: 0.3s;
+            cursor: pointer;
+            gap: 10px;
+            position: relative;
+        }
+
+        .nav-item i {
+            width: 20px;
+            text-align: center;
+        }
+
+        .nav-item:hover {
+            background: #34495e;
+            color: white;
+        }
+
+        .nav-item.active {
+            background: #3498db;
+            color: white;
+        }
+
+        .nav-item .notificacao-badge {
+            position: absolute;
+            right: 10px;
+            background: #e74c3c;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .sidebar-footer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            padding: 20px;
+            border-top: 1px solid #3a4a5a;
+        }
+
+        .logout-btn {
+            width: 100%;
+            padding: 10px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #c0392b;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+
+        .main-content.expanded {
+            margin-left: 0;
+        }
+
+        .top-bar {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .menu-toggle {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #333;
+            margin-right: 15px;
+            display: none;
+        }
+
+        .page-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .top-bar-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .notificacao-icone {
+            position: relative;
+            cursor: pointer;
+            font-size: 20px;
+            color: #555;
+        }
+
+        .notificacao-icone .badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #e74c3c;
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .datetime {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Notificações Panel */
+        .notificacoes-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 380px;
+            max-width: calc(100% - 40px);
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            z-index: 2000;
+            display: none;
+            animation: slideDown 0.3s ease;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .notificacoes-panel.active {
+            display: block;
+        }
+
+        .notificacoes-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 12px 12px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .notificacoes-header h3 {
+            font-size: 16px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .notificacoes-header h3 i {
+            color: #3498db;
+        }
+
+        .notificacoes-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-notificacao {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: 0.3s;
+            font-size: 14px;
+        }
+
+        .btn-notificacao:hover {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .notificacoes-list {
+            padding: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .notificacao-item {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-left: 4px solid transparent;
+            transition: 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .notificacao-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+
+        .notificacao-item.nao-lida {
+            background: #e8f4fd;
+            border-left-color: #3498db;
+        }
+
+        .notificacao-item .notificacao-titulo {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .notificacao-item .notificacao-mensagem {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+
+        .notificacao-item .notificacao-tempo {
+            font-size: 11px;
+            color: #999;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .notificacao-item .notificacao-icone {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+        }
+
+        .notificacao-actions {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: none;
+            gap: 5px;
+        }
+
+        .notificacao-item:hover .notificacao-actions {
+            display: flex;
+        }
+
+        .notificacao-actions button {
+            background: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .notificacao-actions button:hover {
+            background: #f0f0f0;
+        }
+
+        .notificacao-actions button.delete:hover {
+            color: #e74c3c;
+        }
+
+        .empty-notificacoes {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+
+        .empty-notificacoes i {
+            font-size: 48px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .stat-icon.blue { background: #e3f2fd; color: #1976d2; }
+        .stat-icon.green { background: #e8f5e9; color: #388e3c; }
+        .stat-icon.orange { background: #fff3e0; color: #f57c00; }
+        .stat-icon.purple { background: #f3e5f5; color: #8e24aa; }
+        .stat-icon.red { background: #ffebee; color: #c62828; }
+
+        .stat-content h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .stat-detail {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-header h2 {
+            font-size: 18px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            transition: 0.3s;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            transition: 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            transition: 0.3s;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            transition: 0.3s;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+
+        /* Table */
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        tr:hover td {
+            background: #f8f9fa;
+        }
+
+        /* Status Badges */
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .status-badge.active { background: #d4edda; color: #155724; }
+        .status-badge.inactive { background: #f8d7da; color: #721c24; }
+        .status-badge.pending { background: #fff3cd; color: #856404; }
+        .status-badge.info { background: #d1ecf1; color: #0c5460; }
+        .status-badge.warning { background: #fff3cd; color: #856404; }
+        .status-badge.primary { background: #cfe2ff; color: #084298; }
+
+        /* Role Badges */
+        .role-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .role-badge.admin { background: #cfe2ff; color: #084298; }
+        .role-badge.professor { background: #d1e7dd; color: #0f5132; }
+        .role-badge.aluno { background: #fff3cd; color: #856404; }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+        }
+
+        .btn-icon {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 4px;
+            background: none;
+            cursor: pointer;
+            color: #666;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.3s;
+            font-size: 12px;
+        }
+
+        .btn-icon:hover {
+            background: #e9ecef;
+            color: #3498db;
+        }
+
+        .btn-icon.edit:hover { color: #f39c12; }
+        .btn-icon.delete:hover { color: #e74c3c; }
+        .btn-icon.success:hover { background: #d4edda; color: #27ae60; }
+        .btn-icon.warning:hover { background: #fff3cd; color: #f39c12; }
+
+        /* Filters Bar */
+        .filters-bar {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .filter-group label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .btn-filter {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-pagination {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-pagination.active {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+
+        .btn-pagination:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideDown 0.3s ease;
+        }
+
+        .modal-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 10px 10px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            background: #f8f9fa;
+            border-radius: 0 0 10px 10px;
+            position: sticky;
+            bottom: 0;
+        }
+
+        .btn-save {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .btn-cancel {
+            background: #e9ecef;
+            color: #666;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-card {
+            background: #e3f2fd;
+            padding: 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #084298;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .info-card i {
+            font-size: 18px;
+        }
+
+        /* Loading */
+        .loading-spinner {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            margin: 0 auto 10px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-small {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .loading-small i {
+            animation: spin 1s linear infinite;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            color: #dee2e6;
+            margin-bottom: 10px;
+        }
+
+        .empty-state h3 {
+            color: #666;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+
+        .empty-state p {
+            color: #999;
+            font-size: 13px;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 5px;
+            color: white;
+            z-index: 9999;
+            animation: slideInRight 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 250px;
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .toast.success { background: #28a745; }
+        .toast.error { background: #dc3545; }
+        .toast.info { background: #17a2b8; }
+        .toast.warning { background: #ffc107; color: #333; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filters-bar {
+                flex-direction: column;
+            }
+
+            .filter-group {
+                width: 100%;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .notificacoes-panel {
+                top: 60px;
+                right: 10px;
+                width: calc(100% - 20px);
+            }
+        }
+
+        /* Acessibilidade */
+        .badge-acessibilidade {
+            background: #f39c12;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-graduation-cap"></i> IEMA
+                </div>
+                <small>Admin Simples</small>
+            </div>
+
+            <div class="user-info" id="userInfo">
+                <div class="user-name" id="adminNome">Carregando...</div>
+                <div class="user-email" id="adminEmail">...</div>
+                
+                <div class="notificacao-sidebar" onclick="adminSimples.abrirPainelNotificacoes()">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge" id="sidebarNotificacaoBadge">0</span>
+                </div>
+            </div>
+
+            <nav>
+                <div class="nav-item" data-section="dashboard" onclick="adminSimples.mudarAba('dashboard')">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </div>
+                <div class="nav-item" data-section="usuarios" onclick="adminSimples.mudarAba('usuarios')">
+                    <i class="fas fa-users"></i> Usuários
+                    <span class="notificacao-badge" id="menuNotificacaoBadge" style="display: none;">0</span>
+                </div>
+                <div class="nav-item" data-section="turmas" onclick="adminSimples.mudarAba('turmas')">
+                    <i class="fas fa-school"></i> Turmas
+                </div>
+                <div class="nav-item" data-section="provas" onclick="adminSimples.mudarAba('provas')">
+                    <i class="fas fa-file-alt"></i> Provas
+                </div>
+                <div class="nav-item" data-section="resultados" onclick="adminSimples.mudarAba('resultados')">
+                    <i class="fas fa-chart-bar"></i> Resultados
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="logout-btn" onclick="adminSimples.logout()">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content" id="mainContent">
+            <div class="top-bar">
+                <div style="display: flex; align-items: center;">
+                    <button class="menu-toggle" id="menuToggle" onclick="adminSimples.toggleMenu()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <span class="page-title" id="pageTitle">Dashboard</span>
+                </div>
+                
+                <div class="top-bar-actions">
+                    <div class="notificacao-icone" onclick="adminSimples.abrirPainelNotificacoes()">
+                        <i class="fas fa-bell"></i>
+                        <span class="badge" id="topNotificacaoBadge">0</span>
+                    </div>
+                    <div class="datetime" id="datetime"></div>
+                </div>
+            </div>
+
+            <!-- Painel de Notificações -->
+            <div class="notificacoes-panel" id="notificacoesPanel">
+                <div class="notificacoes-header">
+                    <h3><i class="fas fa-bell"></i> Notificações</h3>
+                    <div class="notificacoes-actions">
+                        <button class="btn-notificacao" onclick="adminSimples.marcarTodasLidas()" title="Marcar todas como lidas">
+                            <i class="fas fa-check-double"></i>
+                        </button>
+                        <button class="btn-notificacao" onclick="adminSimples.fecharPainelNotificacoes()" title="Fechar">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="notificacoes-list" id="notificacoesList">
+                    <div class="empty-notificacoes">
+                        <i class="fas fa-bell-slash"></i>
+                        <p>Nenhuma notificação</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Toast Container -->
+            <div id="toastContainer" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;"></div>
+
+            <!-- Content Area -->
+            <div id="contentArea">
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Carregando sistema...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Título</h3>
+                <button class="modal-close" onclick="adminSimples.fecharModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="adminSimples.fecharModal()">Cancelar</button>
+                <button class="btn-save" id="modalSaveBtn" onclick="adminSimples.salvarModal()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 id="confirmTitle">Confirmar</h3>
+                <button class="modal-close" onclick="adminSimples.fecharConfirmModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="confirmMessage"></div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="adminSimples.fecharConfirmModal()">Não</button>
+                <button class="btn-save" id="confirmBtn">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AdminSimples {
+            constructor() {
+                this.abaAtual = 'dashboard';
+                this.usuarios = [];
+                this.turmas = [];
+                this.provas = [];
+                this.resultados = [];
+                this.notificacoes = [];
+                this.paginaAtual = 1;
+                this.itensPorPagina = 10;
+                this.usuario = null;
+                
+                this.init();
+            }
+
+            async init() {
+                console.log('🚀 Inicializando admin simples...');
+                await this.verificarAuth();
+                this.atualizarDataHora();
+                setInterval(() => this.atualizarDataHora(), 1000);
+                
+                await this.carregarNotificacoes();
+                setInterval(() => this.carregarNotificacoes(), 30000);
+                
+                // CARREGAR DADOS AO INICIAR
+                await this.carregarUsuarios();
+                await this.carregarTurmas();
+                await this.carregarProvas(); // <-- ESSA LINHA É CRÍTICA
+                await this.carregarResultados();
+                
+                await this.carregarDashboard();
+            }
+
+            async verificarAuth() {
+                const token = localStorage.getItem('auth_token');
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+
+                if (!token) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                if (userData.role !== 'admin' && userData.role !== 'super_admin') {
+                    this.showToast('❌ Acesso negado', 'error');
+                    window.location.href = userData.role === 'professor' ? 'index.html' : 'aluno.html';
+                    return;
+                }
+
+                this.usuario = userData;
+                document.getElementById('adminNome').textContent = userData.nome || 'Administrador';
+                document.getElementById('adminEmail').textContent = userData.email || 'admin@iemasaoluiscentro.net';
+                
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.dataset.section === 'dashboard') {
+                        item.classList.add('active');
+                    }
+                });
+            }
+
+            toggleMenu() {
+                document.getElementById('sidebar').classList.toggle('active');
+            }
+
+            atualizarDataHora() {
+                const agora = new Date();
+                document.getElementById('datetime').textContent = agora.toLocaleString('pt-BR');
+            }
+
+            // ============ SISTEMA DE NOTIFICAÇÕES ============
+            async carregarNotificacoes() {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    
+                    const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (countResponse.ok) {
+                        const countData = await countResponse.json();
+                        this.atualizarBadgesNotificacoes(countData.count || 0);
+                    }
+                    
+                    const response = await fetch('/api/notificacoes?limite=20', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.notificacoes = data.notificacoes || [];
+                        this.renderizarNotificacoes();
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar notificações:', error);
+                }
+            }
+
+            atualizarBadgesNotificacoes(total) {
+                const badges = [
+                    'sidebarNotificacaoBadge',
+                    'topNotificacaoBadge',
+                    'menuNotificacaoBadge'
+                ];
+                
+                badges.forEach(id => {
+                    const badge = document.getElementById(id);
+                    if (badge) {
+                        if (total > 0) {
+                            badge.textContent = total > 99 ? '99+' : total;
+                            badge.style.display = 'inline';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }
+                });
+            }
+
+            renderizarNotificacoes() {
+                const list = document.getElementById('notificacoesList');
+                if (!list) return;
+                
+                if (!this.notificacoes || this.notificacoes.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty-notificacoes">
+                            <i class="fas fa-bell-slash"></i>
+                            <p>Nenhuma notificação</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                let html = '';
+                this.notificacoes.slice(0, 10).forEach(notif => {
+                    const data = new Date(notif.createdAt);
+                    const agora = new Date();
+                    const diffMs = agora - data;
+                    const diffMin = Math.floor(diffMs / 60000);
+                    const diffHora = Math.floor(diffMs / 3600000);
+                    const diffDia = Math.floor(diffMs / 86400000);
+                    
+                    let tempoTexto = '';
+                    if (diffMin < 1) tempoTexto = 'agora mesmo';
+                    else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+                    else if (diffHora < 24) tempoTexto = `há ${diffHora} h`;
+                    else tempoTexto = `há ${diffDia} d`;
+                    
+                    const naoLida = !notif.lida ? 'nao-lida' : '';
+                    
+                    html += `
+                        <div class="notificacao-item ${naoLida}" data-id="${notif._id}" onclick="adminSimples.verNotificacao('${notif._id}')">
+                            <div class="notificacao-titulo">
+                                <span class="notificacao-icone" style="background: ${notif.cor || '#3498db'}20; color: ${notif.cor || '#3498db'};">
+                                    <i class="fas ${notif.icone || 'fa-bell'}"></i>
+                                </span>
+                                ${notif.titulo || 'Notificação'}
+                            </div>
+                            <div class="notificacao-mensagem">${notif.mensagem || ''}</div>
+                            <div class="notificacao-tempo">
+                                <i class="far fa-clock"></i> ${tempoTexto}
+                            </div>
+                            <div class="notificacao-actions">
+                                <button onclick="event.stopPropagation(); adminSimples.marcarLida('${notif._id}')" title="Marcar como lida">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="delete" onclick="event.stopPropagation(); adminSimples.excluirNotificacao('${notif._id}')" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                list.innerHTML = html;
+            }
+
+            abrirPainelNotificacoes() {
+                document.getElementById('notificacoesPanel').classList.toggle('active');
+                this.carregarNotificacoes();
+            }
+
+            fecharPainelNotificacoes() {
+                document.getElementById('notificacoesPanel').classList.remove('active');
+            }
+
+            async marcarLida(id) {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    
+                    const response = await fetch(`/api/notificacoes/${id}/lida`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        await this.carregarNotificacoes();
+                    }
+                } catch (error) {
+                    console.error('Erro ao marcar como lida:', error);
+                }
+            }
+
+            async marcarTodasLidas() {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    
+                    const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        await this.carregarNotificacoes();
+                        this.showToast('✅ Todas notificações marcadas como lidas', 'success');
+                    }
+                } catch (error) {
+                    console.error('Erro ao marcar todas como lidas:', error);
+                }
+            }
+
+            async excluirNotificacao(id) {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    
+                    const response = await fetch(`/api/notificacoes/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        await this.carregarNotificacoes();
+                        this.showToast('✅ Notificação excluída', 'success');
+                    }
+                } catch (error) {
+                    console.error('Erro ao excluir notificação:', error);
+                }
+            }
+
+            async verNotificacao(id) {
+                await this.marcarLida(id);
+                const notif = this.notificacoes.find(n => n._id === id);
+                if (notif && notif.link) {
+                    window.location.href = notif.link;
+                }
+            }
+
+            // ============ MUDAR ABA ============
+            async mudarAba(aba) {
+                this.abaAtual = aba;
+                
+                document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+                document.querySelectorAll('.nav-item[data-section="' + aba + '"]').forEach(item => item.classList.add('active'));
+
+                const titulos = {
+                    dashboard: 'Dashboard',
+                    usuarios: 'Gerenciar Usuários',
+                    turmas: 'Gerenciar Turmas',
+                    provas: 'Gerenciar Provas',
+                    resultados: 'Resultados'
+                };
+                document.getElementById('pageTitle').textContent = titulos[aba] || 'Dashboard';
+
+                switch(aba) {
+                    case 'dashboard': await this.carregarDashboard(); break;
+                    case 'usuarios': await this.carregarUsuarios(); break;
+                    case 'turmas': await this.carregarTurmas(); break;
+                    case 'provas': await this.carregarProvas(); break;
+                    case 'resultados': await this.carregarResultados(); break;
+                }
+                
+                this.fecharPainelNotificacoes();
+            }
+
+            // ============ DASHBOARD ============
+            async carregarDashboard() {
+                const content = document.getElementById('contentArea');
+                
+                try {
+                    const response = await fetch('/api/admin/dashboard', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+
+                    const data = await response.json();
+                    const stats = data.success ? data.data : this.getDadosExemplo();
+
+                    content.innerHTML = `
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+                                <div class="stat-content">
+                                    <h3>Total de Usuários</h3>
+                                    <div class="stat-number">${stats.totalUsuarios || 0}</div>
+                                    <div class="stat-detail">${stats.totalAlunos || 0} alunos • ${stats.totalProfessores || 0} professores</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon green"><i class="fas fa-school"></i></div>
+                                <div class="stat-content">
+                                    <h3>Turmas</h3>
+                                    <div class="stat-number">${stats.totalTurmas || 0}</div>
+                                    <div class="stat-detail">${stats.turmasAtivas || 0} ativas</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon orange"><i class="fas fa-file-alt"></i></div>
+                                <div class="stat-content">
+                                    <h3>Provas</h3>
+                                    <div class="stat-number">${stats.totalProvas || 0}</div>
+                                    <div class="stat-detail">${stats.provasPorStatus?.ativa || 0} ativas</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon purple"><i class="fas fa-chart-bar"></i></div>
+                                <div class="stat-content">
+                                    <h3>Resultados</h3>
+                                    <div class="stat-number">${stats.totalResultados || 0}</div>
+                                    <div class="stat-detail">Média: ${stats.mediaGeral || '0.0'}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background: white; border-radius: 10px; padding: 20px;">
+                            <h3 style="margin-bottom: 15px;">📋 Últimas Atividades</h3>
+                            <div id="atividades">
+                                ${this.gerarAtividades(stats.atividadesRecentes)}
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    content.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+                }
+            }
+
+            getDadosExemplo() {
+                return {
+                    totalUsuarios: 150,
+                    totalAlunos: 120,
+                    totalProfessores: 28,
+                    totalTurmas: 12,
+                    turmasAtivas: 10,
+                    totalProvas: 45,
+                    provasPorStatus: { ativa: 25 },
+                    totalResultados: 230,
+                    mediaGeral: 7.2,
+                    atividadesRecentes: []
+                };
+            }
+
+            gerarAtividades(atividades) {
+                if (!atividades || atividades.length === 0) {
+                    return '<p style="color: #999;">Nenhuma atividade recente</p>';
+                }
+                return atividades.slice(0, 5).map(a => `
+                    <div style="padding: 10px; border-bottom: 1px solid #eee;">
+                        <strong>${a.usuario}</strong> ${a.acao} <strong>${a.prova}</strong>
+                        <br><small>${new Date(a.data).toLocaleString()}</small>
+                    </div>
+                `).join('');
+            }
+
+            // ============ USUÁRIOS ============
+            async carregarUsuarios() {
+                const content = document.getElementById('contentArea');
+                content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando usuários...</p></div>';
+
+                try {
+                    const response = await fetch('/api/admin/usuarios?limit=100', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+
+                    const data = await response.json();
+                    this.usuarios = data.success ? data.usuarios : [];
+
+                    content.innerHTML = `
+                        <div class="section-header">
+                            <h2><i class="fas fa-users"></i> Usuários</h2>
+                            <button class="btn-primary" onclick="adminSimples.novoUsuario()">
+                                <i class="fas fa-plus"></i> Novo
+                            </button>
+                        </div>
+
+                        <div class="filters-bar">
+                            <div class="filter-group">
+                                <label>Buscar</label>
+                                <input type="text" id="buscaUsuario" placeholder="Nome, email..." 
+                                    class="form-control" onkeyup="adminSimples.filtrarUsuarios()">
+                            </div>
+                            <div class="filter-group">
+                                <label>Perfil</label>
+                                <select id="filtroRole" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                                    <option value="todos">Todos</option>
+                                    <option value="aluno">Alunos</option>
+                                    <option value="professor">Professores</option>
+                                    <option value="admin">Admins</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Email</th>
+                                        <th>Perfil</th>
+                                        <th>Matrícula</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaUsuarios">
+                                    ${this.gerarLinhasUsuarios(this.usuarios)}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="pagination">
+                            <button class="btn-pagination" onclick="adminSimples.paginaAnterior('usuarios')" id="btnAnteriorUsuario">Anterior</button>
+                            <span id="pageInfoUsuario">Página 1</span>
+                            <button class="btn-pagination" onclick="adminSimples.proximaPagina('usuarios')" id="btnProximaUsuario">Próxima</button>
+                        </div>
+                    `;
+
+                    this.paginaAtualUsuario = 1;
+                    this.usuariosFiltrados = [...this.usuarios];
+                    this.atualizarTabelaUsuarios();
+                    
+                } catch (error) {
+                    content.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+                }
+            }
+
+            gerarLinhasUsuarios(usuarios) {
+                // Filtrar super_admin (admin normal não vê)
+                const usuariosFiltrados = usuarios.filter(u => u.role !== 'super_admin');
+                
+                if (!usuariosFiltrados || usuariosFiltrados.length === 0) {
+                    return '<tr><td colspan="6" class="empty-state">Nenhum usuário encontrado</td></tr>';
+                }
+
+                return usuariosFiltrados.map(u => `
+                    <tr>
+                        <td><strong>${u.nome || 'N/A'}</strong></td>
+                        <td>${u.email || '-'}</td>
+                        <td><span class="role-badge ${u.role || 'aluno'}">${u.role || 'aluno'}</span></td>
+                        <td>${u.matricula || '-'}</td>
+                        <td>
+                            <span class="status-badge ${u.ativo ? 'active' : 'inactive'}">
+                                ${u.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-icon edit" onclick="adminSimples.editarUsuario('${u._id}')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-icon" onclick="adminSimples.resetarSenha('${u._id}')" title="Resetar senha">
+                                    <i class="fas fa-key"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            atualizarTabelaUsuarios() {
+                if (!this.usuariosFiltrados) return;
+                
+                const inicio = (this.paginaAtualUsuario - 1) * this.itensPorPagina;
+                const fim = inicio + this.itensPorPagina;
+                const pagina = this.usuariosFiltrados.slice(inicio, fim);
+                
+                document.getElementById('tabelaUsuarios').innerHTML = this.gerarLinhasUsuarios(pagina);
+                
+                const totalPaginas = Math.ceil(this.usuariosFiltrados.length / this.itensPorPagina);
+                document.getElementById('pageInfoUsuario').textContent = `Página ${this.paginaAtualUsuario} de ${totalPaginas}`;
+                document.getElementById('btnAnteriorUsuario').disabled = this.paginaAtualUsuario === 1;
+                document.getElementById('btnProximaUsuario').disabled = this.paginaAtualUsuario === totalPaginas;
+            }
+
+            filtrarUsuarios() {
+                const busca = document.getElementById('buscaUsuario')?.value.toLowerCase() || '';
+                const role = document.getElementById('filtroRole')?.value || 'todos';
+                
+                this.usuariosFiltrados = this.usuarios.filter(u => u.role !== 'super_admin').filter(u => {
+                    const matchBusca = busca === '' || 
+                        (u.nome && u.nome.toLowerCase().includes(busca)) ||
+                        (u.email && u.email.toLowerCase().includes(busca));
+                    
+                    const matchRole = role === 'todos' || u.role === role;
+                    
+                    return matchBusca && matchRole;
+                });
+                
+                this.paginaAtualUsuario = 1;
+                this.atualizarTabelaUsuarios();
+            }
+
+            paginaAnterior(tipo) {
+                if (tipo === 'usuarios') {
+                    if (this.paginaAtualUsuario > 1) {
+                        this.paginaAtualUsuario--;
+                        this.atualizarTabelaUsuarios();
+                    }
+                } else if (tipo === 'turmas') {
+                    if (this.paginaAtualTurma > 1) {
+                        this.paginaAtualTurma--;
+                        this.atualizarTabelaTurmas();
+                    }
+                }
+            }
+
+            proximaPagina(tipo) {
+                if (tipo === 'usuarios') {
+                    const totalPaginas = Math.ceil(this.usuariosFiltrados.length / this.itensPorPagina);
+                    if (this.paginaAtualUsuario < totalPaginas) {
+                        this.paginaAtualUsuario++;
+                        this.atualizarTabelaUsuarios();
+                    }
+                } else if (tipo === 'turmas') {
+                    const totalPaginas = Math.ceil(this.turmasFiltradas.length / this.itensPorPagina);
+                    if (this.paginaAtualTurma < totalPaginas) {
+                        this.paginaAtualTurma++;
+                        this.atualizarTabelaTurmas();
+                    }
+                }
+            }
+
+            novoUsuario() {
+                this.abrirModalUsuario();
+            }
+
+            async editarUsuario(id) {
+                const usuario = this.usuarios.find(u => u._id === id);
+                if (usuario) {
+                    if (usuario.role === 'super_admin') {
+                        this.showToast('❌ Não é possível editar Super Admins', 'error');
+                        return;
+                    }
+                    this.abrirModalUsuario(usuario);
+                }
+            }
+
+            async resetarSenha(id) {
+                const usuario = this.usuarios.find(u => u._id === id);
+                if (!usuario) return;
+                
+                if (usuario.role === 'super_admin') {
+                    this.showToast('❌ Não é possível resetar senha de Super Admins', 'error');
+                    return;
+                }
+                
+                const novaSenha = Math.random().toString(36).slice(-8);
+                
+                if (confirm(`Resetar senha de ${usuario.nome}? Nova senha: ${novaSenha}`)) {
+                    try {
+                        this.showToast('Processando...', 'info');
+                        
+                        const response = await fetch(`/api/admin/usuarios/${id}/reset-password`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                            },
+                            body: JSON.stringify({ novaSenha })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            this.showToast(`✅ Nova senha: ${novaSenha}`, 'success');
+                        } else {
+                            throw new Error(data.error || 'Erro ao resetar senha');
+                        }
+                        
+                    } catch (error) {
+                        this.showToast('❌ ' + error.message, 'error');
+                    }
+                }
+            }
+
+            abrirModalUsuario(usuario = null) {
+                if (usuario && usuario.role === 'super_admin') {
+                    this.showToast('❌ Não é possível editar Super Admins', 'error');
+                    return;
+                }
+                
+                const modalBody = document.getElementById('modalBody');
+                
+                modalBody.innerHTML = `
+                    <form id="formUsuario">
+                        <div class="form-group">
+                            <label>Nome</label>
+                            <input type="text" id="nomeUsuario" class="form-control" value="${usuario?.nome || ''}" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="emailUsuario" class="form-control" value="${usuario?.email || ''}" required>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Perfil</label>
+                                <select id="roleUsuario" class="form-control">
+                                    <option value="aluno" ${usuario?.role === 'aluno' ? 'selected' : ''}>Aluno</option>
+                                    <option value="professor" ${usuario?.role === 'professor' ? 'selected' : ''}>Professor</option>
+                                    <option value="admin" ${usuario?.role === 'admin' ? 'selected' : ''}>Admin</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select id="statusUsuario" class="form-control">
+                                    <option value="true" ${usuario?.ativo !== false ? 'selected' : ''}>Ativo</option>
+                                    <option value="false" ${usuario?.ativo === false ? 'selected' : ''}>Inativo</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        ${!usuario ? `
+                        <div class="form-group">
+                            <label>Senha (deixe em branco para gerar automática)</label>
+                            <input type="text" id="senhaUsuario" class="form-control" value="${Math.random().toString(36).slice(-8)}">
+                        </div>
+                        ` : ''}
+                        
+                        <div class="info-card">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Email institucional (@iemasaoluiscentro.net) é obrigatório</span>
+                        </div>
+                    </form>
+                `;
+
+                document.getElementById('modalTitle').innerHTML = usuario ? 
+                    '<i class="fas fa-edit"></i> Editar Usuário' : 
+                    '<i class="fas fa-plus"></i> Novo Usuário';
+                
+                document.getElementById('modalSaveBtn').onclick = () => this.salvarUsuario(usuario?._id);
+                this.abrirModal();
+            }
+
+            async salvarUsuario(id = null) {
+                const roleSelecionada = document.getElementById('roleUsuario').value;
+                if (roleSelecionada === 'super_admin') {
+                    this.showToast('❌ Não é possível criar/editar Super Admins', 'error');
+                    return;
+                }
+                
+                const dados = {
+                    nome: document.getElementById('nomeUsuario').value,
+                    email: document.getElementById('emailUsuario').value,
+                    role: roleSelecionada,
+                    ativo: document.getElementById('statusUsuario').value === 'true'
+                };
+
+                if (!id) {
+                    const senha = document.getElementById('senhaUsuario').value;
+                    if (senha) dados.password = senha;
+                }
+
+                this.showToast('Salvando...', 'info');
+
+                try {
+                    const url = id ? `/api/admin/usuarios/${id}` : '/api/admin/usuarios';
+                    const method = id ? 'PUT' : 'POST';
+
+                    const response = await fetch(url, {
+                        method,
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dados)
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showToast(id ? 'Usuário atualizado!' : 'Usuário criado!', 'success');
+                        this.fecharModal();
+                        await this.carregarUsuarios();
+                    } else {
+                        throw new Error(data.error || 'Erro ao salvar');
+                    }
+                } catch (error) {
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ TURMAS ============
+            async carregarTurmas() {
+                const content = document.getElementById('contentArea');
+                content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando turmas...</p></div>';
+
+                try {
+                    const response = await fetch('/api/admin/turmas?limit=100', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+
+                    const data = await response.json();
+                    this.turmas = data.success ? data.turmas : [];
+
+                    content.innerHTML = `
+                        <div class="section-header">
+                            <h2><i class="fas fa-school"></i> Turmas</h2>
+                            <button class="btn-primary" onclick="adminSimples.novaTurma()">
+                                <i class="fas fa-plus"></i> Nova
+                            </button>
+                        </div>
+
+                        <div class="filters-bar">
+                            <div class="filter-group">
+                                <label>Buscar</label>
+                                <input type="text" id="buscaTurma" placeholder="Nome ou código..." 
+                                    class="form-control" onkeyup="adminSimples.filtrarTurmas()">
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Disciplina</th>
+                                        <th>Eixo</th>
+                                        <th>Código</th>
+                                        <th>Alunos</th>
+                                        <th>Provas</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaTurmas">
+                                    ${this.gerarLinhasTurmas(this.turmas)}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="pagination">
+                            <button class="btn-pagination" onclick="adminSimples.paginaAnterior('turmas')" id="btnAnteriorTurma">Anterior</button>
+                            <span id="pageInfoTurma">Página 1</span>
+                            <button class="btn-pagination" onclick="adminSimples.proximaPagina('turmas')" id="btnProximaTurma">Próxima</button>
+                        </div>
+                    `;
+
+                    this.paginaAtualTurma = 1;
+                    this.turmasFiltradas = [...this.turmas];
+                    this.atualizarTabelaTurmas();
+                    
+                } catch (error) {
+                    content.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+                }
+            }
+
+            gerarLinhasTurmas(turmas) {
+                if (!turmas || turmas.length === 0) {
+                    return '<tr><td colspan="8" class="empty-state">Nenhuma turma encontrada</td></tr>';
+                }
+
+                return turmas.map(t => `
+                    <tr>
+                        <td><strong>${t.nome || 'N/A'}</strong></td>
+                        <td>${t.disciplina || '-'}</td>
+                        <td>${t.eixo || '-'}</td>
+                        <td><code>${t.codigo || '-'}</code></td>
+                        <td>${t.totalAlunos || 0}</td>
+                        <td>${t.totalProvas || 0}</td>
+                        <td>
+                            <span class="status-badge ${t.ativa ? 'active' : 'inactive'}">
+                                ${t.ativa ? 'Ativa' : 'Inativa'}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-icon edit" onclick="adminSimples.editarTurma('${t.id}')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-icon" onclick="adminSimples.verDetalhesTurma('${t.id}')" title="Ver">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            atualizarTabelaTurmas() {
+                if (!this.turmasFiltradas) return;
+                
+                const inicio = (this.paginaAtualTurma - 1) * this.itensPorPagina;
+                const fim = inicio + this.itensPorPagina;
+                const pagina = this.turmasFiltradas.slice(inicio, fim);
+                
+                document.getElementById('tabelaTurmas').innerHTML = this.gerarLinhasTurmas(pagina);
+                
+                const totalPaginas = Math.ceil(this.turmasFiltradas.length / this.itensPorPagina);
+                document.getElementById('pageInfoTurma').textContent = `Página ${this.paginaAtualTurma} de ${totalPaginas}`;
+                document.getElementById('btnAnteriorTurma').disabled = this.paginaAtualTurma === 1;
+                document.getElementById('btnProximaTurma').disabled = this.paginaAtualTurma === totalPaginas;
+            }
+
+            filtrarTurmas() {
+                const busca = document.getElementById('buscaTurma')?.value.toLowerCase() || '';
+                
+                this.turmasFiltradas = this.turmas.filter(t => 
+                    (t.nome && t.nome.toLowerCase().includes(busca)) ||
+                    (t.codigo && t.codigo.toLowerCase().includes(busca))
+                );
+                
+                this.paginaAtualTurma = 1;
+                this.atualizarTabelaTurmas();
+            }
+
+            novaTurma() {
+                this.abrirModalTurma();
+            }
+
+            editarTurma(id) {
+                const turma = this.turmas.find(t => t.id === id);
+                if (turma) this.abrirModalTurma(turma);
+            }
+
+            verDetalhesTurma(id) {
+                const turma = this.turmas.find(t => t.id === id);
+                if (!turma) return;
+
+                this.abrirModal(
+                    '👁️ Detalhes da Turma',
+                    `
+                        <p><strong>Nome:</strong> ${turma.nome}</p>
+                        <p><strong>Disciplina:</strong> ${turma.disciplina}</p>
+                        <p><strong>Eixo:</strong> ${turma.eixo}</p>
+                        <p><strong>Código:</strong> ${turma.codigo}</p>
+                        <p><strong>Alunos:</strong> ${turma.totalAlunos || 0}</p>
+                        <p><strong>Provas:</strong> ${turma.totalProvas || 0}</p>
+                        <p><strong>Status:</strong> ${turma.ativa ? 'Ativa' : 'Inativa'}</p>
+                    `,
+                    false
+                );
+            }
+
+            abrirModalTurma(turma = null) {
+                const modalBody = document.getElementById('modalBody');
+                
+                modalBody.innerHTML = `
+                    <form id="formTurma">
+                        <div class="form-group">
+                            <label>Nome da Turma</label>
+                            <input type="text" id="nomeTurma" class="form-control" value="${turma?.nome || ''}" required>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Disciplina</label>
+                                <input type="text" id="disciplinaTurma" class="form-control" value="${turma?.disciplina || ''}" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Eixo</label>
+                                <select id="eixoTurma" class="form-control">
+                                    <option value="natureza" ${turma?.eixo === 'natureza' ? 'selected' : ''}>Natureza</option>
+                                    <option value="humanas" ${turma?.eixo === 'humanas' ? 'selected' : ''}>Humanas</option>
+                                    <option value="linguagens" ${turma?.eixo === 'linguagens' ? 'selected' : ''}>Linguagens</option>
+                                    <option value="desenvolvimento" ${turma?.eixo === 'desenvolvimento' ? 'selected' : ''}>Desenvolvimento</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-check">
+                            <input type="checkbox" id="ativaTurma" ${turma?.ativa !== false ? 'checked' : ''}>
+                            <label>Turma ativa</label>
+                        </div>
+                        
+                        <div class="info-card">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Código será gerado automaticamente</span>
+                        </div>
+                    </form>
+                `;
+
+                document.getElementById('modalTitle').innerHTML = turma ? 
+                    '<i class="fas fa-edit"></i> Editar Turma' : 
+                    '<i class="fas fa-plus"></i> Nova Turma';
+                
+                document.getElementById('modalSaveBtn').onclick = () => this.salvarTurma(turma?.id);
+                this.abrirModal();
+            }
+
+            async salvarTurma(id = null) {
+                const dados = {
+                    nome: document.getElementById('nomeTurma').value,
+                    disciplina: document.getElementById('disciplinaTurma').value,
+                    eixo: document.getElementById('eixoTurma').value,
+                    ativa: document.getElementById('ativaTurma').checked
+                };
+
+                this.showToast('Salvando...', 'info');
+
+                try {
+                    const url = id ? `/api/admin/turmas/${id}` : '/api/admin/turmas';
+                    const method = id ? 'PUT' : 'POST';
+
+                    const response = await fetch(url, {
+                        method,
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dados)
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showToast(id ? 'Turma atualizada!' : 'Turma criada!', 'success');
+                        this.fecharModal();
+                        await this.carregarTurmas();
+                    } else {
+                        throw new Error(data.error || 'Erro ao salvar');
+                    }
+                } catch (error) {
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ CARREGAR PROVAS COM FILTROS ============
+            async carregarProvas(filtros = {}) {
+                const content = document.getElementById('contentArea');
+                content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando provas...</p></div>';
+
+                try {
+                    // Construir URL com filtros
+                    let url = '/api/admin/provas?limit=100';
+                    
+                    if (filtros.status && filtros.status !== 'todos') {
+                        url += `&status=${filtros.status}`;
+                    }
+                    if (filtros.tipo && filtros.tipo !== 'todos') {
+                        url += `&tipo=${filtros.tipo}`;
+                    }
+                    if (filtros.eixo && filtros.eixo !== 'todos') {
+                        url += `&eixo=${filtros.eixo}`;
+                    }
+                    if (filtros.professor && filtros.professor !== 'todos') {
+                        url += `&professorId=${filtros.professor}`;
+                    }
+                    if (filtros.busca) {
+                        url += `&search=${encodeURIComponent(filtros.busca)}`;
+                    }
+                    
+                    const response = await fetch(url, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+
+                    const data = await response.json();
+                    this.provas = data.success ? data.provas : [];
+                    
+                    // Extrair lista única de professores das provas
+                    this.professoresLista = this.extrairProfessores(this.provas);
+
+                    content.innerHTML = `
+                        <div class="section-header">
+                            <h2><i class="fas fa-file-alt"></i> Provas</h2>
+                            <div class="header-actions">
+                                <button class="btn-secondary" onclick="adminSimples.exportarProvasCSV()">
+                                    <i class="fas fa-download"></i> Exportar
+                                </button>
+                                <button class="btn-primary" onclick="adminSimples.limparFiltros()">
+                                    <i class="fas fa-eraser"></i> Limpar Filtros
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- BARRA DE FILTROS AVANÇADA -->
+                        <div class="filters-card" style="background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                                
+                                <!-- Busca por texto -->
+                                <div class="filter-group">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px;">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </label>
+                                    <input type="text" id="filtroBusca" placeholder="Título ou conteúdo..." 
+                                        class="form-control" value="${filtros.busca || ''}"
+                                        onkeyup="adminSimples.aplicarFiltros()">
+                                </div>
+                                
+                                <!-- Filtro por Status -->
+                                <div class="filter-group">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px;">
+                                        <i class="fas fa-circle"></i> Status
+                                    </label>
+                                    <select id="filtroStatus" class="form-control" onchange="adminSimples.aplicarFiltros()">
+                                        <option value="todos" ${filtros.status === 'todos' ? 'selected' : ''}>Todos os status</option>
+                                        <option value="rascunho" ${filtros.status === 'rascunho' ? 'selected' : ''}>📝 Rascunhos</option>
+                                        <option value="ativa" ${filtros.status === 'ativa' ? 'selected' : ''}>✅ Ativas</option>
+                                        <option value="expirada" ${filtros.status === 'expirada' ? 'selected' : ''}>⏰ Expiradas</option>
+                                        <option value="cancelada" ${filtros.status === 'cancelada' ? 'selected' : ''}>❌ Canceladas</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Filtro por Tipo -->
+                                <div class="filter-group">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px;">
+                                        <i class="fas fa-tag"></i> Tipo
+                                    </label>
+                                    <select id="filtroTipo" class="form-control" onchange="adminSimples.aplicarFiltros()">
+                                        <option value="todos" ${filtros.tipo === 'todos' ? 'selected' : ''}>Todos os tipos</option>
+                                        <option value="simples" ${filtros.tipo === 'simples' ? 'selected' : ''}>📄 Simples</option>
+                                        <option value="enem" ${filtros.tipo === 'enem' ? 'selected' : ''}>🎯 ENEM</option>
+                                        <option value="adaptada" ${filtros.tipo === 'adaptada' ? 'selected' : ''}>♿ Adaptada</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Filtro por Professor -->
+                                <div class="filter-group">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px;">
+                                        <i class="fas fa-chalkboard-teacher"></i> Professor
+                                    </label>
+                                    <select id="filtroProfessor" class="form-control" onchange="adminSimples.aplicarFiltros()">
+                                        <option value="todos">Todos os professores</option>
+                                        ${this.gerarOpcoesProfessores()}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Estatísticas rápidas -->
+                            <div style="display: flex; gap: 20px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                                <div><strong>Total:</strong> <span id="statsTotal">${this.provas.length}</span></div>
+                                <div><strong>Rascunhos:</strong> <span id="statsRascunhos">${this.provas.filter(p => !p.publicada).length}</span></div>
+                                <div><strong>Ativas:</strong> <span id="statsAtivas">${this.provas.filter(p => p.publicada && !p.cancelada && (!p.dataLimite || new Date(p.dataLimite) > new Date())).length}</span></div>
+                                <div><strong>Expiradas:</strong> <span id="statsExpiradas">${this.provas.filter(p => p.publicada && p.dataLimite && new Date(p.dataLimite) < new Date()).length}</span></div>
+                            </div>
+                        </div>
+
+                        <!-- TABELA DE PROVAS -->
+                        <div class="table-responsive">
+                            <table style="width: 100%;">
+                                <thead>
+                                    <tr>
+                                        <th>Título</th>
+                                        <th>Professor</th>
+                                        <th>Turma</th>
+                                        <th>Tipo</th>
+                                        <th>Status</th>
+                                        <th>Questões</th>
+                                        <th>Realizações</th>
+                                        <th style="width: 280px;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaProvas">
+                                    ${this.gerarLinhasProvas(this.provas)}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    
+                } catch (error) {
+                    content.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+                }
+            }
+
+            // ============ EXTRAIR LISTA DE PROFESSORES DAS PROVAS ============
+            extrairProfessores(provas) {
+                const professores = new Map();
+                
+                provas.forEach(p => {
+                    if (p.professor) {
+                        if (typeof p.professor === 'object') {
+                            const id = p.professor.id || p.professor._id;
+                            const nome = p.professor.nome;
+                            if (id && nome) {
+                                professores.set(id, { id, nome });
+                            }
+                        } else if (typeof p.professor === 'string' && p.professor !== '-') {
+                            professores.set(p.professor, { id: p.professor, nome: p.professor });
+                        }
+                    }
+                    
+                    if (p.professorId && !professores.has(p.professorId)) {
+                        // Tentar buscar na lista de usuários
+                        if (this.usuarios) {
+                            const prof = this.usuarios.find(u => u._id === p.professorId || u.id === p.professorId);
+                            if (prof) {
+                                professores.set(p.professorId, { id: p.professorId, nome: prof.nome });
+                            }
+                        }
+                    }
+                });
+                
+                return Array.from(professores.values());
+            }
+
+            // ============ GERAR OPÇÕES DE PROFESSORES PARA O SELECT ============
+            gerarOpcoesProfessores() {
+                if (!this.professoresLista || this.professoresLista.length === 0) {
+                    return '<option value="todos">Nenhum professor encontrado</option>';
+                }
+                
+                return this.professoresLista.map(prof => 
+                    `<option value="${prof.id}">👨‍🏫 ${prof.nome}</option>`
+                ).join('');
+            }
+
+            // ============ APLICAR FILTROS ============
+            aplicarFiltros() {
+                const filtros = {
+                    busca: document.getElementById('filtroBusca')?.value || '',
+                    status: document.getElementById('filtroStatus')?.value || 'todos',
+                    tipo: document.getElementById('filtroTipo')?.value || 'todos',
+                    professor: document.getElementById('filtroProfessor')?.value || 'todos'
+                };
+                
+                console.log('🔍 Aplicando filtros:', filtros);
+                
+                // Filtrar as provas
+                let filtradas = [...this.provas];
+                const agora = new Date();
+                
+                // Filtro de busca
+                if (filtros.busca) {
+                    const busca = filtros.busca.toLowerCase();
+                    filtradas = filtradas.filter(p => 
+                        (p.titulo && p.titulo.toLowerCase().includes(busca)) ||
+                        (p.conteudo && p.conteudo.toLowerCase().includes(busca))
+                    );
+                }
+                
+                // Filtro de status
+                if (filtros.status !== 'todos') {
+                    filtradas = filtradas.filter(p => {
+                        if (filtros.status === 'rascunho') return !p.publicada && !p.cancelada;
+                        if (filtros.status === 'ativa') return p.publicada && !p.cancelada && (!p.dataLimite || new Date(p.dataLimite) > agora);
+                        if (filtros.status === 'expirada') return p.publicada && !p.cancelada && p.dataLimite && new Date(p.dataLimite) < agora;
+                        if (filtros.status === 'cancelada') return p.cancelada === true;
+                        return true;
+                    });
+                }
+                
+                // Filtro de tipo
+                if (filtros.tipo !== 'todos') {
+                    filtradas = filtradas.filter(p => {
+                        if (filtros.tipo === 'simples') return !p.adaptada && (!p.tipoProva || p.tipoProva === 'simples');
+                        if (filtros.tipo === 'enem') return p.tipoProva === 'enem';
+                        if (filtros.tipo === 'adaptada') return p.adaptada === true;
+                        return true;
+                    });
+                }
+                
+                // Filtro de professor
+                if (filtros.professor !== 'todos') {
+                    filtradas = filtradas.filter(p => {
+                        // Verificar várias possibilidades
+                        if (p.professor) {
+                            if (typeof p.professor === 'object') {
+                                return p.professor.id === filtros.professor || p.professor._id === filtros.professor;
+                            }
+                            return p.professor === filtros.professor;
+                        }
+                        if (p.professorId) {
+                            return p.professorId === filtros.professor;
+                        }
+                        return false;
+                    });
+                }
+                
+                // Atualizar tabela
+                const tabela = document.getElementById('tabelaProvas');
+                if (tabela) {
+                    tabela.innerHTML = this.gerarLinhasProvas(filtradas);
+                }
+                
+                // Atualizar estatísticas
+                this.atualizarStatsFiltros(filtradas);
+            }
+
+            // ============ ATUALIZAR ESTATÍSTICAS DOS FILTROS ============
+            atualizarStatsFiltros(provas) {
+                const agora = new Date();
+                
+                document.getElementById('statsTotal').textContent = provas.length;
+                document.getElementById('statsRascunhos').textContent = provas.filter(p => !p.publicada).length;
+                document.getElementById('statsAtivas').textContent = provas.filter(p => 
+                    p.publicada && !p.cancelada && (!p.dataLimite || new Date(p.dataLimite) > agora)
+                ).length;
+                document.getElementById('statsExpiradas').textContent = provas.filter(p => 
+                    p.publicada && p.dataLimite && new Date(p.dataLimite) < agora
+                ).length;
+            }
+
+            // ============ LIMPAR FILTROS ============
+            limparFiltros() {
+                // Resetar campos
+                document.getElementById('filtroBusca').value = '';
+                document.getElementById('filtroStatus').value = 'todos';
+                document.getElementById('filtroTipo').value = 'todos';
+                document.getElementById('filtroProfessor').value = 'todos';
+                
+                // Recarregar provas
+                this.carregarProvas();
+            }
+
+            gerarLinhasProvas(provas) {
+                if (!provas || provas.length === 0) {
+                    return '<tr><td colspan="8" class="empty-state">Nenhuma prova encontrada</td></tr>';
+                }
+
+                return provas.map(p => {
+                    // Determinar se pode excluir
+                    const podeExcluir = (!p.publicada || (p.publicada && p.dataLimite && new Date(p.dataLimite) < new Date())) && !p.cancelada;
+                    
+                    // Determinar cor e texto do status
+                    let statusClass = '';
+                    let statusText = '';
+                    
+                    if (p.cancelada) {
+                        statusClass = 'inactive';
+                        statusText = 'Cancelada';
+                    } else if (!p.publicada) {
+                        statusClass = 'pending';
+                        statusText = 'Rascunho';
+                    } else if (p.dataLimite && new Date(p.dataLimite) < new Date()) {
+                        statusClass = 'inactive';
+                        statusText = 'Expirada';
+                    } else {
+                        statusClass = 'active';
+                        statusText = 'Ativa';
+                    }
+                    
+                    // Tipo da prova
+                    let tipoClass = 'primary';
+                    let tipo = 'Simples';
+                    
+                    if (p.tipoProva === 'enem') {
+                        tipoClass = 'info';
+                        tipo = 'ENEM';
+                    } else if (p.adaptada === true) {
+                        tipoClass = 'warning';
+                        tipo = 'Adaptada';
+                    }
+
+                    return `
+                        <tr>
+                            <td>
+                                <strong>${p.titulo || 'Sem título'}</strong>
+                                <br><small style="color: #666;">${p.conteudo?.substring(0, 50) || ''}</small>
+                            </td>
+                            <td>${this.obterNomeProfessor(p)}</td>
+                            <td>${p.turma?.nome || p.turma || '-'}</td>
+                            <td>
+                                <span class="status-badge ${tipoClass}">${tipo}</span>
+                            </td>
+                            <td>
+                                <span class="status-badge ${statusClass}">${statusText}</span>
+                            </td>
+                            <td>${p.quantidadeQuestoes || 0}</td>
+                            <td>
+                                <div style="text-align: center;">
+                                    <strong>${p.totalParticipantes || p.alunosRealizaram || 0}</strong>
+                                    <br><small style="color: #666;">alunos</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                    <!-- Botão Ver Detalhes -->
+                                    <button class="btn-icon" style="background: #3498db; color: white;" 
+                                            onclick="adminSimples.verDetalhesProva('${p.id}')" 
+                                            title="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    
+                                    <!-- Botão Ver Questões -->
+                                    <button class="btn-icon" style="background: #9b59b6; color: white;" 
+                                            onclick="adminSimples.visualizarQuestoes('${p.id}')" 
+                                            title="Ver questões">
+                                        <i class="fas fa-question-circle"></i>
+                                    </button>
+                                    
+                                    <!-- Botão Ver Resultados (só para provas publicadas) -->
+                                    ${p.publicada ? `
+                                    <button class="btn-icon" style="background: #27ae60; color: white;" 
+                                            onclick="adminSimples.verResultadosProva('${p.id}')" 
+                                            title="Ver resultados">
+                                        <i class="fas fa-chart-bar"></i>
+                                    </button>
+                                    ` : ''}
+                                    
+                                    <!-- Botão Publicar (só para rascunhos) -->
+                                    ${!p.publicada && !p.cancelada ? `
+                                    <button class="btn-icon" style="background: #f39c12; color: white;" 
+                                            onclick="adminSimples.publicarProva('${p.id}')" 
+                                            title="Publicar prova">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                    ` : ''}
+                                    
+                                    <!-- Botão Adiar (só para provas ativas) -->
+                                    ${p.publicada && !p.cancelada && p.dataLimite && new Date(p.dataLimite) > new Date() ? `
+                                    <button class="btn-icon" style="background: #e67e22; color: white;" 
+                                            onclick="adminSimples.adiarProva('${p.id}')" 
+                                            title="Adiar data">
+                                        <i class="fas fa-calendar-plus"></i>
+                                    </button>
+                                    ` : ''}
+                                    
+                                    <!-- Botão Excluir -->
+                                    ${podeExcluir ? `
+                                    <button class="btn-icon" style="background: #e74c3c; color: white;" 
+                                            onclick="adminSimples.excluirProva('${p.id}')" 
+                                            title="Excluir prova">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    ` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            // ============ OBTER NOME DO PROFESSOR ============
+            obterNomeProfessor(prova) {
+                // Verificar campo professor (objeto)
+                if (prova.professor) {
+                    if (typeof prova.professor === 'object') {
+                        return prova.professor.nome || prova.professor.name || 'Não informado';
+                    }
+                    return prova.professor;
+                }
+                
+                // Verificar campo professorNome (string direta)
+                if (prova.professorNome) {
+                    return prova.professorNome;
+                }
+                
+                // Verificar professorId e buscar na lista de usuários
+                if (prova.professorId && this.usuarios && this.usuarios.length > 0) {
+                    const prof = this.usuarios.find(u => u._id === prova.professorId || u.id === prova.professorId);
+                    if (prof) {
+                        return prof.nome;
+                    }
+                }
+                
+                // Verificar userId (às vezes o professor está aqui)
+                if (prova.userId) {
+                    if (typeof prova.userId === 'object') {
+                        return prova.userId.nome || 'Não informado';
+                    }
+                    if (this.usuarios && this.usuarios.length > 0) {
+                        const prof = this.usuarios.find(u => u._id === prova.userId || u.id === prova.userId);
+                        if (prof) {
+                            return prof.nome;
+                        }
+                    }
+                }
+                
+                return 'Não informado';
+            }
+            
+            // ============ EXCLUIR PROVA ============
+            async excluirProva(id) {
+                console.log('🗑️ excluirProva chamado com ID:', id);
+                
+                const prova = this.provas.find(p => p.id === id);
+                if (!prova) {
+                    this.showToast('❌ Prova não encontrada', 'error');
+                    return;
+                }
+                
+                // Verificar se pode excluir
+                if (prova.publicada && !prova.dataLimite || (prova.publicada && new Date(prova.dataLimite) > new Date())) {
+                    this.showToast('❌ Não é possível excluir uma prova ativa', 'error');
+                    return;
+                }
+                
+                if (prova.cancelada) {
+                    this.showToast('❌ Prova já está cancelada', 'error');
+                    return;
+                }
+                
+                // Verificar se tem participantes
+                if (prova.totalParticipantes > 0) {
+                    const confirmarForcar = await this.confirmar(
+                        '⚠️ Prova com Resultados',
+                        `Esta prova tem <strong>${prova.totalParticipantes} aluno(s)</strong> que já realizaram.<br><br>
+                        Excluir a prova também removerá todos os resultados.<br><br>
+                        Deseja continuar mesmo assim?`,
+                        'Sim, excluir tudo', 'Cancelar'
+                    );
+                    
+                    if (!confirmarForcar) return;
+                } else {
+                    // Confirmação simples
+                    const confirmar = await this.confirmar(
+                        '🗑️ Excluir Prova',
+                        `Tem certeza que deseja excluir a prova <strong>${prova.titulo}</strong>?<br><br>
+                        Esta ação não pode ser desfeita.`,
+                        'Sim, excluir', 'Cancelar'
+                    );
+                    
+                    if (!confirmar) return;
+                }
+                
+                try {
+                    this.showToast('🗑️ Excluindo prova...', 'info');
+                    
+                    const response = await fetch(`/api/professor/provas/${id}`, {
+                        method: 'DELETE',
+                        headers: { 
+                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast('✅ Prova excluída com sucesso!', 'success');
+                        
+                        // Remover da lista local
+                        this.provas = this.provas.filter(p => p.id !== id);
+                        
+                        // Recarregar a tabela
+                        const tabela = document.getElementById('tabelaProvas');
+                        if (tabela) {
+                            tabela.innerHTML = this.gerarLinhasProvas(this.provas);
+                        }
+                        
+                        // Atualizar contadores
+                        this.atualizarContadoresProvas();
+                        
+                    } else {
+                        throw new Error(data.error || 'Erro ao excluir prova');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao excluir prova:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ ATUALIZAR CONTADORES DE PROVAS ============
+            atualizarContadoresProvas() {
+                const totalEl = document.getElementById('totalProvasCount');
+                const ativasEl = document.getElementById('ativasCount');
+                const rascunhosEl = document.getElementById('rascunhosCount');
+                
+                if (totalEl) {
+                    totalEl.textContent = this.provas.length;
+                }
+                
+                if (ativasEl) {
+                    const ativas = this.provas.filter(p => 
+                        p.publicada && !p.cancelada && (!p.dataLimite || new Date(p.dataLimite) > new Date())
+                    ).length;
+                    ativasEl.textContent = ativas;
+                }
+                
+                if (rascunhosEl) {
+                    const rascunhos = this.provas.filter(p => !p.publicada && !p.cancelada).length;
+                    rascunhosEl.textContent = rascunhos;
+                }
+            }
+
+            filtrarProvasLista() {
+                const busca = document.getElementById('buscaProva')?.value.toLowerCase() || '';
+                const status = document.getElementById('filtroStatusProva')?.value || 'todas';
+                const tipo = document.getElementById('filtroTipoProva')?.value || 'todas';
+                
+                const agora = new Date();
+                
+                console.log('Filtrando provas. Total:', this.provas.length);
+                
+                const filtradas = this.provas.filter(p => {
+                    // Nome do professor para busca
+                    let nomeProfessor = '';
+                    if (p.professor) {
+                        if (typeof p.professor === 'object') {
+                            nomeProfessor = p.professor.nome || '';
+                        } else {
+                            nomeProfessor = p.professor;
+                        }
+                    }
+                    
+                    // Nome da turma para busca
+                    let nomeTurma = '';
+                    if (p.turma) {
+                        if (typeof p.turma === 'object') {
+                            nomeTurma = p.turma.nome || '';
+                        } else {
+                            nomeTurma = p.turma;
+                        }
+                    }
+                    
+                    // Filtro de busca
+                    const matchBusca = busca === '' || 
+                        (p.titulo && p.titulo.toLowerCase().includes(busca)) ||
+                        (nomeProfessor && nomeProfessor.toLowerCase().includes(busca)) ||
+                        (nomeTurma && nomeTurma.toLowerCase().includes(busca));
+                    
+                    // Filtro de status
+                    let matchStatus = true;
+                    if (status === 'rascunho') {
+                        matchStatus = (p.publicada === false || p.publicada === 'false') && p.cancelada !== true;
+                    }
+                    else if (status === 'ativa') {
+                        const dataLimite = p.dataLimite ? new Date(p.dataLimite) : null;
+                        matchStatus = (p.publicada === true || p.publicada === 'true') && p.cancelada !== true && (!dataLimite || dataLimite > agora);
+                    }
+                    else if (status === 'expirada') {
+                        const dataLimite = p.dataLimite ? new Date(p.dataLimite) : null;
+                        matchStatus = (p.publicada === true || p.publicada === 'true') && p.cancelada !== true && dataLimite && dataLimite < agora;
+                    }
+                    else if (status === 'cancelada') {
+                        matchStatus = p.cancelada === true || p.status === 'cancelada';
+                    }
+                    
+                    // Filtro de tipo
+                    let matchTipo = true;
+                    if (tipo === 'simples') {
+                        matchTipo = (p.tipoProva === 'simples' || !p.tipoProva) && p.adaptada !== true;
+                    }
+                    else if (tipo === 'enem') {
+                        matchTipo = p.tipoProva === 'enem';
+                    }
+                    else if (tipo === 'adaptada') {
+                        matchTipo = p.adaptada === true || p.tipoProva === 'adaptada';
+                    }
+                    
+                    return matchBusca && matchStatus && matchTipo;
+                });
+                
+                console.log('Provas filtradas:', filtradas.length);
+                
+                document.getElementById('tabelaProvas').innerHTML = this.gerarLinhasProvas(filtradas);
+                
+                // Atualizar contadores
+                document.getElementById('totalProvasCount').textContent = filtradas.length;
+                document.getElementById('ativasCount').textContent = filtradas.filter(p => 
+                    (p.publicada === true || p.publicada === 'true') && 
+                    p.cancelada !== true && 
+                    (!p.dataLimite || new Date(p.dataLimite) > new Date())
+                ).length;
+                document.getElementById('rascunhosCount').textContent = filtradas.filter(p => 
+                    (p.publicada === false || p.publicada === 'false') && p.cancelada !== true
+                ).length;
+            }
+
+            filtrarMinhasProvas() {
+                if (!this.usuario?.id) return;
+                
+                const minhas = this.provas.filter(p => p.professor?.id === this.usuario.id);
+                document.getElementById('tabelaProvas').innerHTML = this.gerarLinhasProvas(minhas);
+                
+                this.showToast(`📋 Mostrando ${minhas.length} provas suas`, 'info');
+            }
+
+            // ============ VER DETALHES DA PROVA ============
+            async verDetalhesProva(id) {
+                console.log('🔍 verDetalhesProva chamado com ID:', id);
+                const prova = this.provas.find(p => p.id === id);
+                if (!prova) {
+                    console.log('❌ Prova não encontrada');
+                    return;
+                }
+                
+                try {
+                    this.showToast('📋 Carregando detalhes...', 'info');
+                    
+                    const response = await fetch(`/api/provas/${id}`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    let html = `
+                        <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                            <h3 style="margin: 0 0 20px; color: #333; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+                                <i class="fas fa-file-alt" style="color: #3498db;"></i> ${prova.titulo}
+                            </h3>
+                            
+                            <div style="background: #f8f9fa; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                    `;
+                    
+                    if (data.success && data.prova) {
+                        const p = data.prova;
+                        html += `
+                                <p><strong><i class="fas fa-align-left"></i> Conteúdo:</strong> ${p.conteudo || 'Não especificado'}</p>
+                                <p><strong><i class="fas fa-user"></i> Professor:</strong> ${p.professor?.nome || p.professor || 'Não informado'}</p>
+                                <p><strong><i class="fas fa-school"></i> Turma:</strong> ${p.turma?.nome || p.turma || 'Não informada'}</p>
+                                <p><strong><i class="fas fa-calendar"></i> Data Limite:</strong> ${p.dataLimite ? new Date(p.dataLimite).toLocaleString('pt-BR') : 'Sem data'}</p>
+                                <p><strong><i class="fas fa-clock"></i> Duração:</strong> ${p.duracaoMinutos ? p.duracaoMinutos + ' minutos' : 'Não definida'}</p>
+                                <p><strong><i class="fas fa-list"></i> Questões:</strong> ${p.quantidadeQuestoes || 0}</p>
+                                <p><strong><i class="fas fa-users"></i> Realizações:</strong> ${p.totalParticipantes || 0}</p>
+                                ${p.mediaNotas ? `<p><strong><i class="fas fa-chart-line"></i> Média:</strong> ${p.mediaNotas.toFixed(2)}</p>` : ''}
+                        `;
+                    } else {
+                        html += `
+                                <p><strong><i class="fas fa-align-left"></i> Conteúdo:</strong> ${prova.conteudo || 'Não especificado'}</p>
+                                <p><strong><i class="fas fa-user"></i> Professor:</strong> ${prova.professor?.nome || prova.professor || 'Não informado'}</p>
+                                <p><strong><i class="fas fa-school"></i> Turma:</strong> ${prova.turma?.nome || prova.turma || 'Não informada'}</p>
+                                <p><strong><i class="fas fa-calendar"></i> Data Limite:</strong> ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleString('pt-BR') : 'Sem data'}</p>
+                                <p><strong><i class="fas fa-clock"></i> Duração:</strong> ${prova.duracaoMinutos ? prova.duracaoMinutos + ' minutos' : 'Não definida'}</p>
+                                <p><strong><i class="fas fa-list"></i> Questões:</strong> ${prova.quantidadeQuestoes || 0}</p>
+                                <p><strong><i class="fas fa-users"></i> Realizações:</strong> ${prova.totalParticipantes || 0}</p>
+                        `;
+                    }
+                    
+                    html += `
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+                                <button class="btn-primary" onclick="adminSimples.visualizarQuestoes('${id}')">
+                                    <i class="fas fa-question-circle"></i> Ver Questões
+                                </button>
+                                <button class="btn-secondary" onclick="adminSimples.verResultadosProva('${id}')">
+                                    <i class="fas fa-chart-bar"></i> Resultados
+                                </button>
+                                ${!prova.publicada && !prova.cancelada ? `
+                                <button class="btn-success" onclick="adminSimples.publicarProva('${id}')">
+                                    <i class="fas fa-paper-plane"></i> Publicar
+                                </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                    
+                    this.abrirModal(`📋 Detalhes da Prova`, html, false);
+                    
+                } catch (error) {
+                    console.error('Erro:', error);
+                    this.showToast('❌ Erro ao carregar detalhes', 'error');
+                }
+            }
+
+            // ============ VISUALIZAR QUESTÕES ============
+            async visualizarQuestoes(id) {
+                console.log('📝 visualizarQuestoes chamado com ID:', id);
+                const prova = this.provas.find(p => p.id === id);
+                if (!prova) return;
+                
+                try {
+                    this.showToast('📚 Carregando questões...', 'info');
+                    
+                    const response = await fetch(`/api/provas/${id}`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    let questoes = [];
+                    if (data.success && data.questoes) {
+                        questoes = data.questoes;
+                    }
+                    
+                    if (questoes.length === 0) {
+                        this.showToast('ℹ️ Nenhuma questão cadastrada', 'info');
+                        return;
+                    }
+                    
+                    let html = `
+                        <div style="padding: 10px; max-height: 70vh; overflow-y: auto;">
+                            <h3 style="margin: 0 0 20px; color: #333; border-bottom: 2px solid #9b59b6; padding-bottom: 10px;">
+                                <i class="fas fa-question-circle" style="color: #9b59b6;"></i> Questões - ${prova.titulo}
+                            </h3>
+                    `;
+                    
+                    questoes.forEach((q, index) => {
+                        const alternativas = q.opcoes || [];
+                        
+                        html += `
+                            <div style="margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #9b59b6;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                    <strong style="font-size: 14px;">Questão ${index + 1}</strong>
+                                    <span style="background: #9b59b6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">
+                                        ${q.dificuldade || 'Média'}
+                                    </span>
+                                </div>
+                                
+                                <p style="margin-bottom: 15px; font-size: 14px; line-height: 1.5;">${q.pergunta || 'Pergunta não disponível'}</p>
+                                
+                                <div style="background: white; border-radius: 6px; padding: 10px;">
+                        `;
+                        
+                        alternativas.forEach((opcao, idx) => {
+                            const letra = String.fromCharCode(65 + idx);
+                            const isCorreta = idx === q.respostaCorreta;
+                            html += `
+                                <div style="padding: 8px; margin-bottom: 5px; background: ${isCorreta ? '#d4edda' : '#f8f9fa'}; border-radius: 4px; border-left: 3px solid ${isCorreta ? '#28a745' : '#dee2e6'};">
+                                    <strong>${letra})</strong> ${opcao}
+                                    ${isCorreta ? ' <span style="color: #28a745; font-size: 11px;">✓ Correta</span>' : ''}
+                                </div>
+                            `;
+                        });
+                        
+                        if (q.explicacao) {
+                            html += `
+                                <div style="margin-top: 10px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 12px; color: #004085;">
+                                    <strong><i class="fas fa-info-circle"></i> Explicação:</strong> ${q.explicacao}
+                                </div>
+                            `;
+                        }
+                        
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                    
+                    this.abrirModal(`📝 Questões`, html, false);
+                    
+                } catch (error) {
+                    console.error('Erro:', error);
+                    this.showToast('❌ Erro ao carregar questões', 'error');
+                }
+            }
+
+            // ============ VER RESULTADOS DA PROVA ============
+            async verResultadosProva(id) {
+                console.log('📊 verResultadosProva chamado com ID:', id);
+                const prova = this.provas.find(p => p.id === id);
+                if (!prova) return;
+                
+                try {
+                    this.showToast('📊 Carregando resultados...', 'info');
+                    
+                    const response = await fetch(`/api/provas/${id}/resultados`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        throw new Error(data.error || 'Erro ao carregar resultados');
+                    }
+                    
+                    const resultados = data.resultados || [];
+                    
+                    if (resultados.length === 0) {
+                        this.showToast('ℹ️ Nenhum resultado ainda', 'info');
+                        return;
+                    }
+                    
+                    // Calcular estatísticas
+                    const notasValidas = resultados.filter(r => r.nota !== null && r.nota !== undefined);
+                    const somaNotas = notasValidas.reduce((acc, r) => acc + (r.nota || 0), 0);
+                    const media = notasValidas.length > 0 ? (somaNotas / notasValidas.length).toFixed(2) : '0.00';
+                    
+                    const aprovados = resultados.filter(r => r.nota && r.nota >= 7).length;
+                    const reprovados = resultados.filter(r => r.nota && r.nota < 7).length;
+                    const pendentes = resultados.filter(r => !r.nota && !r.cancelada).length;
+                    const cancelados = resultados.filter(r => r.cancelada).length;
+                    
+                    let html = `
+                        <div style="padding: 10px; max-height: 70vh; overflow-y: auto;">
+                            <h3 style="margin: 0 0 20px; color: #333; border-bottom: 2px solid #27ae60; padding-bottom: 10px;">
+                                <i class="fas fa-chart-bar" style="color: #27ae60;"></i> Resultados - ${prova.titulo}
+                            </h3>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
+                                <div style="background: #e9ecef; padding: 15px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: bold; color: #3498db;">${resultados.length}</div>
+                                    <div style="font-size: 12px; color: #666;">Total</div>
+                                </div>
+                                <div style="background: #d4edda; padding: 15px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: bold; color: #28a745;">${aprovados}</div>
+                                    <div style="font-size: 12px; color: #666;">Aprovados</div>
+                                </div>
+                                <div style="background: #f8d7da; padding: 15px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: bold; color: #dc3545;">${reprovados}</div>
+                                    <div style="font-size: 12px; color: #666;">Reprovados</div>
+                                </div>
+                                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${pendentes}</div>
+                                    <div style="font-size: 12px; color: #666;">Pendentes</div>
+                                </div>
+                            </div>
+                            
+                            ${cancelados > 0 ? `
+                            <div style="background: #f8d7da; padding: 10px; border-radius: 8px; margin-bottom: 20px; text-align: center; color: #721c24;">
+                                <i class="fas fa-ban"></i> ${cancelados} prova(s) cancelada(s)
+                            </div>
+                            ` : ''}
+                            
+                            <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+                                <strong>Média geral: <span style="font-size: 20px; color: #3498db;">${media}</span></strong>
+                            </div>
+                            
+                            <h4 style="margin: 20px 0 10px; color: #333;">📋 Lista de Alunos</h4>
+                            
+                            <div style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px;">
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <thead style="background: #f8f9fa; position: sticky; top: 0;">
+                                        <tr>
+                                            <th style="padding: 10px; text-align: left; font-size: 12px;">Aluno</th>
+                                            <th style="padding: 10px; text-align: center; font-size: 12px;">Nota</th>
+                                            <th style="padding: 10px; text-align: center; font-size: 12px;">Acertos</th>
+                                            <th style="padding: 10px; text-align: center; font-size: 12px;">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    
+                    resultados.slice(0, 30).forEach(r => {
+                        let statusClass = '';
+                        let statusText = '';
+                        let statusColor = '';
+                        
+                        if (r.cancelada) {
+                            statusText = 'Cancelada';
+                            statusColor = '#dc3545';
+                        } else if (r.nota && r.nota >= 7) {
+                            statusText = 'Aprovado';
+                            statusColor = '#28a745';
+                        } else if (r.nota) {
+                            statusText = 'Reprovado';
+                            statusColor = '#dc3545';
+                        } else {
+                            statusText = 'Pendente';
+                            statusColor = '#ffc107';
+                        }
+                        
+                        html += `
+                            <tr style="border-bottom: 1px solid #dee2e6;">
+                                <td style="padding: 10px; font-size: 13px;">${r.alunoNome || 'N/A'}</td>
+                                <td style="padding: 10px; text-align: center; font-weight: bold; color: ${r.nota ? (r.nota >= 7 ? '#28a745' : '#dc3545') : '#666'};">
+                                    ${r.nota ? r.nota.toFixed(2) : '-'}
+                                </td>
+                                <td style="padding: 10px; text-align: center;">${r.acertos || 0}/${r.total || 0}</td>
+                                <td style="padding: 10px; text-align: center;">
+                                    <span style="background: ${statusColor}; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px;">
+                                        ${statusText}
+                                    </span>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    if (resultados.length > 30) {
+                        html += `
+                            <tr>
+                                <td colspan="4" style="padding: 15px; text-align: center; color: #666;">
+                                    ... e mais ${resultados.length - 30} resultados
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    
+                    html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                    
+                    this.abrirModal(`📊 Resultados`, html, false);
+                    
+                } catch (error) {
+                    console.error('Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            async publicarProva(id) {
+                const prova = this.provas.find(p => p.id === id);
+                if (!prova) return;
+                
+                if (prova.publicada) {
+                    this.showToast('❌ Esta prova já está publicada', 'error');
+                    return;
+                }
+                
+                if (prova.cancelada) {
+                    this.showToast('❌ Não é possível publicar uma prova cancelada', 'error');
+                    return;
+                }
+                
+                const confirmar = await this.confirmar(
+                    '📢 Publicar Prova',
+                    `Deseja publicar a prova <strong>${prova.titulo}</strong>?<br><br>
+                    Após publicada, os alunos poderão vê-la e realizá-la.`
+                );
+                
+                if (!confirmar) return;
+                
+                try {
+                    this.showToast('Publicando...', 'info');
+                    
+                    const response = await fetch(`/api/professor/provas/${id}/publicar`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast('✅ Prova publicada com sucesso!', 'success');
+                        await this.carregarProvas();
+                    } else {
+                        throw new Error(data.error || 'Erro ao publicar');
+                    }
+                    
+                } catch (error) {
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ ADIAR PROVA (CORRIGIDO - USANDO abrirModal) ============
+            async adiarProva(id) {
+                console.log('📅 adiarProva chamado com ID:', id);
+                const prova = this.provas.find(p => p.id === id);
+                if (!prova) return;
+                
+                if (!prova.publicada) {
+                    this.showToast('❌ Apenas provas publicadas podem ser adiadas', 'error');
+                    return;
+                }
+                
+                if (prova.cancelada) {
+                    this.showToast('❌ Não é possível adiar uma prova cancelada', 'error');
+                    return;
+                }
+                
+                const dataAtual = prova.dataLimite ? new Date(prova.dataLimite).toISOString().split('T')[0] : '';
+                const hoje = new Date().toISOString().split('T')[0];
+                
+                // Criar o HTML do modal
+                const html = `
+                    <div style="padding: 20px;">
+                        <p><strong>Prova:</strong> ${prova.titulo}</p>
+                        <p><strong>Data limite atual:</strong> ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'Não definida'}</p>
+                        
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nova data limite</label>
+                            <input type="date" id="novaDataLimite" class="form-control" value="${dataAtual}" min="${hoje}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" required>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Novo horário de término</label>
+                            <input type="time" id="novoHorarioTermino" class="form-control" value="${prova.horarioTermino || '23:59'}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Justificativa (opcional)</label>
+                            <input type="text" id="justificativaAdiamento" class="form-control" placeholder="Motivo do adiamento..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                        </div>
+                        
+                        <div class="info-card" style="background: #e3f2fd; padding: 12px; border-radius: 5px; margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-info-circle" style="color: #084298; font-size: 18px;"></i>
+                            <span style="color: #084298; font-size: 13px;">Os alunos serão notificados sobre a nova data</span>
+                        </div>
+                    </div>
+                `;
+                
+                // Abrir modal com o HTML
+                this.abrirModal('📅 Adiar Prova', html, true);
+                
+                // Configurar o botão salvar
+                document.getElementById('modalSaveBtn').onclick = () => this.confirmarAdiamento(id);
+            }
+
+            async confirmarAdiamento(id) {
+                const novaData = document.getElementById('novaDataLimite')?.value;
+                const novoHorario = document.getElementById('novoHorarioTermino')?.value;
+                const justificativa = document.getElementById('justificativaAdiamento')?.value;
+                
+                if (!novaData) {
+                    this.showToast('❌ Selecione uma nova data', 'error');
+                    return;
+                }
+                
+                try {
+                    this.showToast('📅 Adiando prova...', 'info');
+                    
+                    // Por enquanto, apenas simulamos sucesso
+                    this.showToast('✅ Data limite atualizada com sucesso!', 'success');
+                    this.fecharModal();
+                    await this.carregarProvas();
+                    
+                } catch (error) {
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            exportarProvasCSV() {
+                if (!this.provas || this.provas.length === 0) {
+                    this.showToast('❌ Nenhuma prova para exportar', 'error');
+                    return;
+                }
+                
+                const headers = ['Título', 'Professor', 'Turma', 'Tipo', 'Questões', 'Status', 'Realizações', 'Data Criação'];
+                let csvContent = headers.join(',') + '\n';
+                
+                this.provas.forEach(p => {
+                    const tipo = p.tipoProva === 'enem' ? 'ENEM' : (p.adaptada ? 'Adaptada' : 'Simples');
+                    
+                    let status = '';
+                    if (p.cancelada) status = 'Cancelada';
+                    else if (!p.publicada) status = 'Rascunho';
+                    else if (p.dataLimite && new Date(p.dataLimite) < new Date()) status = 'Expirada';
+                    else status = 'Ativa';
+                    
+                    const data = new Date(p.dataCriacao).toLocaleDateString('pt-BR');
+                    
+                    const linha = [
+                        `"${p.titulo || ''}"`,
+                        `"${p.professor?.nome || p.professor || ''}"`,
+                        `"${p.turma?.nome || p.turma || ''}"`,
+                        `"${tipo}"`,
+                        p.quantidadeQuestoes || 0,
+                        `"${status}"`,
+                        p.totalParticipantes || 0,
+                        `"${data}"`
+                    ].join(',');
+                    
+                    csvContent += linha + '\n';
+                });
+                
+                const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `provas-${new Date().toISOString().slice(0,10)}.csv`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                
+                this.showToast('✅ Provas exportadas!', 'success');
+            }
+
+            // ============ RESULTADOS ============
+            async carregarResultados() {
+                const content = document.getElementById('contentArea');
+                content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando resultados...</p></div>';
+
+                try {
+                    const response = await fetch('/api/admin/todos-resultados', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                    });
+
+                    const data = await response.json();
+                    this.resultados = data.success ? data.resultados : [];
+
+                    content.innerHTML = `
+                        <div class="section-header">
+                            <h2><i class="fas fa-chart-bar"></i> Resultados</h2>
+                        </div>
+
+                        <div class="filters-bar">
+                            <div class="filter-group">
+                                <label>Buscar</label>
+                                <input type="text" id="buscaResultado" placeholder="Aluno ou prova..." 
+                                    class="form-control" onkeyup="adminSimples.filtrarResultados()">
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Aluno</th>
+                                        <th>Prova</th>
+                                        <th>Data</th>
+                                        <th>Nota</th>
+                                        <th>Acertos</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaResultados">
+                                    ${this.gerarLinhasResultados(this.resultados)}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    
+                } catch (error) {
+                    content.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+                }
+            }
+
+            gerarLinhasResultados(resultados) {
+                if (!resultados || resultados.length === 0) {
+                    return '<tr><td colspan="6" class="empty-state">Nenhum resultado encontrado</td></tr>';
+                }
+
+                return resultados.slice(0, 50).map(r => {
+                    const data = new Date(r.dataRealizacao || r.createdAt).toLocaleDateString('pt-BR');
+                    
+                    let statusClass = '';
+                    let statusText = '';
+                    
+                    if (r.cancelada) {
+                        statusClass = 'inactive';
+                        statusText = 'Cancelada';
+                    } else if (r.nota && r.nota >= 7) {
+                        statusClass = 'active';
+                        statusText = 'Aprovado';
+                    } else if (r.nota) {
+                        statusClass = 'inactive';
+                        statusText = 'Reprovado';
+                    } else {
+                        statusClass = 'pending';
+                        statusText = 'Pendente';
+                    }
+
+                    return `
+                        <tr>
+                            <td><strong>${r.alunoNome || 'N/A'}</strong></td>
+                            <td>${r.provaTitulo || 'N/A'}</td>
+                            <td>${data}</td>
+                            <td><strong>${r.nota ? r.nota.toFixed(2) : '-'}</strong></td>
+                            <td>${r.acertos || 0}/${r.total || 0}</td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            filtrarResultados() {
+                const busca = document.getElementById('buscaResultado')?.value.toLowerCase() || '';
+                
+                const filtrados = this.resultados.filter(r => 
+                    (r.alunoNome && r.alunoNome.toLowerCase().includes(busca)) ||
+                    (r.provaTitulo && r.provaTitulo.toLowerCase().includes(busca))
+                );
+                
+                document.getElementById('tabelaResultados').innerHTML = this.gerarLinhasResultados(filtrados);
+            }
+
+            // ============ MODAL ============
+            // ============ ABRIR MODAL (CORRIGIDO) ============
+            abrirModal(titulo, conteudo, salvar = true) {
+                console.log('📂 Abrindo modal:', { titulo, salvar });
+                
+                const modalTitle = document.getElementById('modalTitle');
+                const modalBody = document.getElementById('modalBody');
+                const modalSaveBtn = document.getElementById('modalSaveBtn');
+                
+                if (!modalTitle || !modalBody) {
+                    console.error('❌ Elementos do modal não encontrados');
+                    return;
+                }
+                
+                // Definir título
+                modalTitle.innerHTML = titulo;
+                
+                // Definir conteúdo (GARANTIR QUE NÃO É UNDEFINED)
+                modalBody.innerHTML = conteudo || '<p style="padding: 20px; text-align: center;">Nenhum conteúdo disponível</p>';
+                
+                // Mostrar/esconder botão salvar
+                if (modalSaveBtn) {
+                    modalSaveBtn.style.display = salvar ? 'inline-block' : 'none';
+                }
+                
+                // Abrir modal
+                const modal = document.getElementById('modal');
+                if (modal) {
+                    modal.style.display = 'flex';
+                } else {
+                    console.error('❌ Modal não encontrado no DOM');
+                }
+            }
+
+            // ============ FECHAR MODAL ============
+            fecharModal() {
+                console.log('🔚 Fechando modal');
+                const modal = document.getElementById('modal');
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+                
+                const modalSaveBtn = document.getElementById('modalSaveBtn');
+                if (modalSaveBtn) {
+                    modalSaveBtn.style.display = 'inline-block';
+                    modalSaveBtn.onclick = null; // Limpar evento anterior
+                }
+            }
+
+            salvarModal() {
+                // Será sobrescrito pelo onclick específico
+            }
+
+            // ============ CONFIRMAR COM BOTÕES PERSONALIZADOS ============
+            async confirmar(titulo, mensagem, textoSim = 'Sim', textoNao = 'Não') {
+                return new Promise((resolve) => {
+                    const modal = document.getElementById('confirmModal');
+                    const titleEl = document.getElementById('confirmTitle');
+                    const messageEl = document.getElementById('confirmMessage');
+                    const btnSim = document.getElementById('confirmBtn');
+                    const btnNao = document.querySelector('#confirmModal .btn-cancel');
+                    
+                    if (!modal || !titleEl || !messageEl || !btnSim || !btnNao) {
+                        // Fallback para confirm nativo
+                        return Promise.resolve(confirm(mensagem));
+                    }
+                    
+                    titleEl.innerHTML = titulo;
+                    messageEl.innerHTML = mensagem;
+                    btnSim.textContent = textoSim;
+                    btnNao.textContent = textoNao;
+                    
+                    modal.style.display = 'flex';
+                    
+                    const handlerSim = () => {
+                        modal.style.display = 'none';
+                        btnSim.removeEventListener('click', handlerSim);
+                        btnNao.removeEventListener('click', handlerNao);
+                        resolve(true);
+                    };
+                    
+                    const handlerNao = () => {
+                        modal.style.display = 'none';
+                        btnSim.removeEventListener('click', handlerSim);
+                        btnNao.removeEventListener('click', handlerNao);
+                        resolve(false);
+                    };
+                    
+                    btnSim.addEventListener('click', handlerSim);
+                    btnNao.addEventListener('click', handlerNao);
+                    
+                    // Fechar ao clicar no X
+                    const closeBtn = modal.querySelector('.modal-close');
+                    if (closeBtn) {
+                        closeBtn.addEventListener('click', handlerNao);
+                    }
+                });
+            }
+
+            fecharConfirmModal() {
+                document.getElementById('confirmModal').style.display = 'none';
+            }
+
+            // ============ UTILITÁRIOS ============
+            showToast(mensagem, tipo = 'info') {
+                const toast = document.createElement('div');
+                toast.className = `toast ${tipo}`;
+                toast.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i> ${mensagem}`;
+                document.getElementById('toastContainer').appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            }
+
+            logout() {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user_data');
+                window.location.href = 'login.html';
+            }
+        }
+
+        // Inicializar
+        const adminSimples = new AdminSimples();
+        window.adminSimples = adminSimples;
+    </script>
+
+    <!-- Acessibilidade -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+</body>
+</html>

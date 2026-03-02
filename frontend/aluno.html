@@ -1111,21 +1111,28 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
     
-    <!-- Modal Iniciar Prova -->
+    <!-- Modal Iniciar Prova (COM CLASSES CSS) -->
     <div class="modal" id="modalIniciarProva">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-play-circle"></i> Iniciar Prova</h3>
-                <button class="modal-close" onclick="fecharModal('modalIniciarProva')">&times;</button>
+        <div class="modal-content modal-prova-container">
+            <div class="modal-prova-header">
+                <h3>
+                    <i class="fas fa-play-circle"></i> 
+                    Iniciar Prova
+                </h3>
+                <button class="modal-prova-close" onclick="fecharModal('modalIniciarProva')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div id="modalProvaInfo">
-                <!-- Informações da prova serão inseridas aqui -->
+            
+            <div id="modalProvaInfo" class="modal-prova-content">
+                <!-- O conteúdo será inserido aqui pelo JavaScript -->
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="btn-iniciar-prova" style="flex: 1;" onclick="iniciarProvaSelecionada()">
+            
+            <div class="modal-prova-footer">
+                <button class="modal-prova-btn-primary" onclick="iniciarProvaSelecionada()">
                     <i class="fas fa-play"></i> Iniciar Prova
                 </button>
-                <button class="btn-sair-prova" style="flex: 1;" onclick="fecharModal('modalIniciarProva')">
+                <button class="modal-prova-btn-secondary" onclick="fecharModal('modalIniciarProva')">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
             </div>

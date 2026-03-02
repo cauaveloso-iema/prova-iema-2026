@@ -13773,7 +13773,7 @@ class AdminPanel {
         };
     }
 
-    // ============ GERAR LINHAS DA TABELA DE PROVAS (CORRIGIDO) ============
+    // ============ GERAR LINHAS DA TABELA DE PROVAS (COM BOTÃO EDITAR) ============
     gerarLinhasProvas(provas) {
         if (!provas || provas.length === 0) {
             return `
@@ -13798,10 +13798,8 @@ class AdminPanel {
                 (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) 
                 : 'Rascunho';
 
-            // ===== CORREÇÃO: EXTRAIR NOME DO PROFESSOR CORRETAMENTE =====
+            // Extrair nome do professor
             let nomeProfessor = 'Desconhecido';
-            
-            // Verificar todas as possíveis localizações do nome do professor
             if (prova.professor) {
                 if (typeof prova.professor === 'object') {
                     nomeProfessor = prova.professor.nome || prova.professor.name || 'Desconhecido';
@@ -13809,7 +13807,6 @@ class AdminPanel {
                     nomeProfessor = prova.professor;
                 }
             } else if (prova.professorId) {
-                // Se tiver apenas o ID, tenta buscar na lista de usuários
                 if (this.usuarios && this.usuarios.length > 0) {
                     const prof = this.usuarios.find(u => u._id === prova.professorId || u.id === prova.professorId);
                     if (prof) {
@@ -13845,13 +13842,23 @@ class AdminPanel {
                     </td>
                     <td>${prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'N/A'}</td>
                     <td>
-                        <div class="action-buttons">
+                        <div class="action-buttons" style="display: flex; gap: 5px;">
+                            <!-- Botão Ver Detalhes -->
                             <button class="btn-icon" onclick="admin.verProva('${prova.id}')" title="Ver detalhes">
                                 <i class="fas fa-eye"></i>
                             </button>
+                            
+                            <!-- 🔥 NOVO BOTÃO EDITAR -->
+                            <button class="btn-icon edit" onclick="admin.editarProva('${prova.id}')" title="Editar prova">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            
+                            <!-- Botão Exportar Resultados -->
                             <button class="btn-icon success" onclick="admin.exportarResultadosProva('${prova.id}')" title="Exportar resultados">
                                 <i class="fas fa-download"></i>
                             </button>
+                            
+                            <!-- Botão Excluir -->
                             <button class="btn-icon danger" onclick="admin.excluirProva('${prova.id}')" title="Excluir">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -13941,6 +13948,317 @@ class AdminPanel {
         document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> Detalhes da Prova`;
         document.getElementById('modalSaveBtn').style.display = 'none';
         this.openModal();
+    }
+
+    // ============ EDITAR PROVA (MODAL PROFISSIONAL) ============
+    async editarProva(provaId) {
+        console.log('✏️ Editando prova:', provaId);
+        
+        const prova = this.provas.find(p => p.id === provaId);
+        if (!prova) {
+            this.showToast('❌ Prova não encontrada', 'error');
+            return;
+        }
+        
+        try {
+            this.showToast('📝 Carregando dados da prova...', 'info');
+            
+            // Buscar dados completos da prova
+            const response = await fetch(`/api/provas/${provaId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar dados da prova');
+            }
+            
+            const provaCompleta = data.prova || prova;
+            const questoes = data.questoes || [];
+            
+            // Formatar data para o input date
+            const dataLimite = prova.dataLimite ? new Date(prova.dataLimite).toISOString().split('T')[0] : '';
+            
+            // Criar HTML do modal
+            const modalHtml = `
+                <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; max-height: 80vh; overflow-y: auto; padding: 5px;">
+                    
+                    <!-- HEADER DO MODAL COM GRADIENTE -->
+                    <div style="background: linear-gradient(135deg, #667eea, #764ba2); margin: -20px -20px 20px -20px; padding: 25px 30px; border-radius: 12px 12px 0 0; color: white;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                                <i class="fas fa-pen-fancy"></i>
+                            </div>
+                            <div>
+                                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">✏️ Editando Prova</h2>
+                                <p style="margin: 5px 0 0; opacity: 0.9; font-size: 0.9rem;">
+                                    <i class="fas fa-file-alt"></i> ${prova.titulo}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- STATUS DA PROVA -->
+                    <div style="display: flex; gap: 15px; margin-bottom: 25px; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div style="flex: 1; display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 40px; height: 40px; background: ${prova.publicada ? '#d4edda' : '#fff3cd'}; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: ${prova.publicada ? '#155724' : '#856404'};">
+                                <i class="fas ${prova.publicada ? 'fa-check-circle' : 'fa-clock'}"></i>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Status</div>
+                                <div style="font-weight: 600; color: ${prova.publicada ? '#155724' : '#856404'};">${prova.publicada ? 'Publicada' : 'Rascunho'}</div>
+                            </div>
+                        </div>
+                        <div style="flex: 1; display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 40px; height: 40px; background: #e2e8f0; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #334155;">
+                                <i class="fas fa-calendar-alt"></i>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Data Limite</div>
+                                <div style="font-weight: 600;">${prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'Não definida'}</div>
+                            </div>
+                        </div>
+                        <div style="flex: 1; display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 40px; height: 40px; background: #e2e8f0; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #334155;">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Realizações</div>
+                                <div style="font-weight: 600;">${prova.totalParticipantes || 0} alunos</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- SEÇÃO 1: INFORMAÇÕES BÁSICAS -->
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="display: flex; align-items: center; gap: 8px; font-size: 1rem; color: #334155; margin: 0 0 15px 0; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
+                            <i class="fas fa-info-circle" style="color: #667eea;"></i>
+                            Informações Básicas
+                        </h3>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div style="background: #f8fafc; padding: 15px; border-radius: 10px;">
+                                <label style="display: block; font-size: 0.8rem; color: #64748b; margin-bottom: 5px;">
+                                    <i class="fas fa-heading" style="margin-right: 5px;"></i>Título da Prova
+                                </label>
+                                <input type="text" id="edit_titulo" value="${prova.titulo || ''}" 
+                                    style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; transition: all 0.3s;">
+                            </div>
+                            
+                            <div style="background: #f8fafc; padding: 15px; border-radius: 10px;">
+                                <label style="display: block; font-size: 0.8rem; color: #64748b; margin-bottom: 5px;">
+                                    <i class="fas fa-align-left" style="margin-right: 5px;"></i>Conteúdo / Tema
+                                </label>
+                                <input type="text" id="edit_conteudo" value="${prova.conteudo || ''}" 
+                                    style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;">
+                            </div>
+                            
+                            <div style="background: #f8fafc; padding: 15px; border-radius: 10px;">
+                                <label style="display: block; font-size: 0.8rem; color: #64748b; margin-bottom: 5px;">
+                                    <i class="fas fa-calendar" style="margin-right: 5px;"></i>Data Limite
+                                </label>
+                                <input type="date" id="edit_dataLimite" value="${dataLimite}" 
+                                    style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;">
+                            </div>
+                            
+                            <div style="background: #f8fafc; padding: 15px; border-radius: 10px;">
+                                <label style="display: block; font-size: 0.8rem; color: #64748b; margin-bottom: 5px;">
+                                    <i class="fas fa-clock" style="margin-right: 5px;"></i>Duração (minutos)
+                                </label>
+                                <input type="number" id="edit_duracao" value="${prova.duracaoMinutos || 60}" min="5" max="300"
+                                    style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- SEÇÃO 2: QUESTÕES -->
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="display: flex; align-items: center; gap: 8px; font-size: 1rem; color: #334155; margin: 0;">
+                                <i class="fas fa-list" style="color: #667eea;"></i>
+                                Questões (${questoes.length})
+                            </h3>
+                            <span style="background: #e2e8f0; padding: 4px 12px; border-radius: 30px; font-size: 0.75rem; color: #475569;">
+                                <i class="fas fa-pencil-alt"></i> Clique nas questões para editar
+                            </span>
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            ${questoes.map((q, idx) => {
+                                const opcoes = q.opcoes || ['', '', '', '', ''];
+                                
+                                return `
+                                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                                    <!-- Cabeçalho da questão -->
+                                    <div style="background: linear-gradient(90deg, #f8fafc, #f1f5f9); padding: 12px 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <span style="background: #667eea; color: white; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 600; font-size: 0.85rem;">
+                                                ${idx + 1}
+                                            </span>
+                                            <span style="font-weight: 600; color: #1e293b;">Questão ${idx + 1}</span>
+                                        </div>
+                                        <span style="background: #e2e8f0; padding: 3px 10px; border-radius: 30px; font-size: 0.7rem; color: #475569;">
+                                            ${q.dificuldade || 'Média'}
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Corpo da questão -->
+                                    <div style="padding: 15px;">
+                                        <!-- Pergunta -->
+                                        <div style="margin-bottom: 15px;">
+                                            <label style="display: block; font-size: 0.8rem; color: #64748b; margin-bottom: 5px;">
+                                                <i class="fas fa-question-circle"></i> Pergunta
+                                            </label>
+                                            <textarea id="edit_pergunta_${idx}" rows="2" 
+                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; resize: vertical;">${q.pergunta || ''}</textarea>
+                                        </div>
+                                        
+                                        <!-- Alternativas -->
+                                        <div style="margin-bottom: 15px;">
+                                            <label style="display: block; font-size: 0.8rem; color: #64748b; margin-bottom: 8px;">
+                                                <i class="fas fa-list-ul"></i> Alternativas
+                                            </label>
+                                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                                ${opcoes.map((opcao, optIdx) => {
+                                                    const letra = String.fromCharCode(65 + optIdx);
+                                                    const isCorreta = optIdx === q.respostaCorreta;
+                                                    return `
+                                                    <div style="display: flex; gap: 10px; align-items: center; background: ${isCorreta ? '#f0f9ff' : '#f8fafc'}; padding: 8px; border-radius: 8px; border: 2px solid ${isCorreta ? '#667eea' : 'transparent'};">
+                                                        <span style="font-weight: 600; min-width: 30px; color: ${isCorreta ? '#667eea' : '#64748b'};">${letra})</span>
+                                                        <input type="text" id="edit_opcao_${idx}_${optIdx}" value="${opcao}" 
+                                                            style="flex: 1; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.85rem;">
+                                                        <div style="display: flex; align-items: center; gap: 5px;">
+                                                            <input type="radio" name="resposta_correta_${idx}" value="${optIdx}" ${isCorreta ? 'checked' : ''} 
+                                                                onchange="admin.marcarRespostaCorreta(${idx}, ${optIdx})" style="cursor: pointer;">
+                                                            <span style="font-size: 0.7rem; color: #64748b;">Correta</span>
+                                                        </div>
+                                                    </div>
+                                                `}).join('')}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Explicação -->
+                                        <div>
+                                            <label style="display: block; font-size: 0.8rem; color: #64748b; margin-bottom: 5px;">
+                                                <i class="fas fa-lightbulb"></i> Explicação (opcional)
+                                            </label>
+                                            <textarea id="edit_explicacao_${idx}" rows="2" 
+                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; resize: vertical; background: #faf9fe;">${q.explicacao || ''}</textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            `}).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- AVISO DE SALVAMENTO -->
+                    <div style="background: #f0f9ff; border-left: 4px solid #667eea; padding: 12px 15px; border-radius: 8px; margin: 20px 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-info-circle" style="color: #667eea; font-size: 1.2rem;"></i>
+                        <div style="font-size: 0.85rem; color: #334155;">
+                            <strong>Importante:</strong> As alterações serão salvas apenas quando você clicar em "Salvar Alterações". 
+                            Verifique todas as questões antes de salvar.
+                        </div>
+                    </div>
+                    
+                    <!-- HIDDEN FIELDS -->
+                    <input type="hidden" id="questoes_original" value='${JSON.stringify(questoes).replace(/'/g, "&apos;")}'>
+                </div>
+            `;
+            
+            // Injetar no modal
+            document.getElementById('modalBody').innerHTML = modalHtml;
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editor de Prova';
+            document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoProva(provaId, questoes.length);
+            document.getElementById('modalSaveBtn').textContent = '💾 Salvar Alterações';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro ao editar prova:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ MARCAR RESPOSTA CORRETA ============
+    marcarRespostaCorreta(questaoIndex, opcaoIndex) {
+        // Esta função será chamada pelos radio buttons
+        console.log(`✅ Questão ${questaoIndex} - Resposta correta: ${opcaoIndex}`);
+    }
+
+    // ============ SALVAR EDIÇÃO DA PROVA ============
+    async salvarEdicaoProva(provaId, totalQuestoes) {
+        try {
+            this.showToast('💾 Salvando alterações...', 'info');
+            
+            // Coletar dados básicos
+            const dados = {
+                titulo: document.getElementById('edit_titulo')?.value,
+                conteudo: document.getElementById('edit_conteudo')?.value,
+                dataLimite: document.getElementById('edit_dataLimite')?.value,
+                duracaoMinutos: parseInt(document.getElementById('edit_duracao')?.value) || 60,
+                questoes: []
+            };
+            
+            // Coletar questões
+            for (let i = 0; i < totalQuestoes; i++) {
+                const pergunta = document.getElementById(`edit_pergunta_${i}`)?.value;
+                const explicacao = document.getElementById(`edit_explicacao_${i}`)?.value;
+                
+                // Coletar opções
+                const opcoes = [];
+                let respostaCorreta = 0;
+                
+                // Descobrir qual opção está marcada como correta
+                const radios = document.getElementsByName(`resposta_correta_${i}`);
+                for (let r of radios) {
+                    if (r.checked) {
+                        respostaCorreta = parseInt(r.value);
+                        break;
+                    }
+                }
+                
+                // Coletar textos das opções
+                for (let j = 0; j < 5; j++) {
+                    const opcao = document.getElementById(`edit_opcao_${i}_${j}`)?.value;
+                    if (opcao) {
+                        opcoes.push(opcao);
+                    }
+                }
+                
+                dados.questoes.push({
+                    pergunta,
+                    opcoes,
+                    respostaCorreta,
+                    explicacao
+                });
+            }
+            
+            console.log('📤 Enviando dados:', dados);
+            
+            // ENVIAR PARA O BACKEND (você precisará criar esta rota)
+            const response = await fetch(`/api/admin/provas/${provaId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Prova atualizada com sucesso!', 'success');
+                this.closeModal();
+                this.loadProvas(); // Recarregar lista
+            } else {
+                throw new Error(data.error || 'Erro ao salvar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
     }
 
     async exportarResultadosProva(provaId) {

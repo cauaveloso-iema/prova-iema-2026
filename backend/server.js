@@ -20,7 +20,7 @@ const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const professorAuth = require('./security/professor-auth');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-require('./email-service-resend-antigo');
+require('./services/email-service');
 const multer = require('multer');
 const fs = require('fs');
 const Groq = require("groq-sdk");
@@ -65,7 +65,7 @@ console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Co
 // ============================================================================
 const monitoramentoRoutes = require('./routes/monitoramento');
 const LoggerService = require('./services/logger-service');
-const EmailService = require('./email-service');
+const EmailService = require('./services/email-service');
 const matriculasManager = require('./matriculas/index');
 
 // ============================================================================
@@ -228,7 +228,39 @@ app.use((req, res, next) => {
   });
 });
 
+// ============================================================================
+// MIDDLEWARE DE VERIFICAÇÃO DE PERMISSÕES
+// ============================================================================
 
+// ============ MIDDLEWARE PARA VERIFICAR PERMISSÕES DE ADMIN ============
+const verificarPermissaoSuperAdmin = async (req, res, next) => {
+    try {
+        // Se for super_admin, pode tudo
+        if (req.userRole === 'super_admin') {
+            return next();
+        }
+        
+        // Se for admin normal, verificar se está tentando acessar/modificar super_admin
+        if (req.userRole === 'admin') {
+            const targetUserId = req.params.id || req.body.userId;
+            
+            if (targetUserId) {
+                const targetUser = await User.findById(targetUserId).select('role');
+                if (targetUser && targetUser.role === 'super_admin') {
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Administradores não podem modificar dados de Super Admins'
+                    });
+                }
+            }
+        }
+        
+        next();
+    } catch (error) {
+        console.error('❌ Erro na verificação de permissão:', error);
+        next();
+    }
+};
 
 // ============================================================================
 // CONFIGURAÇÃO DE SESSÃO
@@ -959,9 +991,10 @@ app.post('/api/auth/register', [
     );
     
     // 🔴 CORREÇÃO: Usar 'user' em vez de 'userCompleto'
-    const redirectTo = user.role === 'admin' || user.role === 'super_admin' 
+    const redirectTo = user.role === 'super_admin' 
         ? '/admin.html' 
-        : (user.role === 'professor' ? '/index.html' : '/aluno.html');
+        : (user.role === 'admin' ? '/admin-simples.html' 
+        : (user.role === 'professor' ? '/index.html' : '/aluno.html'));
     
     res.status(201).json({
       success: true,
@@ -1152,15 +1185,17 @@ app.post('/api/auth/login', async (req, res) => {
           let redirectTo = '';
           if (user.forcePasswordChange) {
             redirectTo = '/trocar-senha.html';
-          } else if (user.role === 'admin' || user.role === 'super_admin') {
-            redirectTo = '/admin.html';
+          } else if (user.role === 'super_admin') {
+            redirectTo = '/admin.html'; // Super Admin → admin.html
+          } else if (user.role === 'admin') {
+            redirectTo = '/admin-simples.html'; // Admin normal → admin-simples.html
           } else if (user.role === 'professor') {
             redirectTo = '/index.html';
           } else if (user.role === 'aluno') {
             redirectTo = '/aluno.html';
           } else {
             redirectTo = '/login.html';
-          }
+}
           
           console.log(`✅ 2FA verificado via ${motivo} para ${user.email}`);
           if (user.twoFactorBackupCodes) {
@@ -1404,8 +1439,10 @@ app.post('/api/auth/login', async (req, res) => {
     let redirectTo = '';
     if (user.forcePasswordChange) {
       redirectTo = '/trocar-senha.html';
-    } else if (user.role === 'admin' || user.role === 'super_admin') {
-      redirectTo = '/admin.html';
+    } else if (user.role === 'super_admin') {
+      redirectTo = '/admin.html'; // Super Admin → admin.html
+    } else if (user.role === 'admin') {
+      redirectTo = '/admin-simples.html'; // Admin normal → admin-simples.html
     } else if (user.role === 'professor') {
       redirectTo = '/index.html';
     } else if (user.role === 'aluno') {
@@ -2234,13 +2271,17 @@ app.post('/api/auth/2fa/validate-totp', authenticateToken, async (req, res) => {
         // Definir redirecionamento
         let redirectTo = '';
         if (user.forcePasswordChange) {
-            redirectTo = '/trocar-senha.html';
-        } else if (user.role === 'admin' || user.role === 'super_admin') {
-            redirectTo = '/admin.html';
+          redirectTo = '/trocar-senha.html';
+        } else if (user.role === 'super_admin') {
+          redirectTo = '/admin.html'; // Super Admin → admin.html
+        } else if (user.role === 'admin') {
+          redirectTo = '/admin-simples.html'; // Admin normal → admin-simples.html
         } else if (user.role === 'professor') {
-            redirectTo = '/index.html';
+          redirectTo = '/index.html';
         } else if (user.role === 'aluno') {
-            redirectTo = '/aluno.html';
+          redirectTo = '/aluno.html';
+        } else {
+          redirectTo = '/login.html';
         }
 
         res.json({
@@ -2730,18 +2771,22 @@ const uploadMultiple = upload.fields([
 ]);
 
 
-// ============ ROTA PARA PUBLICAR PROVA ============
+// ============ ROTA PARA PUBLICAR PROVA (CORRIGIDA PARA SUPER ADMIN) ============
 app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.provaId;
-    const professorId = req.userId;
+    const usuarioId = req.userId;
+    const usuarioRole = req.userRole;
     
-    console.log(`📤 Professor ${professorId} solicitando publicação da prova ${provaId}`);
+    console.log(`📤 Usuário ${usuarioId} (${usuarioRole}) solicitando publicação da prova ${provaId}`);
     
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    // 🔥 CORREÇÃO: Verificar se é admin ou super_admin
+    const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
+    
+    if (!isAdmin && usuarioRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem publicar provas'
+        error: 'Apenas professores e administradores podem publicar provas'
       });
     }
     
@@ -2754,8 +2799,8 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
       });
     }
     
-    // Verificar se é o professor da prova
-    if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+    // Verificar se é o professor da prova (se não for admin)
+    if (!isAdmin && prova.userId.toString() !== usuarioId) {
       return res.status(403).json({
         success: false,
         error: 'Você não é o professor desta prova'
@@ -2780,15 +2825,12 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
     
     // Publicar a prova
     prova.publicada = true;
-    prova.status = 'ativa'; // Muda status para ativa
+    prova.status = 'ativa';
     prova.dataPublicacao = new Date();
     
     await prova.save();
     
-    console.log(`✅ Prova ${provaId} publicada com sucesso!`);
-    console.log(`   Título: ${prova.titulo}`);
-    console.log(`   Turma: ${prova.turmaId}`);
-    console.log(`   Data de publicação: ${prova.dataPublicacao}`);
+    console.log(`✅ Prova ${provaId} publicada com sucesso por ${usuarioRole}!`);
     
     // Buscar turma para notificar alunos
     let turma = null;
@@ -2920,10 +2962,11 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
 // ============ ROTAS DE TURMA (PROFESSOR) ============
 app.post('/api/turmas', authenticateToken, async (req, res) => {
   try {
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem criar turmas'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
 
@@ -3051,85 +3094,6 @@ app.post('/api/turmas/entrar', authenticateToken, async (req, res) => {
       error: 'Erro ao entrar na turma'
     });
   }
-});
-
-// ============ ROTA PARA EXCLUIR TURMA (ADMIN/PROFESSOR) ============
-app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
-    try {
-        const turmaId = req.params.id;
-        const usuarioId = req.userId;
-        const usuarioRole = req.userRole;
-
-        console.log(`🗑️ Tentativa de exclusão da turma ${turmaId} pelo usuário ${usuarioId} (${usuarioRole})`);
-
-        // Buscar turma
-        const turma = await Turma.findById(turmaId);
-        if (!turma) {
-            return res.status(404).json({
-                success: false,
-                error: 'Turma não encontrada'
-            });
-        }
-
-        // Verificar permissão (admin ou professor da turma)
-        const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
-        const isProfessorDaTurma = turma.professorId && turma.professorId.toString() === usuarioId;
-
-        if (!isAdmin && !isProfessorDaTurma) {
-            return res.status(403).json({
-                success: false,
-                error: 'Você não tem permissão para excluir esta turma'
-            });
-        }
-
-        // Verificar se há provas associadas
-        const provasAssociadas = await Prova.countDocuments({ turmaId: turmaId });
-        
-        if (provasAssociadas > 0 && !isAdmin) {
-            return res.status(400).json({
-                success: false,
-                error: 'Esta turma possui provas associadas. Exclua as provas primeiro.',
-                detalhes: {
-                    totalProvas: provasAssociadas
-                }
-            });
-        }
-
-        // Se for admin, remover referências das provas
-        if (isAdmin && provasAssociadas > 0) {
-            console.log(`🔧 Admin removendo ${provasAssociadas} provas associadas...`);
-            await Prova.deleteMany({ turmaId: turmaId });
-        }
-
-        // Remover referência da turma dos alunos
-        if (turma.alunos && turma.alunos.length > 0) {
-            await User.updateMany(
-                { _id: { $in: turma.alunos } },
-                { $pull: { turmas: turmaId } }
-            );
-        }
-
-        // Excluir a turma
-        await Turma.findByIdAndDelete(turmaId);
-
-        console.log(`✅ Turma ${turmaId} excluída com sucesso por ${usuarioId}`);
-
-        res.json({
-            success: true,
-            message: 'Turma excluída com sucesso!',
-            detalhes: {
-                provasRemovidas: isAdmin ? provasAssociadas : 0,
-                alunosRemovidos: turma.alunos?.length || 0
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ Erro ao excluir turma:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Erro interno ao excluir turma: ' + error.message
-        });
-    }
 });
 
 // ============ ROTA PARA BUSCAR UMA TURMA ESPECÍFICA ============
@@ -3317,7 +3281,8 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
     // ===== CORREÇÃO: Permitir que admin crie prova para QUALQUER professor =====
     // Professores só podem criar nas suas próprias turmas
     // Admin pode criar em qualquer turma para qualquer professor
-    if (req.userRole !== 'admin' && turma.professorId.toString() !== req.userId) {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && turma.professorId.toString() !== req.userId) {
       return res.status(403).json({
         success: false,
         error: 'Apenas o professor desta turma pode criar provas'
@@ -4208,10 +4173,43 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       console.log(`✅ ${questoesValidadas.length} questões criadas via fallback (área: ${areaFallback})`);
     }
 
-    // ===== CORREÇÃO: DECIDIR QUAL PROFESSOR USAR =====
-    const professorDaProva = req.userRole === 'admin' && professorId ? professorId : req.userId;
-    
-    console.log(`👨‍🏫 Professor da prova: ${professorDaProva} (${req.userRole === 'admin' ? 'Selecionado pelo admin' : 'Próprio professor'})`);
+    // ===== 🔥 CORREÇÃO CRÍTICA: DECIDIR QUAL PROFESSOR USAR =====
+    let professorDaProva;
+
+    console.log(`🔍 Criando prova - Usuário: ${req.userId} (${req.userRole})`);
+    console.log(`🔍 ProfessorId recebido do frontend: ${professorId || 'NÃO FORNECIDO'}`);
+
+    if (isAdmin && professorId) {
+        // ✅ Admin/Super Admin está criando para outro professor
+        professorDaProva = professorId;
+        console.log(`✅ Admin/Super Admin criando prova para professor ID: ${professorId}`);
+        
+        // Verificar se o professor realmente existe
+        const professorExiste = await User.findById(professorId);
+        if (!professorExiste) {
+            console.log(`❌ Professor com ID ${professorId} não encontrado!`);
+            return res.status(400).json({
+                success: false,
+                error: 'Professor selecionado não encontrado no sistema'
+            });
+        }
+        console.log(`✅ Professor verificado: ${professorExiste.nome} (${professorExiste.email})`);
+        
+    } else if (isAdmin && !professorId) {
+        // Admin/Super Admin tentou criar sem selecionar professor
+        console.log(`❌ Admin tentou criar prova sem selecionar professor`);
+        return res.status(400).json({
+            success: false,
+            error: 'Selecione um professor responsável pela prova'
+        });
+        
+    } else {
+        // ✅ Professor criando sua própria prova
+        professorDaProva = req.userId;
+        console.log(`✅ Professor criando própria prova: ${req.userId}`);
+    }
+
+    console.log(`👨‍🏫 Professor final da prova: ${professorDaProva}`);
 
     // ========== CRIAR PROVA COM O PROFESSOR CORRETO ==========
     const prova = new Prova({
@@ -4308,11 +4306,12 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
 app.post('/api/upload/imagem', authenticateToken, async (req, res) => {
     try {
         // Verificar se é professor - USANDO req.userRole em vez de req.user.role
-        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
-            return res.status(403).json({
-                success: false,
-                error: 'Apenas professores podem fazer upload de imagens'
-            });
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        if (!isAdmin && req.userRole !== 'professor') {
+          return res.status(403).json({
+            success: false,
+            error: 'Apenas professores e administradores podem corrigir provas'
+          });
         }
         
         // Verificar se há arquivo
@@ -4833,10 +4832,11 @@ app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, asyn
 
 app.get('/api/professor/provas', authenticateToken, async (req, res) => {
   try {
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem acessar esta rota'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
 
@@ -4977,10 +4977,11 @@ app.get('/api/professor/provas', authenticateToken, async (req, res) => {
 // ============ ROTA PARA PROFESSOR VER PROVAS PENDENTES DE CORREÇÃO ============
 app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (req, res) => {
   try {
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem acessar esta rota'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
 
@@ -5114,10 +5115,11 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
     
     console.log(`📝 Professor ${professorId} corrigindo prova ${provaId} do aluno ${alunoId}`);
     
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem corrigir provas'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
     
@@ -5240,10 +5242,11 @@ app.post('/api/professor/provas/:provaId/liberar-notas', authenticateToken, asyn
     
     console.log(`📝 Professor ${professorId} liberando todas as notas da prova ${provaId}`);
     
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem liberar notas'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
     
@@ -6503,10 +6506,11 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   
   try {
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem acessar estes resultados'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
 
@@ -7356,6 +7360,25 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
   }
 });
 
+// Função auxiliar para formatar duração
+function formatarDuracao(minutos) {
+  if (!minutos) return 'Não definida';
+  
+  const horas = Math.floor(minutos / 60);
+  const mins = minutos % 60;
+  
+  let resultado = '';
+  if (horas > 0) {
+    resultado += `${horas}h`;
+  }
+  if (mins > 0) {
+    if (resultado) resultado += ' ';
+    resultado += `${mins}min`;
+  }
+  
+  return resultado || '0min';
+}
+
 // ============ ROTA PARA VISUALIZAR DETALHES COMPLETOS DA PROVA (COM QUESTÕES E RESPOSTAS) ============
 app.get('/api/provas/:id', authenticateToken, async (req, res) => {
   try {
@@ -7363,11 +7386,11 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
     const userId = req.userId;
     const userRole = req.userRole;
     
-    console.log(`🔍 Usuário ${userId} solicitando detalhes da prova ${provaId}`);
+    console.log(`🔍 Usuário ${userId} (${userRole}) solicitando detalhes da prova ${provaId}`);
 
     // Buscar prova com turma e professor
     const prova = await Prova.findById(provaId)
-      .populate('turmaId', 'nome disciplina')
+      .populate('turmaId', 'nome disciplina alunos')
       .populate('userId', 'nome email');
 
     if (!prova) {
@@ -7377,84 +7400,44 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verificar permissões
-    const isProfessor = userRole === 'professor' || userRole === 'admin';
+    // 🔥 CORREÇÃO: Verificar permissões
+    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
     const isProfessorDaProva = prova.userId && prova.userId._id.toString() === userId;
-    const isAlunoDaTurma = !isProfessor && prova.turmaId;
-
-    // Se é aluno, verificar se está na turma da prova
-    if (isAlunoDaTurma) {
-      const turma = await Turma.findById(prova.turmaId._id);
-      if (!turma || !turma.alunos.includes(userId)) {
-        return res.status(403).json({
-          success: false,
-          error: 'Você não está matriculado na turma desta prova'
-        });
-      }
-    }
     
-    // Se não é professor nem professor da prova, negar acesso
-    if (!isProfessor && !isProfessorDaProva && !isAlunoDaTurma) {
-      return res.status(403).json({
-        success: false,
-        error: 'Você não tem permissão para visualizar esta prova'
-      });
-    }
-
-    // Função auxiliar para formatar duração
-    function formatarDuracao(minutos) {
-      if (!minutos) return 'Não definida';
+    // ADMIN E SUPER ADMIN PODEM VER QUALQUER PROVA
+    if (isAdmin) {
+      console.log(`✅ Admin ${userId} acessando prova ${provaId} - ACESSO LIBERADO`);
       
-      const horas = Math.floor(minutos / 60);
-      const mins = minutos % 60;
-      
-      let resultado = '';
-      if (horas > 0) {
-        resultado += `${horas}h`;
-      }
-      if (mins > 0) {
-        if (resultado) resultado += ' ';
-        resultado += `${mins}min`;
-      }
-      
-      return resultado || '0min';
-    }
+      // Preparar dados da prova
+      const dadosProva = {
+        id: prova._id,
+        titulo: prova.titulo,
+        conteudo: prova.conteudo,
+        periodo: prova.periodo || '1',
+        dataCriacao: prova.createdAt,
+        dataLimite: prova.dataLimite,
+        horarioInicio: prova.horarioInicio,
+        horarioTermino: prova.horarioTermino,
+        duracaoFormatada: formatarDuracao(prova.duracaoMinutos),
+        duracaoMinutos: prova.duracaoMinutos,
+        dificuldade: prova.dificuldade,
+        quantidadeQuestoes: prova.questoes.length,
+        codigo: prova.codigo,
+        status: prova.status,
+        fonteGeracao: prova.fonteGeracao,
+        turma: prova.turmaId ? {
+          id: prova.turmaId._id,
+          nome: prova.turmaId.nome,
+          disciplina: prova.turmaId.disciplina
+        } : null,
+        professor: prova.userId ? {
+          nome: prova.userId.nome,
+          email: prova.userId.email
+        } : null
+      };
 
-    // Preparar dados da prova
-    const dadosProva = {
-          id: prova._id,
-          titulo: prova.titulo,
-          conteudo: prova.conteudo,
-          periodo: prova.periodo || '1',
-          dataCriacao: prova.createdAt,
-          dataLimite: prova.dataLimite,
-          // **ADICIONAR ESTES CAMPOS:**
-          horarioInicio: prova.horarioInicio,
-          horarioTermino: prova.horarioTermino,
-          duracaoFormatada: formatarDuracao(prova.duracaoMinutos),
-          duracaoMinutos: prova.duracaoMinutos,
-          dificuldade: prova.dificuldade,
-          quantidadeQuestoes: prova.questoes.length,
-          codigo: prova.codigo,
-          status: prova.status,
-          fonteGeracao: prova.fonteGeracao,
-          turma: prova.turmaId ? {
-            id: prova.turmaId._id,
-            nome: prova.turmaId.nome,
-            disciplina: prova.turmaId.disciplina
-          } : null,
-          professor: prova.userId ? {
-            nome: prova.userId.nome,
-            email: prova.userId.email
-          } : null
-        };
-
-    // Preparar questões
-    let questoes = [];
-    
-    // Professor vê tudo (perguntas, respostas corretas, explicações)
-    if (isProfessor || isProfessorDaProva) {
-      questoes = prova.questoes.map((questao, index) => ({
+      // Admin vê tudo (perguntas, respostas corretas, explicações)
+      const questoes = prova.questoes.map((questao, index) => ({
         id: questao._id,
         numero: index + 1,
         pergunta: questao.pergunta,
@@ -7463,66 +7446,130 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
         explicacao: questao.explicacao,
         dificuldade: questao.dificuldade || 'media'
       }));
-    } 
-    // Aluno vê apenas perguntas e opções (sem respostas)
-    else {
-      questoes = prova.questoes.map((questao, index) => ({
+
+      return res.json({
+        success: true,
+        prova: dadosProva,
+        questoes: questoes,
+        visualizacao: 'completa',
+        mensagem: `${questoes.length} questões carregadas`
+      });
+    }
+
+    // Se não é admin, verificar as permissões normais
+    // Se é professor da prova
+    if (isProfessorDaProva) {
+      console.log(`✅ Professor ${userId} acessando própria prova ${provaId}`);
+      
+      const dadosProva = {
+        id: prova._id,
+        titulo: prova.titulo,
+        conteudo: prova.conteudo,
+        periodo: prova.periodo || '1',
+        dataCriacao: prova.createdAt,
+        dataLimite: prova.dataLimite,
+        horarioInicio: prova.horarioInicio,
+        horarioTermino: prova.horarioTermino,
+        duracaoFormatada: formatarDuracao(prova.duracaoMinutos),
+        duracaoMinutos: prova.duracaoMinutos,
+        dificuldade: prova.dificuldade,
+        quantidadeQuestoes: prova.questoes.length,
+        codigo: prova.codigo,
+        status: prova.status,
+        fonteGeracao: prova.fonteGeracao,
+        turma: prova.turmaId ? {
+          id: prova.turmaId._id,
+          nome: prova.turmaId.nome,
+          disciplina: prova.turmaId.disciplina
+        } : null,
+        professor: prova.userId ? {
+          nome: prova.userId.nome,
+          email: prova.userId.email
+        } : null
+      };
+
+      const questoes = prova.questoes.map((questao, index) => ({
         id: questao._id,
         numero: index + 1,
         pergunta: questao.pergunta,
         opcoes: questao.opcoes,
-        // Aluno não vê resposta correta
+        respostaCorreta: questao.respostaCorreta,
+        explicacao: questao.explicacao,
         dificuldade: questao.dificuldade || 'media'
       }));
+
+      return res.json({
+        success: true,
+        prova: dadosProva,
+        questoes: questoes,
+        visualizacao: 'completa',
+        mensagem: `${questoes.length} questões carregadas`
+      });
     }
 
-    // Buscar estatísticas (apenas para professor)
-    let estatisticas = null;
-    if (isProfessor || isProfessorDaProva) {
-      const resultados = await Resultado.find({ provaId: prova._id });
-      const provasRealizadas = await ProvaRealizada.find({ provaId: prova._id });
-      
-      const totalAlunosRealizaram = [...new Set([
-        ...resultados.map(r => r.userId.toString()),
-        ...provasRealizadas.map(pr => pr.alunoId.toString())
-      ])].length;
+    // Se é aluno, verificar se está na turma
+    if (userRole === 'aluno' && prova.turmaId) {
+      const turma = await Turma.findById(prova.turmaId._id);
+      if (!turma || !turma.alunos.includes(userId)) {
+        console.log(`❌ Aluno ${userId} não está na turma da prova ${provaId}`);
+        return res.status(403).json({
+          success: false,
+          error: 'Você não está matriculado na turma desta prova'
+        });
+      }
 
-      let totalNotas = 0;
-      let contador = 0;
-      
-      resultados.forEach(r => {
-        if (r.nota !== undefined && !isNaN(r.nota)) {
-          totalNotas += r.nota;
-          contador++;
-        }
-      });
-      
-      provasRealizadas.forEach(pr => {
-        if (pr.nota !== undefined && !isNaN(pr.nota)) {
-          totalNotas += pr.nota;
-          contador++;
-        }
-      });
-      
-      const mediaNotas = contador > 0 ? (totalNotas / contador) : 0;
+      console.log(`✅ Aluno ${userId} acessando prova ${provaId}`);
 
-      estatisticas = {
-        totalAlunos: prova.turmaId ? await Turma.findById(prova.turmaId).then(t => t ? t.alunos.length : 0) : 0,
-        alunosRealizaram: totalAlunosRealizaram,
-        mediaNotas: parseFloat(mediaNotas.toFixed(1)),
-        taxaConclusao: prova.turmaId ? 
-          (totalAlunosRealizaram / (await Turma.findById(prova.turmaId).then(t => t ? t.alunos.length : 1)) * 100).toFixed(1) : 
-          '0.0'
+      const dadosProva = {
+        id: prova._id,
+        titulo: prova.titulo,
+        conteudo: prova.conteudo,
+        periodo: prova.periodo || '1',
+        dataCriacao: prova.createdAt,
+        dataLimite: prova.dataLimite,
+        horarioInicio: prova.horarioInicio,
+        horarioTermino: prova.horarioTermino,
+        duracaoFormatada: formatarDuracao(prova.duracaoMinutos),
+        duracaoMinutos: prova.duracaoMinutos,
+        dificuldade: prova.dificuldade,
+        quantidadeQuestoes: prova.questoes.length,
+        codigo: prova.codigo,
+        status: prova.status,
+        fonteGeracao: prova.fonteGeracao,
+        turma: prova.turmaId ? {
+          id: prova.turmaId._id,
+          nome: prova.turmaId.nome,
+          disciplina: prova.turmaId.disciplina
+        } : null,
+        professor: prova.userId ? {
+          nome: prova.userId.nome,
+          email: prova.userId.email
+        } : null
       };
+
+      // Aluno vê apenas perguntas e opções (sem respostas)
+      const questoes = prova.questoes.map((questao, index) => ({
+        id: questao._id,
+        numero: index + 1,
+        pergunta: questao.pergunta,
+        opcoes: questao.opcoes,
+        dificuldade: questao.dificuldade || 'media'
+      }));
+
+      return res.json({
+        success: true,
+        prova: dadosProva,
+        questoes: questoes,
+        visualizacao: 'parcial',
+        mensagem: `${questoes.length} questões carregadas`
+      });
     }
 
-    res.json({
-      success: true,
-      prova: dadosProva,
-      questoes: questoes,
-      estatisticas: estatisticas,
-      visualizacao: isProfessor || isProfessorDaProva ? 'completa' : 'parcial',
-      mensagem: `${questoes.length} questões carregadas`
+    // Se chegou aqui, não tem permissão
+    console.log(`❌ Usuário ${userId} (${userRole}) sem permissão para acessar prova ${provaId}`);
+    return res.status(403).json({
+      success: false,
+      error: 'Você não tem permissão para acessar esta prova'
     });
 
   } catch (error) {
@@ -7540,10 +7587,11 @@ app.get('/api/provas/:id/correcao', authenticateToken, async (req, res) => {
     const provaId = req.params.id;
     const professorId = req.userId;
     
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem acessar esta rota'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
 
@@ -7676,10 +7724,11 @@ app.post('/api/provas/:provaId/liberar-notas-todos', authenticateToken, async (r
     
     console.log(`📝 Professor ${professorId} liberando TODAS as notas da prova ${provaId}`);
     
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem liberar notas'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
     
@@ -7740,20 +7789,14 @@ app.post('/api/provas/:provaId/liberar-notas-todos', authenticateToken, async (r
   }
 });
 
-// ============ ROTA PARA EXCLUIR PROVA (NOVA) ============
+// ============ ROTA PARA EXCLUIR PROVA (CORRIGIDA) ============
 app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res) => {
     try {
         const provaId = req.params.provaId;
-        const professorId = req.userId;
+        const usuarioId = req.userId;
+        const usuarioRole = req.userRole;
         
-        console.log(`🗑️ Professor ${professorId} tentando excluir prova ${provaId}`);
-        
-        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
-            return res.status(403).json({
-                success: false,
-                error: 'Apenas professores podem excluir provas'
-            });
-        }
+        console.log(`🗑️ Tentativa de exclusão da prova ${provaId} pelo usuário ${usuarioId} (${usuarioRole})`);
         
         // Buscar a prova
         const prova = await Prova.findById(provaId);
@@ -7764,11 +7807,14 @@ app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res)
             });
         }
         
-        // Verificar se é o professor da prova
-        if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+        // 🔥 VERIFICAÇÃO CORRIGIDA: Admin e Super Admin podem excluir qualquer prova
+        const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
+        const isProfessorDaProva = prova.userId && prova.userId.toString() === usuarioId;
+        
+        if (!isAdmin && !isProfessorDaProva) {
             return res.status(403).json({
                 success: false,
-                error: 'Você não é o professor desta prova'
+                error: 'Apenas professores (da prova) ou administradores podem excluir provas'
             });
         }
         
@@ -7822,8 +7868,6 @@ app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res)
         });
     }
 });
-
-
 
 // ============ ROTAS DE MONITORAMENTO ============
 
@@ -7879,10 +7923,11 @@ app.post('/api/monitor/violacao', authenticateToken, async (req, res) => {
 // Obter logs de monitoramento (para professor)
 app.get('/api/monitor/logs/:provaId', authenticateToken, async (req, res) => {
   try {
-    if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores podem acessar logs'
+        error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
     
@@ -8184,11 +8229,12 @@ app.get('/api/aluno/provas/:provaId/detalhes-cancelamento', authenticateToken, a
 // ============ ROTA PARA NOTIFICAÇÕES DE CANCELAMENTO ============
 app.get('/api/professor/notificacoes/cancelamentos', authenticateToken, async (req, res) => {
     try {
-        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
-            return res.status(403).json({
-                success: false,
-                error: 'Apenas professores podem acessar esta rota'
-            });
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        if (!isAdmin && req.userRole !== 'professor') {
+          return res.status(403).json({
+            success: false,
+            error: 'Apenas professores e administradores podem corrigir provas'
+          });
         }
         
         const professorId = req.userId;
@@ -8480,11 +8526,12 @@ app.get('/api/sync/status', authenticateToken, (req, res) => {
 // Rota para backup manual (apenas admin/professor)
 app.post('/api/backup/manual', authenticateToken, async (req, res) => {
     try {
-        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
-            return res.status(403).json({
-                success: false,
-                error: 'Apenas professores e administradores podem fazer backup manual'
-            });
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        if (!isAdmin && req.userRole !== 'professor') {
+          return res.status(403).json({
+            success: false,
+            error: 'Apenas professores e administradores podem corrigir provas'
+          });
         }
         
         console.log(`🔄 Backup manual solicitado por ${req.userId}`);
@@ -8515,11 +8562,12 @@ app.post('/api/backup/manual', authenticateToken, async (req, res) => {
 // Rota para listar backups disponíveis
 app.get('/api/backup/list', authenticateToken, async (req, res) => {
     try {
-        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
-            return res.status(403).json({
-                success: false,
-                error: 'Apenas professores e administradores podem listar backups'
-            });
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        if (!isAdmin && req.userRole !== 'professor') {
+          return res.status(403).json({
+            success: false,
+            error: 'Apenas professores e administradores podem corrigir provas'
+          });
         }
         
         const backups = backupService.listBackups();
@@ -8755,7 +8803,7 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
         console.log('\n🚀 Inicializando serviço de email unificado...');
         
         // 🔥 USAR O NOVO SERVIÇO UNIFICADO
-        const EmailService = require('./email-service');
+        const EmailService = require('./services/email-service');
         const emailService = new EmailService();
         
         // Inicializar o serviço (importante!)
@@ -9523,11 +9571,19 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
 });
 
 // ============ ADMIN CRIAR NOVO USUÁRIO ============
-app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
+app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
     try {
         const userData = req.body;
         
         console.log('📝 Admin criando usuário:', userData.email);
+        
+        // Admin não pode criar super_admin
+        if (req.userRole === 'admin' && userData.role === 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Administradores não podem criar Super Admins'
+            });
+        }
         
         // Validar email institucional
         if (userData.email && !userData.email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
@@ -9575,7 +9631,7 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
             }
         }
 
-        // 🔥 VALIDAR POLÍTICA DE SENHAS NA SENHA GERADA PELO ADMIN
+        // VALIDAR POLÍTICA DE SENHAS
         const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
             Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
             Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
@@ -9588,7 +9644,6 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
         const exigirNumero = configSenhaNumero?.valor || false;
         const exigirEspecial = configSenhaEspecial?.valor || false;
 
-        // Validar tamanho mínimo
         if (userData.password.length < tamanhoMinimo) {
             return res.status(400).json({
                 success: false,
@@ -9617,14 +9672,13 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
             });
         }
 
-        // ========== CRIAR USUÁRIO ==========
-        // ADMIN CRIOU - FORÇAR TROCA DE SENHA NO PRIMEIRO LOGIN
+        // CRIAR USUÁRIO
         const user = new User({
             ...userData,
             cpf: userData.cpf?.replace(/\D/g, ''),
             telefone: userData.telefone?.replace(/\D/g, ''),
             ativo: true,
-            forcePasswordChange: true, // ✅ FORÇAR TROCA - admin criou
+            forcePasswordChange: true,
             passwordChangedAt: null,
             loginAttempts: 0,
             lockUntil: null,
@@ -9641,7 +9695,7 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res
         await user.save();
 
         console.log(`✅ Usuário criado pelo admin: ${user.email}`);
-        console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange} (FORÇADO - criado por admin)`);
+        console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
 
         res.status(201).json({
             success: true,
@@ -9717,18 +9771,26 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
     }
 });
 
-// ============ ATUALIZAR USUÁRIO (VOCÊ JÁ TEM, MAS VAMOS MELHORAR) ============
-app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+// ============ ATUALIZAR USUÁRIO ============
+app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
         
         console.log(`✏️ Admin ${req.userId} editando usuário ${id}`);
         
+        // Impedir que admin altere seu próprio role para super_admin
+        if (req.userRole === 'admin' && updates.role === 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Administradores não podem criar Super Admins'
+            });
+        }
+        
         // Não permitir atualizar senha por esta rota
         delete updates.password;
         
-        // Validar email institucional se estiver sendo atualizado
+        // Validar email institucional
         if (updates.email && !updates.email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
             return res.status(400).json({
                 success: false,
@@ -9745,7 +9807,15 @@ app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
             });
         }
         
-        // Verificar duplicatas de email se estiver mudando
+        // Admin não pode alterar super_admin
+        if (req.userRole === 'admin' && existingUser.role === 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Administradores não podem modificar dados de Super Admins'
+            });
+        }
+        
+        // Verificar duplicatas de email
         if (updates.email && updates.email !== existingUser.email) {
             const emailExists = await User.findOne({ email: updates.email });
             if (emailExists) {
@@ -9756,7 +9826,7 @@ app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
             }
         }
         
-        // Verificar duplicatas de CPF se estiver mudando
+        // Verificar duplicatas de CPF
         if (updates.cpf) {
             const cpfNumeros = updates.cpf.replace(/\D/g, '');
             if (cpfNumeros !== existingUser.cpf) {
@@ -9806,12 +9876,29 @@ app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
 });
 
 // ============ ADMIN RESETAR SENHA ============
-app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdmin, async (req, res) => {
+app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { novaSenha } = req.body;
         
         console.log(`🔑 Admin ${req.userId} resetando senha do usuário ${id}`);
+        
+        // Verificar se o alvo é super_admin
+        const targetUser = await User.findById(id);
+        if (!targetUser) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Admin não pode resetar senha de super_admin
+        if (req.userRole === 'admin' && targetUser.role === 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Administradores não podem resetar senha de Super Admins'
+            });
+        }
         
         if (!novaSenha || novaSenha.length < 6) {
             return res.status(400).json({
@@ -9820,7 +9907,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             });
         }
         
-        // 🔥 VALIDAR POLÍTICA DE SENHAS
+        // VALIDAR POLÍTICA DE SENHAS
         const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
             Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
             Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
@@ -9833,7 +9920,6 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         const exigirNumero = configSenhaNumero?.valor || false;
         const exigirEspecial = configSenhaEspecial?.valor || false;
 
-        // Validar tamanho mínimo
         if (novaSenha.length < tamanhoMinimo) {
             return res.status(400).json({
                 success: false,
@@ -9871,17 +9957,16 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             });
         }
         
-        // ========== ATUALIZAR SENHA ==========
-        // ADMIN RESETOU - FORÇAR TROCA NO PRÓXIMO LOGIN
+        // ATUALIZAR SENHA
         user.password = novaSenha;
-        user.forcePasswordChange = true; // ✅ FORÇAR TROCA - admin resetou
+        user.forcePasswordChange = true;
         user.passwordChangedAt = null;
         await user.save();
         
         console.log(`✅ Senha resetada para usuário ${user.email}`);
-        console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange} (FORÇADO - admin resetou)`);
+        console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
         
-        // Criar notificação para o usuário
+        // Criar notificação
         try {
             const Notificacao = mongoose.model('Notificacao');
             const notificacao = new Notificacao({
@@ -9902,7 +9987,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         res.json({
             success: true,
             message: 'Senha resetada com sucesso! O usuário deverá trocar a senha no próximo login.',
-            novaSenha: novaSenha // Opcional: retornar a senha para o admin
+            novaSenha: novaSenha
         });
         
     } catch (error) {
@@ -9915,7 +10000,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
 });
 
 // ============ ATIVAR/DESATIVAR USUÁRIO ============
-app.put('/api/admin/usuarios/:id/toggle-status', authenticateToken, isSuperAdmin, async (req, res) => {
+app.put('/api/admin/usuarios/:id/toggle-status', authenticateToken, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { ativo } = req.body;
@@ -9928,6 +10013,14 @@ app.put('/api/admin/usuarios/:id/toggle-status', authenticateToken, isSuperAdmin
             return res.status(404).json({
                 success: false,
                 error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Admin não pode desativar super_admin
+        if (req.userRole === 'admin' && user.role === 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Administradores não podem alterar status de Super Admins'
             });
         }
         
@@ -9963,26 +10056,35 @@ app.put('/api/admin/usuarios/:id/toggle-status', authenticateToken, isSuperAdmin
     }
 });
 
-// ============ EXCLUIR USUÁRIO (VOCÊ JÁ TEM, MAS VAMOS MELHORAR) ============
-app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+// ============ EXCLUIR USUÁRIO ============
+app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
         console.log(`🗑️ Admin ${req.userId} tentando excluir usuário ${id}`);
+        
+        const user = await User.findById(id);
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Usuário não encontrado' 
+            });
+        }
+        
+        // Admin não pode excluir super_admin
+        if (req.userRole === 'admin' && user.role === 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Administradores não podem excluir Super Admins'
+            });
+        }
         
         // Verificar se é o último admin
         if (req.userId === id) {
             return res.status(400).json({
                 success: false,
                 error: 'Você não pode excluir seu próprio usuário'
-            });
-        }
-
-        const user = await User.findById(id);
-        if (!user) {
-            return res.status(404).json({ 
-                success: false, 
-                error: 'Usuário não encontrado' 
             });
         }
 
@@ -10181,6 +10283,75 @@ app.get('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) =
     }
 });
 
+// ============ ROTA PARA ADMIN EXCLUIR TURMA ============
+app.delete('/api/admin/turmas/:id', authenticateToken, async (req, res) => {
+    try {
+        // Verificar se é admin ou super_admin
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas administradores podem excluir turmas'
+            });
+        }
+        
+        const turmaId = req.params.id;
+        
+        console.log(`🗑️ Admin ${req.userId} excluindo turma ${turmaId}`);
+        
+        // Buscar turma
+        const turma = await Turma.findById(turmaId);
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+        
+        // Verificar provas associadas
+        const provasAssociadas = await Prova.find({ turmaId: turmaId });
+        
+        // Remover tudo (provas e resultados)
+        console.log(`🔧 Removendo ${provasAssociadas.length} provas associadas...`);
+        
+        for (const prova of provasAssociadas) {
+            // Remover resultados
+            await Resultado.deleteMany({ provaId: prova._id });
+            await ProvaRealizada.deleteMany({ provaId: prova._id });
+            // Remover prova
+            await Prova.findByIdAndDelete(prova._id);
+        }
+        
+        // Remover referência da turma dos alunos
+        if (turma.alunos && turma.alunos.length > 0) {
+            await User.updateMany(
+                { _id: { $in: turma.alunos } },
+                { $pull: { turmas: turmaId } }
+            );
+        }
+        
+        // Excluir a turma
+        await Turma.findByIdAndDelete(turmaId);
+        
+        console.log(`✅ Turma ${turmaId} excluída com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Turma excluída com sucesso!',
+            detalhes: {
+                provasRemovidas: provasAssociadas.length,
+                alunosRemovidos: turma.alunos?.length || 0
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao excluir turma: ' + error.message
+        });
+    }
+});
+
 // ============ GERENCIAMENTO DE PROVAS ============
 
 app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) => {
@@ -10228,6 +10399,65 @@ app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) =
     } catch (error) {
         console.error('❌ Erro ao listar provas:', error);
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ ROTA PARA ADMIN EDITAR PROVA ============
+app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
+    try {
+        // Verificar se é admin ou super_admin
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas administradores podem editar provas'
+            });
+        }
+        
+        const provaId = req.params.id;
+        const updates = req.body;
+        
+        console.log(`✏️ Admin ${req.userId} editando prova ${provaId}`);
+        
+        const prova = await Prova.findById(provaId);
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+        
+        // Atualizar campos básicos
+        if (updates.titulo) prova.titulo = updates.titulo;
+        if (updates.conteudo) prova.conteudo = updates.conteudo;
+        if (updates.dataLimite) prova.dataLimite = new Date(updates.dataLimite);
+        if (updates.duracaoMinutos) prova.duracaoMinutos = updates.duracaoMinutos;
+        
+        // Atualizar questões
+        if (updates.questoes && Array.isArray(updates.questoes)) {
+            prova.questoes = updates.questoes;
+            prova.quantidadeQuestoes = updates.questoes.length;
+        }
+        
+        await prova.save();
+        
+        console.log(`✅ Prova ${provaId} atualizada com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Prova atualizada com sucesso!',
+            prova: {
+                id: prova._id,
+                titulo: prova.titulo,
+                quantidadeQuestoes: prova.questoes.length
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao editar prova:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao editar prova: ' + error.message
+        });
     }
 });
 
@@ -10829,7 +11059,6 @@ app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) =
 });
 
 // ============ ROTA PARA EXCLUIR TURMA (COM REMOÇÃO EM CASCATA) ============
-
 app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
     try {
         const turmaId = req.params.id;
@@ -12888,7 +13117,7 @@ app.post('/api/admin/testar-email-enviar', authenticateToken, isSuperAdmin, asyn
         console.log(`📝 Assunto: ${assunto || 'Teste do Sistema'}`);
 
         // Usar o novo serviço unificado
-        const EmailService = require('./email-service');
+        const EmailService = require('./services/email-service');
         const emailService = new EmailService();
         
         // Inicializar o serviço
@@ -12965,7 +13194,7 @@ app.post('/api/admin/enviar-email-boas-vindas', authenticateToken, isSuperAdmin,
         console.log(`📨 Para: ${destinatario}`);
         console.log(`👤 Nome: ${nomeDestino}`);
 
-        const EmailService = require('./email-service');
+        const EmailService = require('./services/email-service');
         const emailService = new EmailService();
         
         await emailService.init();
@@ -13005,7 +13234,7 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
             });
         }
 
-        const EmailService = require('./email-service');
+        const EmailService = require('./services/email-service');
         const emailService = new EmailService();
         
         await emailService.init();

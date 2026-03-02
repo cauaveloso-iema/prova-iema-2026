@@ -7,70 +7,56 @@
 
 const mongoose = require('mongoose');
 const Notificacao = require('../models/Notificacao');
-const EmailService = require('./email-service-resend');
-const emailService = new EmailService();
 
-// ============ MODELO CONFIG INLINE (para evitar erro de import) ============
-let Config;
-try {
-    Config = mongoose.model('Config');
-    console.log('✅ Modelo Config já existe');
-} catch {
-    const ConfigSchema = new mongoose.Schema({
-        chave: { 
-            type: String, 
-            required: true, 
-            unique: true, 
-            trim: true 
-        },
-        valor: { 
-            type: mongoose.Schema.Types.Mixed, 
-            required: true 
-        },
-        tipo: { 
-            type: String, 
-            enum: ['string', 'number', 'boolean', 'object', 'array'], 
-            default: 'string' 
-        },
-        descricao: { 
-            type: String, 
-            default: '' 
-        },
-        categoria: { 
-            type: String, 
-            enum: ['geral', 'sistema', 'seguranca', 'provas', 'email', 'backups', 'logs', 'aparencia'], 
-            default: 'geral' 
-        },
-        publico: { 
-            type: Boolean, 
-            default: false 
-        },
-        editavel: { 
-            type: Boolean, 
-            default: true 
-        },
-        atualizadoPor: { 
-            type: mongoose.Schema.Types.ObjectId, 
-            ref: 'User' 
-        },
-        atualizadoEm: { 
-            type: Date, 
-            default: Date.now 
+// 🔥 CORREÇÃO: Import do email-service da pasta services
+const EmailService = require('./email-service'); 
+
+// 🔥 CORREÇÃO: Inicializar o serviço de email de forma assíncrona
+let emailService = null;
+let emailServiceInicializado = false;
+
+async function inicializarEmailService() {
+    try {
+        console.log('📧 Inicializando serviço de email no NotificationService...');
+        emailService = new EmailService();
+        
+        // Chamar o método init (que é assíncrono)
+        if (typeof emailService.init === 'function') {
+            await emailService.init();
+            console.log('✅ Serviço de email inicializado com sucesso');
+        } else {
+            console.log('⚠️ Serviço de email não possui método init, usando construtor padrão');
         }
-    }, { 
-        timestamps: true 
-    });
-
-    ConfigSchema.index({ chave: 1 }, { unique: true });
-    ConfigSchema.index({ categoria: 1 });
-    ConfigSchema.index({ atualizadoEm: -1 });
-
-    Config = mongoose.model('Config', ConfigSchema);
-    console.log('✅ Modelo Config criado com sucesso (inline)!');
+        
+        emailServiceInicializado = true;
+    } catch (error) {
+        console.error('❌ Erro ao inicializar serviço de email:', error);
+        emailService = new EmailService(); // Fallback
+        emailServiceInicializado = true;
+    }
 }
+
+// Inicializar imediatamente (assíncrono)
+inicializarEmailService();
+
+// 🔥 IMPORTAR MODELO CONFIG (já existente)
+const Config = mongoose.model('Config');
 
 class NotificationService {
     
+    // ===== FUNÇÃO PARA GARANTIR QUE EMAIL SERVICE ESTÁ PRONTO =====
+    async garantirEmailService() {
+        if (!emailServiceInicializado) {
+            console.log('⏳ Aguardando inicialização do serviço de email...');
+            // Aguardar até 3 segundos
+            for (let i = 0; i < 30; i++) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                if (emailServiceInicializado) break;
+            }
+        }
+        return emailService;
+    }
+
     // ===== BUSCAR CONFIGURAÇÕES DE NOTIFICAÇÃO DO BANCO =====
     async getConfiguracoes() {
         try {
@@ -195,19 +181,25 @@ class NotificationService {
             // SE EMAIL ESTIVER HABILITADO, ENVIAR EMAIL
             if (config.email) {
                 try {
-                    const emailResult = await emailService.sendResultadoLiberado(
-                        aluno.email,
-                        aluno.nome,
-                        prova.titulo,
-                        resultado.nota,
-                        resultado.acertos,
-                        resultado.total
-                    );
+                    const emailServicePronto = await this.garantirEmailService();
                     
-                    if (emailResult.success) {
-                        console.log(`📧 Email enviado para ${aluno.email} sobre resultado`);
+                    if (emailServicePronto && emailServicePronto.sendResultadoLiberado) {
+                        const emailResult = await emailServicePronto.sendResultadoLiberado(
+                            aluno.email,
+                            aluno.nome,
+                            prova.titulo,
+                            resultado.nota,
+                            resultado.acertos,
+                            resultado.total
+                        );
+                        
+                        if (emailResult.success) {
+                            console.log(`📧 Email enviado para ${aluno.email} sobre resultado`);
+                        } else {
+                            console.warn(`⚠️ Falha no email para ${aluno.email}:`, emailResult.error);
+                        }
                     } else {
-                        console.warn(`⚠️ Falha no email para ${aluno.email}:`, emailResult.error);
+                        console.log('📧 Email service não disponível - email não enviado');
                     }
                 } catch (emailError) {
                     console.error('❌ Erro ao enviar email:', emailError.message);
@@ -411,16 +403,20 @@ class NotificationService {
             // SE EMAIL ESTIVER HABILITADO, ENVIAR LEMBRETE
             if (config.email) {
                 try {
-                    const emailResult = await emailService.sendLembreteProva(
-                        aluno.email,
-                        aluno.nome,
-                        prova.titulo,
-                        horasAntes,
-                        prova.dataInicio
-                    );
+                    const emailServicePronto = await this.garantirEmailService();
                     
-                    if (emailResult.success) {
-                        console.log(`📧 Lembrete enviado para ${aluno.email}`);
+                    if (emailServicePronto && emailServicePronto.sendLembreteProva) {
+                        const emailResult = await emailServicePronto.sendLembreteProva(
+                            aluno.email,
+                            aluno.nome,
+                            prova.titulo,
+                            horasAntes,
+                            prova.dataInicio
+                        );
+                        
+                        if (emailResult.success) {
+                            console.log(`📧 Lembrete enviado para ${aluno.email}`);
+                        }
                     }
                 } catch (emailError) {
                     console.error('❌ Erro ao enviar lembrete:', emailError.message);

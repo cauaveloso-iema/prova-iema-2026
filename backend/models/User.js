@@ -72,11 +72,11 @@ const UserSchema = new mongoose.Schema({
       default: false  // false = não precisa trocar senha no login
   },
 
-  role: {
-    type: String,
-    enum: ['aluno', 'professor', 'admin'],
-    default: 'aluno'
-  },
+role: {
+  type: String,
+  enum: ['aluno', 'professor', 'admin', 'super_admin'], // <-- ADICIONADO super_admin
+  default: 'aluno'
+},
 
 // ========== CAMPOS DE SUPERUSUÁRIO ==========
 isSuperUser: {
