@@ -3206,7 +3206,7 @@
                 const hoje = agora.toISOString().split('T')[0];
                 const terminoProva = new Date(hoje + 'T' + prova.horarioTermino + ':00');
                 const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
-                
+
             }
         } else {
             document.getElementById('provaDuracao').textContent = (prova.duracaoMinutos || 30) + ' minutos';
@@ -4672,6 +4672,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <link rel="stylesheet" href="css/mobile.css">
     <script src="js/toggle-buttons.js"></script>
+
+    <script>
+    // ============================================
+    // MENU RÁPIDO - VERSÃO SIMPLES
+    // ============================================
+    (function() {
+        if (window.innerWidth > 768) return;
+        
+        const menu = document.getElementById('menuQuestoesRapido');
+        if (!menu) return;
+        
+        // Abrir menu ao clicar
+        menu.addEventListener('click', function() {
+            alert('Função de navegação rápida - clique nos números para ir às questões');
+        });
+    })();
+        
+    </script>
 
 </body>
 </html>
