@@ -1520,19 +1520,58 @@
                 `).join('');
             }
 
-            // ============ USUÁRIOS ============
+            // ============ CARREGAR USUÁRIOS (VERSÃO COMPLETA E CORRIGIDA) ============
             async carregarUsuarios() {
+                console.log('📢 CARREGANDO USUÁRIOS...');
                 const content = document.getElementById('contentArea');
+                
+                // Mostrar loading
                 content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando usuários...</p></div>';
 
                 try {
+                    const token = localStorage.getItem('auth_token');
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    const isAdminNormal = userData.role === 'admin'; // Admin normal
+                    const isSuperAdmin = userData.role === 'super_admin';
+                    
+                    console.log('🔑 Token:', token ? 'OK' : 'NULO');
+                    console.log('👤 Usuário logado:', userData.role);
+                    
                     const response = await fetch('/api/admin/usuarios?limit=100', {
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
 
+                    console.log('📡 Resposta status:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Erro HTTP: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
-                    this.usuarios = data.success ? data.usuarios : [];
+                    console.log('📦 Dados recebidos:', data);
 
+                    if (!data.success) {
+                        throw new Error(data.error || 'Erro ao carregar usuários');
+                    }
+
+                    // 🔥 FILTRAGEM: Admin normal não vê super_admins
+                    let usuarios = data.usuarios || [];
+                    
+                    if (isAdminNormal) {
+                        const totalAntes = usuarios.length;
+                        usuarios = usuarios.filter(u => u.role !== 'super_admin');
+                        console.log(`🔍 Admin normal: removidos ${totalAntes - usuarios.length} super_admins`);
+                    }
+                    
+                    // Se for super_admin, mantém todos
+                    if (isSuperAdmin) {
+                        console.log('👑 Super Admin: mostrando todos os usuários');
+                    }
+
+                    this.usuarios = usuarios;
+                    console.log(`✅ Usuários carregados: ${this.usuarios.length}`);
+
+                    // Renderizar a interface
                     content.innerHTML = `
                         <div class="section-header">
                             <h2><i class="fas fa-users"></i> Usuários</h2>
@@ -1543,18 +1582,23 @@
 
                         <div class="filters-bar">
                             <div class="filter-group">
-                                <label>Buscar</label>
-                                <input type="text" id="buscaUsuario" placeholder="Nome, email..." 
-                                    class="form-control" onkeyup="adminSimples.filtrarUsuarios()">
+                                <label><i class="fas fa-search"></i> Buscar</label>
+                                <input type="text" id="buscaUsuario" placeholder="Nome, email ou matrícula..." 
+                                    class="form-control" onkeyup="adminSimples.filtrarUsuarios()" autocomplete="off">
                             </div>
                             <div class="filter-group">
-                                <label>Perfil</label>
+                                <label><i class="fas fa-user-tag"></i> Perfil</label>
                                 <select id="filtroRole" class="form-control" onchange="adminSimples.filtrarUsuarios()">
                                     <option value="todos">Todos</option>
                                     <option value="aluno">Alunos</option>
                                     <option value="professor">Professores</option>
                                     <option value="admin">Admins</option>
                                 </select>
+                            </div>
+                            <div class="filter-actions">
+                                <button class="btn-filter" onclick="adminSimples.limparFiltrosUsuarios()">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
                             </div>
                         </div>
 
@@ -1566,6 +1610,8 @@
                                         <th>Email</th>
                                         <th>Perfil</th>
                                         <th>Matrícula</th>
+                                        <th>CPF</th>
+                                        <th>Telefone</th>
                                         <th>Status</th>
                                         <th>Ações</th>
                                     </tr>
@@ -1577,52 +1623,79 @@
                         </div>
 
                         <div class="pagination">
-                            <button class="btn-pagination" onclick="adminSimples.paginaAnterior('usuarios')" id="btnAnteriorUsuario">Anterior</button>
-                            <span id="pageInfoUsuario">Página 1</span>
-                            <button class="btn-pagination" onclick="adminSimples.proximaPagina('usuarios')" id="btnProximaUsuario">Próxima</button>
+                            <button class="btn-pagination" onclick="adminSimples.paginaAnterior('usuarios')" id="btnAnteriorUsuario" disabled>
+                                <i class="fas fa-chevron-left"></i> Anterior
+                            </button>
+                            <span id="pageInfoUsuario">Página 1 de 1</span>
+                            <button class="btn-pagination" onclick="adminSimples.proximaPagina('usuarios')" id="btnProximaUsuario" disabled>
+                                Próxima <i class="fas fa-chevron-right"></i>
+                            </button>
                         </div>
                     `;
 
+                    // Inicializar variáveis de paginação
                     this.paginaAtualUsuario = 1;
                     this.usuariosFiltrados = [...this.usuarios];
+                    this.itensPorPagina = 10;
+                    
+                    // Atualizar a tabela com paginação
                     this.atualizarTabelaUsuarios();
                     
                 } catch (error) {
-                    content.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+                    console.error('❌ Erro ao carregar usuários:', error);
+                    content.innerHTML = `
+                        <div class="error-container" style="text-align: center; padding: 40px;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 15px;"></i>
+                            <h3 style="color: #721c24;">Erro ao carregar usuários</h3>
+                            <p style="color: #6c757d;">${error.message}</p>
+                            <button onclick="adminSimples.carregarUsuarios()" class="btn-primary" style="margin-top: 15px;">
+                                <i class="fas fa-sync-alt"></i> Tentar novamente
+                            </button>
+                        </div>
+                    `;
                 }
             }
 
+            // ============ GERAR LINHAS USUÁRIOS (COM FILTRO) ============
             gerarLinhasUsuarios(usuarios) {
-                // Filtrar super_admin (admin normal não vê)
+                // 🔥 FILTRO: Admin normal não vê super_admins
                 const usuariosFiltrados = usuarios.filter(u => u.role !== 'super_admin');
+                
+                console.log('Usuários após filtrar super_admin:', usuariosFiltrados.length);
                 
                 if (!usuariosFiltrados || usuariosFiltrados.length === 0) {
                     return '<tr><td colspan="6" class="empty-state">Nenhum usuário encontrado</td></tr>';
                 }
 
-                return usuariosFiltrados.map(u => `
-                    <tr>
-                        <td><strong>${u.nome || 'N/A'}</strong></td>
-                        <td>${u.email || '-'}</td>
-                        <td><span class="role-badge ${u.role || 'aluno'}">${u.role || 'aluno'}</span></td>
-                        <td>${u.matricula || '-'}</td>
-                        <td>
-                            <span class="status-badge ${u.ativo ? 'active' : 'inactive'}">
-                                ${u.ativo ? 'Ativo' : 'Inativo'}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="action-buttons">
-                                <button class="btn-icon edit" onclick="adminSimples.editarUsuario('${u._id}')" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn-icon" onclick="adminSimples.resetarSenha('${u._id}')" title="Resetar senha">
-                                    <i class="fas fa-key"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
+                return usuariosFiltrados.map(u => {
+                    // Formatar CPF e Telefone se existirem
+                    const cpfFormatado = u.cpf ? u.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '-';
+                    const telefoneFormatado = u.telefone ? u.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
+                    
+                    return `
+                        <tr>
+                            <td><strong>${u.nome || 'N/A'}</strong></td>
+                            <td>${u.email || '-'}</td>
+                            <td><span class="role-badge ${u.role || 'aluno'}">${u.role || 'aluno'}</span></td>
+                            <td>${u.matricula || '-'}</td>
+                            <td>
+                                <span class="status-badge ${u.ativo ? 'active' : 'inactive'}">
+                                    ${u.ativo ? 'Ativo' : 'Inativo'}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-icon edit" onclick="adminSimples.editarUsuario('${u._id}')" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn-icon" onclick="adminSimples.resetarSenha('${u._id}')" title="Resetar senha">
+                                        <i class="fas fa-key"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
             }
 
             atualizarTabelaUsuarios() {
@@ -1640,11 +1713,15 @@
                 document.getElementById('btnProximaUsuario').disabled = this.paginaAtualUsuario === totalPaginas;
             }
 
+            // ============ FILTRAR USUÁRIOS ============
             filtrarUsuarios() {
                 const busca = document.getElementById('buscaUsuario')?.value.toLowerCase() || '';
                 const role = document.getElementById('filtroRole')?.value || 'todos';
                 
-                this.usuariosFiltrados = this.usuarios.filter(u => u.role !== 'super_admin').filter(u => {
+                // Filtrar removendo super_admin primeiro
+                const usuariosSemSuper = this.usuarios.filter(u => u.role !== 'super_admin');
+                
+                this.usuariosFiltrados = usuariosSemSuper.filter(u => {
                     const matchBusca = busca === '' || 
                         (u.nome && u.nome.toLowerCase().includes(busca)) ||
                         (u.email && u.email.toLowerCase().includes(busca));
@@ -1741,7 +1818,11 @@
                 }
             }
 
+            // ============ ABRIR MODAL USUÁRIO (CORRIGIDO) ============
             abrirModalUsuario(usuario = null) {
+                console.log('📝 Abrindo modal usuário. Dados:', usuario);
+                
+                // Proteção: Se for super_admin, bloquear
                 if (usuario && usuario.role === 'super_admin') {
                     this.showToast('❌ Não é possível editar Super Admins', 'error');
                     return;
@@ -1749,41 +1830,121 @@
                 
                 const modalBody = document.getElementById('modalBody');
                 
-                modalBody.innerHTML = `
+                // Extrair valores
+                const nome = usuario?.nome || '';
+                const email = usuario?.email || '';
+                const role = usuario?.role || 'aluno';
+                const ativo = usuario?.ativo !== false; // default true
+                const id = usuario?._id || usuario?.id || '';
+                const cpf = usuario?.cpf || '';
+                const telefone = usuario?.telefone || '';
+                const matricula = usuario?.matricula || '';
+                const curso = usuario?.curso || '';
+                const turma = usuario?.turma || '';
+                const eixo = usuario?.eixo || '';
+                
+                console.log('📋 Valores extraídos:', { nome, email, role, ativo, id });
+                
+                // Escapar valores para evitar problemas com aspas
+                const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;');
+                
+                const nomeStr = escapeStr(nome);
+                const emailStr = escapeStr(email);
+                const cpfStr = escapeStr(cpf);
+                const telefoneStr = escapeStr(telefone);
+                const matriculaStr = escapeStr(matricula);
+                const cursoStr = escapeStr(curso);
+                const turmaStr = escapeStr(turma);
+                
+                // Criar HTML do conteúdo
+                const conteudoHTML = `
                     <form id="formUsuario">
                         <div class="form-group">
                             <label>Nome</label>
-                            <input type="text" id="nomeUsuario" class="form-control" value="${usuario?.nome || ''}" required>
+                            <input type="text" id="nomeUsuario" class="form-control" value="${nomeStr}" required>
                         </div>
                         
                         <div class="form-group">
                             <label>Email</label>
-                            <input type="email" id="emailUsuario" class="form-control" value="${usuario?.email || ''}" required>
+                            <input type="email" id="emailUsuario" class="form-control" value="${emailStr}" required>
                         </div>
                         
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Perfil</label>
                                 <select id="roleUsuario" class="form-control">
-                                    <option value="aluno" ${usuario?.role === 'aluno' ? 'selected' : ''}>Aluno</option>
-                                    <option value="professor" ${usuario?.role === 'professor' ? 'selected' : ''}>Professor</option>
-                                    <option value="admin" ${usuario?.role === 'admin' ? 'selected' : ''}>Admin</option>
+                                    <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>Aluno</option>
+                                    <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professor</option>
+                                    <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
                                 </select>
                             </div>
                             
                             <div class="form-group">
                                 <label>Status</label>
                                 <select id="statusUsuario" class="form-control">
-                                    <option value="true" ${usuario?.ativo !== false ? 'selected' : ''}>Ativo</option>
-                                    <option value="false" ${usuario?.ativo === false ? 'selected' : ''}>Inativo</option>
+                                    <option value="true" ${ativo ? 'selected' : ''}>Ativo</option>
+                                    <option value="false" ${!ativo ? 'selected' : ''}>Inativo</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>CPF</label>
+                                <input type="text" id="cpfUsuario" class="form-control" value="${cpfStr}" placeholder="Apenas números">
+                            </div>
+                            <div class="form-group">
+                                <label>Telefone</label>
+                                <input type="text" id="telefoneUsuario" class="form-control" value="${telefoneStr}" placeholder="(99) 99999-9999">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Matrícula</label>
+                            <input type="text" id="matriculaUsuario" class="form-control" value="${matriculaStr}">
+                        </div>
+                        
+                        <!-- Campos específicos para Aluno -->
+                        <div id="alunoFields" style="${role === 'aluno' ? 'display: block;' : 'display: none;'}">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Curso</label>
+                                    <input type="text" id="cursoUsuario" class="form-control" value="${cursoStr}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Turma</label>
+                                    <input type="text" id="turmaUsuario" class="form-control" value="${turmaStr}">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Campos específicos para Professor -->
+                        <div id="professorFields" style="${role === 'professor' ? 'display: block;' : 'display: none;'}">
+                            <div class="form-group">
+                                <label>Eixo</label>
+                                <select id="eixoUsuario" class="form-control">
+                                    <option value="">Selecione...</option>
+                                    <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>Natureza</option>
+                                    <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>Humanas</option>
+                                    <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>Linguagens</option>
+                                    <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>Desenvolvimento</option>
+                                    <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>Gestão</option>
+                                    <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>Turismo</option>
+                                    <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>Ambiente</option>
                                 </select>
                             </div>
                         </div>
                         
                         ${!usuario ? `
                         <div class="form-group">
-                            <label>Senha (deixe em branco para gerar automática)</label>
-                            <input type="text" id="senhaUsuario" class="form-control" value="${Math.random().toString(36).slice(-8)}">
+                            <label>Senha Temporária</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="senhaUsuario" class="form-control" value="${this.gerarSenha()}" required>
+                                <button type="button" class="btn-icon" onclick="adminSimples.gerarNovaSenha()" title="Gerar nova senha">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <small style="color: #6c757d;">O usuário usará esta senha para fazer login</small>
                         </div>
                         ` : ''}
                         
@@ -1794,12 +1955,36 @@
                     </form>
                 `;
 
-                document.getElementById('modalTitle').innerHTML = usuario ? 
+                // Definir título do modal
+                const titulo = usuario ? 
                     '<i class="fas fa-edit"></i> Editar Usuário' : 
-                    '<i class="fas fa-plus"></i> Novo Usuário';
+                    '<i class="fas fa-user-plus"></i> Novo Usuário';
                 
-                document.getElementById('modalSaveBtn').onclick = () => this.salvarUsuario(usuario?._id);
-                this.abrirModal();
+                // Abrir modal usando o método abrirModal com o título e conteúdo
+                this.abrirModal(titulo, conteudoHTML, true);
+                
+                // Configurar o botão salvar
+                document.getElementById('modalSaveBtn').onclick = () => this.salvarUsuario(id);
+                
+                // Configurar toggle dos campos específicos
+                const roleSelect = document.getElementById('roleUsuario');
+                if (roleSelect) {
+                    roleSelect.addEventListener('change', () => this.toggleCamposRole());
+                }
+            }
+
+            // ============ TOGGLE CAMPOS POR ROLE ============
+            toggleCamposRole() {
+                const role = document.getElementById('roleUsuario')?.value;
+                const alunoFields = document.getElementById('alunoFields');
+                const professorFields = document.getElementById('professorFields');
+                
+                if (alunoFields) {
+                    alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
+                }
+                if (professorFields) {
+                    professorFields.style.display = role === 'professor' ? 'block' : 'none';
+                }
             }
 
             async salvarUsuario(id = null) {
@@ -1978,9 +2163,24 @@
                 this.abrirModalTurma();
             }
 
+            // ============ EDITAR TURMA (CORRIGIDO) ============
             editarTurma(id) {
-                const turma = this.turmas.find(t => t.id === id);
-                if (turma) this.abrirModalTurma(turma);
+                console.log('✏️ Editando turma ID:', id);
+                
+                // Buscar a turma na lista
+                const turma = this.turmas.find(t => t.id === id || t._id === id);
+                
+                if (!turma) {
+                    console.error('❌ Turma não encontrada!');
+                    console.log('Turmas disponíveis:', this.turmas);
+                    this.showToast('❌ Turma não encontrada', 'error');
+                    return;
+                }
+                
+                console.log('📋 Dados da turma encontrada:', turma);
+                
+                // Abrir modal com os dados da turma
+                this.abrirModalTurma(turma);
             }
 
             verDetalhesTurma(id) {
@@ -2002,36 +2202,70 @@
                 );
             }
 
+            // ============ ESCAPAR HTML PARA EVITAR INJEÇÃO ============
+            escapeHtml(text) {
+                if (!text) return '';
+                return String(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;')
+                    .replace(/\n/g, '\\n');
+            }
+
+            // ============ ABRIR MODAL TURMA (CORRIGIDO - SEM ESCAPE) ============
+            // ============ ABRIR MODAL TURMA (CORRIGIDO) ============
             abrirModalTurma(turma = null) {
+                console.log('📝 Abrindo modal turma. Dados:', turma);
+                
                 const modalBody = document.getElementById('modalBody');
                 
-                modalBody.innerHTML = `
+                // Extrair valores
+                const nome = turma?.nome || turma?.name || '';
+                const disciplina = turma?.disciplina || '';
+                const eixo = turma?.eixo || '';
+                const ativa = turma?.ativa !== false;
+                const id = turma?.id || turma?._id || '';
+                
+                console.log('📋 Valores extraídos:', { nome, disciplina, eixo, ativa, id });
+                
+                // Garantir que os valores são strings
+                const nomeStr = String(nome || '').replace(/"/g, '&quot;');
+                const disciplinaStr = String(disciplina || '').replace(/"/g, '&quot;');
+                
+                // Criar o HTML do conteúdo
+                const conteudoHTML = `
                     <form id="formTurma">
                         <div class="form-group">
                             <label>Nome da Turma</label>
-                            <input type="text" id="nomeTurma" class="form-control" value="${turma?.nome || ''}" required>
+                            <input type="text" id="nomeTurma" class="form-control" value="${nomeStr}" required>
                         </div>
                         
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Disciplina</label>
-                                <input type="text" id="disciplinaTurma" class="form-control" value="${turma?.disciplina || ''}" required>
+                                <input type="text" id="disciplinaTurma" class="form-control" value="${disciplinaStr}" required>
                             </div>
                             
                             <div class="form-group">
                                 <label>Eixo</label>
                                 <select id="eixoTurma" class="form-control">
-                                    <option value="natureza" ${turma?.eixo === 'natureza' ? 'selected' : ''}>Natureza</option>
-                                    <option value="humanas" ${turma?.eixo === 'humanas' ? 'selected' : ''}>Humanas</option>
-                                    <option value="linguagens" ${turma?.eixo === 'linguagens' ? 'selected' : ''}>Linguagens</option>
-                                    <option value="desenvolvimento" ${turma?.eixo === 'desenvolvimento' ? 'selected' : ''}>Desenvolvimento</option>
+                                    <option value="">Selecione...</option>
+                                    <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
+                                    <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
+                                    <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
+                                    <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
+                                    <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
+                                    <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
+                                    <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
                                 </select>
                             </div>
                         </div>
                         
                         <div class="form-check">
-                            <input type="checkbox" id="ativaTurma" ${turma?.ativa !== false ? 'checked' : ''}>
-                            <label>Turma ativa</label>
+                            <input type="checkbox" id="ativaTurma" ${ativa ? 'checked' : ''}>
+                            <label for="ativaTurma">Turma ativa</label>
                         </div>
                         
                         <div class="info-card">
@@ -2041,12 +2275,16 @@
                     </form>
                 `;
 
-                document.getElementById('modalTitle').innerHTML = turma ? 
+                // Definir título do modal
+                const titulo = turma ? 
                     '<i class="fas fa-edit"></i> Editar Turma' : 
                     '<i class="fas fa-plus"></i> Nova Turma';
                 
-                document.getElementById('modalSaveBtn').onclick = () => this.salvarTurma(turma?.id);
-                this.abrirModal();
+                // Abrir modal usando o método abrirModal com o título e conteúdo
+                this.abrirModal(titulo, conteudoHTML, true);
+                
+                // Configurar o botão salvar
+                document.getElementById('modalSaveBtn').onclick = () => this.salvarTurma(id);
             }
 
             async salvarTurma(id = null) {
@@ -3292,9 +3530,9 @@
             }
 
             // ============ MODAL ============
-            // ============ ABRIR MODAL (CORRIGIDO) ============
+            // Localize este método no seu código e substitua por esta versão corrigida:
             abrirModal(titulo, conteudo, salvar = true) {
-                console.log('📂 Abrindo modal:', { titulo, salvar });
+                console.log('📂 Abrindo modal:', { titulo, salvar, temConteudo: !!conteudo });
                 
                 const modalTitle = document.getElementById('modalTitle');
                 const modalBody = document.getElementById('modalBody');
@@ -3305,15 +3543,17 @@
                     return;
                 }
                 
-                // Definir título
-                modalTitle.innerHTML = titulo;
+                // Definir título (garantir que não é undefined)
+                modalTitle.innerHTML = titulo || 'Título';
                 
-                // Definir conteúdo (GARANTIR QUE NÃO É UNDEFINED)
+                // Definir conteúdo (garantir que não é undefined)
                 modalBody.innerHTML = conteudo || '<p style="padding: 20px; text-align: center;">Nenhum conteúdo disponível</p>';
                 
                 // Mostrar/esconder botão salvar
                 if (modalSaveBtn) {
                     modalSaveBtn.style.display = salvar ? 'inline-block' : 'none';
+                    // Limpar eventos anteriores
+                    modalSaveBtn.onclick = null;
                 }
                 
                 // Abrir modal

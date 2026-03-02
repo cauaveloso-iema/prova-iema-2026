@@ -84,6 +84,16 @@
             opacity: 0.9;
         }
 
+        .header .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 30px;
+            margin-top: 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
         .content {
             padding: 30px;
         }
@@ -165,6 +175,23 @@
             width: 20px;
         }
 
+        .info-box {
+            background: #eef2ff;
+            border-left: 4px solid #4f46e5;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 0.9rem;
+            color: #1e40af;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-box i {
+            font-size: 1.2rem;
+        }
+
         .btn-primary {
             width: 100%;
             padding: 14px;
@@ -243,6 +270,7 @@
         <div class="header">
             <h1><i class="fas fa-key"></i> Trocar Senha</h1>
             <p>Defina uma nova senha para sua conta</p>
+            <span class="badge" id="tipoAcesso">Primeiro Acesso</span>
         </div>
         
         <div class="content">
@@ -250,19 +278,30 @@
             <div id="alert" class="alert"></div>
             
             <!-- Informações do usuário -->
-            <div id="userInfo" class="user-info" style="display: none;">
+            <div id="userInfo" class="user-info">
                 <p><i class="fas fa-user"></i> <strong id="userName"></strong></p>
                 <p><i class="fas fa-envelope"></i> <span id="userEmail"></span></p>
                 <p><i class="fas fa-tag"></i> <span id="userRole"></span></p>
+                <p id="primeiroAcessoInfo" style="color: #4f46e5; margin-top: 8px;">
+                    <i class="fas fa-info-circle"></i> 
+                    <span id="mensagemPrimeiroAcesso">Este é seu primeiro acesso. Defina sua nova senha.</span>
+                </p>
             </div>
             
             <form id="trocarSenhaForm">
-                <div class="form-group">
-                    <label for="senhaAtual">
-                        <i class="fas fa-lock"></i> Senha Atual
-                    </label>
-                    <input type="password" id="senhaAtual" class="form-control" 
-                           placeholder="Digite sua senha atual" required>
+                <!-- 🔥 CAMPO DE SENHA ATUAL - OCULTO POR PADRÃO -->
+                <div id="campoSenhaAtual" style="display: none;">
+                    <div class="form-group">
+                        <label for="senhaAtual">
+                            <i class="fas fa-lock"></i> Senha Atual
+                        </label>
+                        <input type="password" id="senhaAtual" class="form-control" 
+                               placeholder="Digite sua senha atual">
+                        <small style="color: #6b7280; display: block; margin-top: 5px;">
+                            <i class="fas fa-info-circle"></i> 
+                            Digite a senha gerada pelo seu Administrador
+                        </small>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -289,9 +328,17 @@
                     <div class="requirement" id="reqMatch">
                         <i class="far fa-circle"></i> Senhas coincidem
                     </div>
-                    <div class="requirement" id="reqDifferent">
-                        <i class="far fa-circle"></i> Diferente da senha atual
+                    <div id="reqDifferentContainer" style="display: none;">
+                        <div class="requirement" id="reqDifferent">
+                            <i class="far fa-circle"></i> Diferente da senha atual
+                        </div>
                     </div>
+                </div>
+                
+                <!-- Info box para primeiro acesso -->
+                <div id="infoPrimeiroAcesso" class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Por ser seu primeiro acesso, você não precisa digitar a senha atual. Apenas defina sua nova senha.</span>
                 </div>
                 
                 <button type="submit" class="btn-primary" id="btnTrocarSenha" disabled>
@@ -307,27 +354,32 @@
 
     <script>
         // ============================================
-        // TROCAR SENHA - VERSÃO SIMPLIFICADA
+        // TROCAR SENHA - VERSÃO SEM SENHA ATUAL PARA PRIMEIRO ACESSO
         // ============================================
         
         const API_BASE_URL = '/api';
+        let isPrimeiroAcesso = false;
+        let userData = null;
         
         // ========== VERIFICAR AUTENTICAÇÃO ==========
         function verificarAutenticacao() {
             const token = localStorage.getItem('auth_token');
-            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             
             console.log('📦 Verificando autenticação:');
             console.log('   Token:', token ? '✅' : '❌');
             console.log('   User:', userData);
             console.log('   forcePasswordChange:', userData.forcePasswordChange);
             
+            // Determinar se é primeiro acesso
+            isPrimeiroAcesso = userData.forcePasswordChange === true;
+            
             return { token, userData };
         }
 
         // ========== CARREGAR INFORMAÇÕES DO USUÁRIO ==========
         function carregarInfoUsuario() {
-            const { token, userData } = verificarAutenticacao();
+            const { token } = verificarAutenticacao();
             
             if (!token || !userData.nome) {
                 mostrarAlerta('Sessão expirada. Faça login novamente.', 'error');
@@ -350,7 +402,30 @@
                 roleText = 'Aluno';
             }
             document.getElementById('userRole').textContent = roleText;
-            document.getElementById('userInfo').style.display = 'block';
+            
+            // 🔥 CONFIGURAR INTERFACE BASEADO NO TIPO DE ACESSO
+            if (isPrimeiroAcesso) {
+                // Primeiro acesso - não precisa de senha atual
+                document.getElementById('campoSenhaAtual').style.display = 'none';
+                document.getElementById('infoPrimeiroAcesso').style.display = 'flex';
+                document.getElementById('reqDifferentContainer').style.display = 'none';
+                document.getElementById('tipoAcesso').textContent = 'Primeiro Acesso';
+                document.getElementById('tipoAcesso').style.background = 'rgba(255,215,0,0.3)';
+                document.getElementById('mensagemPrimeiroAcesso').textContent = 
+                    'Este é seu primeiro acesso. Defina sua nova senha sem precisar da senha atual.';
+            } else {
+                // Troca normal de senha - precisa de senha atual
+                document.getElementById('campoSenhaAtual').style.display = 'block';
+                document.getElementById('infoPrimeiroAcesso').style.display = 'none';
+                document.getElementById('reqDifferentContainer').style.display = 'block';
+                document.getElementById('tipoAcesso').textContent = 'Troca de Senha';
+                document.getElementById('tipoAcesso').style.background = 'rgba(255,255,255,0.2)';
+                document.getElementById('mensagemPrimeiroAcesso').textContent = 
+                    'Digite sua senha atual e a nova senha.';
+                
+                // Tornar campo de senha atual obrigatório
+                document.getElementById('senhaAtual').required = true;
+            }
             
             return true;
         }
@@ -385,23 +460,34 @@
                 reqMatch.classList.remove('valid');
             }
             
-            // Requisito 3: Diferente da senha atual
-            const reqDifferent = document.getElementById('reqDifferent');
-            if (senhaAtual && novaSenha && senhaAtual !== novaSenha) {
-                reqDifferent.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Diferente da senha atual';
-                reqDifferent.classList.add('valid');
-            } else {
-                reqDifferent.innerHTML = '<i class="far fa-circle"></i> Diferente da senha atual';
-                reqDifferent.classList.remove('valid');
+            // Requisito 3: Diferente da senha atual (apenas para troca normal)
+            let senhaAtualValida = true;
+            if (!isPrimeiroAcesso) {
+                const reqDifferent = document.getElementById('reqDifferent');
+                if (senhaAtual && novaSenha && senhaAtual !== novaSenha) {
+                    reqDifferent.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Diferente da senha atual';
+                    reqDifferent.classList.add('valid');
+                    senhaAtualValida = true;
+                } else {
+                    reqDifferent.innerHTML = '<i class="far fa-circle"></i> Diferente da senha atual';
+                    reqDifferent.classList.remove('valid');
+                    senhaAtualValida = false;
+                }
             }
             
-            // Habilitar/desabilitar botão
+            // Habilitar/desabilitar botão baseado no tipo de acesso
             const btn = document.getElementById('btnTrocarSenha');
-            const valido = novaSenha.length >= 6 && 
-                          novaSenha === confirmarSenha && 
-                          senhaAtual && senhaAtual !== novaSenha;
             
-            btn.disabled = !valido;
+            if (isPrimeiroAcesso) {
+                // Primeiro acesso: só precisa da nova senha
+                btn.disabled = !(novaSenha.length >= 6 && novaSenha === confirmarSenha);
+            } else {
+                // Troca normal: precisa de senha atual também
+                btn.disabled = !(novaSenha.length >= 6 && 
+                                novaSenha === confirmarSenha && 
+                                senhaAtual && 
+                                senhaAtualValida);
+            }
         }
 
         senhaAtualInput.addEventListener('input', validarSenhas);
@@ -413,10 +499,24 @@
             e.preventDefault();
             
             const token = localStorage.getItem('auth_token');
-            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             
-            const senhaAtual = senhaAtualInput.value;
             const novaSenha = novaSenhaInput.value;
+            
+            // Construir payload baseado no tipo de acesso
+            const payload = {
+                novaSenha: novaSenha
+            };
+            
+            // Adicionar senha atual apenas se não for primeiro acesso
+            if (!isPrimeiroAcesso) {
+                payload.senhaAtual = senhaAtualInput.value;
+            }
+            
+            console.log('📤 Enviando payload:', { 
+                ...payload, 
+                senhaAtual: payload.senhaAtual ? '***' : 'não enviada',
+                isPrimeiroAcesso 
+            });
             
             // Mostrar loading
             const btn = document.getElementById('btnTrocarSenha');
@@ -433,37 +533,38 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({
-                        senhaAtual: senhaAtual,
-                        novaSenha: novaSenha
-                    })
+                    body: JSON.stringify(payload)
                 });
                 
-                const data = await response.json();
-                console.log('📦 Resposta:', data);
+                const dados = await response.json();  // ← NOMEIE COMO 'dados'
+                console.log('📦 Resposta:', dados);
                 
-                if (data.success) {
+                if (dados.success) {
                     mostrarAlerta('✅ Senha alterada com sucesso!', 'success');
                     
                     // Atualizar localStorage
                     userData.forcePasswordChange = false;
                     localStorage.setItem('user_data', JSON.stringify(userData));
                     
-                    // Redirecionar após 2 segundos
+                    // 🔥 REDIRECIONAMENTO - DENTRO DO .then()
                     setTimeout(() => {
-                        if (userData.role === 'admin' || userData.role === 'super_admin') {
-                            window.location.href = 'admin.html';
-                        } else if (userData.role === 'professor') {
-                            window.location.href = 'index.html';
-                        } else if (userData.role === 'aluno') {
-                            window.location.href = 'aluno.html';
+                        const role = dados.user?.role;  // ← 'dados' existe aqui!
+                        
+                        if (role === 'super_admin') {
+                            window.location.href = '/admin.html';
+                        } else if (role === 'admin') {
+                            window.location.href = '/admin-simples.html';
+                        } else if (role === 'professor') {
+                            window.location.href = '/index.html';
+                        } else if (role === 'aluno') {
+                            window.location.href = '/aluno.html';
                         } else {
-                            window.location.href = 'login.html';
+                            window.location.href = '/login.html';
                         }
-                    }, 2000);
+                    }, 1500);
                     
                 } else {
-                    throw new Error(data.error || 'Erro ao trocar senha');
+                    throw new Error(dados.error || 'Erro ao trocar senha');
                 }
                 
             } catch (error) {

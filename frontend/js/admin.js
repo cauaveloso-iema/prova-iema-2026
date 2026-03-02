@@ -609,12 +609,12 @@ class AdminPanel {
         }
     }
 
-    // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (CORRIGIDO) ============
+    // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (COM BOTÃO ATIVAR/DESATIVAR) ============
     gerarLinhasUsuarios(usuarios) {
         if (!usuarios || usuarios.length === 0) {
             return `
                 <tr>
-                    <td colspan="8" style="text-align: center; padding: 40px;">
+                    <td colspan="9" style="text-align: center; padding: 40px;">
                         <i class="fas fa-users-slash" style="font-size: 2rem; color: #dee2e6; margin-bottom: 10px; display: block;"></i>
                         Nenhum usuário encontrado
                     </td>
@@ -650,9 +650,18 @@ class AdminPanel {
                         <button class="btn-icon" onclick="admin.editarUsuario('${user._id}')" title="Editar">
                             <i class="fas fa-edit"></i>
                         </button>
+                        
+                        <!-- 🔥 NOVO: Botão Ativar/Inativar -->
+                        <button class="btn-icon ${user.ativo ? 'warning' : 'success'}" 
+                                onclick="admin.toggleStatusUsuario('${user._id}', ${user.ativo})" 
+                                title="${user.ativo ? 'Inativar usuário' : 'Ativar usuário'}">
+                            <i class="fas ${user.ativo ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
+                        </button>
+                        
                         <button class="btn-icon" onclick="admin.resetarSenha('${user._id}')" title="Resetar Senha">
                             <i class="fas fa-key"></i>
                         </button>
+                        
                         <button class="btn-icon danger" onclick="admin.excluirUsuario('${user._id}')" title="Excluir">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -755,12 +764,8 @@ class AdminPanel {
                     <input type="text" id="userNome" class="form-control" value="${usuario?.nome || ''}" required>
                 </div>
 
+                // No método abrirModalUsuario, já deve ter este campo:
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>Email Institucional</label>
-                        <input type="email" id="userEmail" class="form-control" value="${usuario?.email || ''}" required>
-                        <small style="color: #6c757d;">@iemasaoluiscentro.net</small>
-                    </div>
                     <div class="form-group">
                         <label>Perfil</label>
                         <select id="userRole" class="form-control" onchange="admin.toggleCamposRole()">
@@ -768,6 +773,15 @@ class AdminPanel {
                             <option value="professor" ${usuario?.role === 'professor' ? 'selected' : ''}>Professor</option>
                             <option value="admin" ${usuario?.role === 'admin' ? 'selected' : ''}>Admin</option>
                             <option value="super_admin" ${usuario?.role === 'super_admin' ? 'selected' : ''}>Super Admin</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 🔥 CAMPO DE STATUS JÁ EXISTE AQUI -->
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="userStatus" class="form-control">
+                            <option value="true" ${usuario?.ativo !== false ? 'selected' : ''}>Ativo</option>
+                            <option value="false" ${usuario?.ativo === false ? 'selected' : ''}>Inativo</option>
                         </select>
                     </div>
                 </div>
@@ -889,6 +903,64 @@ class AdminPanel {
         document.getElementById('userPassword').value = this.gerarSenha();
     }
 
+    // ============ ATIVAR/INATIVAR USUÁRIO ============
+    async toggleStatusUsuario(usuarioId, ativoAtual) {
+        console.log(`🔄 Toggle status do usuário ${usuarioId}. Ativo atual: ${ativoAtual}`);
+        
+        const usuario = this.usuarios.find(u => u._id === usuarioId || u.id === usuarioId);
+        if (!usuario) {
+            this.showToast('❌ Usuário não encontrado', 'error');
+            return;
+        }
+        
+        const novoStatus = !ativoAtual;
+        const acao = novoStatus ? 'ativar' : 'inativar';
+        
+        // Confirmação
+        const confirmar = await this.confirmar(
+            `${novoStatus ? '✅' : '⏸️'} ${novoStatus ? 'Ativar' : 'Inativar'} Usuário`,
+            `<strong>${usuario.nome}</strong><br><br>
+            Tem certeza que deseja <strong>${acao}</strong> este usuário?<br><br>
+            ${!novoStatus ? 
+                '⚠️ O usuário não poderá mais acessar o sistema até ser reativado.' : 
+                '✅ O usuário voltará a ter acesso ao sistema.'}`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast(`🔄 ${acao === 'ativar' ? 'Ativando' : 'Inativando'} usuário...`, 'info');
+            
+            const response = await fetch(`${this.apiBase}/usuarios/${usuarioId}/toggle-status`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ativo: novoStatus })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(`✅ Usuário ${acao}do com sucesso!`, 'success');
+                
+                // Atualizar localmente
+                usuario.ativo = novoStatus;
+                
+                // Recarregar a lista para atualizar a interface
+                this.loadUsuarios();
+                
+            } else {
+                throw new Error(data.error || `Erro ao ${acao} usuário`);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
     // ============ SALVAR USUÁRIO ============
     async salvarUsuario(id = null) {
         try {
@@ -896,13 +968,15 @@ class AdminPanel {
             
             const role = document.getElementById('userRole').value;
             
+            // No método salvarUsuario, dentro do objeto dados:
             const dados = {
                 nome: document.getElementById('userNome').value,
                 email: document.getElementById('userEmail').value,
                 cpf: document.getElementById('userCPF').value.replace(/\D/g, ''),
                 telefone: document.getElementById('userTelefone').value.replace(/\D/g, ''),
                 role: role,
-                matricula: document.getElementById('userMatricula').value || undefined
+                matricula: document.getElementById('userMatricula').value || undefined,
+                ativo: document.getElementById('userStatus').value === 'true' // <-- ISSO JÁ DEVE EXISTIR
             };
 
             // Campos específicos por role
