@@ -2887,6 +2887,114 @@
     <!-- Chatbot -->
     <script src="js/chatbot-frontend.js"></script>
 
+    <!-- ===== MOBILE OPTIMIZATION ===== -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <link rel="stylesheet" href="css/mobile.css">
+    <script src="js/toggle-buttons.js"></script>
+
+    <script>
+    // ============================================
+    // MENU HAMBURGUER SIMPLIFICADO - APENAS ADMIN
+    // ============================================
+    (function() {
+        'use strict';
+        
+        console.log('🍔 Inicializando menu do admin...');
+        
+        // Função que faz tudo funcionar
+        function iniciarMenu() {
+            // Pegar elementos
+            const menuToggle = document.getElementById('menuToggle') || document.querySelector('.menu-toggle');
+            const sidebar = document.getElementById('sidebar') || document.querySelector('.sidebar');
+            
+            // Verificar se encontrou
+            if (!menuToggle) {
+                console.log('❌ Botão do menu não encontrado');
+                return false;
+            }
+            
+            if (!sidebar) {
+                console.log('❌ Sidebar não encontrada');
+                return false;
+            }
+            
+            console.log('✅ Elementos encontrados!');
+            
+            // CRIAR OVERLAY (se não existir)
+            let overlay = document.querySelector('.sidebar-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.className = 'sidebar-overlay';
+                overlay.style.cssText = 'display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1999;';
+                document.body.appendChild(overlay);
+                console.log('✅ Overlay criado');
+            }
+            
+            // Remover eventos antigos (clonar para garantir)
+            const novoBotao = menuToggle.cloneNode(true);
+            menuToggle.parentNode.replaceChild(novoBotao, menuToggle);
+            
+            // Adicionar evento de clique
+            novoBotao.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('🍔 Menu clicado!');
+                
+                // Alternar classes
+                if (sidebar.classList.contains('active')) {
+                    sidebar.classList.remove('active');
+                    overlay.classList.remove('active');
+                    overlay.style.display = 'none';
+                    document.body.style.overflow = '';
+                } else {
+                    sidebar.classList.add('active');
+                    overlay.classList.add('active');
+                    overlay.style.display = 'block';
+                    document.body.style.overflow = 'hidden';
+                }
+            });
+            
+            // Fechar ao clicar no overlay
+            overlay.addEventListener('click', function() {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                overlay.style.display = 'none';
+                document.body.style.overflow = '';
+            });
+            
+            // Fechar ao redimensionar para desktop
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 768) {
+                    sidebar.classList.remove('active');
+                    overlay.classList.remove('active');
+                    overlay.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            });
+            
+            return true;
+        }
+        
+        // Tentar iniciar de várias formas
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', iniciarMenu);
+        } else {
+            // Já carregou, tenta agora
+            setTimeout(iniciarMenu, 100);
+            setTimeout(iniciarMenu, 500);
+            setTimeout(iniciarMenu, 1000);
+        }
+        
+        // Também tentar quando a janela carregar
+        window.addEventListener('load', function() {
+            setTimeout(iniciarMenu, 200);
+        });
+        
+    })();
+    </script>
+
+
 
 </body>
 </html>

@@ -7979,14 +7979,20 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
             }
         }
         
-        // ========== DETECTAR TIPO DE CANCELAMENTO ==========
+        // ============ DETECTAR TIPO DE CANCELAMENTO ==========
         const motivoLower = motivo.toLowerCase();
-        const isViolacao = motivoLower.includes('violação') || 
-                          motivoLower.includes('violacao') ||
-                          motivoLower.includes('multiplas') ||
+        const palavrasViolacao = [
+            'violação', 'violacao', 'multiplas', 'múltiplas',
+            'atualizar', 'recarregar', 'refresh', 'f5',
+            'ctrl+r', 'reload', 'navegação', 'navegacao',
+            'backspace', 'atalho', 'tecla', 'click direito'
+        ];
+
+        const isViolacao = palavrasViolacao.some(palavra => motivoLower.includes(palavra)) ||
                           (estatisticas?.avisos > 0);
 
         console.log(`⚠️ Tipo de cancelamento: ${isViolacao ? 'VIOLAÇÃO' : 'PRAZO EXPIRADO'}`);
+        console.log(`📝 Motivo: "${motivo}"`);
 
         // ========== CRIAR REGISTROS DE CANCELAMENTO ==========
         const provaCancelada = new ProvaRealizada({

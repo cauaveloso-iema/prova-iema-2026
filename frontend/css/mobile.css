@@ -1,0 +1,158 @@
+/* frontend/css/mobile.css */
+@media screen and (max-width: 768px) {
+    body {
+        font-size: 14px;
+        padding: 10px;
+    }
+    
+    input, button, select, textarea {
+        width: 100%;
+        min-height: 44px;
+        font-size: 16px;
+    }
+    
+    table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+
+/* ===== MENU FIXO COM CONTEÚDO DESLIZANTE ===== */
+
+@media screen and (max-width: 768px) {
+    
+    /* ===== SIDEBAR FIXA ===== */
+    .sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 280px !important;
+        height: 100vh !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.3s ease !important;
+        z-index: 2000 !important;
+        background: linear-gradient(180deg, #1a1f2b 0%, #0d1117 100%) !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important; /* Scroll suave no iOS */
+    }
+
+    .sidebar.active {
+        transform: translateX(0) !important;
+        box-shadow: 2px 0 20px rgba(0,0,0,0.3) !important;
+    }
+
+    /* ===== OVERLAY QUANDO MENU ABERTO ===== */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(3px);
+        z-index: 1999;
+    }
+
+    .sidebar-overlay.active {
+        display: block !important;
+    }
+
+    /* ===== BOTÃO DO MENU (HAMBURGUER) ===== */
+    .menu-toggle {
+        display: block !important;
+        background: none !important;
+        border: none !important;
+        font-size: 24px !important;
+        color: #333 !important;
+        cursor: pointer !important;
+        padding: 8px !important;
+        margin-right: 10px !important;
+        z-index: 2001 !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        min-height: 100vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    /* ===== TOP BAR FIXA ===== */
+    .top-bar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 100 !important;
+        background: white !important;
+        padding: 10px 15px !important;
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    }
+
+    /* ===== CONTEÚDO COM SCROLL ===== */
+    .content-wrapper {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding: 15px !important;
+        max-height: calc(100vh - 70px) !important; /* Altura total menos a top bar */
+    }
+
+    /* ===== CARDS E GRIDS ===== */
+    .stats-grid {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        margin-bottom: 20px !important;
+    }
+
+    .cards-grid {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 15px !important;
+    }
+
+    /* ===== TABELAS COM SCROLL HORIZONTAL ===== */
+    .table-responsive {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        margin: 0 -15px !important;
+        padding: 0 15px !important;
+        width: calc(100% + 30px) !important;
+    }
+
+    /* ===== AJUSTES PARA TELAS MUITO PEQUENAS ===== */
+    @media screen and (max-width: 480px) {
+        .page-title {
+            font-size: 16px !important;
+        }
+
+        .header-actions {
+            gap: 5px !important;
+        }
+
+        .search-box {
+            max-width: 150px !important;
+        }
+
+        .search-box input {
+            font-size: 13px !important;
+            padding: 6px 8px 6px 28px !important;
+        }
+
+        .notificacoes-btn span,
+        .btn-push span {
+            display: none !important;
+        }
+
+        .content-wrapper {
+            padding: 10px !important;
+        }
+    }
+}

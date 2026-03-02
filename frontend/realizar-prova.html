@@ -1245,7 +1245,7 @@
                     
                     if (this.refreshTentativas >= this.maxRefreshTentativas) {
                         console.log('💀 CANCELANDO PROVA POR SEGUNDA TENTATIVA DE REFRESH');
-                        this.monitoramento?.cancelarProvaPorRefresh('Tentativa de atualizar/recarregar a página');
+                        this.monitoramento?.cancelarProvaNoServidor('Tentativa de atualizar/recarregar a página');
                     } else {
                         console.log('⚠️ Primeira tentativa de refresh - apenas aviso');
                         this.mostrarAvisoRefreshCritico();
@@ -2738,11 +2738,14 @@
                 if (data.success) {
                     console.log('✅ Prova cancelada no servidor com sucesso! Motivo:', motivo);
                     
-                    localStorage.removeItem('prova_' + prova._id);
-                    localStorage.removeItem('tempo_prova_' + prova._id);
-                    localStorage.removeItem('hora_entrada_' + prova._id);
+                    localStorage.removeItem(`prova_${prova._id}`);
+                    localStorage.removeItem(`tempo_prova_${prova._id}`);
+                    localStorage.removeItem(`hora_entrada_${prova._id}`);
                     
                     await this.enviarNotificacaoCancelamento(motivo);
+                    
+                    // 🔥 CHAMADA CORRETA - A ÚNICA LINHA QUE PRECISA!
+                    bloquearTelaCompletamente(30);
                     
                 } else {
                     console.error('❌ Erro ao cancelar prova no servidor:', data.error);
@@ -3204,15 +3207,6 @@
                 const terminoProva = new Date(hoje + 'T' + prova.horarioTermino + ':00');
                 const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
                 
-                if (tempoRestanteMs > 0) {
-                    const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
-                    metaLeft.innerHTML += `
-                        <div class="meta-item" id="tempoRestanteHorario">
-                            <i class="fas fa-hourglass-end"></i> 
-                            <span>Restante: ${formatarMinutosEmHoraMinutos(tempoRestanteMinutos)}</span>
-                        </div>
-                    `;
-                }
             }
         } else {
             document.getElementById('provaDuracao').textContent = (prova.duracaoMinutos || 30) + ' minutos';
@@ -3772,77 +3766,103 @@
             localStorage.setItem('tempo_prova_' + prova._id, tempoTotal.toString());
         }
         
-        // Formatar tempo decorrido
-        const horas = Math.floor(tempoTotal / 3600);
-        const minutos = Math.floor((tempoTotal % 3600) / 60);
-        const segundos = tempoTotal % 60;
+        // Formatar tempo decorrido (apenas para referência)
+        const horasDecorridas = Math.floor(tempoTotal / 3600);
+        const minutosDecorridos = Math.floor((tempoTotal % 3600) / 60);
+        const segundosDecorridos = tempoTotal % 60;
         
         const timerElement = document.getElementById('contadorTempo');
         
-        // CALCULAR TEMPO RESTANTE BASEADO NO HORÁRIO DE TÉRMINO
-        if (prova.horarioTermino) {
-            const hoje = agora.toISOString().split('T')[0];
-            const terminoProva = new Date(hoje + 'T' + prova.horarioTermino + ':00');
+        // 🔥 CORREÇÃO: Usar DATA LIMITE + HORÁRIO DE TÉRMINO
+        if (prova.dataLimite && prova.horarioTermino) {
+            // Converter dataLimite para Date (se for string)
+            let dataLimite;
+            if (typeof prova.dataLimite === 'string') {
+                dataLimite = new Date(prova.dataLimite);
+            } else {
+                dataLimite = prova.dataLimite;
+            }
+            
+            // Extrair ano, mês, dia da data limite
+            const ano = dataLimite.getFullYear();
+            const mes = String(dataLimite.getMonth() + 1).padStart(2, '0');
+            const dia = String(dataLimite.getDate()).padStart(2, '0');
+            
+            // Criar data de término COMPLETA (data limite + horário de término)
+            const terminoProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00`);
+            
+            console.log('⏱️ Cálculo de tempo:');
+            console.log('   Data limite (original):', prova.dataLimite);
+            console.log('   Data limite (processada):', `${ano}-${mes}-${dia}`);
+            console.log('   Horário término:', prova.horarioTermino);
+            console.log('   Término completo:', terminoProva.toLocaleString('pt-BR'));
+            console.log('   Agora:', agora.toLocaleString('pt-BR'));
             
             // Calcular tempo restante em milissegundos
             const tempoRestanteMs = terminoProva.getTime() - agora.getTime();
             
             if (tempoRestanteMs <= 0) {
-                // TEMPO ESGOTADO PELO HORÁRIO DE TÉRMINO
+                // TEMPO ESGOTADO
                 clearInterval(timerInterval);
                 timerElement.textContent = 'TEMPO ESGOTADO';
                 timerElement.style.color = '#dc2626';
                 
                 setTimeout(() => {
-                    alert('⏰ TEMPO ESGOTADO! O horário da prova terminou.');
+                    alert('⏰ TEMPO ESGOTADO! O prazo para esta prova terminou.');
                     finalizarProva();
                 }, 1000);
                 return;
             }
             
-            // Converter para minutos e segundos
-            const tempoRestanteMinutos = Math.floor(tempoRestanteMs / (1000 * 60));
-            const tempoRestanteHoras = Math.floor(tempoRestanteMinutos / 60);
-            const tempoRestanteMinutosResto = tempoRestanteMinutos % 60;
-            const tempoRestanteSegundos = Math.floor((tempoRestanteMs % (1000 * 60)) / 1000);
+            // Converter para horas, minutos e segundos
+            const totalSegundos = Math.floor(tempoRestanteMs / 1000);
+            const horas = Math.floor(totalSegundos / 3600);
+            const minutos = Math.floor((totalSegundos % 3600) / 60);
+            const segundos = totalSegundos % 60;
             
             // Mostrar TEMPO RESTANTE no contador
-            timerElement.textContent = 
-                tempoRestanteHoras.toString().padStart(2, '0') + ':' + 
-                tempoRestanteMinutosResto.toString().padStart(2, '0') + ':' + 
-                tempoRestanteSegundos.toString().padStart(2, '0');
-            
-            // Alerta visual conforme tempo restante
-            if (tempoRestanteMinutos <= 5) { // 5 minutos restantes
-                timerElement.style.color = '#dc2626';
-                timerElement.classList.add('warning-high');
-            } else if (tempoRestanteMinutos <= 10) { // 10 minutos restantes
-                timerElement.style.color = '#f59e0b';
-                timerElement.classList.add('warning-medium');
-            } else if (tempoRestanteMinutos <= 15) { // 15 minutos restantes
-                timerElement.style.color = '#f59e0b';
-                timerElement.classList.add('warning-low');
-            } else {
-                timerElement.style.color = '#065f46'; // Verde para tempo suficiente
-                timerElement.classList.remove('warning-low', 'warning-medium', 'warning-high');
-            }
-            
-            // Alertas sonoros
-            if (tempoRestanteMinutos === 5) {
-                alert('⚠️ ATENÇÃO: Restam 5 minutos!');
-            } else if (tempoRestanteMinutos === 1) {
-                alert('⏰ ÚLTIMO MINUTO!');
-            }
-            
-            // Mostrar tempo decorrido também (em tooltip ou outro lugar)
-            timerElement.title = 'Tempo decorrido: ' + horas + 'h ' + minutos + 'm ' + segundos + 's';
-            
-        } else {
-            // Se não tem horário de término, mostrar tempo decorrido
             timerElement.textContent = 
                 horas.toString().padStart(2, '0') + ':' + 
                 minutos.toString().padStart(2, '0') + ':' + 
                 segundos.toString().padStart(2, '0');
+            
+            // Alerta visual conforme tempo restante
+            if (totalSegundos <= 300) { // 5 minutos restantes
+                timerElement.style.color = '#dc2626';
+                timerElement.classList.add('warning-high');
+                
+                if (totalSegundos === 300) {
+                    alert('⚠️ ATENÇÃO: Restam 5 minutos!');
+                }
+            } else if (totalSegundos <= 600) { // 10 minutos restantes
+                timerElement.style.color = '#f59e0b';
+                timerElement.classList.add('warning-medium');
+            } else if (totalSegundos <= 900) { // 15 minutos restantes
+                timerElement.style.color = '#f59e0b';
+                timerElement.classList.add('warning-low');
+            } else {
+                timerElement.style.color = '#065f46';
+                timerElement.classList.remove('warning-low', 'warning-medium', 'warning-high');
+            }
+            
+            // Alertas sonoros
+            if (totalSegundos === 300) {
+                // Já alertamos acima
+            } else if (totalSegundos === 60) {
+                alert('⏰ ÚLTIMO MINUTO!');
+            }
+            
+            // Mostrar tempo decorrido em tooltip
+            timerElement.title = 'Tempo decorrido: ' + horasDecorridas + 'h ' + minutosDecorridos + 'm ' + segundosDecorridos + 's';
+            
+        } else {
+            // Fallback: se não tem data/horário, mostrar tempo decorrido
+            timerElement.textContent = 
+                horasDecorridas.toString().padStart(2, '0') + ':' + 
+                minutosDecorridos.toString().padStart(2, '0') + ':' + 
+                segundosDecorridos.toString().padStart(2, '0');
+            timerElement.style.color = '#065f46';
+            timerElement.title = 'Tempo decorrido';
         }
     }
     
@@ -4515,5 +4535,143 @@
             console.log('✅ Observador VLibras configurado');
         }, 3000);
     </script>
+
+    <script>
+    // ============================================
+    // MARCAR O BOTÃO DE ACESSIBILIDADE DA PROVA COMO SEGURO
+    // ============================================
+    (function() {
+        'use strict';
+        
+        console.log('🔐 Configurando botão de acessibilidade da prova...');
+        
+        // Função para marcar o botão como seguro
+        function marcarBotaoAcessibilidadeSeguro() {
+            const btnAcessibilidade = document.getElementById('btnAcessibilidadeProva');
+            
+            if (btnAcessibilidade) {
+                console.log('✅ Botão de acessibilidade encontrado!');
+                
+                // Marcar com todos os atributos de segurança
+                btnAcessibilidade.setAttribute('data-seguro', 'true');
+                btnAcessibilidade.setAttribute('data-ignorar-monitoramento', 'true');
+                btnAcessibilidade.setAttribute('data-acessibilidade', 'true');
+                
+                // Estilo visual para indicar que é seguro (opcional)
+                btnAcessibilidade.style.border = '2px solid #10b981';
+                btnAcessibilidade.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.5)';
+                
+                // Remover o estilo após 2 segundos
+                setTimeout(() => {
+                    btnAcessibilidade.style.border = '';
+                    btnAcessibilidade.style.boxShadow = '';
+                }, 2000);
+                
+                // Adicionar evento para garantir que cliques não sejam monitorados
+                btnAcessibilidade.addEventListener('click', function(e) {
+                    // Ativar flags de acessibilidade globalmente
+                    window.acessibilidadeAtiva = true;
+                    window.acessibilidadeClicada = true;
+                    
+                    console.log('♿ Clique no botão de acessibilidade ignorado pelo monitoramento');
+                    
+                    // Restaurar flags após o clique
+                    setTimeout(() => {
+                        window.acessibilidadeAtiva = false;
+                        window.acessibilidadeClicada = false;
+                    }, 200);
+                });
+                
+                return true;
+            } else {
+                console.log('⏳ Botão de acessibilidade ainda não carregado...');
+                return false;
+            }
+        }
+        
+        // Tentar marcar imediatamente
+        if (!marcarBotaoAcessibilidadeSeguro()) {
+            // Se não encontrou, tentar novamente após a página carregar
+            document.addEventListener('DOMContentLoaded', function() {
+                if (!marcarBotaoAcessibilidadeSeguro()) {
+                    // Tentar mais algumas vezes com intervalo
+                    let tentativas = 0;
+                    const intervalo = setInterval(function() {
+                        tentativas++;
+                        if (marcarBotaoAcessibilidadeSeguro() || tentativas >= 10) {
+                            clearInterval(intervalo);
+                            if (tentativas >= 10) {
+                                console.warn('⚠️ Botão de acessibilidade não encontrado após 10 tentativas');
+                            }
+                        }
+                    }, 500);
+                }
+            });
+        }
+        
+        // ============================================
+        // TAMBÉM MODIFICAR O MONITORAMENTO PARA IGNORAR O BOTÃO
+        // ============================================
+        
+        // Salvar referência ao monitoramento original
+        const monitoramentoOriginal = window.MonitoramentoProva;
+        
+        // Se o monitoramento já existe, estender seus métodos
+        if (window.monitoramento) {
+            console.log('🔄 Estendendo monitoramento existente...');
+            
+            // Guardar método original
+            const originalVerificarElementoSeguro = window.monitoramento.verificarElementoSeguro;
+            
+            // Sobrescrever método para incluir o botão de acessibilidade
+            window.monitoramento.verificarElementoSeguro = function(elemento) {
+                // Verificar se é o botão de acessibilidade
+                if (elemento && (elemento.id === 'btnAcessibilidadeProva' || 
+                    elemento.closest('#btnAcessibilidadeProva'))) {
+                    console.log('♿ Botão de acessibilidade ignorado');
+                    return true;
+                }
+                
+                // Chamar método original
+                return originalVerificarElementoSeguro.call(this, elemento);
+            };
+            
+            console.log('✅ Monitoramento estendido com sucesso!');
+        }
+        
+        // ============================================
+        // TAMBÉM ADICIONAR À FUNÇÃO DE ELEMENTOS SEGUROS GLOBAL
+        // ============================================
+        
+        // Estender a função global de marcar elementos seguros
+        const marcarElementosSegurosGlobalOriginal = window.marcarElementosSegurosGlobalmente;
+        
+        if (typeof marcarElementosSegurosGlobalOriginal === 'function') {
+            window.marcarElementosSegurosGlobalmente = function() {
+                // Chamar função original
+                const resultado = marcarElementosSegurosGlobalOriginal();
+                
+                // Marcar o botão de acessibilidade
+                const btnAcessibilidade = document.getElementById('btnAcessibilidadeProva');
+                if (btnAcessibilidade) {
+                    btnAcessibilidade.setAttribute('data-seguro', 'true');
+                    btnAcessibilidade.setAttribute('data-ignorar-monitoramento', 'true');
+                    btnAcessibilidade.setAttribute('data-acessibilidade', 'true');
+                    console.log('✅ Botão de acessibilidade marcado globalmente');
+                }
+                
+                return resultado;
+            };
+        }
+        
+        console.log('🔐 Configuração do botão de acessibilidade concluída!');
+    })();
+    </script>
+
+        <!-- ===== MOBILE OPTIMIZATION ===== -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <link rel="stylesheet" href="css/mobile.css">
+    <script src="js/toggle-buttons.js"></script>
+
 </body>
 </html>
