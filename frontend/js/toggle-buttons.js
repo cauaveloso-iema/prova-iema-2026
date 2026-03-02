@@ -11,7 +11,7 @@
     // ============================================
     const CONFIG = {
         buttonColor: 'transparent',    // Agora transparente
-        buttonSize: '40px',             // Tamanho do botão (aumentado um pouco)
+        buttonSize: '40px',             // Tamanho do botão
         buttonPosition: 'left: 20px',   // Posição
         animationDuration: 300,          // Duração da animação em ms
         defaultHidden: false,            // Começar com ícones escondidos? (false = mostrados)
@@ -30,7 +30,7 @@
         btn.setAttribute('aria-label', 'Mostrar/esconder ícones de acessibilidade e chatbot');
         btn.setAttribute('title', 'Mostrar/esconder ícones de acessibilidade e chatbot');
         
-        // Estilo do botão - AGORA TRANSPARENTE
+        // Estilo do botão - TRANSPARENTE
         Object.assign(btn.style, {
             position: 'fixed',
             bottom: '100px',
@@ -38,16 +38,16 @@
             width: CONFIG.buttonSize,
             height: CONFIG.buttonSize,
             borderRadius: '50%',
-            background: 'transparent',     // Fundo transparente
-            color: '#0D6EFD',              // Ícone azul
-            border: 'none',                 // Sem borda
-            boxShadow: 'none',              // Sem sombra
+            background: 'transparent',
+            color: '#0D6EFD',
+            border: 'none',
+            boxShadow: 'none',
             cursor: 'pointer',
             zIndex: '10000',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '32px',               // Ícone maior
+            fontSize: '32px',
             transition: 'all 0.3s ease',
             outline: 'none',
             padding: '0',
@@ -57,15 +57,15 @@
         // Ícone de controle (🎮)
         btn.innerHTML = '🎮';
 
-        // Evento de hover (apenas muda a cor do ícone)
+        // Evento de hover
         btn.addEventListener('mouseenter', () => {
             btn.style.transform = 'scale(1.1)';
-            btn.style.color = '#4f46e5';    // Roxo no hover
+            btn.style.color = '#4f46e5';
         });
 
         btn.addEventListener('mouseleave', () => {
             btn.style.transform = 'scale(1)';
-            btn.style.color = '#0D6EFD';    // Volta ao azul
+            btn.style.color = '#0D6EFD';
         });
 
         return btn;
@@ -108,9 +108,9 @@
     }
 
     // ============================================
-    // MOSTRAR/ESCONDER ÍCONES
+    // MOSTRAR/ESCONDER ÍCONES (AGORA EXPORTADA)
     // ============================================
-    let iconesVisiveis = !CONFIG.defaultHidden; // true = visíveis, false = escondidos
+    let iconesVisiveis = !CONFIG.defaultHidden;
 
     function toggleIcones(mostrar = null) {
         const icones = getIcones();
@@ -118,15 +118,15 @@
         if (mostrar !== null) {
             iconesVisiveis = mostrar;
         } else {
-            iconesVisiveis = !iconesVisiveis; // alterna
+            iconesVisiveis = !iconesVisiveis;
         }
 
-        // Atualizar botão (apenas a cor do ícone muda)
+        // Atualizar botão
         const btn = document.getElementById('toggle-buttons-btn');
         if (btn) {
-            btn.innerHTML = '🎮';  // Mantém o mesmo ícone
-            btn.style.color = iconesVisiveis ? '#0D6EFD' : '#6c757d'; // Azul quando visível, cinza quando escondido
-            btn.style.background = 'transparent'; // Sempre transparente
+            btn.innerHTML = '🎮';
+            btn.style.color = iconesVisiveis ? '#0D6EFD' : '#6c757d';
+            btn.style.background = 'transparent';
         }
 
         // Mostrar/esconder cada ícone com animação
@@ -134,14 +134,12 @@
             if (!icon) return;
 
             if (iconesVisiveis) {
-                // Mostrar
                 icon.style.transition = `opacity ${CONFIG.animationDuration}ms ease, transform ${CONFIG.animationDuration}ms ease`;
                 icon.style.opacity = '1';
                 icon.style.transform = 'scale(1)';
                 icon.style.pointerEvents = 'auto';
                 icon.style.visibility = 'visible';
             } else {
-                // Esconder
                 icon.style.transition = `opacity ${CONFIG.animationDuration}ms ease, transform ${CONFIG.animationDuration}ms ease`;
                 icon.style.opacity = '0';
                 icon.style.transform = 'scale(0.5)';
@@ -159,6 +157,11 @@
     }
 
     // ============================================
+    // EXPORTAR A FUNÇÃO PARA O ESCOPO GLOBAL
+    // ============================================
+    window.toggleIcones = toggleIcones;
+
+    // ============================================
     // CARREGAR ESTADO SALVO
     // ============================================
     function carregarEstadoSalvo() {
@@ -171,23 +174,20 @@
     }
 
     // ============================================
-    // OBSERVAR MUDANÇAS NO DOM (para elementos que carregam depois)
+    // OBSERVAR MUDANÇAS NO DOM
     // ============================================
     function observarMudancas() {
         const observer = new MutationObserver(() => {
-            // Quando novos elementos aparecerem, aplicar o estado atual
             const icones = getIcones();
             icones.forEach(icon => {
                 if (!icon) return;
                 
-                // Aplicar estado atual sem animação
                 icon.style.transition = 'none';
                 icon.style.opacity = iconesVisiveis ? '1' : '0';
                 icon.style.transform = iconesVisiveis ? 'scale(1)' : 'scale(0.5)';
                 icon.style.pointerEvents = iconesVisiveis ? 'auto' : 'none';
                 icon.style.visibility = iconesVisiveis ? 'visible' : 'hidden';
                 
-                // Restaurar transição após um pequeno delay
                 setTimeout(() => {
                     icon.style.transition = `opacity ${CONFIG.animationDuration}ms ease, transform ${CONFIG.animationDuration}ms ease`;
                 }, 50);
@@ -204,23 +204,17 @@
     // INICIALIZAR
     // ============================================
     function init() {
-        // Carregar estado salvo
         carregarEstadoSalvo();
 
-        // Criar e adicionar botão (transparente com ícone 🎮)
         const btn = criarBotao();
         document.body.appendChild(btn);
 
-        // Evento de clique
         btn.addEventListener('click', () => toggleIcones());
 
-        // Aplicar estado inicial
         toggleIcones(iconesVisiveis);
 
-        // Observar mudanças no DOM
         observarMudancas();
 
-        // Adicionar tecla de atalho (Ctrl+Shift+H)
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.shiftKey && e.key === 'H') {
                 e.preventDefault();
@@ -231,7 +225,6 @@
         console.log('✅ Botão de controle de ícones inicializado (🎮 transparente)');
     }
 
-    // Executar quando a página carregar
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
