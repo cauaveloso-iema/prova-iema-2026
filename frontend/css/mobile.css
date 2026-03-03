@@ -592,3 +592,74 @@
         }
     }
 }
+
+/* ===== HEADER DO MENU COM BOTÃO VOLTAR ===== */
+.menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    background: #1e2b37;
+    border-bottom: 1px solid #3a4a5a;
+    width: 100%;
+}
+
+.menu-header .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.menu-header .logo-area i {
+    font-size: 22px;
+    color: #3498db;
+}
+
+.menu-header .logo-area span {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+}
+
+.btn-voltar-inicio {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s;
+}
+
+.btn-voltar-inicio i {
+    font-size: 12px;
+}
+
+.btn-voltar-inicio:hover {
+    background: rgba(255,255,255,0.2);
+    transform: translateX(-3px);
+}
+
+/* Ajuste para mobile */
+@media (max-width: 768px) {
+    .sidebar-header {
+        padding: 0 !important;
+    }
+    
+    .menu-header {
+        padding: 12px 15px;
+    }
+    
+    .menu-header .logo-area span {
+        font-size: 14px;
+    }
+    
+    .btn-voltar-inicio {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+}

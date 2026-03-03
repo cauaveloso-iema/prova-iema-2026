@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Simples - IEMA Provas</title>
+    <title>Admin Simples - Sistema de Provas</title>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="IEMA Provas">
+    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
 
     <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
@@ -1027,13 +1027,20 @@
     <div class="admin-container">
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
+            <!-- Header com Botão Voltar -->
             <div class="sidebar-header">
-                <div class="logo">
-                    <i class="fas fa-graduation-cap"></i> IEMA
+                <div class="menu-header">
+                    <div class="logo-area">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>Sistema de Provas Admin</span>
+                    </div>
+                    <button class="btn-voltar-inicio" onclick="fecharMenuEVoltar()">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </button>
                 </div>
-                <small>Admin Simples</small>
             </div>
 
+            <!-- User Info (mantido igual) -->
             <div class="user-info" id="userInfo">
                 <div class="user-name" id="adminNome">Carregando...</div>
                 <div class="user-email" id="adminEmail">...</div>
@@ -1044,6 +1051,7 @@
                 </div>
             </div>
 
+            <!-- Navegação (mantida igual) -->
             <nav>
                 <div class="nav-item" data-section="dashboard" onclick="adminSimples.mudarAba('dashboard')">
                     <i class="fas fa-tachometer-alt"></i> Dashboard
@@ -1063,6 +1071,7 @@
                 </div>
             </nav>
 
+            <!-- Footer (mantido igual) -->
             <div class="sidebar-footer">
                 <button class="logout-btn" onclick="adminSimples.logout()">
                     <i class="fas fa-sign-out-alt"></i> Sair
@@ -3653,6 +3662,30 @@
         // Inicializar
         const adminSimples = new AdminSimples();
         window.adminSimples = adminSimples;
+
+        // ============================================
+        // FUNÇÃO PARA FECHAR MENU E VOLTAR
+        // ============================================
+        function fecharMenuEVoltar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            if (sidebar) {
+                sidebar.classList.remove('active');
+            }
+            
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+            
+            document.body.style.overflow = '';
+            
+            // Rolar para o topo suavemente
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
     </script>
 
     <!-- Acessibilidade -->
