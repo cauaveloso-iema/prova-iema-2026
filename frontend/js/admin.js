@@ -1591,9 +1591,12 @@ class AdminPanel {
                         <button class="footer-action-btn" onclick="admin.editarTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Editar">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="footer-action-btn ${turma.ativa ? 'warning' : 'success'}" onclick="admin.toggleStatusTurma('${turma.id}', ${turma.ativa})" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="${turma.ativa ? 'Inativar' : 'Ativar'}">
-                            <i class="fas ${turma.ativa ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
+                        
+                        <!-- 🔥 NOVO BOTÃO: Gerenciar Alunos (no lugar do ativar/desativar) -->
+                        <button class="footer-action-btn" onclick="admin.gerenciarAlunosTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #667eea; transition: all 0.2s;" title="Gerenciar alunos">
+                            <i class="fas fa-users"></i>
                         </button>
+                        
                         <button class="footer-action-btn danger" onclick="admin.excluirTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Excluir">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -1601,6 +1604,797 @@ class AdminPanel {
                 </div>
             `;
         }).join('');
+    }
+
+    // ============ GERENCIAR ALUNOS NA TURMA ============
+    async gerenciarAlunosTurma(turmaId) {
+        console.log('👥 Gerenciando alunos da turma:', turmaId);
+        
+        try {
+            this.showToast('🔄 Carregando alunos...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // 🔥 CORREÇÃO: Usar as rotas ADMIN
+            const [turmaRes, alunosRes] = await Promise.all([
+                fetch(`/api/admin/turmas/${turmaId}`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                }),
+                fetch(`/api/admin/usuarios?role=aluno&limit=1000`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                })
+            ]);
+
+            // Verificar respostas
+            if (!turmaRes.ok) {
+                const errorText = await turmaRes.text();
+                console.error('❌ Erro turma:', errorText.substring(0, 200));
+                throw new Error(`Erro ao carregar turma: ${turmaRes.status}`);
+            }
+            
+            if (!alunosRes.ok) {
+                const errorText = await alunosRes.text();
+                console.error('❌ Erro alunos:', errorText.substring(0, 200));
+                throw new Error(`Erro ao carregar alunos: ${alunosRes.status}`);
+            }
+
+            const turmaData = await turmaRes.json();
+            const alunosData = await alunosRes.json();
+
+            if (!turmaData.success) throw new Error(turmaData.error || 'Erro ao carregar turma');
+            if (!alunosData.success) throw new Error(alunosData.error || 'Erro ao carregar alunos');
+
+            const turma = turmaData.turma || turmaData.data;
+            const todosAlunos = alunosData.usuarios || [];
+            
+            // IDs dos alunos já matriculados
+            const alunosMatriculadosIds = new Set((turma.alunos || []).map(a => a._id || a.id));
+            
+            // Separar alunos matriculados e disponíveis
+            const alunosMatriculados = todosAlunos.filter(a => alunosMatriculadosIds.has(a._id || a.id));
+            const alunosDisponiveis = todosAlunos.filter(a => !alunosMatriculadosIds.has(a._id || a.id));
+
+            this.mostrarModalGerenciarAlunos(turma, alunosMatriculados, alunosDisponiveis);
+            this.showToast('✅ Alunos carregados!', 'success', 2000);
+
+        } catch (error) {
+            console.error('❌ Erro detalhado:', error);
+            this.showToast('❌ ' + error.message, 'error');
+            
+            // Mostrar erro no modal se já estiver aberto
+            const modalBody = document.getElementById('modalBody');
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 15px;"></i>
+                        <h3 style="color: #721c24;">Erro ao carregar alunos</h3>
+                        <p style="color: #6c757d;">${error.message}</p>
+                        <button onclick="admin.gerenciarAlunosTurma('${turmaId}')" style="
+                            margin-top: 15px;
+                            padding: 8px 20px;
+                            background: #667eea;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    }
+
+
+    // ============ MOSTRAR MODAL DE GERENCIAMENTO DE ALUNOS ============
+    mostrarModalGerenciarAlunos(turma, alunosMatriculados, alunosDisponiveis) {
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        
+        modalTitle.innerHTML = `<i class="fas fa-users"></i> Alunos - ${turma.nome}`;
+        
+        modalBody.innerHTML = `
+            <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
+                <!-- HEADER DA TURMA -->
+                <div style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 20px; color: white; position: sticky; top: 0; z-index: 10;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.2rem;">${turma.nome}</h3>
+                            <p style="margin: 5px 0 0; opacity: 0.9;">${turma.disciplina || ''}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 30px; font-size: 0.85rem;">
+                                <i class="fas fa-users"></i> ${alunosMatriculados.length} matriculados
+                            </span>
+                            <div style="margin-top: 5px;">
+                                <span class="status-badge" style="background: ${turma.ativa ? '#10b981' : '#ef4444'}; color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem;">
+                                    ${turma.ativa ? 'Ativa' : 'Inativa'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- BARRA DE AÇÕES -->
+                <div style="padding: 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <div style="flex: 1; position: relative;">
+                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+                        <input type="text" id="buscaAluno" placeholder="Buscar aluno por nome, email ou matrícula..." 
+                            style="width: 100%; padding: 10px 10px 10px 35px; border: 2px solid #e2e8f0; border-radius: 30px; font-size: 14px;"
+                            onkeyup="admin.filtrarAlunosModal()">
+                    </div>
+                    <button class="btn-primary" onclick="admin.abrirAdicionarAluno('${turma.id}')" 
+                        style="background: #10b981; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                        <i class="fas fa-user-plus"></i> Adicionar Aluno
+                    </button>
+                </div>
+                
+                <!-- TABS -->
+                <div style="display: flex; gap: 10px; padding: 15px 15px 0; border-bottom: 2px solid #e2e8f0;">
+                    <button class="tab-aluno active" onclick="admin.mudarTabAluno('matriculados')" id="tab-matriculados" 
+                        style="padding: 8px 16px; background: none; border: none; border-bottom: 3px solid #667eea; font-weight: 600; color: #667eea; cursor: pointer;">
+                        <i class="fas fa-check-circle"></i> Matriculados <span class="badge" style="background: #667eea; color: white; padding: 2px 6px; border-radius: 20px; margin-left: 5px;">${alunosMatriculados.length}</span>
+                    </button>
+                    <button class="tab-aluno" onclick="admin.mudarTabAluno('disponiveis')" id="tab-disponiveis" 
+                        style="padding: 8px 16px; background: none; border: none; border-bottom: 3px solid transparent; font-weight: 600; color: #6c757d; cursor: pointer;">
+                        <i class="fas fa-user-plus"></i> Disponíveis <span class="badge" style="background: #e2e8f0; color: #4b5563; padding: 2px 6px; border-radius: 20px; margin-left: 5px;">${alunosDisponiveis.length}</span>
+                    </button>
+                </div>
+                
+                <!-- CONTEÚDO DAS TABS -->
+                <div id="conteudo-matriculados" class="tab-conteudo-aluno" style="display: block; padding: 15px;">
+                    ${this.gerarListaAlunosMatriculados(alunosMatriculados, turma.id)}
+                </div>
+                
+                <div id="conteudo-disponiveis" class="tab-conteudo-aluno" style="display: none; padding: 15px;">
+                    ${this.gerarListaAlunosDisponiveis(alunosDisponiveis, turma.id)}
+                </div>
+            </div>
+        `;
+        
+        // Esconder botão salvar
+        modalSaveBtn.style.display = 'none';
+        
+        // Guardar dados no objeto
+        this.turmaAtual = turma;
+        this.alunosMatriculados = alunosMatriculados;
+        this.alunosDisponiveis = alunosDisponiveis;
+        
+        this.openModal();
+    }
+
+    // ============ showToast melhorado ============
+    showToast(mensagem, tipo = 'info', duracao = 3000) {
+        const container = document.getElementById('toastContainer');
+        if (!container) {
+            console.log(`[${tipo}] ${mensagem}`);
+            return;
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${tipo}`;
+        
+        const icones = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            info: 'fa-info-circle',
+            warning: 'fa-exclamation-triangle'
+        };
+        
+        toast.innerHTML = `
+            <i class="fas ${icones[tipo] || 'fa-info-circle'}"></i>
+            <span>${mensagem}</span>
+        `;
+        
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: ${tipo === 'success' ? '#10b981' : tipo === 'error' ? '#ef4444' : tipo === 'warning' ? '#f59e0b' : '#3b82f6'};
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+            max-width: 400px;
+        `;
+        
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, duracao);
+    }
+
+
+    // ============ GERAR LISTA DE ALUNOS MATRICULADOS ============
+    gerarListaAlunosMatriculados(alunos, turmaId) {
+        if (!alunos || alunos.length === 0) {
+            return `
+                <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px;">
+                    <i class="fas fa-user-graduate" style="font-size: 48px; color: #cbd5e0; margin-bottom: 15px;"></i>
+                    <h4 style="color: #64748b; margin-bottom: 5px;">Nenhum aluno matriculado</h4>
+                    <p style="color: #94a3b8; font-size: 14px;">Mude para a aba "Disponíveis" para adicionar alunos</p>
+                </div>
+            `;
+        }
+
+        return alunos.map(aluno => {
+            const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            const dataMatricula = aluno.dataMatricula ? new Date(aluno.dataMatricula).toLocaleDateString('pt-BR') : 'N/A';
+            
+            return `
+                <div class="aluno-item" data-aluno-id="${aluno._id || aluno.id}" style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; transition: all 0.2s;">
+                    <!-- Avatar -->
+                    <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; flex-shrink: 0;">
+                        ${iniciais}
+                    </div>
+                    
+                    <!-- Informações do Aluno -->
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <strong style="font-size: 15px; color: #1e293b;">${aluno.nome}</strong>
+                            ${aluno.precisaAcessibilidade ? 
+                                '<span style="background: #e6f7ff; color: #0066cc; padding: 2px 8px; border-radius: 30px; font-size: 10px;"><i class="fas fa-wheelchair"></i> Acessibilidade</span>' : ''}
+                        </div>
+                        <div style="display: flex; gap: 15px; margin-top: 4px; font-size: 12px; color: #64748b;">
+                            <span><i class="fas fa-envelope"></i> ${aluno.email || 'Sem email'}</span>
+                            <span><i class="fas fa-id-card"></i> ${aluno.matricula || 'Sem matrícula'}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Ações -->
+                    <div style="display: flex; gap: 5px;">
+                        <button class="btn-icon" onclick="admin.verDetalhesAluno('${aluno._id || aluno.id}')" title="Ver detalhes" style="width: 34px; height: 34px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; cursor: pointer;">
+                            <i class="fas fa-eye" style="color: #64748b;"></i>
+                        </button>
+                        <button class="btn-icon" onclick="admin.removerAlunoDaTurma('${turmaId}', '${aluno._id || aluno.id}', '${aluno.nome}')" title="Remover da turma" style="width: 34px; height: 34px; border: 1px solid #fee2e2; border-radius: 8px; background: #fff5f5; cursor: pointer;">
+                            <i class="fas fa-user-minus" style="color: #dc2626;"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // ============ GERAR LISTA DE ALUNOS DISPONÍVEIS ============
+    gerarListaAlunosDisponiveis(alunos, turmaId) {
+        if (!alunos || alunos.length === 0) {
+            return `
+                <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px;">
+                    <i class="fas fa-user-check" style="font-size: 48px; color: #cbd5e0; margin-bottom: 15px;"></i>
+                    <h4 style="color: #64748b; margin-bottom: 5px;">Nenhum aluno disponível</h4>
+                    <p style="color: #94a3b8; font-size: 14px;">Todos os alunos já estão matriculados nesta turma</p>
+                </div>
+            `;
+        }
+
+        return alunos.map(aluno => {
+            const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            
+            return `
+                <div class="aluno-item" data-aluno-id="${aluno._id || aluno.id}" style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; transition: all 0.2s; opacity: 0.9;">
+                    <!-- Avatar -->
+                    <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #94a3b8, #64748b); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; flex-shrink: 0;">
+                        ${iniciais}
+                    </div>
+                    
+                    <!-- Informações do Aluno -->
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <strong style="font-size: 15px; color: #1e293b;">${aluno.nome}</strong>
+                            ${aluno.precisaAcessibilidade ? 
+                                '<span style="background: #e6f7ff; color: #0066cc; padding: 2px 8px; border-radius: 30px; font-size: 10px;"><i class="fas fa-wheelchair"></i> Acessibilidade</span>' : ''}
+                        </div>
+                        <div style="display: flex; gap: 15px; margin-top: 4px; font-size: 12px; color: #64748b;">
+                            <span><i class="fas fa-envelope"></i> ${aluno.email || 'Sem email'}</span>
+                            <span><i class="fas fa-id-card"></i> ${aluno.matricula || 'Sem matrícula'}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Ação: Adicionar -->
+                    <button class="btn-primary" onclick="admin.adicionarAlunoNaTurma('${turmaId}', '${aluno._id || aluno.id}', '${aluno.nome}')" 
+                        style="background: #10b981; border: none; color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                        <i class="fas fa-user-plus"></i> Adicionar
+                    </button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // ============ MUDAR ABA DO MODAL ============
+    mudarTabAluno(tab) {
+        // Atualizar tabs
+        document.querySelectorAll('.tab-aluno').forEach(btn => {
+            btn.classList.remove('active');
+            btn.style.borderBottomColor = 'transparent';
+            btn.style.color = '#6c757d';
+        });
+        
+        if (tab === 'matriculados') {
+            document.getElementById('tab-matriculados').classList.add('active');
+            document.getElementById('tab-matriculados').style.borderBottomColor = '#667eea';
+            document.getElementById('tab-matriculados').style.color = '#667eea';
+            document.getElementById('conteudo-matriculados').style.display = 'block';
+            document.getElementById('conteudo-disponiveis').style.display = 'none';
+        } else {
+            document.getElementById('tab-disponiveis').classList.add('active');
+            document.getElementById('tab-disponiveis').style.borderBottomColor = '#667eea';
+            document.getElementById('tab-disponiveis').style.color = '#667eea';
+            document.getElementById('conteudo-matriculados').style.display = 'none';
+            document.getElementById('conteudo-disponiveis').style.display = 'block';
+        }
+    }
+
+    // ============ FILTRAR ALUNOS NO MODAL ============
+    filtrarAlunosModal() {
+        const termo = document.getElementById('buscaAluno')?.value.toLowerCase() || '';
+        const tabAtiva = document.getElementById('conteudo-matriculados').style.display === 'block' ? 'matriculados' : 'disponiveis';
+        
+        const alunos = tabAtiva === 'matriculados' ? this.alunosMatriculados : this.alunosDisponiveis;
+        const turmaId = this.turmaAtual.id;
+        
+        const filtrados = alunos.filter(a => 
+            a.nome.toLowerCase().includes(termo) ||
+            (a.email && a.email.toLowerCase().includes(termo)) ||
+            (a.matricula && a.matricula.toLowerCase().includes(termo))
+        );
+        
+        if (tabAtiva === 'matriculados') {
+            document.getElementById('conteudo-matriculados').innerHTML = this.gerarListaAlunosMatriculados(filtrados, turmaId);
+        } else {
+            document.getElementById('conteudo-disponiveis').innerHTML = this.gerarListaAlunosDisponiveis(filtrados, turmaId);
+        }
+    }
+
+    // ============ ADICIONAR ALUNO NA TURMA ============
+    async adicionarAlunoNaTurma(turmaId, alunoId, alunoNome) {
+        try {
+            console.log('📝 Adicionando aluno:', { turmaId, alunoId, alunoNome });
+            
+            // Verificar se os IDs são válidos
+            if (!turmaId || !alunoId) {
+                this.showToast('❌ IDs inválidos', 'error');
+                return;
+            }
+            
+            this.showToast(`🔄 Adicionando ${alunoNome}...`, 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // 🔥 CORREÇÃO: Usar a rota ADMIN
+            const response = await fetch(`/api/admin/turmas/${turmaId}/alunos`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ alunoId: alunoId })
+            });
+
+            // Verificar se a resposta é JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+                throw new Error('Erro no servidor. Resposta não é JSON.');
+            }
+            
+            const data = await response.json();
+            console.log('📦 Resposta da API:', data);
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Erro ${response.status}: ${response.statusText}`);
+            }
+            
+            if (data.success) {
+                this.showToast(`✅ ${alunoNome} adicionado à turma!`, 'success');
+                
+                // Fechar modal de busca se estiver aberto
+                this.closeModal();
+                
+                // Recarregar o modal de gerenciamento
+                await this.gerenciarAlunosTurma(turmaId);
+                
+                // Atualizar lista de turmas
+                await this.loadTurmas();
+            } else {
+                throw new Error(data.error || 'Erro ao adicionar aluno');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro detalhado:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+
+    // ============ REMOVER ALUNO DA TURMA ============
+    async removerAlunoDaTurma(turmaId, alunoId, alunoNome) {
+        if (!turmaId || !alunoId) {
+            this.showToast('❌ IDs inválidos', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🗑️ Remover Aluno',
+            `Tem certeza que deseja remover <strong>${alunoNome}</strong> desta turma?`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast(`🔄 Removendo ${alunoNome}...`, 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // 🔥 CORREÇÃO: Usar a rota ADMIN
+            const response = await fetch(`/api/admin/turmas/${turmaId}/alunos/${alunoId}`, {
+                method: 'DELETE',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // Verificar se a resposta é JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+                throw new Error('Erro no servidor. Resposta não é JSON.');
+            }
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Erro ${response.status}: ${response.statusText}`);
+            }
+            
+            if (data.success) {
+                this.showToast(`✅ ${alunoNome} removido da turma!`, 'success');
+                
+                // Recarregar o modal de gerenciamento
+                await this.gerenciarAlunosTurma(turmaId);
+                
+                // Atualizar lista de turmas
+                await this.loadTurmas();
+            } else {
+                throw new Error(data.error || 'Erro ao remover aluno');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro detalhado:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ ABRIR MODAL PARA ADICIONAR ALUNO MANUALMENTE ============
+    abrirAdicionarAluno(turmaId) {
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        
+        modalTitle.innerHTML = '<i class="fas fa-user-plus"></i> Adicionar Aluno';
+        
+        modalBody.innerHTML = `
+            <div style="padding: 20px;">
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Buscar Aluno</label>
+                    <input type="text" id="buscaAdicionarAluno" placeholder="Digite nome, email ou matrícula..." 
+                        style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                        onkeyup="admin.buscarAlunosParaAdicionar('${turmaId}')">
+                </div>
+                
+                <div id="resultadoBuscaAlunos" style="max-height: 400px; overflow-y: auto;">
+                    <p style="text-align: center; color: #94a3b8; padding: 20px;">Digite para buscar alunos...</p>
+                </div>
+            </div>
+        `;
+        
+        modalSaveBtn.style.display = 'none';
+        this.openModal();
+    }
+
+    // ============ BUSCAR ALUNOS PARA ADICIONAR ============
+    async buscarAlunosParaAdicionar(turmaId) {
+        const termo = document.getElementById('buscaAdicionarAluno')?.value;
+        if (!termo || termo.length < 3) {
+            document.getElementById('resultadoBuscaAlunos').innerHTML = 
+                '<p style="text-align: center; color: #94a3b8; padding: 20px;">Digite pelo menos 3 caracteres...</p>';
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // 🔥 CORREÇÃO: Usar a rota ADMIN
+            const response = await fetch(`/api/admin/usuarios?role=aluno&search=${encodeURIComponent(termo)}&limit=20`, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            // Verificar se a resposta é JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+                throw new Error('Erro no servidor. Resposta não é JSON.');
+            }
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Erro ${response.status}`);
+            }
+            
+            if (data.success) {
+                const alunos = data.usuarios || [];
+                const container = document.getElementById('resultadoBuscaAlunos');
+                
+                if (alunos.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #94a3b8; padding: 20px;">Nenhum aluno encontrado</p>';
+                    return;
+                }
+                
+                let html = '';
+                alunos.forEach(aluno => {
+                    const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+                    
+                    html += `
+                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
+                                ${iniciais}
+                            </div>
+                            <div style="flex: 1;">
+                                <strong>${aluno.nome}</strong>
+                                <div style="font-size: 12px; color: #64748b;">${aluno.email} • ${aluno.matricula || 'Sem matrícula'}</div>
+                            </div>
+                            <button onclick="admin.adicionarAlunoNaTurma('${turmaId}', '${aluno._id || aluno.id}', '${aluno.nome.replace(/'/g, "\\'")}')" 
+                                style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer;">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao buscar alunos:', error);
+            document.getElementById('resultadoBuscaAlunos').innerHTML = 
+                `<p style="text-align: center; color: #dc3545; padding: 20px;">Erro: ${error.message}</p>`;
+        }
+    }
+
+    // ============ VER DETALHES DO ALUNO ============
+    async verDetalhesAluno(alunoId) {
+        console.log('🔍 Verificando detalhes do aluno ID:', alunoId);
+        
+        try {
+            // Verificar se o ID é válido
+            if (!alunoId) {
+                this.showToast('❌ ID do aluno inválido', 'error');
+                return;
+            }
+            
+            this.showToast('🔄 Carregando detalhes...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // 🔥 CORREÇÃO: Usar a rota que FUNCIONOU no diagnóstico
+            const response = await fetch(`/api/admin/usuarios/${alunoId}`, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json'
+                }
+            });
+            
+            console.log('📡 Status da resposta:', response.status);
+            
+            // Verificar se a resposta é OK
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Erro na resposta:', errorText.substring(0, 200));
+                throw new Error(`Erro ${response.status}: ${response.statusText}`);
+            }
+            
+            // Verificar content-type
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+                throw new Error('Resposta do servidor não é JSON');
+            }
+            
+            const data = await response.json();
+            console.log('📦 Dados recebidos:', data);
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar detalhes');
+            }
+            
+            const aluno = data.user || data.usuario;
+            
+            if (!aluno) {
+                throw new Error('Dados do aluno não encontrados na resposta');
+            }
+            
+            console.log('✅ Aluno carregado:', aluno.nome);
+            
+            // Mostrar modal com os detalhes
+            this.mostrarModalDetalhesAluno(aluno);
+            
+        } catch (error) {
+            console.error('❌ Erro detalhado:', error);
+            this.showToast('❌ ' + error.message, 'error');
+            
+            // Mostrar erro no modal
+            const modalBody = document.getElementById('modalBody');
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 15px;"></i>
+                        <h3 style="color: #721c24;">Erro ao carregar detalhes</h3>
+                        <p style="color: #6c757d;">${error.message}</p>
+                        <button onclick="admin.closeModal()" style="
+                            margin-top: 15px;
+                            padding: 8px 20px;
+                            background: #667eea;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-times"></i> Fechar
+                        </button>
+                    </div>
+                `;
+                document.getElementById('modalTitle').innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro';
+                document.getElementById('modalSaveBtn').style.display = 'none';
+                this.openModal();
+            }
+        }
+    }
+
+    mostrarModalDetalhesAluno(aluno) {
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        
+        modalTitle.innerHTML = '<i class="fas fa-user-graduate"></i> Detalhes do Aluno';
+        
+        // Formatar dados
+        const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+        const telefoneFormatado = aluno.telefone ? 
+            aluno.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : 'Não informado';
+        const cpfFormatado = aluno.cpf ? 
+            aluno.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : 'Não informado';
+        
+        modalBody.innerHTML = `
+            <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                <!-- Avatar -->
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="
+                        width: 100px;
+                        height: 100px;
+                        background: linear-gradient(135deg, #667eea, #764ba2);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin: 0 auto 15px;
+                        border: 3px solid white;
+                        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                    ">
+                        <span style="font-size: 36px; color: white; font-weight: bold;">${iniciais}</span>
+                    </div>
+                    <h2 style="margin: 0; color: #1f2937; font-size: 24px;">${aluno.nome}</h2>
+                    <p style="color: #6b7280; margin: 5px 0;">${aluno.email}</p>
+                </div>
+                
+                <!-- Informações em cards -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 12px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">
+                            <i class="fas fa-id-card"></i> Matrícula
+                        </div>
+                        <div style="font-weight: 600; font-size: 16px;">${aluno.matricula || 'Não informada'}</div>
+                    </div>
+                    
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 12px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">
+                            <i class="fas fa-id-card"></i> CPF
+                        </div>
+                        <div style="font-weight: 600; font-size: 16px;">${cpfFormatado}</div>
+                    </div>
+                    
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 12px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">
+                            <i class="fas fa-phone"></i> Telefone
+                        </div>
+                        <div style="font-weight: 600; font-size: 16px;">${telefoneFormatado}</div>
+                    </div>
+                    
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 12px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">
+                            <i class="fas fa-graduation-cap"></i> Curso
+                        </div>
+                        <div style="font-weight: 600; font-size: 16px;">${aluno.curso || 'Não informado'}</div>
+                    </div>
+                    
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 12px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">
+                            <i class="fas fa-school"></i> Turma
+                        </div>
+                        <div style="font-weight: 600; font-size: 16px;">${aluno.turma || 'Não informada'}</div>
+                    </div>
+                    
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 12px;">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">
+                            <i class="fas fa-wheelchair"></i> Acessibilidade
+                        </div>
+                        <div style="font-weight: 600; font-size: 16px;">
+                            ${aluno.precisaAcessibilidade ? 
+                                '<span style="color: #10b981;">✅ Sim</span>' : 
+                                '<span style="color: #6b7280;">❌ Não</span>'}
+                        </div>
+                        ${aluno.precisaAcessibilidade && aluno.condicaoAcessibilidade ? `
+                            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">
+                                Condição: ${aluno.condicaoAcessibilidade}
+                                ${aluno.outraCondicao ? ` - ${aluno.outraCondicao}` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <!-- Informações do sistema -->
+                <div style="background: #f9fafb; border-radius: 12px; padding: 15px; margin-top: 10px;">
+                    <h4 style="margin: 0 0 10px; font-size: 14px; color: #374151;">
+                        <i class="fas fa-info-circle"></i> Informações do Sistema
+                    </h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+                        <div>
+                            <span style="color: #6b7280;">Status:</span>
+                            <span style="color: ${aluno.ativo ? '#10b981' : '#ef4444'}; font-weight: 600; margin-left: 5px;">
+                                ${aluno.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                        </div>
+                        <div>
+                            <span style="color: #6b7280;">2FA:</span>
+                            <span style="margin-left: 5px;">${aluno.twoFactorEnabled ? '✅ Ativado' : '❌ Desativado'}</span>
+                        </div>
+                        <div>
+                            <span style="color: #6b7280;">Cadastro:</span>
+                            <span style="margin-left: 5px;">${aluno.createdAt ? new Date(aluno.createdAt).toLocaleDateString('pt-BR') : 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span style="color: #6b7280;">ID:</span>
+                            <span style="margin-left: 5px; font-family: monospace; font-size: 11px;">${aluno._id || aluno.id}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        modalSaveBtn.style.display = 'none';
+        this.openModal();
     }
 
     // ============ ATUALIZAR TURMAS ============
@@ -1682,9 +2476,16 @@ class AdminPanel {
                                 style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">${turma?.descricao || ''}</textarea>
                     </div>
                     
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                        <input type="checkbox" id="turmaAtiva" ${turma?.ativa !== false ? 'checked' : ''}>
-                        <label for="turmaAtiva">Turma ativa</label>
+                    <!-- 🔥 NOVO: Status da turma dentro do modal -->
+                    <div style="background: #f8fafc; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <input type="checkbox" id="turmaAtiva" ${turma?.ativa !== false ? 'checked' : ''}>
+                            <label for="turmaAtiva" style="font-weight: 600; cursor: pointer;">Turma Ativa</label>
+                        </div>
+                        <p style="margin: 0; font-size: 12px; color: #6b7280;">
+                            <i class="fas fa-info-circle"></i> 
+                            Se desativada, alunos não poderão acessar provas desta turma
+                        </p>
                     </div>
                     
                     <div style="background: #f0f4ff; padding: 10px; border-radius: 8px; font-size: 13px; color: #1e40af;">

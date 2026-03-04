@@ -13224,6 +13224,291 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
     }
 });
 
+// ============ ADICIONAR ALUNO À TURMA (ADMIN) ============
+app.post('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const turmaId = req.params.id;
+        const { alunoId } = req.body;
+
+        console.log(`📝 Admin ${req.userId} adicionando aluno ${alunoId} à turma ${turmaId}`);
+
+        // Verificar se a turma existe
+        const turma = await Turma.findById(turmaId);
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+
+        // Verificar se o aluno existe
+        const aluno = await User.findById(alunoId);
+        if (!aluno) {
+            return res.status(404).json({
+                success: false,
+                error: 'Aluno não encontrado'
+            });
+        }
+
+        // Verificar se o usuário é aluno
+        if (aluno.role !== 'aluno') {
+            return res.status(400).json({
+                success: false,
+                error: 'O usuário selecionado não é um aluno'
+            });
+        }
+
+        // Verificar se o aluno já está na turma
+        if (turma.alunos.includes(alunoId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Aluno já está matriculado nesta turma'
+            });
+        }
+
+        // Adicionar aluno à turma
+        turma.alunos.push(alunoId);
+        await turma.save();
+
+        console.log(`✅ Aluno ${aluno.nome} adicionado à turma ${turma.nome}`);
+
+        // Criar notificação para o aluno
+        try {
+            const Notificacao = mongoose.model('Notificacao');
+            const notificacao = new Notificacao({
+                usuarioId: alunoId,
+                tipo: 'sistema',
+                titulo: '📚 Nova Turma',
+                mensagem: `Você foi matriculado na turma ${turma.nome} - ${turma.disciplina}`,
+                icone: '🏫',
+                cor: '#10b981',
+                link: '/aluno.html',
+                prioridade: 3
+            });
+            await notificacao.save();
+        } catch (notifError) {
+            console.warn('⚠️ Erro ao criar notificação:', notifError.message);
+        }
+
+        res.json({
+            success: true,
+            message: 'Aluno adicionado à turma com sucesso!',
+            turma: {
+                id: turma._id,
+                nome: turma.nome,
+                totalAlunos: turma.alunos.length
+            },
+            aluno: {
+                id: aluno._id,
+                nome: aluno.nome,
+                email: aluno.email
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao adicionar aluno à turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// ============ REMOVER ALUNO DA TURMA (ADMIN) ============
+app.delete('/api/admin/turmas/:id/alunos/:alunoId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const turmaId = req.params.id;
+        const alunoId = req.params.alunoId;
+
+        console.log(`🗑️ Admin ${req.userId} removendo aluno ${alunoId} da turma ${turmaId}`);
+
+        // Verificar se a turma existe
+        const turma = await Turma.findById(turmaId);
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+
+        // Verificar se o aluno existe
+        const aluno = await User.findById(alunoId);
+        if (!aluno) {
+            return res.status(404).json({
+                success: false,
+                error: 'Aluno não encontrado'
+            });
+        }
+
+        // Verificar se o aluno está na turma
+        if (!turma.alunos.includes(alunoId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Aluno não está matriculado nesta turma'
+            });
+        }
+
+        // Remover aluno da turma
+        turma.alunos = turma.alunos.filter(id => id.toString() !== alunoId.toString());
+        await turma.save();
+
+        console.log(`✅ Aluno ${aluno.nome} removido da turma ${turma.nome}`);
+
+        // Criar notificação para o aluno
+        try {
+            const Notificacao = mongoose.model('Notificacao');
+            const notificacao = new Notificacao({
+                usuarioId: alunoId,
+                tipo: 'sistema',
+                titulo: '📚 Removido da Turma',
+                mensagem: `Você foi removido da turma ${turma.nome} - ${turma.disciplina}`,
+                icone: '🏫',
+                cor: '#ef4444',
+                link: '/aluno.html',
+                prioridade: 3
+            });
+            await notificacao.save();
+        } catch (notifError) {
+            console.warn('⚠️ Erro ao criar notificação:', notifError.message);
+        }
+
+        res.json({
+            success: true,
+            message: 'Aluno removido da turma com sucesso!',
+            turma: {
+                id: turma._id,
+                nome: turma.nome,
+                totalAlunos: turma.alunos.length
+            },
+            aluno: {
+                id: aluno._id,
+                nome: aluno.nome,
+                email: aluno.email
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao remover aluno da turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// ============ LISTAR ALUNOS DE UMA TURMA (ADMIN) ============
+app.get('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const turmaId = req.params.id;
+
+        console.log(`📋 Admin ${req.userId} listando alunos da turma ${turmaId}`);
+
+        const turma = await Turma.findById(turmaId)
+            .populate('alunos', 'nome email matricula precisaAcessibilidade condicaoAcessibilidade')
+            .lean();
+
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+
+        const alunos = turma.alunos || [];
+
+        res.json({
+            success: true,
+            alunos: alunos.map(a => ({
+                id: a._id,
+                nome: a.nome,
+                email: a.email,
+                matricula: a.matricula,
+                precisaAcessibilidade: a.precisaAcessibilidade,
+                condicaoAcessibilidade: a.condicaoAcessibilidade
+            })),
+            total: alunos.length,
+            turma: {
+                id: turma._id,
+                nome: turma.nome,
+                disciplina: turma.disciplina
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar alunos da turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// ============ BUSCAR UMA TURMA ESPECÍFICA (ADMIN) ============
+app.get('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const turmaId = req.params.id;
+        
+        console.log(`🔍 Admin ${req.userId} buscando turma ${turmaId}`);
+        
+        const turma = await Turma.findById(turmaId)
+            .populate('professorId', 'nome email')
+            .populate('alunos', 'nome email matricula precisaAcessibilidade condicaoAcessibilidade')
+            .populate('provas', 'titulo status')
+            .lean();
+        
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+        
+        const turmaFormatada = {
+            id: turma._id,
+            nome: turma.nome,
+            disciplina: turma.disciplina,
+            eixo: turma.eixo,
+            codigo: turma.codigo,
+            descricao: turma.descricao,
+            dataCriacao: turma.createdAt,
+            ativa: turma.ativa,
+            professor: turma.professorId ? {
+                id: turma.professorId._id,
+                nome: turma.professorId.nome,
+                email: turma.professorId.email
+            } : null,
+            totalAlunos: turma.alunos?.length || 0,
+            alunos: turma.alunos?.map(a => ({
+                id: a._id,
+                nome: a.nome,
+                email: a.email,
+                matricula: a.matricula,
+                precisaAcessibilidade: a.precisaAcessibilidade || false,
+                condicaoAcessibilidade: a.condicaoAcessibilidade
+            })) || [],
+            totalProvas: turma.provas?.length || 0,
+            provas: turma.provas?.map(p => ({
+                id: p._id,
+                titulo: p.titulo,
+                status: p.status
+            })) || []
+        };
+        
+        res.json({
+            success: true,
+            turma: turmaFormatada
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+
 // ============================================================================
 // VERIFICADOR AUTOMÁTICO DE NOTIFICAÇÕES (A CADA 1 MINUTO)
 // ============================================================================
