@@ -1677,6 +1677,250 @@
     }
 
     </script>
+
+    <script>
+// ============================================
+// NOTIFICAÇÕES PUSH PARA CELULAR
+// ============================================
+
+(function() {
+    // Verificar se o navegador suporta
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log('📱 Push não suportado neste navegador');
+        return;
+    }
+
+    console.log('📱 Push notifications disponível');
+
+    // Verificar status atual
+    if (Notification.permission === 'granted') {
+        console.log('✅ Notificações já permitidas');
+        registrarPushSubscription();
+    } else if (Notification.permission === 'default') {
+        // Nunca perguntou - perguntar após 3 segundos
+        setTimeout(solicitarPermissaoNotificacao, 3000);
+    } else {
+        // Bloqueado - mostrar botão flutuante após 5 segundos
+        setTimeout(mostrarBotaoAtivarNotificacoes, 5000);
+    }
+})();
+
+// Função para solicitar permissão
+async function solicitarPermissaoNotificacao() {
+    try {
+        console.log('📱 Solicitando permissão de notificação...');
+        const permission = await Notification.requestPermission();
+        
+        console.log('📋 Resposta:', permission);
+        
+        if (permission === 'granted') {
+            console.log('✅ Permissão concedida!');
+            await registrarPushSubscription();
+            mostrarNotificacaoBoasVindas();
+        } else {
+            console.log('❌ Permissão negada');
+        }
+    } catch (error) {
+        console.error('❌ Erro ao solicitar permissão:', error);
+    }
+}
+
+// Registrar inscrição push
+async function registrarPushSubscription() {
+    try {
+        // Aguardar service worker estar pronto
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Verificar se já tem inscrição
+        let subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+            console.log('🆕 Criando nova inscrição push...');
+            
+            // Chave VAPID pública (você precisa gerar uma)
+            const vapidPublicKey = urlBase64ToUint8Array('BFV6eF6W3rqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQ');
+            
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: vapidPublicKey
+            });
+            
+            console.log('✅ Inscrição criada:', subscription);
+            
+            // Enviar para o servidor
+            await fetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                },
+                body: JSON.stringify(subscription)
+            });
+            
+            console.log('✅ Inscrição enviada ao servidor');
+            
+        } else {
+            console.log('✅ Já inscrito em push');
+            
+            // Verificar se a inscrição ainda é válida
+            try {
+                await fetch('/api/push/check-subscription', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                    }
+                });
+            } catch (e) {
+                console.log('⚠️ Erro ao verificar inscrição:', e.message);
+            }
+        }
+    } catch (error) {
+        console.error('❌ Erro ao registrar push:', error);
+    }
+}
+
+// Mostrar notificação de boas-vindas
+function mostrarNotificacaoBoasVindas() {
+    if (Notification.permission === 'granted') {
+        new Notification('📱 Notificações ativadas!', {
+            body: 'Você receberá alertas de provas, resultados e mensagens importantes',
+            icon: '/icons/favicon.ico',
+            badge: '/icons/favicon.ico',
+            vibrate: [200, 100, 200],
+            tag: 'boas-vindas-push',
+            silent: false,
+            requireInteraction: false
+        });
+    }
+}
+
+// Mostrar botão flutuante para quando está bloqueado
+function mostrarBotaoAtivarNotificacoes() {
+    // Verificar se já não existe
+    if (document.getElementById('push-banner')) return;
+    
+    const banner = document.createElement('div');
+    banner.id = 'push-banner';
+    banner.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        z-index: 10000;
+        animation: slideUp 0.3s ease;
+        max-width: 400px;
+        margin: 0 auto;
+    `;
+    
+    banner.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+            <div style="
+                width: 50px;
+                height: 50px;
+                background: rgba(255,255,255,0.2);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+            ">
+                <i class="fas fa-bell-slash"></i>
+            </div>
+            <div style="flex: 1;">
+                <strong style="font-size: 16px;">🔕 Notificações bloqueadas</strong>
+                <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.9;">
+                    Você não está recebendo alertas de provas e resultados
+                </p>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" style="
+                background: none;
+                border: none;
+                color: white;
+                font-size: 20px;
+                cursor: pointer;
+                opacity: 0.7;
+            ">×</button>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
+            <p style="margin: 0 0 10px; font-size: 14px;">
+                <i class="fas fa-lock"></i> 
+                <strong>Como ativar no Microsoft Edge:</strong>
+            </p>
+            <ol style="margin: 0; padding-left: 20px; font-size: 13px;">
+                <li>Clique no <strong>cadeado 🔒</strong> ao lado da URL</li>
+                <li>Vá em <strong>"Permissões para este site"</strong></li>
+                <li>Em <strong>"Notificações"</strong>, escolha <strong>"Permitir"</strong></li>
+                <li>Recarregue a página</li>
+            </ol>
+        </div>
+        
+        <button onclick="window.location.reload()" style="
+            width: 100%;
+            padding: 12px;
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        ">
+            <i class="fas fa-sync-alt"></i>
+            Já permiti - Recarregar
+        </button>
+    `;
+    
+    document.body.appendChild(banner);
+    
+    // Adicionar animação
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Função auxiliar para converter chave VAPID
+function urlBase64ToUint8Array(base64String) {
+    while (base64String.length % 4 !== 0) {
+        base64String += '=';
+    }
+    base64String = base64String.replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64String);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+// Função para testar (opcional)
+window.testarNotificacao = function() {
+    if (Notification.permission === 'granted') {
+        new Notification('🔔 Teste manual', {
+            body: 'Notificação de teste',
+            icon: '/icons/favicon.ico'
+        });
+        console.log('✅ Notificação enviada');
+    } else {
+        console.log('❌ Sem permissão');
+        solicitarPermissaoNotificacao();
+    }
+};
+</script>
     
 </body>
 </html>
