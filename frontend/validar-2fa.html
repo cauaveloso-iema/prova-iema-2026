@@ -843,8 +843,14 @@
             async init() {
                 this.setupEventListeners();
                 await this.loadUserData();
+                
+                // Carregar códigos de backup (NÃO ENVIA SMS)
                 await this.loadBackupCodes();
+                
+                // Iniciar timer
                 this.startTimer(300);
+                
+                // 🔥 AGORA sim, enviar o código APENAS UMA VEZ
                 await this.requestCode();
             }
 

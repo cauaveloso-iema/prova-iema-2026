@@ -83,7 +83,7 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
-// ============ FUNÇÃO PARA ENVIAR SMS VIA TWILIO (VERSÃO FINAL) ============
+// ============ FUNÇÃO PARA ENVIAR SMS VIA TWILIO (VERSÃO FINAL - SEM DUPLICAÇÃO) ============
 async function enviarSmsTwilio(telefone, mensagem) {
   try {
     // Garantir que o telefone está no formato E.164 (+55...)
@@ -96,7 +96,7 @@ async function enviarSmsTwilio(telefone, mensagem) {
     console.log('   Para:', numeroDestino);
     console.log('   Mensagem:', mensagem.substring(0, 30) + '...');
     
-    // TENTATIVA 1: Usar Messaging Service (prioridade)
+    // ✅ USAR APENAS UMA TENTATIVA - PRIORIDADE PARA MESSAGING SERVICE
     if (process.env.TWILIO_MESSAGING_SERVICE_SID) {
       try {
         const message = await twilioClient.messages.create({
@@ -106,22 +106,30 @@ async function enviarSmsTwilio(telefone, mensagem) {
         });
         
         console.log(`✅ SMS enviado via Messaging Service! SID: ${message.sid}`);
+        console.log(`✅ SMS enviado para ${telefone.replace(/\D/g, '')}`);
         return { success: true, sid: message.sid, enviado: true };
       } catch (error) {
-        console.log('⚠️ Erro no Messaging Service, tentando número direto...');
+        console.log('⚠️ Erro no Messaging Service:', error.message);
+        // Se falhar, tenta com número direto
       }
     }
     
-    // TENTATIVA 2: Usar número direto
+    // TENTATIVA 2: Usar número direto (APENAS SE O PRIMEIRO FALHAR)
     if (process.env.TWILIO_PHONE_NUMBER) {
-      const message = await twilioClient.messages.create({
-        body: mensagem,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to: numeroDestino
-      });
-      
-      console.log(`✅ SMS enviado via número direto! SID: ${message.sid}`);
-      return { success: true, sid: message.sid, enviado: true };
+      try {
+        const message = await twilioClient.messages.create({
+          body: mensagem,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: numeroDestino
+        });
+        
+        console.log(`✅ SMS enviado via número direto! SID: ${message.sid}`);
+        console.log(`✅ SMS enviado para ${telefone.replace(/\D/g, '')}`);
+        return { success: true, sid: message.sid, enviado: true };
+      } catch (error) {
+        console.log('⚠️ Erro no número direto:', error.message);
+        throw error; // Propagar erro para o fallback
+      }
     }
     
     throw new Error('Nenhuma configuração de SMS encontrada');
@@ -1029,7 +1037,7 @@ app.post('/api/auth/register', [
 });
 
 // ============ ROTA PÚBLICA DE LOGIN ============
-// ============ ROTA DE LOGIN COM 2FA (CONTROLADO PELO SUPER ADMIN) ============
+// ============ ROTA DE LOGIN COM 2FA (VERSÃO CORRIGIDA - SEM ENVIO DUPLICADO) ============
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password, cpf, twoFactorCode, token: tempToken } = req.body;
@@ -1065,7 +1073,7 @@ app.post('/api/auth/login', async (req, res) => {
             });
           }
           
-          // ========== VERIFICAÇÃO DE CÓDIGO 2FA CORRIGIDA ==========
+          // ========== VERIFICAÇÃO DE CÓDIGO 2FA ==========
           let isValid = false;
           let motivo = '';
           
@@ -1074,6 +1082,7 @@ app.post('/api/auth/login', async (req, res) => {
             isValid = true;
             motivo = 'SMS';
             user.twoFactorTempSecret = null; // Limpar após uso
+            await user.save();
             console.log('✅ Código SMS válido');
           }
           
@@ -1082,7 +1091,7 @@ app.post('/api/auth/login', async (req, res) => {
             try {
               const speakeasy = require('speakeasy');
               
-              // 🔴 TENTAR PRIMEIRO COM SEGREDO TEMPORÁRIO (QR CODE ACABOU DE SER GERADO)
+              // TENTAR PRIMEIRO COM SEGREDO TEMPORÁRIO
               if (user.twoFactorTempSecret) {
                 const verified = speakeasy.totp.verify({
                   secret: user.twoFactorTempSecret,
@@ -1096,9 +1105,8 @@ app.post('/api/auth/login', async (req, res) => {
                   motivo = 'TOTP (QR Code) - Temporário';
                   console.log('✅ Código TOTP temporário válido');
                   
-                  // Se for primeira ativação (2FA ainda não ativado)
+                  // Se for primeira ativação
                   if (!user.twoFactorEnabled) {
-                    // Gerar 10 códigos de backup
                     const backupCodes = [];
                     for (let i = 0; i < 10; i++) {
                       backupCodes.push(generateBackupCode());
@@ -1111,14 +1119,13 @@ app.post('/api/auth/login', async (req, res) => {
                     await user.save();
                     console.log('✅ 2FA ativado com sucesso via QR Code');
                   } else {
-                    // Se já estiver ativado, apenas limpa o temporário
                     user.twoFactorTempSecret = null;
                     await user.save();
                   }
                 }
               }
               
-              // 🔴 SE NÃO FUNCIONOU COM TEMPORÁRIO, TENTAR COM PERMANENTE
+              // TENTAR COM PERMANENTE
               if (!isValid && user.twoFactorSecret && user.twoFactorEnabled) {
                 const verified = speakeasy.totp.verify({
                   secret: user.twoFactorSecret,
@@ -1142,12 +1149,12 @@ app.post('/api/auth/login', async (req, res) => {
           if (!isValid && user.twoFactorBackupCodes && user.twoFactorBackupCodes.includes(twoFactorCode)) {
             isValid = true;
             motivo = 'backup';
-            // Remover o código usado da lista
             user.twoFactorBackupCodes = user.twoFactorBackupCodes.filter(c => c !== twoFactorCode);
+            await user.save();
             console.log('✅ Código de backup válido');
           }
           
-          // 4. Verificar código secreto permanente (caso especial - mantido para compatibilidade)
+          // 4. Verificar código secreto permanente
           if (!isValid && user.twoFactorSecret && user.twoFactorSecret === twoFactorCode) {
             isValid = true;
             motivo = 'secreto';
@@ -1162,14 +1169,11 @@ app.post('/api/auth/login', async (req, res) => {
             });
           }
           
-          // Salvar alterações (se houver)
-          await user.save();
-          
           // Buscar configuração de expiração do JWT
           const configJwt = await Config.findOne({ chave: 'seguranca.jwtExpiracao' });
           const jwtExpiracao = configJwt ? configJwt.valor : '24h';
           
-          // Gerar token PRINCIPAL (após 2FA verificado)
+          // Gerar token PRINCIPAL
           const authToken = jwt.sign(
             { 
               id: user._id, 
@@ -1181,28 +1185,27 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: jwtExpiracao }
           );
           
-          // Definir redirecionamento baseado no role
+          // Definir redirecionamento
           let redirectTo = '';
           if (user.forcePasswordChange) {
             redirectTo = '/trocar-senha.html';
           } else if (user.role === 'super_admin') {
-            redirectTo = '/admin.html'; // Super Admin → admin.html
+            redirectTo = '/admin.html';
           } else if (user.role === 'admin') {
-            redirectTo = '/admin-simples.html'; // Admin normal → admin-simples.html
+            redirectTo = '/admin-simples.html';
           } else if (user.role === 'professor') {
             redirectTo = '/index.html';
           } else if (user.role === 'aluno') {
             redirectTo = '/aluno.html';
           } else {
             redirectTo = '/login.html';
-}
+          }
           
           console.log(`✅ 2FA verificado via ${motivo} para ${user.email}`);
           if (user.twoFactorBackupCodes) {
             console.log(`📊 Códigos de backup restantes: ${user.twoFactorBackupCodes.length}`);
           }
           
-          // Retornar sucesso com token principal
           return res.json({
             success: true,
             token: authToken,
@@ -1242,7 +1245,7 @@ app.post('/api/auth/login', async (req, res) => {
     const jwtExpiracao = configJwt ? configJwt.valor : '24h';
     const exigir2FA = config2FA ? config2FA.valor : false;
     
-    console.log(`🔐 Configuração 2FA: ${exigir2FA ? 'ATIVADO (admins e professores)' : 'DESATIVADO'}`);
+    console.log(`🔐 Configuração 2FA: ${exigir2FA ? 'ATIVADO' : 'DESATIVADO'}`);
     
     // Buscar usuário por email ou CPF
     let user;
@@ -1293,11 +1296,9 @@ app.post('/api/auth/login', async (req, res) => {
     const isMatch = await user.comparePassword(password);
     
     if (!isMatch) {
-      // Incrementar tentativas de login
       user.loginAttempts = (user.loginAttempts || 0) + 1;
       
       if (user.loginAttempts >= maxTentativas) {
-        // Bloquear usuário
         user.lockUntil = Date.now() + (tempoBloqueio * 60 * 1000);
         user.loginAttempts = 0;
         await user.save();
@@ -1317,23 +1318,14 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
     
-    // Login bem-sucedido - resetar tentativas
+    // Login bem-sucedido
     user.loginAttempts = 0;
     user.lockUntil = null;
     user.lastLogin = new Date();
     await user.save();
     
-    // ===== VERIFICAR SE DEVE EXIGIR 2FA BASEADO NO PERFIL =====
-    
-    // 🔥 REGRAS ATUALIZADAS:
-    // - SUPER ADMIN: SEMPRE 2FA
-    // - ADMIN: segue configuração
-    // - PROFESSOR: segue a MESMA configuração dos admins
-    // - ALUNO: nunca 2FA
-    
+    // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
     const perfisCom2FA = ['super_admin'];
-    
-    // Se a configuração estiver ativada, admins e professores também entram
     if (exigir2FA) {
       perfisCom2FA.push('admin', 'professor');
     }
@@ -1341,32 +1333,20 @@ app.post('/api/auth/login', async (req, res) => {
     if (perfisCom2FA.includes(user.role)) {
       console.log(`🔐 2FA exigido para ${user.role} ${user.email}`);
       
-      // 🔥 VERIFICAR SE O USUÁRIO JÁ TEM CÓDIGOS DE BACKUP
-      // Se não tiver, GERAR 10 CÓDIGOS AGORA!
+      // Verificar códigos de backup
       if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
           console.log('🆕 Usuário sem códigos de backup - gerando 10 agora...');
-          
           const backupCodes = [];
           for (let i = 0; i < 10; i++) {
               backupCodes.push(generateBackupCode());
           }
-          
           user.twoFactorBackupCodes = backupCodes;
-          user.twoFactorBackupCodesShown = false; // <-- CRIAR O CAMPO AQUI!
+          user.twoFactorBackupCodesShown = false;
           await user.save();
-        
-        console.log('✅ 10 códigos de backup gerados para o usuário');
-        console.log('📋 Códigos:', backupCodes);
-      } else {
-        console.log(`📊 Usuário já tem ${user.twoFactorBackupCodes.length} códigos de backup`);
+        console.log('✅ 10 códigos de backup gerados');
       }
       
-      // Verificar se tem telefone cadastrado
-      if (!user.telefone) {
-        console.warn(`⚠️ Usuário ${user.email} não tem telefone cadastrado para 2FA`);
-      }
-      
-      // Gerar token TEMPORÁRIO para a sessão 2FA
+      // Gerar token TEMPORÁRIO
       const tempAuthToken = jwt.sign(
         { 
           id: user._id,
@@ -1379,43 +1359,20 @@ app.post('/api/auth/login', async (req, res) => {
         { expiresIn: '10m' }
       );
       
-      // Gerar novo código SMS automaticamente
-      const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Salvar código temporário
-      user.twoFactorTempSecret = codigo;
-      user.lastOtpRequest = new Date();
-      user.otpRequestCount = (user.otpRequestCount || 0) + 1;
-      await user.save();
-      
-      // Enviar SMS com o código (se tiver telefone)
-      if (user.telefone) {
-        const telefoneLimpo = user.telefone.replace(/\D/g, '');
-        const mensagem = `🔐 ${user.nome}, seu código de verificação do IEMA é: ${codigo}. Válido por 5 minutos.`;
-        
-        // Enviar SMS em background
-        enviarSmsTwilio(telefoneLimpo, mensagem).then(resultado => {
-          if (resultado.devMode) {
-            console.log(`🔧 Código gerado (modo desenvolvimento): ${resultado.codigo}`);
-          }
-        }).catch(err => {
-          console.error('❌ Erro ao enviar SMS:', err);
-        });
-      }
+      // 🔥 NÃO GERAR CÓDIGO NEM ENVIAR SMS AQUI!
       
       return res.json({
         success: true,
         requiresTwoFactor: true,
         userId: user._id,
         token: tempAuthToken,
-        message: 'Código 2FA necessário'
+        message: '2FA necessário'
       });
     }
     
     // ===== USUÁRIOS SEM 2FA =====
     console.log(`✅ Login bem-sucedido para usuário ${user.email} (${user.role})`);
     
-    // Gerar token principal
     const authToken = jwt.sign(
       { 
         id: user._id, 
@@ -1427,7 +1384,6 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: jwtExpiracao }
     );
     
-    // Configurar cookie
     res.cookie('auth_token', authToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -1435,14 +1391,13 @@ app.post('/api/auth/login', async (req, res) => {
       maxAge: parseJwtExpiration(jwtExpiracao) * 1000
     });
     
-    // Definir redirecionamento
     let redirectTo = '';
     if (user.forcePasswordChange) {
       redirectTo = '/trocar-senha.html';
     } else if (user.role === 'super_admin') {
-      redirectTo = '/admin.html'; // Super Admin → admin.html
+      redirectTo = '/admin.html';
     } else if (user.role === 'admin') {
-      redirectTo = '/admin-simples.html'; // Admin normal → admin-simples.html
+      redirectTo = '/admin-simples.html';
     } else if (user.role === 'professor') {
       redirectTo = '/index.html';
     } else if (user.role === 'aluno') {
