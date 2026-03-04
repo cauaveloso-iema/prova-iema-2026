@@ -970,6 +970,135 @@
 
         <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
+
+        <script>
+
+    // ============================================
+    // PULL-TO-REFRESH MANUAL (SEM KODULAR)
+    // ============================================
+
+    let touchStartY = 0;
+    let touchCurrentY = 0;
+    let isPulling = false;
+    const PULL_THRESHOLD = 100; // Distância mínima para atualizar
+
+    document.addEventListener('touchstart', function(e) {
+        // Só ativa se estiver no topo da página
+        if (window.scrollY <= 0) {
+            touchStartY = e.touches[0].clientY;
+            isPulling = true;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+        if (!isPulling) return;
+        
+        touchCurrentY = e.touches[0].clientY;
+        const pullDistance = touchCurrentY - touchStartY;
+        
+        // Só considera movimento para BAIXO
+        if (pullDistance > 0) {
+            // Mostrar indicador visual (opcional)
+            mostrarIndicadorPull(pullDistance);
+            
+            // Se passou do limite, atualiza
+            if (pullDistance > PULL_THRESHOLD) {
+                e.preventDefault();
+                atualizarPagina();
+            }
+        }
+    }, { passive: false });
+
+    document.addEventListener('touchend', function(e) {
+        if (!isPulling) return;
+        
+        const pullDistance = touchCurrentY - touchStartY;
+        
+        // Se não passou do limite, apenas esconde o indicador
+        if (pullDistance < PULL_THRESHOLD) {
+            esconderIndicadorPull();
+        }
+        
+        isPulling = false;
+        touchStartY = 0;
+        touchCurrentY = 0;
+    });
+
+    // Função para atualizar a página
+    function atualizarPagina() {
+        // Mostrar mensagem
+        mostrarMensagem('Atualizando página...');
+        
+        // Efeito visual
+        document.body.style.opacity = '0.7';
+        document.body.style.transition = 'opacity 0.3s';
+        
+        // Recarregar a página
+        setTimeout(() => {
+            location.reload();
+        }, 500);
+    }
+
+    // Indicador visual (opcional)
+    function mostrarIndicadorPull(distancia) {
+        let indicador = document.getElementById('pull-indicator');
+        
+        if (!indicador) {
+            indicador = document.createElement('div');
+            indicador.id = 'pull-indicator';
+            indicador.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: #4f46e5;
+                color: white;
+                text-align: center;
+                padding: 10px;
+                font-size: 14px;
+                z-index: 9999;
+                transform: translateY(-100%);
+                transition: transform 0.2s;
+            `;
+            indicador.innerHTML = '↓ Solte para atualizar';
+            document.body.appendChild(indicador);
+        }
+        
+        // Mostrar conforme a distância
+        if (distancia > 20) {
+            indicador.style.transform = 'translateY(0)';
+        }
+    }
+
+    function esconderIndicadorPull() {
+        const indicador = document.getElementById('pull-indicator');
+        if (indicador) {
+            indicador.style.transform = 'translateY(-100%)';
+        }
+    }
+
+    function mostrarMensagem(texto) {
+        const msg = document.createElement('div');
+        msg.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #10b981;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-weight: bold;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        `;
+        msg.textContent = texto;
+        document.body.appendChild(msg);
+        
+        setTimeout(() => msg.remove(), 1500);
+    }
+
+    </script>
     
 </body>
 </html>
