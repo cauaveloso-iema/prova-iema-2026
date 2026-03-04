@@ -311,17 +311,18 @@
         <script>
 
     // ============================================
-    // PULL-TO-REFRESH MANUAL (SEM KODULAR)
+    // PULL-TO-REFRESH - MENOS SENSÍVEL (CORRIGIDO)
     // ============================================
 
     let touchStartY = 0;
     let touchCurrentY = 0;
     let isPulling = false;
-    const PULL_THRESHOLD = 100; // Distância mínima para atualizar
+    const PULL_THRESHOLD = 600; // AUMENTADO para 200px (bem menos sensível)
+    const TOP_TOLERANCE = 100;    // Tolerância maior para considerar "topo"
 
     document.addEventListener('touchstart', function(e) {
-        // Só ativa se estiver no topo da página
-        if (window.scrollY <= 0) {
+        // Só ativa se estiver no topo da página (com tolerância)
+        if (window.scrollY <= TOP_TOLERANCE) {
             touchStartY = e.touches[0].clientY;
             isPulling = true;
         }
@@ -335,16 +336,21 @@
         
         // Só considera movimento para BAIXO
         if (pullDistance > 0) {
-            // Mostrar indicador visual (opcional)
-            mostrarIndicadorPull(pullDistance);
+            // NÃO bloqueia o scroll! (removido e.preventDefault)
             
-            // Se passou do limite, atualiza
+            // Mostrar indicador visual apenas se passar de 50px
+            if (pullDistance > 50) {
+                mostrarIndicadorPull(pullDistance);
+            }
+            
+            // Se passou do limite MUITO MAIOR, atualiza
             if (pullDistance > PULL_THRESHOLD) {
+                // Agora sim bloqueia para não dar conflito
                 e.preventDefault();
                 atualizarPagina();
             }
         }
-    }, { passive: false });
+    }, { passive: true }); // MUDADO para passive: true (não bloqueia)
 
     document.addEventListener('touchend', function(e) {
         if (!isPulling) return;
@@ -359,7 +365,7 @@
         isPulling = false;
         touchStartY = 0;
         touchCurrentY = 0;
-    });
+    }, { passive: true });
 
     // Função para atualizar a página
     function atualizarPagina() {
@@ -376,7 +382,7 @@
         }, 500);
     }
 
-    // Indicador visual (opcional)
+    // Indicador visual simplificado
     function mostrarIndicadorPull(distancia) {
         let indicador = document.getElementById('pull-indicator');
         
@@ -402,7 +408,7 @@
         }
         
         // Mostrar conforme a distância
-        if (distancia > 20) {
+        if (distancia > 50) {
             indicador.style.transform = 'translateY(0)';
         }
     }

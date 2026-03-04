@@ -745,7 +745,6 @@ class AdminPanel {
 
     // ============ MODAL USUÁRIO ============
 
-    // ============ ABRIR MODAL DE USUÁRIO (CORRIGIDO) ============
     abrirModalUsuario(usuarioId = null) {
         console.log('🔍 Abrindo modal para usuário ID:', usuarioId);
         
@@ -756,108 +755,132 @@ class AdminPanel {
             console.log('👤 Usuário encontrado:', usuario);
         }
 
+        // Extrair valores com segurança
+        const nome = usuario?.nome || '';
+        const email = usuario?.email || '';
+        const role = usuario?.role || 'aluno';
+        const ativo = usuario?.ativo !== false; // default true
+        const id = usuario?._id || usuario?.id || '';
+        const cpf = usuario?.cpf || '';
+        const telefone = usuario?.telefone || '';
+        const matricula = usuario?.matricula || '';
+        const curso = usuario?.curso || '';
+        const turma = usuario?.turma || '';
+        const eixo = usuario?.eixo || '';
+        const departamento = usuario?.departamento || '';
+        const titulacao = usuario?.titulacao || '';
+        const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
+
+        // Escapar valores para evitar problemas com aspas
+        const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        
         const modalBody = document.getElementById('modalBody');
+        
+        // Criar HTML do conteúdo
         modalBody.innerHTML = `
             <form id="userForm">
                 <div class="form-group">
-                    <label>Nome Completo</label>
-                    <input type="text" id="userNome" class="form-control" value="${usuario?.nome || ''}" required>
+                    <label><i class="fas fa-user"></i> Nome Completo</label>
+                    <input type="text" id="userNome" class="form-control" value="${escapeStr(nome)}" required>
                 </div>
-
-                // No método abrirModalUsuario, já deve ter este campo:
+                
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Email</label>
+                    <input type="email" id="userEmail" class="form-control" value="${escapeStr(email)}" required>
+                </div>
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Perfil</label>
+                        <label><i class="fas fa-user-tag"></i> Perfil</label>
                         <select id="userRole" class="form-control" onchange="admin.toggleCamposRole()">
-                            <option value="aluno" ${usuario?.role === 'aluno' || (!usuario && 'aluno') ? 'selected' : ''}>Aluno</option>
-                            <option value="professor" ${usuario?.role === 'professor' ? 'selected' : ''}>Professor</option>
-                            <option value="admin" ${usuario?.role === 'admin' ? 'selected' : ''}>Admin</option>
-                            <option value="super_admin" ${usuario?.role === 'super_admin' ? 'selected' : ''}>Super Admin</option>
+                            <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>Aluno</option>
+                            <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professor</option>
+                            <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                            <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option>
                         </select>
                     </div>
                     
-                    <!-- 🔥 CAMPO DE STATUS JÁ EXISTE AQUI -->
                     <div class="form-group">
-                        <label>Status</label>
+                        <label><i class="fas fa-circle"></i> Status</label>
                         <select id="userStatus" class="form-control">
-                            <option value="true" ${usuario?.ativo !== false ? 'selected' : ''}>Ativo</option>
-                            <option value="false" ${usuario?.ativo === false ? 'selected' : ''}>Inativo</option>
+                            <option value="true" ${ativo ? 'selected' : ''}>Ativo</option>
+                            <option value="false" ${!ativo ? 'selected' : ''}>Inativo</option>
                         </select>
                     </div>
                 </div>
-
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>CPF</label>
-                        <input type="text" id="userCPF" class="form-control" value="${usuario?.cpf || ''}" oninput="formatarCPF(this)" maxlength="14" required>
+                        <label><i class="fas fa-id-card"></i> CPF</label>
+                        <input type="text" id="userCPF" class="form-control" value="${cpf}" oninput="formatarCPF(this)" maxlength="14" required>
                     </div>
                     <div class="form-group">
-                        <label>Telefone</label>
-                        <input type="text" id="userTelefone" class="form-control" value="${usuario?.telefone || ''}" oninput="formatarTelefone(this)" maxlength="15" required>
+                        <label><i class="fas fa-phone"></i> Telefone</label>
+                        <input type="text" id="userTelefone" class="form-control" value="${telefone}" oninput="formatarTelefone(this)" maxlength="15" required>
                     </div>
                 </div>
-
+                
                 <div class="form-group">
-                    <label>Matrícula</label>
-                    <input type="text" id="userMatricula" class="form-control" value="${usuario?.matricula || ''}" maxlength="6">
+                    <label><i class="fas fa-hashtag"></i> Matrícula</label>
+                    <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
                 </div>
-
+                
                 <!-- Campos específicos para Aluno -->
-                <div id="alunoFields" class="role-specific" style="${usuario?.role === 'aluno' ? 'display: block;' : 'display: none;'}">
+                <div id="alunoFields" class="role-specific" style="${role === 'aluno' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Curso</label>
+                            <label><i class="fas fa-graduation-cap"></i> Curso</label>
                             <select id="userCurso" class="form-control">
                                 <option value="">Selecione...</option>
-                                <option value="TÉCNICO EM EVENTOS" ${usuario?.curso === 'TÉCNICO EM EVENTOS' ? 'selected' : ''}>TÉCNICO EM EVENTOS</option>
-                                <option value="TÉCNICO EM REDES DE COMPUTADORES" ${usuario?.curso === 'TÉCNICO EM REDES DE COMPUTADORES' ? 'selected' : ''}>TÉCNICO EM REDES DE COMPUTADORES</option>
-                                <option value="TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS" ${usuario?.curso === 'TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS' ? 'selected' : ''}>TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS</option>
-                                <option value="TÉCNICO EM MARKETING" ${usuario?.curso === 'TÉCNICO EM MARKETING' ? 'selected' : ''}>TÉCNICO EM MARKETING</option>
-                                <option value="TÉCNICO EM GASTRONOMIA" ${usuario?.curso === 'TÉCNICO EM GASTRONOMIA' ? 'selected' : ''}>TÉCNICO EM GASTRONOMIA</option>
-                                <option value="TÉCNICO EM MEIO AMBIENTE" ${usuario?.curso === 'TÉCNICO EM MEIO AMBIENTE' ? 'selected' : ''}>TÉCNICO EM MEIO AMBIENTE</option>
+                                <option value="TÉCNICO EM EVENTOS" ${curso === 'TÉCNICO EM EVENTOS' ? 'selected' : ''}>TÉCNICO EM EVENTOS</option>
+                                <option value="TÉCNICO EM REDES DE COMPUTADORES" ${curso === 'TÉCNICO EM REDES DE COMPUTADORES' ? 'selected' : ''}>TÉCNICO EM REDES DE COMPUTADORES</option>
+                                <option value="TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS" ${curso === 'TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS' ? 'selected' : ''}>TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS</option>
+                                <option value="TÉCNICO EM MARKETING" ${curso === 'TÉCNICO EM MARKETING' ? 'selected' : ''}>TÉCNICO EM MARKETING</option>
+                                <option value="TÉCNICO EM GASTRONOMIA" ${curso === 'TÉCNICO EM GASTRONOMIA' ? 'selected' : ''}>TÉCNICO EM GASTRONOMIA</option>
+                                <option value="TÉCNICO EM MEIO AMBIENTE" ${curso === 'TÉCNICO EM MEIO AMBIENTE' ? 'selected' : ''}>TÉCNICO EM MEIO AMBIENTE</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Turma</label>
-                            <input type="text" id="userTurma" class="form-control" value="${usuario?.turma || ''}" placeholder="Ex: 101, 102">
+                            <label><i class="fas fa-users"></i> Turma</label>
+                            <input type="text" id="userTurma" class="form-control" value="${escapeStr(turma)}" placeholder="Ex: 101, 102">
                         </div>
                     </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="userAcessibilidade" ${usuario?.precisaAcessibilidade ? 'checked' : ''}>
-                        <label for="userAcessibilidade">Necessita de acessibilidade</label>
+                    <div class="checkbox-group" style="margin: 10px 0;">
+                        <input type="checkbox" id="userAcessibilidade" ${precisaAcessibilidade ? 'checked' : ''}>
+                        <label for="userAcessibilidade"><i class="fas fa-wheelchair"></i> Necessita de acessibilidade</label>
                     </div>
                 </div>
-
+                
                 <!-- Campos específicos para Professor -->
-                <div id="professorFields" class="role-specific" style="${usuario?.role === 'professor' ? 'display: block;' : 'display: none;'}">
+                <div id="professorFields" class="role-specific" style="${role === 'professor' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Eixo</label>
+                            <label><i class="fas fa-sitemap"></i> Eixo</label>
                             <select id="userEixo" class="form-control">
                                 <option value="">Selecione...</option>
-                                <option value="natureza" ${usuario?.eixo === 'natureza' ? 'selected' : ''}>Natureza</option>
-                                <option value="humanas" ${usuario?.eixo === 'humanas' ? 'selected' : ''}>Humanas</option>
-                                <option value="linguagens" ${usuario?.eixo === 'linguagens' ? 'selected' : ''}>Linguagens</option>
-                                <option value="desenvolvimento" ${usuario?.eixo === 'desenvolvimento' ? 'selected' : ''}>Desenvolvimento</option>
-                                <option value="gestao" ${usuario?.eixo === 'gestao' ? 'selected' : ''}>Gestão</option>
-                                <option value="turismo" ${usuario?.eixo === 'turismo' ? 'selected' : ''}>Turismo</option>
-                                <option value="ambiente" ${usuario?.eixo === 'ambiente' ? 'selected' : ''}>Ambiente</option>
+                                <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
+                                <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
+                                <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
+                                <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
+                                <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
+                                <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
+                                <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Departamento</label>
-                            <input type="text" id="userDepartamento" class="form-control" value="${usuario?.departamento || ''}">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Titulação</label>
-                        <input type="text" id="userTitulacao" class="form-control" value="${usuario?.titulacao || ''}">
+                        <label><i class="fas fa-award"></i> Titulação</label>
+                        <input type="text" id="userTitulacao" class="form-control" value="${escapeStr(titulacao)}">
                     </div>
                 </div>
-
-                ${!usuario ? `
+                
+                ${!id ? `
                 <div class="form-group">
-                    <label>Senha Temporária</label>
+                    <label><i class="fas fa-key"></i> Senha Temporária</label>
                     <div style="display: flex; gap: 10px;">
                         <input type="text" id="userPassword" class="form-control" value="${this.gerarSenha()}" required>
                         <button type="button" class="btn-icon" onclick="admin.gerarNovaSenha()" title="Gerar nova senha">
@@ -868,8 +891,10 @@ class AdminPanel {
                 </div>
                 ` : ''}
                 
-                <!-- Campo hidden para o status (sempre ativo) -->
-                <input type="hidden" id="userStatus" value="true">
+                <div class="info-card" style="background: #eef2ff; padding: 10px; border-radius: 8px; margin-top: 10px;">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Email institucional (@iemasaoluiscentro.net) é obrigatório</span>
+                </div>
             </form>
         `;
 
@@ -878,16 +903,40 @@ class AdminPanel {
             '<i class="fas fa-edit"></i> Editar Usuário' : 
             '<i class="fas fa-user-plus"></i> Novo Usuário';
         
-        // Configurar botão salvar
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarUsuario(usuario?._id || usuario?.id);
+        // 🔥 CORREÇÃO: Usar setTimeout para garantir que os elementos existam
+        setTimeout(() => {
+            // Configurar botão salvar
+            const modalSaveBtn = document.getElementById('modalSaveBtn');
+            if (modalSaveBtn) {
+                modalSaveBtn.onclick = () => this.salvarUsuario(id);
+            } else {
+                console.error('❌ Botão modalSaveBtn não encontrado');
+            }
+            
+            // Configurar toggle dos campos específicos
+            const roleSelect = document.getElementById('userRole');
+            if (roleSelect) {
+                roleSelect.addEventListener('change', () => this.toggleCamposRole());
+            } else {
+                console.error('❌ Campo userRole não encontrado');
+            }
+        }, 100); // Pequeno delay para garantir que o DOM foi atualizado
         
         this.openModal();
     }
 
+    // ============ TOGGLE CAMPOS POR ROLE ============
     toggleCamposRole() {
-        const role = document.getElementById('userRole').value;
-        document.getElementById('alunoFields').style.display = role === 'aluno' ? 'block' : 'none';
-        document.getElementById('professorFields').style.display = role === 'professor' ? 'block' : 'none';
+        const role = document.getElementById('userRole')?.value;
+        const alunoFields = document.getElementById('alunoFields');
+        const professorFields = document.getElementById('professorFields');
+        
+        if (alunoFields) {
+            alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
+        }
+        if (professorFields) {
+            professorFields.style.display = role === 'professor' ? 'block' : 'none';
+        }
     }
 
     gerarSenha() {
