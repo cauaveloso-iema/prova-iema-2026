@@ -27,6 +27,15 @@ const Groq = require("groq-sdk");
 const http = require('http');
 const cookieParser = require('cookie-parser');
 
+// ============================================================================
+// FORÇAR FUSO HORÁRIO (LOGO NA PRIMEIRA LINHA)
+// ============================================================================
+process.env.TZ = 'America/Sao_Paulo';
+console.log('🌍 FUSO HORÁRIO FORÇADO PARA:', process.env.TZ);
+console.log('🕒 HORA ATUAL DO SERVIDOR (local):', new Date().toString());
+console.log('🕒 HORA ATUAL DO SERVIDOR (ISO):', new Date().toISOString());
+console.log('='.repeat(60));
+
 
 // ============================================================================
 // INICIALIZAÇÃO DO EXPRESS E SERVIDOR
