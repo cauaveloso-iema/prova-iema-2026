@@ -11580,6 +11580,276 @@ app.put('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req
     }
 });
 
+// ============ ROTA PARA EXCLUIR RESULTADO (ADMIN) - VERSÃO QUE VERIFICA AMBAS COLEÇÕES ============
+app.delete('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} excluindo resultado/registro ${id}`);
+
+        let excluidos = {
+            resultado: false,
+            provaRealizada: false,
+            resultadoId: null,
+            provaRealizadaId: null
+        };
+
+        // TENTAR 1: Buscar no modelo Resultado
+        const resultado = await Resultado.findById(id);
+        if (resultado) {
+            const provaId = resultado.provaId;
+            const userId = resultado.userId;
+            
+            await Resultado.findByIdAndDelete(id);
+            excluidos.resultado = true;
+            excluidos.resultadoId = id;
+            
+            console.log(`✅ Resultado ${id} excluído`);
+            
+            // TENTAR 2: Verificar se existe também em ProvaRealizada para o mesmo aluno/prova
+            if (userId && provaId) {
+                const provaRealizada = await ProvaRealizada.findOne({
+                    provaId: provaId,
+                    alunoId: userId
+                });
+                
+                if (provaRealizada) {
+                    await ProvaRealizada.findByIdAndDelete(provaRealizada._id);
+                    excluidos.provaRealizada = true;
+                    excluidos.provaRealizadaId = provaRealizada._id;
+                    console.log(`✅ ProvaRealizada ${provaRealizada._id} também excluída (mesmo aluno/prova)`);
+                }
+            }
+        } 
+        // TENTAR 3: Se não achou em Resultado, buscar em ProvaRealizada
+        else {
+            const provaRealizada = await ProvaRealizada.findById(id);
+            if (provaRealizada) {
+                await ProvaRealizada.findByIdAndDelete(id);
+                excluidos.provaRealizada = true;
+                excluidos.provaRealizadaId = id;
+                console.log(`✅ ProvaRealizada ${id} excluída`);
+                
+                // TENTAR 4: Verificar se existe também em Resultado para o mesmo aluno/prova
+                if (provaRealizada.alunoId && provaRealizada.provaId) {
+                    const resultado = await Resultado.findOne({
+                        provaId: provaRealizada.provaId,
+                        userId: provaRealizada.alunoId
+                    });
+                    
+                    if (resultado) {
+                        await Resultado.findByIdAndDelete(resultado._id);
+                        excluidos.resultado = true;
+                        excluidos.resultadoId = resultado._id;
+                        console.log(`✅ Resultado ${resultado._id} também excluído (mesmo aluno/prova)`);
+                    }
+                }
+            }
+        }
+
+        // Se nenhum registro foi encontrado
+        if (!excluidos.resultado && !excluidos.provaRealizada) {
+            return res.status(404).json({
+                success: false,
+                error: 'Registro não encontrado em nenhuma coleção'
+            });
+        }
+
+        // Atualizar estatísticas da prova se possível
+        if (excluidos.resultadoId || excluidos.provaRealizadaId) {
+            // Tentar encontrar a provaId de qualquer um dos registros
+            let provaId = null;
+            
+            if (excluidos.resultado) {
+                // Já temos a provaId do resultado
+                const resultadoCompleto = await Resultado.findById(id);
+                if (resultadoCompleto) provaId = resultadoCompleto.provaId;
+            } else if (excluidos.provaRealizada) {
+                const provaRealizadaCompleta = await ProvaRealizada.findById(id);
+                if (provaRealizadaCompleta) provaId = provaRealizadaCompleta.provaId;
+            }
+            
+            if (provaId) {
+                const prova = await Prova.findById(provaId);
+                if (prova) {
+                    // Recalcular estatísticas considerando AMBAS as coleções
+                    const todosResultados = await Resultado.find({ provaId });
+                    const todasRealizadas = await ProvaRealizada.find({ provaId });
+                    
+                    const totalParticipantes = todosResultados.length + todasRealizadas.length;
+                    
+                    let somaNotas = 0;
+                    todosResultados.forEach(r => somaNotas += (r.nota || 0));
+                    todasRealizadas.forEach(r => somaNotas += (r.nota || 0));
+                    
+                    prova.mediaNotas = totalParticipantes > 0 ? somaNotas / totalParticipantes : 0;
+                    prova.totalParticipantes = totalParticipantes;
+                    
+                    await prova.save();
+                    console.log(`📊 Estatísticas da prova ${provaId} atualizadas`);
+                }
+            }
+        }
+
+        // Montar mensagem de resposta
+        let mensagem = '';
+        if (excluidos.resultado && excluidos.provaRealizada) {
+            mensagem = 'Resultado e ProvaRealizada excluídos permanentemente!';
+        } else if (excluidos.resultado) {
+            mensagem = 'Resultado excluído permanentemente!';
+        } else if (excluidos.provaRealizada) {
+            mensagem = 'ProvaRealizada excluída permanentemente!';
+        }
+
+        res.json({
+            success: true,
+            message: mensagem,
+            detalhes: excluidos
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao excluir resultado:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao excluir resultado: ' + error.message
+        });
+    }
+});
+
+// ============ ROTA PARA DETALHES DE CANCELAMENTO (ADMIN) ============
+app.get('/api/admin/resultados/:id/cancelamento', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🔍 Admin ${req.userId} buscando detalhes de cancelamento para ID: ${id}`);
+
+        // Tentar buscar em Resultado primeiro
+        let registro = await Resultado.findById(id)
+            .populate('userId', 'nome email')
+            .populate('provaId', 'titulo conteudo dataLimite userId')
+            .lean();
+
+        let tipo = 'resultado';
+
+        // Se não encontrou, tentar em ProvaRealizada
+        if (!registro) {
+            registro = await ProvaRealizada.findById(id)
+                .populate('alunoId', 'nome email matricula')
+                .populate('provaId', 'titulo conteudo dataLimite userId')
+                .lean();
+            tipo = 'prova_realizada';
+        }
+
+        if (!registro) {
+            return res.status(404).json({
+                success: false,
+                error: 'Registro não encontrado'
+            });
+        }
+
+        // Verificar se é um cancelamento
+        const isCancelada = registro.cancelada === true || 
+                           registro.status === 'cancelada' ||
+                           (registro.nota === 0 && registro.status === 'pendente');
+
+        if (!isCancelada) {
+            return res.status(400).json({
+                success: false,
+                error: 'Este registro não é um cancelamento'
+            });
+        }
+
+        // Determinar tipo de cancelamento
+        const motivo = registro.motivoCancelamento || '';
+        const motivoLower = motivo.toLowerCase();
+        
+        let tipoCancelamento = 'prazo';
+        let icone = 'clock';
+        let cor = '#f59e0b';
+        let titulo = 'CANCELADA - PRAZO EXPIRADO';
+
+        // Palavras-chave para violação
+        const palavrasViolacao = [
+            'violação', 'violacao', 'violou', 'viola', 'multiplas', 'múltiplas',
+            'regras', 'monitoramento', 'trapaça', 'trapaca', 'fraude',
+            'atalho', 'shortcut', 'f5', 'refresh', 'recarregar'
+        ];
+
+        const isViolacao = palavrasViolacao.some(palavra => motivoLower.includes(palavra)) ||
+                          registro.flagViolacao === true ||
+                          (registro.estatisticasCancelamento && 
+                           registro.estatisticasCancelamento.avisos > 0);
+
+        if (isViolacao) {
+            tipoCancelamento = 'violacao';
+            icone = 'user-slash';
+            cor = '#dc2626';
+            titulo = 'CANCELADA - VIOLAÇÃO DAS REGRAS';
+        }
+
+        // Buscar professor
+        let professor = null;
+        if (registro.provaId && registro.provaId.userId) {
+            professor = await User.findById(registro.provaId.userId)
+                .select('nome email')
+                .lean();
+        }
+
+        // Preparar dados do aluno
+        const aluno = tipo === 'resultado' ? registro.userId : registro.alunoId;
+
+        // Preparar resposta
+        const response = {
+            success: true,
+            tipoCancelamento: tipoCancelamento,
+            titulo: titulo,
+            icone: icone,
+            cor: cor,
+            prova: {
+                id: registro.provaId?._id,
+                titulo: registro.provaId?.titulo || 'Prova não identificada',
+                conteudo: registro.provaId?.conteudo || '',
+                dataLimite: registro.provaId?.dataLimite
+            },
+            aluno: {
+                id: aluno?._id,
+                nome: aluno?.nome || 'Aluno não identificado',
+                email: aluno?.email || '',
+                matricula: aluno?.matricula || ''
+            },
+            cancelamento: {
+                data: registro.dataRealizacao || registro.createdAt,
+                motivo: registro.motivoCancelamento || 'Motivo não especificado',
+                nota: registro.nota || 0,
+                tempoGasto: registro.tempoGasto || 0,
+                flagViolacao: registro.flagViolacao || false
+            },
+            estatisticas: registro.estatisticasCancelamento || {
+                avisos: 0,
+                tentativasAtalho: 0,
+                capturasTela: 0,
+                tempoFora: 0,
+                timestamp: registro.createdAt
+            },
+            professor: professor ? {
+                nome: professor.nome,
+                email: professor.email
+            } : null,
+            tipo: tipo,
+            timestamp: new Date().toISOString()
+        };
+
+        res.json(response);
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar detalhes de cancelamento:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
 // ============ ROTAS DE NOTIFICAÇÃO (ORDEM CORRETA) ============
 
 // =========================================================

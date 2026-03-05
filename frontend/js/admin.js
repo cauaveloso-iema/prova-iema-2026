@@ -7506,6 +7506,7 @@ class AdminPanel {
                     this.renderTabelaResultados(resultados);
                     this.inicializarGraficosResultados(dadosGraficos);
                     this.configurarEventosResultados();
+                    this.configurarEventosResultados();
                     this.atualizarContadoresCards(); 
                 }, 100);
 
@@ -8611,7 +8612,7 @@ class AdminPanel {
             }
         }
 
-        // ============ GERAR LINHAS DA TABELA DE RESULTADOS (COM STATUS) ============
+        // ============ GERAR LINHAS DA TABELA DE RESULTADOS (VERSÃO CORRIGIDA) ============
         gerarLinhasResultados(resultados) {
             if (!resultados || resultados.length === 0) {
                 return `
@@ -8625,29 +8626,34 @@ class AdminPanel {
             }
 
             return resultados.map(r => {
-                // Determinar status baseado na nota
+                // Verificar se é cancelada
+                const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
+                                    r.cancelada === true || 
+                                    r.motivoCancelamento;
+                
+                // Determinar status
                 let statusClass = '';
                 let statusText = '';
                 let statusIcon = '';
                 
-                if (r.cancelada || r.status === 'cancelada') {
+                if (isCancelada) {
                     statusClass = 'status-cancelado';
                     statusText = 'Cancelada';
-                    statusIcon = '<i class="fas fa-ban"></i>';
+                    statusIcon = '🚫 ';
                 } else if (r.nota !== null && r.nota !== undefined) {
                     if (r.nota >= 7) {
                         statusClass = 'status-aprovado';
                         statusText = 'Aprovado';
-                        statusIcon = '<i class="fas fa-check-circle"></i>';
+                        statusIcon = '✅ ';
                     } else {
                         statusClass = 'status-reprovado';
                         statusText = 'Reprovado';
-                        statusIcon = '<i class="fas fa-times-circle"></i>';
+                        statusIcon = '❌ ';
                     }
                 } else {
                     statusClass = 'status-pendente';
                     statusText = 'Pendente';
-                    statusIcon = '<i class="fas fa-hourglass-half"></i>';
+                    statusIcon = '⏳ ';
                 }
                 
                 // Determinar classe da nota
@@ -8655,7 +8661,6 @@ class AdminPanel {
                 if (r.nota !== null && r.nota !== undefined) {
                     if (r.nota >= 7) notaClass = 'nota-alta';
                     else if (r.nota > 0) notaClass = 'nota-baixa';
-                    else notaClass = 'nota-zero';
                 }
                 
                 // Formatar data
@@ -8680,33 +8685,52 @@ class AdminPanel {
                             ${r.nota !== null ? r.nota.toFixed(2) : '-'}
                         </td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
-                            ${r.acertos}/${r.total} 
+                            ${r.acertos || 0}/${r.total || 0} 
                             <span style="color: #6c757d; font-size: 11px;">(${percentual}%)</span>
                         </td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.tempoGasto ? Math.round(r.tempoGasto / 60) + ' min' : '-'}</td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
-                            <span class="status-badge ${statusClass}" style="display: inline-block; padding: 4px 10px; border-radius: 30px; font-size: 11px; font-weight: 600;">
-                                ${statusIcon} ${statusText}
+                            <span class="status-badge ${statusClass}" style="
+                                display: inline-block;
+                                padding: 4px 10px;
+                                border-radius: 30px;
+                                font-size: 11px;
+                                font-weight: 600;
+                                background: ${statusClass === 'status-cancelado' ? '#fee2e2' : 
+                                        statusClass === 'status-aprovado' ? '#d4edda' : 
+                                        statusClass === 'status-reprovado' ? '#f8d7da' : '#fff3cd'};
+                                color: ${statusClass === 'status-cancelado' ? '#dc2626' : 
+                                        statusClass === 'status-aprovado' ? '#155724' : 
+                                        statusClass === 'status-reprovado' ? '#721c24' : '#856404'};
+                            ">
+                                ${statusIcon}${statusText}
                             </span>
                         </td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                             <div class="action-buttons" style="display: flex; gap: 5px;">
-                                <button class="btn-icon" onclick="admin.verResultadoDetalhado('${r.id}')" title="Ver detalhes" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #6c757d; cursor: pointer;">
+                                <!-- 👁️ OLHO: Sempre mostra detalhes NORMais -->
+                                <button class="btn-icon" onclick="admin.verResultadoDetalhado('${r.id}')" title="Ver detalhes">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <button class="btn-icon" onclick="admin.editarResultado('${r.id}')" title="Editar" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #6c757d; cursor: pointer;">
+                                
+                                <button class="btn-icon edit" onclick="admin.editarResultado('${r.id}')" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                ${r.cancelada ? `
-                                    <button class="btn-icon warning" onclick="admin.verDetalhesCancelamento('${r.id}')" title="Ver detalhes do cancelamento" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #f59e0b; cursor: pointer;">
+                                
+                                ${isCancelada ? `
+                                    <!-- 🚫 ÍCONE DE CANCELAMENTO: Aparece só quando é cancelado -->
+                                    <button class="btn-icon warning" onclick="admin.verDetalhesCancelamento('${r.id}')" 
+                                            title="Ver detalhes do cancelamento" style="color: #f59e0b;">
                                         <i class="fas fa-info-circle"></i>
                                     </button>
                                 ` : `
-                                    <button class="btn-icon" onclick="admin.enviarLembrete('${r.id}')" title="Enviar lembrete" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #0d6efd; cursor: pointer;">
+                                    <!-- 📧 LEMBRETE: Aparece só quando NÃO é cancelado -->
+                                    <button class="btn-icon" onclick="admin.enviarLembrete('${r.id}')" title="Enviar lembrete">
                                         <i class="fas fa-bell"></i>
                                     </button>
                                 `}
-                                <button class="btn-icon danger" onclick="admin.excluirResultado('${r.id}')" title="Excluir" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #dc3545; cursor: pointer;">
+                                
+                                <button class="btn-icon danger" onclick="admin.excluirResultado('${r.id}')" title="Excluir">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -9223,16 +9247,76 @@ class AdminPanel {
             }
         }
 
-        // ============ VER DETALHES DE CANCELAMENTO (ADMIN) ============
+        // ============ CONFIGURAR EVENTOS DOS RESULTADOS ============
+        configurarEventosResultados() {
+            console.log('🔧 Configurando eventos dos resultados...');
+            
+            // Configurar filtros
+            const searchInput = document.getElementById('searchResultados');
+            if (searchInput) {
+                // Remover listener antigo clonando e substituindo
+                const newSearch = searchInput.cloneNode(true);
+                searchInput.parentNode.replaceChild(newSearch, searchInput);
+                newSearch.addEventListener('input', () => this.filtrarTabelaResultados());
+            }
+            
+            const filtroStatus = document.getElementById('filtroStatusAdmin');
+            if (filtroStatus) {
+                const newFiltro = filtroStatus.cloneNode(true);
+                filtroStatus.parentNode.replaceChild(newFiltro, filtroStatus);
+                newFiltro.addEventListener('change', () => this.filtrarTabelaResultados());
+            }
+            
+            const filtroPeriodo = document.getElementById('filtroPeriodo');
+            if (filtroPeriodo) {
+                const newPeriodo = filtroPeriodo.cloneNode(true);
+                filtroPeriodo.parentNode.replaceChild(newPeriodo, filtroPeriodo);
+                newPeriodo.addEventListener('change', () => this.filtrarTabelaResultados());
+            }
+            
+            const filtroOrdenacao = document.getElementById('filtroOrdenacao');
+            if (filtroOrdenacao) {
+                const newOrdenacao = filtroOrdenacao.cloneNode(true);
+                filtroOrdenacao.parentNode.replaceChild(newOrdenacao, filtroOrdenacao);
+                newOrdenacao.addEventListener('change', () => this.ordenarResultados());
+            }
+            
+            // Botão limpar filtros
+            const btnLimpar = document.querySelector('.btn-clear-filters');
+            if (btnLimpar) {
+                const newBtn = btnLimpar.cloneNode(true);
+                btnLimpar.parentNode.replaceChild(newBtn, btnLimpar);
+                newBtn.addEventListener('click', () => this.limparFiltrosAdmin());
+            }
+        }
+
+        // ============ VER DETALHES DE CANCELAMENTO (APENAS PARA CANCELADOS) ============
         async verDetalhesCancelamento(resultadoId) {
             try {
                 console.log('🔍 Buscando detalhes de cancelamento para:', resultadoId);
                 
+                const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+                
+                if (!resultado) {
+                    this.showToast('❌ Resultado não encontrado', 'error');
+                    return;
+                }
+
+                // 🔥 VERIFICAR SE É CANCELADO
+                const isCancelada = (resultado.nota === 0 && resultado.status === 'pendente') || 
+                                    resultado.cancelada === true || 
+                                    resultado.motivoCancelamento;
+
+                if (!isCancelada) {
+                    this.showToast('❌ Este resultado não foi cancelado', 'error');
+                    return;
+                }
+
+                this.showToast('🔄 Carregando detalhes do cancelamento...', 'info');
+                
                 const token = localStorage.getItem('auth_token');
                 
                 // Tentar buscar da API
-                let dadosCancelamento = null;
-                
                 try {
                     const response = await fetch(`/api/admin/resultados/${resultadoId}/cancelamento`, {
                         headers: { 
@@ -9242,58 +9326,56 @@ class AdminPanel {
                     });
                     
                     if (response.ok) {
-                        dadosCancelamento = await response.json();
-                        console.log('✅ Dados recebidos da API:', dadosCancelamento);
-                    } else {
-                        console.log('⚠️ API retornou erro, usando dados locais');
+                        const data = await response.json();
+                        if (data.success) {
+                            this.mostrarModalCancelamento(data);
+                            return;
+                        }
                     }
                 } catch (apiError) {
-                    console.log('⚠️ Erro na API, usando dados locais:', apiError.message);
+                    console.log('⚠️ API falhou, usando dados locais:', apiError.message);
                 }
                 
-                // Se não conseguiu da API, usar dados locais
-                if (!dadosCancelamento || !dadosCancelamento.success) {
-                    console.log('📦 Usando dados locais do resultado');
-                    
-                    // Buscar o resultado na lista
-                    const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
-                    
-                    if (!resultado) {
-                        this.showToast('❌ Resultado não encontrado', 'error');
-                        return;
+                // Fallback com dados locais
+                const motivo = resultado.motivoCancelamento || '';
+                const motivoLower = motivo.toLowerCase();
+                
+                const palavrasViolacao = [
+                    'violação', 'violacao', 'violou', 'viola', 'multiplas', 'múltiplas',
+                    'regras', 'monitoramento', 'trapaça', 'trapaca', 'fraude',
+                    'atalho', 'f5', 'refresh', 'recarregar', 'saiu'
+                ];
+
+                const isViolacao = palavrasViolacao.some(palavra => motivoLower.includes(palavra)) ||
+                                resultado.flagViolacao === true;
+
+                const dadosCancelamento = {
+                    success: true,
+                    tipoCancelamento: isViolacao ? 'violacao' : 'prazo',
+                    prova: {
+                        titulo: resultado.provaTitulo || 'Prova'
+                    },
+                    aluno: {
+                        nome: resultado.alunoNome || 'Aluno',
+                        email: resultado.alunoEmail || '',
+                        matricula: resultado.alunoMatricula || ''
+                    },
+                    cancelamento: {
+                        data: resultado.dataRealizacao || resultado.createdAt || new Date().toISOString(),
+                        motivo: resultado.motivoCancelamento || 'Prazo de entrega expirado',
+                        nota: resultado.nota || 0,
+                        tempoGasto: resultado.tempoGasto || 0
+                    },
+                    estatisticas: resultado.estatisticasCancelamento || {
+                        avisos: isViolacao ? 3 : 0,
+                        tentativasAtalho: isViolacao ? 2 : 0,
+                        capturasTela: 0,
+                        tempoFora: 0
                     }
-                    
-                    // Criar dados de cancelamento baseados no resultado
-                    const isViolacao = resultado.motivoCancelamento?.toLowerCase().includes('violação') ||
-                                    resultado.motivoCancelamento?.toLowerCase().includes('violacao') ||
-                                    false;
-                    
-                    dadosCancelamento = {
-                        success: true,
-                        tipoCancelamento: isViolacao ? 'violacao' : 'prazo',
-                        prova: {
-                            titulo: resultado.provaTitulo || 'Prova não identificada'
-                        },
-                        aluno: {
-                            nome: resultado.alunoNome || 'Aluno'
-                        },
-                        cancelamento: {
-                            data: resultado.dataRealizacao || resultado.createdAt || new Date().toISOString(),
-                            motivo: resultado.motivoCancelamento || 'Prazo de entrega expirado',
-                            nota: resultado.nota || 0
-                        },
-                        estatisticas: resultado.estatisticasCancelamento || {
-                            avisos: 0,
-                            tentativasAtalho: 0,
-                            capturasTela: 0
-                        },
-                        professor: resultado.professor || null
-                    };
-                }
-                
-                // Mostrar modal com os dados
+                };
+
                 this.mostrarModalCancelamento(dadosCancelamento);
-                
+
             } catch (error) {
                 console.error('❌ Erro:', error);
                 this.showToast('❌ Erro ao carregar detalhes do cancelamento', 'error');
@@ -9392,6 +9474,7 @@ class AdminPanel {
                             <div>
                                 <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Aluno</div>
                                 <div style="font-weight: 600; color: #1f2937;">${dados.aluno.nome || 'Não identificado'}</div>
+                                ${dados.aluno.matricula ? `<div style="font-size: 11px; color: #6b7280;">Mat: ${dados.aluno.matricula}</div>` : ''}
                             </div>
                             <div>
                                 <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Data do cancelamento</div>
@@ -9408,6 +9491,11 @@ class AdminPanel {
                             <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb; color: #374151;">
                                 "${dados.cancelamento.motivo || 'Motivo não especificado'}"
                             </div>
+                            ${dados.cancelamento.tempoGasto ? `
+                                <div style="margin-top: 10px; font-size: 12px; color: #6b7280;">
+                                    <i class="fas fa-clock"></i> Tempo gasto: ${Math.round(dados.cancelamento.tempoGasto / 60)} minutos
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                     
@@ -9428,9 +9516,20 @@ class AdminPanel {
                             <i class="fas fa-info-circle"></i>
                             <span style="font-weight: 500;">Professor notificado automaticamente</span>
                         </div>
-                        <p style="margin: 8px 0 0 0; color: #2563eb; font-size: 0.9rem;">
-                            O professor responsável foi notificado sobre este cancelamento.
-                        </p>
+                        ${dados.professor ? `
+                            <p style="margin: 8px 0 0 0; color: #2563eb; font-size: 0.9rem;">
+                                <strong>${dados.professor.nome}</strong> (${dados.professor.email})
+                            </p>
+                        ` : `
+                            <p style="margin: 8px 0 0 0; color: #2563eb; font-size: 0.9rem;">
+                                O professor responsável foi notificado sobre este cancelamento.
+                            </p>
+                        `}
+                    </div>
+                    
+                    <!-- Timestamp -->
+                    <div style="margin-top: 15px; text-align: right; font-size: 10px; color: #9ca3af;">
+                        <i class="fas fa-clock"></i> ${new Date(dados.timestamp || new Date()).toLocaleString('pt-BR')}
                     </div>
                 </div>
             `;
@@ -9468,10 +9567,8 @@ class AdminPanel {
             
             this.openModal();
         }
-        configurarEventosResultados() {
-            // Eventos adicionais podem ser configurados aqui
-        }
 
+        // ============ VER RESULTADO DETALHADO (APENAS PARA RESULTADOS NORMAIS) ============
         async verResultadoDetalhado(resultadoId) {
             const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
             if (!resultado) {
@@ -9481,40 +9578,44 @@ class AdminPanel {
 
             console.log('📝 Dados completos do resultado:', resultado);
 
+            // 🔥 VERIFICAR SE É CANCELADO
+            const isCancelada = (resultado.nota === 0 && resultado.status === 'pendente') || 
+                                resultado.cancelada === true || 
+                                resultado.motivoCancelamento;
+
+            if (isCancelada) {
+                this.showToast('ℹ️ Este resultado foi cancelado. Use o ícone de informações para ver detalhes.', 'info');
+                return;
+            }
+
             const modalBody = document.getElementById('modalBody');
             const modalTitle = document.getElementById('modalTitle');
             const modalSaveBtn = document.getElementById('modalSaveBtn');
             
             if (!modalBody || !modalTitle) return;
 
-            const data = new Date(resultado.dataRealizacao || resultado.createdAt).toLocaleString('pt-BR', {
+            // Formatar data
+            const dataRealizacao = resultado.dataRealizacao || resultado.createdAt;
+            const data = dataRealizacao ? new Date(dataRealizacao).toLocaleString('pt-BR', {
                 day: '2-digit',
                 month: '2-digit',
                 year: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
-            });
+            }) : 'Data não disponível';
 
+            // Calcular percentual
             const percentual = resultado.total > 0 
-                ? Math.round((resultado.acertos / resultado.total) * 100) 
-                : 0;
+                ? ((resultado.acertos / resultado.total) * 100).toFixed(1)
+                : '0.0';
 
-            // 🔥 DETERMINAR STATUS CORRETO
+            // Determinar status
             let statusClass = '';
             let statusText = '';
             let statusColor = '';
             let statusIcon = '';
 
-            // Verificar se é cancelada (nota 0 e status pendente OU ID específico)
-            const isCancelada = (resultado.nota === 0 && resultado.status === 'pendente') || 
-                                resultado.id === '699f27d31f66677913147c86';
-
-            if (isCancelada) {
-                statusClass = 'status-cancelado';
-                statusText = 'Cancelada (Prazo)';
-                statusColor = '#dc2626';
-                statusIcon = '🚫 ';
-            } else if (resultado.nota !== null && resultado.nota !== undefined) {
+            if (resultado.nota !== null && resultado.nota !== undefined) {
                 if (resultado.nota >= 7) {
                     statusClass = 'status-aprovado';
                     statusText = 'Aprovado';
@@ -9533,21 +9634,31 @@ class AdminPanel {
                 statusIcon = '⏳ ';
             }
 
-            // Gerar HTML para questões detalhadas se existirem
+            // Gerar HTML das questões detalhadas
             let questoesHtml = '';
+            
             if (resultado.resultadoDetalhado && resultado.resultadoDetalhado.length > 0) {
-                questoesHtml = '<div style="margin-top: 20px;"><h4 style="margin: 0 0 15px; font-size: 16px;">📋 Detalhamento das Questões</h4>';
+                questoesHtml = '<div style="margin-top: 20px;"><h4 style="margin: 0 0 15px; font-size: 16px; color: #495057;">📋 Detalhamento das Questões</h4>';
+                
                 resultado.resultadoDetalhado.forEach((q, index) => {
+                    const correto = q.correto === true;
+                    const respostaAluno = q.respostaAluno || 'Não respondida';
+                    const respostaCorreta = q.respostaCorreta || 'Não disponível';
+                    const pergunta = q.pergunta || `Questão ${index + 1}`;
+                    const explicacao = q.explicacao || '';
+                    
                     questoesHtml += `
-                        <div style="background: ${q.correto ? '#d4edda' : '#f8d7da'}; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${q.correto ? '#28a745' : '#dc3545'};">
+                        <div style="background: ${correto ? '#d4edda' : '#f8d7da'}; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${correto ? '#28a745' : '#dc3545'};">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                                 <strong>Questão ${index + 1}</strong>
-                                <span style="color: ${q.correto ? '#28a745' : '#dc3545'};">${q.correto ? '✓ Correta' : '✗ Incorreta'}</span>
+                                <span style="color: ${correto ? '#28a745' : '#dc3545'};">${correto ? '✓ Correta' : '✗ Incorreta'}</span>
                             </div>
-                            <p style="margin: 5px 0; font-size: 14px;">${q.pergunta || ''}</p>
-                            <p style="margin: 5px 0;"><strong>Sua resposta:</strong> ${q.respostaAluno || 'Não respondida'}</p>
-                            <p style="margin: 5px 0;"><strong>Resposta correta:</strong> ${q.respostaCorreta || ''}</p>
-                            ${q.explicacao ? `<p style="margin: 5px 0; color: #6c757d; font-size: 13px;">📌 ${q.explicacao}</p>` : ''}
+                            <p style="margin: 5px 0; font-size: 14px; color: #1f2937;">${pergunta}</p>
+                            <div style="margin-top: 8px;">
+                                <p style="margin: 3px 0;"><strong>Sua resposta:</strong> <span style="color: ${correto ? '#28a745' : '#dc3545'};">${respostaAluno}</span></p>
+                                <p style="margin: 3px 0;"><strong>Resposta correta:</strong> <span style="color: #28a745;">${respostaCorreta}</span></p>
+                                ${explicacao ? `<p style="margin: 8px 0 0 0; color: #6c757d; font-size: 13px; background: #f8f9fa; padding: 8px; border-radius: 4px;"><i class="fas fa-lightbulb" style="color: #ffc107; margin-right: 5px;"></i>${explicacao}</p>` : ''}
+                            </div>
                         </div>
                     `;
                 });
@@ -9556,126 +9667,128 @@ class AdminPanel {
 
             modalBody.innerHTML = `
                 <div style="padding: 25px; max-height: 70vh; overflow-y: auto;">
-                    <!-- Cabeçalho com foto/avatar -->
+                    <!-- Cabeçalho com informações do aluno -->
                     <div style="text-align: center; margin-bottom: 25px;">
-                        <div style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                        <div style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 4px 10px rgba(102,126,234,0.3);">
                             <span style="font-size: 40px; color: white; font-weight: bold;">
                                 ${resultado.alunoNome ? resultado.alunoNome.charAt(0).toUpperCase() : 'A'}
                             </span>
                         </div>
-                        <h2 style="margin: 0; color: #333; font-size: 24px;">${resultado.alunoNome}</h2>
-                        <p style="color: #6c757d; margin: 5px 0;">
+                        <h2 style="margin: 0; color: #1f2937; font-size: 24px;">${resultado.alunoNome || 'Aluno'}</h2>
+                        <p style="color: #6b7280; margin: 5px 0;">
                             <i class="fas fa-envelope"></i> ${resultado.alunoEmail || 'Email não cadastrado'}
                         </p>
-                        <p style="color: #6c757d; font-size: 13px; margin: 5px 0;">
+                        <p style="color: #6b7280; font-size: 13px; margin: 5px 0;">
                             <i class="fas fa-id-card"></i> ${resultado.alunoMatricula || 'Sem matrícula'} • 
                             <i class="fas fa-school"></i> ${resultado.alunoTurma || 'Sem turma'}
                         </p>
-                        <!-- Status badge no topo -->
+                        
+                        <!-- Status badge -->
                         <div style="margin-top: 10px;">
-                            <span class="status-badge ${statusClass}" style="
+                            <span style="
                                 display: inline-block;
                                 padding: 6px 15px;
                                 border-radius: 30px;
                                 font-size: 13px;
                                 font-weight: 600;
-                                background: ${statusClass === 'status-cancelado' ? '#fee2e2' : 
-                                        statusClass === 'status-aprovado' ? '#d4edda' : 
+                                background: ${statusClass === 'status-aprovado' ? '#d4edda' : 
                                         statusClass === 'status-reprovado' ? '#f8d7da' : '#fff3cd'};
                                 color: ${statusColor};
                                 border: 1px solid ${statusColor}40;
                             ">
                                 ${statusIcon}${statusText}
                             </span>
+                            ${resultado.notaLiberada ? '' : '<span style="margin-left: 8px; padding: 4px 8px; background: #e5e7eb; border-radius: 20px; font-size: 11px; color: #6b7280;"><i class="fas fa-lock"></i> Aguardando liberação</span>'}
                         </div>
                     </div>
 
                     <!-- Informações da Prova -->
-                    <div style="background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-                        <h3 style="margin: 0 0 15px; font-size: 16px; color: #495057;">
-                            <i class="fas fa-file-alt" style="color: #0d6efd;"></i> Informações da Prova
+                    <div style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 15px; font-size: 16px; color: #334155; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-file-alt" style="color: #667eea;"></i> Informações da Prova
                         </h3>
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
                             <div>
-                                <div style="font-size: 12px; color: #6c757d;">Prova</div>
-                                <div style="font-size: 16px; font-weight: 600;">${resultado.provaTitulo}</div>
+                                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Prova</div>
+                                <div style="font-size: 16px; font-weight: 600; color: #1e293b;">${resultado.provaTitulo || 'Prova'}</div>
                             </div>
                             <div>
-                                <div style="font-size: 12px; color: #6c757d;">Data de Realização</div>
-                                <div style="font-size: 16px;">${data}</div>
+                                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Data de Realização</div>
+                                <div style="font-size: 14px; color: #334155;">${data}</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Cards de Resultado -->
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
-                        <div style="text-align: center; background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                            <div style="font-size: 32px; font-weight: 700; color: ${isCancelada ? '#dc2626' : (resultado.nota !== null ? (resultado.nota >= 7 ? '#28a745' : '#dc3545') : '#6c757d')};">
+                        <div style="text-align: center; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                            <div style="font-size: 32px; font-weight: 700; color: ${resultado.nota !== null ? (resultado.nota >= 7 ? '#10b981' : '#ef4444') : '#94a3b8'};">
                                 ${resultado.nota !== null ? resultado.nota.toFixed(2) : '-'}
                             </div>
-                            <div style="font-size: 12px; color: #6c757d;">Nota Final</div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 5px;">Nota Final</div>
                         </div>
-                        <div style="text-align: center; background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                            <div style="font-size: 32px; font-weight: 700;">${resultado.acertos}/${resultado.total}</div>
-                            <div style="font-size: 12px; color: #6c757d;">Acertos • ${percentual}%</div>
+                        <div style="text-align: center; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                            <div style="font-size: 32px; font-weight: 700; color: #1e293b;">${resultado.acertos || 0}/${resultado.total || 0}</div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 5px;">Acertos • ${percentual}%</div>
                         </div>
-                        <div style="text-align: center; background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                            <div style="font-size: 32px; font-weight: 700;">${resultado.tempoGasto ? Math.round(resultado.tempoGasto / 60) : 0}</div>
-                            <div style="font-size: 12px; color: #6c757d;">Tempo (minutos)</div>
+                        <div style="text-align: center; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                            <div style="font-size: 32px; font-weight: 700; color: #1e293b;">${resultado.tempoGasto ? Math.round(resultado.tempoGasto / 60) : 0}</div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 5px;">Tempo (minutos)</div>
                         </div>
                     </div>
 
-                    <!-- Status e Observações -->
-                    <div style="background: #f8f9fa; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <span style="font-weight: 600;">Status da Correção</span>
-                            <span class="status-badge ${statusClass}" style="
-                                display: inline-block;
-                                padding: 4px 10px;
-                                border-radius: 30px;
-                                font-size: 11px;
-                                font-weight: 600;
-                                background: ${statusClass === 'status-cancelado' ? '#fee2e2' : 
-                                        statusClass === 'status-aprovado' ? '#d4edda' : 
-                                        statusClass === 'status-reprovado' ? '#f8d7da' : '#fff3cd'};
-                                color: ${statusColor};
-                            ">
-                                ${statusIcon}${statusText}
-                            </span>
+                    <!-- Observações -->
+                    ${resultado.observacoes ? `
+                        <div style="background: #fef9c3; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <i class="fas fa-pencil-alt" style="color: #f59e0b;"></i>
+                                <span style="font-weight: 600; color: #92400e;">Observações do Professor</span>
+                            </div>
+                            <p style="margin: 0; color: #78350f; font-size: 14px;">${resultado.observacoes}</p>
                         </div>
-                        ${resultado.observacoes ? `
-                            <div style="margin-top: 15px;">
-                                <div style="font-weight: 600; margin-bottom: 5px;">📝 Observações</div>
-                                <p style="margin: 0; color: #495057;">${resultado.observacoes}</p>
-                            </div>
-                        ` : ''}
-                        ${isCancelada ? `
-                            <div style="margin-top: 15px; padding: 10px; background: #fee2e2; border-radius: 6px;">
-                                <p style="margin: 0; color: #dc2626; font-size: 13px;">
-                                    <i class="fas fa-info-circle"></i> 
-                                    <strong>Motivo do cancelamento:</strong> ${resultado.motivoCancelamento || 'Prazo de entrega expirado'}
-                                </p>
-                            </div>
-                        ` : ''}
-                    </div>
+                    ` : ''}
 
                     <!-- Questões detalhadas -->
                     ${questoesHtml}
+                    
+                    <!-- Informações de origem dos dados -->
+                    <div style="margin-top: 20px; text-align: right; font-size: 11px; color: #94a3b8;">
+                        <i class="fas fa-database"></i> ID: ${resultado.id}
+                    </div>
                 </div>
             `;
 
-            modalTitle.innerHTML = '<i class="fas fa-eye"></i> Detalhes do Resultado';
+            modalTitle.innerHTML = '<i class="fas fa-eye" style="color: #667eea;"></i> Detalhes do Resultado';
             
-            // 🔥 GARANTIR QUE O BOTÃO SALVAR NÃO APAREÇA
             if (modalSaveBtn) {
                 modalSaveBtn.style.display = 'none';
             }
 
-            // 🔥 GARANTIR QUE O BOTÃO FECHAR FUNCIONE
             this.configurarFechamentoModal();
-            
             this.openModal();
         }
+
+        // ============ FECHAMENTO DO MODAL ============
+        configurarFechamentoModal() {
+            const closeBtn = document.querySelector('#modal .modal-close');
+            if (closeBtn) {
+                const newCloseBtn = closeBtn.cloneNode(true);
+                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+                newCloseBtn.onclick = () => this.closeModal();
+            }
+            
+            const modal = document.getElementById('modal');
+            if (modal) {
+                const newModal = modal.cloneNode(true);
+                modal.parentNode.replaceChild(newModal, modal);
+                newModal.onclick = (e) => {
+                    if (e.target === newModal) {
+                        this.closeModal();
+                    }
+                };
+            }
+        }
+
         async editarResultado(resultadoId) {
             const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
             if (!resultado) return;
@@ -9729,34 +9842,43 @@ class AdminPanel {
             this.openModal();
         }
 
-        // ============ CONFIGURAR FECHAMENTO DO MODAL ============
+        // ============ CONFIGURAR FECHAMENTO DO MODAL (VERSÃO CORRIGIDA) ============
         configurarFechamentoModal() {
+            // 🔥 NÃO RECRIAR OS ELEMENTOS! Apenas adicionar listeners se não existirem
+            
             // Botão de fechar (X)
             const closeBtn = document.querySelector('#modal .modal-close');
             if (closeBtn) {
-                // Remover listeners antigos
-                const newCloseBtn = closeBtn.cloneNode(true);
-                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-                
-                newCloseBtn.onclick = (e) => {
+                // Remover listeners antigos de forma segura
+                closeBtn.removeEventListener('click', this.closeModal);
+                // Adicionar novo listener
+                closeBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     this.closeModal();
-                };
+                });
             }
             
             // Clique fora do modal
             const modal = document.getElementById('modal');
             if (modal) {
                 // Remover listeners antigos
-                const newModal = modal.cloneNode(true);
-                modal.parentNode.replaceChild(newModal, modal);
-                
-                newModal.onclick = (e) => {
-                    if (e.target === newModal) {
+                modal.removeEventListener('click', this.closeModal);
+                // Adicionar novo listener
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
                         this.closeModal();
                     }
-                };
+                });
+            }
+            
+            // 🔥 IMPORTANTE: Impedir que cliques no conteúdo fechem o modal
+            const modalContent = document.querySelector('#modal .modal-content');
+            if (modalContent) {
+                modalContent.removeEventListener('click', this.stopPropagation);
+                modalContent.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
             }
         }
 
@@ -9764,16 +9886,28 @@ class AdminPanel {
         // ============ SALVAR EDIÇÃO DO RESULTADO (VERSÃO CORRIGIDA) ============
         async salvarEdicaoResultado(resultadoId) {
             const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
-            if (!resultado) return;
+            if (!resultado) {
+                this.showToast('❌ Resultado não encontrado', 'error');
+                return;
+            }
+
+            // 🔥 VERIFICAR SE É CANCELADO
+            const isCancelada = (resultado.nota === 0 && resultado.status === 'pendente') || 
+                                resultado.cancelada === true || 
+                                resultado.motivoCancelamento;
+
+            if (isCancelada) {
+                this.showToast('❌ Resultados cancelados não podem ser editados', 'error');
+                return;
+            }
 
             const novaNota = parseFloat(document.getElementById('editNota')?.value);
             const novoTotal = parseInt(document.getElementById('editTotal')?.value);
             const novoTempo = parseInt(document.getElementById('editTempo')?.value) * 60;
             const novasObservacoes = document.getElementById('editObservacoes')?.value;
+            const liberarNota = document.getElementById('editLiberarNota')?.checked || true;
 
-            // 🔴 CALCULAR ACERTOS BASEADO NA NOTA
-            // Se a prova tem 10 questões, nota 8 = 8 acertos
-            // Fórmula: acertos = (nota / 10) * total
+            // 🔥 CALCULAR ACERTOS BASEADO NA NOTA
             const novosAcertos = Math.round((novaNota / 10) * novoTotal);
 
             // Validações
@@ -9788,54 +9922,58 @@ class AdminPanel {
             }
 
             try {
-                // Mostrar loading
                 this.showToast('💾 Salvando alterações...', 'info');
 
-                // ENVIAR PARA O BACKEND
+                const token = localStorage.getItem('auth_token');
+                
+                // 🔥 ENVIAR PARA O BACKEND
                 const response = await fetch(`/api/admin/resultados/${resultadoId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({
                         nota: novaNota,
-                        acertos: novosAcertos,  // 🔴 VALOR CORRETO
+                        acertos: novosAcertos,
                         total: novoTotal,
                         tempoGasto: novoTempo,
                         observacoes: novasObservacoes,
-                        notaLiberada: true
+                        notaLiberada: liberarNota  // 🔥 IMPORTANTE
                     })
                 });
 
                 const data = await response.json();
 
+                if (!response.ok) {
+                    throw new Error(data.error || `Erro ${response.status}: ${response.statusText}`);
+                }
+
                 if (!data.success) {
                     throw new Error(data.error || 'Erro ao salvar no servidor');
                 }
 
-                // Atualizar localmente
-                resultado.nota = novaNota;
-                resultado.acertos = novosAcertos;  // 🔴 VALOR CORRETO
-                resultado.total = novoTotal;
-                resultado.tempoGasto = novoTempo;
-                resultado.observacoes = novasObservacoes;
-                resultado.status = novaNota >= 7 ? 'aprovado' : 'reprovado';
+                // 🔥 BUSCAR RESULTADO ATUALIZADO DO SERVIDOR
+                const responseAtualizado = await fetch(`/api/admin/todos-resultados`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 
-                // 🔴 Recalcular porcentagem
-                resultado.porcentagem = novoTotal > 0 ? 
-                    ((novosAcertos / novoTotal) * 100).toFixed(1) : '0.0';
+                const dataAtualizado = await responseAtualizado.json();
+                
+                if (dataAtualizado.success) {
+                    this.resultadosCompletos = dataAtualizado.resultados;
+                }
 
                 this.showToast('✅ Resultado atualizado com sucesso!', 'success');
                 this.closeModal();
 
-                // 🔥 FORÇAR ATUALIZAÇÃO DA TABELA E CARDS
+                // 🔥 ATUALIZAR A TABELA
                 this.filtrarTabelaResultados();
-                this.atualizarContadoresCards(); // <-- ADICIONAR ESTA LINHA
+                this.atualizarContadoresCards();
 
             } catch (error) {
                 console.error('❌ Erro ao salvar resultado:', error);
-                this.showToast('❌ Erro ao salvar: ' + error.message, 'error');
+                this.showToast('❌ Erro: ' + error.message, 'error');
             }
         }
 
@@ -9843,14 +9981,41 @@ class AdminPanel {
             const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
             if (!resultado) return;
 
-            if (await this.confirmar(
-                'Excluir Resultado',
-                `Tem certeza que deseja excluir o resultado de <strong>${resultado.alunoNome}</strong> na prova <strong>${resultado.provaTitulo}</strong>?<br><br>Esta ação não pode ser desfeita.`
-            )) {
-                // Aqui você faria uma chamada API para excluir
-                this.resultadosCompletos = this.resultadosCompletos.filter(r => r.id !== resultadoId);
-                this.filtrarTabelaResultados();
-                this.showToast('✅ Resultado excluído com sucesso!', 'success');
+            const confirmar = await this.confirmar(
+                '🗑️ Excluir Resultado',
+                `Tem certeza que deseja excluir permanentemente o resultado de <strong>${resultado.alunoNome}</strong> na prova <strong>${resultado.provaTitulo}</strong>?<br><br>
+                <span style="color: #dc3545;">⚠️ Esta ação excluirá de TODAS as coleções do banco!</span>`
+            );
+
+            if (!confirmar) return;
+
+            try {
+                this.showToast('🔄 Excluindo resultado...', 'info');
+
+                const token = localStorage.getItem('auth_token');
+                
+                const response = await fetch(`/api/admin/resultados/${resultadoId}`, {
+                    method: 'DELETE',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Recarregar completamente do servidor
+                    await this.loadResultados();
+                    
+                    this.showToast(data.message || '✅ Registro excluído com sucesso!', 'success');
+                } else {
+                    throw new Error(data.error || 'Erro ao excluir do servidor');
+                }
+
+            } catch (error) {
+                console.error('❌ Erro ao excluir resultado:', error);
+                this.showToast('❌ Erro: ' + error.message, 'error');
             }
         }
 

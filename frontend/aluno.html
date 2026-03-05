@@ -3041,7 +3041,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }).join('');
         }
 
-        // ============ VERIFICAR E CANCELAR PROVAS COM HORÁRIO ENCERRADO (NOVA) ============
+        // ============ VERIFICAR E CANCELAR PROVAS EXPIRADAS (VERSÃO CORRIGIDA) ============
         async function verificarECancelarProvasExpiradas() {
             try {
                 const token = localStorage.getItem('auth_token');
@@ -3052,7 +3052,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const usuario = JSON.parse(userData);
                 if (usuario.role !== 'aluno') return;
                 
-                // Buscar provas pendentes novamente para verificar expiração
+                // 🔥 VERIFICAR FLAG NO LOCALSTORAGE PARA NÃO REPETIR NOTIFICAÇÕES
+                const notificacoesExibidas = JSON.parse(localStorage.getItem('notificacoesCancelamentoExibidas') || '{}');
+                
+                // Buscar provas pendentes
                 const response = await fetch(`${API_BASE_URL}/aluno/provas/pendentes`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -3061,33 +3064,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!data.success) return;
                 
                 const provasPendentes = data.provas || [];
-                const hoje = new Date();
                 
                 // DATA ATUAL PARA VERIFICAÇÃO DE HORÁRIO
-                const ano = hoje.getFullYear();
-                const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-                const dia = String(hoje.getDate()).padStart(2, '0');
+                const agora = new Date();
+                const ano = agora.getFullYear();
+                const mes = String(agora.getMonth() + 1).padStart(2, '0');
+                const dia = String(agora.getDate()).padStart(2, '0');
                 
-                let provasCanceladas = 0;
+                let cancelouAlguma = false;
                 
                 for (const prova of provasPendentes) {
                     // Pular se já está cancelada ou finalizada
-                    if (prova.status === 'cancelada' || prova.status === 'finalizada') continue;
+                    if (prova.status === 'cancelada' || prova.status === 'finalizada') {
+                        console.log(`⏭️ Prova "${prova.titulo}" já está ${prova.status}`);
+                        continue;
+                    }
                     
-                    // ============================================
-                    // VERIFICAÇÃO 1: DATA LIMITE (EXISTENTE)
-                    // ============================================
+                    // ========== VERIFICAÇÃO 1: DATA LIMITE ==========
                     if (prova.dataLimite) {
                         const dataLimiteObj = new Date(prova.dataLimite);
                         const dataLimiteFimDia = new Date(dataLimiteObj);
                         dataLimiteFimDia.setHours(23, 59, 59, 999);
                         
-                        // Se a prova expirou (hoje > data limite fim do dia)
-                        if (hoje > dataLimiteFimDia) {
+                        if (agora > dataLimiteFimDia) {
                             console.log(`⚠️ Prova "${prova.titulo}" expirou (data limite)! Cancelando...`);
                             
-                            const respostasCorretas = [];
-                            
+                            // Chamar API de cancelamento
                             const cancelResponse = await fetch(`${API_BASE_URL}/provas/${prova._id}/cancelar`, {
                                 method: 'POST',
                                 headers: {
@@ -3098,11 +3100,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                     motivo: 'Prazo de entrega expirado - Cancelamento automático',
                                     estatisticas: {
                                         dataExpiracao: dataLimiteObj.toISOString(),
-                                        dataCancelamento: hoje.toISOString(),
-                                        motivo: 'prazo_expirado',
-                                        acao: 'cancelamento_automatico'
+                                        dataCancelamento: agora.toISOString(),
+                                        motivo: 'prazo_expirado'
                                     },
-                                    respostasAtuais: respostasCorretas,
+                                    respostasAtuais: [],
                                     tempoTotal: 0
                                 })
                             });
@@ -3110,35 +3111,28 @@ document.addEventListener('DOMContentLoaded', function() {
                             const cancelData = await cancelResponse.json();
                             
                             if (cancelData.success) {
-                                provasCanceladas++;
-                                console.log(`✅ Prova cancelada (data): ${cancelData.message}`);
+                                cancelouAlguma = true;
+                                console.log(`✅ Prova cancelada: ${cancelData.message}`);
+                                
+                                // 🔥 MOSTRAR NOTIFICAÇÃO (usando a função existente) - APENAS UMA VEZ
+                                const chaveNotificacao = `notificacao_${prova._id}`;
+                                if (!notificacoesExibidas[chaveNotificacao]) {
+                                    mostrarNotificacaoHorarioEncerrado(prova.titulo, 'data limite');
+                                    notificacoesExibidas[chaveNotificacao] = new Date().toLocaleString('pt-BR');
+                                    localStorage.setItem('notificacoesCancelamentoExibidas', JSON.stringify(notificacoesExibidas));
+                                }
                             }
                             
-                            continue; // Pular para próxima prova (já cancelada)
+                            continue;
                         }
                     }
                     
-                    // ============================================
-                    // VERIFICAÇÃO 2: HORÁRIO DO DIA (NOVA)
-                    // ============================================
+                    // ========== VERIFICAÇÃO 2: HORÁRIO ==========
                     if (prova.horarioInicio && prova.horarioTermino) {
-                        // Criar data de término para HOJE (usando o horário da prova)
                         const terminoProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00`);
                         
-                        // 🔥 LOG PARA DEBUG
-                        console.log(`⏰ Verificando horário:`, {
-                            prova: prova.titulo,
-                            horarioTermino: prova.horarioTermino,
-                            terminoProva: terminoProva.toLocaleString('pt-BR'),
-                            agora: hoje.toLocaleString('pt-BR'),
-                            passou: hoje > terminoProva ? 'SIM' : 'NÃO'
-                        });
-                        
-                        // SE JÁ PASSOU DO HORÁRIO DE TÉRMINO
-                        if (hoje > terminoProva) {
+                        if (agora > terminoProva) {
                             console.log(`🚫 Prova "${prova.titulo}" - horário encerrado às ${prova.horarioTermino}`);
-                            
-                            const respostasCorretas = [];
                             
                             const cancelResponse = await fetch(`${API_BASE_URL}/provas/${prova._id}/cancelar`, {
                                 method: 'POST',
@@ -3147,15 +3141,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                     'Content-Type': 'application/json'
                                 },
                                 body: JSON.stringify({
-                                    motivo: `Horário da prova encerrado às ${prova.horarioTermino} - Cancelamento automático`,
+                                    motivo: `Horário da prova encerrado às ${prova.horarioTermino}`,
                                     estatisticas: {
                                         horarioTermino: prova.horarioTermino,
-                                        dataCancelamento: hoje.toISOString(),
-                                        motivo: 'horario_encerrado',
-                                        acao: 'cancelamento_automatico_horario',
-                                        horarioVerificado: `${ano}-${mes}-${dia}`
+                                        dataCancelamento: agora.toISOString(),
+                                        motivo: 'horario_encerrado'
                                     },
-                                    respostasAtuais: respostasCorretas,
+                                    respostasAtuais: [],
                                     tempoTotal: 0
                                 })
                             });
@@ -3163,31 +3155,74 @@ document.addEventListener('DOMContentLoaded', function() {
                             const cancelData = await cancelResponse.json();
                             
                             if (cancelData.success) {
-                                provasCanceladas++;
+                                cancelouAlguma = true;
                                 console.log(`✅ Prova cancelada (horário): ${cancelData.message}`);
                                 
-                                // Mostrar notificação
-                                mostrarNotificacaoHorarioEncerrado(prova.titulo, prova.horarioTermino);
-                            } else {
-                                console.error(`❌ Falha ao cancelar: ${cancelData.error}`);
+                                // 🔥 MOSTRAR NOTIFICAÇÃO (usando a função existente) - APENAS UMA VEZ
+                                const chaveNotificacao = `notificacao_${prova._id}`;
+                                if (!notificacoesExibidas[chaveNotificacao]) {
+                                    mostrarNotificacaoHorarioEncerrado(prova.titulo, prova.horarioTermino);
+                                    notificacoesExibidas[chaveNotificacao] = new Date().toLocaleString('pt-BR');
+                                    localStorage.setItem('notificacoesCancelamentoExibidas', JSON.stringify(notificacoesExibidas));
+                                }
                             }
                         }
                     }
                 }
                 
-                if (provasCanceladas > 0) {
-                    console.log(`✅ ${provasCanceladas} prova(s) cancelada(s) (${provasCanceladas} por horário)`);
-                    
-                    // Atualizar a interface após 2 segundos
-                    setTimeout(() => {
-                        carregarProvasPendentes();
-                        carregarProvasConcluidas();
-                    }, 2000);
+                // Se cancelou alguma, recarregar as listas
+                if (cancelouAlguma) {
+                    console.log('🔄 Recarregando listas após cancelamentos...');
+                    await carregarProvasPendentes();
+                    await carregarProvasConcluidas();
                 }
                 
             } catch (error) {
                 console.error('Erro ao verificar provas expiradas:', error);
             }
+        }
+
+        // ============ FUNÇÃO PARA LIMPAR REGISTROS ANTIGOS ============
+        function limparRegistrosCancelamentoAntigos() {
+            const notificacoes = JSON.parse(localStorage.getItem('notificacoesCancelamentoExibidas') || '{}');
+            const umMesAtras = new Date();
+            umMesAtras.setMonth(umMesAtras.getMonth() - 1);
+            
+            let mudou = false;
+            
+            Object.keys(notificacoes).forEach(chave => {
+                const dataStr = notificacoes[chave];
+                const data = new Date(dataStr.split(' ')[0].split('/').reverse().join('-'));
+                
+                if (!isNaN(data.getTime()) && data < umMesAtras) {
+                    delete notificacoes[chave];
+                    mudou = true;
+                }
+            });
+            
+            if (mudou) {
+                localStorage.setItem('notificacoesCancelamentoExibidas', JSON.stringify(notificacoes));
+                console.log('🧹 Registros antigos de cancelamento limpos');
+            }
+        }
+
+        // ============ MODIFICAR O INÍCIO DA VERIFICAÇÃO ============
+        function iniciarVerificacaoPeriodica() {
+            console.log('🔄 Iniciando verificações periódicas...');
+            
+            // Limpar registros antigos ao iniciar
+            limparRegistrosCancelamentoAntigos();
+            
+            // Verificar a cada 2 minutos
+            setInterval(() => {
+                console.log('⏱️ Executando verificação de expiração...');
+                verificarECancelarProvasExpiradas();
+            }, 120000); // 2 minutos
+            
+            // Verificar imediatamente ao carregar
+            setTimeout(() => {
+                verificarECancelarProvasExpiradas();
+            }, 3000);
         }
 
         // ============ NOTIFICAÇÃO DE HORÁRIO ENCERRADO ============
@@ -3475,6 +3510,76 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        // ============ FUNÇÃO PARA VERIFICAR PROVAS CANCELADAS NÃO NOTIFICADAS ============
+        async function verificarProvasCanceladasNaoNotificadas() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const userData = localStorage.getItem('user_data');
+                
+                if (!token || !userData) return;
+                
+                const usuario = JSON.parse(userData);
+                if (usuario.role !== 'aluno') return;
+                
+                console.log('🔍 Verificando provas canceladas não notificadas...');
+                
+                const notificacoesExibidas = JSON.parse(localStorage.getItem('notificacoesCancelamentoExibidas') || '{}');
+                
+                const response = await fetch(`${API_BASE_URL}/aluno/provas`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                if (!data.success) return;
+                
+                const todasProvas = data.provas || [];
+                const provasCanceladas = todasProvas.filter(p => 
+                    p.cancelada === true || 
+                    p.status === 'cancelada' || 
+                    p.motivoCancelamento
+                );
+                
+                console.log(`📊 Encontradas ${provasCanceladas.length} provas canceladas`);
+                
+                let notificouAlguma = false;
+                
+                for (const prova of provasCanceladas) {
+                    const chaveNotificacao = `notificacao_${prova._id}`;
+                    
+                    if (notificacoesExibidas[chaveNotificacao]) {
+                        continue;
+                    }
+                    
+                    let motivo = 'prazo expirado';
+                    let horarioExibicao = 'data limite';
+                    
+                    if (prova.motivoCancelamento) {
+                        const motivoLower = prova.motivoCancelamento.toLowerCase();
+                        if (motivoLower.includes('horário') || motivoLower.includes('horario')) {
+                            motivo = 'horário encerrado';
+                            horarioExibicao = prova.horarioTermino || 'horário limite';
+                        }
+                    }
+                    
+                    console.log(`🔔 Primeira visualização da prova cancelada: "${prova.titulo}"`);
+                    
+                    mostrarNotificacaoHorarioEncerrado(prova.titulo, horarioExibicao);
+                    
+                    notificacoesExibidas[chaveNotificacao] = new Date().toLocaleString('pt-BR');
+                    localStorage.setItem('notificacoesCancelamentoExibidas', JSON.stringify(notificacoesExibidas));
+                    
+                    notificouAlguma = true;
+                }
+                
+                if (notificouAlguma) {
+                    console.log('✅ Notificações de provas canceladas exibidas com sucesso!');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao verificar provas canceladas:', error);
+            }
+        }
+
         // Adicionar verificação periódica de provas expiradas
         function iniciarVerificacaoPeriodica() {
             console.log('🔄 Iniciando verificações periódicas (data limite + horário)...');
@@ -3489,6 +3594,12 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 verificarECancelarProvasExpiradas();
             }, 3000);
+            
+            // Verificar provas canceladas não notificadas a cada 5 minutos
+            setInterval(() => {
+                console.log('⏱️ Verificando provas canceladas não notificadas...');
+                verificarProvasCanceladasNaoNotificadas();
+            }, 300000); // 5 minutos
         }
 
         // ============ ADICIONAR ANIMAÇÕES (se não existirem) ============

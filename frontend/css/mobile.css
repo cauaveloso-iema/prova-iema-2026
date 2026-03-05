@@ -1,27 +1,55 @@
-/* frontend/css/mobile.css */
+/* ==================================================
+   MOBILE.CSS - CORREÇÕES E MELHORIAS
+   ================================================== */
+
+/* ===== CORREÇÕES GLOBAIS ===== */
 @media screen and (max-width: 768px) {
-    body {
-        font-size: 14px;
-        padding: 10px;
-    }
     
+    /* CORREÇÃO: Inputs e botões muito grandes */
     input, button, select, textarea {
         width: 100%;
         min-height: 44px;
         font-size: 16px;
+        margin: 5px 0;
+        padding: 8px 12px;
+        border-radius: 8px;
+        box-sizing: border-box;
     }
-    
+
+    /* CORREÇÃO: Tabelas com scroll */
     table {
         display: block;
         overflow-x: auto;
+        white-space: nowrap;
+        width: 100%;
+    }
+
+    /* CORREÇÃO: Cards e containers com padding consistente */
+    .card, .stat-card, .turma-card, .prova-card, .form-container {
+        margin-bottom: 15px;
+        border-radius: 12px;
+        box-sizing: border-box;
+    }
+
+    /* CORREÇÃO: Grids para 2 colunas em telas médias */
+    .stats-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    /* CORREÇÃO: Texto não quebrava */
+    h1, h2, h3, h4, p, span {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 }
 
-/* ===== MENU FIXO COM CONTEÚDO DESLIZANTE ===== */
+/* ===== NOVAS CORREÇÕES ===== */
 
 @media screen and (max-width: 768px) {
     
-    /* ===== SIDEBAR FIXA ===== */
+    /* ----- CORREÇÃO: Sidebar sobrepondo conteúdo ----- */
     .sidebar {
         position: fixed !important;
         top: 0 !important;
@@ -33,7 +61,8 @@
         z-index: 2000 !important;
         background: linear-gradient(180deg, #1a1f2b 0%, #0d1117 100%) !important;
         overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important; /* Scroll suave no iOS */
+        -webkit-overflow-scrolling: touch !important;
+        padding: 20px 0 !important;
     }
 
     .sidebar.active {
@@ -41,7 +70,7 @@
         box-shadow: 2px 0 20px rgba(0,0,0,0.3) !important;
     }
 
-    /* ===== OVERLAY QUANDO MENU ABERTO ===== */
+    /* ----- CORREÇÃO: Overlay com blur ----- */
     .sidebar-overlay {
         display: none;
         position: fixed;
@@ -58,31 +87,27 @@
         display: block !important;
     }
 
-    /* ===== BOTÃO DO MENU (HAMBURGUER) ===== */
+    /* ----- CORREÇÃO: Menu toggle visível e com fundo ----- */
     .menu-toggle {
         display: block !important;
-        background: none !important;
+        background: #4f46e5 !important;
         border: none !important;
         font-size: 24px !important;
-        color: #333 !important;
+        color: white !important;
         cursor: pointer !important;
-        padding: 8px !important;
-        margin-right: 10px !important;
+        padding: 10px !important;
+        margin: 10px !important;
         z-index: 2001 !important;
-        min-width: 44px !important;
-        min-height: 44px !important;
+        width: 48px !important;
+        height: 48px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3) !important;
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
     }
 
-    /* ===== MAIN CONTENT ===== */
-    .main-content {
-        margin-left: 0 !important;
-        width: 100% !important;
-        min-height: 100vh !important;
-        display: flex !important;
-        flex-direction: column !important;
-    }
-
-    /* ===== TOP BAR FIXA ===== */
+    /* ----- CORREÇÃO: Top bar com padding correto ----- */
     .top-bar {
         position: sticky !important;
         top: 0 !important;
@@ -93,573 +118,389 @@
         align-items: center !important;
         flex-wrap: wrap !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        width: 100%;
+        box-sizing: border-box;
     }
 
-    /* ===== CONTEÚDO COM SCROLL ===== */
+    /* ----- CORREÇÃO: Conteúdo com altura correta ----- */
     .content-wrapper {
         flex: 1 !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
         padding: 15px !important;
-        max-height: calc(100vh - 70px) !important; /* Altura total menos a top bar */
+        max-height: calc(100vh - 70px) !important;
     }
 
-    /* ===== CARDS E GRIDS ===== */
-    .stats-grid {
-        display: grid !important;
-        grid-template-columns: 1fr !important;
-        gap: 12px !important;
-        margin-bottom: 20px !important;
-    }
-
-    .cards-grid {
-        display: grid !important;
-        grid-template-columns: 1fr !important;
-        gap: 15px !important;
-    }
-
-    /* ===== TABELAS COM SCROLL HORIZONTAL ===== */
-    .table-responsive {
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        margin: 0 -15px !important;
-        padding: 0 15px !important;
-        width: calc(100% + 30px) !important;
-    }
-
-    /* ===== AJUSTES PARA TELAS MUITO PEQUENAS ===== */
-    @media screen and (max-width: 480px) {
-        .page-title {
-            font-size: 16px !important;
-        }
-
-        .header-actions {
-            gap: 5px !important;
-        }
-
-        .search-box {
-            max-width: 150px !important;
-        }
-
-        .search-box input {
-            font-size: 13px !important;
-            padding: 6px 8px 6px 28px !important;
-        }
-
-        .notificacoes-btn span,
-        .btn-push span {
-            display: none !important;
-        }
-
-        .content-wrapper {
-            padding: 10px !important;
-        }
-    }
-}
-
-/* ==================================================
-   PROVA MOBILE - VERSÃO SUPER SIMPLES
-   ================================================== */
-
-@media screen and (max-width: 768px) {
-    
-    /* ----- CONTAINER PRINCIPAL ----- */
-    .questao-container {
-        padding: 10px !important;
-    }
-    
-    /* ----- CABEÇALHO - SÓ TÍTULO E TEMPO ----- */
-    .prova-header {
-        padding: 12px !important;
-    }
-    
-    .prova-header h1 {
-        font-size: 1.3rem !important;
-        margin: 0 0 8px 0 !important;
-    }
-    
-    /* Esconder TUDO que não é essencial */
-    .prova-header p,
-    #periodoBadge,
-    #infoHorario,
-    .meta-item .fa-clock,
-    .meta-item .fa-calendar-alt,
-    .meta-item .fa-hourglass-half {
-        display: none !important;
-    }
-    
-    /* Mostrar só contador e número de questões */
-    .meta-left {
+    /* ----- CORREÇÃO: Header Actions (Entrar em Turma e outros) ----- */
+    .header-actions {
         display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
+        gap: 8px !important;
         width: 100% !important;
-    }
-    
-    .meta-item {
-        background: none !important;
-        padding: 0 !important;
-        font-size: 1rem !important;
-    }
-    
-    .timer-container {
-        background: #fef3c7 !important;
-        padding: 8px 15px !important;
-        border-radius: 30px !important;
-        font-size: 1.1rem !important;
-        font-weight: bold !important;
-        min-width: 90px !important;
-        text-align: center !important;
-    }
-    
-    /* ----- NAVEGAÇÃO GRANDES BOTÕES ----- */
-    .navegacao-container {
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        margin: 15px 0 !important;
-        gap: 10px !important;
-    }
-    
-    .btn-navegacao {
-        flex: 1 !important;
-        padding: 15px !important;
-        font-size: 1rem !important;
-        background: #4f46e5 !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 12px !important;
-        font-weight: bold !important;
-        min-height: 50px !important;
-    }
-    
-    .btn-navegacao span {
-        display: inline !important; /* Manter texto */
-        margin-left: 5px !important;
-    }
-    
-    .btn-navegacao i {
-        font-size: 1.1rem !important;
-    }
-    
-    .btn-navegacao:disabled {
-        opacity: 0.5 !important;
-        background: #9ca3af !important;
-    }
-    
-    .contador-questao {
-        font-size: 1rem !important;
-        font-weight: bold !important;
-        background: #e5e7eb !important;
-        padding: 10px 15px !important;
-        border-radius: 30px !important;
-        white-space: nowrap !important;
-    }
-    
-    /* ----- QUESTÕES ESPAÇADAS ----- */
-    .questao-card {
-        padding: 20px !important;
-        margin-bottom: 20px !important;
-        border-radius: 16px !important;
-        border: 2px solid #e5e7eb !important;
-    }
-    
-    .questao-numero {
-        width: 40px !important;
-        height: 40px !important;
-        font-size: 1.1rem !important;
-        margin-bottom: 15px !important;
-    }
-    
-    .questao-texto {
-        font-size: 1.1rem !important;
-        line-height: 1.6 !important;
-        margin-bottom: 20px !important;
-    }
-    
-    .opcoes-container {
-        gap: 12px !important;
-    }
-    
-    .opcao {
-        padding: 16px !important;
-        font-size: 1rem !important;
-        border-radius: 12px !important;
-    }
-    
-    .opcao-letra {
-        width: 32px !important;
-        height: 32px !important;
-        font-size: 1rem !important;
-    }
-    
-    /* ----- BOTÃO FINALIZAR GRANDE ----- */
-    #btnFinalizarPagina {
-        width: 100% !important;
-        padding: 18px !important;
-        font-size: 1.2rem !important;
-        margin: 20px 0 !important;
-        border-radius: 16px !important;
-    }
-    
-    /* Esconder elementos flutuantes */
-    #btnFinalizarFlutuante,
-    .menu-questoes-rapido,
-    .monitor-panel {
-        display: none !important;
-    }
-    
-    /* ----- BOTÕES DE ACESSIBILIDADE - POSIÇÃO FIXA ----- */
-    .acessibilidade-btn-prova {
-        position: fixed !important;
-        bottom: 20px !important;
-        left: 20px !important;
-        width: 56px !important;
-        height: 56px !important;
-        border-radius: 50% !important;
-        background: #4f46e5 !important;
-        z-index: 9999 !important;
-    }
-    
-    div[vw] {
-        position: fixed !important;
-        bottom: 90px !important;
-        left: 20px !important;
-        transform: scale(0.9) !important;
-        z-index: 9998 !important;
-    }
-    
-    .chatbot-button {
-        position: fixed !important;
-        bottom: 20px !important;
-        right: 20px !important;
-        width: 56px !important;
-        height: 56px !important;
-        z-index: 9999 !important;
-    }
-    
-    /* ----- PROGRESSO ----- */
-    .progresso-container {
-        padding: 15px !important;
+        flex-wrap: wrap !important;
         margin-top: 10px !important;
     }
-    
-    .progresso {
-        font-size: 1rem !important;
-        color: #4b5563 !important;
-    }
-}
 
-/* TELAS PEQUENAS */
-@media screen and (max-width: 480px) {
-    .btn-navegacao span {
-        display: none !important; /* Só ícone em telas muito pequenas */
-    }
-    
-    .contador-questao {
-        padding: 10px !important;
-        font-size: 0.9rem !important;
-    }
-}
-
-/* ==================================================
-   ALUNO.HTML - BOTÃO DE SAIR MENOR
-   ================================================== */
-
-@media screen and (max-width: 768px) {
-    
-    /* Botão de logout/sair */
-    .btn-logout,
-    button.logout-btn,
-    .logout-button,
-    [class*="logout"],
-    button[onclick*="logout"],
-    a[href*="logout"] {
-        width: auto !important;
-        min-width: 60px !important;
-        max-width: 100px !important;
+    .header-actions button,
+    .btn-entrar-turma {
+        flex: 1 !important;
+        min-width: 120px !important;
         padding: 8px 12px !important;
-        font-size: 0.85rem !important;
-        margin: 5px !important;
-        display: inline-flex !important;
-        border-radius: 20px !important;
+        font-size: 13px !important;
+        white-space: nowrap !important;
+        margin: 0 !important;
     }
-    
-    /* Se for um botão com ícone e texto */
-    .btn-logout i,
-    .logout-btn i {
-        margin-right: 5px !important;
-        font-size: 0.9rem !important;
-    }
-    
-    /* Se o botão estiver na sidebar */
-    .sidebar .btn-logout,
-    .sidebar-footer .logout-btn {
-        width: calc(100% - 20px) !important;
+
+    /* ----- CORREÇÃO: Notificações dropdown ----- */
+    .notificacoes-dropdown {
+        position: fixed !important;
+        top: 70px !important;
+        right: 10px !important;
+        left: 10px !important;
+        width: auto !important;
         max-width: none !important;
-        margin: 10px !important;
+        z-index: 10000 !important;
     }
-    
-    /* Para telas muito pequenas, só o ícone */
-    @media screen and (max-width: 480px) {
-        .btn-logout span,
-        .logout-btn span {
-            display: none !important;
-        }
-        
-        .btn-logout,
-        .logout-btn {
-            min-width: 44px !important;
-            width: 44px !important;
-            padding: 10px !important;
-            border-radius: 50% !important;
-            justify-content: center !important;
-        }
-        
-        .btn-logout i,
-        .logout-btn i {
-            margin: 0 !important;
-            font-size: 1.2rem !important;
-        }
+
+    .notificacao-item {
+        padding: 12px !important;
+    }
+
+    /* ----- CORREÇÃO: Modal ocupando tela inteira ----- */
+    .modal-content {
+        width: 95% !important;
+        margin: 10px auto !important;
+        max-height: 90vh !important;
+        overflow-y: auto !important;
+        border-radius: 16px !important;
+    }
+
+    /* ----- CORREÇÃO: Paginação ----- */
+    .pagination {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 5px !important;
+    }
+
+    .pagination button {
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        padding: 0 !important;
+    }
+
+    /* ----- NOVO: Tabs com scroll horizontal ----- */
+    .content-tabs {
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        padding: 5px !important;
+        gap: 5px !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .content-tab {
+        display: inline-block !important;
+        padding: 10px 15px !important;
+        white-space: nowrap !important;
+        font-size: 13px !important;
+    }
+
+    /* ----- NOVO: Filtros em coluna ----- */
+    .filters-grid {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    .filter-group {
+        width: 100% !important;
+    }
+
+    /* ----- NOVO: Utilitários ----- */
+    .hide-mobile {
+        display: none !important;
+    }
+
+    .show-mobile {
+        display: block !important;
+    }
+
+    .text-center-mobile {
+        text-align: center !important;
+    }
+
+    .w-100-mobile {
+        width: 100% !important;
     }
 }
 
-/* Caso o botão esteja em um container específico */
-.aluno-container .btn-sair,
-.painel-aluno .sair {
-    width: auto !important;
-    min-width: 80px !important;
-}
-
-
-/* ==================================================
-   BOTÕES DE ACESSIBILIDADE - TAMANHO PADRÃO
-   ================================================== */
-
+/* ===== BOTÃO DE SAIR - CORRIGIDO ===== */
 @media screen and (max-width: 768px) {
     
-    /* ===== VLIBRAS ===== */
-    div[vw] {
+    .btn-logout,
+    button#btnLogout,
+    button.btn-logout {
+        all: initial !important;
         position: fixed !important;
-        bottom: 90px !important;
-        left: 20px !important;
-        z-index: 9998 !important;
-        transform: scale(1) !important;
-    }
-    
-    [vw-access-button] {
-        width: 56px !important;
-        height: 56px !important;
-        min-width: 56px !important;
-        min-height: 56px !important;
-        max-width: 56px !important;
-        max-height: 56px !important;
-        border-radius: 16px !important;
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-    
-    /* ===== BOTÃO DE ACESSIBILIDADE (VERDE) ===== */
-    .accessibility-toggle,
-    #accessibilityToggle {
-        position: fixed !important;
-        bottom: 20px !important;
-        left: 20px !important;
-        width: 56px !important;
-        height: 56px !important;
-        min-width: 56px !important;
-        min-height: 56px !important;
-        max-width: 56px !important;
-        max-height: 56px !important;
-        border-radius: 16px !important;
-        background: #10b981 !important; /* VERDE */
+        top: 10px !important;
+        right: 10px !important;
+        left: auto !important;
+        bottom: auto !important;
+        width: auto !important;
+        min-width: 45px !important;
+        max-width: 55px !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        max-height: 28px !important;
+        font-size: 10px !important;
+        padding: 2px 6px !important;
+        margin: 0 !important;
+        border-radius: 14px !important;
+        gap: 2px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: linear-gradient(135deg, #ef4444, #dc2626) !important;
         color: white !important;
-        font-size: 24px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        z-index: 9999 !important;
         border: none !important;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important; /* Sombra verde */
         cursor: pointer !important;
-        padding: 0 !important;
-        margin: 0 !important;
+        font-family: inherit !important;
+        font-weight: 600 !important;
+        line-height: 1 !important;
+        z-index: 9999 !important;
+        box-shadow: 0 2px 5px rgba(239, 68, 68, 0.3) !important;
     }
-    
-    /* ===== BOTÃO DO CHATBOT ===== */
-    .chatbot-toggle,
-    #chatbotToggle {
-        position: fixed !important;
-        bottom: 20px !important;
-        right: 20px !important;
-        width: 56px !important;
-        height: 56px !important;
-        min-width: 56px !important;
-        min-height: 56px !important;
-        max-width: 56px !important;
-        max-height: 56px !important;
-        border-radius: 16px !important;
-        background: #4f46e5 !important; /* ROXO (padrão) */
+
+    .btn-logout i,
+    button#btnLogout i,
+    button.btn-logout i {
+        all: initial !important;
+        font-family: "Font Awesome 6 Free" !important;
+        font-weight: 900 !important;
+        font-size: 10px !important;
+        margin: 0 !important;
+        display: inline-block !important;
         color: white !important;
-        font-size: 24px !important;
-        display: flex !important;
+        line-height: 1 !important;
+    }
+
+    .btn-logout span,
+    button#btnLogout span,
+    button.btn-logout span {
+        font-size: 10px !important;
+        line-height: 1 !important;
+    }
+
+    /* Na sidebar */
+    .sidebar .btn-logout,
+    .sidebar button#btnLogout,
+    .sidebar-footer .btn-logout {
+        position: relative !important;
+        top: auto !important;
+        right: auto !important;
+        left: auto !important;
+        width: calc(100% - 30px) !important;
+        max-width: none !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        max-height: 36px !important;
+        font-size: 12px !important;
+        margin: 15px !important;
+    }
+
+    .sidebar .btn-logout i,
+    .sidebar button#btnLogout i {
+        font-size: 12px !important;
+    }
+}
+
+/* ===== BOTÃO ENTAR EM TURMA - CORRIGIDO ===== */
+@media screen and (max-width: 768px) {
+    
+    .btn-entrar-turma {
+        background: white !important;
+        color: #10b981 !important;
+        border: 2px solid #10b981 !important;
+        padding: 8px 12px !important;
+        border-radius: 30px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        z-index: 9999 !important;
-        border: none !important;
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
-        cursor: pointer !important;
-        padding: 0 !important;
-        margin: 0 !important;
+        gap: 6px !important;
+        transition: all 0.3s !important;
+        white-space: nowrap !important;
+        margin: 0 0 0 auto !important; /* margin-left: auto para alinhar à direita */
+        min-width: 120px !important;
+        max-width: 140px !important;
+        position: relative !important;
     }
-    
-    /* ===== BOTÃO DE CONTROLE (OLHO) ===== */
-    #toggle-buttons-btn {
-        position: fixed !important;
-        bottom: 100px !important;
-        left: 20px !important;
-        width: 56px !important;
-        height: 56px !important;
-        min-width: 56px !important;
-        min-height: 56px !important;
-        max-width: 56px !important;
-        max-height: 56px !important;
-        border-radius: 16px !important;
-        background: transparent !important;
-        color: #4f46e5 !important;
-        font-size: 32px !important;
+
+    .btn-entrar-turma i {
+        font-size: 13px !important;
+    }
+
+    /* Container dos botões do header */
+    .aluno-header > div:last-child {
         display: flex !important;
         align-items: center !important;
-        justify-content: center !important;
-        z-index: 10000 !important;
-        border: none !important;
-        box-shadow: none !important;
-        cursor: pointer !important;
+        justify-content: flex-end !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+        max-width: 100% !important;
+    }
+
+    /* Links como o "Baixar App" */
+    .aluno-header a[href*="drive.google.com"] {
+        padding: 6px 12px !important;
+        font-size: 12px !important;
+        white-space: nowrap !important;
+        max-width: 100px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+    }
+}
+
+/* ===== CORREÇÕES PARA TELAS MUITO PEQUENAS ===== */
+@media screen and (max-width: 480px) {
+    
+    /* Stats grid vira 1 coluna */
+    .stats-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Botões de ação */
+    .header-actions {
+        flex-wrap: wrap !important;
+        gap: 5px !important;
+    }
+
+    .header-actions button,
+    .btn-entrar-turma {
+        min-width: 100px !important;
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+    }
+
+    .header-actions button i,
+    .btn-entrar-turma i {
+        font-size: 12px !important;
+    }
+
+    /* Botão de sair em telas muito pequenas */
+    .btn-logout span,
+    button#btnLogout span,
+    button.btn-logout span {
+        display: none !important;
+    }
+
+    .btn-logout,
+    button#btnLogout,
+    button.btn-logout {
+        min-width: 40px !important;
+        max-width: 40px !important;
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 50% !important;
         padding: 0 !important;
+        justify-content: center !important;
+        top: 10px !important;
+        right: 10px !important;
+    }
+
+    .btn-logout i,
+    button#btnLogout i,
+    button.btn-logout i {
+        font-size: 16px !important;
         margin: 0 !important;
     }
+
+    /* Esconder link do app em telas muito pequenas */
+    .aluno-header a[href*="drive.google.com"] {
+        display: none !important;
+    }
+
+    /* Títulos menores */
+    .page-title {
+        font-size: 18px !important;
+    }
+
+    h1 { font-size: 22px !important; }
+    h2 { font-size: 20px !important; }
+    h3 { font-size: 18px !important; }
+}
+
+/* ===== TELAS MÉDIAS (481px - 600px) ===== */
+@media screen and (min-width: 481px) and (max-width: 600px) {
     
-    /* ===== AJUSTE DE POSIÇÕES EM CASCATA ===== */
-    .accessibility-toggle,
-    #accessibilityToggle {
-        bottom: 90px !important; /* Segundo botão */
+    .aluno-header a[href*="drive.google.com"] span {
+        display: none !important;
     }
     
-    [vw-access-button] {
-        bottom: 160px !important; /* Terceiro botão */
-    }
-    
-    #toggle-buttons-btn {
-        bottom: 230px !important; /* Primeiro botão (topo) */
-    }
-    
-    /* ===== AJUSTE PARA QUANDO OS ÍCONES ESTIVEREM ESCONDIDOS ===== */
-    .accessibility-toggle[style*="opacity: 0"],
-    #accessibilityToggle[style*="opacity: 0"],
-    .chatbot-toggle[style*="opacity: 0"],
-    #chatbotToggle[style*="opacity: 0"],
-    [vw-access-button][style*="opacity: 0"] {
-        pointer-events: none !important;
-        transition: opacity 0.3s ease !important;
-    }
-    
-    /* ===== TELAS MUITO PEQUENAS ===== */
-    @media screen and (max-width: 480px) {
-        .accessibility-toggle,
-        #accessibilityToggle,
-        .chatbot-toggle,
-        #chatbotToggle,
-        [vw-access-button],
-        #toggle-buttons-btn {
-            width: 48px !important;
-            height: 48px !important;
-            min-width: 48px !important;
-            min-height: 48px !important;
-            font-size: 24px !important;
-        }
-        
-        .accessibility-toggle,
-        #accessibilityToggle {
-            bottom: 80px !important;
-        }
-        
-        [vw-access-button] {
-            bottom: 140px !important;
-        }
-        
-        #toggle-buttons-btn {
-            bottom: 200px !important;
-        }
+    .aluno-header a[href*="drive.google.com"] {
+        min-width: 44px !important;
+        width: 44px !important;
+        padding: 10px !important;
+        justify-content: center !important;
     }
 }
 
-/* ===== HEADER DO MENU COM BOTÃO VOLTAR ===== */
-.menu-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 15px 20px;
-    background: #1e2b37;
-    border-bottom: 1px solid #3a4a5a;
-    width: 100%;
-}
-
-.menu-header .logo-area {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.menu-header .logo-area i {
-    font-size: 22px;
-    color: #3498db;
-}
-
-.menu-header .logo-area span {
-    font-size: 16px;
-    font-weight: 600;
-    color: white;
-}
-
-.btn-voltar-inicio {
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: white;
-    padding: 6px 12px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    transition: all 0.3s;
-}
-
-.btn-voltar-inicio i {
-    font-size: 12px;
-}
-
-.btn-voltar-inicio:hover {
-    background: rgba(255,255,255,0.2);
-    transform: translateX(-3px);
-}
-
-/* Ajuste para mobile */
-@media (max-width: 768px) {
-    .sidebar-header {
-        padding: 0 !important;
-    }
+/* ===== CORREÇÕES PARA ORIENTAÇÃO PAISAGEM ===== */
+@media screen and (max-width: 900px) and (orientation: landscape) {
     
-    .menu-header {
-        padding: 12px 15px;
+    .sidebar {
+        width: 240px !important;
     }
-    
-    .menu-header .logo-area span {
-        font-size: 14px;
+
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
     }
-    
-    .btn-voltar-inicio {
-        padding: 5px 10px;
-        font-size: 12px;
+
+    .modal-content {
+        max-height: 80vh !important;
+    }
+
+    .menu-toggle {
+        bottom: 10px !important;
+        left: 10px !important;
+    }
+
+    .btn-logout,
+    button#btnLogout {
+        top: 5px !important;
+        right: 5px !important;
+    }
+}
+
+/* ===== CORREÇÕES PARA NOTCH (iOS) ===== */
+@supports (padding: max(0px)) {
+    body {
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .sidebar {
+        padding-top: max(20px, env(safe-area-inset-top)) !important;
+        padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
+    }
+
+    .menu-toggle {
+        bottom: max(20px, env(safe-area-inset-bottom)) !important;
+        left: max(20px, env(safe-area-inset-left)) !important;
+    }
+
+    .chatbot-toggle {
+        bottom: max(20px, env(safe-area-inset-bottom)) !important;
+        right: max(20px, env(safe-area-inset-right)) !important;
+    }
+
+    .btn-logout,
+    button#btnLogout {
+        top: max(10px, env(safe-area-inset-top)) !important;
+        right: max(10px, env(safe-area-inset-right)) !important;
     }
 }

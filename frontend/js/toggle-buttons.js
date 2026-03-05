@@ -33,7 +33,7 @@
         // Estilo do botão - TRANSPARENTE
         Object.assign(btn.style, {
             position: 'fixed',
-            bottom: '100px',
+            bottom: '825px',
             left: '30px',
             width: CONFIG.buttonSize,
             height: CONFIG.buttonSize,
