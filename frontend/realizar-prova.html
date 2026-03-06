@@ -1915,7 +1915,8 @@
                 
                 if (elem.requestFullscreen) {
                     elem.requestFullscreen().catch(err => {
-                        console.log('⚠️ Erro ao entrar em fullscreen (pode ser por restrições do navegador):', err);
+                        // 🔥 CORREÇÃO: Apenas logar, sem registrar como tentativa de atalho
+                        console.log('ℹ️ Não foi possível ativar fullscreen (restrição do navegador):', err.message);
                         
                         // Tentar novamente após interação do usuário
                         document.addEventListener('click', function initFullscreenOnClick() {
@@ -1932,13 +1933,14 @@
                 // Configurar listener para garantir que permaneça em fullscreen
                 document.addEventListener('fullscreenchange', () => {
                     if (!document.fullscreenElement) {
-                        console.log('⚠️ Usuário tentou sair do fullscreen - forçando retorno');
+                        console.log('ℹ️ Usuário saiu do modo tela cheia');
                         
                         // Pequeno atraso para evitar loop infinito
                         setTimeout(() => {
-                            if (!document.fullscreenElement && !this.provaCancelada) {
+                            if (!document.fullscreenElement && !this.provaCancelada && !this.provaSendoFinalizada) {
+                                console.log('🔄 Tentando reativar fullscreen...');
                                 this.ativarFullScreenInicial();
-                                if (this) this.registrarTentativaAtalho('Saída do modo tela cheia');
+                                // 🔥 REMOVIDO: this.registrarTentativaAtalho('Saída do modo tela cheia');
                             }
                         }, 100);
                     }

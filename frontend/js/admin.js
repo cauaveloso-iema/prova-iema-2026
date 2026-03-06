@@ -7443,6 +7443,7 @@ class AdminPanel {
         // MÓDULO DE RESULTADOS - ADMIN (VERSÃO CORRIGIDA)
         // ============================================================================
 
+        // ============ LOAD RESULTADOS (VERSÃO CORRIGIDA) ============
         async loadResultados() {
             const contentArea = document.getElementById('contentArea');
             
@@ -7461,7 +7462,7 @@ class AdminPanel {
             try {
                 const token = localStorage.getItem('auth_token');
                 
-                // Buscar TODOS os resultados (nova rota)
+                // Buscar TODOS os resultados
                 const response = await fetch('/api/admin/todos-resultados', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -7501,13 +7502,26 @@ class AdminPanel {
                 // Renderizar a página com os resultados
                 contentArea.innerHTML = this.renderResultadosCompleto(resultados, estatisticas);
 
-                // Renderizar a tabela e gráficos
+                // 🔥 ARMAZENAR OS DADOS NO OBJETO
+                this.resultadosCompletos = resultados;
+                this.resultadosFiltrados = resultados;
+                this.paginaAtual = 1;
+                this.itensPorPagina = 15;
+
+                // 🔥 RENDERIZAR A TABELA COM A FUNÇÃO CORRIGIDA
                 setTimeout(() => {
-                    this.renderTabelaResultados(resultados);
+                    const tbody = document.getElementById('tabelaResultadosBody');
+                    if (tbody) {
+                        tbody.innerHTML = this.gerarLinhasResultados(resultados);
+                        console.log('✅ Tabela renderizada com função corrigida');
+                    }
+                    
                     this.inicializarGraficosResultados(dadosGraficos);
                     this.configurarEventosResultados();
-                    this.configurarEventosResultados();
-                    this.atualizarContadoresCards(); 
+                    this.atualizarContadoresCards();
+                    
+                    // 🔥 GARANTIR QUE A TABELA ESTÁ CORRETA
+                    this.atualizarTabelaPaginada();
                 }, 100);
 
             } catch (error) {
@@ -7515,7 +7529,6 @@ class AdminPanel {
                 contentArea.innerHTML = this.renderErro(error);
             }
         }
-
         processarResultadosReais(dashboardData, provasData, alunosData, resultadosAPI) {
             const resultados = [];
             const alunosMap = new Map();
@@ -8519,34 +8532,28 @@ class AdminPanel {
             
             const resultados = this.resultadosCompletos;
             
-            // Calcular estatísticas com a mesma lógica dos filtros
+            // Calcular estatísticas com a lógica correta
             let aprovados = 0;
             let reprovados = 0;
             let pendentes = 0;
             let canceladas = 0;
             
             resultados.forEach(r => {
-                const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
-                                    r.cancelada === true || 
-                                    r.motivoCancelamento;
-                
-                if (isCancelada) {
+                // 🔥 CORREÇÃO: Só é cancelado se cancelada === true
+                if (r.cancelada === true) {
                     canceladas++;
                 }
-                else if (r.nota !== null && r.nota !== undefined) {
-                    if (r.notaLiberada === true) {
-                        if (r.nota >= 7) {
-                            aprovados++;
-                        } else {
-                            reprovados++;
-                        }
-                    } else {
-                        // Tem nota mas não foi liberada = aguardando correção
-                        pendentes++;
-                    }
-                } else {
-                    // Não tem nota = pendente
+                // Se não tem nota OU nota não foi liberada → pendente (aguardando correção)
+                else if (r.nota === null || r.nota === undefined || r.notaLiberada === false) {
                     pendentes++;
+                }
+                // Tem nota e foi liberada
+                else {
+                    if (r.nota >= 7) {
+                        aprovados++;
+                    } else {
+                        reprovados++;
+                    }
                 }
             });
             
@@ -8557,7 +8564,7 @@ class AdminPanel {
                 statsNumbers[0].textContent = resultados.length;      // Total
                 statsNumbers[1].textContent = aprovados;              // Aprovados
                 statsNumbers[2].textContent = reprovados;             // Reprovados
-                statsNumbers[3].textContent = pendentes;              // Pendentes
+                statsNumbers[3].textContent = pendentes;              // Pendentes (Aguardando Correção)
                 if (statsNumbers[4]) statsNumbers[4].textContent = canceladas; // Canceladas
                 
                 console.log('✅ Cards atualizados:', { 
@@ -8569,13 +8576,9 @@ class AdminPanel {
                 });
             }
             
-            // Atualizar média e taxa de aprovação
+            // Atualizar média e taxa de aprovação (apenas notas liberadas)
             const notasValidas = resultados.filter(r => 
-                !((r.nota === 0 && r.status === 'pendente') || 
-                r.cancelada === true || 
-                r.motivoCancelamento) && 
-                r.nota !== null && 
-                r.notaLiberada === true
+                !r.cancelada && r.nota !== null && r.nota !== undefined && r.notaLiberada === true
             ).map(r => r.nota);
             
             const mediaGeral = notasValidas.length > 0 
@@ -8612,7 +8615,7 @@ class AdminPanel {
             }
         }
 
-        // ============ GERAR LINHAS DA TABELA DE RESULTADOS (VERSÃO CORRIGIDA) ============
+        // ============ GERAR LINHAS DA TABELA DE RESULTADOS (COM BOTÃO DE LIBERAR NOTA) ============
         gerarLinhasResultados(resultados) {
             if (!resultados || resultados.length === 0) {
                 return `
@@ -8626,10 +8629,8 @@ class AdminPanel {
             }
 
             return resultados.map(r => {
-                // Verificar se é cancelada
-                const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
-                                    r.cancelada === true || 
-                                    r.motivoCancelamento;
+                // 🔥 CORREÇÃO: Só é cancelado se cancelada === true
+                const isCancelada = r.cancelada === true;
                 
                 // Determinar status
                 let statusClass = '';
@@ -8640,7 +8641,15 @@ class AdminPanel {
                     statusClass = 'status-cancelado';
                     statusText = 'Cancelada';
                     statusIcon = '🚫 ';
-                } else if (r.nota !== null && r.nota !== undefined) {
+                } 
+                // Se não tem nota OU nota não foi liberada → AGUARDANDO CORREÇÃO
+                else if (r.nota === null || r.nota === undefined || r.notaLiberada === false) {
+                    statusClass = 'status-pendente';
+                    statusText = 'Aguardando Correção';
+                    statusIcon = '⏳ ';
+                } 
+                // Tem nota e foi liberada
+                else {
                     if (r.nota >= 7) {
                         statusClass = 'status-aprovado';
                         statusText = 'Aprovado';
@@ -8650,18 +8659,21 @@ class AdminPanel {
                         statusText = 'Reprovado';
                         statusIcon = '❌ ';
                     }
-                } else {
-                    statusClass = 'status-pendente';
-                    statusText = 'Pendente';
-                    statusIcon = '⏳ ';
                 }
                 
-                // Determinar classe da nota
+                // Só mostrar nota se foi liberada
+                const notaExibida = (r.notaLiberada === true && r.nota !== null && r.nota !== undefined) ? r.nota.toFixed(2) : '-';
+                
+                // Determinar classe da nota (apenas para estilo)
                 let notaClass = '';
-                if (r.nota !== null && r.nota !== undefined) {
+                if (r.nota !== null && r.nota !== undefined && !isCancelada && r.notaLiberada === true) {
                     if (r.nota >= 7) notaClass = 'nota-alta';
                     else if (r.nota > 0) notaClass = 'nota-baixa';
+                    else if (r.nota === 0) notaClass = 'nota-zero';
                 }
+                
+                // Verificar se precisa mostrar botão de liberar nota
+                const precisaLiberar = !isCancelada && r.nota !== null && r.nota !== undefined && r.notaLiberada === false;
                 
                 // Formatar data
                 const data = r.dataRealizacao ? 
@@ -8682,7 +8694,7 @@ class AdminPanel {
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.alunoTurma || '-'}</td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${data}</td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;" class="${notaClass}">
-                            ${r.nota !== null ? r.nota.toFixed(2) : '-'}
+                            ${notaExibida}
                         </td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                             ${r.acertos || 0}/${r.total || 0} 
@@ -8708,7 +8720,6 @@ class AdminPanel {
                         </td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                             <div class="action-buttons" style="display: flex; gap: 5px;">
-                                <!-- 👁️ OLHO: Sempre mostra detalhes NORMais -->
                                 <button class="btn-icon" onclick="admin.verResultadoDetalhado('${r.id}')" title="Ver detalhes">
                                     <i class="fas fa-eye"></i>
                                 </button>
@@ -8717,14 +8728,20 @@ class AdminPanel {
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 
+                                ${precisaLiberar ? `
+                                    <button class="btn-icon" style="background: #10b981; color: white;" 
+                                            onclick="admin.liberarNota('${r.id}')" 
+                                            title="Liberar nota para o aluno">
+                                        <i class="fas fa-lock-open"></i>
+                                    </button>
+                                ` : ''}
+                                
                                 ${isCancelada ? `
-                                    <!-- 🚫 ÍCONE DE CANCELAMENTO: Aparece só quando é cancelado -->
                                     <button class="btn-icon warning" onclick="admin.verDetalhesCancelamento('${r.id}')" 
                                             title="Ver detalhes do cancelamento" style="color: #f59e0b;">
                                         <i class="fas fa-info-circle"></i>
                                     </button>
                                 ` : `
-                                    <!-- 📧 LEMBRETE: Aparece só quando NÃO é cancelado -->
                                     <button class="btn-icon" onclick="admin.enviarLembrete('${r.id}')" title="Enviar lembrete">
                                         <i class="fas fa-bell"></i>
                                     </button>
@@ -8752,7 +8769,7 @@ class AdminPanel {
             this.atualizarTabelaPaginada();
         }
 
-        // ============ ATUALIZAR TABELA PAGINADA (COM STATUS CORRETO) ============
+        // ============ ATUALIZAR TABELA PAGINADA (VERSÃO CORRIGIDA - USA A FUNÇÃO PRINCIPAL) ============
         atualizarTabelaPaginada() {
             const tbody = document.getElementById('tabelaResultadosBody');
             if (!tbody || !this.resultadosFiltrados) return;
@@ -8761,126 +8778,8 @@ class AdminPanel {
             const fim = inicio + this.itensPorPagina;
             const paginaResultados = this.resultadosFiltrados.slice(inicio, fim);
 
-            let html = '';
-            paginaResultados.forEach(r => {
-                const data = new Date(r.dataRealizacao || r.createdAt).toLocaleDateString('pt-BR');
-                
-                // 🔥 LÓGICA CORRETA DE STATUS
-                let notaClass = '';
-                let statusClass = '';
-                let statusText = '';
-                let statusIcon = '';
-                
-                // Verificar se é cancelada
-                const isCancelada = (r.nota === 0 && r.status === 'pendente') || 
-                                    r.cancelada === true || 
-                                    r.motivoCancelamento;
-
-                if (isCancelada) {
-                    statusClass = 'status-cancelado';
-                    statusText = 'Cancelada';
-                    statusIcon = '🚫 ';
-                    notaClass = 'nota-zero';
-                } 
-                // Aguardando correção (tem nota MAS notaLiberada é false)
-                else if (r.nota !== null && r.nota !== undefined && r.notaLiberada === false) {
-                    statusClass = 'status-pendente';
-                    statusText = 'Aguardando';
-                    statusIcon = '⏳ ';
-                    notaClass = '';
-                }
-                // Corrigida (tem nota E notaLiberada é true)
-                else if (r.nota !== null && r.nota !== undefined && r.notaLiberada === true) {
-                    if (r.nota >= 7) {
-                        statusClass = 'status-aprovado';
-                        statusText = 'Aprovado';
-                        statusIcon = '✅ ';
-                        notaClass = 'nota-alta';
-                    } else {
-                        statusClass = 'status-reprovado';
-                        statusText = 'Reprovado';
-                        statusIcon = '❌ ';
-                        notaClass = 'nota-baixa';
-                    }
-                } 
-                // Pendente (sem nota)
-                else {
-                    statusClass = 'status-pendente';
-                    statusText = 'Pendente';
-                    statusIcon = '⏳ ';
-                    notaClass = '';
-                }
-                
-                const percentual = r.total > 0 ? Math.round((r.acertos / r.total) * 100) : 0;
-
-                html += `
-                    <tr>
-                        <td>
-                            <strong>${r.alunoNome || 'N/A'}</strong>
-                            <div style="font-size: 11px; color: #6c757d;">${r.alunoMatricula || ''}</div>
-                        </td>
-                        <td style="font-size: 12px; color: #6c757d;">${r.alunoEmail || '-'}</td>
-                        <td>${r.provaTitulo || 'N/A'}</td>
-                        <td>${r.alunoTurma || '-'}</td>
-                        <td>${data}</td>
-                        <td class="${notaClass}">${r.nota !== null ? r.nota.toFixed(2) : '-'}</td>
-                        <td>${r.acertos || 0}/${r.total || 0} (${percentual}%)</td>
-                        <td>${r.tempoGasto ? Math.round(r.tempoGasto / 60) + ' min' : '-'}</td>
-                        <td>
-                            <span class="status-badge ${statusClass}" style="
-                                display: inline-block;
-                                padding: 4px 10px;
-                                border-radius: 30px;
-                                font-size: 11px;
-                                font-weight: 600;
-                                background: ${statusClass === 'status-cancelado' ? '#fee2e2' : 
-                                        statusClass === 'status-aprovado' ? '#d4edda' : 
-                                        statusClass === 'status-reprovado' ? '#f8d7da' : '#fff3cd'};
-                                color: ${statusClass === 'status-cancelado' ? '#dc2626' : 
-                                        statusClass === 'status-aprovado' ? '#155724' : 
-                                        statusClass === 'status-reprovado' ? '#721c24' : '#856404'};
-                            ">
-                                ${statusIcon}${statusText}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="action-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
-                                <button class="btn-icon" onclick="admin.verResultadoDetalhado('${r.id}')" title="Ver detalhes">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                
-                                <button class="btn-icon edit" onclick="admin.editarResultado('${r.id}')" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                
-                                ${!isCancelada && r.nota !== null && r.notaLiberada === false ? `
-                                    <button class="btn-icon" style="background: #10b981; color: white;" 
-                                            onclick="admin.liberarNota('${r.id}')" 
-                                            title="Liberar nota para o aluno">
-                                        <i class="fas fa-lock-open"></i>
-                                    </button>
-                                ` : ''}
-                                
-                                ${isCancelada ? `
-                                    <button class="btn-icon warning" onclick="admin.verDetalhesCancelamento('${r.id}')" title="Ver detalhes do cancelamento">
-                                        <i class="fas fa-info-circle"></i>
-                                    </button>
-                                ` : `
-                                    <button class="btn-icon" onclick="admin.enviarLembrete('${r.id}')" title="Enviar lembrete">
-                                        <i class="fas fa-bell"></i>
-                                    </button>
-                                `}
-                                
-                                <button class="btn-icon delete" onclick="admin.excluirResultado('${r.id}')" title="Excluir">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-
-            tbody.innerHTML = html;
+            // 🔥 USAR A FUNÇÃO PRINCIPAL que já está corrigida
+            tbody.innerHTML = this.gerarLinhasResultados(paginaResultados);
 
             // Atualizar paginação
             const totalPaginas = Math.ceil(this.resultadosFiltrados.length / this.itensPorPagina);
@@ -9568,7 +9467,7 @@ class AdminPanel {
             this.openModal();
         }
 
-        // ============ VER RESULTADO DETALHADO (APENAS PARA RESULTADOS NORMAIS) ============
+        // ============ VER RESULTADO DETALHADO (VERSÃO CORRIGIDA) ============
         async verResultadoDetalhado(resultadoId) {
             const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
             if (!resultado) {
@@ -9578,11 +9477,11 @@ class AdminPanel {
 
             console.log('📝 Dados completos do resultado:', resultado);
 
-            // 🔥 VERIFICAR SE É CANCELADO
-            const isCancelada = (resultado.nota === 0 && resultado.status === 'pendente') || 
-                                resultado.cancelada === true || 
-                                resultado.motivoCancelamento;
-
+            // 🔥 CORREÇÃO: Verificar se é cancelado DE VERDADE (usando o campo do backend)
+            const isCancelada = resultado.cancelada === true;
+            
+            // 🔥 AGORA PODE VER DETALHES DE QUALQUER RESULTADO, MESMO COM NOTA 0!
+            // Apenas bloqueia se for cancelado REAL
             if (isCancelada) {
                 this.showToast('ℹ️ Este resultado foi cancelado. Use o ícone de informações para ver detalhes.', 'info');
                 return;
@@ -9629,7 +9528,7 @@ class AdminPanel {
                 }
             } else {
                 statusClass = 'status-pendente';
-                statusText = 'Pendente';
+                statusText = 'Aguardando Correção';
                 statusColor = '#ffc107';
                 statusIcon = '⏳ ';
             }
@@ -14972,71 +14871,180 @@ class AdminPanel {
         this.loadProvas();
     }
 
-    // ============ VER DETALHES DA PROVA (CORRIGIDO) ============
-    verProva(provaId) {
-        const prova = this.provas.find(p => p.id === provaId);
-        if (!prova) return;
-
-        // Extrair nome do professor
-        let nomeProfessor = 'Desconhecido';
-        if (prova.professor) {
-            if (typeof prova.professor === 'object') {
-                nomeProfessor = prova.professor.nome || prova.professor.name || 'Desconhecido';
-            } else {
-                nomeProfessor = prova.professor;
+    // ============ VER DETALHES DA PROVA (VERSÃO CORRIGIDA - BUSCA DA API) ============
+    async verProva(provaId) {
+        try {
+            console.log('🔍 Buscando detalhes da prova:', provaId);
+            this.showToast('🔄 Carregando detalhes...', 'info');
+            
+            // Buscar dados atualizados da API
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/provas/${provaId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar prova');
             }
-        } else if (prova.professorId) {
-            if (this.usuarios && this.usuarios.length > 0) {
-                const prof = this.usuarios.find(u => u._id === prova.professorId);
-                if (prof) nomeProfessor = prof.nome;
-            }
-        }
-
-        const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
-            <div style="padding: 10px;">
-                <h3 style="margin: 0 0 20px 0; color: #495057;">${prova.titulo}</h3>
+            
+            const prova = data.prova;
+            const questoes = data.questoes || [];
+            
+            console.log('📦 Dados da prova recebidos:', prova);
+            console.log('   Horário início:', prova.horarioInicio);
+            console.log('   Horário término:', prova.horarioTermino);
+            console.log('   Duração:', prova.duracaoMinutos);
+            
+            // 🔥 FORMATAR DURAÇÃO
+            const duracaoMinutos = prova.duracaoMinutos || 0;
+            const duracaoFormatada = this.formatarDuracao(duracaoMinutos);
+            
+            // 🔥 HORÁRIOS (com fallback)
+            const horarioInicio = prova.horarioInicio || 'Não definido';
+            const horarioTermino = prova.horarioTermino || 'Não definido';
+            
+            // 🔥 DATA LIMITE
+            let dataLimiteFormatada = 'Sem limite';
+            if (prova.dataLimite) {
+                const dataLimite = new Date(prova.dataLimite);
+                dataLimiteFormatada = dataLimite.toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
                 
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <p><strong><i class="fas fa-align-left"></i> Conteúdo:</strong> ${prova.conteudo || 'Não especificado'}</p>
-                    <p><strong><i class="fas fa-user"></i> Professor:</strong> 
-                        <span style="display: inline-flex; align-items: center; gap: 5px;">
-                            <i class="fas fa-chalkboard-teacher" style="color: #0d6efd;"></i>
-                            ${nomeProfessor}
-                        </span>
-                    </p>
-                    <p><strong><i class="fas fa-school"></i> Turma:</strong> ${prova.turma?.nome || prova.turma || 'N/A'}</p>
-                    <p><strong><i class="fas fa-calendar-week"></i> Período:</strong> ${prova.periodo ? prova.periodo + 'º' : '1º'}</p>
-                    <p><strong><i class="fas fa-calendar-alt"></i> Data Limite:</strong> ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'Sem limite'}</p>
-                    <p><strong><i class="fas fa-clock"></i> Duração:</strong> ${prova.duracaoMinutos ? prova.duracaoMinutos + ' minutos' : 'Não definida'}</p>
-                    <p><strong><i class="fas fa-circle"></i> Status:</strong> 
-                        <span class="status-badge ${prova.publicada ? (prova.cancelada ? 'inactive' : 'active') : 'inactive'}">
-                            ${prova.publicada ? (prova.cancelada ? 'Cancelada' : (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) : 'Rascunho'}
-                        </span>
-                    </p>
-                </div>
+                // Se tiver horário de término, incluir
+                if (prova.horarioTermino) {
+                    dataLimiteFormatada += ` às ${prova.horarioTermino}`;
+                }
+            }
+            
+            // Nome do professor
+            const nomeProfessor = prova.professor?.nome || prova.professor || 'Desconhecido';
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 10px;">
+                    <h3 style="margin: 0 0 20px 0; color: #495057;">${prova.titulo || 'Prova'}</h3>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <p><strong><i class="fas fa-align-left"></i> Conteúdo:</strong> ${prova.conteudo || 'Não especificado'}</p>
+                        <p><strong><i class="fas fa-user"></i> Professor:</strong> 
+                            <span style="display: inline-flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-chalkboard-teacher" style="color: #0d6efd;"></i>
+                                ${nomeProfessor}
+                            </span>
+                        </p>
+                        <p><strong><i class="fas fa-school"></i> Turma:</strong> ${prova.turma?.nome || prova.turma || 'N/A'}</p>
+                        <p><strong><i class="fas fa-calendar-week"></i> Período:</strong> ${prova.periodo ? prova.periodo + 'º' : '1º'}</p>
+                        
+                        <!-- CARD DE HORÁRIOS -->
+                        <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); padding: 15px; border-radius: 8px; margin: 15px 0;">
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #1976d2; margin-bottom: 5px;">
+                                        <i class="fas fa-play"></i> INÍCIO
+                                    </div>
+                                    <div style="font-size: 1.3rem; font-weight: bold; color: #0d47a1;">
+                                        ${horarioInicio}
+                                    </div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #1976d2; margin-bottom: 5px;">
+                                        <i class="fas fa-stop"></i> TÉRMINO
+                                    </div>
+                                    <div style="font-size: 1.3rem; font-weight: bold; color: #0d47a1;">
+                                        ${horarioTermino}
+                                    </div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #1976d2; margin-bottom: 5px;">
+                                        <i class="fas fa-hourglass-half"></i> DURAÇÃO
+                                    </div>
+                                    <div style="font-size: 1.3rem; font-weight: bold; color: #0d47a1;">
+                                        ${duracaoFormatada}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <p><strong><i class="fas fa-calendar-alt"></i> Data Limite:</strong> ${dataLimiteFormatada}</p>
+                        <p><strong><i class="fas fa-circle"></i> Status:</strong> 
+                            <span class="status-badge ${prova.publicada ? (prova.cancelada ? 'inactive' : 'active') : 'inactive'}">
+                                ${prova.publicada ? (prova.cancelada ? 'Cancelada' : (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) : 'Rascunho'}
+                            </span>
+                        </p>
+                        <p><strong><i class="fas fa-hashtag"></i> Código:</strong> ${prova.codigo || 'N/A'}</p>
+                    </div>
 
-                <h4 style="margin: 20px 0 10px 0;">📊 Estatísticas</h4>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #0d6efd;">${prova.alunosRealizaram || 0}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Realizações</div>
+                    <h4 style="margin: 20px 0 10px 0;">📊 Estatísticas</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
+                        <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
+                            <div style="font-size: 24px; font-weight: bold; color: #0d6efd;">${prova.alunosRealizaram || 0}</div>
+                            <div style="font-size: 12px; color: #6c757d;">Realizações</div>
+                        </div>
+                        <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
+                            <div style="font-size: 24px; font-weight: bold; color: #198754;">${(prova.mediaNotas || 0).toFixed(1)}</div>
+                            <div style="font-size: 12px; color: #6c757d;">Média</div>
+                        </div>
+                        <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
+                            <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${prova.totalParticipantes || 0}</div>
+                            <div style="font-size: 12px; color: #6c757d;">Participantes</div>
+                        </div>
                     </div>
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #198754;">${(prova.mediaNotas || 0).toFixed(1)}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Média</div>
+                    
+                    <!-- LISTA DE QUESTÕES (opcional) -->
+                    ${questoes.length > 0 ? `
+                    <h4 style="margin: 20px 0 10px 0;">📝 Questões</h4>
+                    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px;">
+                        ${questoes.map((q, idx) => `
+                            <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                <strong>${idx + 1}. ${q.pergunta}</strong>
+                                <div style="margin-top: 8px; font-size: 0.9rem;">
+                                    ${q.opcoes.map((opcao, optIdx) => `
+                                        <div style="padding: 3px 0; ${optIdx === q.respostaCorreta ? 'color: #198754; font-weight: 500;' : ''}">
+                                            ${opcao} ${optIdx === q.respostaCorreta ? '✓' : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
-                    <div style="text-align: center; background: #e9ecef; padding: 15px; border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${prova.totalParticipantes || 0}</div>
-                        <div style="font-size: 12px; color: #6c757d;">Participantes</div>
+                    ` : ''}
+                    
+                    <!-- INFORMAÇÕES TÉCNICAS -->
+                    <div style="margin-top: 20px; padding: 10px; background: #f1f3f4; border-radius: 6px; font-size: 0.7rem; color: #6c757d;">
+                        <i class="fas fa-database"></i> ID: ${prova.id}
                     </div>
                 </div>
-            </div>
-        `;
+            `;
 
-        document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> Detalhes da Prova`;
-        document.getElementById('modalSaveBtn').style.display = 'none';
-        this.openModal();
+            document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> Detalhes da Prova`;
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar detalhes da prova:', error);
+            this.showToast('❌ Erro ao carregar detalhes: ' + error.message, 'error');
+        }
+    }
+
+    // ============ FORMATAR DURAÇÃO ============
+    formatarDuracao(minutos) {
+        if (!minutos || minutos <= 0) return 'Não definida';
+        
+        const horas = Math.floor(minutos / 60);
+        const mins = minutos % 60;
+        
+        if (horas > 0 && mins > 0) {
+            return `${horas} hora${horas > 1 ? 's' : ''} e ${mins} minuto${mins > 1 ? 's' : ''}`;
+        }
+        if (horas > 0) {
+            return `${horas} hora${horas > 1 ? 's' : ''}`;
+        }
+        return `${mins} minuto${mins > 1 ? 's' : ''}`;
     }
 
     // ============ EDITAR PROVA (MODAL PROFISSIONAL) ============
@@ -15068,6 +15076,10 @@ class AdminPanel {
             
             // Formatar data para o input date
             const dataLimite = prova.dataLimite ? new Date(prova.dataLimite).toISOString().split('T')[0] : '';
+            
+            // Extrair horários (se existirem)
+            const horarioInicio = prova.horarioInicio || prova.horaInicio || '08:00';
+            const horarioTermino = prova.horarioTermino || prova.horaTermino || '09:30';
             
             // Criar HTML do modal
             const modalHtml = `
@@ -15157,6 +15169,82 @@ class AdminPanel {
                                 </label>
                                 <input type="number" id="edit_duracao" value="${prova.duracaoMinutos || 60}" min="5" max="300"
                                     style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 🔥 NOVA SEÇÃO: HORÁRIOS DA PROVA -->
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="display: flex; align-items: center; gap: 8px; font-size: 1rem; color: #334155; margin: 0 0 15px 0; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
+                            <i class="fas fa-clock" style="color: #667eea;"></i>
+                            Horários da Prova
+                        </h3>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <!-- Horário de Início -->
+                            <div style="background: linear-gradient(135deg, #f0f9ff, #e6f0ff); padding: 20px; border-radius: 12px; border: 1px solid #b3d9ff;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                                    <div style="width: 45px; height: 45px; background: #3b82f6; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
+                                        <i class="fas fa-play"></i>
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; font-size: 0.95rem; color: #1e293b;">Horário de Início</h4>
+                                        <p style="margin: 2px 0 0; font-size: 0.75rem; color: #64748b;">Quando os alunos podem começar</p>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <div style="flex: 1;">
+                                        <label style="display: block; font-size: 0.7rem; color: #4b5563; margin-bottom: 4px;">Hora</label>
+                                        <input type="time" id="edit_horario_inicio" value="${horarioInicio}" 
+                                            style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; font-family: monospace; text-align: center;">
+                                    </div>
+                                    <div style="font-size: 1.5rem; color: #94a3b8;">➡️</div>
+                                </div>
+                                
+                                <div style="margin-top: 12px; padding: 8px 12px; background: #ffffff80; border-radius: 8px; font-size: 0.8rem; color: #3b82f6; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>Os alunos só poderão acessar a prova a partir deste horário</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Horário de Término -->
+                            <div style="background: linear-gradient(135deg, #fef2f2, #fee2e2); padding: 20px; border-radius: 12px; border: 1px solid #fecaca;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                                    <div style="width: 45px; height: 45px; background: #ef4444; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
+                                        <i class="fas fa-stop"></i>
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; font-size: 0.95rem; color: #1e293b;">Horário de Término</h4>
+                                        <p style="margin: 2px 0 0; font-size: 0.75rem; color: #64748b;">Quando a prova será encerrada</p>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <input type="time" id="edit_horario_termino" value="${horarioTermino}" 
+                                        style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; font-family: monospace; text-align: center;">
+                                </div>
+                                
+                                <div style="margin-top: 12px; padding: 8px 12px; background: #ffffff80; border-radius: 8px; font-size: 0.8rem; color: #ef4444; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <span>Após este horário, os alunos não poderão mais enviar respostas</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Duração Calculada -->
+                        <div style="margin-top: 20px; background: #f8fafc; border-radius: 12px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px dashed #94a3b8;">
+                            <div style="width: 40px; height: 40px; background: #e2e8f0; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #475569;">
+                                <i class="fas fa-hourglass-half"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-size: 0.75rem; color: #64748b;">Duração da Prova</div>
+                                <div style="font-size: 1.2rem; font-weight: 600; color: #1e293b;" id="duracao_calculada_edit">
+                                    ${this.calcularDuracaoTexto(horarioInicio, horarioTermino)}
+                                </div>
+                            </div>
+                            <div style="color: #64748b; font-size: 0.8rem;">
+                                <i class="fas fa-sync-alt" style="margin-right: 5px;"></i>Atualiza automaticamente
                             </div>
                         </div>
                     </div>
@@ -15260,6 +15348,18 @@ class AdminPanel {
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editor de Prova';
             document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoProva(provaId, questoes.length);
             document.getElementById('modalSaveBtn').textContent = '💾 Salvar Alterações';
+            
+            // Configurar eventos para atualizar a duração quando os horários mudarem
+            setTimeout(() => {
+                const inicioInput = document.getElementById('edit_horario_inicio');
+                const terminoInput = document.getElementById('edit_horario_termino');
+                
+                if (inicioInput && terminoInput) {
+                    inicioInput.addEventListener('change', () => this.atualizarDuracaoEdit());
+                    terminoInput.addEventListener('change', () => this.atualizarDuracaoEdit());
+                }
+            }, 500);
+            
             this.openModal();
             
         } catch (error) {
@@ -15268,24 +15368,92 @@ class AdminPanel {
         }
     }
 
+    // ============ CALCULAR DURAÇÃO TEXTO ============
+    calcularDuracaoTexto(inicio, termino) {
+        if (!inicio || !termino) return 'Horários não definidos';
+        
+        const [h1, m1] = inicio.split(':').map(Number);
+        const [h2, m2] = termino.split(':').map(Number);
+        
+        const totalMinutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+        
+        if (totalMinutos <= 0) {
+            return '<span style="color: #dc3545;">Horário inválido</span>';
+        }
+        
+        const horas = Math.floor(totalMinutos / 60);
+        const minutos = totalMinutos % 60;
+        
+        let duracaoTexto = '';
+        if (horas > 0) duracaoTexto += `${horas}h`;
+        if (minutos > 0) {
+            if (horas > 0) duracaoTexto += ' ';
+            duracaoTexto += `${minutos}min`;
+        }
+        
+        return duracaoTexto;
+    }
+
+    // ============ ATUALIZAR DURAÇÃO NO EDIT ============
+    atualizarDuracaoEdit() {
+        const inicio = document.getElementById('edit_horario_inicio')?.value;
+        const termino = document.getElementById('edit_horario_termino')?.value;
+        
+        if (!inicio || !termino) return;
+        
+        const duracaoElement = document.getElementById('duracao_calculada_edit');
+        if (!duracaoElement) return;
+        
+        duracaoElement.innerHTML = this.calcularDuracaoTexto(inicio, termino);
+    }
+
     // ============ MARCAR RESPOSTA CORRETA ============
     marcarRespostaCorreta(questaoIndex, opcaoIndex) {
         // Esta função será chamada pelos radio buttons
         console.log(`✅ Questão ${questaoIndex} - Resposta correta: ${opcaoIndex}`);
     }
 
-    // ============ SALVAR EDIÇÃO DA PROVA ============
+    // ============ SALVAR EDIÇÃO DA PROVA (CORRIGIDO - HORÁRIO DE SÃO PAULO) ============
     async salvarEdicaoProva(provaId, totalQuestoes) {
         try {
             this.showToast('💾 Salvando alterações...', 'info');
             
             // Coletar dados básicos
+            const titulo = document.getElementById('edit_titulo')?.value;
+            const conteudo = document.getElementById('edit_conteudo')?.value;
+            const dataLimiteStr = document.getElementById('edit_dataLimite')?.value;
+            const horarioInicio = document.getElementById('edit_horario_inicio')?.value;
+            const horarioTermino = document.getElementById('edit_horario_termino')?.value;
+            const duracaoMinutos = parseInt(document.getElementById('edit_duracao')?.value) || 60;
+            
+            // 🔥 IMPORTANTE: NÃO CONVERTER PARA UTC!
+            // Manter no formato que o usuário escolheu (horário de São Paulo)
+            let dataLimiteComHorario = null;
+            
+            if (dataLimiteStr && horarioTermino) {
+                // Formato: YYYY-MM-DDTHH:MM (ISO sem timezone)
+                dataLimiteComHorario = `${dataLimiteStr}T${horarioTermino}:00`;
+                console.log('📅 Data limite (São Paulo):', dataLimiteComHorario);
+            } else if (dataLimiteStr) {
+                // Apenas data, sem horário específico
+                dataLimiteComHorario = `${dataLimiteStr}T23:59:59`;
+            }
+            
+            // Enviar para o backend no formato ISO SEM TIMEZONE
+            // O backend deve interpretar como horário local (America/Sao_Paulo)
             const dados = {
-                titulo: document.getElementById('edit_titulo')?.value,
-                conteudo: document.getElementById('edit_conteudo')?.value,
-                dataLimite: document.getElementById('edit_dataLimite')?.value,
-                duracaoMinutos: parseInt(document.getElementById('edit_duracao')?.value) || 60,
-                questoes: []
+                titulo,
+                conteudo,
+                // Se o backend espera ISO, enviamos a string ISO sem o Z (sem UTC)
+                dataLimite: dataLimiteComHorario, // Ex: "2026-03-06T09:30:00"
+                horarioInicio,  // String simples "HH:MM"
+                horarioTermino, // String simples "HH:MM"
+                duracaoMinutos,
+                questoes: [],
+                
+                // 🔥 Informar explicitamente o fuso horário
+                timezone: 'America/Sao_Paulo',
+                usarHorarioLocal: true
             };
             
             // Coletar questões
@@ -15306,11 +15474,11 @@ class AdminPanel {
                     }
                 }
                 
-                // Coletar textos das opções
+                // Coletar textos das opções (máximo 5)
                 for (let j = 0; j < 5; j++) {
                     const opcao = document.getElementById(`edit_opcao_${i}_${j}`)?.value;
-                    if (opcao) {
-                        opcoes.push(opcao);
+                    if (opcao && opcao.trim()) {
+                        opcoes.push(opcao.trim());
                     }
                 }
                 
@@ -15318,13 +15486,21 @@ class AdminPanel {
                     pergunta,
                     opcoes,
                     respostaCorreta,
-                    explicacao
+                    explicacao,
+                    tipo: 'multipla_escolha'
                 });
             }
             
-            console.log('📤 Enviando dados:', dados);
+            console.log('📤 Enviando dados (horário de São Paulo):', {
+                titulo: dados.titulo,
+                dataLimite: dados.dataLimite,
+                horarioInicio: dados.horarioInicio,
+                horarioTermino: dados.horarioTermino,
+                timezone: dados.timezone,
+                questoes: dados.questoes.length
+            });
             
-            // ENVIAR PARA O BACKEND (você precisará criar esta rota)
+            // ENVIAR PARA O BACKEND
             const response = await fetch(`/api/admin/provas/${provaId}`, {
                 method: 'PUT',
                 headers: {
@@ -15333,6 +15509,14 @@ class AdminPanel {
                 },
                 body: JSON.stringify(dados)
             });
+            
+            // Verificar se a resposta é JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+                throw new Error('Resposta do servidor não é JSON');
+            }
             
             const data = await response.json();
             
@@ -15345,9 +15529,49 @@ class AdminPanel {
             }
             
         } catch (error) {
-            console.error('❌ Erro:', error);
+            console.error('❌ Erro ao salvar prova:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
+    }
+
+    // ============ FORMATAR HORÁRIO PARA EXIBIÇÃO (SEM UTC) ============
+    formatarHorarioParaEdicao(prova) {
+        let horarioInicio = '08:00';
+        let horarioTermino = '09:30';
+        
+        // Se a prova tiver horários definidos
+        if (prova.horarioInicio) {
+            // Se veio como ISO string, extrair apenas a parte da hora (ignorar UTC)
+            if (typeof prova.horarioInicio === 'string' && prova.horarioInicio.includes('T')) {
+                // Pegar apenas HH:MM da string ISO (ignorar timezone)
+                const match = prova.horarioInicio.match(/T(\d{2}:\d{2})/);
+                if (match) {
+                    horarioInicio = match[1];
+                }
+            } else {
+                horarioInicio = prova.horarioInicio;
+            }
+        }
+        
+        if (prova.horarioTermino) {
+            if (typeof prova.horarioTermino === 'string' && prova.horarioTermino.includes('T')) {
+                const match = prova.horarioTermino.match(/T(\d{2}:\d{2})/);
+                if (match) {
+                    horarioTermino = match[1];
+                }
+            } else {
+                horarioTermino = prova.horarioTermino;
+            }
+        } else if (prova.duracaoMinutos && horarioInicio) {
+            // Calcular horário de término baseado na duração
+            const [h, m] = horarioInicio.split(':').map(Number);
+            const totalMinutos = h * 60 + m + prova.duracaoMinutos;
+            const horas = Math.floor(totalMinutos / 60);
+            const minutos = totalMinutos % 60;
+            horarioTermino = `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
+        }
+        
+        return { horarioInicio, horarioTermino };
     }
 
     async exportarResultadosProva(provaId) {

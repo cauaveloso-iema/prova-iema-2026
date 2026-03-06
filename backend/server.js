@@ -10366,7 +10366,7 @@ app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) =
     }
 });
 
-// ============ ROTA PARA ADMIN EDITAR PROVA ============
+// ============ ROTA PARA ADMIN EDITAR PROVA (VERSÃO CORRIGIDA COM HORÁRIOS) ============
 app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
     try {
         // Verificar se é admin ou super_admin
@@ -10381,6 +10381,15 @@ app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
         const updates = req.body;
         
         console.log(`✏️ Admin ${req.userId} editando prova ${provaId}`);
+        console.log('📦 Dados recebidos:', {
+            titulo: updates.titulo,
+            conteudo: updates.conteudo,
+            dataLimite: updates.dataLimite,
+            horarioInicio: updates.horarioInicio,
+            horarioTermino: updates.horarioTermino,
+            duracaoMinutos: updates.duracaoMinutos,
+            questoes: updates.questoes?.length || 0
+        });
         
         const prova = await Prova.findById(provaId);
         if (!prova) {
@@ -10390,21 +10399,55 @@ app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
             });
         }
         
-        // Atualizar campos básicos
+        // Atualizar campos básicos (incluindo horários)
         if (updates.titulo) prova.titulo = updates.titulo;
         if (updates.conteudo) prova.conteudo = updates.conteudo;
-        if (updates.dataLimite) prova.dataLimite = new Date(updates.dataLimite);
-        if (updates.duracaoMinutos) prova.duracaoMinutos = updates.duracaoMinutos;
+        
+        // 🔥 CORREÇÃO: Processar data limite com horário de São Paulo
+        if (updates.dataLimite) {
+            // Se veio como string ISO (ex: "2026-03-06T09:30:00")
+            if (updates.dataLimite.includes('T')) {
+                prova.dataLimite = new Date(updates.dataLimite);
+            } 
+            // Se veio apenas data (ex: "2026-03-06")
+            else if (updates.horarioTermino) {
+                // Combinar data com horário de término
+                const dataStr = `${updates.dataLimite}T${updates.horarioTermino}:00`;
+                prova.dataLimite = new Date(dataStr);
+            } else {
+                // Apenas data, usar 23:59:59 do dia
+                prova.dataLimite = new Date(`${updates.dataLimite}T23:59:59`);
+            }
+            console.log(`📅 Data limite atualizada: ${prova.dataLimite.toLocaleString('pt-BR')}`);
+        }
+        
+        // 🔥 ATUALIZAR HORÁRIOS (CRÍTICO!)
+        if (updates.horarioInicio) {
+            prova.horarioInicio = updates.horarioInicio;
+            console.log(`⏰ Horário início atualizado: ${prova.horarioInicio}`);
+        }
+        
+        if (updates.horarioTermino) {
+            prova.horarioTermino = updates.horarioTermino;
+            console.log(`⏰ Horário término atualizado: ${prova.horarioTermino}`);
+        }
+        
+        // Atualizar duração
+        if (updates.duracaoMinutos) {
+            prova.duracaoMinutos = updates.duracaoMinutos;
+        }
         
         // Atualizar questões
         if (updates.questoes && Array.isArray(updates.questoes)) {
             prova.questoes = updates.questoes;
             prova.quantidadeQuestoes = updates.questoes.length;
+            console.log(`📝 ${prova.quantidadeQuestoes} questões atualizadas`);
         }
         
         await prova.save();
         
         console.log(`✅ Prova ${provaId} atualizada com sucesso`);
+        console.log(`   Horários salvos: ${prova.horarioInicio} - ${prova.horarioTermino}`);
         
         res.json({
             success: true,
@@ -10412,6 +10455,9 @@ app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
             prova: {
                 id: prova._id,
                 titulo: prova.titulo,
+                dataLimite: prova.dataLimite,
+                horarioInicio: prova.horarioInicio,
+                horarioTermino: prova.horarioTermino,
                 quantidadeQuestoes: prova.questoes.length
             }
         });
@@ -11212,7 +11258,7 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
     }
 });
 
-// ============ ROTA PARA ADMIN LISTAR TODOS OS RESULTADOS (SEM DUPLICATAS) ============
+// ============ ROTA PARA ADMIN LISTAR TODOS OS RESULTADOS (CORRIGIDA) ============
 app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (req, res) => {
   try {
     console.log('📊 Admin buscando todos os resultados');
@@ -11231,22 +11277,19 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
       .sort({ dataRealizacao: -1 })
       .lean();
     
-    // Buscar atividades do dashboard (se houver)
-    let dashboardAtividades = [];
-    try {
-      // Aqui você precisaria ter uma coleção de dashboard ou buscar de outro lugar
-      // Por enquanto, vamos ignorar para evitar duplicatas
-    } catch (e) {
-      console.warn('⚠️ Erro ao buscar dashboard:', e.message);
-    }
-    
-    // Usar um Map para garantir unicidade (chave: alunoId + provaId + data)
     const resultadosMap = new Map();
     
-    // Processar resultados do modelo Resultado (prioridade mais alta)
+    // Processar resultados do modelo Resultado
     resultados.forEach(r => {
       const dataStr = r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '';
       const key = `${r.userId?._id || r.userId}-${r.provaId?._id || r.provaId}-${dataStr}`;
+      
+      // 🔥 CORREÇÃO: Só é cancelado se tiver motivo de cancelamento EXPLÍCITO
+      const isCancelada = r.cancelada === true || 
+                         r.status === 'cancelada' ||
+                         (r.motivoCancelamento && r.motivoCancelamento.length > 0);
+      
+      // 🔥 IMPORTANTE: Nota 0 NÃO é cancelamento!
       
       resultadosMap.set(key, {
         id: r._id,
@@ -11262,20 +11305,26 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
         acertos: r.acertos || 0,
         total: r.total || 0,
         tempoGasto: r.tempoGasto || 0,
-        status: r.nota ? (r.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente',
+        status: r.status || (r.nota ? (r.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente'),
         notaLiberada: r.notaLiberada || false,
+        cancelada: isCancelada,  // 🔥 SÓ TRUE SE REALMENTE CANCELADA
+        motivoCancelamento: r.motivoCancelamento,
+        flagViolacao: r.flagViolacao || false,
         origem: 'resultado',
         resultadoDetalhado: r.resultadoDetalhado || [],
         observacoes: r.observacoes || ''
       });
     });
     
-    // Processar provas realizadas (só adicionar se não existir no Map)
+    // Processar provas realizadas
     provasRealizadas.forEach(pr => {
       const dataStr = pr.dataRealizacao ? new Date(pr.dataRealizacao).toISOString().split('T')[0] : '';
       const key = `${pr.alunoId?._id || pr.alunoId}-${pr.provaId?._id || pr.provaId}-${dataStr}`;
       
-      // Só adicionar se ainda não existir
+      const isCancelada = pr.cancelada === true || 
+                         pr.status === 'cancelada' ||
+                         (pr.motivoCancelamento && pr.motivoCancelamento.length > 0);
+      
       if (!resultadosMap.has(key)) {
         resultadosMap.set(key, {
           id: pr._id,
@@ -11291,8 +11340,11 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
           acertos: pr.acertos || 0,
           total: pr.total || 0,
           tempoGasto: pr.tempoGasto || 0,
-          status: pr.nota ? (pr.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente',
+          status: pr.status || (pr.nota ? (pr.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente'),
           notaLiberada: pr.notaLiberada || false,
+          cancelada: isCancelada,  // 🔥 SÓ TRUE SE REALMENTE CANCELADA
+          motivoCancelamento: pr.motivoCancelamento,
+          flagViolacao: pr.flagViolacao || false,
           origem: 'provaRealizada',
           resultadoDetalhado: pr.resultadoDetalhado || [],
           observacoes: pr.observacoes || ''
@@ -11300,13 +11352,7 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
       }
     });
     
-    // Converter o Map de volta para array
     const todosResultados = Array.from(resultadosMap.values());
-    
-    // Ordenar por data (mais recentes primeiro)
-    todosResultados.sort((a, b) => new Date(b.dataRealizacao) - new Date(a.dataRealizacao));
-    
-    console.log(`✅ Total de resultados únicos: ${todosResultados.length}`);
     
     res.json({
       success: true,
@@ -11314,11 +11360,12 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
       total: todosResultados.length,
       estatisticas: {
         total: todosResultados.length,
-        comNota: todosResultados.filter(r => r.nota !== null && r.nota !== undefined).length,
+        comNota: todosResultados.filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada).length,
         semNota: todosResultados.filter(r => r.nota === null || r.nota === undefined).length,
-        aprovados: todosResultados.filter(r => r.nota && r.nota >= 7).length,
-        reprovados: todosResultados.filter(r => r.nota && r.nota < 7).length,
-        pendentes: todosResultados.filter(r => !r.nota).length
+        aprovados: todosResultados.filter(r => r.nota && r.nota >= 7 && !r.cancelada).length,
+        reprovados: todosResultados.filter(r => r.nota && r.nota < 7 && !r.cancelada).length,
+        cancelados: todosResultados.filter(r => r.cancelada).length,
+        pendentes: todosResultados.filter(r => r.nota === null || r.nota === undefined).length
       }
     });
     
