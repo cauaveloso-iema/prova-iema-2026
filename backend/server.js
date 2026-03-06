@@ -2825,6 +2825,121 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
   }
 });
 
+// ============ ROTA PARA PROFESSOR EDITAR SUAS PRÓPRIAS PROVAS ============
+app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
+    try {
+        // Verificar se é professor ou admin (professores podem editar suas provas)
+        const isProfessor = req.userRole === 'professor' || req.userRole === 'admin' || req.userRole === 'super_admin';
+        
+        if (!isProfessor) {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas professores e administradores podem editar provas'
+            });
+        }
+        
+        const provaId = req.params.id;
+        const usuarioId = req.userId;
+        const usuarioRole = req.userRole;
+        const updates = req.body;
+        
+        console.log(`✏️ Usuário ${usuarioId} (${usuarioRole}) editando prova ${provaId}`);
+        console.log('📦 Dados recebidos:', {
+            titulo: updates.titulo,
+            conteudo: updates.conteudo,
+            dataLimite: updates.dataLimite,
+            horarioInicio: updates.horarioInicio,
+            horarioTermino: updates.horarioTermino,
+            questoes: updates.questoes?.length || 0
+        });
+        
+        const prova = await Prova.findById(provaId);
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+        
+        // 🔥 VERIFICAÇÃO DE PERMISSÃO: Professor só pode editar suas próprias provas
+        if (usuarioRole === 'professor' && prova.userId.toString() !== usuarioId) {
+            return res.status(403).json({
+                success: false,
+                error: 'Você só pode editar suas próprias provas'
+            });
+        }
+        
+        // Atualizar campos básicos (incluindo horários)
+        if (updates.titulo) prova.titulo = updates.titulo;
+        if (updates.conteudo) prova.conteudo = updates.conteudo;
+        
+        // Processar data limite com horário de São Paulo
+        if (updates.dataLimite) {
+            if (updates.dataLimite.includes('T')) {
+                prova.dataLimite = new Date(updates.dataLimite);
+            } else if (updates.horarioTermino) {
+                const dataStr = `${updates.dataLimite}T${updates.horarioTermino}:00`;
+                prova.dataLimite = new Date(dataStr);
+            } else {
+                prova.dataLimite = new Date(`${updates.dataLimite}T23:59:59`);
+            }
+            console.log(`📅 Data limite atualizada: ${prova.dataLimite.toLocaleString('pt-BR')}`);
+        }
+        
+        // Atualizar horários
+        if (updates.horarioInicio) {
+            prova.horarioInicio = updates.horarioInicio;
+            console.log(`⏰ Horário início atualizado: ${prova.horarioInicio}`);
+        }
+        
+        if (updates.horarioTermino) {
+            prova.horarioTermino = updates.horarioTermino;
+            console.log(`⏰ Horário término atualizado: ${prova.horarioTermino}`);
+        }
+        
+        // Atualizar duração (calcular automaticamente se não veio)
+        if (updates.duracaoMinutos) {
+            prova.duracaoMinutos = updates.duracaoMinutos;
+        } else if (updates.horarioInicio && updates.horarioTermino) {
+            const [h1, m1] = updates.horarioInicio.split(':').map(Number);
+            const [h2, m2] = updates.horarioTermino.split(':').map(Number);
+            prova.duracaoMinutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+        }
+        
+        // Atualizar questões
+        if (updates.questoes && Array.isArray(updates.questoes)) {
+            prova.questoes = updates.questoes;
+            prova.quantidadeQuestoes = updates.questoes.length;
+            console.log(`📝 ${prova.quantidadeQuestoes} questões atualizadas`);
+        }
+        
+        await prova.save();
+        
+        console.log(`✅ Prova ${provaId} atualizada com sucesso por ${usuarioRole}`);
+        console.log(`   Horários salvos: ${prova.horarioInicio} - ${prova.horarioTermino}`);
+        
+        res.json({
+            success: true,
+            message: 'Prova atualizada com sucesso!',
+            prova: {
+                id: prova._id,
+                titulo: prova.titulo,
+                dataLimite: prova.dataLimite,
+                horarioInicio: prova.horarioInicio,
+                horarioTermino: prova.horarioTermino,
+                quantidadeQuestoes: prova.questoes.length
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao editar prova:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao editar prova: ' + error.message
+        });
+    }
+});
+
 // ============ ROTA PARA EDITAR QUESTÕES ============
 app.put('/api/provas/:id/questoes', authenticateToken, async (req, res) => {
   try {

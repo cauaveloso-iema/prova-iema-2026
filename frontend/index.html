@@ -6608,7 +6608,7 @@ window.addEventListener('scroll', function() {
         }
 
 
-        // ============ FUNÇÃO ATUALIZAR LISTA DE PROVAS - VERSÃO CORRIGIDA ============
+        // ============ FUNÇÃO ATUALIZAR LISTA DE PROVAS - VERSÃO CORRIGIDA COM BOTÃO EDITAR ============
         function atualizarListaProvas(provas) {
             const listaProvas = document.getElementById('listaProvas');
             const alerta = document.getElementById('alertMinhasProvas');
@@ -6884,7 +6884,7 @@ window.addEventListener('scroll', function() {
                         </div>
                         ` : ''}
                         
-                        <div class="prova-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                        <div class="prova-actions" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
                             <button class="btn-ver-prova" onclick="verResultadosProva('${prova.id}')" style="
                                 background: #4f46e5; 
                                 color: white; 
@@ -6900,6 +6900,7 @@ window.addEventListener('scroll', function() {
                             ">
                                 <i class="fas fa-chart-bar"></i> Ver Resultados
                             </button>
+                            
                             <button class="btn-visualizar-prova" onclick="visualizarProva('${prova.id}')" style="
                                 background: #10b981; 
                                 color: white; 
@@ -6915,6 +6916,24 @@ window.addEventListener('scroll', function() {
                             ">
                                 <i class="fas fa-eye"></i> Visualizar
                             </button>
+                            
+                            <!-- 🔥 NOVO BOTÃO EDITAR (APARECE PARA TODAS AS PROVAS, MESMO PUBLICADAS) -->
+                            <button class="btn-editar-prova" onclick="editarProvaProfessor('${prova.id}')" style="
+                                background: #f59e0b; 
+                                color: white; 
+                                border: none; 
+                                padding: 8px 16px; 
+                                border-radius: 6px; 
+                                cursor: pointer; 
+                                font-weight: 600; 
+                                display: flex; 
+                                align-items: center; 
+                                gap: 5px; 
+                                font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            
                             ${prova.codigo ? `
                             <button class="btn-compartilhar-prova" onclick="compartilharProva('${prova.codigo}')" style="
                                 background: #8b5cf6; 
@@ -6932,6 +6951,7 @@ window.addEventListener('scroll', function() {
                                 <i class="fas fa-share-alt"></i> Código: ${prova.codigo}
                             </button>
                             ` : ''}
+                            
                             ${prova.alunosRealizaram > 0 ? `
                             <button class="btn-liberar-notas" onclick="liberarTodasNotas('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="
                                 background: #f59e0b; 
@@ -6964,6 +6984,7 @@ window.addEventListener('scroll', function() {
                                 <i class="fas fa-file-check"></i> Prova Corrigida
                             </button>
                             ` : ''}
+                            
                             <button class="btn-excluir-prova" onclick="solicitarExclusaoProva('${prova.id}', '${prova.titulo.replace(/'/g, "\\'")}')" style="
                                 background: #ef4444; 
                                 color: white; 
@@ -8199,6 +8220,282 @@ window.addEventListener('scroll', function() {
         } catch (error) {
             console.error('Erro ao carregar provas:', error);
         }
+        }
+
+        // ============ EDITAR PROVA (PROFESSOR) - IGUAL AO ADMIN ============
+        async function editarProvaProfessor(provaId) {
+            console.log('✏️ Professor editando prova:', provaId);
+            
+            try {
+                // Mostrar loading
+                mostrarAlerta('alertMinhasProvas', '📝 Carregando dados da prova...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                
+                // Buscar dados completos da prova
+                const response = await fetch(`/api/provas/${provaId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao carregar dados da prova');
+                }
+                
+                const prova = data.prova;
+                const questoes = data.questoes || [];
+                
+                console.log('📦 Dados da prova:', prova);
+                
+                // Formatar data para o input date
+                let dataLimiteStr = '';
+                if (prova.dataLimite) {
+                    const dataLimite = new Date(prova.dataLimite);
+                    const ano = dataLimite.getFullYear();
+                    const mes = String(dataLimite.getMonth() + 1).padStart(2, '0');
+                    const dia = String(dataLimite.getDate()).padStart(2, '0');
+                    dataLimiteStr = `${ano}-${mes}-${dia}`;
+                }
+                
+                // Extrair horários
+                const horarioInicio = prova.horarioInicio || '08:00';
+                const horarioTermino = prova.horarioTermino || '09:30';
+                
+                // Criar modal de edição (igual ao admin)
+                criarModalEdicaoProva(provaId, prova, questoes, dataLimiteStr, horarioInicio, horarioTermino);
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar prova para edição:', error);
+                mostrarAlerta('alertMinhasProvas', '❌ Erro: ' + error.message, 'error');
+            }
+        }
+
+        // ============ CRIAR MODAL DE EDIÇÃO (PROFESSOR) ============
+        function criarModalEdicaoProva(provaId, prova, questoes, dataLimiteStr, horarioInicio, horarioTermino) {
+            // Criar modal se não existir
+            let modal = document.getElementById('modalEditarProvaProfessor');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.id = 'modalEditarProvaProfessor';
+                document.body.appendChild(modal);
+            }
+            
+            // Gerar HTML das questões
+            let questoesHTML = '';
+            questoes.forEach((q, index) => {
+                const opcoes = q.opcoes || ['', '', '', '', ''];
+                
+                questoesHTML += `
+                    <div style="margin-bottom: 30px; padding: 20px; background: #f8fafc; border-radius: 12px; border-left: 4px solid #4f46e5;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                                <span style="background: #4f46e5; color: white; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">
+                                    ${index + 1}
+                                </span>
+                                Questão ${index + 1}
+                            </h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Pergunta</label>
+                            <textarea id="edit-pergunta-${index}" rows="3" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">${q.pergunta || ''}</textarea>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Opções</label>
+                            ${opcoes.map((opcao, optIdx) => {
+                                const letra = String.fromCharCode(65 + optIdx);
+                                const isCorreta = optIdx === q.respostaCorreta;
+                                return `
+                                <div style="display: flex; gap: 10px; margin-bottom: 8px; align-items: center;">
+                                    <span style="font-weight: 600; min-width: 30px;">${letra})</span>
+                                    <input type="text" id="edit-opcao-${index}-${optIdx}" value="${opcao}" style="flex: 1; padding: 8px; border: 2px solid #e5e7eb; border-radius: 6px;">
+                                    <div style="display: flex; align-items: center; gap: 5px;">
+                                        <input type="radio" name="resposta-correta-${index}" value="${optIdx}" ${isCorreta ? 'checked' : ''} onchange="marcarRespostaCorretaProfessor(${index}, ${optIdx})">
+                                        <span>Correta</span>
+                                    </div>
+                                </div>
+                            `}).join('')}
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Explicação</label>
+                            <textarea id="edit-explicacao-${index}" rows="2" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">${q.explicacao || ''}</textarea>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+                    <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px;">
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-edit"></i> Editar Prova
+                        </h3>
+                        <button class="modal-close" onclick="fecharModal('modalEditarProvaProfessor')" style="color: white;">&times;</button>
+                    </div>
+                    
+                    <div style="padding: 25px;">
+                        <!-- Informações básicas -->
+                        <div style="background: #f8fafc; padding: 20px; border-radius: 12px; margin-bottom: 25px;">
+                            <h4 style="margin: 0 0 15px 0;">Informações Básicas</h4>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Título</label>
+                                    <input type="text" id="edit-titulo" value="${prova.titulo || ''}" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                                </div>
+                                
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Conteúdo</label>
+                                    <input type="text" id="edit-conteudo" value="${prova.conteudo || ''}" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                                </div>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Data Limite</label>
+                                    <input type="date" id="edit-data-limite" value="${dataLimiteStr}" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                                </div>
+                                
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Horário Início</label>
+                                    <input type="time" id="edit-horario-inicio" value="${horarioInicio}" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                                </div>
+                                
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Horário Término</label>
+                                    <input type="time" id="edit-horario-termino" value="${horarioTermino}" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Questões -->
+                        <h4 style="margin: 0 0 15px 0;">Questões (${questoes.length})</h4>
+                        <div id="questoes-edit-container">
+                            ${questoesHTML}
+                        </div>
+                        
+                        <input type="hidden" id="questoes-count" value="${questoes.length}">
+                        
+                        <!-- Botões -->
+                        <div style="display: flex; gap: 10px; margin-top: 25px;">
+                            <button onclick="salvarEdicaoProvaProfessor('${provaId}')" style="flex: 1; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                            <button onclick="fecharModal('modalEditarProvaProfessor')" style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.style.display = 'flex';
+        }
+
+        // ============ MARCAR RESPOSTA CORRETA (PROFESSOR) ============
+        window.marcarRespostaCorretaProfessor = function(questaoIndex, opcaoIndex) {
+            console.log(`✅ Questão ${questaoIndex} - Resposta correta: ${opcaoIndex}`);
+        };
+
+        // ============ SALVAR EDIÇÃO DA PROVA (PROFESSOR) - VERSÃO CORRIGIDA ============
+        async function salvarEdicaoProvaProfessor(provaId) {
+            try {
+                mostrarAlerta('alertMinhasProvas', '💾 Salvando alterações...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                
+                // Coletar dados básicos
+                const dados = {
+                    titulo: document.getElementById('edit-titulo')?.value,
+                    conteudo: document.getElementById('edit-conteudo')?.value,
+                    dataLimite: document.getElementById('edit-data-limite')?.value,
+                    horarioInicio: document.getElementById('edit-horario-inicio')?.value,
+                    horarioTermino: document.getElementById('edit-horario-termino')?.value,
+                    questoes: []
+                };
+                
+                const totalQuestoes = parseInt(document.getElementById('questoes-count')?.value || '0');
+                
+                // Coletar questões
+                for (let i = 0; i < totalQuestoes; i++) {
+                    const pergunta = document.getElementById(`edit-pergunta-${i}`)?.value;
+                    const explicacao = document.getElementById(`edit-explicacao-${i}`)?.value;
+                    
+                    // Coletar opções
+                    const opcoes = [];
+                    let respostaCorreta = 0;
+                    
+                    // Descobrir qual opção está marcada como correta
+                    const radios = document.getElementsByName(`resposta-correta-${i}`);
+                    for (let r of radios) {
+                        if (r.checked) {
+                            respostaCorreta = parseInt(r.value);
+                            break;
+                        }
+                    }
+                    
+                    // Coletar textos das opções
+                    for (let j = 0; j < 5; j++) {
+                        const opcao = document.getElementById(`edit-opcao-${i}-${j}`)?.value;
+                        if (opcao) {
+                            opcoes.push(opcao);
+                        }
+                    }
+                    
+                    dados.questoes.push({
+                        pergunta,
+                        opcoes,
+                        respostaCorreta,
+                        explicacao
+                    });
+                }
+                
+                console.log('📤 Enviando dados para:', `/api/professor/provas/${provaId}`);
+                console.log('📦 Dados:', dados);
+                
+                // 🔥 CORREÇÃO: Usar rota de professor, não de admin
+                const response = await fetch(`/api/professor/provas/${provaId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                // Verificar se a resposta é JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+                    throw new Error('Resposta do servidor não é JSON');
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarAlerta('alertMinhasProvas', '✅ Prova atualizada com sucesso!', 'success');
+                    fecharModal('modalEditarProvaProfessor');
+                    
+                    // Recarregar lista de provas
+                    setTimeout(() => {
+                        if (typeof carregarProvasProfessor === 'function') {
+                            carregarProvasProfessor();
+                        }
+                    }, 1500);
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                mostrarAlerta('alertMinhasProvas', '❌ ' + error.message, 'error');
+            }
         }
 
         // Atualizar select de turmas
