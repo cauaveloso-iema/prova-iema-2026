@@ -1839,7 +1839,8 @@
         sairDaProva() {
             // Marcar prova como cancelada
             if (monitoramento) {
-                monitoramento.cancelarProva('Usuário saiu voluntariamente da prova');
+                // 🔥 GARANTIR ENVIO PARA O SERVIDOR
+                monitoramento.cancelarProvaNoServidor('Usuário saiu voluntariamente da prova');
             } else {
                 // Limpar dados da prova
                 if (prova && prova._id) {
@@ -2422,23 +2423,23 @@
             const saidaModal = document.getElementById('saidaModal');
             if (saidaModal) saidaModal.classList.remove('active');
             
-            // Registrar no servidor - PASSANDO O MOTIVO!
-            this.monitoramento?.cancelarProvaNoServidor(motivo);
+            // 🔥 GARANTIR ENVIO PARA O SERVIDOR
+            this.cancelarProvaNoServidor(motivo);
             
             // Mostrar tela de cancelamento
             const cancelStats = document.getElementById('cancelStats');
             if (cancelStats) {
                 cancelStats.innerHTML = `
                     <div class="stat">
-                        <div class="stat-value">${this.monitoramento?.avisos || 0}</div>
+                        <div class="stat-value">${this.avisos || 0}</div>
                         <div class="stat-label">Avisos</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-value">${this.monitoramento?.tentativasAtalho || 0}</div>
+                        <div class="stat-value">${this.tentativasAtalho || 0}</div>
                         <div class="stat-label">Atalhos</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-value">${this.monitoramento?.screenshots || 0}</div>
+                        <div class="stat-value">${this.screenshots || 0}</div>
                         <div class="stat-label">Capturas</div>
                     </div>
                     <div class="stat">
@@ -2458,7 +2459,7 @@
             // Chamar a função que mostra a tela de cancelamento
             bloquearTelaCompletamente(30);
         }
-        
+                
         mostrarModalAviso() {
             if (this.isModalOpen) return;
             
@@ -2673,7 +2674,7 @@
                 motivoElement.textContent = motivo;
             }
             
-            // CHAMAR FUNÇÃO PARA CANCELAR PROVA NO SERVIDOR COM MOTIVO!
+            // 🔥 GARANTIR ENVIO PARA O SERVIDOR
             this.cancelarProvaNoServidor(motivo);
             
             const cancelStats = document.getElementById('cancelStats');
@@ -2744,7 +2745,6 @@
                     
                     await this.enviarNotificacaoCancelamento(motivo);
                     
-                    // 🔥 CHAMADA CORRETA - A ÚNICA LINHA QUE PRECISA!
                     bloquearTelaCompletamente(30);
                     
                 } else {
@@ -4398,7 +4398,6 @@
         }
         
         // ============ EVENTO BEFOREUNLOAD COM SEND BEACON ============
-        // ============ EVENTO BEFOREUNLOAD CORRIGIDO COM LOCALSTORAGE ============
         window.addEventListener('beforeunload', function(e) {
             // 🔥 VERIFICAR PRIMEIRO NO LOCALSTORAGE (MAIS CONFIÁVEL)
             if (prova && prova._id) {
@@ -4445,7 +4444,7 @@
                             
                             const blob = new Blob([JSON.stringify(dadosCancelamento)], { type: 'application/json' });
                             navigator.sendBeacon(
-                                `${API_BASE_URL}/provas/${prova._id}/cancelar?token=${encodeURIComponent(token)}`,
+                                `${API_BASE_URL}/provas/${prova._id}/cancelar`,
                                 blob
                             );
                             console.log('📤 Requisição de cancelamento enviada via sendBeacon');
@@ -4693,6 +4692,11 @@
     })();
         
     </script>
+
+    <script>
+    // Marcar a página como página de prova para o CSS
+    document.documentElement.setAttribute('data-page', 'realizar-prova');
+</script>
 
 </body>
 </html>

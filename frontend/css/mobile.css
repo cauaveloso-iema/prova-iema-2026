@@ -504,3 +504,209 @@
         right: max(10px, env(safe-area-inset-right)) !important;
     }
 }
+
+/* ==================================================
+   AJUSTES FINAIS - PROVA (VERSÃO DEFINITIVA)
+   ADICIONADO NO FINAL - NÃO REMOVER NADA ACIMA
+   ================================================== */
+
+@media screen and (max-width: 768px) {
+    
+    /* ----- AUMENTAR O CABEÇALHO ----- */
+    html[data-page="realizar-prova"] .prova-header {
+        padding: 12px 12px !important;
+        min-height: 80px !important;
+        background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%) !important;
+    }
+
+    html[data-page="realizar-prova"] .prova-header h1 {
+        font-size: 1.3rem !important;
+        margin: 0 !important;
+        color: white !important;
+    }
+
+    /* ----- INDICADOR MONITORADO PULSANTE (VERMELHO) ----- */
+    html[data-page="realizar-prova"] .prova-header::after {
+        content: "● MONITORADO" !important;
+        position: absolute !important;
+        top: 5px !important;
+        left: 5px !important;
+        font-size: 0.55rem !important;
+        background: rgba(0,0,0,0.6) !important;
+        color: #ff4444 !important;
+        padding: 2px 5px !important;
+        border-radius: 4px !important;
+        letter-spacing: 0.5px !important;
+        z-index: 100 !important;
+        animation: pulse 1.5s infinite !important;
+        font-weight: 500 !important;
+    }
+
+    @keyframes pulse {
+        0% { opacity: 0.7; }
+        50% { opacity: 1; }
+        100% { opacity: 0.7; }
+    }
+
+    /* ----- REMOVER TODOS OS ELEMENTOS DE ACESSIBILIDADE E MONITORAMENTO ----- */
+    html[data-page="realizar-prova"] .monitor-panel,
+    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
+    html[data-page="realizar-prova"] #monitorHelp,
+    html[data-page="realizar-prova"] .btn-logout,
+    html[data-page="realizar-prova"] .btn-sair-prova,
+    html[data-page="realizar-prova"] .btn-finalizar-menu {
+        display: none !important;
+    }
+
+    /* ----- REMOVER O BOTÃO VERMELHO DE FINALIZAR ----- */
+    html[data-page="realizar-prova"] .btn-sair-prova,
+    html[data-page="realizar-prova"] .btn-finalizar-prova:not(#btnFinalizarPagina) {
+        display: none !important;
+    }
+
+    /* ----- REMOVER O MENU RÁPIDO DE QUESTÕES (NÚMEROS 1-10) ----- */
+    html[data-page="realizar-prova"] #menuQuestoesRapido,
+    html[data-page="realizar-prova"] [id*="menuQuestoes"],
+    html[data-page="realizar-prova"] [class*="menu-questoes"],
+    html[data-page="realizar-prova"] .questoes-grid,
+    html[data-page="realizar-prova"] [class*="questoes-grid"],
+    html[data-page="realizar-prova"] .btn-questao-rapida,
+    html[data-page="realizar-prova"] [class*="btn-questao"] {
+        display: none !important;
+    }
+
+    /* ----- GARANTIR QUE O NÚMERO DO ENUNCIADO CONTINUE VISÍVEL ----- */
+    html[data-page="realizar-prova"] .questao-numero {
+        display: flex !important;
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 1rem !important;
+        background: #4f46e5 !important;
+        margin-bottom: 15px !important;
+        border-radius: 50% !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: white !important;
+        font-weight: bold !important;
+    }
+
+    /* ----- AJUSTAR O CARD DAS QUESTÕES ----- */
+    html[data-page="realizar-prova"] .questao-card {
+        padding: 18px 16px !important;
+        margin: 12px 8px !important;
+        border-radius: 14px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+    }
+
+    html[data-page="realizar-prova"] .questao-texto {
+        font-size: 1.1rem !important;
+        line-height: 1.5 !important;
+        margin-bottom: 18px !important;
+        font-weight: 500 !important;
+    }
+
+    /* ----- AJUSTAR AS OPÇÕES ----- */
+    html[data-page="realizar-prova"] .opcao {
+        padding: 14px 16px !important;
+        margin-bottom: 10px !important;
+        border-radius: 10px !important;
+        border: 2px solid #e5e7eb !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao-letra {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 1rem !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao-texto {
+        font-size: 1rem !important;
+        line-height: 1.4 !important;
+    }
+
+    /* ----- AJUSTAR A BARRA DE NAVEGAÇÃO ----- */
+    html[data-page="realizar-prova"] .navegacao-container {
+        padding: 10px 12px !important;
+    }
+
+    html[data-page="realizar-prova"] .navegacao-container button {
+        padding: 10px 16px !important;
+        font-size: 0.9rem !important;
+        min-width: 90px !important;
+    }
+
+    html[data-page="realizar-prova"] #btnFinalizarPagina {
+        padding: 10px 18px !important;
+        font-size: 0.95rem !important;
+        min-width: 100px !important;
+    }
+
+    html[data-page="realizar-prova"] .contador-questao {
+        font-size: 0.95rem !important;
+        padding: 8px 12px !important;
+        min-width: 80px !important;
+    }
+
+    /* ----- AJUSTAR AS INFORMAÇÕES DA PROVA ----- */
+    html[data-page="realizar-prova"] #infoHorario {
+        margin: 12px 0 8px 0 !important;
+        padding: 6px 14px !important;
+        font-size: 0.8rem !important;
+    }
+
+    html[data-page="realizar-prova"] .meta-item {
+        padding: 5px 12px !important;
+        font-size: 0.8rem !important;
+    }
+
+    html[data-page="realizar-prova"] .timer-container {
+        padding: 5px 14px !important;
+        font-size: 0.85rem !important;
+        min-width: 80px !important;
+    }
+}
+
+/* ===== TELAS MUITO PEQUENAS ===== */
+@media screen and (max-width: 480px) {
+    
+    html[data-page="realizar-prova"] .prova-header::after {
+        font-size: 0.5rem !important;
+        padding: 1px 4px !important;
+    }
+
+    html[data-page="realizar-prova"] .questao-numero {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 0.9rem !important;
+    }
+
+    html[data-page="realizar-prova"] .questao-texto {
+        font-size: 1rem !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao {
+        padding: 12px 14px !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao-texto {
+        font-size: 0.95rem !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao-letra {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 0.95rem !important;
+    }
+
+    html[data-page="realizar-prova"] .navegacao-container button {
+        padding: 8px 12px !important;
+        font-size: 0.85rem !important;
+        min-width: 70px !important;
+    }
+
+    html[data-page="realizar-prova"] #btnFinalizarPagina {
+        padding: 8px 14px !important;
+        font-size: 0.85rem !important;
+        min-width: 80px !important;
+    }
+}
