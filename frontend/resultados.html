@@ -2445,6 +2445,89 @@
 
     </script>
 
+    <script>
+// ============================================
+// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+// ============================================
+
+(function() {
+    // Só ativar em telas menores que 768px
+    if (window.innerWidth > 768) {
+        console.log('📐 Desktop detectado - escalonamento desativado');
+        return;
+    }
+    
+    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+    
+    // Função para calcular a escala baseada na largura (apenas mobile)
+    function calcularEscalaMobile() {
+        const width = window.innerWidth;
+        
+        // Largura de referência para mobile (768px)
+        const baseWidth = 768;
+        
+        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
+        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+        
+        // Ajustes específicos para faixas de tamanho
+        if (width <= 320) escala = 0.55;
+        else if (width <= 360) escala = 0.6;
+        else if (width <= 400) escala = 0.65;
+        else if (width <= 500) escala = 0.75;
+        else if (width <= 600) escala = 0.85;
+        else if (width <= 700) escala = 0.95;
+        else escala = 1;
+        
+        return escala;
+    }
+    
+    // Função para aplicar a escala
+    function aplicarEscalaMobile() {
+        // Só aplicar se ainda estiver em mobile
+        if (window.innerWidth > 768) return;
+        
+        const escala = calcularEscalaMobile();
+        
+        // Atualizar variável CSS
+        document.documentElement.style.setProperty('--scale-ratio', escala);
+        document.documentElement.style.setProperty('--current-width', window.innerWidth);
+        
+        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+    }
+    
+    // Aplicar inicial
+    aplicarEscalaMobile();
+    
+    // Aplicar ao redimensionar (com debounce)
+    let timeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            // Verificar se ainda está em mobile
+            if (window.innerWidth <= 768) {
+                aplicarEscalaMobile();
+            } else {
+                // Se passou para desktop, resetar escala
+                document.documentElement.style.setProperty('--scale-ratio', '1');
+                console.log('📐 Modo desktop - escala resetada');
+            }
+        }, 100);
+    });
+    
+    // Também aplicar quando orientação mudar
+    window.addEventListener('orientationchange', function() {
+        setTimeout(() => {
+            if (window.innerWidth <= 768) {
+                aplicarEscalaMobile();
+            }
+        }, 200);
+    });
+    
+    console.log('✅ Sistema de escalonamento mobile ativo!');
+    
+})();
+</script>
+
     
 </body>
 </html>

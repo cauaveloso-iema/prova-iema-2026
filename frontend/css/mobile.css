@@ -710,3 +710,475 @@
         min-width: 80px !important;
     }
 }
+
+/* ==================================================
+   SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+   ================================================== */
+
+/* Variáveis base - só são aplicadas em mobile */
+@media screen and (max-width: 768px) {
+    :root {
+        --base-width: 768; /* Largura de referência para mobile */
+        --current-width: 768;
+        --scale-ratio: 1;
+    }
+}
+
+/* Escalonamento apenas para telas menores que 768px */
+@media screen and (max-width: 768px) {
+    
+    /* Calcular escala baseado na largura atual */
+    :root {
+        --current-width: 768; /* Será atualizado via JS */
+        --scale-ratio: calc(var(--current-width) / 768);
+    }
+    
+    /* Ajuste automático para telas menores */
+    @media screen and (max-width: 700px) {
+        :root { --scale-ratio: 0.95; }
+    }
+    
+    @media screen and (max-width: 600px) {
+        :root { --scale-ratio: 0.85; }
+    }
+    
+    @media screen and (max-width: 500px) {
+        :root { --scale-ratio: 0.75; }
+    }
+    
+    @media screen and (max-width: 400px) {
+        :root { --scale-ratio: 0.65; }
+    }
+    
+    @media screen and (max-width: 360px) {
+        :root { --scale-ratio: 0.6; }
+    }
+    
+    @media screen and (max-width: 320px) {
+        :root { --scale-ratio: 0.55; }
+    }
+    
+    /* APLICAR ESCALA APENAS EM MOBILE */
+    
+    /* Aplicar escala a elementos principais */
+    .container,
+    .main-content,
+    .content-area,
+    .section,
+    .card,
+    .stat-card,
+    .turma-card,
+    .prova-card,
+    .modal-content,
+    .form-container,
+    .table-container {
+        padding: calc(20px * var(--scale-ratio)) !important;
+        margin: calc(15px * var(--scale-ratio)) !important;
+        border-radius: calc(10px * var(--scale-ratio)) !important;
+    }
+    
+    /* Ajustar fontes proporcionalmente */
+    h1 { font-size: calc(32px * var(--scale-ratio)) !important; }
+    h2 { font-size: calc(28px * var(--scale-ratio)) !important; }
+    h3 { font-size: calc(24px * var(--scale-ratio)) !important; }
+    h4 { font-size: calc(20px * var(--scale-ratio)) !important; }
+    p, span, div, li { font-size: calc(16px * var(--scale-ratio)) !important; }
+    small { font-size: calc(14px * var(--scale-ratio)) !important; }
+    
+    /* Botões e inputs */
+    button,
+    .btn,
+    .button,
+    .btn-primary,
+    .btn-secondary,
+    .btn-logout,
+    .btn-entrar-turma,
+    input,
+    select,
+    textarea {
+        font-size: calc(16px * var(--scale-ratio)) !important;
+        padding: calc(10px * var(--scale-ratio)) calc(20px * var(--scale-ratio)) !important;
+        min-height: calc(44px * var(--scale-ratio)) !important;
+        border-radius: calc(8px * var(--scale-ratio)) !important;
+    }
+    
+    /* Ícones */
+    i, .fas, .far, .fab {
+        font-size: calc(18px * var(--scale-ratio)) !important;
+    }
+    
+    /* Títulos de página */
+    .page-title,
+    .header-title {
+        font-size: calc(28px * var(--scale-ratio)) !important;
+        margin-bottom: calc(15px * var(--scale-ratio)) !important;
+    }
+    
+    /* Cards de estatística */
+    .stat-number {
+        font-size: calc(32px * var(--scale-ratio)) !important;
+    }
+    
+    .stat-label {
+        font-size: calc(14px * var(--scale-ratio)) !important;
+    }
+    
+    .stat-icon {
+        width: calc(50px * var(--scale-ratio)) !important;
+        height: calc(50px * var(--scale-ratio)) !important;
+        font-size: calc(24px * var(--scale-ratio)) !important;
+    }
+    
+    /* Tabelas */
+    table th,
+    table td {
+        padding: calc(12px * var(--scale-ratio)) calc(16px * var(--scale-ratio)) !important;
+        font-size: calc(14px * var(--scale-ratio)) !important;
+    }
+    
+    /* Modais */
+    .modal-content {
+        width: calc(500px * var(--scale-ratio)) !important;
+        max-width: calc(500px * var(--scale-ratio)) !important;
+    }
+    
+    /* Sidebar */
+    .sidebar {
+        width: calc(280px * var(--scale-ratio)) !important;
+    }
+    
+    .sidebar .nav-item {
+        padding: calc(12px * var(--scale-ratio)) calc(16px * var(--scale-ratio)) !important;
+        font-size: calc(16px * var(--scale-ratio)) !important;
+    }
+    
+    /* Grids responsivas */
+    .stats-grid {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(calc(250px * var(--scale-ratio)), 1fr)) !important;
+        gap: calc(20px * var(--scale-ratio)) !important;
+    }
+    
+    .cards-grid {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(calc(300px * var(--scale-ratio)), 1fr)) !important;
+        gap: calc(20px * var(--scale-ratio)) !important;
+    }
+    
+    /* Espaçamentos */
+    .mt-1 { margin-top: calc(4px * var(--scale-ratio)) !important; }
+    .mt-2 { margin-top: calc(8px * var(--scale-ratio)) !important; }
+    .mt-3 { margin-top: calc(16px * var(--scale-ratio)) !important; }
+    .mt-4 { margin-top: calc(24px * var(--scale-ratio)) !important; }
+    .mt-5 { margin-top: calc(32px * var(--scale-ratio)) !important; }
+    
+    .mb-1 { margin-bottom: calc(4px * var(--scale-ratio)) !important; }
+    .mb-2 { margin-bottom: calc(8px * var(--scale-ratio)) !important; }
+    .mb-3 { margin-bottom: calc(16px * var(--scale-ratio)) !important; }
+    .mb-4 { margin-bottom: calc(24px * var(--scale-ratio)) !important; }
+    .mb-5 { margin-bottom: calc(32px * var(--scale-ratio)) !important; }
+    
+    .p-1 { padding: calc(4px * var(--scale-ratio)) !important; }
+    .p-2 { padding: calc(8px * var(--scale-ratio)) !important; }
+    .p-3 { padding: calc(16px * var(--scale-ratio)) !important; }
+    .p-4 { padding: calc(24px * var(--scale-ratio)) !important; }
+    .p-5 { padding: calc(32px * var(--scale-ratio)) !important; }
+}
+
+
+/* ==================================================
+   CORREÇÃO PARA MODO PAISAGEM NA PÁGINA DE PROVA - APENAS MOBILE/TABLET
+   ================================================== */
+
+/* DISPOSITIVOS MÓVEIS EM PAISAGEM (celulares e tablets pequenos) */
+@media screen and (max-width: 1024px) and (orientation: landscape) {
+    
+    /* Garantir que os elementos de acessibilidade e monitoramento continuem OCULTOS */
+    html[data-page="realizar-prova"] .monitor-panel,
+    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
+    html[data-page="realizar-prova"] #monitorHelp,
+    html[data-page="realizar-prova"] .btn-logout,
+    html[data-page="realizar-prova"] .btn-sair-prova,
+    html[data-page="realizar-prova"] .btn-finalizar-menu {
+        display: none !important;
+    }
+
+    /* Garantir que o menu rápido de questões continue OCULTO */
+    html[data-page="realizar-prova"] #menuQuestoesRapido,
+    html[data-page="realizar-prova"] [id*="menuQuestoes"],
+    html[data-page="realizar-prova"] [class*="menu-questoes"],
+    html[data-page="realizar-prova"] .questoes-grid,
+    html[data-page="realizar-prova"] [class*="questoes-grid"],
+    html[data-page="realizar-prova"] .btn-questao-rapida,
+    html[data-page="realizar-prova"] [class*="btn-questao"] {
+        display: none !important;
+    }
+
+    /* Garantir que o número do enunciado continue VISÍVEL */
+    html[data-page="realizar-prova"] .questao-numero {
+        display: flex !important;
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 1rem !important;
+        background: #4f46e5 !important;
+        margin-bottom: 15px !important;
+        border-radius: 50% !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: white !important;
+        font-weight: bold !important;
+    }
+
+    /* Ajustar o card das questões para paisagem */
+    html[data-page="realizar-prova"] .questao-card {
+        padding: 15px !important;
+        margin: 8px !important;
+        border-radius: 12px !important;
+    }
+
+    /* Ajustar o texto da questão */
+    html[data-page="realizar-prova"] .questao-texto {
+        font-size: 1rem !important;
+        line-height: 1.4 !important;
+        margin-bottom: 15px !important;
+    }
+
+    /* Ajustar as opções */
+    html[data-page="realizar-prova"] .opcao {
+        padding: 10px 12px !important;
+        margin-bottom: 8px !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao-letra {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 0.9rem !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao-texto {
+        font-size: 0.9rem !important;
+    }
+
+    /* Ajustar a barra de navegação */
+    html[data-page="realizar-prova"] .navegacao-container {
+        padding: 8px 10px !important;
+    }
+
+    html[data-page="realizar-prova"] .navegacao-container button {
+        padding: 8px 14px !important;
+        font-size: 0.85rem !important;
+        min-width: 80px !important;
+    }
+
+    html[data-page="realizar-prova"] #btnFinalizarPagina {
+        padding: 8px 16px !important;
+        font-size: 0.9rem !important;
+        min-width: 90px !important;
+    }
+
+    html[data-page="realizar-prova"] .contador-questao {
+        font-size: 0.85rem !important;
+        padding: 6px 10px !important;
+        min-width: 70px !important;
+    }
+
+    /* Ajustar o header da prova */
+    html[data-page="realizar-prova"] .prova-header {
+        padding: 8px 12px !important;
+        min-height: 60px !important;
+    }
+
+    html[data-page="realizar-prova"] .prova-header h1 {
+        font-size: 1.1rem !important;
+    }
+
+    html[data-page="realizar-prova"] .prova-header p {
+        font-size: 0.8rem !important;
+        margin: 2px 0 !important;
+    }
+
+    /* Ajustar badge de período */
+    html[data-page="realizar-prova"] #periodoBadge {
+        margin: 2px 0 !important;
+        padding: 2px 8px !important;
+        font-size: 0.7rem !important;
+    }
+
+    /* Ajustar informações de horário */
+    html[data-page="realizar-prova"] #infoHorario {
+        margin: 5px 0 !important;
+        padding: 4px 8px !important;
+        font-size: 0.7rem !important;
+    }
+
+    /* Ajustar meta items */
+    html[data-page="realizar-prova"] .meta-item {
+        padding: 3px 8px !important;
+        font-size: 0.7rem !important;
+    }
+
+    html[data-page="realizar-prova"] .timer-container {
+        padding: 3px 10px !important;
+        font-size: 0.75rem !important;
+        min-width: 70px !important;
+    }
+
+    /* Ajustar container das questões */
+    html[data-page="realizar-prova"] .questao-container-wrapper {
+        max-height: calc(100vh - 100px) !important;
+    }
+
+    /* Ajustar progresso */
+    html[data-page="realizar-prova"] .progresso-container {
+        padding: 5px 10px !important;
+    }
+
+    html[data-page="realizar-prova"] .progresso {
+        font-size: 0.75rem !important;
+    }
+
+    /* Manter o indicador MONITORADO visível */
+    html[data-page="realizar-prova"] .prova-header::after {
+        content: "● MONITORADO" !important;
+        position: absolute !important;
+        top: 5px !important;
+        left: 5px !important;
+        font-size: 0.55rem !important;
+        background: rgba(0,0,0,0.6) !important;
+        color: #ff4444 !important;
+        padding: 2px 5px !important;
+        border-radius: 4px !important;
+        letter-spacing: 0.5px !important;
+        z-index: 100 !important;
+        animation: pulse 1.5s infinite !important;
+        font-weight: 500 !important;
+    }
+}
+
+/* Ajustes para telas muito pequenas em paisagem - apenas mobile/tablet */
+@media screen and (max-width: 1024px) and (orientation: landscape) and (max-height: 500px) {
+    
+    html[data-page="realizar-prova"] .prova-header {
+        min-height: 50px !important;
+        padding: 5px 10px !important;
+    }
+
+    html[data-page="realizar-prova"] .prova-header h1 {
+        font-size: 1rem !important;
+    }
+
+    html[data-page="realizar-prova"] .prova-header p,
+    html[data-page="realizar-prova"] #periodoBadge,
+    html[data-page="realizar-prova"] #infoHorario {
+        display: none !important;
+    }
+
+    html[data-page="realizar-prova"] .questao-card {
+        padding: 10px !important;
+        margin: 5px !important;
+    }
+
+    html[data-page="realizar-prova"] .questao-numero {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 0.8rem !important;
+        margin-bottom: 8px !important;
+    }
+
+    html[data-page="realizar-prova"] .questao-texto {
+        font-size: 0.85rem !important;
+        margin-bottom: 8px !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao {
+        padding: 6px 8px !important;
+    }
+
+    html[data-page="realizar-prova"] .opcao-letra {
+        width: 22px !important;
+        height: 22px !important;
+        font-size: 0.7rem !important;
+    }
+
+    html[data-page="realizar-prova"] .navegacao-container button {
+        padding: 5px 10px !important;
+        font-size: 0.7rem !important;
+        min-width: 60px !important;
+    }
+}
+
+/* ===== SOBRESCREVER QUALQUER REGRA ANTERIOR - APENAS MOBILE/TABLET ===== */
+@media screen and (max-width: 1024px) and (orientation: landscape) {
+    /* Garantir que nenhuma regra anterior sobreponha estas */
+    html[data-page="realizar-prova"] .monitor-panel,
+    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
+    html[data-page="realizar-prova"] #monitorHelp,
+    html[data-page="realizar-prova"] #menuQuestoesRapido {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+}
+
+/* ===== MODO RETRATO MOBILE (MANTENDO O QUE JÁ EXISTIA) ===== */
+@media screen and (max-width: 768px) and (orientation: portrait) {
+    /* Suas regras existentes para modo retrato - NÃO MODIFICADO */
+    html[data-page="realizar-prova"] .monitor-panel,
+    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
+    html[data-page="realizar-prova"] #monitorHelp,
+    html[data-page="realizar-prova"] .btn-logout,
+    html[data-page="realizar-prova"] .btn-sair-prova,
+    html[data-page="realizar-prova"] .btn-finalizar-menu,
+    html[data-page="realizar-prova"] #menuQuestoesRapido {
+        display: none !important;
+    }
+}
+
+/* Garantia de que elementos de monitoramento e menu de questões estão ocultos em QUALQUER mobile/tablet (até 1024px) */
+@media screen and (max-width: 1024px) {
+    html[data-page="realizar-prova"] .monitor-panel,
+    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
+    html[data-page="realizar-prova"] #monitorHelp,
+    html[data-page="realizar-prova"] .btn-logout,
+    html[data-page="realizar-prova"] .btn-sair-prova,
+    html[data-page="realizar-prova"] .btn-finalizar-menu,
+    html[data-page="realizar-prova"] #menuQuestoesRapido,
+    html[data-page="realizar-prova"] [id*="menuQuestoes"],
+    html[data-page="realizar-prova"] [class*="menu-questoes"],
+    html[data-page="realizar-prova"] .questoes-grid,
+    html[data-page="realizar-prova"] [class*="questoes-grid"],
+    html[data-page="realizar-prova"] .btn-questao-rapida,
+    html[data-page="realizar-prova"] [class*="btn-questao"] {
+        display: none !important;
+    }
+}
+
+/* ===== RESET PARA DESKTOP - APENAS ACIMA DE 1024px ===== */
+@media screen and (min-width: 1025px) {
+    /* Garantir que todos os elementos voltem ao normal no desktop */
+    html[data-page="realizar-prova"] .monitor-panel,
+    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
+    html[data-page="realizar-prova"] #monitorHelp,
+    html[data-page="realizar-prova"] .btn-logout,
+    html[data-page="realizar-prova"] .btn-sair-prova,
+    html[data-page="realizar-prova"] .btn-finalizar-menu,
+    html[data-page="realizar-prova"] #menuQuestoesRapido,
+    html[data-page="realizar-prova"] [id*="menuQuestoes"],
+    html[data-page="realizar-prova"] [class*="menu-questoes"],
+    html[data-page="realizar-prova"] .questoes-grid,
+    html[data-page="realizar-prova"] [class*="questoes-grid"],
+    html[data-page="realizar-prova"] .btn-questao-rapida,
+    html[data-page="realizar-prova"] [class*="btn-questao"] {
+        display: revert !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+}
+
+/* ===== RESET PARA TABLETS GRANDES EM PAISAGEM (NÃO SÃO DESKTOP) ===== */
+@media screen and (min-width: 1025px) and (orientation: landscape) {
+    /* Tablets grandes como iPad Pro em paisagem ainda são tablets, não desktop */
+    /* Mantém elementos ocultos se necessário */
+}
