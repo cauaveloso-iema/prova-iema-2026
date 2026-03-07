@@ -1625,92 +1625,73 @@
             }, true);
         }
         
+        // ============ GESTOS MOBILE - MENOS AGRESSIVO ============
         bloquearGestosMobile() {
-            // BLOQUEAR COMPLETAMENTE gestos de navegação em mobile
+            // NÃO BLOQUEAR MAIS O PULL-TO-REFRESH COMPLETAMENTE
+            // Apenas monitorar e deixar o navegador lidar com isso
             
-            let touchStartX = 0;
             let touchStartY = 0;
+            let touchStartX = 0;
             let isScrolling = false;
+            let isPullToRefresh = false;
+            let touchStartTime = 0;
             
             document.addEventListener('touchstart', (e) => {
-                // Verificar se é elemento seguro
+                // Verificar se é elemento seguro (VLibras, botões, etc)
                 if (this.verificarElementoSeguro(e.target)) {
                     return;
                 }
                 
-                touchStartX = e.changedTouches[0].screenX;
-                touchStartY = e.changedTouches[0].screenY;
+                touchStartY = e.touches[0].clientY;
+                touchStartX = e.touches[0].clientX;
+                touchStartTime = Date.now();
                 isScrolling = false;
+                isPullToRefresh = false;
             }, { passive: true });
             
             document.addEventListener('touchmove', (e) => {
-                const touchY = e.changedTouches[0].clientY;
-                const touchX = e.changedTouches[0].clientX;
+                // Se não temos posição inicial, ignorar
+                if (touchStartY === 0) return;
                 
-                // Detectar se é scroll vertical (permitido) ou horizontal (navegação - bloqueado)
-                const diffX = Math.abs(touchX - touchStartX);
-                const diffY = Math.abs(touchY - touchStartY);
+                const touchY = e.touches[0].clientY;
+                const touchX = e.touches[0].clientX;
+                const deltaY = touchY - touchStartY;
+                const deltaX = touchX - touchStartX;
                 
-                if (diffY > diffX) {
-                    isScrolling = true; // É scroll vertical - permitir
+                // Detectar se é scroll vertical
+                if (Math.abs(deltaY) > Math.abs(deltaX)) {
+                    isScrolling = true;
+                    
+                    // SÓ BLOQUEAR SE FOR PULL-TO-REFRESH EXTREMO
+                    // E NÃO FOR EM ELEMENTO SEGURO
+                    if (deltaY > 100 && window.scrollY < 10 && !this.verificarElementoSeguro(e.target)) {
+                        // MUITO MAIS TOLERANTE - só bloqueia se passar de 200px
+                        if (deltaY > 200) {
+                            e.preventDefault();
+                            isPullToRefresh = true;
+                        }
+                    }
                 }
-            }, { passive: true });
+            }, { passive: false });
             
             document.addEventListener('touchend', (e) => {
-                // Verificar se é elemento seguro
-                if (this.verificarElementoSeguro(e.target)) {
-                    return;
+                if (touchStartY === 0) return;
+                
+                const deltaY = e.changedTouches[0].clientY - touchStartY;
+                const deltaTime = Date.now() - touchStartTime;
+                
+                // Só considerar pull-to-refresh se foi muito longo e rápido
+                if (deltaY > 200 && deltaTime < 500 && window.scrollY < 10) {
+                    console.log('📱 Pull-to-refresh detectado, mas NÃO será bloqueado');
+                    // Não fazer nada - deixar o navegador lidar
                 }
                 
-                const touchEndX = e.changedTouches[0].screenX;
-                const touchEndY = e.changedTouches[0].screenY;
-                
-                const diffX = touchEndX - touchStartX;
-                const diffY = touchEndY - touchStartY;
-                
-                // Se não era scroll e tem movimento horizontal significativo
-                if (!isScrolling && Math.abs(diffX) > 50 && Math.abs(diffY) < 100) {
-                    e.preventDefault();
-                    
-                    this.refreshTentativas++;
-                    console.log(`📱 Swipe horizontal detectado: ${this.refreshTentativas}`);
-                    
-                    if (this.refreshTentativas >= this.maxRefreshTentativas) {
-                        this.monitoramento?.cancelarProvaPorRefresh('Swipe para navegação em dispositivo móvel');
-                    } else {
-                        this.mostrarAvisoSwipeCritico();
-                    }
-                }
-            }, { passive: false });
-            
-            // Detectar e BLOQUEAR pull-to-refresh
-            let lastTouchY = 0;
-            let isPullToRefresh = false;
-            
-            document.addEventListener('touchmove', (e) => {
-                // Se toque começou no topo da tela
-                if (touchStartY < 50) {
-                    const touchY = e.touches[0].clientY;
-                    
-                    // Se usuário puxou para baixo mais de 100px
-                    if (touchY > lastTouchY + 100) {
-                        isPullToRefresh = true;
-                        e.preventDefault(); // BLOQUEAR COMPLETAMENTE
-                    }
-                    lastTouchY = touchY;
-                }
-            }, { passive: false });
-            
-            document.addEventListener('touchend', () => {
-                if (isPullToRefresh) {
-                    this.refreshTentativas++;
-                    isPullToRefresh = false;
-                    
-                    if (this.refreshTentativas >= this.maxRefreshTentativas) {
-                        this.monitoramento?.cancelarProvaPorRefresh('Pull-to-refresh em dispositivo móvel');
-                    }
-                }
-            }, { passive: false });
+                // Resetar variáveis
+                touchStartY = 0;
+                touchStartX = 0;
+                isScrolling = false;
+                isPullToRefresh = false;
+            }, { passive: true });
         }
         
         mostrarAvisoSwipeCritico() {

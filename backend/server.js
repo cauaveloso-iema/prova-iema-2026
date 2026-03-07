@@ -12630,42 +12630,61 @@ app.get('/api/matriculas-autorizadas/verificar/:matricula', async (req, res) => 
     }
 });
 
-// ============ ROTA PARA BUSCAR PROFESSORES CADASTRADOS ============
+// ============ ROTA PARA BUSCAR TODOS OS USUÁRIOS COM MATRÍCULA (PROFESSORES, ADMINS, SUPER_ADMINS) ============
 app.get('/api/admin/professores-cadastrados', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log(`📋 Admin ${req.userId} buscando professores cadastrados`);
+        console.log(`📋 Admin ${req.userId} buscando usuários com matrícula cadastrada`);
         
-        // Buscar todos os usuários com role = 'professor'
-        const professores = await User.find({ 
-            role: 'professor',
-        }).select('nome email matricula ativo createdAt'); 
+        // 🔥 CORREÇÃO: Buscar TODOS os usuários com matrícula (professor, admin, super_admin)
+        const usuarios = await User.find({ 
+            matricula: { $exists: true, $ne: null, $ne: '' } // Qualquer um que tenha matrícula
+        }).select('nome email matricula ativo createdAt role'); // Incluir role!
+        
+        console.log(`📊 Usuários encontrados com matrícula: ${usuarios.length}`);
         
         // Criar um mapa de matrículas para consulta rápida
-        const professoresMap = {};
-        professores.forEach(prof => {
-            professoresMap[prof.matricula] = {
-                id: prof._id,
-                nome: prof.nome,
-                email: prof.email,
-                ativo: prof.ativo,
-                createdAt: prof.createdAt // 👈 INCLUIR DATA DE CRIAÇÃO
-            };
+        const usuariosMap = {};
+        usuarios.forEach(user => {
+            if (user.matricula) { // Garantir que tem matrícula
+                usuariosMap[user.matricula] = {
+                    id: user._id,
+                    nome: user.nome,
+                    email: user.email,
+                    ativo: user.ativo,
+                    role: user.role, // 🔥 INCLUIR O PERFIL!
+                    createdAt: user.createdAt
+                };
+                
+                // Log para debug
+                console.log(`   → Matrícula: ${user.matricula} | Nome: ${user.nome} | Role: ${user.role} | Ativo: ${user.ativo}`);
+            }
         });
         
-        console.log(`✅ Encontrados ${professores.length} professores`);
+        // Estatísticas por perfil
+        const stats = {
+            total: usuarios.length,
+            professores: usuarios.filter(u => u.role === 'professor').length,
+            admins: usuarios.filter(u => u.role === 'admin').length,
+            superAdmins: usuarios.filter(u => u.role === 'super_admin').length,
+            ativos: usuarios.filter(u => u.ativo === true).length,
+            inativos: usuarios.filter(u => u.ativo === false).length
+        };
+        
+        console.log('✅ Estatísticas:', stats);
         
         res.json({
             success: true,
-            professores: professores,
-            mapa: professoresMap,
-            total: professores.length
+            professores: usuarios, // Mantendo o nome para compatibilidade
+            mapa: usuariosMap,
+            total: usuarios.length,
+            estatisticas: stats // Enviar estatísticas para o frontend
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar professores:', error);
+        console.error('❌ Erro ao buscar usuários com matrícula:', error);
         res.status(500).json({
             success: false,
-            error: 'Erro ao buscar professores: ' + error.message
+            error: 'Erro ao buscar usuários: ' + error.message
         });
     }
 });

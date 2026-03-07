@@ -11278,7 +11278,7 @@ class AdminPanel {
         }
     }
 
-    // ============ CARREGAR MATRÍCULAS (VERSÃO REAL) ============
+    // ============ CARREGAR MATRÍCULAS (VERSÃO CORRIGIDA - TODOS OS PERFIS) ============
     async carregarMatriculas() {
         try {
             const token = localStorage.getItem('auth_token');
@@ -11286,8 +11286,8 @@ class AdminPanel {
             // Mostrar loading
             this.mostrarLoadingTabela();
             
-            // Buscar matrículas autorizadas E professores cadastrados em paralelo
-            const [matriculasRes, professoresRes] = await Promise.all([
+            // Buscar matrículas autorizadas E usuários cadastrados em paralelo
+            const [matriculasRes, usuariosRes] = await Promise.all([
                 fetch('/api/admin/matriculas-autorizadas', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }),
@@ -11297,7 +11297,7 @@ class AdminPanel {
             ]);
             
             const matriculasData = await matriculasRes.json();
-            const professoresData = await professoresRes.json();
+            const usuariosData = await usuariosRes.json();
             
             if (!matriculasData.success) {
                 throw new Error(matriculasData.error || 'Erro ao carregar matrículas');
@@ -11305,16 +11305,17 @@ class AdminPanel {
             
             // Processar dados
             this.matriculas = matriculasData.matriculas || [];
-            this.professoresMap = professoresData.mapa || {};
+            this.usuariosMap = usuariosData.mapa || {};
 
-            // Adicionar informação REAL de cadastro
+            // Adicionar informação REAL de cadastro (para QUALQUER perfil)
             this.matriculas = this.matriculas.map(matricula => {
-                const professorInfo = this.professoresMap[matricula.matricula] || null;
+                const usuarioInfo = this.usuariosMap[matricula.matricula] || null;
                 return {
                     ...matricula,
-                    cadastrado: !!professorInfo,
-                    professorInfo: professorInfo, // Agora inclui nome, email, id, ativo e createdAt
-                    professorAtivo: professorInfo ? professorInfo.ativo : null
+                    cadastrado: !!usuarioInfo,
+                    usuarioInfo: usuarioInfo, // Informações completas do usuário
+                    usuarioAtivo: usuarioInfo ? usuarioInfo.ativo : null,
+                    usuarioRole: usuarioInfo ? usuarioInfo.role : null
                 };
             });
             
@@ -11334,10 +11335,15 @@ class AdminPanel {
             document.getElementById('resultadosEncontrados').textContent = 
                 `${this.matriculasFiltradas.length} resultados`;
             
-            console.log('✅ Matrículas carregadas com dados REAIS:', {
+            console.log('✅ Matrículas carregadas com dados REAIS (todos os perfis):', {
                 total: this.matriculas.length,
                 cadastrados: this.matriculas.filter(m => m.cadastrado).length,
-                pendentes: this.matriculas.filter(m => !m.cadastrado).length
+                pendentes: this.matriculas.filter(m => !m.cadastrado).length,
+                porPerfil: {
+                    superAdmins: this.matriculas.filter(m => m.usuarioRole === 'super_admin').length,
+                    admins: this.matriculas.filter(m => m.usuarioRole === 'admin').length,
+                    professores: this.matriculas.filter(m => m.usuarioRole === 'professor').length
+                }
             });
             
         } catch (error) {
@@ -11387,20 +11393,52 @@ class AdminPanel {
     }
 
 
+    // ============ ATUALIZAR ESTATÍSTICAS (COM TODOS OS PERFIS) ============
     atualizarEstatisticasMatriculas() {
         const total = this.matriculas.length;
         const cadastrados = this.matriculas.filter(m => m.cadastrado).length;
         const pendentes = total - cadastrados;
         
-        document.getElementById('statTotalMatriculas').textContent = total;
-        document.getElementById('statProfessoresCadastrados').textContent = cadastrados;
+        // Calcular quantos de cada perfil
+        let superAdmins = 0;
+        let admins = 0;
+        let professores = 0;
+        
+        this.matriculas.forEach(m => {
+            if (m.cadastrado && m.usuarioInfo) {
+                if (m.usuarioInfo.role === 'super_admin') superAdmins++;
+                else if (m.usuarioInfo.role === 'admin') admins++;
+                else if (m.usuarioInfo.role === 'professor') professores++;
+            }
+        });
+        
+        const statTotalMatriculas = document.getElementById('statTotalMatriculas');
+        const statProfessoresCadastrados = document.getElementById('statProfessoresCadastrados');
+        const statUltimaAtualizacao = document.getElementById('statUltimaAtualizacao');
+        
+        if (statTotalMatriculas) statTotalMatriculas.textContent = total;
+        if (statProfessoresCadastrados) statProfessoresCadastrados.textContent = cadastrados;
         
         const agora = new Date();
-        document.getElementById('statUltimaAtualizacao').textContent = 
-            agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        if (statUltimaAtualizacao) {
+            statUltimaAtualizacao.textContent = agora.toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+        
+        console.log('📊 Estatísticas atualizadas:', {
+            total,
+            cadastrados,
+            pendentes,
+            superAdmins,
+            admins,
+            professores
+        });
     }
 
-    // ============ RENDERIZAR TABELA COM DADOS REAIS (VERSÃO CORRIGIDA) ============
+    // ============ RENDERIZAR TABELA COM DADOS REAIS (VERSÃO CORRIGIDA - TODOS OS PERFIS) ============
     renderizarTabelaMatriculas() {
         const tbody = document.getElementById('tabelaMatriculasBody');
         if (!tbody) return;
@@ -11425,36 +11463,58 @@ class AdminPanel {
         let html = '';
         paginaMatriculas.forEach((item, index) => {
             const cadastrado = item.cadastrado;
-            const statusClass = cadastrado ? 'success' : 'warning';
-            const statusText = cadastrado ? 'Professor cadastrado' : 'Aguardando cadastro';
-            const statusIcon = cadastrado ? 'fa-check-circle' : 'fa-clock';
             
-            const professorInfo = item.professorInfo;
+            // Determinar status e ícone baseado no cadastro
+            let statusClass = cadastrado ? 'success' : 'warning';
+            let statusText = cadastrado ? 'Usuário cadastrado' : 'Aguardando cadastro';
+            let statusIcon = cadastrado ? 'fa-check-circle' : 'fa-clock';
             
-            // 🔴 CORREÇÃO AQUI: Verificar status ATIVO corretamente
-            let professorAtivo = false;
-            let statusProfessorClass = 'secondary';
-            let statusProfessorText = 'Desconhecido';
+            const usuarioInfo = item.usuarioInfo;
             
-            if (professorInfo) {
-                // Verificar o campo 'ativo' - pode vir de diferentes formas
-                if (professorInfo.ativo === true || professorInfo.ativo === 'true' || professorInfo.ativo === 1) {
-                    professorAtivo = true;
-                    statusProfessorClass = 'success';
-                    statusProfessorText = 'Ativo';
-                } else if (professorInfo.ativo === false || professorInfo.ativo === 'false' || professorInfo.ativo === 0) {
-                    professorAtivo = false;
-                    statusProfessorClass = 'secondary';
-                    statusProfessorText = 'Inativo';
-                } else {
-                    // Se não veio informação, considerar como ativo? (default)
-                    professorAtivo = true;
-                    statusProfessorClass = 'success';
-                    statusProfessorText = 'Ativo (default)';
+            // Verificar status ATIVO e ROLE
+            let usuarioAtivo = false;
+            let statusUsuarioClass = 'secondary';
+            let statusUsuarioText = 'Desconhecido';
+            let roleIcon = '';
+            let roleDisplay = '';
+            let roleColor = '';
+            
+            if (usuarioInfo) {
+                // Verificar o campo 'ativo'
+                if (usuarioInfo.ativo === true || usuarioInfo.ativo === 'true' || usuarioInfo.ativo === 1) {
+                    usuarioAtivo = true;
+                    statusUsuarioClass = 'success';
+                    statusUsuarioText = 'Ativo';
+                } else if (usuarioInfo.ativo === false || usuarioInfo.ativo === 'false' || usuarioInfo.ativo === 0) {
+                    usuarioAtivo = false;
+                    statusUsuarioClass = 'secondary';
+                    statusUsuarioText = 'Inativo';
                 }
                 
-                // Log para debug (remover depois)
-                console.log(`Professor ${professorInfo.nome}: ativo =`, professorInfo.ativo, '→', professorAtivo ? 'ATIVO' : 'INATIVO');
+                // DETERMINAR O PERFIL DO USUÁRIO
+                if (usuarioInfo.role) {
+                    switch(usuarioInfo.role) {
+                        case 'super_admin':
+                            roleIcon = '👑';
+                            roleDisplay = 'Super Admin';
+                            roleColor = '#8b5cf6';
+                            break;
+                        case 'admin':
+                            roleIcon = '⚙️';
+                            roleDisplay = 'Admin';
+                            roleColor = '#3b82f6';
+                            break;
+                        case 'professor':
+                            roleIcon = '👨‍🏫';
+                            roleDisplay = 'Professor';
+                            roleColor = '#10b981';
+                            break;
+                        default:
+                            roleIcon = '👤';
+                            roleDisplay = usuarioInfo.role;
+                            roleColor = '#6b7280';
+                    }
+                }
             }
             
             html += `
@@ -11462,30 +11522,34 @@ class AdminPanel {
                     <td><strong>${item.matricula}</strong></td>
                     <td>
                         ${item.nome || 'Nome não informado'}
-                        ${professorInfo ? `<br><small style="color: #6b7280; font-size: 11px;">${professorInfo.nome}</small>` : ''}
+                        ${usuarioInfo ? `<br><small style="color: #6b7280; font-size: 11px;">${usuarioInfo.nome}</small>` : ''}
                     </td>
                     <td>
                         <span class="status-badge ${statusClass}">
                             <i class="fas ${statusIcon}"></i>
                             ${statusText}
                         </span>
-                        ${professorInfo ? `
+                        ${usuarioInfo ? `
                             <br>
-                            <span class="status-badge ${statusProfessorClass}" style="margin-top: 5px;">
+                            <span class="status-badge ${statusUsuarioClass}" style="margin-top: 5px;">
                                 <i class="fas fa-circle"></i>
-                                ${statusProfessorText}
+                                ${statusUsuarioText}
+                            </span>
+                            <br>
+                            <span class="status-badge" style="margin-top: 5px; background: ${roleColor}20; color: ${roleColor}; border: 1px solid ${roleColor}40;">
+                                ${roleIcon} ${roleDisplay}
                             </span>
                         ` : ''}
                     </td>
                     <td>
                         <div class="cadastro-info">
-                            ${professorInfo ? `
-                                <span class="cadastro-data"><i class="fas fa-envelope"></i> ${professorInfo.email || '—'}</span>
+                            ${usuarioInfo ? `
+                                <span class="cadastro-data"><i class="fas fa-envelope"></i> ${usuarioInfo.email || '—'}</span>
                                 <span class="cadastro-data" style="margin-top: 3px;">
-                                    <i class="fas fa-calendar-alt"></i> ${this.formatarData(professorInfo.createdAt)}
+                                    <i class="fas fa-calendar-alt"></i> ${this.formatarData(usuarioInfo.createdAt)}
                                 </span>
                                 <span class="cadastro-por" style="margin-top: 3px;">
-                                    <i class="fas fa-id-card"></i> ID: ${professorInfo.id?.substring(0,8)}...
+                                    <i class="fas fa-id-card"></i> ID: ${usuarioInfo.id?.substring(0,8)}...
                                 </span>
                             ` : '—'}
                         </div>
@@ -11498,27 +11562,31 @@ class AdminPanel {
                             </button>
                             
                             ${cadastrado ? `
-                                <!-- AÇÕES DO PROFESSOR (quando já cadastrado) -->
-                                ${professorAtivo ? `
-                                    <button class="btn-icon warning" onclick="admin.toggleStatusProfessor('${professorInfo.id}', '${professorInfo.nome}', true)" 
-                                            title="Inativar professor (bloquear acesso)">
+                                <!-- AÇÕES DO USUÁRIO (quando já cadastrado) -->
+                                ${usuarioAtivo ? `
+                                    <button class="btn-icon warning" onclick="admin.toggleStatusUsuario('${usuarioInfo.id}', '${usuarioInfo.nome.replace(/'/g, "\\'")}', ${usuarioAtivo})" 
+                                            title="Inativar usuário (bloquear acesso)">
                                         <i class="fas fa-pause-circle"></i>
                                     </button>
                                 ` : `
-                                    <button class="btn-icon success" onclick="admin.toggleStatusProfessor('${professorInfo.id}', '${professorInfo.nome}', false)" 
-                                            title="Reativar professor">
+                                    <button class="btn-icon success" onclick="admin.toggleStatusUsuario('${usuarioInfo.id}', '${usuarioInfo.nome.replace(/'/g, "\\'")}', ${usuarioAtivo})" 
+                                            title="Reativar usuário">
                                         <i class="fas fa-play-circle"></i>
                                     </button>
                                 `}
                                 
-                                <button class="btn-icon danger" onclick="admin.excluirProfessor('${professorInfo.id}', '${professorInfo.nome}')" 
+                                <button class="btn-icon" onclick="admin.resetarSenha('${usuarioInfo.id}')" title="Resetar Senha">
+                                    <i class="fas fa-key"></i>
+                                </button>
+                                
+                                <button class="btn-icon danger" onclick="admin.excluirUsuario('${usuarioInfo.id}')" 
                                         title="Excluir permanentemente (apenas se não tiver vínculos)">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             ` : `
                                 <!-- APENAS EXCLUIR MATRÍCULA (quando não cadastrado) -->
                                 <button class="btn-icon danger" onclick="admin.excluirMatricula('${item.matricula}')" 
-                                        title="Excluir matrícula (professor ainda não cadastrado)">
+                                        title="Excluir matrícula (usuário ainda não cadastrado)">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             `}
@@ -11535,10 +11603,15 @@ class AdminPanel {
         const inicioExibicao = (this.paginaAtual - 1) * this.itensPorPagina + 1;
         const fimExibicao = Math.min(this.paginaAtual * this.itensPorPagina, total);
         
-        document.getElementById('itemsCounter').textContent = 
-            `${inicioExibicao}-${fimExibicao} de ${total}`;
-        document.getElementById('paginationInfo').textContent = 
-            `Mostrando ${inicioExibicao} a ${fimExibicao} de ${total} registros`;
+        const itemsCounter = document.getElementById('itemsCounter');
+        if (itemsCounter) {
+            itemsCounter.textContent = `${inicioExibicao}-${fimExibicao} de ${total}`;
+        }
+        
+        const paginationInfo = document.getElementById('paginationInfo');
+        if (paginationInfo) {
+            paginationInfo.textContent = `Mostrando ${inicioExibicao} a ${fimExibicao} de ${total} registros`;
+        }
     }
 
 
