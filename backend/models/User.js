@@ -78,6 +78,8 @@ role: {
   default: 'aluno'
 },
 
+tokenExpired: { type: Boolean, default: false },
+
 // ========== CAMPOS DE SUPERUSUÁRIO ==========
 isSuperUser: {
   type: Boolean,

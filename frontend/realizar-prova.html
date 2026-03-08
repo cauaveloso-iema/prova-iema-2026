@@ -31,6 +31,157 @@
     <title>Realizar Prova - Sistema de Provas</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+// ============================================
+// FULLSCREEN AUTOMÁTICO AO INICIAR PROVA (MOBILE/TABLET)
+// ============================================
+(function() {
+    // Detectar se é dispositivo móvel/tablet
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 1024;
+    
+    if (isMobile) {
+        console.log('📱 Dispositivo móvel detectado - Ativando fullscreen automático');
+        
+        // Função para entrar em fullscreen
+        function entrarFullScreen() {
+            const doc = document.documentElement;
+            
+            if (doc.requestFullscreen) {
+                doc.requestFullscreen();
+            } else if (doc.webkitRequestFullscreen) { // Chrome, Safari
+                doc.webkitRequestFullscreen();
+            } else if (doc.msRequestFullscreen) { // IE/Edge
+                doc.msRequestFullscreen();
+            } else if (doc.mozRequestFullScreen) { // Firefox
+                doc.mozRequestFullScreen();
+            }
+        }
+        
+        // Tentar entrar em fullscreen quando a página carregar
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', entrarFullScreen);
+        } else {
+            entrarFullScreen();
+        }
+        
+        // Também tentar quando o usuário tocar na tela (para garantir)
+        document.addEventListener('touchstart', function fullScreenOnTouch() {
+            entrarFullScreen();
+            document.removeEventListener('touchstart', fullScreenOnTouch);
+        }, { once: true });
+        
+        // Detectar quando sai do fullscreen e tentar voltar
+        document.addEventListener('fullscreenchange', function() {
+            if (!document.fullscreenElement && isMobile) {
+                console.log('⚠️ Saiu do fullscreen - tentando voltar');
+                setTimeout(entrarFullScreen, 100);
+            }
+        });
+        
+        document.addEventListener('webkitfullscreenchange', function() {
+            if (!document.webkitFullscreenElement && isMobile) {
+                setTimeout(entrarFullScreen, 100);
+            }
+        });
+        
+        document.addEventListener('mozfullscreenchange', function() {
+            if (!document.mozFullScreenElement && isMobile) {
+                setTimeout(entrarFullScreen, 100);
+            }
+        });
+        
+        document.addEventListener('MSFullscreenChange', function() {
+            if (!document.msFullscreenElement && isMobile) {
+                setTimeout(entrarFullScreen, 100);
+            }
+        });
+    }
+})();
+</script>
+
+<script>
+// ============================================
+// WAKE LOCK - TELA NUNCA APAGA (TODOS DISPOSITIVOS)
+// ============================================
+(function() {
+    let wakeLock = null;
+    
+    // Função para solicitar Wake Lock (impedir tela de apagar)
+    async function solicitarWakeLock() {
+        try {
+            // Verificar se a API Wake Lock é suportada
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log('✅ Wake Lock ativado - tela não apagará');
+                
+                // Listener para quando o wake lock é liberado
+                wakeLock.addEventListener('release', () => {
+                    console.log('⚠️ Wake Lock liberado');
+                });
+            } else {
+                console.log('⚠️ API Wake Lock não suportada - usando fallback');
+                usarFallbackWakeLock();
+            }
+        } catch (err) {
+            console.error('❌ Erro ao ativar Wake Lock:', err);
+            usarFallbackWakeLock();
+        }
+    }
+    
+    // Fallback para navegadores sem suporte a Wake Lock
+    function usarFallbackWakeLock() {
+        console.log('🔄 Ativando fallback - mantendo tela ativa com toques simulados');
+        
+        // Criar um elemento invisível que recebe foco
+        const manterAtivo = document.createElement('div');
+        manterAtivo.style.position = 'fixed';
+        manterAtivo.style.top = '0';
+        manterAtivo.style.left = '0';
+        manterAtivo.style.width = '1px';
+        manterAtivo.style.height = '1px';
+        manterAtivo.style.opacity = '0';
+        manterAtivo.style.pointerEvents = 'none';
+        manterAtivo.setAttribute('tabindex', '-1');
+        document.body.appendChild(manterAtivo);
+        
+        // Simular atividade a cada 30 segundos
+        setInterval(() => {
+            manterAtivo.focus();
+            document.dispatchEvent(new Event('mousemove'));
+            console.log('⚡ Mantendo tela ativa...');
+        }, 30000);
+    }
+    
+    // Reativar wake lock quando a página ficar visível novamente
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && wakeLock) {
+            console.log('👁️ Página visível novamente - reativando Wake Lock');
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {
+                console.error('❌ Erro ao reativar Wake Lock:', err);
+            }
+        }
+    });
+    
+    // Ativar wake lock quando a página carregar
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', solicitarWakeLock);
+    } else {
+        solicitarWakeLock();
+    }
+    
+    // Função para desativar manualmente (opcional)
+    window.desativarWakeLock = function() {
+        if (wakeLock) {
+            wakeLock.release();
+            wakeLock = null;
+            console.log('⏸️ Wake Lock desativado manualmente');
+        }
+    };
+})();
+</script>
     
     <!-- ESTILOS DE ACESSIBILIDADE PARA PROVAS -->
     <style>

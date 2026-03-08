@@ -614,7 +614,7 @@ const uploadMiddleware = multer({
 // MIDDLEWARES PERSONALIZADOS
 // ============================================================================
 
-// ============ MIDDLEWARE DE AUTENTICAÇÃO JWT (CORRIGIDO) ============
+// ============ MIDDLEWARE DE AUTENTICAÇÃO JWT COM TOKEN VERSION ============
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -626,7 +626,7 @@ const authenticateToken = (req, res, next) => {
     });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
     if (err) {
       console.log('❌ Erro na verificação do token:', err.message);
       return res.status(403).json({ 
@@ -635,14 +635,39 @@ const authenticateToken = (req, res, next) => {
       });
     }
     
-    // Extrair dados do token
-    req.userId = user.id;
-    req.userRole = user.role;
-    req.userNome = user.nome;
-    req.userTwoFactorEnabled = user.twoFactorEnabled || false;
+    // 🔥 VERIFICAR SE O TOKEN FOI INVALIDADO POR RESET
+    try {
+      const user = await User.findById(decoded.id).select('tokenVersion');
+      
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          error: 'Usuário não encontrado.'
+        });
+      }
+      
+      // Se a versão do token não corresponde, foi resetado
+      if (user.tokenVersion !== decoded.tokenVersion) {
+        return res.status(401).json({
+          success: false,
+          error: '🔐 Sua sessão foi encerrada pelo administrador. Faça login novamente.',
+          motivo: 'reset_global',
+          precisaLogin: true
+        });
+      }
+    } catch (dbError) {
+      console.error('❌ Erro ao verificar tokenVersion:', dbError);
+    }
     
-    // 🔥 IMPORTANTE: Marcar se é token temporário (para 2FA)
-    req.tokenTemp = user.temp || false;
+    // Extrair dados do token
+    req.userId = decoded.id;
+    req.userRole = decoded.role;
+    req.userNome = decoded.nome;
+    req.userTwoFactorEnabled = decoded.twoFactorEnabled || false;
+    req.tokenVersion = decoded.tokenVersion;
+    
+    // Marcar se é token temporário (para 2FA)
+    req.tokenTemp = decoded.temp || false;
  
     next();
   });
@@ -1009,7 +1034,8 @@ app.post('/api/auth/register', [
         nome: user.nome,
         cpf: user.cpf,
         precisaAcessibilidade: user.precisaAcessibilidade === true,
-        condicaoAcessibilidade: user.condicaoAcessibilidade
+        condicaoAcessibilidade: user.condicaoAcessibilidade,
+        tokenVersion: user.tokenVersion || 0
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
@@ -13972,6 +13998,99 @@ app.get('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// ============ ROTA PARA RESETAR ACESSOS COM NOTIFICAÇÃO ============
+app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
+    try {
+        // Verificar se é super_admin
+        if (req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas Super Admins podem resetar acessos'
+            });
+        }
+
+        console.log(`🔄 Super Admin ${req.userId} iniciando reset de acessos...`);
+
+        // Buscar o admin que está fazendo o reset
+        const admin = await User.findById(req.userId).select('nome email');
+
+        // Buscar todos os usuários que NÃO são super_admin
+        const usuarios = await User.find({ 
+            role: { $ne: 'super_admin' }
+        });
+
+        let contador = 0;
+        const estatisticas = {
+            alunos: 0,
+            professores: 0,
+            admins: 0
+        };
+
+        // Inicializar serviço de notificações
+        const NotificationService = require('./services/notification-service');
+        const notificationService = new NotificationService();
+
+        for (const user of usuarios) {
+            // Incrementar tokenVersion (invalida todos os tokens antigos)
+            user.tokenVersion = (user.tokenVersion || 0) + 1;
+            user.ultimoResetAcesso = new Date();
+            
+            await user.save();
+            contador++;
+            
+            // 🔥 ENVIAR NOTIFICAÇÃO PARA O USUÁRIO
+            try {
+                // Criar notificação diretamente no banco
+                const Notificacao = mongoose.model('Notificacao');
+                const notificacao = new Notificacao({
+                    usuarioId: user._id,
+                    tipo: 'sistema',
+                    titulo: '🔐 Sessão Encerrada',
+                    mensagem: `O administrador ${admin.nome} resetou os acessos do sistema. Faça login novamente para continuar.`,
+                    icone: '🔐',
+                    cor: '#dc2626',
+                    link: '/login.html',
+                    prioridade: 5,
+                    dados: {
+                        tipo: 'reset_acesso',
+                        motivo: 'reset_global',
+                        adminId: admin._id,
+                        adminNome: admin.nome,
+                        data: new Date().toISOString()
+                    }
+                });
+                
+                await notificacao.save();
+                console.log(`✅ Notificação enviada para ${user.email}`);
+            } catch (notifError) {
+                console.warn(`⚠️ Erro ao notificar ${user.email}:`, notifError.message);
+            }
+            
+            // Contar por role
+            if (user.role === 'aluno') estatisticas.alunos++;
+            else if (user.role === 'professor') estatisticas.professores++;
+            else if (user.role === 'admin') estatisticas.admins++;
+        }
+
+        console.log(`✅ Reset concluído! ${contador} usuários afetados`);
+
+        res.json({
+            success: true,
+            message: `Acessos resetados para ${contador} usuários!`,
+            totalAfetados: contador,
+            estatisticas: estatisticas,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao resetar acessos:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });

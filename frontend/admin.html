@@ -1526,6 +1526,24 @@
                     <button class="btn-refresh" id="refreshBtn">
                         <i class="fas fa-sync-alt"></i>
                     </button>
+                    <button id="btnResetAcessos" class="btn-danger" style="
+                        background: linear-gradient(135deg, #dc2626, #b91c1c);
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 40px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        margin-left: 10px;
+                        box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);
+                    ">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Resetar Acessos</span>
+                    </button>    
                     <div class="datetime" id="currentDatetime"></div>
                 </div>
             </header>
@@ -3682,6 +3700,180 @@ window.testarNotificacao = function() {
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="js/websocket-manager.js"></script>  <!-- NOVO: carrega PRIMEIRO -->
     <script src="js/admin.js"></script>               <!-- EXISTENTE: carrega DEPOIS -->
+
+    <script>
+        // ============================================
+// RESET DE ACESSOS - VERSÃO COMPLETA
+// ============================================
+(function() {
+    const btnReset = document.getElementById('btnResetAcessos');
+    
+    if (!btnReset) return;
+    
+    btnReset.addEventListener('click', async function() {
+        // Confirmar com modal personalizado
+        const confirmar = await mostrarModalConfirmacao(
+            '⚠️ RESET DE ACESSOS',
+            `Você está prestes a <strong>resetar os acessos de TODOS os usuários</strong> (exceto Super Admins).<br><br>
+            <span style="color: #f59e0b;">Isso significa que:</span>
+            <ul style="text-align: left; margin-top: 10px;">
+                <li>✅ Todos receberão uma notificação</li>
+                <li>✅ Serão desconectados imediatamente</li>
+                <li>✅ Precisarão fazer login novamente</li>
+                <li>❌ Esta ação <strong>NÃO PODE SER DESFEITA</strong></li>
+            </ul>
+            <br>
+            <strong>Deseja continuar?</strong>`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            // Mostrar loading
+            btnReset.disabled = true;
+            btnReset.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetando acessos...';
+            
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch('/api/admin/reset-access', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Mostrar modal de sucesso com estatísticas
+                await mostrarModalSucesso(
+                    '✅ RESET CONCLUÍDO!',
+                    `<strong style="font-size: 1.3rem; color: #10b981;">${data.totalAfetados} usuários foram afetados!</strong><br><br>
+                    <div style="background: #1f2937; padding: 15px; border-radius: 12px;">
+                        <h4 style="color: #f59e0b; margin-bottom: 10px;">📊 ESTATÍSTICAS:</h4>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="margin: 8px 0;">👤 <strong>Alunos:</strong> ${data.estatisticas?.alunos || 0}</li>
+                            <li style="margin: 8px 0;">👨‍🏫 <strong>Professores:</strong> ${data.estatisticas?.professores || 0}</li>
+                            <li style="margin: 8px 0;">👑 <strong>Admins:</strong> ${data.estatisticas?.admins || 0}</li>
+                        </ul>
+                    </div>
+                    <br>
+                    <span style="color: #10b981;">✅ Notificações enviadas para todos os afetados</span>`
+                );
+                
+                // Perguntar se quer sair agora
+                if (confirm('Deseja sair agora para testar como será a experiência do usuário?')) {
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user_data');
+                    window.location.href = 'login.html';
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao resetar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            alert('❌ Erro ao resetar acessos: ' + error.message);
+        } finally {
+            btnReset.disabled = false;
+            btnReset.innerHTML = '<i class="fas fa-sync-alt"></i> Resetar Acessos';
+        }
+    });
+    
+    // ===== FUNÇÕES AUXILIARES PARA MODAIS =====
+    
+    function mostrarModalConfirmacao(titulo, mensagem) {
+        return new Promise((resolve) => {
+            let modal = document.getElementById('modalResetConfirmacao');
+            
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'modalResetConfirmacao';
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            <h2 id="modalConfirmTitulo">⚠️ ATENÇÃO!</h2>
+                            <button class="modal-close" onclick="document.getElementById('modalResetConfirmacao').style.display='none'; resolve(false)">&times;</button>
+                        </div>
+                        <div class="modal-body" style="padding: 25px; background: #1f2937; color: white;">
+                            <div id="modalConfirmMensagem"></div>
+                        </div>
+                        <div class="modal-footer" style="background: #111827; padding: 20px; display: flex; gap: 12px;">
+                            <button class="btn-cancel" id="modalConfirmCancelar" style="flex:1; background: #6b7280; color: white; border: none; padding: 12px; border-radius: 40px; font-weight: 600; cursor: pointer;">Cancelar</button>
+                            <button class="btn-danger" id="modalConfirmConfirmar" style="flex:1; background: #f59e0b; color: white; border: none; padding: 12px; border-radius: 40px; font-weight: 600; cursor: pointer;">Confirmar</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            document.getElementById('modalConfirmTitulo').innerHTML = titulo;
+            document.getElementById('modalConfirmMensagem').innerHTML = mensagem;
+            
+            modal.style.display = 'flex';
+            
+            document.getElementById('modalConfirmCancelar').onclick = () => {
+                modal.style.display = 'none';
+                resolve(false);
+            };
+            
+            document.getElementById('modalConfirmConfirmar').onclick = () => {
+                modal.style.display = 'none';
+                resolve(true);
+            };
+            
+            modal.querySelector('.modal-close').onclick = () => {
+                modal.style.display = 'none';
+                resolve(false);
+            };
+        });
+    }
+    
+    function mostrarModalSucesso(titulo, mensagem) {
+        return new Promise((resolve) => {
+            let modal = document.getElementById('modalResetSucesso');
+            
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'modalResetSucesso';
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <h2 id="modalSucessoTitulo">✅ Sucesso!</h2>
+                            <button class="modal-close" onclick="document.getElementById('modalResetSucesso').style.display='none'; resolve()">&times;</button>
+                        </div>
+                        <div class="modal-body" style="padding: 25px; background: #1f2937; color: white;">
+                            <div id="modalSucessoMensagem"></div>
+                        </div>
+                        <div class="modal-footer" style="background: #111827; padding: 20px;">
+                            <button class="btn-primary" id="modalSucessoOk" style="background: #10b981; color: white; border: none; padding: 12px 30px; border-radius: 40px; font-weight: 600; cursor: pointer; margin: 0 auto;">OK</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            document.getElementById('modalSucessoTitulo').innerHTML = titulo;
+            document.getElementById('modalSucessoMensagem').innerHTML = mensagem;
+            
+            modal.style.display = 'flex';
+            
+            document.getElementById('modalSucessoOk').onclick = () => {
+                modal.style.display = 'none';
+                resolve();
+            };
+            
+            modal.querySelector('.modal-close').onclick = () => {
+                modal.style.display = 'none';
+                resolve();
+            };
+        });
+    }
+})();
+    </script>
 
 </body>
 </html>
