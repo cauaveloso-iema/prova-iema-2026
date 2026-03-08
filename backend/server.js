@@ -241,7 +241,6 @@ app.use((req, res, next) => {
           if (err.name === 'TokenExpiredError') {
               // Não logar nada
           } else {
-              console.log('❌ Erro na verificação do token:', err.message);
           }
           req.user = null;
       } else {
@@ -628,7 +627,6 @@ const authenticateToken = (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
     if (err) {
-      console.log('❌ Erro na verificação do token:', err.message);
       return res.status(403).json({ 
         success: false, 
         error: 'Token inválido ou expirado.' 
