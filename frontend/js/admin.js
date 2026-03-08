@@ -12,6 +12,13 @@ class AdminPanel {
         this.backups = [];
         this.monitoramento = [];
         this.graficos = {};
+        this.wsListener = null;
+    
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.init());
+        } else {
+            this.init();
+        }
         this.filtros = {
             usuarios: { role: 'todos', search: '', page: 1, limit: 10 },
             turmas: { search: '', eixo: 'todos', page: 1, limit: 10 },
@@ -42,9 +49,12 @@ class AdminPanel {
         this.startAutoRefresh();
         this.carregarDadosReais();
         
-        // 👇 ADICIONAR ESTAS LINHAS
         this.aplicarModoEscuro(this.getConfiguracoesPadrao());
         this.criarBotaoModoEscuro();
+        
+        // ===== NOVO: Verificar conexão WebSocket =====
+        setTimeout(() => this.verificarConexaoWebSocket(), 2000);
+        setTimeout(() => this.mostrarStatusConexao(), 3000);
     }
 
     async checkAuth() {
@@ -522,11 +532,24 @@ class AdminPanel {
 
     // ============ USUÁRIOS ============
 
+    // ============ USUÁRIOS - VERSÃO PROFISSIONAL (MESMO ESTILO DAS PROVAS) ============
     async loadUsuarios() {
         const contentArea = document.getElementById('contentArea');
         
         try {
             const { role, search, page, limit } = this.filtros.usuarios;
+            
+            // MOSTRAR LOADING
+            contentArea.innerHTML = `
+                <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                    <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #1e3a8a; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                    <p style="color: #6b7280;">Carregando usuários...</p>
+                </div>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            `;
+
+            // BUSCAR DADOS DO BACKEND
+            console.log('📡 Buscando usuários...');
             const response = await fetch(
                 `${this.apiBase}/usuarios?role=${role}&search=${search}&page=${page}&limit=${limit}`,
                 { headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` } }
@@ -538,75 +561,723 @@ class AdminPanel {
 
             this.usuarios = data.usuarios;
 
-            contentArea.innerHTML = `
-                <div class="section">
-                    <div class="section-header">
-                        <h2><i class="fas fa-users-cog"></i> Gerenciar Usuários</h2>
-                        <button class="btn-primary" onclick="admin.abrirModalUsuario()">
-                            <i class="fas fa-plus"></i> Novo Usuário
+            // CALCULAR ESTATÍSTICAS
+            const totalUsuarios = data.pagination?.total || this.usuarios.length;
+            const usuariosAtivos = this.usuarios.filter(u => u.ativo === true).length;
+            const usuariosInativos = this.usuarios.filter(u => u.ativo === false).length;
+            const totalAlunos = this.usuarios.filter(u => u.role === 'aluno').length;
+            const totalProfessores = this.usuarios.filter(u => u.role === 'professor').length;
+            const totalAdmins = this.usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length;
+            const comAcessibilidade = this.usuarios.filter(u => u.precisaAcessibilidade === true).length;
+
+            // RENDERIZAR HTML NO MESMO ESTILO DAS PROVAS
+            contentArea.innerHTML = this.renderUsuariosProfissional({
+                role, search, page, limit,
+                usuarios: this.usuarios,
+                pagination: data.pagination,
+                total: totalUsuarios,
+                estatisticas: {
+                    total: totalUsuarios,
+                    ativos: usuariosAtivos,
+                    inativos: usuariosInativos,
+                    alunos: totalAlunos,
+                    professores: totalProfessores,
+                    admins: totalAdmins,
+                    acessibilidade: comAcessibilidade
+                }
+            });
+
+            // CONFIGURAR EVENTOS DOS FILTROS
+            this.configurarEventosFiltrosUsuarios();
+
+            console.log('✅ Usuários carregados:', this.usuarios.length);
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar usuários:', error);
+            contentArea.innerHTML = this.renderErroUsuarios(error.message);
+        }
+    }
+
+    // ============ RENDERIZAR USUÁRIOS (VERSÃO PROFISSIONAL) ============
+    renderUsuariosProfissional({ role, search, page, limit, usuarios, pagination, total, estatisticas }) {
+        return `
+            <div class="usuarios-container">
+                <!-- HEADER PROFISSIONAL (AZUL ROYAL) -->
+                <div class="usuarios-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-users-cog"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>Gerenciar Usuários</h1>
+                            <p>Gerencie todos os usuários do sistema</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.atualizarUsuarios()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-header btn-primary" onclick="admin.abrirModalUsuario()">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Novo Usuário</span>
                         </button>
                     </div>
+                </div>
 
-                    <div class="filters-bar">
+                <!-- CARDS DE ESTATÍSTICAS -->
+                <div class="stats-grid">
+                    <div class="stat-card primary" onclick="admin.filtrarUsuariosPorRole('todos')">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Total de Usuários</span>
+                            <span class="stat-value" id="totalUsuariosCard">${estatisticas.total}</span>
+                            <span class="stat-detail">${estatisticas.ativos} ativos • ${estatisticas.inativos} inativos</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card success" onclick="admin.filtrarUsuariosPorRole('ativo')">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Ativos</span>
+                            <span class="stat-value" id="ativosCard">${estatisticas.ativos}</span>
+                            <span class="stat-detail">Podem acessar</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card danger" onclick="admin.filtrarUsuariosPorRole('inativo')">
+                        <div class="stat-icon">
+                            <i class="fas fa-pause-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Inativos</span>
+                            <span class="stat-value" id="inativosCard">${estatisticas.inativos}</span>
+                            <span class="stat-detail">Bloqueados</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card info" onclick="admin.filtrarUsuariosPorRole('aluno')">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Alunos</span>
+                            <span class="stat-value" id="alunosCard">${estatisticas.alunos}</span>
+                            <span class="stat-detail">${estatisticas.acessibilidade} com acessibilidade</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card warning" onclick="admin.filtrarUsuariosPorRole('professor')">
+                        <div class="stat-icon">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Professores</span>
+                            <span class="stat-value" id="professoresCard">${estatisticas.professores}</span>
+                            <span class="stat-detail">Com matrícula</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer;" onclick="admin.filtrarUsuariosPorRole('admin')">
+                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #1e3a8a, #1e40af);">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Admins</span>
+                            <span class="stat-value" id="adminsCard">${estatisticas.admins}</span>
+                            <span class="stat-detail">Administradores</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BARRA DE FILTROS -->
+                <div class="filters-card">
+                    <div class="filters-header">
+                        <div class="filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <h3>Filtros</h3>
+                        </div>
+                        <span class="filters-badge" id="resultadosBadge">${total} ${total === 1 ? 'usuário' : 'usuários'}</span>
+                    </div>
+                    
+                    <div class="filters-grid">
+                        <!-- Busca -->
                         <div class="filter-group">
                             <label><i class="fas fa-search"></i> Buscar</label>
-                            <input type="text" id="searchUsuarios" placeholder="Nome, email ou matrícula..." 
-                                   value="${search}" oninput="admin.filtrarUsuarios()" class="form-control">
+                            <div class="input-wrapper">
+                                <input type="text" id="searchUsuarios" 
+                                    placeholder="Nome, email, CPF ou matrícula..." 
+                                    value="${search || ''}">
+                                <i class="fas fa-search input-icon"></i>
+                                ${search ? `
+                                    <button class="input-clear" onclick="document.getElementById('searchUsuarios').value=''; admin.aplicarFiltrosUsuarios()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
+                        
+                        <!-- Perfil -->
                         <div class="filter-group">
                             <label><i class="fas fa-user-tag"></i> Perfil</label>
-                            <select id="filterRole" class="form-control" onchange="admin.filtrarUsuarios()">
+                            <select id="filterRole" class="filter-select">
                                 <option value="todos" ${role === 'todos' ? 'selected' : ''}>Todos</option>
-                                <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>Alunos</option>
-                                <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professores</option>
-                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admins</option>
-                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admins</option>
+                                <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>👨‍🎓 Alunos</option>
+                                <option value="professor" ${role === 'professor' ? 'selected' : ''}>👨‍🏫 Professores</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admins</option>
+                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 Super Admins</option>
                             </select>
                         </div>
+                        
+                        <!-- Status -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-circle"></i> Status</label>
+                            <select id="filterStatus" class="filter-select" onchange="admin.filtrarPorStatusUsuario()">
+                                <option value="todos" ${this.filtros.usuarios.status === 'todos' ? 'selected' : ''}>Todos</option>
+                                <option value="ativo" ${this.filtros.usuarios.status === 'ativo' ? 'selected' : ''}>✅ Ativos</option>
+                                <option value="inativo" ${this.filtros.usuarios.status === 'inativo' ? 'selected' : ''}>⏸️ Inativos</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Botões -->
                         <div class="filter-actions">
-                            <button class="btn-filter" onclick="admin.limparFiltrosUsuarios()">
+                            <button class="btn-filter" onclick="admin.aplicarFiltrosUsuarios()">
+                                <i class="fas fa-filter"></i> Filtrar
+                            </button>
+                            <button class="btn-filter btn-clear" onclick="admin.limparFiltrosUsuarios()">
                                 <i class="fas fa-eraser"></i> Limpar
                             </button>
                         </div>
                     </div>
+                </div>
 
+                <!-- TABELA DE USUÁRIOS -->
+                <div class="table-professional">
+                    <div class="table-header">
+                        <div class="table-title">
+                            <i class="fas fa-list"></i>
+                            <h3>Lista de Usuários</h3>
+                        </div>
+                        <div class="table-info">
+                            <span class="items-counter" id="itemsCounter">${usuarios.length} ${usuarios.length === 1 ? 'registro' : 'registros'}</span>
+                        </div>
+                    </div>
+                    
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Nome</th>
-                                    <th>Email</th>
-                                    <th>Perfil</th>
-                                    <th>Matrícula</th>
-                                    <th>CPF</th>
-                                    <th>Telefone</th>
-                                    <th>Status</th>
+                                    <th onclick="admin.ordenarUsuariosPor('nome')" class="sortable">
+                                        Nome <i class="fas fa-sort" id="sort-nome"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarUsuariosPor('email')" class="sortable">
+                                        Email <i class="fas fa-sort" id="sort-email"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarUsuariosPor('role')" class="sortable">
+                                        Perfil <i class="fas fa-sort" id="sort-role"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarUsuariosPor('matricula')" class="sortable">
+                                        Matrícula <i class="fas fa-sort" id="sort-matricula"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarUsuariosPor('cpf')" class="sortable">
+                                        CPF <i class="fas fa-sort" id="sort-cpf"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarUsuariosPor('telefone')" class="sortable">
+                                        Telefone <i class="fas fa-sort" id="sort-telefone"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarUsuariosPor('status')" class="sortable">
+                                        Status <i class="fas fa-sort" id="sort-status"></i>
+                                    </th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                ${this.gerarLinhasUsuarios(data.usuarios)}
+                            <tbody id="tabelaUsuariosBody">
+                                ${this.gerarLinhasUsuarios(usuarios)}
                             </tbody>
                         </table>
                     </div>
 
-                    ${this.gerarPaginacao(data.pagination, 'usuarios')}
+                    <!-- Paginação -->
+                    ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'usuarios') : ''}
                 </div>
-            `;
+            </div>
 
-        } catch (error) {
-            console.error('Erro ao carregar usuários:', error);
-            contentArea.innerHTML = `
-                <div class="error-container">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Erro ao carregar usuários</h3>
-                    <p>${error.message}</p>
-                    <button class="btn-primary" onclick="admin.loadUsuarios()">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
-                </div>
-            `;
+            <style>
+                .usuarios-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+                
+                /* Header com azul royal (igual às provas) */
+                .usuarios-header {
+                    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 10px 30px rgba(30, 58, 138, 0.3);
+                    position: relative;
+                    overflow: hidden;
+                }
+                
+                .usuarios-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -50px;
+                    right: -50px;
+                    width: 200px;
+                    height: 200px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 50%;
+                }
+                
+                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
+                .header-icon {
+                    width: 70px; height: 70px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.2);
+                }
+                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
+                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
+                
+                .btn-header {
+                    padding: 12px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    border: none;
+                    position: relative;
+                    z-index: 2;
+                }
+                .btn-header.btn-primary {
+                    background: white;
+                    color: #1e3a8a;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                }
+                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
+                .btn-header.btn-refresh {
+                    background: rgba(255,255,255,0.15);
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    backdrop-filter: blur(5px);
+                    padding: 12px;
+                }
+                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
+                
+                /* Stats cards */
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(6, 1fr);
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                .stat-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    transition: all 0.3s;
+                    border: 1px solid rgba(0,0,0,0.05);
+                    cursor: pointer;
+                }
+                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .stat-card.primary .stat-icon { background: linear-gradient(135deg, #1e3a8a, #1e40af); }
+                .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
+                .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+                .stat-card.danger .stat-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
+                .stat-icon {
+                    width: 60px; height: 60px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                    color: white;
+                }
+                .stat-content { flex: 1; }
+                .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
+                .stat-detail { font-size: 11px; color: #9ca3af; }
+                
+                /* Filtros */
+                .filters-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+                .filters-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+                .filters-title { display: flex; align-items: center; gap: 10px; }
+                .filters-title i { font-size: 18px; color: #1e3a8a; background: #e0e7ff; padding: 8px; border-radius: 10px; }
+                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                .filters-badge { background: #1e3a8a; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+                
+                .filters-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 1fr 1fr auto;
+                    gap: 15px;
+                }
+                .filter-group { display: flex; flex-direction: column; gap: 5px; }
+                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; display: flex; align-items: center; gap: 5px; }
+                
+                .input-wrapper { position: relative; }
+                .input-wrapper input {
+                    width: 100%;
+                    padding: 10px 35px 10px 40px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    transition: all 0.3s;
+                }
+                .input-wrapper input:focus {
+                    outline: none;
+                    border-color: #1e3a8a;
+                    box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.1);
+                }
+                .input-icon {
+                    position: absolute;
+                    left: 15px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #9ca3af;
+                    font-size: 14px;
+                }
+                .input-clear {
+                    position: absolute;
+                    right: 10px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background: none;
+                    border: none;
+                    color: #9ca3af;
+                    cursor: pointer;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .input-clear:hover { background: #f3f4f6; color: #4b5563; }
+                
+                .filter-select {
+                    width: 100%;
+                    padding: 10px 15px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    background: white;
+                    cursor: pointer;
+                }
+                
+                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+                .btn-filter {
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    white-space: nowrap;
+                }
+                .btn-filter { background: #1e3a8a; color: white; }
+                .btn-filter:hover { background: #1e40af; transform: translateY(-2px); }
+                .btn-filter.btn-clear { background: #6b7280; }
+                .btn-filter.btn-clear:hover { background: #4b5563; }
+                
+                /* Tabela profissional */
+                .table-professional {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    overflow: hidden;
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+                .table-header {
+                    padding: 16px 20px;
+                    background: #f9fafb;
+                    border-bottom: 1px solid #e5e7eb;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .table-title { display: flex; align-items: center; gap: 10px; }
+                .table-title i { color: #1e3a8a; font-size: 16px; }
+                .table-title h3 { margin: 0; font-size: 15px; color: #374151; }
+                .table-info { font-size: 13px; color: #6b7280; font-weight: 500; }
+                
+                .data-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .data-table th {
+                    padding: 15px 20px;
+                    text-align: left;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #4b5563;
+                    background: #f9fafb;
+                    border-bottom: 2px solid #e5e7eb;
+                }
+                .data-table th.sortable { cursor: pointer; transition: background 0.2s; }
+                .data-table th.sortable:hover { background: #f3f4f6; }
+                .data-table td {
+                    padding: 15px 20px;
+                    border-bottom: 1px solid #e5e7eb;
+                    font-size: 14px;
+                    color: #1f2937;
+                }
+                .data-table tr:hover td { background: #f9fafb; }
+                
+                /* Role badges */
+                .role-badge {
+                    display: inline-block;
+                    padding: 4px 10px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                .role-badge.super_admin { background: #1e3a8a; color: white; }
+                .role-badge.admin { background: #3b82f6; color: white; }
+                .role-badge.professor { background: #f59e0b; color: white; }
+                .role-badge.aluno { background: #10b981; color: white; }
+                
+                /* Status badges */
+                .status-badge {
+                    display: inline-block;
+                    padding: 4px 10px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                .status-badge.active { background: #d1fae5; color: #065f46; }
+                .status-badge.inactive { background: #fee2e2; color: #991b1b; }
+                
+                /* Acessibilidade badge */
+                .badge-acessibilidade {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 20px;
+                    height: 20px;
+                    background: #3b82f6;
+                    color: white;
+                    border-radius: 50%;
+                    font-size: 10px;
+                    margin-left: 5px;
+                }
+                
+                /* Action buttons */
+                .action-buttons { display: flex; gap: 5px; }
+                .btn-icon {
+                    width: 32px; height: 32px;
+                    border: none;
+                    border-radius: 6px;
+                    background: transparent;
+                    color: #6c757d;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s;
+                }
+                .btn-icon:hover { background: #e9ecef; color: #1e3a8a; }
+                .btn-icon.warning:hover { color: #f59e0b; }
+                .btn-icon.success:hover { color: #10b981; }
+                .btn-icon.danger:hover { color: #dc3545; }
+                
+                /* Paginação */
+                .pagination-professional {
+                    padding: 16px 20px;
+                    border-top: 1px solid #e5e7eb;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }
+                .pagination-info { font-size: 13px; color: #6b7280; }
+                .pagination-controls { display: flex; gap: 8px; align-items: center; }
+                .btn-page {
+                    min-width: 38px; height: 38px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #4b5563;
+                    transition: all 0.2s;
+                }
+                .btn-page:hover { background: #f3f4f6; border-color: #1e3a8a; color: #1e3a8a; }
+                .btn-page.active { background: #1e3a8a; border-color: #1e3a8a; color: white; }
+                
+                @media (max-width: 1200px) {
+                    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+                }
+                @media (max-width: 1024px) {
+                    .filters-grid { grid-template-columns: 1fr; }
+                }
+                @media (max-width: 768px) {
+                    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+                    .usuarios-header { flex-direction: column; align-items: flex-start; }
+                    .header-actions { width: 100%; }
+                    .btn-header { flex: 1; }
+                }
+            </style>
+        `;
+    }
+
+    // ============ MÉTODOS AUXILIARES PARA USUÁRIOS ============
+
+    // Configurar eventos dos filtros
+    configurarEventosFiltrosUsuarios() {
+        // Busca com debounce
+        const searchInput = document.getElementById('searchUsuarios');
+        if (searchInput) {
+            const novoSearch = searchInput.cloneNode(true);
+            searchInput.parentNode.replaceChild(novoSearch, searchInput);
+            
+            let timeout;
+            novoSearch.addEventListener('keyup', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    this.aplicarFiltrosUsuarios();
+                }, 500);
+            });
         }
+        
+        // Configurar selects
+        ['filterRole', 'filterStatus'].forEach(id => {
+            const select = document.getElementById(id);
+            if (select) {
+                const novoSelect = select.cloneNode(true);
+                select.parentNode.replaceChild(novoSelect, select);
+                
+                novoSelect.addEventListener('change', () => {
+                    this.aplicarFiltrosUsuarios();
+                });
+            }
+        });
+    }
+
+    // Aplicar filtros
+    aplicarFiltrosUsuarios() {
+        this.filtros.usuarios.search = document.getElementById('searchUsuarios')?.value || '';
+        this.filtros.usuarios.role = document.getElementById('filterRole')?.value || 'todos';
+        this.filtros.usuarios.status = document.getElementById('filterStatus')?.value || 'todos';
+        this.filtros.usuarios.page = 1;
+        this.loadUsuarios();
+    }
+
+    // Limpar filtros
+    limparFiltrosUsuarios() {
+        this.filtros.usuarios = { role: 'todos', status: 'todos', search: '', page: 1, limit: 10 };
+        
+        const searchInput = document.getElementById('searchUsuarios');
+        const roleSelect = document.getElementById('filterRole');
+        const statusSelect = document.getElementById('filterStatus');
+        
+        if (searchInput) searchInput.value = '';
+        if (roleSelect) roleSelect.value = 'todos';
+        if (statusSelect) statusSelect.value = 'todos';
+        
+        this.loadUsuarios();
+    }
+
+    // Filtrar por role (clicando nos cards)
+    filtrarUsuariosPorRole(role) {
+        const select = document.getElementById('filterRole');
+        if (select) {
+            select.value = role;
+            this.aplicarFiltrosUsuarios();
+        }
+    }
+
+    // Filtrar por status
+    filtrarPorStatusUsuario() {
+        this.aplicarFiltrosUsuarios();
+    }
+
+    // Atualizar usuários
+    async atualizarUsuarios() {
+        const refreshBtn = document.querySelector('.usuarios-header .btn-refresh i');
+        
+        try {
+            if (refreshBtn) {
+                refreshBtn.className = 'fas fa-spinner fa-spin';
+            }
+            
+            this.showToast('🔄 Atualizando usuários...', 'info');
+            await this.loadUsuarios();
+            this.showToast('✅ Usuários atualizados!', 'success');
+            
+        } catch (error) {
+            console.error('Erro:', error);
+            this.showToast('❌ Erro ao atualizar', 'error');
+        } finally {
+            if (refreshBtn) {
+                setTimeout(() => {
+                    refreshBtn.className = 'fas fa-sync-alt';
+                }, 500);
+            }
+        }
+    }
+
+    // Renderizar erro
+    renderErroUsuarios(mensagem) {
+        return `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 16px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 20px;"></i>
+                <h3 style="color: #721c24; margin-bottom: 10px;">Erro ao carregar usuários</h3>
+                <p style="color: #6c757d; margin-bottom: 20px;">${mensagem}</p>
+                <button onclick="admin.loadUsuarios()" style="
+                    background: #1e3a8a;
+                    color: white;
+                    border: none;
+                    padding: 10px 30px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                ">
+                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                </button>
+            </div>
+        `;
     }
 
     // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (COM BOTÃO ATIVAR/DESATIVAR) ============
@@ -3133,59 +3804,307 @@ class AdminPanel {
 
     // ============ PROVAS ============
 
+    // ============ PROVAS - VERSÃO FINAL COMPLETA ============
     async loadProvas() {
         const contentArea = document.getElementById('contentArea');
         
         try {
+            // Pegar filtros atuais
             const { status, dificuldade, periodo, search, page, limit } = this.filtros.provas;
-            const response = await fetch(
-                `${this.apiBase}/provas?status=${status}&dificuldade=${dificuldade}&periodo=${periodo}&search=${search}&page=${page}&limit=${limit}`,
-                { headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` } }
-            );
+            
+            // MOSTRAR LOADING
+            contentArea.innerHTML = `
+                <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                    <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #1e3a8a; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                    <p style="color: #6b7280;">Carregando provas...</p>
+                </div>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            `;
+
+            // BUSCAR DADOS DO BACKEND
+            console.log('📡 Buscando provas com filtros:', { status, dificuldade, periodo, search, page, limit });
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // CONSTRUIR URL COM PARÂMETROS BÁSICOS (SEM PERÍODO)
+            let url = `${this.apiBase}/provas?page=${page}&limit=${limit}`;
+            
+            if (search && search.trim() !== '') {
+                url += `&search=${encodeURIComponent(search.trim())}`;
+            }
+            
+            if (status && status !== 'todos') {
+                url += `&status=${status}`;
+            }
+            
+            if (dificuldade && dificuldade !== 'todas') {
+                url += `&dificuldade=${dificuldade}`;
+            }
+            
+            console.log('🔗 URL final:', url);
+            
+            const response = await fetch(url, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
             
             const data = await response.json();
+            console.log('📦 Dados recebidos do backend:', data);
 
             if (!data.success) throw new Error(data.error || 'Erro ao carregar provas');
 
+            // ARMAZENAR DADOS ORIGINAIS
             this.provas = data.provas || [];
+            
+            // ===== APLICAR FILTROS NO FRONTEND =====
+            let provasFiltradas = [...this.provas];
+            
+            // 1. FILTRO POR BUSCA
+            if (search && search.trim() !== '') {
+                const termo = search.toLowerCase().trim();
+                provasFiltradas = provasFiltradas.filter(p => {
+                    const titulo = (p.titulo || '').toLowerCase();
+                    const conteudo = (p.conteudo || '').toLowerCase();
+                    const professorNome = p.professor?.nome?.toLowerCase() || p.professorNome?.toLowerCase() || '';
+                    
+                    return titulo.includes(termo) || 
+                        conteudo.includes(termo) || 
+                        professorNome.includes(termo);
+                });
+                console.log(`🔍 Filtro de busca "${termo}": ${provasFiltradas.length} provas`);
+            }
+            
+            // 2. FILTRO POR STATUS
+            if (status && status !== 'todos') {
+                provasFiltradas = provasFiltradas.filter(p => {
+                    if (p.cancelada === true) return status === 'cancelada';
+                    if (p.publicada !== true) return status === 'rascunho';
+                    
+                    const agora = new Date();
+                    const dataLimite = p.dataLimite ? new Date(p.dataLimite) : null;
+                    
+                    if (dataLimite && dataLimite < agora) return status === 'concluida';
+                    return status === 'ativa';
+                });
+                console.log(`🏷️ Filtro de status "${status}": ${provasFiltradas.length} provas`);
+            }
+            
+            // 3. FILTRO POR DIFICULDADE
+            if (dificuldade && dificuldade !== 'todas') {
+                provasFiltradas = provasFiltradas.filter(p => p.dificuldade === dificuldade);
+                console.log(`📊 Filtro de dificuldade "${dificuldade}": ${provasFiltradas.length} provas`);
+            }
+            
+            // 4. FILTRO POR PERÍODO
+            if (periodo && periodo !== 'todos' && ['1','2','3','4'].includes(periodo)) {
+                const periodoNum = parseInt(periodo);
+                provasFiltradas = provasFiltradas.filter(p => {
+                    if (!p.periodo) return false;
+                    const pPeriodo = parseInt(p.periodo);
+                    return pPeriodo === periodoNum;
+                });
+                console.log(`📅 Filtro de período ${periodo}: ${provasFiltradas.length} provas`);
+            }
+            
+            // ORDENAR POR DATA (mais recentes primeiro)
+            provasFiltradas.sort((a, b) => {
+                const dataA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+                const dataB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+                return dataB - dataA;
+            });
+            
+            console.log(`✅ Total após todos os filtros: ${provasFiltradas.length} provas`);
+            
+            // RENDERIZAR HTML COM AS PROVAS FILTRADAS
+            contentArea.innerHTML = this.renderProvasProfissional({
+                search, 
+                status, 
+                dificuldade, 
+                periodo, 
+                page, 
+                limit,
+                provas: provasFiltradas,
+                pagination: data.pagination,
+                total: provasFiltradas.length
+            });
 
-            contentArea.innerHTML = `
-                <div class="section">
-                    <div class="section-header">
-                        <h2><i class="fas fa-file-alt"></i> Gerenciar Provas</h2>
-                        <button class="btn-primary" onclick="admin.switchSection('nova-prova')">
-                            <i class="fas fa-plus"></i> Nova Prova
+            // CONFIGURAR EVENTOS DOS FILTROS
+            this.configurarEventosFiltrosProvas();
+
+            console.log('✅ Provas carregadas:', provasFiltradas.length);
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar provas:', error);
+            contentArea.innerHTML = this.renderErroProvas(error.message);
+        }
+    }
+
+    // ============ RENDERIZAR PROVAS (VERSÃO PROFISSIONAL) ============
+    renderProvasProfissional({ search, status, dificuldade, periodo, page, limit, provas, pagination, total }) {
+        // Calcular estatísticas
+        const totalProvas = provas.length;
+        const agora = new Date();
+        
+        const provasAtivas = provas.filter(p => 
+            p.publicada === true && 
+            !p.cancelada && 
+            (!p.dataLimite || new Date(p.dataLimite) >= agora)
+        ).length;
+        
+        const provasRascunho = provas.filter(p => p.publicada === false).length;
+        
+        const provasConcluidas = provas.filter(p => 
+            p.publicada === true && 
+            p.dataLimite && 
+            new Date(p.dataLimite) < agora && 
+            !p.cancelada
+        ).length;
+        
+        const provasCanceladas = provas.filter(p => p.cancelada === true).length;
+        
+        return `
+            <div class="provas-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="provas-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>Gerenciar Provas</h1>
+                            <p>Gerencie todas as provas do sistema</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.atualizarProvas()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-header btn-primary" onclick="admin.switchSection('nova-prova')">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Nova Prova com IA</span>
                         </button>
                     </div>
+                </div>
 
-                    <div class="filters-bar">
+                <!-- CARDS DE ESTATÍSTICAS -->
+                <div class="stats-grid">
+                    <div class="stat-card primary" onclick="admin.filtrarPorStatus('todos')">
+                        <div class="stat-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Total de Provas</span>
+                            <span class="stat-value" id="totalProvasCard">${totalProvas}</span>
+                            <span class="stat-detail">Clique para ver todas</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card success" onclick="admin.filtrarPorStatus('ativa')">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Ativas</span>
+                            <span class="stat-value" id="ativasCard">${provasAtivas}</span>
+                            <span class="stat-detail">Disponíveis</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card warning" onclick="admin.filtrarPorStatus('rascunho')">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Rascunhos</span>
+                            <span class="stat-value" id="rascunhosCard">${provasRascunho}</span>
+                            <span class="stat-detail">Aguardando</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card info" onclick="admin.filtrarPorStatus('concluida')">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-double"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Concluídas</span>
+                            <span class="stat-value" id="concluidasCard">${provasConcluidas}</span>
+                            <span class="stat-detail">Encerradas</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card danger" onclick="admin.filtrarPorStatus('cancelada')">
+                        <div class="stat-icon">
+                            <i class="fas fa-ban"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Canceladas</span>
+                            <span class="stat-value" id="canceladasCard">${provasCanceladas}</span>
+                            <span class="stat-detail">Com violações</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BARRA DE FILTROS -->
+                <div class="filters-card">
+                    <div class="filters-header">
+                        <div class="filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <h3>Filtros</h3>
+                        </div>
+                        <span class="filters-badge" id="resultadosBadge">${total} ${total === 1 ? 'prova' : 'provas'}</span>
+                    </div>
+                    
+                    <div class="filters-grid">
+                        <!-- Busca -->
                         <div class="filter-group">
                             <label><i class="fas fa-search"></i> Buscar</label>
-                            <input type="text" id="searchProvas" placeholder="Título ou conteúdo..." 
-                                value="${search}" oninput="admin.filtrarProvas()" class="form-control">
+                            <div class="input-wrapper">
+                                <input type="text" id="searchProvas" 
+                                    placeholder="Título, conteúdo ou professor..." 
+                                    value="${search || ''}">
+                                <i class="fas fa-search input-icon"></i>
+                                ${search ? `
+                                    <button class="input-clear" onclick="document.getElementById('searchProvas').value=''; admin.aplicarFiltrosProvas()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
+                        
+                        <!-- Status -->
                         <div class="filter-group">
                             <label><i class="fas fa-circle"></i> Status</label>
-                            <select id="filterStatus" class="form-control" onchange="admin.filtrarProvas()">
+                            <select id="filterStatus" class="filter-select">
                                 <option value="todos" ${status === 'todos' ? 'selected' : ''}>Todos</option>
-                                <option value="ativa" ${status === 'ativa' ? 'selected' : ''}>Ativas</option>
-                                <option value="rascunho" ${status === 'rascunho' ? 'selected' : ''}>Rascunhos</option>
-                                <option value="concluida" ${status === 'concluida' ? 'selected' : ''}>Concluídas</option>
-                                <option value="cancelada" ${status === 'cancelada' ? 'selected' : ''}>Canceladas</option>
+                                <option value="ativa" ${status === 'ativa' ? 'selected' : ''}>✅ Ativas</option>
+                                <option value="rascunho" ${status === 'rascunho' ? 'selected' : ''}>📝 Rascunhos</option>
+                                <option value="concluida" ${status === 'concluida' ? 'selected' : ''}>🏁 Concluídas</option>
+                                <option value="cancelada" ${status === 'cancelada' ? 'selected' : ''}>🚫 Canceladas</option>
                             </select>
                         </div>
+                        
+                        <!-- Dificuldade -->
                         <div class="filter-group">
                             <label><i class="fas fa-chart-line"></i> Dificuldade</label>
-                            <select id="filterDificuldade" class="form-control" onchange="admin.filtrarProvas()">
+                            <select id="filterDificuldade" class="filter-select">
                                 <option value="todas" ${dificuldade === 'todas' ? 'selected' : ''}>Todas</option>
-                                <option value="facil" ${dificuldade === 'facil' ? 'selected' : ''}>Fácil</option>
-                                <option value="media" ${dificuldade === 'media' ? 'selected' : ''}>Médio</option>
-                                <option value="dificil" ${dificuldade === 'dificil' ? 'selected' : ''}>Difícil</option>
+                                <option value="facil" ${dificuldade === 'facil' ? 'selected' : ''}>🟢 Fácil</option>
+                                <option value="media" ${dificuldade === 'media' ? 'selected' : ''}>🟡 Médio</option>
+                                <option value="dificil" ${dificuldade === 'dificil' ? 'selected' : ''}>🔴 Difícil</option>
                             </select>
                         </div>
+                        
+                        <!-- Período -->
                         <div class="filter-group">
                             <label><i class="fas fa-calendar-week"></i> Período</label>
-                            <select id="filterPeriodo" class="form-control" onchange="admin.filtrarProvas()">
+                            <select id="filterPeriodo" class="filter-select">
                                 <option value="todos" ${periodo === 'todos' ? 'selected' : ''}>Todos</option>
                                 <option value="1" ${periodo === '1' ? 'selected' : ''}>1º Período</option>
                                 <option value="2" ${periodo === '2' ? 'selected' : ''}>2º Período</option>
@@ -3193,51 +4112,608 @@ class AdminPanel {
                                 <option value="4" ${periodo === '4' ? 'selected' : ''}>4º Período</option>
                             </select>
                         </div>
+                        
+                        <!-- Botões -->
                         <div class="filter-actions">
-                            <button class="btn-filter" onclick="admin.limparFiltrosProvas()">
+                            <button class="btn-filter" onclick="admin.aplicarFiltrosProvas()">
+                                <i class="fas fa-filter"></i> Filtrar
+                            </button>
+                            <button class="btn-filter btn-clear" onclick="admin.limparFiltrosProvas()">
                                 <i class="fas fa-eraser"></i> Limpar
                             </button>
                         </div>
                     </div>
+                </div>
 
+                <!-- TABELA DE PROVAS -->
+                <div class="table-professional">
+                    <div class="table-header">
+                        <div class="table-title">
+                            <i class="fas fa-list"></i>
+                            <h3>Lista de Provas</h3>
+                        </div>
+                        <div class="table-info">
+                            <span class="items-counter" id="itemsCounter">${provas.length} ${provas.length === 1 ? 'registro' : 'registros'}</span>
+                        </div>
+                    </div>
+                    
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Título</th>
-                                    <th>Professor</th>
-                                    <th>Turma</th>
+                                    <th onclick="admin.ordenarProvasPor('titulo')" class="sortable">
+                                        Título <i class="fas fa-sort" id="sort-titulo"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarProvasPor('professor')" class="sortable">
+                                        Professor <i class="fas fa-sort" id="sort-professor"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarProvasPor('turma')" class="sortable">
+                                        Turma <i class="fas fa-sort" id="sort-turma"></i>
+                                    </th>
                                     <th>Período</th>
                                     <th>Tipo</th>
-                                    <th>Questões</th>
-                                    <th>Status</th>
-                                    <th>Data</th>
+                                    <th onclick="admin.ordenarProvasPor('questoes')" class="sortable">
+                                        Questões <i class="fas fa-sort" id="sort-questoes"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarProvasPor('status')" class="sortable">
+                                        Status <i class="fas fa-sort" id="sort-status"></i>
+                                    </th>
+                                    <th onclick="admin.ordenarProvasPor('data')" class="sortable">
+                                        Data <i class="fas fa-sort" id="sort-data"></i>
+                                    </th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                ${this.gerarLinhasProvas(this.provas)}
+                            <tbody id="tabelaProvasBody">
+                                ${this.gerarLinhasProvas(provas)}
                             </tbody>
                         </table>
                     </div>
 
-                    ${this.gerarPaginacao(data.pagination, 'provas')}
+                    <!-- Paginação -->
+                    ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'provas') : ''}
                 </div>
-            `;
+            </div>
 
-        } catch (error) {
-            console.error('Erro ao carregar provas:', error);
-            contentArea.innerHTML = `
-                <div class="error-container">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Erro ao carregar provas</h3>
-                    <p>${error.message}</p>
-                    <button class="btn-primary" onclick="admin.loadProvas()">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
-                </div>
+            <style>
+                .provas-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+                
+                /* Header com azul royal */
+                .provas-header {
+                    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 10px 30px rgba(30, 58, 138, 0.3);
+                    position: relative;
+                    overflow: hidden;
+                }
+                
+                .provas-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -50px;
+                    right: -50px;
+                    width: 200px;
+                    height: 200px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 50%;
+                }
+                
+                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
+                .header-icon {
+                    width: 70px; height: 70px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.2);
+                }
+                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
+                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
+                
+                .btn-header {
+                    padding: 12px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    border: none;
+                    position: relative;
+                    z-index: 2;
+                }
+                .btn-header.btn-primary {
+                    background: white;
+                    color: #1e3a8a;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                }
+                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
+                .btn-header.btn-refresh {
+                    background: rgba(255,255,255,0.15);
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    backdrop-filter: blur(5px);
+                    padding: 12px;
+                }
+                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
+                
+                /* Stats cards */
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(5, 1fr);
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                .stat-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    transition: all 0.3s;
+                    border: 1px solid rgba(0,0,0,0.05);
+                    cursor: pointer;
+                }
+                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .stat-card.primary .stat-icon { background: linear-gradient(135deg, #1e3a8a, #1e40af); }
+                .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
+                .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+                .stat-card.danger .stat-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
+                .stat-icon {
+                    width: 60px; height: 60px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                    color: white;
+                }
+                .stat-content { flex: 1; }
+                .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
+                .stat-detail { font-size: 11px; color: #9ca3af; }
+                
+                /* Filtros */
+                .filters-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+                .filters-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+                .filters-title { display: flex; align-items: center; gap: 10px; }
+                .filters-title i { font-size: 18px; color: #1e3a8a; background: #e0e7ff; padding: 8px; border-radius: 10px; }
+                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                .filters-badge { background: #1e3a8a; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+                
+                .filters-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+                    gap: 15px;
+                }
+                .filter-group { display: flex; flex-direction: column; gap: 5px; }
+                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; display: flex; align-items: center; gap: 5px; }
+                
+                .input-wrapper { position: relative; }
+                .input-wrapper input {
+                    width: 100%;
+                    padding: 10px 35px 10px 40px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    transition: all 0.3s;
+                }
+                .input-wrapper input:focus {
+                    outline: none;
+                    border-color: #1e3a8a;
+                    box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.1);
+                }
+                .input-icon {
+                    position: absolute;
+                    left: 15px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #9ca3af;
+                    font-size: 14px;
+                }
+                .input-clear {
+                    position: absolute;
+                    right: 10px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background: none;
+                    border: none;
+                    color: #9ca3af;
+                    cursor: pointer;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .input-clear:hover { background: #f3f4f6; color: #4b5563; }
+                
+                .filter-select {
+                    width: 100%;
+                    padding: 10px 15px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    background: white;
+                    cursor: pointer;
+                }
+                
+                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+                .btn-filter {
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    white-space: nowrap;
+                }
+                .btn-filter { background: #1e3a8a; color: white; }
+                .btn-filter:hover { background: #1e40af; transform: translateY(-2px); }
+                .btn-filter.btn-clear { background: #6b7280; }
+                .btn-filter.btn-clear:hover { background: #4b5563; }
+                
+                /* Tabela profissional */
+                .table-professional {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    overflow: hidden;
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+                .table-header {
+                    padding: 16px 20px;
+                    background: #f9fafb;
+                    border-bottom: 1px solid #e5e7eb;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .table-title { display: flex; align-items: center; gap: 10px; }
+                .table-title i { color: #1e3a8a; font-size: 16px; }
+                .table-title h3 { margin: 0; font-size: 15px; color: #374151; }
+                .table-info { font-size: 13px; color: #6b7280; font-weight: 500; }
+                
+                .data-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .data-table th {
+                    padding: 15px 20px;
+                    text-align: left;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #4b5563;
+                    background: #f9fafb;
+                    border-bottom: 2px solid #e5e7eb;
+                }
+                .data-table th.sortable { cursor: pointer; transition: background 0.2s; }
+                .data-table th.sortable:hover { background: #f3f4f6; }
+                .data-table td {
+                    padding: 15px 20px;
+                    border-bottom: 1px solid #e5e7eb;
+                    font-size: 14px;
+                    color: #1f2937;
+                }
+                .data-table tr:hover td { background: #f9fafb; }
+                
+                /* Status badges */
+                .status-badge {
+                    display: inline-block;
+                    padding: 4px 10px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                .status-badge.ativa { background: #d1fae5; color: #065f46; }
+                .status-badge.rascunho { background: #fef3c7; color: #92400e; }
+                .status-badge.concluida { background: #e5e7eb; color: #374151; }
+                .status-badge.cancelada { background: #fee2e2; color: #991b1b; }
+                
+                /* Action buttons */
+                .action-buttons { display: flex; gap: 5px; }
+                .btn-icon {
+                    width: 32px; height: 32px;
+                    border: none;
+                    border-radius: 6px;
+                    background: transparent;
+                    color: #6c757d;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s;
+                }
+                .btn-icon:hover { background: #e9ecef; color: #1e3a8a; }
+                .btn-icon.danger:hover { color: #dc3545; }
+                
+                /* Paginação */
+                .pagination-professional {
+                    padding: 16px 20px;
+                    border-top: 1px solid #e5e7eb;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }
+                .pagination-info { font-size: 13px; color: #6b7280; }
+                .pagination-controls { display: flex; gap: 8px; align-items: center; }
+                .btn-page {
+                    min-width: 38px; height: 38px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #4b5563;
+                    transition: all 0.2s;
+                }
+                .btn-page:hover { background: #f3f4f6; border-color: #1e3a8a; color: #1e3a8a; }
+                .btn-page.active { background: #1e3a8a; border-color: #1e3a8a; color: white; }
+                
+                @media (max-width: 1024px) {
+                    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+                    .filters-grid { grid-template-columns: 1fr; }
+                }
+                @media (max-width: 768px) {
+                    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+                    .provas-header { flex-direction: column; align-items: flex-start; }
+                    .header-actions { width: 100%; }
+                    .btn-header { flex: 1; }
+                }
+            </style>
+        `;
+    }
+
+    // ============ GERAR LINHAS DA TABELA DE PROVAS ============
+    gerarLinhasProvas(provas) {
+        if (!provas || provas.length === 0) {
+            return `
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 40px;">
+                        <i class="fas fa-file-alt" style="font-size: 2rem; color: #dee2e6; margin-bottom: 10px; display: block;"></i>
+                        Nenhuma prova encontrada
+                    </td>
+                </tr>
             `;
         }
+
+        return provas.map(prova => {
+            const tipo = prova.tipoProva === 'enem' ? 'ENEM' : 
+                        (prova.adaptada ? 'Adaptada' : 'Simples');
+            
+            // Calcular status
+            const agora = new Date();
+            const dataLimite = prova.dataLimite ? new Date(prova.dataLimite) : null;
+            
+            let statusClass = '';
+            let statusText = '';
+            
+            if (prova.cancelada === true) {
+                statusClass = 'cancelada';
+                statusText = 'Cancelada';
+            } else if (prova.publicada !== true) {
+                statusClass = 'rascunho';
+                statusText = 'Rascunho';
+            } else if (dataLimite && dataLimite < agora) {
+                statusClass = 'concluida';
+                statusText = 'Concluída';
+            } else {
+                statusClass = 'ativa';
+                statusText = 'Ativa';
+            }
+
+            // Nome do professor
+            let nomeProfessor = 'Desconhecido';
+            if (prova.professor) {
+                if (typeof prova.professor === 'object') {
+                    nomeProfessor = prova.professor.nome || prova.professor.name || 'Desconhecido';
+                } else if (typeof prova.professor === 'string') {
+                    nomeProfessor = prova.professor;
+                }
+            } else if (prova.professorNome) {
+                nomeProfessor = prova.professorNome;
+            }
+
+            // Turma
+            const turmaNome = prova.turma?.nome || prova.turma || 'N/A';
+            
+            // Data
+            const dataCriacao = prova.createdAt ? 
+                new Date(prova.createdAt).toLocaleDateString('pt-BR') : 'N/A';
+
+            return `
+                <tr>
+                    <td>
+                        <strong>${prova.titulo || 'Sem título'}</strong>
+                        ${prova.adaptada ? '<span class="badge-acessibilidade" title="Adaptada"><i class="fas fa-universal-access"></i></span>' : ''}
+                    </td>
+                    <td>
+                        <span style="display: flex; align-items: center; gap: 5px;">
+                            <i class="fas fa-chalkboard-teacher" style="color: #1e3a8a;"></i>
+                            ${nomeProfessor}
+                        </span>
+                    </td>
+                    <td>${turmaNome}</td>
+                    <td>${prova.periodo || '1'}º</td>
+                    <td>${tipo}</td>
+                    <td>${prova.quantidadeQuestoes || prova.questoes?.length || 0}</td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            ${statusText}
+                        </span>
+                    </td>
+                    <td>${dataCriacao}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-icon" onclick="admin.verProva('${prova.id}')" title="Ver detalhes">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn-icon edit" onclick="admin.editarProva('${prova.id}')" title="Editar prova">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-icon success" onclick="admin.exportarResultadosProva('${prova.id}')" title="Exportar resultados">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <button class="btn-icon danger" onclick="admin.excluirProva('${prova.id}')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // ============ CONFIGURAR EVENTOS DOS FILTROS ============
+    configurarEventosFiltrosProvas() {
+        // Busca com debounce
+        const searchInput = document.getElementById('searchProvas');
+        if (searchInput) {
+            const novoSearch = searchInput.cloneNode(true);
+            searchInput.parentNode.replaceChild(novoSearch, searchInput);
+            
+            let timeout;
+            novoSearch.addEventListener('keyup', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    this.aplicarFiltrosProvas();
+                }, 500);
+            });
+        }
+        
+        // Configurar selects
+        ['filterStatus', 'filterDificuldade', 'filterPeriodo'].forEach(id => {
+            const select = document.getElementById(id);
+            if (select) {
+                const novoSelect = select.cloneNode(true);
+                select.parentNode.replaceChild(novoSelect, select);
+                
+                novoSelect.addEventListener('change', () => {
+                    this.aplicarFiltrosProvas();
+                });
+            }
+        });
+    }
+
+    // ============ APLICAR FILTROS ============
+    aplicarFiltrosProvas() {
+        this.filtros.provas.search = document.getElementById('searchProvas')?.value || '';
+        this.filtros.provas.status = document.getElementById('filterStatus')?.value || 'todos';
+        this.filtros.provas.dificuldade = document.getElementById('filterDificuldade')?.value || 'todas';
+        this.filtros.provas.periodo = document.getElementById('filterPeriodo')?.value || 'todos';
+        this.filtros.provas.page = 1;
+        this.loadProvas();
+    }
+
+    // ============ LIMPAR FILTROS ============
+    limparFiltrosProvas() {
+        this.filtros.provas = { status: 'todos', dificuldade: 'todas', periodo: 'todos', search: '', page: 1, limit: 10 };
+        
+        const searchInput = document.getElementById('searchProvas');
+        const statusSelect = document.getElementById('filterStatus');
+        const dificuldadeSelect = document.getElementById('filterDificuldade');
+        const periodoSelect = document.getElementById('filterPeriodo');
+        
+        if (searchInput) searchInput.value = '';
+        if (statusSelect) statusSelect.value = 'todos';
+        if (dificuldadeSelect) dificuldadeSelect.value = 'todas';
+        if (periodoSelect) periodoSelect.value = 'todos';
+        
+        this.loadProvas();
+    }
+
+    // ============ FILTRAR POR STATUS (CLICANDO NOS CARDS) ============
+    filtrarPorStatus(status) {
+        const select = document.getElementById('filterStatus');
+        if (select) {
+            select.value = status;
+            this.aplicarFiltrosProvas();
+        }
+    }
+
+    // ============ ATUALIZAR PROVAS ============
+    async atualizarProvas() {
+        const refreshBtn = document.querySelector('.provas-header .btn-refresh i');
+        
+        try {
+            if (refreshBtn) {
+                refreshBtn.className = 'fas fa-spinner fa-spin';
+            }
+            
+            this.showToast('🔄 Atualizando provas...', 'info');
+            await this.loadProvas();
+            this.showToast('✅ Provas atualizadas!', 'success');
+            
+        } catch (error) {
+            console.error('Erro:', error);
+            this.showToast('❌ Erro ao atualizar', 'error');
+        } finally {
+            if (refreshBtn) {
+                setTimeout(() => {
+                    refreshBtn.className = 'fas fa-sync-alt';
+                }, 500);
+            }
+        }
+    }
+
+    // ============ RENDERIZAR ERRO ============
+    renderErroProvas(mensagem) {
+        return `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 16px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 20px;"></i>
+                <h3 style="color: #721c24; margin-bottom: 10px;">Erro ao carregar provas</h3>
+                <p style="color: #6c757d; margin-bottom: 20px;">${mensagem}</p>
+                <button onclick="admin.loadProvas()" style="
+                    background: #1e3a8a;
+                    color: white;
+                    border: none;
+                    padding: 10px 30px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                ">
+                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                </button>
+            </div>
+        `;
     }
 
     // ============ NOVA PROVA (VERSÃO PROFISSIONAL) ============
@@ -5629,19 +7105,12 @@ class AdminPanel {
         const contentArea = document.getElementById('contentArea');
         
         // Mostrar loading
-        contentArea.innerHTML = `
-            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
-                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
-                <p style="color: #495057;">Carregando dados reais do sistema...</p>
-            </div>
-            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-        `;
-
+        contentArea.innerHTML = this.renderMonitoramentoLoading();
+        
         try {
             // Buscar dados reais do backend
             const token = localStorage.getItem('auth_token');
             
-            // Fazer requisições paralelas
             const [metricasRes, anomaliasRes, estatisticasRes] = await Promise.all([
                 fetch(`${this.apiBase}/monitoramento/metricas`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -5654,7 +7123,6 @@ class AdminPanel {
                 })
             ]);
 
-            // Processar respostas
             const metricas = await metricasRes.json();
             const anomalias = await anomaliasRes.json();
             const estatisticas = await estatisticasRes.json();
@@ -5665,22 +7133,22 @@ class AdminPanel {
                 estatisticas: estatisticas.data 
             });
 
-            // Salvar dados no objeto this
+            // Salvar dados
             this.metricasData = metricas.data || {};
             this.anomaliasData = anomalias.data || [];
             this.estatisticasData = estatisticas.data || {};
 
-            // Renderizar HTML com os dados reais
+            // Renderizar HTML
             contentArea.innerHTML = this.renderMonitoramentoComDadosReais(
                 this.metricasData, 
                 this.anomaliasData, 
                 this.estatisticasData
             );
 
-            // CONECTAR AO WEBSOCKET PARA LOGS REAIS
-            this.conectarWebSocketLogs();
+            // ===== CONECTAR AO WEBSOCKET MANAGER =====
+            this.conectarWebSocketManager();
 
-            // Inicializar gráficos com dados reais
+            // Inicializar gráficos
             setTimeout(() => {
                 this.inicializarGraficosComDadosReais(this.metricasData);
             }, 500);
@@ -5690,17 +7158,213 @@ class AdminPanel {
 
         } catch (error) {
             console.error('❌ Erro ao carregar monitoramento:', error);
-            contentArea.innerHTML = `
-                <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 20px;"></i>
-                    <h3 style="color: #721c24;">Erro ao carregar dados do sistema</h3>
-                    <p style="color: #6c757d;">${error.message}</p>
-                    <button onclick="admin.loadMonitoramento()" style="background: #0d6efd; color: white; border: none; padding: 10px 30px; border-radius: 6px; margin-top: 20px; cursor: pointer;">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
-                </div>
-            `;
+            contentArea.innerHTML = this.renderMonitoramentoErro(error);
         }
+    }
+
+    // NOVO MÉTODO: Conectar ao WebSocket Manager
+
+    conectarWebSocketManager() {
+        console.log('📡 Conectando ao WebSocket Manager...');
+        
+        if (!window.wsManager) {
+            console.error('❌ WebSocketManager não encontrado!');
+            window.wsManager = new WebSocketManager();
+        }
+        
+        if (this.wsListener) {
+            this.wsListener = null;
+        }
+        
+        this.emReconexao = true;
+        
+        this.wsListener = window.wsManager.addListener((data) => {
+            if (data.type === 'history' && data.logs) {
+                console.log(`📦 Recebendo ${data.logs.length} logs históricos`);
+                
+                let novosLogs = 0;
+                let logsIgnorados = 0;
+                
+                data.logs.forEach(log => {
+                    const logId = `${log.timestamp}-${log.message?.substring(0, 100)}`;
+                    
+                    if (!this.logsRecebidos?.has(logId)) {
+                        const mensagem = log.message || '';
+                        if (!mensagem.includes('pong')) {
+                            this.adicionarLogServidor(log);
+                            if (this.logsRecebidos) {
+                                this.logsRecebidos.add(logId);
+                            }
+                            novosLogs++;
+                        }
+                    } else {
+                        logsIgnorados++;
+                    }
+                });
+                
+                if (novosLogs > 0) {
+                    this.adicionarLogServidor({
+                        type: 'system',
+                        message: `📊 +${novosLogs} novos logs (${logsIgnorados} duplicados)`,
+                        localTime: new Date().toLocaleTimeString('pt-BR', { hour12: false })
+                    });
+                }
+                
+                this.emReconexao = false;
+            }
+            else if (data.type === 'command_result') {
+                // Mostrar resultado de comandos
+                this.adicionarLogServidor({
+                    type: 'system',
+                    message: data.result,
+                    localTime: new Date().toLocaleTimeString('pt-BR', { hour12: false })
+                });
+            }
+            else if (data.type !== 'connection' && data.type !== 'history') {
+                const mensagem = data.message || '';
+                if (!mensagem.includes('pong')) {
+                    this.adicionarLogServidor(data);
+                }
+            }
+            else if (data.type === 'connection') {
+                const agora = new Date().toLocaleTimeString('pt-BR', { hour12: false });
+                
+                if (data.status === 'connected') {
+                    this.adicionarLogServidor({
+                        type: 'system',
+                        message: '✅ Conectado ao servidor',
+                        localTime: agora
+                    });
+                    
+                    // PEDIR APENAS UMA VEZ!
+                    if (this.emReconexao) {
+                        setTimeout(() => {
+                            window.wsManager?.requestHistory(); // Só history, não buffer
+                        }, 500);
+                    }
+                } 
+                else if (data.status === 'disconnected') {
+                    this.adicionarLogServidor({
+                        type: 'system',
+                        message: `❌ Desconectado (código: ${data.code})`,
+                        localTime: agora
+                    });
+                    this.emReconexao = true;
+                }
+            }
+        });
+        
+        const status = window.wsManager.getConnectionStatus();
+        console.log(`🔌 Status: ${status}`);
+        
+        if (status === 'connected' && !this.emReconexao) {
+            // Já conectado, pedir apenas buffer
+            setTimeout(() => {
+                window.wsManager?.requestBuffer();
+            }, 500);
+        }
+    }
+
+    verificarConexaoWebSocket() {
+        if (!window.wsManager) return;
+        
+        const status = window.wsManager.getConnectionStatus();
+        const statusElement = document.getElementById('connectionStatus');
+        
+        if (statusElement) {
+            let statusText = '';
+            let statusColor = '';
+            
+            switch(status) {
+                case 'connected':
+                    statusText = '🟢 Conectado';
+                    statusColor = '#28a745';
+                    break;
+                case 'connecting':
+                    statusText = '🟡 Conectando...';
+                    statusColor = '#ffc107';
+                    break;
+                case 'disconnected':
+                    statusText = '🔴 Desconectado';
+                    statusColor = '#dc3545';
+                    break;
+                default:
+                    statusText = '⚫ Desconhecido';
+                    statusColor = '#6c757d';
+            }
+            
+            statusElement.innerHTML = `<span style="color: ${statusColor};">${statusText}</span>`;
+        }
+        
+        // Verificar novamente em 5 segundos
+        setTimeout(() => this.verificarConexaoWebSocket(), 5000);
+    }
+
+    // Modificar o método de limpeza de conexão
+    limparConexaoWebSocket() {
+        // NÃO fechar a conexão global ao sair da aba!
+        // Apenas remover a referência do listener
+        this.wsListener = null;
+    }
+
+    // Método auxiliar para renderizar loading
+    renderMonitoramentoLoading() {
+        return `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                <p style="color: #495057;">Carregando dados reais do sistema...</p>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+    }
+
+    // Método auxiliar para renderizar erro
+    renderMonitoramentoErro(error) {
+        return `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 20px;"></i>
+                <h3 style="color: #721c24;">Erro ao carregar dados do sistema</h3>
+                <p style="color: #6c757d;">${error.message}</p>
+                <button onclick="admin.loadMonitoramento()" style="background: #0d6efd; color: white; border: none; padding: 10px 30px; border-radius: 6px; margin-top: 20px; cursor: pointer;">
+                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                </button>
+            </div>
+        `;
+    }
+
+    // Adicione este método na classe AdminPanel
+    mostrarStatusConexao() {
+        const status = window.wsManager?.getConnectionStatus();
+        const consoleFooter = document.querySelector('.console-footer');
+        
+        if (consoleFooter) {
+            let statusHTML = '';
+            switch(status) {
+                case 'connected':
+                    statusHTML = '<span style="color: #28a745;">🟢 Conectado</span>';
+                    break;
+                case 'connecting':
+                    statusHTML = '<span style="color: #ffc107;">🟡 Conectando...</span>';
+                    break;
+                case 'disconnected':
+                    statusHTML = '<span style="color: #dc3545;">🔴 Desconectado</span>';
+                    break;
+                default:
+                    statusHTML = '<span style="color: #6c757d;">⚫ Desconhecido</span>';
+            }
+            
+            // Verificar se já existe
+            let statusElement = document.getElementById('connectionStatusDetail');
+            if (!statusElement) {
+                statusElement = document.createElement('span');
+                statusElement.id = 'connectionStatusDetail';
+                statusElement.style.marginLeft = '15px';
+                consoleFooter.appendChild(statusElement);
+            }
+            statusElement.innerHTML = `📡 Status: ${statusHTML}`;
+        }
+        
+        setTimeout(() => this.mostrarStatusConexao(), 2000);
     }
 
     // ==================== RENDERIZAÇÃO COM DADOS REAIS ====================
@@ -5826,6 +7490,9 @@ class AdminPanel {
                                 <span class="console-title">
                                     <i class="fas fa-circle" style="color: #28a745; font-size: 10px;"></i>
                                     Servidor Ativo - Logs em tempo real
+                                </span>
+                                <span class="connection-status" id="connectionStatus" style="margin-left: 15px; font-size: 12px;">
+                                    <span style="color: #ffc107;">🟡 Conectando...</span>
                                 </span>
                                 <div class="console-actions">
                                     <label class="auto-scroll">
@@ -6573,119 +8240,6 @@ class AdminPanel {
         `;
     }
 
-    // ==================== CONEXÃO WEBSOCKET PARA LOGS REAIS ====================
-    conectarWebSocketLogs() {
-        // Se já existe uma conexão ativa, não fazer nada
-        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-            console.log('ℹ️ WebSocket já está conectado ou conectando');
-            return;
-        }
-
-        // Fechar conexão anterior se existir (apenas se não estiver já fechando)
-        if (this.ws) {
-            try {
-                this.ws.close();
-            } catch (e) {
-                // Ignorar erros ao fechar
-            }
-            this.ws = null;
-        }
-
-        // Determinar protocolo (ws ou wss)
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}`;
-        
-        console.log('🔌 Conectando ao WebSocket de logs:', wsUrl);
-        
-        this.ws = new WebSocket(wsUrl);
-        this.wsReconnectTimer = null; // Para controlar reconexão
-        
-        this.ws.onopen = () => {
-            console.log('✅ Conectado ao servidor de logs em tempo real');
-            this.adicionarLogServidor({
-                type: 'system',
-                message: '✅ Conectado ao servidor de logs em tempo real',
-                timestamp: new Date().toISOString()
-            });
-            
-            // Enviar comando para ativar modo de comandos
-            this.ws.send(JSON.stringify({ type: 'enable_commands' }));
-            
-            // Limpar qualquer timer de reconexão pendente
-            if (this.wsReconnectTimer) {
-                clearTimeout(this.wsReconnectTimer);
-                this.wsReconnectTimer = null;
-            }
-        };
-        
-        this.ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                
-                // Verificar se é comando para limpar console
-                if (data.type === 'clear_console') {
-                    this.limparConsole();
-                    return;
-                }
-                
-                // Verificar se é resultado de comando
-                if (data.type === 'command_result') {
-                    this.adicionarLogServidor({
-                        type: 'success',
-                        message: data.result,
-                        timestamp: data.timestamp
-                    });
-                } 
-                // Verificar se é erro de comando
-                else if (data.type === 'command_error') {
-                    this.adicionarLogServidor({
-                        type: 'error',
-                        message: `❌ Erro: ${data.error}`,
-                        timestamp: data.timestamp
-                    });
-                }
-                // Log normal
-                else {
-                    this.adicionarLogServidor(data);
-                }
-            } catch (e) {
-                console.error('Erro ao processar log:', e);
-            }
-        };
-        
-        this.ws.onerror = (error) => {
-            console.error('❌ Erro na conexão WebSocket:', error);
-            this.adicionarLogServidor({
-                type: 'error',
-                message: '❌ Erro na conexão com o servidor de logs',
-                timestamp: new Date().toISOString()
-            });
-        };
-        
-        this.ws.onclose = () => {
-            console.log('🔌 Desconectado do servidor de logs');
-            this.adicionarLogServidor({
-                type: 'system',
-                message: '🔌 Desconectado do servidor de logs',
-                timestamp: new Date().toISOString()
-            });
-            
-            // Limpar a referência do WebSocket
-            this.ws = null;
-            
-            // Não tentar reconectar automaticamente - apenas se o usuário estiver na aba de console
-            // e se não houver um timer já programado
-            if (!this.wsReconnectTimer && document.getElementById('tab-console')?.classList.contains('active')) {
-                console.log('⏳ Aguardando 10 segundos antes de tentar reconectar...');
-                this.wsReconnectTimer = setTimeout(() => {
-                    console.log('🔄 Tentando reconectar...');
-                    this.wsReconnectTimer = null;
-                    this.conectarWebSocketLogs();
-                }, 10000); // 10 segundos de espera
-            }
-        };
-    }
-
     // Adicione este método para limpar a conexão ao mudar de aba
     limparConexaoWebSocket() {
         if (this.ws) {
@@ -6700,46 +8254,64 @@ class AdminPanel {
         }
     }
 
-    // ==================== ADICIONAR LOG DO SERVIDOR ====================
+    // ===== ADICIONAR LOG DO SERVIDOR (VERSÃO CORRIGIDA) =====
     adicionarLogServidor(log) {
         const consoleOutput = document.getElementById('consoleOutput');
         if (!consoleOutput) return;
         
+        // ⚠️ NÃO LIMPAR O CONSOLE AUTOMATICAMENTE!
+        // Apenas adicionar novos logs
+        
         const linha = document.createElement('div');
         linha.className = 'console-line';
         
-        const data = new Date(log.timestamp);
-        const hora = data.toLocaleTimeString('pt-BR', { hour12: false });
+        // Usar localTime se existir, senão criar um timestamp
+        let hora = log.localTime || '--:--:--';
         
-        // Determinar ícone e cor baseado no tipo
-        let icone = 'ℹ️';
-        let tipo = 'info';
-        let cor = '#0dcaf0';
+        // Se não tiver localTime mas tiver timestamp ISO, converter
+        if (!log.localTime && log.timestamp) {
+            try {
+                const data = new Date(log.timestamp);
+                if (!isNaN(data.getTime())) {
+                    hora = data.toLocaleTimeString('pt-BR', { 
+                        hour12: false,
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                }
+            } catch (e) {
+                // Ignorar erro
+            }
+        }
         
-        // Verificar mensagens específicas do terminal
+        // Ignorar mensagens de pong (não mostrar no console)
         const mensagem = log.message || '';
+        if (mensagem.includes('pong') || log.type === 'pong') {
+            return; // Não mostrar pings/pongs no console
+        }
         
-        if (mensagem.includes('❌') || mensagem.includes('Error') || mensagem.includes('erro') || log.type === 'error') {
+        // Determinar tipo e cor
+        let tipo = log.type || 'info';
+        let cor = '#0dcaf0';
+        let icone = 'ℹ️';
+        
+        if (mensagem.includes('❌') || mensagem.includes('Error') || tipo === 'error') {
             icone = '❌';
             tipo = 'error';
             cor = '#dc3545';
         }
-        else if (mensagem.includes('⚠️') || mensagem.includes('warn') || log.type === 'warn') {
+        else if (mensagem.includes('⚠️') || mensagem.includes('warn') || tipo === 'warn') {
             icone = '⚠️';
             tipo = 'warn';
             cor = '#ffc107';
         }
-        else if (mensagem.includes('✅') || mensagem.includes('sucesso') || log.type === 'success') {
+        else if (mensagem.includes('✅') || mensagem.includes('sucesso') || tipo === 'success') {
             icone = '✅';
             tipo = 'success';
             cor = '#28a745';
         }
-        else if (mensagem.includes('🔍') || mensagem.includes('Testando') || log.type === 'debug') {
-            icone = '🔍';
-            tipo = 'debug';
-            cor = '#6f42c1';
-        }
-        else if (mensagem.includes('📁') || mensagem.includes('📊') || mensagem.includes('📝') || mensagem.includes('🚀')) {
+        else if (mensagem.includes('📊') || mensagem.includes('📦') || tipo === 'system') {
             icone = '📌';
             tipo = 'system';
             cor = '#6c757d';
@@ -6753,8 +8325,8 @@ class AdminPanel {
         
         consoleOutput.appendChild(linha);
         
-        // Limitar número de linhas
-        while (consoleOutput.children.length > 500) {
+        // Limitar número de linhas (opcional - manter últimas 500)
+        while (consoleOutput.children.length > 1000) {
             consoleOutput.removeChild(consoleOutput.firstChild);
         }
         
@@ -6762,9 +8334,6 @@ class AdminPanel {
         if (document.getElementById('autoScrollConsole')?.checked) {
             consoleOutput.scrollTop = consoleOutput.scrollHeight;
         }
-        
-        // Atualizar estatísticas
-        this.atualizarStatsConsole();
     }
 
     // ==================== EXECUÇÃO DE COMANDOS ====================
@@ -6837,8 +8406,9 @@ class AdminPanel {
             consoleOutput.innerHTML = '';
             this.adicionarLogServidor({
                 type: 'system',
-                message: '🧹 Console limpo pelo administrador',
-                timestamp: new Date().toISOString()
+                message: '🧹 Console limpo manualmente',
+                timestamp: new Date().toISOString(),
+                localTime: new Date().toLocaleTimeString('pt-BR', { hour12: false })
             });
         }
     }
@@ -7060,12 +8630,14 @@ class AdminPanel {
             this.atualizarGraficosMetricas();
         }
         
-        // Se não for a aba de console, limpar a conexão WebSocket para economizar recursos
-        if (tab !== 'console') {
-            this.limparConexaoWebSocket();
-        } else {
-            // Se for a aba de console, reconectar
-            this.conectarWebSocketLogs();
+        // NÃO PRECISAMOS MAIS DESCONECTAR/RECONECTAR!
+        // O WebSocketManager já está sempre conectado
+        
+        // Se for a aba de console, pedir estatísticas do buffer
+        if (tab === 'console') {
+            setTimeout(() => {
+                window.wsManager?.sendCommand('buffer()');
+            }, 500);
         }
     }
 
@@ -14740,98 +16312,6 @@ class AdminPanel {
             input.value = comando;
             input.focus();
         }
-    }
-
-    conectarWebSocketLogs() {
-        // Fechar conexão anterior se existir
-        if (this.ws) {
-            this.ws.close();
-        }
-
-        // Determinar protocolo (ws ou wss)
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}`;
-        
-        console.log('🔌 Conectando ao WebSocket de logs:', wsUrl);
-        
-        this.ws = new WebSocket(wsUrl);
-        
-        this.ws.onopen = () => {
-            console.log('✅ Conectado ao servidor de logs em tempo real');
-            this.adicionarLogServidor({
-                type: 'system',
-                message: '✅ Conectado ao servidor de logs em tempo real',
-                timestamp: new Date().toISOString()
-            });
-            
-            // Enviar comando para ativar modo de comandos
-            this.ws.send(JSON.stringify({ type: 'enable_commands' }));
-        };
-        
-        // Dentro do método conectarWebSocketLogs, no ws.onmessage:
-        this.ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                
-                // Verificar se é comando para limpar console
-                if (data.type === 'clear_console') {
-                    this.limparConsole();
-                    return;
-                }
-                
-                // Verificar se é resultado de comando
-                if (data.type === 'command_result') {
-                    this.adicionarLogServidor({
-                        type: 'success',
-                        message: data.result,
-                        timestamp: data.timestamp
-                    });
-                } 
-                // Verificar se é erro de comando
-                else if (data.type === 'command_error') {
-                    this.adicionarLogServidor({
-                        type: 'error',
-                        message: `❌ Erro: ${data.error}`,
-                        timestamp: data.timestamp
-                    });
-                }
-                // Log normal
-                else {
-                    this.adicionarLogServidor(data);
-                }
-            } catch (e) {
-                console.error('Erro ao processar log:', e);
-            }
-        };
-        
-        this.ws.onerror = (error) => {
-            console.error('❌ Erro na conexão WebSocket:', error);
-            this.adicionarLogServidor({
-                type: 'error',
-                message: '❌ Erro na conexão com o servidor de logs',
-                timestamp: new Date().toISOString()
-            });
-            
-            // Fallback para logs simulados
-            this.iniciarLogsSimulados();
-        };
-        
-        this.ws.onclose = () => {
-            console.log('🔌 Desconectado do servidor de logs');
-            this.adicionarLogServidor({
-                type: 'system',
-                message: '🔌 Desconectado do servidor de logs',
-                timestamp: new Date().toISOString()
-            });
-            
-            // Tentar reconectar após 5 segundos
-            setTimeout(() => {
-                if (document.getElementById('tab-console')?.classList.contains('active')) {
-                    console.log('🔄 Tentando reconectar...');
-                    this.conectarWebSocketLogs();
-                }
-            }, 5000);
-        };
     }
 
     // ============ GERAR LINHAS DA TABELA DE PROVAS (COM BOTÃO EDITAR) ============

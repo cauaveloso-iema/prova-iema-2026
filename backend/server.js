@@ -20,7 +20,6 @@ const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const professorAuth = require('./security/professor-auth');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-require('./services/email-service');
 const multer = require('multer');
 const fs = require('fs');
 const Groq = require("groq-sdk");
@@ -31,11 +30,6 @@ const cookieParser = require('cookie-parser');
 // FORÇAR FUSO HORÁRIO (LOGO NA PRIMEIRA LINHA)
 // ============================================================================
 process.env.TZ = 'America/Sao_Paulo';
-console.log('🌍 FUSO HORÁRIO FORÇADO PARA:', process.env.TZ);
-console.log('🕒 HORA ATUAL DO SERVIDOR (local):', new Date().toString());
-console.log('🕒 HORA ATUAL DO SERVIDOR (ISO):', new Date().toISOString());
-console.log('='.repeat(60));
-
 
 // ============================================================================
 // INICIALIZAÇÃO DO EXPRESS E SERVIDOR
@@ -43,6 +37,22 @@ console.log('='.repeat(60));
 const app = express();
 const PORT = process.env.PORT || 10000;
 const server = http.createServer(app);
+
+// ============================================================================
+// LOGGER DEVE SER O PRIMEIRO SERVIÇO A SER INICIALIZADO
+// ============================================================================
+const LoggerService = require('./services/logger-service');
+const loggerService = new LoggerService(server);
+
+// ============================================================================
+// AGORA TODOS OS CONSOLE.LOG SERÃO CAPTURADOS (INCLUINDO OS PRIMEIROS)
+// ============================================================================
+console.log('🌍 FUSO HORÁRIO FORÇADO PARA:', process.env.TZ);
+console.log('🕒 HORA ATUAL DO SERVIDOR (local):', new Date().toString());
+console.log('🕒 HORA ATUAL DO SERVIDOR (ISO):', new Date().toISOString());
+console.log('='.repeat(60));
+console.log('🚀 Servidor iniciando...');
+console.log('📝 LoggerService ativo desde o boot!');
 
 // ============================================================================
 // CRIAÇÃO DE DIRETÓRIOS NECESSÁRIOS
@@ -73,7 +83,6 @@ console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Co
 // IMPORTAÇÃO DE SERVIÇOS
 // ============================================================================
 const monitoramentoRoutes = require('./routes/monitoramento');
-const LoggerService = require('./services/logger-service');
 const EmailService = require('./services/email-service');
 const matriculasManager = require('./matriculas/index');
 
@@ -164,9 +173,8 @@ async function enviarSmsTwilio(telefone, mensagem) {
 }
 
 // ============================================================================
-// INICIALIZAÇÃO DOS SERVIÇOS
+// INICIALIZAÇÃO DO EMAIL SERVICE
 // ============================================================================
-const loggerService = new LoggerService(server);
 const emailService = new EmailService();
 
 // ============================================================================
@@ -190,7 +198,7 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(cookieParser()); 
+app.use(cookieParser());
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO GLOBAL ============
 // Middleware de autenticação JWT (global)
@@ -13964,6 +13972,31 @@ app.get('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// No seu server.js ou push-routes.js
+app.post('/api/push/subscribe', authenticateToken, async (req, res) => {
+    try {
+        const subscription = req.body;
+        const userId = req.userId;
+        
+        // Aqui você salva a subscription no banco de dados
+        // associada ao usuário userId
+        
+        console.log(`📱 Nova inscrição push para usuário ${userId}`);
+        
+        res.json({
+            success: true,
+            message: 'Inscrição salva com sucesso'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar inscrição:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });

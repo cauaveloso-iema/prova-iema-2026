@@ -4041,7 +4041,7 @@
     
     async function finalizarProva() {
 
-         // ============ VERIFICAR SE JÁ FOI FINALIZADA ============
+        // ============ VERIFICAR SE JÁ FOI FINIFICADA ============
         if (provaFinalizada) {
             console.log('⏭️ Prova já foi finalizada anteriormente');
             
@@ -4051,7 +4051,7 @@
                 console.log('✅ Prova marcada como finalizada no localStorage');
                 
                 // Já redirecionar direto
-                mostrarAlertaSeguro('Você já finalizou esta prova anteriormente. Redirecionando...');
+                alert('Você já finalizou esta prova anteriormente. Redirecionando...');
                 setTimeout(() => {
                     window.location.href = '/aluno.html?prova_finalizada=true&prova_id=' + encodeURIComponent(prova._id);
                 }, 2000);
@@ -4060,11 +4060,6 @@
         }
         
         console.log('🚀 INICIANDO PROCESSO DE FINALIZAÇÃO DA PROVA');
-        
-        // Marcar que a prova está sendo finalizada (EM MEMÓRIA E LOCALSTORAGE)
-        provaFinalizada = true;
-        window.provaFinalizada = true;
-        localStorage.setItem('provaFinalizada_' + prova._id, 'true');
         
         // 🔥 VARIÁVEL DE CONTROLE PARA SABER SE FOI CANCELADO PELO USUÁRIO
         let canceladoPeloUsuario = false;
@@ -4322,6 +4317,11 @@
         
         // ============ SE CHEGOU AQUI, USUÁRIO CONFIRMOU ============
         console.log('🎯 USUÁRIO CONFIRMOU - PROSSEGUINDO COM FINALIZAÇÃO');
+        
+        // ============ AGORA SIM MARCAR QUE A PROVA ESTÁ SENDO FINALIZADA ============
+        provaFinalizada = true;
+        window.provaFinalizada = true;
+        localStorage.setItem('provaFinalizada_' + prova._id, 'true');
         
         // ============ ETAPA 3: PREPARAÇÃO E ENVIO ============
         try {
