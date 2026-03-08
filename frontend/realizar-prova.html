@@ -182,6 +182,101 @@
     };
 })();
 </script>
+
+<script>
+// ============================================
+// FULLSCREEN AUTOMÁTICO PARA KODULAR
+// ============================================
+(function() {
+    // Detectar se está rodando no Kodular (WebView)
+    const isKodular = /Kodular|AppInventor|WebView|Android/i.test(navigator.userAgent) || 
+                      window.location.href.includes('kodular') ||
+                      document.referrer.includes('kodular');
+    
+    if (isKodular) {
+        console.log('📱 Kodular detectado - Ativando modo fullscreen');
+        
+        // Função para entrar em fullscreen
+        function entrarFullScreen() {
+            const doc = document.documentElement;
+            
+            if (doc.requestFullscreen) {
+                doc.requestFullscreen();
+            } else if (doc.webkitRequestFullscreen) {
+                doc.webkitRequestFullscreen();
+            } else if (doc.msRequestFullscreen) {
+                doc.msRequestFullscreen();
+            } else if (doc.mozRequestFullScreen) {
+                doc.mozRequestFullScreen();
+            }
+            
+            // Esconder a barra de endereço do WebView
+            if (window.scrollTo) {
+                window.scrollTo(0, 1);
+            }
+        }
+        
+        // Tentar entrar em fullscreen quando a página carregar
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', entrarFullScreen);
+        } else {
+            entrarFullScreen();
+        }
+        
+        // Também tentar quando o usuário tocar na tela
+        document.addEventListener('touchstart', function fullScreenOnTouch() {
+            entrarFullScreen();
+            document.removeEventListener('touchstart', fullScreenOnTouch);
+        }, { once: true });
+        
+        // Detectar quando sai do fullscreen e tentar voltar
+        document.addEventListener('fullscreenchange', function() {
+            if (!document.fullscreenElement && isKodular) {
+                setTimeout(entrarFullScreen, 100);
+            }
+        });
+        
+        document.addEventListener('webkitfullscreenchange', function() {
+            if (!document.webkitFullscreenElement && isKodular) {
+                setTimeout(entrarFullScreen, 100);
+            }
+        });
+        
+        // CSS específico para Kodular
+        const style = document.createElement('style');
+        style.textContent = `
+            /* Esconder elementos do sistema no Kodular */
+            body.kodular-mode {
+                padding-top: 0 !important;
+                margin-top: 0 !important;
+            }
+            
+            /* Garantir que o conteúdo ocupe toda a tela */
+            html.kodular-mode, 
+            body.kodular-mode {
+                height: 100vh !important;
+                width: 100vw !important;
+                overflow: hidden !important;
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+            }
+            
+            /* Forçar barra de endereço a sumir */
+            .kodular-mode .prova-header {
+                margin-top: env(safe-area-inset-top, 0px);
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Adicionar classe ao body
+        document.body.classList.add('kodular-mode');
+        document.documentElement.classList.add('kodular-mode');
+    }
+})();
+</script>
     
     <!-- ESTILOS DE ACESSIBILIDADE PARA PROVAS -->
     <style>
