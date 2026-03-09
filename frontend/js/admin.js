@@ -9935,15 +9935,14 @@ class AdminPanel {
             `;
         }
 
-        // ============ ENVIAR LEMBRETE (VERSÃO FINAL QUE FUNCIONA) ============
+        // ============ ENVIAR LEMBRETE (VERSÃO COM PUSH) ============
         async enviarLembrete(resultadoId) {
             try {
                 console.log('📧 Enviando lembrete para resultado:', resultadoId);
                 
-                // 🔴 PASSO 1: VERIFICAR CONFIGURAÇÕES ANTES DE TUDO
                 const token = localStorage.getItem('auth_token');
                 
-                // Buscar configurações atuais
+                // 🔴 PASSO 1: VERIFICAR CONFIGURAÇÕES
                 const configResponse = await fetch('/api/admin/configuracoes', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -9953,27 +9952,21 @@ class AdminPanel {
                 }
                 
                 const configData = await configResponse.json();
-                const notificacoesHabilitadas = configData.configuracoes?.notificacoes?.sistema !== false;
+                const notifConfig = configData.configuracoes?.notificacoes;
+                const pushAtivado = notifConfig?.push === true;
+                const sistemaAtivado = notifConfig?.sistema !== false;
                 
-                console.log('📋 Configurações de notificação:', {
-                    sistema: configData.configuracoes?.notificacoes?.sistema,
-                    habilitadas: notificacoesHabilitadas
-                });
+                console.log('📋 Configurações:', { pushAtivado, sistemaAtivado });
                 
-                // Se notificações do sistema estiverem desabilitadas, NÃO ENVIAR
-                if (!notificacoesHabilitadas) {
-                    this.showToast('⚠️ Notificações do sistema estão desabilitadas nas configurações', 'warning');
-                    console.log('🚫 Bloqueado: notificações do sistema desabilitadas');
+                if (!sistemaAtivado) {
+                    this.showToast('⚠️ Notificações do sistema desabilitadas', 'warning');
                     return;
                 }
                 
-                // Buscar dados do resultado - primeiro tenta do this.resultadosCompletos
+                // 🔴 PASSO 2: BUSCAR RESULTADO
                 let resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
                 
-                // Se não encontrar, busca da API
                 if (!resultado) {
-                    console.log('📡 Resultado não encontrado localmente, buscando da API...');
-                    
                     const response = await fetch('/api/admin/todos-resultados', {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
@@ -9997,28 +9990,27 @@ class AdminPanel {
                     return;
                 }
                 
-                // Confirmar envio
+                // 🔴 PASSO 3: CONFIRMAR ENVIO
                 const confirmar = await this.confirmar(
                     '📧 Enviar Lembrete',
-                    `Deseja enviar um lembrete para o aluno <strong>${alunoNome}</strong> sobre a prova <strong>${provaTitulo}</strong>?`
+                    `Deseja enviar um lembrete para <strong>${alunoNome}</strong> sobre a prova <strong>${provaTitulo}</strong>?`
                 );
                 
                 if (!confirmar) return;
                 
                 this.showToast('📧 Enviando lembrete...', 'info');
                 
+                // 🔴 PASSO 4: CRIAR NOTIFICAÇÃO NO SISTEMA
                 const notificacaoBody = {
                     usuarioId: alunoId,
                     tipo: 'sistema',
                     titulo: '📝 Lembrete de Prova',
-                    mensagem: `O professor enviou um lembrete sobre a prova "${provaTitulo}".`,
+                    mensagem: `Professor enviou lembrete: "${provaTitulo}"`,
                     icone: '📧',
                     cor: '#3b82f6',
                     link: `/aluno.html?prova=${provaId}`,
                     prioridade: 1
                 };
-                
-                console.log('📤 Enviando notificação:', notificacaoBody);
                 
                 const notificacaoResponse = await fetch('/api/notificacoes', {
                     method: 'POST',
@@ -10031,18 +10023,57 @@ class AdminPanel {
                 
                 const notificacaoData = await notificacaoResponse.json();
                 
-                if (notificacaoData.success) {
-                    this.showToast('✅ Lembrete enviado com sucesso!', 'success');
-                    
-                    // Mostrar modal de confirmação
-                    this.mostrarConfirmacaoLembrete(alunoNome, provaTitulo);
-                } else {
+                if (!notificacaoData.success) {
                     throw new Error(notificacaoData.error || 'Erro ao criar notificação');
                 }
                 
+                console.log('✅ Notificação criada no sistema');
+                
+                // 🔴 PASSO 5: SE PUSH ATIVADO, ENVIAR PARA ONESIGNAL
+                if (pushAtivado) {
+                    console.log('📱 Enviando push para OneSignal...');
+                    
+                    try {
+                        const pushResponse = await fetch('/api/usuario/testar-push', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ 
+                                usuarioId: alunoId,
+                                titulo: '📝 Lembrete de Prova',
+                                mensagem: `Professor enviou lembrete: ${provaTitulo}`,
+                                dados: {
+                                    tipo: 'lembrete',
+                                    provaId: provaId,
+                                    provaTitulo: provaTitulo
+                                }
+                            })
+                        });
+                        
+                        const pushData = await pushResponse.json();
+                        
+                        if (pushData.success) {
+                            console.log('✅ Push enviado com sucesso!');
+                        } else {
+                            console.log('⚠️ Push não enviado:', pushData.error);
+                        }
+                    } catch (pushError) {
+                        console.log('⚠️ Erro ao enviar push:', pushError.message);
+                        // Não interrompe o fluxo - notificação já foi criada
+                    }
+                } else {
+                    console.log('📱 Push desativado nas configurações');
+                }
+                
+                // 🔴 PASSO 6: MOSTRAR CONFIRMAÇÃO
+                this.showToast('✅ Lembrete enviado com sucesso!', 'success');
+                this.mostrarConfirmacaoLembrete(alunoNome, provaTitulo);
+                
             } catch (error) {
-                console.error('❌ Erro ao enviar lembrete:', error);
-                this.showToast('❌ Erro: ' + error.message, 'error');
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
         }
 
