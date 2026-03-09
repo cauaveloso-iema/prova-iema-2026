@@ -1638,7 +1638,6 @@ app.post('/api/admin/2fa/gerar-backup-codes/:userId', authenticateToken, async (
     }
 });
 
-// ============ ROTA PARA SOLICITAR NOVOS CÓDIGOS DE BACKUP (VERSÃO FINAL) ============
 // ============ ROTA PARA SOLICITAR NOVOS CÓDIGOS DE BACKUP ============
 app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
     try {
@@ -1668,20 +1667,23 @@ app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
             });
         }
         
-        // ✅ USANDO O MODELO IMPORTADO (sem recriar!)
         const notificacoes = [];
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
         
         for (const admin of admins) {
             try {
-                const notificacao = new Notificacao({  // ✅ Modelo correto!
+                // Criar notificação no sistema
+                const notificacao = new Notificacao({
                     usuarioId: admin._id,
-                    tipo: 'sistema',  // ✅ Usando um tipo válido do enum correto
+                    tipo: 'sistema',
                     titulo: '🆕 Solicitação de novos códigos de backup',
                     mensagem: `${usuario.nome} (${usuario.role}) está sem códigos de backup e solicita novos.`,
                     icone: '🔑',
                     cor: '#f59e0b',
                     link: `/admin.html?section=usuarios&userId=${usuarioId}`,
-                    prioridade: 4,  // ✅ NÚMERO! (1-5)
+                    prioridade: 4,
                     dados: {
                         solicitanteId: usuarioId,
                         solicitanteNome: usuario.nome,
@@ -1695,6 +1697,23 @@ app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
                 await notificacao.save();
                 notificacoes.push(notificacao);
                 console.log(`✅ Notificação criada para admin ${admin._id}`);
+                
+                // 🔥 ENVIAR PUSH SE ATIVADO
+                if (pushAtivado) {
+                    const OneSignalService = require('./services/onesignal-service');
+                    const oneSignal = new OneSignalService();
+                    
+                    await oneSignal.enviarPush(
+                        admin._id,
+                        '🆕 Solicitação de Backup',
+                        `${usuario.nome} solicitou novos códigos de backup`,
+                        {
+                            tipo: 'solicitacao_backup',
+                            solicitanteId: usuarioId,
+                            solicitanteNome: usuario.nome
+                        }
+                    );
+                }
                 
             } catch (error) {
                 console.error(`❌ Erro ao notificar admin ${admin._id}:`, error.message);
@@ -2798,7 +2817,7 @@ const uploadMultiple = upload.fields([
 ]);
 
 
-// ============ ROTA PARA PUBLICAR PROVA (CORRIGIDA PARA SUPER ADMIN) ============
+// ============ ROTA PARA PUBLICAR PROVA (CORRIGIDA COM PUSH) ============
 app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.provaId;
@@ -2861,8 +2880,62 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
     
     // Buscar turma para notificar alunos
     let turma = null;
+    let alunos = [];
+    
     if (prova.turmaId) {
-      turma = await Turma.findById(prova.turmaId);
+      turma = await Turma.findById(prova.turmaId).populate('alunos', 'nome email onesignalPlayerId');
+      alunos = turma?.alunos || [];
+    }
+    
+    // ===== 🔥 ADICIONAR NOTIFICAÇÃO + PUSH PARA ALUNOS =====
+    if (alunos.length > 0) {
+      const Config = mongoose.model('Config');
+      const configDoc = await Config.findOne({ chave: 'notificacoes' });
+      const pushAtivado = configDoc?.valor?.push === true;
+      const OneSignalService = require('./services/onesignal-service');
+      const oneSignal = pushAtivado ? new OneSignalService() : null;
+      
+      for (const aluno of alunos) {
+        try {
+          // Notificação no sistema
+          const notificacao = new Notificacao({
+            usuarioId: aluno._id,
+            tipo: 'sistema',
+            titulo: '📝 Nova Prova Publicada',
+            mensagem: `A prova "${prova.titulo}" foi publicada na turma ${turma?.nome || 'sua turma'}.`,
+            icone: '📚',
+            cor: '#10b981',
+            link: `/aluno.html`,
+            prioridade: 3,
+            dados: {
+              provaId: prova._id,
+              provaTitulo: prova.titulo,
+              turmaId: turma?._id,
+              tipo: 'nova_prova'
+            }
+          });
+          
+          await notificacao.save();
+          
+          // Push se ativado
+          if (pushAtivado && oneSignal && aluno.onesignalPlayerId) {
+            await oneSignal.enviarPush(
+              aluno._id,
+              '📝 Nova Prova',
+              `Prova "${prova.titulo}" publicada em ${turma?.nome || 'sua turma'}`,
+              {
+                tipo: 'nova_prova',
+                provaId: prova._id,
+                provaTitulo: prova.titulo
+              }
+            );
+          }
+        } catch (notifError) {
+          console.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, notifError.message);
+        }
+      }
+      
+      console.log(`✅ ${alunos.length} alunos notificados sobre nova prova`);
     }
     
     res.json({
@@ -2891,7 +2964,6 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
 // ============ ROTA PARA PROFESSOR EDITAR SUAS PRÓPRIAS PROVAS ============
 app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
     try {
-        // Verificar se é professor ou admin (professores podem editar suas provas)
         const isProfessor = req.userRole === 'professor' || req.userRole === 'admin' || req.userRole === 'super_admin';
         
         if (!isProfessor) {
@@ -2907,14 +2979,6 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
         const updates = req.body;
         
         console.log(`✏️ Usuário ${usuarioId} (${usuarioRole}) editando prova ${provaId}`);
-        console.log('📦 Dados recebidos:', {
-            titulo: updates.titulo,
-            conteudo: updates.conteudo,
-            dataLimite: updates.dataLimite,
-            horarioInicio: updates.horarioInicio,
-            horarioTermino: updates.horarioTermino,
-            questoes: updates.questoes?.length || 0
-        });
         
         const prova = await Prova.findById(provaId);
         if (!prova) {
@@ -2924,7 +2988,6 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
             });
         }
         
-        // 🔥 VERIFICAÇÃO DE PERMISSÃO: Professor só pode editar suas próprias provas
         if (usuarioRole === 'professor' && prova.userId.toString() !== usuarioId) {
             return res.status(403).json({
                 success: false,
@@ -2932,11 +2995,19 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
             });
         }
         
-        // Atualizar campos básicos (incluindo horários)
+        // Guardar valores antigos para comparar
+        const tinhaMudancas = (
+            updates.titulo !== prova.titulo ||
+            updates.conteudo !== prova.conteudo ||
+            updates.dataLimite !== prova.dataLimite ||
+            updates.horarioInicio !== prova.horarioInicio ||
+            updates.horarioTermino !== prova.horarioTermino
+        );
+        
+        // Atualizar campos
         if (updates.titulo) prova.titulo = updates.titulo;
         if (updates.conteudo) prova.conteudo = updates.conteudo;
         
-        // Processar data limite com horário de São Paulo
         if (updates.dataLimite) {
             if (updates.dataLimite.includes('T')) {
                 prova.dataLimite = new Date(updates.dataLimite);
@@ -2946,21 +3017,11 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
             } else {
                 prova.dataLimite = new Date(`${updates.dataLimite}T23:59:59`);
             }
-            console.log(`📅 Data limite atualizada: ${prova.dataLimite.toLocaleString('pt-BR')}`);
         }
         
-        // Atualizar horários
-        if (updates.horarioInicio) {
-            prova.horarioInicio = updates.horarioInicio;
-            console.log(`⏰ Horário início atualizado: ${prova.horarioInicio}`);
-        }
+        if (updates.horarioInicio) prova.horarioInicio = updates.horarioInicio;
+        if (updates.horarioTermino) prova.horarioTermino = updates.horarioTermino;
         
-        if (updates.horarioTermino) {
-            prova.horarioTermino = updates.horarioTermino;
-            console.log(`⏰ Horário término atualizado: ${prova.horarioTermino}`);
-        }
-        
-        // Atualizar duração (calcular automaticamente se não veio)
         if (updates.duracaoMinutos) {
             prova.duracaoMinutos = updates.duracaoMinutos;
         } else if (updates.horarioInicio && updates.horarioTermino) {
@@ -2969,17 +3030,70 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
             prova.duracaoMinutos = (h2 * 60 + m2) - (h1 * 60 + m1);
         }
         
-        // Atualizar questões
         if (updates.questoes && Array.isArray(updates.questoes)) {
             prova.questoes = updates.questoes;
             prova.quantidadeQuestoes = updates.questoes.length;
-            console.log(`📝 ${prova.quantidadeQuestoes} questões atualizadas`);
         }
         
         await prova.save();
         
-        console.log(`✅ Prova ${provaId} atualizada com sucesso por ${usuarioRole}`);
-        console.log(`   Horários salvos: ${prova.horarioInicio} - ${prova.horarioTermino}`);
+        console.log(`✅ Prova ${provaId} atualizada com sucesso`);
+        
+        // ===== 🔥 SE HOUVER MUDANÇAS SIGNIFICATIVAS E A PROVA JÁ FOI PUBLICADA, NOTIFICAR ALUNOS =====
+        if (tinhaMudancas && prova.publicada) {
+            try {
+                const turma = await Turma.findById(prova.turmaId).populate('alunos', 'nome onesignalPlayerId');
+                const alunos = turma?.alunos || [];
+                
+                if (alunos.length > 0) {
+                    const Config = mongoose.model('Config');
+                    const configDoc = await Config.findOne({ chave: 'notificacoes' });
+                    const pushAtivado = configDoc?.valor?.push === true;
+                    const OneSignalService = require('./services/onesignal-service');
+                    const oneSignal = pushAtivado ? new OneSignalService() : null;
+                    
+                    for (const aluno of alunos) {
+                        try {
+                            const notificacao = new Notificacao({
+                                usuarioId: aluno._id,
+                                tipo: 'sistema',
+                                titulo: '✏️ Prova Atualizada',
+                                mensagem: `A prova "${prova.titulo}" foi atualizada. Verifique os detalhes.`,
+                                icone: '✏️',
+                                cor: '#ffc107',
+                                link: `/aluno.html?prova=${provaId}`,
+                                prioridade: 3,
+                                dados: {
+                                    provaId: prova._id,
+                                    provaTitulo: prova.titulo,
+                                    tipo: 'prova_atualizada'
+                                }
+                            });
+                            
+                            await notificacao.save();
+                            
+                            if (pushAtivado && oneSignal && aluno.onesignalPlayerId) {
+                                await oneSignal.enviarPush(
+                                    aluno._id,
+                                    '✏️ Prova Atualizada',
+                                    `A prova "${prova.titulo}" foi atualizada`,
+                                    {
+                                        tipo: 'prova_atualizada',
+                                        provaId: prova._id
+                                    }
+                                );
+                            }
+                        } catch (notifError) {
+                            console.error('⚠️ Erro ao notificar aluno:', notifError.message);
+                        }
+                    }
+                    
+                    console.log(`✅ ${alunos.length} alunos notificados sobre atualização da prova`);
+                }
+            } catch (notifError) {
+                console.error('⚠️ Erro ao notificar alunos:', notifError.message);
+            }
+        }
         
         res.json({
             success: true,
@@ -3674,7 +3788,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
             "E) Fortalecimento dos laços comunitários tradicionais."
           ],
           respostaCorreta: 1,
-          explicacao: "A Revolução Industrial ledo à formação do proletariado urbano (trabalhadores assalariados) e ao sistema fabril, alterando radicalmente as relações de trabalho.",
+          explicacao: "A Revolução Industrial levou à formação do proletariado urbano (trabalhadores assalariados) e ao sistema fabril, alterando radicalmente as relações de trabalho.",
           conceitos: ["Revolução Industrial", "Transformações sociais"]
         }
       },
@@ -4398,6 +4512,11 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     console.log(`👨‍🏫 Professor atribuído: ${professorDaProva}`);
     console.log(`🎯 Alunos alvo: ${alunosDestino.length} alunos`);
     console.log(`⏱️ Duração: ${duracaoMinutos} minutos (validada pelas configurações)`);
+
+    // ===== 🔥 NOTIFICAR ALUNOS SOBRE NOVA PROVA (SÓ QUANDO FOR PUBLICADA) =====
+    // Como a prova é criada como rascunho, não notificamos agora.
+    // A notificação será enviada quando o professor publicar a prova.
+    // Isso já está implementado na rota de publicação.
 
     let mensagemSucesso = '';
     if (tipoProva === 'adaptada' || adaptada === true) {
@@ -5248,7 +5367,7 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
 });
 
 
-// ============ ROTA PARA PROFESSOR CORRIGIR/LIBERAR NOTA (ATUALIZADA) ============
+// ============ ROTA PARA PROFESSOR CORRIGIR/LIBERAR NOTA (ATUALIZADA COM PUSH) ============
 app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.provaId;
@@ -5326,7 +5445,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
     
     // Atualizar Resultado
     if (resultado) {
-      resultado.nota = notaNumber; // Atualiza a nota (já existe)
+      resultado.nota = notaNumber;
       resultado.notaLiberada = liberarNota;
       resultado.porcentagem = ((notaNumber / 10) * 100).toFixed(1);
       await resultado.save();
@@ -5347,6 +5466,59 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
       prova.mediaNotas = parseFloat(prova.mediaNotas.toFixed(2));
       await prova.save();
       console.log(`📈 Estatísticas da prova atualizadas. Nova média: ${prova.mediaNotas}`);
+    }
+    
+    // ===== 🔥 NOTIFICAR ALUNO SOBRE CORREÇÃO =====
+    if (liberarNota) {
+      try {
+        const aluno = await User.findById(alunoId).select('nome onesignalPlayerId');
+        const professor = await User.findById(professorId).select('nome');
+        
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
+        
+        // Notificação no sistema
+        const notificacao = new Notificacao({
+          usuarioId: alunoId,
+          tipo: 'prova_corrigida',
+          titulo: '✅ Prova Corrigida',
+          mensagem: `Sua nota na prova "${prova.titulo}" foi liberada: ${notaNumber.toFixed(2)}`,
+          icone: '✅',
+          cor: '#10b981',
+          link: `/aluno.html?prova=${provaId}`,
+          prioridade: 4,
+          dados: {
+            provaId: prova._id,
+            provaTitulo: prova.titulo,
+            nota: notaNumber,
+            professor: professor?.nome || 'Professor'
+          }
+        });
+        
+        await notificacao.save();
+        
+        // Push se ativado
+        if (pushAtivado) {
+          const OneSignalService = require('./services/onesignal-service');
+          const oneSignal = new OneSignalService();
+          
+          await oneSignal.enviarPush(
+            alunoId,
+            '✅ Prova Corrigida',
+            `Sua nota em "${prova.titulo}" foi liberada: ${notaNumber.toFixed(2)}`,
+            {
+              tipo: 'prova_corrigida',
+              provaId: prova._id,
+              nota: notaNumber
+            }
+          );
+        }
+        
+        console.log(`✅ Aluno ${aluno?.nome || alunoId} notificado sobre correção`);
+      } catch (notifError) {
+        console.error('⚠️ Erro ao notificar aluno:', notifError.message);
+      }
     }
     
     res.json({
@@ -5413,13 +5585,13 @@ app.post('/api/professor/provas/:provaId/liberar-notas', authenticateToken, asyn
       provaId: provaId,
       nota: { $ne: null },
       notaLiberada: false
-    });
+    }).populate('alunoId', 'nome onesignalPlayerId');
     
     const resultados = await Resultado.find({
       provaId: provaId,
       nota: { $ne: null },
       notaLiberada: false
-    });
+    }).populate('userId', 'nome onesignalPlayerId');
     
     // Liberar notas das ProvaRealizadas
     let contadorProvas = 0;
@@ -5442,9 +5614,70 @@ app.post('/api/professor/provas/:provaId/liberar-notas', authenticateToken, asyn
     
     console.log(`✅ ${totalLiberados} notas liberadas para a prova ${provaId}`);
     
+    // ===== 🔥 NOTIFICAR TODOS OS ALUNOS =====
+    if (totalLiberados > 0) {
+      const Config = mongoose.model('Config');
+      const configDoc = await Config.findOne({ chave: 'notificacoes' });
+      const pushAtivado = configDoc?.valor?.push === true;
+      const OneSignalService = require('./services/onesignal-service');
+      const oneSignal = pushAtivado ? new OneSignalService() : null;
+      
+      const todosAlunos = [...provasRealizadas, ...resultados];
+      
+      for (const item of todosAlunos) {
+        try {
+          const alunoId = item.alunoId?._id || item.userId?._id;
+          const alunoNome = item.alunoId?.nome || item.userId?.nome || 'Aluno';
+          const nota = item.nota;
+          
+          if (!alunoId) continue;
+          
+          // Notificação no sistema
+          const notificacao = new Notificacao({
+            usuarioId: alunoId,
+            tipo: 'resultado_liberado',
+            titulo: '📊 Resultado Liberado!',
+            mensagem: `Sua nota na prova "${prova.titulo}" foi liberada: ${nota.toFixed(2)}`,
+            icone: '🎯',
+            cor: '#28a745',
+            link: `/aluno.html?prova=${provaId}`,
+            prioridade: 4,
+            dados: {
+              provaId: prova._id,
+              provaTitulo: prova.titulo,
+              nota: nota
+            }
+          });
+          
+          await notificacao.save();
+          
+          // Push se ativado
+          if (pushAtivado && oneSignal) {
+            const playerId = item.alunoId?.onesignalPlayerId || item.userId?.onesignalPlayerId;
+            if (playerId) {
+              await oneSignal.enviarPush(
+                alunoId,
+                '📊 Resultado Liberado!',
+                `Sua nota em "${prova.titulo}" foi liberada: ${nota.toFixed(2)}`,
+                {
+                  tipo: 'resultado_liberado',
+                  provaId: prova._id,
+                  nota: nota
+                }
+              );
+            }
+          }
+        } catch (notifError) {
+          console.error('⚠️ Erro ao notificar aluno:', notifError.message);
+        }
+      }
+      
+      console.log(`✅ ${todosAlunos.length} alunos notificados sobre liberação de notas`);
+    }
+    
     res.json({
       success: true,
-      message: `Notas liberadas para ${totalLiberados} alunos`,
+      message: `Notas liberadas para ${totalLiberados} alunos!`,
       totalLiberados: totalLiberados,
       provasLiberadas: contadorProvas,
       resultadosLiberados: contadorResultados,
@@ -8035,7 +8268,7 @@ app.post('/api/monitor/inicio', authenticateToken, async (req, res) => {
   }
 });
 
-// Registrar violação
+// ============ REGISTRAR VIOLAÇÃO ============
 app.post('/api/monitor/violacao', authenticateToken, async (req, res) => {
   try {
     const { provaId, tipo, dados, timestamp } = req.body;
@@ -8052,10 +8285,63 @@ app.post('/api/monitor/violacao', authenticateToken, async (req, res) => {
     // Se for prova cancelada, notificar professor
     if (tipo === 'prova_cancelada') {
       console.log('🚫 PROVA CANCELADA:', req.userId, dados);
-      // Aqui você pode enviar email/notificação para o professor
+      
+      // ===== 🔥 NOTIFICAR PROFESSOR SOBRE CANCELAMENTO =====
+      try {
+        const prova = await Prova.findById(provaId).populate('userId', 'nome email');
+        const aluno = await User.findById(req.userId).select('nome');
+        
+        if (prova && prova.userId) {
+          const Config = mongoose.model('Config');
+          const configDoc = await Config.findOne({ chave: 'notificacoes' });
+          const pushAtivado = configDoc?.valor?.push === true;
+          
+          const notificacao = new Notificacao({
+            usuarioId: prova.userId._id,
+            tipo: 'cancelamento',
+            titulo: '🚫 Prova Cancelada por Violação',
+            mensagem: `Aluno ${aluno?.nome || req.userId} teve a prova "${prova.titulo}" cancelada por violação.`,
+            icone: '🚫',
+            cor: '#dc2626',
+            link: `/professor.html?prova=${provaId}`,
+            prioridade: 5,
+            dados: {
+              alunoId: req.userId,
+              alunoNome: aluno?.nome || 'Aluno',
+              provaId: provaId,
+              provaTitulo: prova.titulo,
+              motivo: dados?.motivo || 'Violação detectada',
+              estatisticas: dados
+            }
+          });
+          
+          await notificacao.save();
+          
+          if (pushAtivado) {
+            const OneSignalService = require('./services/onesignal-service');
+            const oneSignal = new OneSignalService();
+            
+            await oneSignal.enviarPush(
+              prova.userId._id,
+              '🚫 Prova Cancelada',
+              `Aluno ${aluno?.nome || req.userId} teve prova cancelada`,
+              {
+                tipo: 'cancelamento_violacao',
+                alunoId: req.userId,
+                provaId: provaId
+              }
+            );
+          }
+          
+          console.log(`✅ Professor ${prova.userId.email} notificado sobre cancelamento`);
+        }
+      } catch (notifError) {
+        console.error('⚠️ Erro ao notificar professor:', notifError.message);
+      }
     }
     
     res.json({ success: true });
+    
   } catch (error) {
     console.error('Erro ao registrar violação:', error);
     res.status(500).json({ success: false, error: 'Erro interno' });
@@ -8088,7 +8374,7 @@ app.get('/api/monitor/logs/:provaId', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ ROTA PARA CANCELAR PROVA (VERSÃO FINAL COM MOTIVO CORRETO) ============
+// ============ ROTA PARA CANCELAR PROVA (VERSÃO FINAL COM PUSH) ============
 app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) => {
     try {
         const provaId = req.params.provaId;
@@ -8096,7 +8382,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         const { motivo, estatisticas, respostasAtuais, tempoTotal } = req.body;
         
         console.log(`🚫 Tentativa de cancelamento - Prova: ${provaId}, Aluno: ${alunoId}`);
-        console.log(`📝 Motivo recebido: "${motivo}"`); // LOG PARA DEBUG
+        console.log(`📝 Motivo recebido: "${motivo}"`);
         
         // ========== VERIFICAR SE PROVA JÁ FOI FINALIZADA ==========
         const [resultadoExistente, provaRealizadaExistente] = await Promise.all([
@@ -8192,7 +8478,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
             status: 'cancelada',
             notaLiberada: true,
             cancelada: true,
-            motivoCancelamento: motivo, // 🔥 USAR O MOTIVO RECEBIDO!
+            motivoCancelamento: motivo,
             flagViolacao: isViolacao,
             estatisticasCancelamento: estatisticas,
             motivoCancelamentoTipo: isViolacao ? 'violacao' : 'prazo_expirado',
@@ -8212,7 +8498,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
             resultadoDetalhado: [],
             notaLiberada: true,
             cancelada: true,
-            motivoCancelamento: motivo, // 🔥 USAR O MOTIVO RECEBIDO!
+            motivoCancelamento: motivo,
             flagViolacao: isViolacao,
             estatisticasCancelamento: estatisticas,
             motivoCancelamentoTipo: isViolacao ? 'violacao' : 'prazo_expirado',
@@ -8230,6 +8516,11 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
             : 0;
         await prova.save();
         
+        // ========== VERIFICAR CONFIGURAÇÕES DE PUSH ==========
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
+        
         // ========== NOTIFICAR PROFESSOR (SÓ SE CANCELOU DE VERDADE) ==========
         const configNotificarProfessor = await Config.findOne({ 
             chave: 'provas.notificarProfessorCancelamento' 
@@ -8242,28 +8533,6 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
                 const turma = await Turma.findById(prova.turmaId).select('nome disciplina codigo');
                 
                 if (professor) {
-                    let Notificacao;
-                    try {
-                        Notificacao = mongoose.model('Notificacao');
-                    } catch (e) {
-                        const NotificacaoSchema = new mongoose.Schema({
-                            usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-                            tipo: { type: String, enum: ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'], default: 'sistema' },
-                            titulo: { type: String, required: true },
-                            mensagem: { type: String, required: true },
-                            icone: { type: String, default: '📋' },
-                            cor: { type: String, default: '#3b82f6' },
-                            link: { type: String, default: null },
-                            lida: { type: Boolean, default: false },
-                            prioridade: { type: Number, min: 1, max: 5, default: 3 },
-                            dados: { type: mongoose.Schema.Types.Mixed, default: null },
-                            dataEnvio: { type: Date, default: Date.now }
-                        }, { timestamps: true });
-                        
-                        Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
-                    }
-                    
-                    // 🔥 MENSAGEM COMPLETA PARA O PROFESSOR
                     const mensagem = `${aluno.nome} - ${prova.titulo} (${turma?.nome || 'Turma não identificada'}) - Motivo: ${motivo}`;
                     
                     const notificacao = new Notificacao({
@@ -8281,7 +8550,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
                             alunoEmail: aluno.email,
                             provaId,
                             provaTitulo: prova.titulo,
-                            motivo: motivo, // 🔥 MOTIVO CORRETO NOS DADOS
+                            motivo: motivo,
                             tipo: isViolacao ? 'violacao' : 'prazo',
                             turma: turma ? {
                                 id: turma._id,
@@ -8295,6 +8564,24 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
                     
                     await notificacao.save();
                     console.log(`✅ Professor notificado: ${professor.email} - Motivo: "${motivo}"`);
+                    
+                    // 🔥 ENVIAR PUSH PARA PROFESSOR SE ATIVADO
+                    if (pushAtivado) {
+                        const OneSignalService = require('./services/onesignal-service');
+                        const oneSignal = new OneSignalService();
+                        
+                        await oneSignal.enviarPush(
+                            professor._id,
+                            '🚫 Prova Cancelada',
+                            `Aluno ${aluno.nome} - Prova ${prova.titulo}`,
+                            {
+                                tipo: 'cancelamento',
+                                alunoId,
+                                provaId,
+                                motivo
+                            }
+                        );
+                    }
                 }
             } catch (notifError) {
                 console.error('⚠️ Erro não crítico ao notificar professor:', notifError.message);
@@ -8306,7 +8593,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         res.json({
             success: true,
             message: isViolacao ? 'Prova cancelada por violação' : 'Prova cancelada por prazo',
-            motivo: motivo, // 🔥 RETORNAR O MOTIVO NA RESPOSTA
+            motivo: motivo,
             nota: 0,
             status: 'cancelada'
         });
@@ -10111,6 +10398,11 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         console.log(`✅ Senha resetada para usuário ${user.email}`);
         console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
         
+        // VERIFICAR CONFIGURAÇÕES DE PUSH
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
+        
         // Criar notificação
         try {
             const Notificacao = mongoose.model('Notificacao');
@@ -10125,6 +10417,23 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
                 prioridade: 4
             });
             await notificacao.save();
+            
+            // 🔥 ENVIAR PUSH SE ATIVADO
+            if (pushAtivado) {
+                const OneSignalService = require('./services/onesignal-service');
+                const oneSignal = new OneSignalService();
+                
+                await oneSignal.enviarPush(
+                    user._id,
+                    '🔐 Senha Resetada',
+                    'Sua senha foi resetada pelo administrador. Você precisará trocá-la no próximo login.',
+                    {
+                        tipo: 'reset_senha',
+                        forcarTroca: true
+                    }
+                );
+            }
+            
         } catch (notifError) {
             console.warn('⚠️ Erro ao criar notificação:', notifError.message);
         }
@@ -11124,11 +11433,81 @@ app.put('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
         const { id } = req.params;
         const updates = req.body;
 
+        // Guardar valores antigos para comparar
+        const turmaAntiga = await Turma.findById(id).select('ativa nome alunos');
+        
         const turma = await Turma.findByIdAndUpdate(id, updates, { new: true })
             .populate('professorId', 'nome email');
 
         if (!turma) {
             return res.status(404).json({ success: false, error: 'Turma não encontrada' });
+        }
+
+        // ===== 🔥 ADICIONAR NOTIFICAÇÃO SE HOUVER MUDANÇA DE STATUS =====
+        if (turmaAntiga && turmaAntiga.ativa !== turma.ativa && turma.alunos?.length > 0) {
+            try {
+                const Config = mongoose.model('Config');
+                const configDoc = await Config.findOne({ chave: 'notificacoes' });
+                const pushAtivado = configDoc?.valor?.push === true;
+                const OneSignalService = require('./services/onesignal-service');
+                const oneSignal = pushAtivado ? new OneSignalService() : null;
+                
+                const statusTexto = turma.ativa ? 'ativada' : 'desativada';
+                const cor = turma.ativa ? '#10b981' : '#ef4444';
+                const icone = turma.ativa ? '✅' : '⏸️';
+                
+                // Buscar alunos da turma com seus player_ids
+                const alunos = await User.find({ 
+                    _id: { $in: turma.alunos } 
+                }).select('_id onesignalPlayerId nome');
+                
+                console.log(`📢 Turma ${turma.nome} ${statusTexto} - Notificando ${alunos.length} alunos`);
+                
+                for (const aluno of alunos) {
+                    try {
+                        // Notificação no sistema
+                        const notificacao = new Notificacao({
+                            usuarioId: aluno._id,
+                            tipo: 'sistema',
+                            titulo: `${icone} Turma ${statusTexto}`,
+                            mensagem: `A turma "${turma.nome}" foi ${statusTexto}. ${!turma.ativa ? 'Você não poderá acessar as provas desta turma.' : ''}`,
+                            icone: icone,
+                            cor: cor,
+                            link: '/aluno.html',
+                            prioridade: 3,
+                            dados: {
+                                turmaId: turma._id,
+                                turmaNome: turma.nome,
+                                status: turma.ativa ? 'ativa' : 'inativa',
+                                tipo: 'status_turma'
+                            }
+                        });
+                        
+                        await notificacao.save();
+                        
+                        // Push se ativado
+                        if (pushAtivado && oneSignal && aluno.onesignalPlayerId) {
+                            await oneSignal.enviarPush(
+                                aluno._id,
+                                `🏫 Turma ${statusTexto}`,
+                                `A turma "${turma.nome}" foi ${statusTexto}.`,
+                                {
+                                    tipo: 'status_turma',
+                                    turmaId: turma._id,
+                                    status: turma.ativa ? 'ativa' : 'inativa'
+                                }
+                            );
+                        }
+                    } catch (alunoError) {
+                        console.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, alunoError.message);
+                    }
+                }
+                
+                console.log(`✅ ${alunos.length} alunos notificados sobre mudança de status da turma`);
+                
+            } catch (notifError) {
+                console.error('⚠️ Erro ao notificar alunos:', notifError.message);
+            }
         }
 
         res.json({
@@ -11140,7 +11519,7 @@ app.put('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
                 eixo: turma.eixo,
                 codigo: turma.codigo,
                 professor: turma.professorId ? {
-                    id: turma.professorId._id,
+                    id: turma.professorId._id,  // ← 's' REMOVIDO!
                     nome: turma.professorId.nome
                 } : null,
                 ativa: turma.ativa
@@ -12079,7 +12458,9 @@ app.get('/api/admin/resultados/:id/cancelamento', authenticateToken, isSuperAdmi
     }
 });
 
-// ============ ROTAS DE NOTIFICAÇÃO (ORDEM CORRETA) ============
+// ============================================================================
+// ROTAS DE NOTIFICAÇÃO (VERSÃO CORRIGIDA COM PUSH AUTOMÁTICO)
+// ============================================================================
 
 // =========================================================
 // 1. ROTAS ESPECÍFICAS (SEM PARÂMETROS)
@@ -12088,7 +12469,6 @@ app.get('/api/admin/resultados/:id/cancelamento', authenticateToken, isSuperAdmi
 // Contador de notificações não lidas
 app.get('/api/notificacoes/nao-lidas/contador', authenticateToken, async (req, res) => {
     try {
-        // ✅ Usando o modelo importado do topo
         const count = await Notificacao.countDocuments({
             usuarioId: req.userId,
             lida: false
@@ -12108,14 +12488,14 @@ app.get('/api/notificacoes/nao-lidas/contador', authenticateToken, async (req, r
     }
 });
 
-// ============ ROTA PARA CRIAR NOTIFICAÇÃO ============
+// ============ ROTA PARA CRIAR NOTIFICAÇÃO (COM PUSH AUTOMÁTICO) ============
 app.post('/api/notificacoes', authenticateToken, async (req, res) => {
     try {
         const { usuarioId, tipo, titulo, mensagem, icone, cor, link, prioridade, dados } = req.body;
         
         console.log(`📝 Criando notificação para usuário ${usuarioId}: ${titulo}`);
         
-        // ✅ Validar se o tipo é um dos permitidos no enum
+        // ✅ Validar tipo
         const tiposPermitidos = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
         
         if (!tiposPermitidos.includes(tipo)) {
@@ -12125,12 +12505,11 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
             });
         }
         
-        // ✅ Validar prioridade (deve ser número entre 1-5)
+        // ✅ Validar prioridade
         let prioridadeFinal = prioridade;
         if (prioridade === undefined || prioridade === null) {
-            prioridadeFinal = 3; // default
+            prioridadeFinal = 3;
         } else if (typeof prioridade === 'string') {
-            // Se veio como string, tenta converter
             const prioridadeNum = parseInt(prioridade);
             if (isNaN(prioridadeNum) || prioridadeNum < 1 || prioridadeNum > 5) {
                 return res.status(400).json({
@@ -12149,7 +12528,7 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
             prioridadeFinal = prioridade;
         }
 
-        // ✅ Usando o modelo importado
+        // ✅ Criar notificação no sistema
         const notificacao = new Notificacao({
             usuarioId,
             tipo,
@@ -12166,6 +12545,43 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
 
         console.log(`✅ Notificação criada com ID: ${notificacao._id}`);
         
+        // ✅ VERIFICAR CONFIGURAÇÃO DE PUSH
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
+        
+        let pushResult = null;
+        
+        // ✅ ENVIAR PUSH SE ATIVADO
+        if (pushAtivado) {
+            console.log(`📱 Push ativado, enviando para usuário ${usuarioId}...`);
+            
+            const OneSignalService = require('./services/onesignal-service');
+            const oneSignal = new OneSignalService();
+            
+            // Remover HTML da mensagem para push
+            const mensagemPush = mensagem.replace(/<[^>]*>/g, '');
+            
+            pushResult = await oneSignal.enviarPush(
+                usuarioId,
+                titulo,
+                mensagemPush,
+                {
+                    ...dados,
+                    notificacaoId: notificacao._id,
+                    tipo,
+                    origem: 'sistema'
+                }
+            );
+            
+            if (pushResult) {
+                console.log(`✅ Push enviado! ID: ${pushResult.notificationId || pushResult.id}`);
+            }
+        } else {
+            console.log('📱 Push desativado nas configurações');
+        }
+        
+        // ✅ RESPOSTA
         res.json({ 
             success: true, 
             notificacao: { 
@@ -12174,13 +12590,19 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
                 mensagem: notificacao.mensagem,
                 tipo: notificacao.tipo,
                 prioridade: notificacao.prioridade
-            } 
+            },
+            push: pushResult ? { 
+                enviado: true, 
+                id: pushResult.notificationId || pushResult.id 
+            } : { 
+                enviado: false, 
+                motivo: pushAtivado ? 'falha_no_envio' : 'push_desativado'
+            }
         });
 
     } catch (error) {
         console.error('❌ Erro ao criar notificação:', error);
         
-        // Tratar erro de validação do mongoose
         if (error.name === 'ValidationError') {
             return res.status(400).json({
                 success: false,
@@ -12198,7 +12620,6 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
 // Marcar todas como lidas
 app.put('/api/notificacoes/marcar-todas-lidas', authenticateToken, async (req, res) => {
     try {
-        // ✅ Usando o modelo importado diretamente (mais eficiente)
         const resultado = await Notificacao.updateMany(
             { 
                 usuarioId: req.userId,
@@ -12229,7 +12650,6 @@ app.delete('/api/notificacoes/limpar-minhas', authenticateToken, async (req, res
         
         console.log(`🗑️ Usuário ${usuarioId} excluindo todas as suas notificações`);
         
-        // ✅ Usando o modelo importado
         const resultado = await Notificacao.deleteMany({ 
             usuarioId: usuarioId 
         });
@@ -12265,10 +12685,8 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
         
         const skip = (parseInt(pagina) - 1) * parseInt(limite);
         
-        // Construir query
         let query = { usuarioId: usuarioId };
         
-        // Aplicar filtro se houver
         if (filtro && filtro !== 'todas') {
             if (filtro === 'nao_lidas') {
                 query.lida = false;
@@ -12279,7 +12697,6 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
             }
         }
         
-        // ✅ Usando o modelo importado
         const [notificacoes, total] = await Promise.all([
             Notificacao.find(query)
                 .sort({ createdAt: -1, prioridade: -1 })
@@ -12289,7 +12706,6 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
             Notificacao.countDocuments(query)
         ]);
         
-        // Buscar estatísticas
         const [totalNaoLidas, totalPorTipo] = await Promise.all([
             Notificacao.countDocuments({ usuarioId: usuarioId, lida: false }),
             Notificacao.aggregate([
@@ -12298,7 +12714,6 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
             ])
         ]);
         
-        // Formatar estatísticas por tipo
         const porTipo = {};
         totalPorTipo.forEach(item => {
             porTipo[item._id] = item.count;
@@ -12341,7 +12756,6 @@ app.get('/api/notificacoes', authenticateToken, async (req, res) => {
     try {
         const { apenasNaoLidas, limite } = req.query;
         
-        // ✅ Usando o modelo importado diretamente (mais simples)
         let query = { usuarioId: req.userId };
         if (apenasNaoLidas === 'true') {
             query.lida = false;
@@ -12382,7 +12796,6 @@ app.put('/api/notificacoes/:id/lida', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         
-        // ✅ Usando o modelo importado diretamente
         const notificacao = await Notificacao.findOneAndUpdate(
             { 
                 _id: id,
@@ -12418,7 +12831,6 @@ app.delete('/api/notificacoes/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         
-        // ✅ Usando o modelo importado diretamente
         const resultado = await Notificacao.findOneAndDelete({
             _id: id,
             usuarioId: req.userId
@@ -12446,7 +12858,6 @@ app.delete('/api/notificacoes/:id', authenticateToken, async (req, res) => {
 // ============ ROTA PARA ADMIN ATIVAR/DESATIVAR PUSH GLOBAL ============
 app.post('/api/push/admin/toggle', authenticateToken, async (req, res) => {
     try {
-        // Verificar se é admin
         if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
@@ -12456,7 +12867,6 @@ app.post('/api/push/admin/toggle', authenticateToken, async (req, res) => {
 
         const { ativar } = req.body;
         
-        // Buscar ou criar configuração push
         let PushSettings;
         try {
             PushSettings = mongoose.model('PushSettings');
@@ -12472,7 +12882,6 @@ app.post('/api/push/admin/toggle', authenticateToken, async (req, res) => {
             PushSettings = mongoose.model('PushSettings', PushSettingsSchema);
         }
 
-        // Atualizar configuração
         const settings = await PushSettings.findByIdAndUpdate(
             'global',
             {
@@ -12496,6 +12905,54 @@ app.post('/api/push/admin/toggle', authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// ============ ROTA PARA ENVIAR PUSH ============
+app.post('/api/usuario/enviar-push', authenticateToken, async (req, res) => {
+    try {
+        const { usuarioId, titulo, mensagem, dados = {} } = req.body;
+        
+        // Validação básica
+        if (!usuarioId || !titulo || !mensagem) {
+            return res.status(400).json({
+                success: false,
+                error: 'usuarioId, titulo e mensagem são obrigatórios'
+            });
+        }
+        
+        const OneSignalService = require('./services/onesignal-service');
+        const oneSignal = new OneSignalService();
+        
+        const resultado = await oneSignal.enviarPush(
+            usuarioId,
+            titulo,
+            mensagem,
+            {
+                ...dados,
+                origem: 'sistema',
+                timestamp: Date.now()
+            }
+        );
+        
+        if (resultado) {
+            res.json({ 
+                success: true, 
+                notificationId: resultado.notificationId || resultado.id 
+            });
+        } else {
+            res.status(500).json({ 
+                success: false, 
+                error: 'Falha ao enviar push' 
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao enviar push:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
         });
     }
 });
@@ -13799,6 +14256,11 @@ app.post('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async 
 
         console.log(`✅ Aluno ${aluno.nome} adicionado à turma ${turma.nome}`);
 
+        // VERIFICAR CONFIGURAÇÕES DE PUSH
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
+
         // Criar notificação para o aluno
         try {
             const Notificacao = mongoose.model('Notificacao');
@@ -13813,6 +14275,24 @@ app.post('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async 
                 prioridade: 3
             });
             await notificacao.save();
+            
+            // 🔥 ENVIAR PUSH SE ATIVADO
+            if (pushAtivado) {
+                const OneSignalService = require('./services/onesignal-service');
+                const oneSignal = new OneSignalService();
+                
+                await oneSignal.enviarPush(
+                    alunoId,
+                    '📚 Nova Turma',
+                    `Você foi matriculado em ${turma.nome}`,
+                    {
+                        tipo: 'nova_turma',
+                        turmaId: turma._id,
+                        turmaNome: turma.nome
+                    }
+                );
+            }
+            
         } catch (notifError) {
             console.warn('⚠️ Erro ao criar notificação:', notifError.message);
         }
@@ -13881,6 +14361,11 @@ app.delete('/api/admin/turmas/:id/alunos/:alunoId', authenticateToken, isSuperAd
 
         console.log(`✅ Aluno ${aluno.nome} removido da turma ${turma.nome}`);
 
+        // VERIFICAR CONFIGURAÇÕES DE PUSH
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
+
         // Criar notificação para o aluno
         try {
             const Notificacao = mongoose.model('Notificacao');
@@ -13895,6 +14380,24 @@ app.delete('/api/admin/turmas/:id/alunos/:alunoId', authenticateToken, isSuperAd
                 prioridade: 3
             });
             await notificacao.save();
+            
+            // 🔥 ENVIAR PUSH SE ATIVADO
+            if (pushAtivado) {
+                const OneSignalService = require('./services/onesignal-service');
+                const oneSignal = new OneSignalService();
+                
+                await oneSignal.enviarPush(
+                    alunoId,
+                    '📚 Removido da Turma',
+                    `Você foi removido da turma ${turma.nome}`,
+                    {
+                        tipo: 'removido_turma',
+                        turmaId: turma._id,
+                        turmaNome: turma.nome
+                    }
+                );
+            }
+            
         } catch (notifError) {
             console.warn('⚠️ Erro ao criar notificação:', notifError.message);
         }
@@ -14070,17 +14573,19 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
             role: { $ne: 'super_admin' }
         });
 
+        // VERIFICAR CONFIGURAÇÕES DE PUSH
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
+        const OneSignalService = require('./services/onesignal-service');
+        const oneSignal = pushAtivado ? new OneSignalService() : null;
+
         let contador = 0;
         const estatisticas = {
             alunos: 0,
             professores: 0,
             admins: 0
         };
-
-        // Inicializar serviço de notificações
-        const NotificationService = require('./services/notification-service');
-        const OneSignalService = require('./services/onesignal-service');
-        const notificationService = new NotificationService();
 
         for (const user of usuarios) {
             // Incrementar tokenVersion (invalida todos os tokens antigos)
@@ -14092,7 +14597,6 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
             
             // 🔥 ENVIAR NOTIFICAÇÃO PARA O USUÁRIO
             try {
-                // Criar notificação diretamente no banco
                 const Notificacao = mongoose.model('Notificacao');
                 const notificacao = new Notificacao({
                     usuarioId: user._id,
@@ -14114,6 +14618,20 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
                 
                 await notificacao.save();
                 console.log(`✅ Notificação enviada para ${user.email}`);
+                
+                // 🔥 ENVIAR PUSH SE ATIVADO
+                if (pushAtivado && oneSignal && user.onesignalPlayerId) {
+                    await oneSignal.enviarPush(
+                        user._id,
+                        '🔐 Sessão Encerrada',
+                        `O administrador ${admin.nome} resetou os acessos do sistema. Faça login novamente.`,
+                        {
+                            tipo: 'reset_acesso',
+                            adminNome: admin.nome
+                        }
+                    );
+                }
+                
             } catch (notifError) {
                 console.warn(`⚠️ Erro ao notificar ${user.email}:`, notifError.message);
             }

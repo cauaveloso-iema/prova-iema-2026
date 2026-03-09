@@ -9935,14 +9935,104 @@ class AdminPanel {
             `;
         }
 
+        // ============================================================================
+        // 📱 FUNÇÃO AUXILIAR: ENVIAR PUSH PARA USUÁRIO
+        // ============================================================================
+        // Coloque esta função dentro da classe AdminPanel
+        // ============================================================================
+
+        /**
+         * Envia uma notificação push para um usuário específico
+         * @param {string} usuarioId - ID do usuário que receberá o push
+         * @param {string} titulo - Título da notificação
+         * @param {string} mensagem - Corpo da mensagem
+         * @param {Object} dados - Dados adicionais (opcional)
+         * @returns {Promise<boolean>} - true se enviado com sucesso
+         */
+        async enviarPushParaUsuario(usuarioId, titulo, mensagem, dados = {}) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                if (!token) {
+                    console.error('❌ Token não encontrado');
+                    return false;
+                }
+                
+                console.log(`📱 Enviando push para usuário ${usuarioId}: ${titulo}`);
+                
+                const response = await fetch('/api/usuario/enviar-push', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        usuarioId,
+                        titulo,
+                        mensagem,
+                        dados: {
+                            ...dados,
+                            timestamp: Date.now(),
+                            origem: 'admin'
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('✅ Push enviado com sucesso! ID:', data.notificationId);
+                    return true;
+                } else {
+                    console.log('⚠️ Push não enviado:', data.error);
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao enviar push:', error);
+                return false;
+            }
+        }
+
+        // ============================================================================
+        // ⚙️ FUNÇÃO: VERIFICAR CONFIGURAÇÕES DE PUSH
+        // ============================================================================
+
+        /**
+         * Verifica se o push está ativado nas configurações do sistema
+         * @returns {Promise<boolean>} - true se push ativado
+         */
+        async verificarConfiguracoesPush() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/admin/configuracoes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    console.warn('⚠️ Não foi possível buscar configurações');
+                    return false;
+                }
+                
+                const data = await response.json();
+                const pushAtivado = data.configuracoes?.notificacoes?.push === true;
+                
+                console.log('📊 Push ativado nas configurações:', pushAtivado ? '✅' : '❌');
+                return pushAtivado;
+            } catch (error) {
+                console.error('❌ Erro ao verificar push:', error);
+                return false;
+            }
+        }
+
         // ============ ENVIAR LEMBRETE (VERSÃO COM PUSH) ============
+
         async enviarLembrete(resultadoId) {
             try {
                 console.log('📧 Enviando lembrete para resultado:', resultadoId);
                 
                 const token = localStorage.getItem('auth_token');
                 
-                // 🔴 PASSO 1: VERIFICAR CONFIGURAÇÕES
+                // ===== 1. VERIFICAR CONFIGURAÇÕES =====
                 const configResponse = await fetch('/api/admin/configuracoes', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -9952,21 +10042,29 @@ class AdminPanel {
                 }
                 
                 const configData = await configResponse.json();
-                const notifConfig = configData.configuracoes?.notificacoes;
-                const pushAtivado = notifConfig?.push === true;
-                const sistemaAtivado = notifConfig?.sistema !== false;
+                const notificacoesHabilitadas = configData.configuracoes?.notificacoes?.sistema !== false;
+                const pushAtivado = configData.configuracoes?.notificacoes?.push === true;
                 
-                console.log('📋 Configurações:', { pushAtivado, sistemaAtivado });
+                console.log('📋 Configurações de notificação:', {
+                    sistema: configData.configuracoes?.notificacoes?.sistema,
+                    habilitadas: notificacoesHabilitadas,
+                    push: pushAtivado
+                });
                 
-                if (!sistemaAtivado) {
-                    this.showToast('⚠️ Notificações do sistema desabilitadas', 'warning');
+                // Se notificações do sistema estiverem desabilitadas, NÃO ENVIAR
+                if (!notificacoesHabilitadas) {
+                    this.showToast('⚠️ Notificações do sistema estão desabilitadas nas configurações', 'warning');
+                    console.log('🚫 Bloqueado: notificações do sistema desabilitadas');
                     return;
                 }
                 
-                // 🔴 PASSO 2: BUSCAR RESULTADO
+                // ===== 2. BUSCAR DADOS DO RESULTADO =====
                 let resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
                 
+                // Se não encontrar, busca da API
                 if (!resultado) {
+                    console.log('📡 Resultado não encontrado localmente, buscando da API...');
+                    
                     const response = await fetch('/api/admin/todos-resultados', {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
@@ -9990,27 +10088,43 @@ class AdminPanel {
                     return;
                 }
                 
-                // 🔴 PASSO 3: CONFIRMAR ENVIO
+                // Buscar dados do admin logado
+                const adminResponse = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const adminData = await adminResponse.json();
+                const adminNome = adminData.user?.nome || 'Administrador';
+                
+                // ===== 3. CONFIRMAR ENVIO =====
                 const confirmar = await this.confirmar(
                     '📧 Enviar Lembrete',
-                    `Deseja enviar um lembrete para <strong>${alunoNome}</strong> sobre a prova <strong>${provaTitulo}</strong>?`
+                    `Deseja enviar um lembrete para o aluno <strong>${alunoNome}</strong> sobre a prova <strong>${provaTitulo}</strong>?`
                 );
                 
                 if (!confirmar) return;
                 
                 this.showToast('📧 Enviando lembrete...', 'info');
                 
-                // 🔴 PASSO 4: CRIAR NOTIFICAÇÃO NO SISTEMA
+                // ===== 4. CRIAR NOTIFICAÇÃO NO SISTEMA =====
                 const notificacaoBody = {
                     usuarioId: alunoId,
                     tipo: 'sistema',
                     titulo: '📝 Lembrete de Prova',
-                    mensagem: `Professor enviou lembrete: "${provaTitulo}"`,
+                    mensagem: `Professor ${adminNome} enviou um lembrete sobre a prova "${provaTitulo}".`,
                     icone: '📧',
                     cor: '#3b82f6',
                     link: `/aluno.html?prova=${provaId}`,
-                    prioridade: 1
+                    prioridade: 1,
+                    dados: {
+                        tipo: 'lembrete',
+                        provaId: provaId,
+                        provaTitulo: provaTitulo,
+                        professor: adminNome,
+                        resultadoId: resultadoId
+                    }
                 };
+                
+                console.log('📤 Enviando notificação:', notificacaoBody);
                 
                 const notificacaoResponse = await fetch('/api/notificacoes', {
                     method: 'POST',
@@ -10027,61 +10141,58 @@ class AdminPanel {
                     throw new Error(notificacaoData.error || 'Erro ao criar notificação');
                 }
                 
-                console.log('✅ Notificação criada no sistema');
+                console.log('✅ Notificação criada no sistema. ID:', notificacaoData.notificacao.id);
                 
-                // 🔴 PASSO 5: SE PUSH ATIVADO, ENVIAR PARA ONESIGNAL
+                // ===== 5. ENVIAR PUSH SE ATIVADO =====
                 if (pushAtivado) {
-                    console.log('📱 Enviando push para OneSignal...');
+                    console.log('📱 Push ativado, enviando para o celular...');
                     
-                    try {
-                        const pushResponse = await fetch('/api/usuario/testar-push', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ 
-                                usuarioId: alunoId,
-                                titulo: '📝 Lembrete de Prova',
-                                mensagem: `Professor enviou lembrete: ${provaTitulo}`,
-                                dados: {
-                                    tipo: 'lembrete',
-                                    provaId: provaId,
-                                    provaTitulo: provaTitulo
-                                }
-                            })
-                        });
-                        
-                        const pushData = await pushResponse.json();
-                        
-                        if (pushData.success) {
-                            console.log('✅ Push enviado com sucesso!');
-                        } else {
-                            console.log('⚠️ Push não enviado:', pushData.error);
+                    // Usar a função auxiliar que criamos
+                    const pushEnviado = await this.enviarPushParaUsuario(
+                        alunoId,
+                        '📝 Lembrete de Prova',
+                        `Professor ${adminNome} enviou lembrete: ${provaTitulo}`,
+                        {
+                            tipo: 'lembrete',
+                            provaId: provaId,
+                            provaTitulo: provaTitulo,
+                            notificacaoId: notificacaoData.notificacao.id,
+                            resultadoId: resultadoId
                         }
-                    } catch (pushError) {
-                        console.log('⚠️ Erro ao enviar push:', pushError.message);
-                        // Não interrompe o fluxo - notificação já foi criada
+                    );
+                    
+                    if (pushEnviado) {
+                        console.log('✅ Push enviado com sucesso!');
+                    } else {
+                        console.log('⚠️ Push não pôde ser enviado (verifique logs)');
                     }
                 } else {
-                    console.log('📱 Push desativado nas configurações');
+                    console.log('📱 Push desativado nas configurações - não enviado');
                 }
                 
-                // 🔴 PASSO 6: MOSTRAR CONFIRMAÇÃO
+                // ===== 6. MOSTRAR CONFIRMAÇÃO =====
                 this.showToast('✅ Lembrete enviado com sucesso!', 'success');
-                this.mostrarConfirmacaoLembrete(alunoNome, provaTitulo);
+                
+                // Mostrar modal de confirmação
+                this.mostrarConfirmacaoLembrete(alunoNome, provaTitulo, pushAtivado);
                 
             } catch (error) {
-                console.error('❌ Erro:', error);
-                this.showToast('❌ ' + error.message, 'error');
+                console.error('❌ Erro ao enviar lembrete:', error);
+                this.showToast('❌ Erro: ' + error.message, 'error');
             }
         }
 
-        // ============ MODAL DE CONFIRMAÇÃO ============
-        mostrarConfirmacaoLembrete(alunoNome, provaTitulo) {
+        // ============================================================================
+        // ✅ FUNÇÃO: MOSTRAR CONFIRMAÇÃO DE LEMBRETE
+        // ============================================================================
+
+        mostrarConfirmacaoLembrete(alunoNome, provaTitulo, pushEnviado = false) {
             const modalBody = document.getElementById('modalBody');
             const modalTitle = document.getElementById('modalTitle');
             const modalSaveBtn = document.getElementById('modalSaveBtn');
+            
+            const pushIcon = pushEnviado ? '📱' : '📋';
+            const pushText = pushEnviado ? 'Push enviado para o celular!' : 'Notificação enviada no sistema';
             
             modalBody.innerHTML = `
                 <div style="padding: 20px; text-align: center;">
@@ -10100,8 +10211,23 @@ class AdminPanel {
                     <h3 style="margin: 0 0 10px; color: #1f2937;">✅ Lembrete Enviado!</h3>
                     <p style="color: #6b7280; margin-bottom: 5px;"><strong>Aluno:</strong> ${alunoNome}</p>
                     <p style="color: #6b7280;"><strong>Prova:</strong> ${provaTitulo}</p>
+                    <div style="
+                        margin-top: 15px;
+                        padding: 10px;
+                        background: ${pushEnviado ? '#d1fae5' : '#f3f4f6'};
+                        border-radius: 8px;
+                        color: ${pushEnviado ? '#065f46' : '#4b5563'};
+                        font-size: 0.9rem;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
+                    ">
+                        <span style="font-size: 1.2rem;">${pushIcon}</span>
+                        <span>${pushText}</span>
+                    </div>
                     <p style="color: #9ca3af; font-size: 0.85rem; margin-top: 15px;">
-                        <i class="fas fa-bell"></i> O aluno receberá uma notificação no sistema.
+                        <i class="fas fa-bell"></i> O aluno receberá no sistema e no celular (se push ativado).
                     </p>
                 </div>
             `;
@@ -10110,11 +10236,12 @@ class AdminPanel {
             modalSaveBtn.style.display = 'none';
             this.openModal();
             
-            // Fechar automaticamente após 2 segundos
+            // Fechar automaticamente após 2.5 segundos
             setTimeout(() => {
                 this.closeModal();
-            }, 2000);
+            }, 2500);
         }
+
         // ============ CONFIGURAR FECHAMENTO DO MODAL (VERSÃO SIMPLES) ============
         configurarFechamentoModalSimples() {
             const closeBtn = document.querySelector('#modal .modal-close');
@@ -10498,7 +10625,10 @@ class AdminPanel {
             }
         }
 
-        // ============ LIBERAR NOTA PARA O ALUNO ============
+        // ============================================================================
+        // 🔓 FUNÇÃO: LIBERAR NOTA PARA O ALUNO (COM PUSH)
+        // ============================================================================
+
         async liberarNota(resultadoId) {
             try {
                 const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
@@ -10509,8 +10639,7 @@ class AdminPanel {
 
                 const confirmar = await this.confirmar(
                     '✅ Liberar Nota',
-                    `Deseja realmente liberar a nota <strong>${resultado.nota}</strong> para o aluno <strong>${resultado.alunoNome}</strong>?<br><br>
-                    Após liberada, o aluno poderá ver sua nota imediatamente.`
+                    `Deseja realmente liberar a nota <strong>${resultado.nota}</strong> para o aluno <strong>${resultado.alunoNome}</strong>?`
                 );
 
                 if (!confirmar) return;
@@ -10519,6 +10648,15 @@ class AdminPanel {
 
                 const token = localStorage.getItem('auth_token');
                 
+                // Buscar configurações
+                const configResponse = await fetch('/api/admin/configuracoes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const configData = await configResponse.json();
+                const pushAtivado = configData.configuracoes?.notificacoes?.push === true;
+                
+                // Atualizar resultado
                 const response = await fetch(`/api/admin/resultados/${resultadoId}`, {
                     method: 'PUT',
                     headers: {
@@ -10531,8 +10669,7 @@ class AdminPanel {
                         total: resultado.total,
                         tempoGasto: resultado.tempoGasto,
                         observacoes: resultado.observacoes,
-                        notaLiberada: true,  // <-- LIBERAR A NOTA
-                        status: resultado.nota >= 7 ? 'aprovado' : 'reprovado'
+                        notaLiberada: true
                     })
                 });
 
@@ -10541,13 +10678,31 @@ class AdminPanel {
                 if (data.success) {
                     // Atualizar localmente
                     resultado.notaLiberada = true;
-                    resultado.status = resultado.nota >= 7 ? 'aprovado' : 'reprovado';
                     
                     this.showToast('✅ Nota liberada com sucesso!', 'success');
                     
+                    // Enviar push se ativado
+                    if (pushAtivado && resultado.alunoId) {
+                        await this.enviarPushParaUsuario(
+                            resultado.alunoId,
+                            '📊 Resultado Liberado!',
+                            `Sua nota em "${resultado.provaTitulo}" foi liberada: ${resultado.nota.toFixed(2)}`,
+                            {
+                                tipo: 'resultado_liberado',
+                                provaId: resultado.provaId,
+                                nota: resultado.nota
+                            }
+                        );
+                    }
+                    
                     // Recarregar a tabela
-                    this.filtrarTabelaResultados();
-                    this.atualizarContadoresCards();
+                    if (typeof this.filtrarTabelaResultados === 'function') {
+                        this.filtrarTabelaResultados();
+                    }
+                    
+                    if (typeof this.atualizarContadoresCards === 'function') {
+                        this.atualizarContadoresCards();
+                    }
                 } else {
                     throw new Error(data.error || 'Erro ao liberar nota');
                 }
@@ -10558,7 +10713,10 @@ class AdminPanel {
             }
         }
 
-        // ============ LIBERAR TODAS AS NOTAS PENDENTES ============
+        // ============================================================================
+        // 📢 FUNÇÃO: LIBERAR TODAS AS NOTAS PENDENTES (COM PUSH)
+        // ============================================================================
+
         async liberarTodasNotas() {
             const pendentes = this.resultadosCompletos?.filter(r => 
                 !((r.nota === 0 && r.status === 'pendente') || 
@@ -10576,20 +10734,28 @@ class AdminPanel {
             const confirmar = await this.confirmar(
                 '📢 Liberar Todas as Notas',
                 `Deseja liberar <strong>${pendentes.length} nota(s)</strong> pendente(s)?<br><br>
-                Esta ação não pode ser desfeita.`
+                Cada aluno receberá uma notificação.`
             );
 
             if (!confirmar) return;
 
             this.showToast(`🔄 Liberando ${pendentes.length} notas...`, 'info');
 
+            // Buscar configurações de push
+            const token = localStorage.getItem('auth_token');
+            const configResponse = await fetch('/api/admin/configuracoes', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const configData = await configResponse.json();
+            const pushAtivado = configData.configuracoes?.notificacoes?.push === true;
+
             let sucessos = 0;
             let erros = 0;
 
             for (const resultado of pendentes) {
                 try {
-                    const token = localStorage.getItem('auth_token');
-                    
+                    // Atualizar no backend
                     const response = await fetch(`/api/admin/resultados/${resultado.id}`, {
                         method: 'PUT',
                         headers: {
@@ -10602,8 +10768,7 @@ class AdminPanel {
                             total: resultado.total,
                             tempoGasto: resultado.tempoGasto,
                             observacoes: resultado.observacoes,
-                            notaLiberada: true,
-                            status: resultado.nota >= 7 ? 'aprovado' : 'reprovado'
+                            notaLiberada: true
                         })
                     });
 
@@ -10611,8 +10776,21 @@ class AdminPanel {
 
                     if (data.success) {
                         resultado.notaLiberada = true;
-                        resultado.status = resultado.nota >= 7 ? 'aprovado' : 'reprovado';
                         sucessos++;
+                        
+                        // Enviar push se ativado
+                        if (pushAtivado && resultado.alunoId) {
+                            await this.enviarPushParaUsuario(
+                                resultado.alunoId,
+                                '📊 Resultado Liberado!',
+                                `Sua nota em "${resultado.provaTitulo}" foi liberada: ${resultado.nota.toFixed(2)}`,
+                                {
+                                    tipo: 'resultado_liberado',
+                                    provaId: resultado.provaId,
+                                    nota: resultado.nota
+                                }
+                            );
+                        }
                     } else {
                         erros++;
                     }
@@ -10623,8 +10801,14 @@ class AdminPanel {
             }
 
             this.showToast(`✅ ${sucessos} notas liberadas, ${erros} erros`, 'success');
-            this.filtrarTabelaResultados();
-            this.atualizarContadoresCards();
+            
+            if (typeof this.filtrarTabelaResultados === 'function') {
+                this.filtrarTabelaResultados();
+            }
+            
+            if (typeof this.atualizarContadoresCards === 'function') {
+                this.atualizarContadoresCards();
+            }
         }
 
         // ============ FILTRAR TABELA DE RESULTADOS (COM STATUS CORRETO) ============
@@ -11408,44 +11592,48 @@ class AdminPanel {
 
 
         // ============ SALVAR EDIÇÃO DO RESULTADO (VERSÃO CORRIGIDA) ============
+
         async salvarEdicaoResultado(resultadoId) {
-            const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
-            if (!resultado) {
-                this.showToast('❌ Resultado não encontrado', 'error');
-                return;
-            }
-
-            // 🔥 VERIFICAR SE É CANCELADO
-            const isCancelada = (resultado.nota === 0 && resultado.status === 'pendente') || 
-                                resultado.cancelada === true || 
-                                resultado.motivoCancelamento;
-
-            if (isCancelada) {
-                this.showToast('❌ Resultados cancelados não podem ser editados', 'error');
-                return;
-            }
-
-            const novaNota = parseFloat(document.getElementById('editNota')?.value);
-            const novoTotal = parseInt(document.getElementById('editTotal')?.value);
-            const novoTempo = parseInt(document.getElementById('editTempo')?.value) * 60;
-            const novasObservacoes = document.getElementById('editObservacoes')?.value;
-            const liberarNota = document.getElementById('editLiberarNota')?.checked || true;
-
-            // 🔥 CALCULAR ACERTOS BASEADO NA NOTA
-            const novosAcertos = Math.round((novaNota / 10) * novoTotal);
-
-            // Validações
-            if (isNaN(novaNota) || novaNota < 0 || novaNota > 10) {
-                this.showToast('❌ Nota inválida. Deve ser entre 0 e 10', 'error');
-                return;
-            }
-
-            if (isNaN(novoTotal) || novoTotal < 1) {
-                this.showToast('❌ Total de questões inválido', 'error');
-                return;
-            }
-
             try {
+                const resultado = this.resultadosCompletos?.find(r => r.id === resultadoId);
+                if (!resultado) {
+                    this.showToast('❌ Resultado não encontrado', 'error');
+                    return;
+                }
+
+                // 🔥 VERIFICAR SE É CANCELADO
+                const isCancelada = (resultado.nota === 0 && resultado.status === 'pendente') || 
+                                    resultado.cancelada === true || 
+                                    resultado.motivoCancelamento;
+
+                if (isCancelada) {
+                    this.showToast('❌ Resultados cancelados não podem ser editados', 'error');
+                    return;
+                }
+
+                const novaNota = parseFloat(document.getElementById('editNota')?.value);
+                const novoTotal = parseInt(document.getElementById('editTotal')?.value);
+                const novoTempo = parseInt(document.getElementById('editTempo')?.value) * 60;
+                const novasObservacoes = document.getElementById('editObservacoes')?.value;
+                const liberarNota = document.getElementById('editLiberarNota')?.checked || true;
+
+                // 🔥 CALCULAR ACERTOS BASEADO NA NOTA
+                const novosAcertos = Math.round((novaNota / 10) * novoTotal);
+
+                // Validações
+                if (isNaN(novaNota) || novaNota < 0 || novaNota > 10) {
+                    this.showToast('❌ Nota inválida. Deve ser entre 0 e 10', 'error');
+                    return;
+                }
+
+                if (isNaN(novoTotal) || novoTotal < 1) {
+                    this.showToast('❌ Total de questões inválido', 'error');
+                    return;
+                }
+
+                // Verificar se é liberação ou edição
+                const tipoAcao = (!resultado.notaLiberada && liberarNota) ? 'liberada' : 'editada';
+                
                 this.showToast('💾 Salvando alterações...', 'info');
 
                 const token = localStorage.getItem('auth_token');
@@ -11463,7 +11651,7 @@ class AdminPanel {
                         total: novoTotal,
                         tempoGasto: novoTempo,
                         observacoes: novasObservacoes,
-                        notaLiberada: liberarNota  // 🔥 IMPORTANTE
+                        notaLiberada: liberarNota
                     })
                 });
 
@@ -11488,12 +11676,52 @@ class AdminPanel {
                     this.resultadosCompletos = dataAtualizado.resultados;
                 }
 
+                // 🔥 VERIFICAR CONFIGURAÇÕES DE PUSH
+                const configResponse = await fetch('/api/admin/configuracoes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const configData = await configResponse.json();
+                const pushAtivado = configData.configuracoes?.notificacoes?.push === true;
+                
+                // 🔥 ENVIAR PUSH SE ATIVADO E NOTA FOI LIBERADA
+                if (pushAtivado && liberarNota && resultado.alunoId) {
+                    const alunoNome = resultado.alunoNome || 'Aluno';
+                    const provaTitulo = resultado.provaTitulo || 'Prova';
+                    
+                    const tituloPush = tipoAcao === 'liberada' 
+                        ? '📊 Resultado Liberado!' 
+                        : '✏️ Resultado Atualizado';
+                    
+                    const mensagemPush = tipoAcao === 'liberada'
+                        ? `Sua nota em "${provaTitulo}" foi liberada: ${novaNota.toFixed(2)}`
+                        : `Sua nota em "${provaTitulo}" foi atualizada para ${novaNota.toFixed(2)}`;
+                    
+                    await this.enviarPushParaUsuario(
+                        resultado.alunoId,
+                        tituloPush,
+                        mensagemPush,
+                        {
+                            tipo: 'resultado',
+                            acao: tipoAcao,
+                            provaId: resultado.provaId,
+                            nota: novaNota,
+                            resultadoId: resultadoId
+                        }
+                    );
+                }
+
                 this.showToast('✅ Resultado atualizado com sucesso!', 'success');
                 this.closeModal();
 
                 // 🔥 ATUALIZAR A TABELA
-                this.filtrarTabelaResultados();
-                this.atualizarContadoresCards();
+                if (typeof this.filtrarTabelaResultados === 'function') {
+                    this.filtrarTabelaResultados();
+                }
+                
+                if (typeof this.atualizarContadoresCards === 'function') {
+                    this.atualizarContadoresCards();
+                }
 
             } catch (error) {
                 console.error('❌ Erro ao salvar resultado:', error);
