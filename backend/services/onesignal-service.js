@@ -1,8 +1,11 @@
 // ============================================================================
-// SERVIÇO DE NOTIFICAÇÕES PUSH - ONESIGNAL
+// SERVIÇO DE NOTIFICAÇÕES PUSH - ONESIGNAL (VERSÃO DEFINITIVA)
 // ============================================================================
 // Responsável por enviar notificações push para dispositivos móveis e web
 // através da API do OneSignal
+// 
+// ✅ CORREÇÃO CRÍTICA: Timestamp adicionado aos dados
+// ✅ Todas as notificações agora têm data válida
 // ============================================================================
 
 const axios = require('axios');
@@ -16,6 +19,7 @@ class OneSignalService {
             console.warn('⚠️ OneSignal não configurado. Push notifications desabilitadas.');
         } else {
             console.log('📱 OneSignal Service inicializado com sucesso');
+            console.log(`   App ID: ${this.appId.substring(0, 8)}...`);
         }
     }
 
@@ -63,15 +67,21 @@ class OneSignalService {
             console.log(`   Título: ${titulo}`);
             console.log(`   Player ID: ${user.onesignalPlayerId.substring(0, 8)}...`);
 
-            // ===== PREPARAR PAYLOAD COMPLETO =====
-            // 🔥 CORREÇÃO CRÍTICA: Adicionar timestamp atual nos dados
+            // ===== 🔥 CORREÇÃO CRÍTICA: TIMESTAMP VÁLIDO =====
+            // Timestamp em milissegundos (formato JavaScript)
+            const timestampAtual = Date.now();
+            
+            // Dados completos com timestamp SEMPRE presente
             const dadosCompletos = {
                 ...dados,
-                timestamp: Date.now(),           // ← TIMESTAMP ATUAL (corrige data 1970)
-                usuarioId: usuarioId,             // ID do usuário para referência
-                origem: 'sistema_provas',         // Identificação da origem
-                versao: '1.0'                     // Versão do payload
+                timestamp: timestampAtual,              // ← TIMESTAMP ATUAL (corrige data 1970)
+                usuarioId: usuarioId,                    // ID do usuário para referência
+                origem: 'sistema_provas',                // Identificação da origem
+                versao: '1.0',                           // Versão do payload
+                dataEnvio: new Date().toISOString()      // Data ISO para debug
             };
+
+            console.log(`   Timestamp: ${timestampAtual} (${new Date(timestampAtual).toLocaleString('pt-BR')})`);
 
             // ===== MONTAR PAYLOAD DA NOTIFICAÇÃO =====
             const payload = {
@@ -105,11 +115,10 @@ class OneSignalService {
                 // ===== PRIORIDADE E EXPIRAÇÃO =====
                 priority: 10,                      // Alta prioridade
                 ttl: 86400,                        // 24 horas em segundos
-                expiration: 86400,                  // Expira em 24 horas
                 
-                // ===== CONFIGURAÇÕES ADICIONAIS =====
-                delayed_option: 'timezone',         // Respeitar fuso horário
-                delivery_time_of_day: '9:00AM'      // Horário de entrega (opcional)
+                // ===== 🔥 NÃO INCLUIR CAMPOS DE AGENDAMENTO =====
+                // Importante: não enviar send_after ou schedule
+                // para que a notificação seja entregue imediatamente
             };
 
             // ===== ENVIAR PARA ONESIGNAL =====
@@ -132,7 +141,8 @@ class OneSignalService {
                     notificationId: response.data.id,
                     recipients: response.data.recipients || 1,
                     externalId: response.data.external_id || null,
-                    data: response.data
+                    data: response.data,
+                    timestamp: timestampAtual
                 };
             } else {
                 console.log(`⚠️ Resposta inesperada do OneSignal:`, response.data);
