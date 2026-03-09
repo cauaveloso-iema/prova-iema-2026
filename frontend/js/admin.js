@@ -16247,7 +16247,8 @@ class AdminPanel {
             console.error('❌ Erro ao carregar configurações:', error);
         }
     }
-    // ==================== EXECUÇÃO DE COMANDOS ====================
+    
+    // ==================== EXECUÇÃO DE COMANDOS (VERSÃO CORRIGIDA) ====================
     async executarComando() {
         const input = document.getElementById('consoleCommandInput');
         const comando = input.value.trim();
@@ -16267,19 +16268,60 @@ class AdminPanel {
         // Limpar input
         input.value = '';
 
-        // Enviar via WebSocket
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-                type: 'execute_command',
-                command: comando
-            }));
+        // Verificar se o WebSocketManager existe
+        if (!window.wsManager) {
+            this.adicionarLogServidor({
+                type: 'error',
+                message: '❌ WebSocketManager não encontrado. Recarregue a página.',
+                timestamp: new Date().toISOString()
+            });
+            return;
+        }
+
+        // Verificar status da conexão
+        const status = window.wsManager.getConnectionStatus();
+        
+        if (status === 'connected') {
+            // 🔥 Usar sendCommand em vez de isConnected
+            const enviado = window.wsManager.sendCommand(comando);
+            
+            if (!enviado) {
+                this.adicionarLogServidor({
+                    type: 'warn',
+                    message: '⚠️ Comando duplicado ou muito recente. Aguarde.',
+                    timestamp: new Date().toISOString()
+                });
+            }
         } else {
             this.adicionarLogServidor({
                 type: 'error',
-                message: '❌ WebSocket não conectado. Tentando reconectar...',
+                message: `❌ WebSocket ${status}. Tentando reconectar...`,
                 timestamp: new Date().toISOString()
             });
-            this.conectarWebSocketLogs();
+            
+            // Tentar reconectar
+            if (status === 'disconnected') {
+                window.wsManager.connect();
+                
+                // Tentar enviar após reconexão
+                setTimeout(() => {
+                    const novoStatus = window.wsManager.getConnectionStatus();
+                    if (novoStatus === 'connected') {
+                        window.wsManager.sendCommand(comando);
+                        this.adicionarLogServidor({
+                            type: 'success',
+                            message: '✅ Reconectado! Comando enviado.',
+                            timestamp: new Date().toISOString()
+                        });
+                    } else {
+                        this.adicionarLogServidor({
+                            type: 'error',
+                            message: '❌ Falha na reconexão. Tente novamente.',
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                }, 2000);
+            }
         }
     }
 

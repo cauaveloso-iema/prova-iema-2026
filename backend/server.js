@@ -95,81 +95,112 @@ const QRCode = require('qrcode');
 // ============ SERVIÇO DE SMS (TWILIO) - VERSÃO CORRIGIDA ============
 const twilio = require('twilio');
 
-// Configurar Twilio
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+// Configurar Twilio (com validação)
+let twilioClient = null;
+try {
+    if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+        twilioClient = twilio(
+            process.env.TWILIO_ACCOUNT_SID,
+            process.env.TWILIO_AUTH_TOKEN
+        );
+        console.log('✅ Twilio client inicializado com sucesso');
+    } else {
+        console.warn('⚠️ Credenciais Twilio não configuradas');
+    }
+} catch (error) {
+    console.error('❌ Erro ao inicializar Twilio:', error.message);
+}
 
-// ============ FUNÇÃO PARA ENVIAR SMS VIA TWILIO (VERSÃO FINAL - SEM DUPLICAÇÃO) ============
 async function enviarSmsTwilio(telefone, mensagem) {
-  try {
-    // Garantir que o telefone está no formato E.164 (+55...)
-    let numeroDestino = telefone;
-    if (!telefone.startsWith('+')) {
-      numeroDestino = `+55${telefone.replace(/\D/g, '')}`;
-    }
+    try {
+        // Verificar se o client foi inicializado
+        if (!twilioClient) {
+            throw new Error('Twilio client não inicializado - verifique credenciais');
+        }
 
-    console.log('📱 Enviando SMS...');
-    console.log('   Para:', numeroDestino);
-    console.log('   Mensagem:', mensagem.substring(0, 30) + '...');
-    
-    // ✅ USAR APENAS UMA TENTATIVA - PRIORIDADE PARA MESSAGING SERVICE
-    if (process.env.TWILIO_MESSAGING_SERVICE_SID) {
-      try {
-        const message = await twilioClient.messages.create({
-          body: mensagem,
-          messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
-          to: numeroDestino
-        });
+        // Garantir que o telefone está no formato E.164 (+55...)
+        let numeroDestino = telefone;
+        if (!telefone.startsWith('+')) {
+            numeroDestino = `+55${telefone.replace(/\D/g, '')}`;
+        }
+
+        console.log('📱 Enviando SMS...');
+        console.log('   Para:', numeroDestino);
+        console.log('   Mensagem:', mensagem.substring(0, 30) + '...');
         
-        console.log(`✅ SMS enviado via Messaging Service! SID: ${message.sid}`);
-        console.log(`✅ SMS enviado para ${telefone.replace(/\D/g, '')}`);
-        return { success: true, sid: message.sid, enviado: true };
-      } catch (error) {
-        console.log('⚠️ Erro no Messaging Service:', error.message);
-        // Se falhar, tenta com número direto
-      }
-    }
-    
-    // TENTATIVA 2: Usar número direto (APENAS SE O PRIMEIRO FALHAR)
-    if (process.env.TWILIO_PHONE_NUMBER) {
-      try {
-        const message = await twilioClient.messages.create({
-          body: mensagem,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to: numeroDestino
-        });
+        // Validar formato do número
+        const telefoneLimpo = numeroDestino.replace(/\D/g, '');
+        if (telefoneLimpo.length < 10 || telefoneLimpo.length > 13) {
+            throw new Error(`Número de telefone inválido: ${numeroDestino}`);
+        }
         
-        console.log(`✅ SMS enviado via número direto! SID: ${message.sid}`);
-        console.log(`✅ SMS enviado para ${telefone.replace(/\D/g, '')}`);
-        return { success: true, sid: message.sid, enviado: true };
-      } catch (error) {
-        console.log('⚠️ Erro no número direto:', error.message);
-        throw error; // Propagar erro para o fallback
-      }
+        // PRIORIDADE 1: Usar Messaging Service (recomendado)
+        if (process.env.TWILIO_MESSAGING_SERVICE_SID) {
+            try {
+                console.log('📤 Tentando com Messaging Service...');
+                const message = await twilioClient.messages.create({
+                    body: mensagem,
+                    messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
+                    to: numeroDestino
+                });
+                
+                console.log(`✅ SMS enviado via Messaging Service! SID: ${message.sid}`);
+                return { 
+                    success: true, 
+                    sid: message.sid, 
+                    enviado: true,
+                    via: 'messaging_service'
+                };
+            } catch (error) {
+                console.log('⚠️ Erro no Messaging Service:', error.message);
+                // Se falhar, tenta com número direto
+            }
+        }
+        
+        // PRIORIDADE 2: Usar número direto
+        if (process.env.TWILIO_PHONE_NUMBER) {
+            try {
+                console.log('📤 Tentando com número direto...');
+                const message = await twilioClient.messages.create({
+                    body: mensagem,
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    to: numeroDestino
+                });
+                
+                console.log(`✅ SMS enviado via número direto! SID: ${message.sid}`);
+                return { 
+                    success: true, 
+                    sid: message.sid, 
+                    enviado: true,
+                    via: 'numero_direto'
+                };
+            } catch (error) {
+                console.log('⚠️ Erro no número direto:', error.message);
+                throw error;
+            }
+        }
+        
+        throw new Error('Nenhuma configuração de SMS encontrada');
+        
+    } catch (error) {
+        console.error('❌ Erro Twilio:', error.message);
+        
+        // Fallback - mostra o código no console
+        const codigoMatch = mensagem.match(/\d{6}/);
+        const codigo = codigoMatch ? codigoMatch[0] : '123456';
+        
+        console.log(`\n🔧 FALLBACK - Código seria: ${codigo}`);
+        console.log(`🔧 Motivo: ${error.message}\n`);
+        console.log('💡 DICA: Verifique as credenciais no .env');
+        
+        return { 
+            success: true,  // Mantém true para não quebrar o fluxo
+            devMode: true, 
+            codigo,
+            erro: error.message,
+            enviado: false
+        };
     }
-    
-    throw new Error('Nenhuma configuração de SMS encontrada');
-    
-  } catch (error) {
-    console.error('❌ Erro Twilio:', error.message);
-    
-    // Fallback - mostra o código no console
-    const codigoMatch = mensagem.match(/\d{6}/);
-    const codigo = codigoMatch ? codigoMatch[0] : '123456';
-    
-    console.log(`\n🔧 FALLBACK - Código seria: ${codigo}`);
-    console.log(`🔧 Motivo: ${error.message}\n`);
-    
-    return { 
-      success: true, 
-      devMode: true, 
-      codigo,
-      erro: error.message,
-      enviado: false
-    };
-  }
 }
 
 // ============================================================================
@@ -9834,8 +9865,9 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
         
         console.log(`🔍 Admin ${req.userId} buscando usuário ${id}`);
         
+        // 🔥 CORREÇÃO: Incluir onesignalPlayerId explicitamente
         const user = await User.findById(id)
-            .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret')
+            .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret +onesignalPlayerId')
             .lean();
         
         if (!user) {
@@ -9869,6 +9901,8 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
                 dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade || null,
                 twoFactorEnabled: user.twoFactorEnabled || false,
                 telefoneVerificado: user.telefoneVerificado || false,
+                // 🔥 CAMPO ADICIONADO!
+                onesignalPlayerId: user.onesignalPlayerId || null,
                 createdAt: user.createdAt
             }
         });
@@ -13999,6 +14033,20 @@ app.get('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
             error: 'Erro interno: ' + error.message
         });
     }
+});
+
+// Adicione no seu server.js
+app.post('/api/usuario/salvar-player-id', authenticateToken, async (req, res) => {
+  try {
+    const { playerId } = req.body;
+    const userId = req.userId;
+    
+    await User.findByIdAndUpdate(userId, { onesignalPlayerId: playerId });
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ============ ROTA PARA RESETAR ACESSOS COM NOTIFICAÇÃO ============
