@@ -11,9 +11,15 @@ const Notificacao = require('../models/Notificacao');
 // 🔥 CORREÇÃO: Import do email-service da pasta services
 const EmailService = require('./email-service'); 
 
+// 🔥 NOVO: Import do OneSignal Service
+const OneSignalService = require('./onesignal-service');
+
 // 🔥 CORREÇÃO: Inicializar o serviço de email de forma assíncrona
 let emailService = null;
 let emailServiceInicializado = false;
+
+// 🔥 NOVO: Inicializar serviço OneSignal
+let oneSignalService = null;
 
 async function inicializarEmailService() {
     try {
@@ -36,8 +42,19 @@ async function inicializarEmailService() {
     }
 }
 
+// 🔥 NOVO: Inicializar OneSignal Service
+function inicializarOneSignal() {
+    try {
+        oneSignalService = new OneSignalService();
+        console.log('📱 Serviço OneSignal inicializado');
+    } catch (error) {
+        console.error('❌ Erro ao inicializar OneSignal:', error);
+    }
+}
+
 // Inicializar imediatamente (assíncrono)
 inicializarEmailService();
+inicializarOneSignal();
 
 // 🔥 IMPORTAR MODELO CONFIG (já existente)
 const Config = mongoose.model('Config');
@@ -206,9 +223,39 @@ class NotificationService {
                 }
             }
 
-            // SE PUSH ESTIVER HABILITADO (futuro)
+            // 🔥 NOVO: SE PUSH ESTIVER HABILITADO, ENVIAR ONESIGNAL
             if (config.push) {
-                console.log(`📱 Notificação push seria enviada para ${aluno.nome}`);
+                try {
+                    if (oneSignalService) {
+                        const dadosPush = {
+                            tipo: 'resultado',
+                            acao: tipoAcao,
+                            provaId: prova._id || prova.id,
+                            provaTitulo: prova.titulo,
+                            resultadoId: resultado._id,
+                            nota: resultado.nota,
+                            alunoId: aluno._id || aluno.id
+                        };
+                        
+                        // Remover tags HTML para push (OneSignal não suporta)
+                        const mensagemPush = mensagem.replace(/<[^>]*>/g, '');
+                        
+                        const pushResult = await oneSignalService.enviarPush(
+                            aluno._id || aluno.id,
+                            titulo,
+                            mensagemPush,
+                            dadosPush
+                        );
+                        
+                        if (pushResult) {
+                            console.log(`📱 Push enviado para aluno ${aluno.nome}`);
+                        }
+                    }
+                } catch (pushError) {
+                    console.error('❌ Erro ao enviar push:', pushError.message);
+                }
+            } else {
+                console.log(`📱 Push desabilitado nas configurações - não enviado para ${aluno.nome}`);
             }
 
             // SE WHATSAPP ESTIVER HABILITADO (futuro)
@@ -288,6 +335,40 @@ class NotificationService {
 
             console.log(`✅ Notificação criada para professor ${professor.nome} (ID: ${notificacao._id})`);
 
+            // 🔥 NOVO: SE PUSH ESTIVER HABILITADO, ENVIAR ONESIGNAL PARA PROFESSOR
+            if (config.push) {
+                try {
+                    if (oneSignalService) {
+                        const dadosPush = {
+                            tipo: 'resultado_professor',
+                            acao: tipoAcao,
+                            alunoId: aluno._id || aluno.id,
+                            alunoNome: aluno.nome,
+                            provaId: prova._id || prova.id,
+                            provaTitulo: prova.titulo,
+                            nota: resultado.nota,
+                            adminId: admin._id || admin.id,
+                            adminNome: admin.nome
+                        };
+                        
+                        const mensagemPush = mensagem.replace(/<[^>]*>/g, '');
+                        
+                        const pushResult = await oneSignalService.enviarPush(
+                            professor._id || professor.id,
+                            titulo,
+                            mensagemPush,
+                            dadosPush
+                        );
+                        
+                        if (pushResult) {
+                            console.log(`📱 Push enviado para professor ${professor.nome}`);
+                        }
+                    }
+                } catch (pushError) {
+                    console.error('❌ Erro ao enviar push para professor:', pushError.message);
+                }
+            }
+
             // SE EMAIL ESTIVER HABILITADO E LEMBRETE DE CORREÇÃO ATIVO
             if (config.email && config.lembreteCorrecao) {
                 console.log(`📧 Email seria enviado para ${professor.email || 'email não disponível'} sobre resultado ${tipoAcao}`);
@@ -350,6 +431,38 @@ class NotificationService {
 
             console.log(`✅ Notificação de cancelamento criada para professor ${professor.nome} (ID: ${notificacao._id})`);
 
+            // 🔥 NOVO: SE PUSH ESTIVER HABILITADO, ENVIAR ONESIGNAL
+            if (config.push) {
+                try {
+                    if (oneSignalService) {
+                        const dadosPush = {
+                            tipo: 'cancelamento',
+                            isViolacao: isViolacao,
+                            alunoId: aluno._id || aluno.id,
+                            alunoNome: aluno.nome,
+                            provaId: prova._id || prova.id,
+                            provaTitulo: prova.titulo,
+                            motivo: motivo
+                        };
+                        
+                        const mensagemPush = notificacao.mensagem;
+                        
+                        const pushResult = await oneSignalService.enviarPush(
+                            professor._id || professor.id,
+                            titulo,
+                            mensagemPush,
+                            dadosPush
+                        );
+                        
+                        if (pushResult) {
+                            console.log(`📱 Push de cancelamento enviado para professor ${professor.nome}`);
+                        }
+                    }
+                } catch (pushError) {
+                    console.error('❌ Erro ao enviar push de cancelamento:', pushError.message);
+                }
+            }
+
             if (config.email) {
                 console.log(`📧 Email de cancelamento seria enviado para ${professor.email || 'email não disponível'}`);
             }
@@ -399,6 +512,33 @@ class NotificationService {
             await notificacao.save();
 
             console.log(`✅ Lembrete de prova criado para aluno ${aluno.nome} (ID: ${notificacao._id})`);
+
+            // 🔥 NOVO: SE PUSH ESTIVER HABILITADO, ENVIAR LEMBRETE
+            if (config.push) {
+                try {
+                    if (oneSignalService) {
+                        const dadosPush = {
+                            tipo: 'lembrete',
+                            provaId: prova._id || prova.id,
+                            provaTitulo: prova.titulo,
+                            horasAntes: horasAntes
+                        };
+                        
+                        const pushResult = await oneSignalService.enviarPush(
+                            aluno._id || aluno.id,
+                            notificacao.titulo,
+                            notificacao.mensagem,
+                            dadosPush
+                        );
+                        
+                        if (pushResult) {
+                            console.log(`📱 Lembrete push enviado para aluno ${aluno.nome}`);
+                        }
+                    }
+                } catch (pushError) {
+                    console.error('❌ Erro ao enviar lembrete push:', pushError.message);
+                }
+            }
 
             // SE EMAIL ESTIVER HABILITADO, ENVIAR LEMBRETE
             if (config.email) {
@@ -481,6 +621,35 @@ class NotificationService {
 
             console.log(`✅ Lembrete de correção criado para professor ${professor.nome} (ID: ${notificacao._id})`);
 
+            // 🔥 NOVO: SE PUSH ESTIVER HABILITADO, ENVIAR LEMBRETE
+            if (config.push) {
+                try {
+                    if (oneSignalService) {
+                        const dadosPush = {
+                            tipo: 'lembrete_correcao',
+                            quantidade: quantidade,
+                            provas: provasPendentes.map(p => ({
+                                id: p._id,
+                                titulo: p.titulo
+                            }))
+                        };
+                        
+                        const pushResult = await oneSignalService.enviarPush(
+                            professor._id || professor.id,
+                            titulo,
+                            notificacao.mensagem,
+                            dadosPush
+                        );
+                        
+                        if (pushResult) {
+                            console.log(`📱 Lembrete de correção push enviado para professor ${professor.nome}`);
+                        }
+                    }
+                } catch (pushError) {
+                    console.error('❌ Erro ao enviar lembrete de correção push:', pushError.message);
+                }
+            }
+
             if (config.email) {
                 console.log(`📧 Email de lembrete de correção seria enviado para ${professor.email || 'email não disponível'}`);
             }
@@ -532,6 +701,33 @@ class NotificationService {
             await notificacao.save();
 
             console.log(`✅ Notificação de nova prova criada para professor ${professorId}`);
+
+            // 🔥 NOVO: SE PUSH ESTIVER HABILITADO, ENVIAR
+            if (config.push) {
+                try {
+                    if (oneSignalService) {
+                        const dadosPush = {
+                            tipo: 'nova_prova_corrigir',
+                            alunoNome: alunoNome,
+                            provaId: provaId,
+                            provaTitulo: provaTitulo
+                        };
+                        
+                        const pushResult = await oneSignalService.enviarPush(
+                            professorId,
+                            notificacao.titulo,
+                            notificacao.mensagem,
+                            dadosPush
+                        );
+                        
+                        if (pushResult) {
+                            console.log(`📱 Push de nova prova enviado para professor ${professorId}`);
+                        }
+                    }
+                } catch (pushError) {
+                    console.error('❌ Erro ao enviar push de nova prova:', pushError.message);
+                }
+            }
 
             return {
                 success: true,

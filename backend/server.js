@@ -11688,6 +11688,7 @@ app.put('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req
 
                 // CRIAR NOTIFICAÇÕES
                 const NotificationService = require('./services/notification-service');
+                const OneSignalService = require('./services/onesignal-service');
                 const notificationService = new NotificationService();
 
                 // Notificar aluno
@@ -14030,6 +14031,7 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
 
         // Inicializar serviço de notificações
         const NotificationService = require('./services/notification-service');
+        const OneSignalService = require('./services/onesignal-service');
         const notificationService = new NotificationService();
 
         for (const user of usuarios) {
@@ -14115,6 +14117,61 @@ app.post('/api/push/subscribe', authenticateToken, async (req, res) => {
             success: false,
             error: error.message
         });
+    }
+});
+
+// ============ ROTAS DE TESTE PARA PUSH ============
+app.get('/api/usuario/verificar-push-id', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.userId).select('onesignalPlayerId');
+        res.json({
+            success: true,
+            temPlayerId: !!user?.onesignalPlayerId,
+            playerId: user?.onesignalPlayerId || null
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/usuario/testar-push', authenticateToken, async (req, res) => {
+    try {
+        const OneSignalService = require('./services/onesignal-service');
+        const oneSignal = new OneSignalService();
+        
+        const resultado = await oneSignal.enviarPush(
+            req.userId,
+            '🔔 TESTE DO SISTEMA',
+            'Notificação de teste em ' + new Date().toLocaleTimeString(),
+            { tipo: 'teste', timestamp: Date.now() }
+        );
+        
+        if (resultado) {
+            res.json({ success: true, message: 'Push enviado!' });
+        } else {
+            res.json({ success: false, error: 'Falha ao enviar push' });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/usuario/status-push', authenticateToken, async (req, res) => {
+    try {
+        const config = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = config?.valor?.push === true;
+        
+        const user = await User.findById(req.userId).select('onesignalPlayerId');
+        
+        res.json({
+            success: true,
+            pushAtivado,
+            temPlayerId: !!user?.onesignalPlayerId,
+            playerId: user?.onesignalPlayerId ? '✅ Cadastrado' : '❌ Não cadastrado',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

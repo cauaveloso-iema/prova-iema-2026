@@ -10272,7 +10272,12 @@ class AdminPanel {
                             ${r.acertos || 0}/${r.total || 0} 
                             <span style="color: #6c757d; font-size: 11px;">(${percentual}%)</span>
                         </td>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.tempoGasto ? Math.round(r.tempoGasto / 60) + ' min' : '-'}</td>
+                        
+                        <!-- 🔥 LINHA CORRIGIDA DO TEMPO (APENAS MINUTOS) -->
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                            ${this.formatarTempoResultado(r.tempoGasto, r.cancelada, r.status)}
+                        </td>
+                        
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                             <span class="status-badge ${statusClass}" style="
                                 display: inline-block;
@@ -10327,6 +10332,23 @@ class AdminPanel {
                     </tr>
                 `;
             }).join('');
+        }
+
+        // ============ FORMATAR TEMPO DO RESULTADO (VERSÃO FINAL) ============
+        formatarTempoResultado(tempoGasto, cancelada = false, status = '') {
+            if (cancelada || status === 'cancelada') {
+                return '<span style="color: #dc2626;"><i class="fas fa-ban"></i> Cancelada</span>';
+            }
+            
+            if (!tempoGasto || tempoGasto <= 0) {
+                return '<span style="color: #6b7280;">—</span>';
+            }
+            
+            // 🔥 O VALOR JÁ ESTÁ EM MINUTOS!
+            const minutos = Math.round(tempoGasto);
+            
+            // Formatação simples
+            return `<span style="color: #1f2937;">${minutos} min</span>`;
         }
 
         renderTabelaResultados(resultados) {

@@ -72,6 +72,11 @@ const UserSchema = new mongoose.Schema({
       default: false  // false = não precisa trocar senha no login
   },
 
+  onesignalPlayerId: {
+    type: String,
+    default: null
+},
+
 role: {
   type: String,
   enum: ['aluno', 'professor', 'admin', 'super_admin'], // <-- ADICIONADO super_admin
