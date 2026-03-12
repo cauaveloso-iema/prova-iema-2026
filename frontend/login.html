@@ -383,7 +383,7 @@
             
             <!-- LINK PARA BAIXAR O APP - OPÇÃO 2 -->
             <div style="margin-top: 15px; text-align: center;">
-                <a href="https://drive.google.com/file/d/1BIQh5SfZsBx_q9jHBtnTQKgKX7CY0So8/view?usp=sharing" target="_blank" style="display: inline-block; background: rgba(255,255,255,0.2); color: white; padding: 8px 20px; border-radius: 30px; text-decoration: none; font-size: 0.9rem; border: 1px solid rgba(255,255,255,0.3);">
+                <a href="https://drive.google.com/file/d/1Gvs9fTuuqb56ubub49actA8yQ5jw5zNJ/view?usp=sharing" target="_blank" style="display: inline-block; background: rgba(255,255,255,0.2); color: white; padding: 8px 20px; border-radius: 30px; text-decoration: none; font-size: 0.9rem; border: 1px solid rgba(255,255,255,0.3);">
                     <i class="fas fa-download"></i> Baixar App Oficial
                 </a>
             </div>
@@ -502,28 +502,18 @@
                 
                 <!-- Campos para Aluno -->
                 <div id="alunoFields" class="role-fields active">
-                    <!-- CURSO OBRIGATÓRIO - SELECIONÁVEL -->
+                    <!-- CURSO OBRIGATÓRIO - AGORA VEM DO BANCO -->
                     <div class="form-group">
                         <label for="registerCurso"><i class="fas fa-graduation-cap"></i> Curso <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
                         <select id="registerCurso" class="form-control" required onchange="atualizarTurmasPorCurso()">
-                            <option value="">Selecione seu curso técnico</option>
-                            <option value="TÉCNICO EM EVENTOS">TÉCNICO EM EVENTOS</option>
-                            <option value="TÉCNICO EM REDES DE COMPUTADORES">TÉCNICO EM REDES DE COMPUTADORES</option>
-                            <option value="TÉCNICO EM ÁUDIO E VÍDEO">TÉCNICO EM ÁUDIO E VÍDEO</option>
-                            <option value="TÉCNICO EM GUIA DE TURISMO">TÉCNICO EM GUIA DE TURISMO</option>
-                            <option value="TÉCNICO EM MARKETING">TÉCNICO EM MARKETING</option>
-                            <option value="TÉCNICO EM GASTRONOMIA">TÉCNICO EM GASTRONOMIA</option>
-                            <option value="TÉCNICO EM PUBLICIDADE">TÉCNICO EM PUBLICIDADE</option>
-                            <option value="TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS">TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS</option>
-                            <option value="TÉCNICO EM SERVIÇOS JURÍDICOS">TÉCNICO EM SERVIÇOS JURÍDICOS</option>
-                            <option value="TÉCNICO EM MEIO AMBIENTE">TÉCNICO EM MEIO AMBIENTE</option>
+                            <option value="">Carregando cursos...</option>
                         </select>
                     </div>
                     
-                    <!-- TURMA OBRIGATÓRIA - DINÂMICA BASEADA NO CURSO -->
+                    <!-- TURMA OBRIGATÓRIA - AGORA VEM DO BANCO -->
                     <div class="form-group">
                         <label for="registerTurma"><i class="fas fa-users"></i> Turma <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
-                        <select id="registerTurma" class="form-control">
+                        <select id="registerTurma" class="form-control" required>
                             <option value="">Primeiro selecione seu curso</option>
                         </select>
                         <small style="color: #6b7280; display: block; margin-top: 5px;">
@@ -593,19 +583,12 @@
                 </div>
                 
                 <!-- Campos para Professor -->
+                <!-- Campos para Professor -->
                 <div id="professorFields" class="role-fields">
                     <div class="form-group">
                         <label for="registerEixo"><i class="fas fa-sitemap"></i> Eixo</label>
-                        <select id="registerEixo" class="form-control">
-                            <option value="">Selecione seu eixo</option>
-                            <option value="natureza">Natureza e Matemática (Exatas, Biológicas)</option>
-                            <option value="humanas">Humanas (Humanidades, Sociais)</option>
-                            <option value="linguagens">Linguagens</option>
-                            <option value="desenvolvimento">Eixo de Informação e Comunicação (Desenvolvimento de Sistemas e Rede de Computadores)</option>
-                            <option value="gestao">Eixo de Gestão e Negócios (Marketing e Serviços Jurídicos)</option>
-                            <option value="producao">Eixo Produção Cultural e Design e (Produção de Áudio e Vídeo e Publicidade)</option>
-                            <option value="turismo">Eixo Turismo, Hospitalidade e Lazer (Eventos, Guia de Turismo e Gastronomia)</option>
-                            <option value="ambiente">Eixo de Ambiente e Saúde (Meio Ambiente)</option>
+                        <select id="registerEixo" class="form-control" required>
+                            <option value="">Carregando eixos...</option>
                         </select>
                     </div>
                     
@@ -662,21 +645,65 @@
     <!-- === SEU JAVASCRIPT === -->
     <script>
 
-        // Mapeamento de turmas por curso
-        const TURMAS_POR_CURSO = {
-            "TÉCNICO EM EVENTOS": ["101", "201"],
-            "TÉCNICO EM REDES DE COMPUTADORES": ["103", "203"],
-            "TÉCNICO EM ÁUDIO E VÍDEO": ["105", "205", "305"],
-            "TÉCNICO EM GUIA DE TURISMO": ["106", "206"],
-            "TÉCNICO EM MARKETING": ["300"],
-            "TÉCNICO EM GASTRONOMIA": ["302"],
-            "TÉCNICO EM PUBLICIDADE": ["109","209"],
-            "TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS": ["104","204","304"],
-            "TÉCNICO EM SERVIÇOS JURÍDICOS": ["307"],
-            "TÉCNICO EM MEIO AMBIENTE": ["308"]
-        };
+        // ============ VARIÁVEIS GLOBAIS ============
+        let cursosDoBanco = [];
 
-        // Função para atualizar turmas baseado no curso selecionado
+        // ============ DETECTAR AMBIENTE ============
+        const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1';
+        const IS_RENDER = window.location.hostname.includes('render.com') || 
+                        window.location.hostname.includes('sistema-avaliativo');
+
+        let API_BASE_URL;
+
+        if (IS_LOCALHOST) {
+            API_BASE_URL = 'http://localhost:3000/api';
+            console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
+        } else if (IS_RENDER) {
+            API_BASE_URL = window.location.origin + '/api';
+            console.log('🚀 Modo: PRODUÇÃO (Render)');
+        } else {
+            API_BASE_URL = '/api';
+            console.log('⚙️ Modo: FALLBACK');
+        }
+        console.log('🌐 API URL:', API_BASE_URL);
+
+        // ============ CARREGAR CURSOS DO BANCO ============
+        async function carregarCursosDoBanco() {
+            try {
+                console.log('📚 Carregando cursos do banco...');
+                const response = await fetch(`${API_BASE_URL}/cursos`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    cursosDoBanco = data.cursos || [];
+                    console.log(`✅ ${cursosDoBanco.length} cursos carregados`);
+                    
+                    // Preencher select de cursos
+                    const cursoSelect = document.getElementById('registerCurso');
+                    cursoSelect.innerHTML = '<option value="">Selecione seu curso técnico</option>';
+                    
+                    // Ordenar cursos por nome
+                    const cursosOrdenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
+                    
+                    cursosOrdenados.forEach(curso => {
+                        const option = document.createElement('option');
+                        option.value = curso.nome;
+                        option.textContent = curso.nome;
+                        cursoSelect.appendChild(option);
+                    });
+                } else {
+                    console.error('❌ Erro ao carregar cursos:', data.error);
+                    // Fallback para não quebrar o cadastro
+                    document.getElementById('registerCurso').innerHTML = '<option value="">Erro ao carregar cursos</option>';
+                }
+            } catch (error) {
+                console.error('❌ Erro na requisição:', error);
+                document.getElementById('registerCurso').innerHTML = '<option value="">Erro de conexão</option>';
+            }
+        }
+
+        // ============ ATUALIZAR TURMAS POR CURSO (AGORA USA BANCO) ============
         function atualizarTurmasPorCurso() {
             const cursoSelect = document.getElementById('registerCurso');
             const turmaSelect = document.getElementById('registerTurma');
@@ -690,10 +717,10 @@
                 return;
             }
             
-            // Obter turmas do curso selecionado
-            const turmasDisponiveis = TURMAS_POR_CURSO[cursoSelecionado] || [];
+            // Buscar o curso selecionado nos dados do banco
+            const curso = cursosDoBanco.find(c => c.nome === cursoSelecionado);
             
-            if (turmasDisponiveis.length === 0) {
+            if (!curso || !curso.turmas || curso.turmas.length === 0) {
                 turmaSelect.innerHTML = '<option value="">Nenhuma turma disponível</option>';
                 return;
             }
@@ -701,114 +728,32 @@
             // Adicionar opção padrão
             turmaSelect.innerHTML = '<option value="">Selecione sua turma</option>';
             
-            // Adicionar turmas disponíveis
-            turmasDisponiveis.forEach(turma => {
-                const option = document.createElement('option');
-                option.value = turma;
-                option.textContent = `Turma ${turma}`;
-                turmaSelect.appendChild(option);
+            // Adicionar turmas do banco (ordenadas por código)
+            const turmasOrdenadas = [...curso.turmas].sort((a, b) => a.codigo.localeCompare(b.codigo));
+            
+            turmasOrdenadas.forEach(turma => {
+                // Só mostrar turmas ativas
+                if (turma.ativa !== false) {
+                    const option = document.createElement('option');
+                    option.value = turma.codigo;
+                    
+                    // Formatar texto da turma
+                    let texto = `Turma ${turma.codigo}`;
+                    if (turma.periodo) {
+                        texto += ` (${turma.periodo}º período)`;
+                    }
+                    if (turma.vagas) {
+                        texto += ` - ${turma.vagas} vagas`;
+                    }
+                    option.textContent = texto;
+                    
+                    turmaSelect.appendChild(option);
+                }
             });
-        }
-
-        // Modificar a função de registro para incluir turma
-        async function register(event) {
-            event.preventDefault();
             
-            const role = document.querySelector('input[name="role"]:checked')?.value;
-            if (!role) {
-                alert('Selecione se você é Aluno ou Professor');
-                return;
-            }
-            
-            const nome = document.getElementById('registerNome').value;
-            const email = document.getElementById('registerEmail').value;
-            const senha = document.getElementById('registerPassword').value; // CORRIGIDO
-            const cpf = document.getElementById('registerCPF').value;
-            const telefone = document.getElementById('registerTelefone').value;
-            
-            let userData = {
-                nome,
-                email,
-                senha,
-                cpf: cpf.replace(/\D/g, ''),
-                telefone: telefone.replace(/\D/g, ''),
-                role
-            };
-            
-            // Dados específicos por role
-            if (role === 'aluno') {
-                const curso = document.getElementById('registerCurso').value;
-                // 🟢🟢🟢 PEGAR O VALOR DA TURMA! 🟢🟢🟢
-                const turma = document.getElementById('registerTurma').value;
-                const matricula = document.getElementById('registerMatricula')?.value || '';
-                
-                if (!curso) {
-                    alert('Selecione seu curso');
-                    return;
-                }
-                
-                // 🟢🟢🟢 VALIDAR SE SELECIONOU TURMA! 🟢🟢🟢
-                if (!turma) {
-                    alert('Selecione sua turma');
-                    return;
-                }
-                
-                // Mapear eixo com base no curso
-                let eixo = '';
-                if (curso.includes('EVENTOS') || curso.includes('GUIA') || curso.includes('GASTRONOMIA')) {
-                    eixo = 'turismo';
-                } else if (curso.includes('REDES') || curso.includes('DESENVOLVIMENTO')) {
-                    eixo = 'desenvolvimento';
-                } else if (curso.includes('MARKETING') || curso.includes('SERVIÇOS JURÍDICOS')) {
-                    eixo = 'gestao';
-                } else if (curso.includes('ÁUDIO') || curso.includes('VÍDEO') || curso.includes('PUBLICIDADE')) {
-                    eixo = 'producao';
-                } else if (curso.includes('MEIO AMBIENTE')) {
-                    eixo = 'ambiente';
-                }
-                
-                userData = {
-                    ...userData,
-                    curso,
-                    turma,      // 🟢🟢🟢 ENVIAR A TURMA! 🟢🟢🟢
-                    matricula,
-                    eixo
-                };
-                
-            } else if (role === 'professor') {
-                const eixo = document.getElementById('registerEixo')?.value;
-                
-                if (!eixo) {
-                    alert('Selecione seu eixo');
-                    return;
-                }
-                
-                userData = {
-                    ...userData,
-                    eixo
-                };
-            }
-            
-            console.log('📤 Enviando dados:', userData); // VERIFICAR SE TURMA APARECE
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/auth/register`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(userData)
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Cadastro realizado com sucesso! Faça login.');
-                    mostrarLogin();
-                } else {
-                    alert('❌ Erro: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Erro no registro:', error);
-                alert('❌ Erro ao conectar com o servidor');
+            // Se não houver turmas ativas
+            if (turmaSelect.options.length === 1) {
+                turmaSelect.innerHTML = '<option value="">Nenhuma turma ativa disponível</option>';
             }
         }
 
@@ -833,7 +778,7 @@
             document.getElementById('alert').style.display = 'none';
         }
         
-        // FUNÇÃO CORRIGIDA - Aceita todos os eixos
+        // FUNÇÃO CORRIGIDA - Carrega eixos quando professor é selecionado
         function selecionarRole(role) {
             // Atualizar botões de seleção
             document.querySelectorAll('.role-option').forEach(opt => {
@@ -878,10 +823,13 @@
                 if (radioSim) radioSim.removeAttribute('required');
                 if (radioNao) radioNao.removeAttribute('required');
                 
-                // ✅ CORREÇÃO: Eixo OBRIGATÓRIO para TODOS OS EIXOS
+                // ✅ Eixo OBRIGATÓRIO para professores
                 if (eixoSelect) {
                     eixoSelect.setAttribute('required', 'true');
                     console.log('📚 Eixo obrigatório ativado para professor');
+                    
+                    // 🔥 CARREGAR EIXOS DO BANCO QUANDO PROFESSOR FOR SELECIONADO
+                    carregarEixosParaProfessor();
                 }
                 
                 // Curso NÃO obrigatório para professores
@@ -1182,7 +1130,7 @@
             const telefone = document.getElementById('registerTelefone').value;
             const email = document.getElementById('registerEmail').value.trim();
             const curso = document.getElementById('registerCurso').value;
-            const turma = document.getElementById('registerTurma').value;  // 🟢 CAPTURAR AQUI!
+            const turma = document.getElementById('registerTurma').value;
             const periodo = document.getElementById('registerPeriodo').value.trim();
             const matricula = document.getElementById('registerMatricula').value.trim();
             const senha = document.getElementById('registerPassword').value;
@@ -1273,7 +1221,7 @@
                 }
                 
                 dadosCadastro.curso = curso;
-                dadosCadastro.turma = turma;  // <-- ENVIAR TURMA!
+                dadosCadastro.turma = turma;
                 dadosCadastro.periodo = periodo || undefined;
                 
                 // ACESSIBILIDADE
@@ -1354,6 +1302,73 @@
                 btn.disabled = false;
             }
         });
+
+        // ============ CARREGAR EIXOS DO BANCO PARA O SELECT ============
+        async function carregarEixosParaProfessor() {
+            try {
+                console.log('📚 Carregando eixos para cadastro de professor...');
+                
+                const eixoSelect = document.getElementById('registerEixo');
+                if (!eixoSelect) {
+                    console.error('❌ Select de eixo não encontrado');
+                    return;
+                }
+                
+                // Mostrar loading
+                eixoSelect.innerHTML = '<option value="">Carregando eixos...</option>';
+                eixoSelect.disabled = true;
+                
+                // Buscar eixos da API
+                const response = await fetch('/api/eixos');
+                const data = await response.json();
+                
+                if (data.success && data.eixos) {
+                    // Limpar select
+                    eixoSelect.innerHTML = '<option value="">Selecione seu eixo</option>';
+                    
+                    // Ordenar eixos por label
+                    const eixosOrdenados = data.eixos.sort((a, b) => a.label.localeCompare(b.label));
+                    
+                    // Adicionar cada eixo como opção
+                    eixosOrdenados.forEach(eixo => {
+                        if (eixo.ativo !== false) { // Só mostrar eixos ativos
+                            const option = document.createElement('option');
+                            option.value = eixo.nome;
+                            option.textContent = eixo.label;
+                            option.style.borderLeft = `3px solid ${eixo.cor || '#667eea'}`;
+                            eixoSelect.appendChild(option);
+                        }
+                    });
+                    
+                    console.log(`✅ ${data.eixos.length} eixos carregados no select`);
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar eixos');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar eixos:', error);
+                
+                // Fallback para não quebrar o cadastro
+                const eixoSelect = document.getElementById('registerEixo');
+                if (eixoSelect) {
+                    eixoSelect.innerHTML = `
+                        <option value="">Erro ao carregar eixos</option>
+                        <option value="natureza">🌿 Natureza</option>
+                        <option value="humanas">📜 Humanas</option>
+                        <option value="linguagens">📚 Linguagens</option>
+                        <option value="desenvolvimento">💻 Desenvolvimento</option>
+                        <option value="gestao">📊 Gestão</option>
+                        <option value="turismo">✈️ Turismo</option>
+                        <option value="ambiente">🌱 Ambiente</option>
+                    `;
+                }
+            } finally {
+                const eixoSelect = document.getElementById('registerEixo');
+                if (eixoSelect) {
+                    eixoSelect.disabled = false;
+                }
+            }
+        }
 
         // ========== FUNÇÃO PARA GARANTIR QUE OS CAMPOS DE ACESSIBILIDADE ESTÃO CONFIGURADOS ==========
         function inicializarCamposAcessibilidade() {
@@ -1459,11 +1474,14 @@
         // CHAMAR ESTA FUNÇÃO AGORA!
         forcarCarregamentoDadosAluno();
 
-
-        
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             inicializarCamposAcessibilidade();
+            carregarCursosDoBanco();
+            
+            // 🔥 NOVO: Carregar cursos do banco
+            carregarCursosDoBanco();
+            
             console.log('🚀 Sistema de login/cadastro carregado!');
             
             // Verificar se já está logado

@@ -333,7 +333,10 @@ class AdminPanel {
             questoes: 'Banco de Questões',
             resultados: 'Resultados',
             matriculas: 'Matrículas Autorizadas',
+            cursos: 'Cursos e Turmas',
             backups: 'Backups e Restauração',
+            eixos: 'Gerenciar Eixos',
+            cursos: 'Gerenciar Cursos',
             monitoramento: 'Monitoramento do Sistema',  // <-- ADICIONAR ESTA LINHA
             configuracoes: 'Configurações do Sistema'
         };
@@ -380,10 +383,19 @@ class AdminPanel {
             case 'matriculas':
                 await this.loadMatriculas();
                 break;
+            case 'cursos':                    // <-- ADICIONE ESTE CASE
+                await this.loadCursos();       // <-- CHAMA O MÉTODO QUE CRIAMOS
+                break;
+            case 'eixos':
+                await this.loadEixos();
+                break;
+            case 'cursos':
+                await this.loadCursos();
+                break;
             case 'backups':
                 await this.loadBackups();
                 break;
-            case 'monitoramento':  // <-- ADICIONAR ESTE CASE
+            case 'monitoramento':
                 await this.loadMonitoramento();
                 break;
             case 'configuracoes':
@@ -2156,7 +2168,7 @@ class AdminPanel {
         `;
     }
 
-    // ============ GERAR CARDS DAS TURMAS COM BOTÃO ATIVAR/INATIVAR ============
+    // ============ GERAR CARDS DAS TURMAS COM BOTÕES CORRIGIDOS ============
     gerarCardsTurmasProfissional(turmas) {
         if (!turmas || turmas.length === 0) {
             return `
@@ -2255,19 +2267,23 @@ class AdminPanel {
                         </div>
                     </div>
                     
+                    <!-- 🔥 BOTÕES DE AÇÃO CORRIGIDOS - AGORA PASSAM 2 PARÂMETROS -->
                     <div class="card-footer-actions" style="display: flex; border-top: 1px solid #e5e7eb;">
                         <button class="footer-action-btn" onclick="admin.verTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Ver detalhes">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="footer-action-btn" onclick="admin.editarTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Editar">
+                        
+                        <!-- 🔥 BOTÃO EDITAR CORRIGIDO: Passa o ID da turma e também o ID do curso (se disponível) -->
+                        <button class="footer-action-btn" onclick="admin.editarTurma('${turma.id}', '${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Editar">
                             <i class="fas fa-edit"></i>
                         </button>
                         
-                        <!-- 🔥 NOVO BOTÃO: Gerenciar Alunos (no lugar do ativar/desativar) -->
+                        <!-- 🔥 BOTÃO GERENCIAR ALUNOS -->
                         <button class="footer-action-btn" onclick="admin.gerenciarAlunosTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #667eea; transition: all 0.2s;" title="Gerenciar alunos">
                             <i class="fas fa-users"></i>
                         </button>
                         
+                        <!-- 🔥 BOTÃO EXCLUIR -->
                         <button class="footer-action-btn danger" onclick="admin.excluirTurma('${turma.id}')" style="flex: 1; padding: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: #6b7280; transition: all 0.2s;" title="Excluir">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -3093,143 +3109,513 @@ class AdminPanel {
             }
         }
     }
-
-    // ============ ABRIR MODAL TURMA ============
-    abrirModalTurma(turmaId = null) {
-        console.log('📝 Abrindo modal turma. ID:', turmaId);
+    
+    // ============ ABRIR MODAL TURMA (VERSÃO FINAL - FUNCIONA EM AMBOS OS MENUS) ============
+    abrirModalTurma(param1 = null, param2 = null) {
+        console.log('📝 Abrindo modal turma. Parâmetros:', { param1, param2 });
         
-        const turma = turmaId ? this.turmas.find(t => t.id === turmaId) : null;
+        let turma = null;
+        let curso = null;
+        let turmaId = null;
+        let cursoId = null;
         
-        const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
-            <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
-                <div style="padding: 20px;">
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nome da Turma</label>
-                        <input type="text" id="turmaNome" class="form-control" value="${turma?.nome || ''}" 
-                            style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;" required>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                        <div class="form-group">
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Disciplina</label>
-                            <input type="text" id="turmaDisciplina" class="form-control" value="${turma?.disciplina || ''}" 
-                                style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;" required>
-                        </div>
-                        <div class="form-group">
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Eixo</label>
-                            <select id="turmaEixo" class="form-control" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
-                                <option value="">Selecione...</option>
-                                <option value="natureza" ${turma?.eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
-                                <option value="humanas" ${turma?.eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
-                                <option value="linguagens" ${turma?.eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
-                                <option value="desenvolvimento" ${turma?.eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
-                                <option value="gestao" ${turma?.eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
-                                <option value="turismo" ${turma?.eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
-                                <option value="ambiente" ${turma?.eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Professor</label>
-                        <select id="turmaProfessor" class="form-control" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
-                            <option value="">Selecione um professor...</option>
-                            ${this.professores ? this.professores.map(p => 
-                                `<option value="${p._id}" ${turma?.professor?.id === p._id ? 'selected' : ''}>${p.nome} - ${p.email}</option>`
-                            ).join('') : ''}
-                        </select>
-                    </div>
-                    
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Descrição (opcional)</label>
-                        <textarea id="turmaDescricao" class="form-control" rows="3" 
-                                style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">${turma?.descricao || ''}</textarea>
-                    </div>
-                    
-                    <!-- 🔥 NOVO: Status da turma dentro do modal -->
-                    <div style="background: #f8fafc; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                            <input type="checkbox" id="turmaAtiva" ${turma?.ativa !== false ? 'checked' : ''}>
-                            <label for="turmaAtiva" style="font-weight: 600; cursor: pointer;">Turma Ativa</label>
-                        </div>
-                        <p style="margin: 0; font-size: 12px; color: #6b7280;">
-                            <i class="fas fa-info-circle"></i> 
-                            Se desativada, alunos não poderão acessar provas desta turma
-                        </p>
-                    </div>
-                    
-                    <div style="background: #f0f4ff; padding: 10px; border-radius: 8px; font-size: 13px; color: #1e40af;">
-                        <i class="fas fa-info-circle"></i> O código da turma será gerado automaticamente.
-                    </div>
-                </div>
-            </form>
-        `;
+        // ===== DETECTAR QUAL MENU ESTAMOS =====
+        const isMenuCursos = window.location.hash.includes('cursos') || 
+                            document.querySelector('.cursos-container') !== null ||
+                            document.querySelector('.cursos-list') !== null;
         
-        document.getElementById('modalTitle').innerHTML = turma ? 
-            '<i class="fas fa-edit"></i> Editar Turma' : 
-            '<i class="fas fa-plus"></i> Nova Turma';
+        const isMenuTurmas = window.location.hash.includes('turmas') || 
+                            document.querySelector('.turmas-container') !== null ||
+                            document.querySelector('.turmas-cards-grid') !== null;
         
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarTurma(turmaId);
-        document.getElementById('modalSaveBtn').style.display = 'inline-block';
+        console.log('📍 Menu detectado:', isMenuCursos ? 'CURSOS' : 'TURMAS');
         
-        this.openModal();
-        console.log('✅ Modal aberto');
-    }
-
-    // ============ SALVAR TURMA ============
-    async salvarTurma(id = null) {
-        console.log('💾 Salvando turma. ID:', id);
-        
-        try {
-            const dados = {
-                nome: document.getElementById('turmaNome')?.value,
-                disciplina: document.getElementById('turmaDisciplina')?.value,
-                eixo: document.getElementById('turmaEixo')?.value,
-                professorId: document.getElementById('turmaProfessor')?.value || null,
-                descricao: document.getElementById('turmaDescricao')?.value || undefined,
-                ativa: document.getElementById('turmaAtiva')?.checked || false
-            };
+        // ===== CASO 1: MENU DE CURSOS =====
+        if (isMenuCursos) {
+            console.log('🔍 Modo: Edição no menu de Cursos');
             
-            // Validação
-            if (!dados.nome || !dados.disciplina || !dados.eixo) {
-                this.showToast('❌ Nome, disciplina e eixo são obrigatórios', 'error');
-                return;
+            // No menu de Cursos, os parâmetros podem vir de duas formas:
+            // Forma 1: (cursoId, turmaId) - quando vem do botão "Nova Turma"
+            // Forma 2: (turmaId, cursoId) - quando vem do botão "Editar" (parâmetros trocados)
+            
+            // Tentativa 1: Assumir que param1 é cursoId e param2 é turmaId
+            if (param1 && param2) {
+                // Verificar se param1 é um curso válido
+                const possivelCurso = this.cursos?.find(c => c._id === param1 || c.id === param1);
+                
+                if (possivelCurso) {
+                    // Caso: (cursoId, turmaId)
+                    cursoId = param1;
+                    turmaId = param2;
+                    console.log('✅ Formato (cursoId, turmaId) detectado');
+                } else {
+                    // Se param1 não é curso, provavelmente é (turmaId, cursoId)
+                    cursoId = param2;
+                    turmaId = param1;
+                    console.log('✅ Formato (turmaId, cursoId) detectado (parâmetros trocados)');
+                }
+            } else if (param1 && !param2) {
+                // Apenas um parâmetro - pode ser cursoId (nova turma) ou turmaId (edição direta)
+                const possivelCurso = this.cursos?.find(c => c._id === param1 || c.id === param1);
+                
+                if (possivelCurso) {
+                    // É um cursoId - criar nova turma
+                    cursoId = param1;
+                    turmaId = null;
+                    console.log('✅ Nova turma no curso:', possivelCurso.nome);
+                } else {
+                    // É um turmaId - editar turma existente
+                    turmaId = param1;
+                    cursoId = null;
+                    console.log('✅ Editar turma com ID:', turmaId);
+                }
             }
             
-            this.showToast('🔄 Salvando...', 'info');
-            
-            const url = id ? `${this.apiBase}/turmas/${id}` : `${this.apiBase}/turmas`;
-            const method = id ? 'PUT' : 'POST';
-            
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                },
-                body: JSON.stringify(dados)
-            });
-            
-            const data = await response.json();
-            console.log('📦 Resposta do servidor:', data);
-            
-            if (data.success) {
-                this.showToast(id ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
-                this.closeModal();
-                
-                // ATUALIZAR TODAS AS ABAS
-                await this.loadTurmas(); // Recarregar lista
-                await this.carregarDadosReais(); // Atualizar dashboard
-                
-                // Se estiver na aba de provas ou resultados, recarregar
-                if (this.currentSection === 'provas') {
-                    await this.loadProvas();
-                } else if (this.currentSection === 'resultados') {
-                    await this.loadResultados();
+            // Buscar o curso se temos cursoId
+            if (cursoId && this.cursos) {
+                curso = this.cursos.find(c => c._id === cursoId || c.id === cursoId);
+                if (curso) {
+                    console.log('✅ Curso encontrado:', curso.nome);
+                    this.cursoAtual = curso;
                 }
-            } else {
-                throw new Error(data.error || 'Erro ao salvar');
+            }
+            
+            // Buscar a turma
+            if (turmaId) {
+                // Primeiro: procurar dentro do curso (se temos o curso)
+                if (curso && curso.turmas) {
+                    turma = curso.turmas.find(t => t._id === turmaId);
+                    if (turma) {
+                        console.log('✅ Turma encontrada no curso:', turma.codigo);
+                    }
+                }
+                
+                // Segundo: se não encontrou, procurar em todos os cursos
+                if (!turma && this.cursos) {
+                    for (const c of this.cursos) {
+                        if (c.turmas) {
+                            turma = c.turmas.find(t => t._id === turmaId);
+                            if (turma) {
+                                console.log('✅ Turma encontrada no curso:', c.nome);
+                                curso = c;
+                                this.cursoAtual = curso;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Terceiro: procurar em this.turmas (fallback)
+                if (!turma && this.turmas) {
+                    turma = this.turmas.find(t => t.id === turmaId || t._id === turmaId);
+                    if (turma) {
+                        console.log('✅ Turma encontrada em this.turmas (fallback)');
+                    }
+                }
+            }
+        }
+        
+        // ===== CASO 2: MENU DE TURMAS =====
+        if (isMenuTurmas) {
+            console.log('🔍 Modo: Edição no menu de Turmas');
+            
+            // No menu de Turmas, o primeiro parâmetro é sempre o ID da turma
+            turmaId = param1 || param2;
+            
+            if (turmaId && this.turmas) {
+                turma = this.turmas.find(t => t.id === turmaId || t._id === turmaId);
+                
+                if (turma) {
+                    console.log('✅ Turma encontrada em this.turmas:', turma.nome || turma.codigo);
+                } else {
+                    console.log('⚠️ Turma não encontrada em this.turmas');
+                }
+            }
+        }
+        
+        // ===== CASO 3: CRIAÇÃO DE NOVA TURMA (sem IDs) =====
+        if (!param1 && !param2) {
+            console.log('➕ Criando nova turma');
+            turma = null;
+            curso = null;
+            turmaId = null;
+            cursoId = null;
+        }
+        
+        // ===== VERIFICAÇÃO FINAL =====
+        if (turmaId && !turma) {
+            console.error('❌ Turma não encontrada em nenhum lugar');
+            console.log('📊 IDs disponíveis em this.turmas:', this.turmas?.map(t => ({ id: t.id, nome: t.nome })));
+            this.showToast('❌ Turma não encontrada', 'error');
+            return;
+        }
+        
+        // ===== RENDERIZAR MODAL =====
+        this.renderizarModalTurma(turma, cursoId, turmaId);
+    }
+
+    // ============ RENDERIZAR MODAL TURMA (MENU DE TURMAS) - VERSÃO MELHORADA ============
+    renderizarModalTurma(turma, cursoId, turmaId) {
+        const modalBody = document.getElementById('modalBody');
+        if (!modalBody) {
+            console.error('❌ Modal body não encontrado');
+            return;
+        }
+        
+        // Detectar qual menu
+        const isMenuCursos = window.location.hash.includes('cursos') || 
+                            document.querySelector('.cursos-container') !== null;
+        
+        let html = '';
+        
+        if (isMenuCursos) {
+            // HTML para menu de Cursos (já existente)
+            html = `
+                <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
+                    <div style="padding: 20px;">
+                        <div class="form-group">
+                            <label>Código da Turma</label>
+                            <input type="text" id="turmaCodigo" class="form-control" 
+                                value="${turma?.codigo || ''}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Série</label>
+                            <select id="turmaPeriodo" class="form-control" required>
+                                <option value="1" ${turma?.periodo === '1' ? 'selected' : ''}>1ª Série</option>
+                                <option value="2" ${turma?.periodo === '2' ? 'selected' : ''}>2ª Série</option>
+                                <option value="3" ${turma?.periodo === '3' ? 'selected' : ''}>3ª Série</option>
+                                <option value="4" ${turma?.periodo === '4' ? 'selected' : ''}>4ª Série</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Vagas</label>
+                            <input type="number" id="turmaVagas" class="form-control" 
+                                value="${turma?.vagas || 40}" min="1">
+                        </div>
+                        <div class="form-group">
+                            <input type="checkbox" id="turmaAtiva" ${turma?.ativa !== false ? 'checked' : ''}>
+                            <label>Turma Ativa</label>
+                        </div>
+                    </div>
+                </form>
+            `;
+        } else {
+            // ===== HTML PARA MENU DE TURMAS - VERSÃO MELHORADA =====
+            html = `
+                <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
+                    <!-- HEADER DO MODAL COM GRADIENTE -->
+                    <div style="background: linear-gradient(135deg, #667eea, #764ba2); margin: -20px -20px 20px -20px; padding: 25px 30px; border-radius: 12px 12px 0 0; color: white;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                                <i class="fas fa-school"></i>
+                            </div>
+                            <div>
+                                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">${turmaId ? '✏️ Editar Turma' : '➕ Nova Turma'}</h2>
+                                <p style="margin: 5px 0 0; opacity: 0.9; font-size: 0.9rem;">
+                                    <i class="fas fa-users"></i> Gerencie as informações da turma
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="padding: 10px 20px 20px 20px;">
+                        <!-- CARD DE INFORMAÇÕES -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                            
+                            <!-- Nome da Turma -->
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
+                                    <i class="fas fa-tag" style="color: #667eea;"></i>
+                                    Nome da Turma <span style="color: #ef4444; margin-left: 4px;">*</span>
+                                </label>
+                                <input type="text" id="turmaNome" class="form-control" 
+                                    value="${turma?.nome || ''}" 
+                                    placeholder="Ex: Turma A - 2024"
+                                    style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; transition: all 0.3s;"
+                                    required>
+                                <div style="font-size: 11px; color: #94a3b8; margin-top: 5px;">
+                                    <i class="fas fa-info-circle"></i> Nome que identificará a turma
+                                </div>
+                            </div>
+
+                            <!-- Linha: Disciplina e Eixo -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                                <!-- Disciplina -->
+                                <div class="form-group">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
+                                        <i class="fas fa-book" style="color: #667eea;"></i>
+                                        Disciplina <span style="color: #ef4444;">*</span>
+                                    </label>
+                                    <input type="text" id="turmaDisciplina" class="form-control" 
+                                        value="${turma?.disciplina || ''}" 
+                                        placeholder="Ex: Matemática"
+                                        style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; transition: all 0.3s;"
+                                        required>
+                                </div>
+                                
+                                <!-- Eixo -->
+                                <div class="form-group">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
+                                        <i class="fas fa-sitemap" style="color: #667eea;"></i>
+                                        Eixo <span style="color: #ef4444;">*</span>
+                                    </label>
+                                    <select id="turmaEixo" class="form-control" 
+                                        style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; background: white;"
+                                        required>
+                                        <option value="">Selecione um eixo...</option>
+                                        <option value="natureza" ${turma?.eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
+                                        <option value="humanas" ${turma?.eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
+                                        <option value="linguagens" ${turma?.eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
+                                        <option value="desenvolvimento" ${turma?.eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
+                                        <option value="gestao" ${turma?.eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
+                                        <option value="turismo" ${turma?.eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
+                                        <option value="ambiente" ${turma?.eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Professor -->
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
+                                    <i class="fas fa-chalkboard-teacher" style="color: #667eea;"></i>
+                                    Professor Responsável
+                                </label>
+                                <select id="turmaProfessor" class="form-control" 
+                                    style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; background: white;">
+                                    <option value="">Selecione um professor...</option>
+                                    ${this.professores?.map(p => 
+                                        `<option value="${p._id}" ${turma?.professor?.id === p._id ? 'selected' : ''}>${p.nome} - ${p.email}</option>`
+                                    ).join('') || ''}
+                                </select>
+                                <div style="font-size: 11px; color: #94a3b8; margin-top: 5px;">
+                                    <i class="fas fa-info-circle"></i> Opcional por enquanto
+                                </div>
+                            </div>
+
+                            <!-- Descrição -->
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
+                                    <i class="fas fa-align-left" style="color: #667eea;"></i>
+                                    Descrição
+                                </label>
+                                <textarea id="turmaDescricao" class="form-control" 
+                                    rows="3"
+                                    placeholder="Descreva informações adicionais sobre a turma..."
+                                    style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; resize: vertical;">${turma?.descricao || ''}</textarea>
+                            </div>
+
+                            <!-- Status da Turma -->
+                            <div style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-radius: 12px; padding: 15px; margin-top: 15px; border: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+                                    <div style="width: 40px; height: 40px; background: ${turma?.ativa !== false ? '#10b981' : '#ef4444'}20; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas ${turma?.ativa !== false ? 'fa-check-circle' : 'fa-pause-circle'}" style="color: ${turma?.ativa !== false ? '#10b981' : '#ef4444'}; font-size: 20px;"></i>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <input type="checkbox" id="turmaAtiva" ${turma?.ativa !== false ? 'checked' : ''} 
+                                                style="width: 18px; height: 18px; cursor: pointer;">
+                                            <label for="turmaAtiva" style="font-weight: 600; cursor: pointer; color: #1e293b;">Turma Ativa</label>
+                                        </div>
+                                        <p style="margin: 5px 0 0; font-size: 12px; color: #64748b;">
+                                            <i class="fas fa-info-circle"></i> 
+                                            Se desativada, alunos não poderão acessar provas desta turma
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Informações adicionais -->
+                            <div style="background: #f0f4ff; border-radius: 10px; padding: 12px 15px; margin-top: 20px; display: flex; align-items: center; gap: 10px; border-left: 4px solid #667eea;">
+                                <i class="fas fa-lightbulb" style="color: #667eea; font-size: 18px;"></i>
+                                <div style="font-size: 13px; color: #1e40af;">
+                                    <strong>Dica:</strong> Preencha todos os campos obrigatórios (*) para criar a turma corretamente.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            `;
+        }
+        
+        modalBody.innerHTML = html;
+        
+        // Adicionar foco no primeiro campo
+        setTimeout(() => {
+            const primeiroCampo = document.getElementById(isMenuCursos ? 'turmaCodigo' : 'turmaNome');
+            if (primeiroCampo) primeiroCampo.focus();
+        }, 100);
+        
+        // Configurar título
+        const modalTitle = document.getElementById('modalTitle');
+        if (modalTitle) {
+            modalTitle.innerHTML = turmaId ? 
+                '<i class="fas fa-edit" style="color: #667eea;"></i> Editar Turma' : 
+                '<i class="fas fa-plus-circle" style="color: #10b981;"></i> Nova Turma';
+        }
+        
+        // Configurar botão salvar
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        if (modalSaveBtn) {
+            modalSaveBtn.onclick = () => this.salvarTurma(turmaId);
+            modalSaveBtn.style.display = 'inline-block';
+            modalSaveBtn.innerHTML = turmaId ? 
+                '<i class="fas fa-save"></i> Salvar Alterações' : 
+                '<i class="fas fa-check-circle"></i> Criar Turma';
+            modalSaveBtn.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+            modalSaveBtn.style.color = 'white';
+            modalSaveBtn.style.border = 'none';
+            modalSaveBtn.style.padding = '10px 25px';
+            modalSaveBtn.style.borderRadius = '8px';
+            modalSaveBtn.style.fontWeight = '600';
+            modalSaveBtn.style.cursor = 'pointer';
+        }
+        
+        this.openModal();
+        console.log('✅ Modal renderizado com dados da turma');
+    }
+
+    // ============ SALVAR TURMA (VERSÃO UNIFICADA) ============
+    async salvarTurma(turmaId = null) {
+        console.log('💾 Salvando turma. ID:', turmaId);
+        
+        // ===== DETECTAR EM QUAL MENU ESTAMOS =====
+        const isMenuCursos = window.location.hash.includes('cursos') || 
+                            document.querySelector('.cursos-container') !== null ||
+                            document.querySelector('.cursos-list') !== null;
+        
+        const isMenuTurmas = window.location.hash.includes('turmas') || 
+                            document.querySelector('.turmas-container') !== null ||
+                            document.querySelector('.turmas-cards-grid') !== null;
+        
+        console.log('📍 Menu detectado:', isMenuCursos ? 'CURSOS' : 'TURMAS');
+        
+        try {
+            let dados = {};
+            let url = '';
+            let method = 'POST';
+            
+            // ===== CASO 1: MENU DE CURSOS =====
+            if (isMenuCursos) {
+                console.log('🔍 Salvando no menu de CURSOS');
+                
+                // Coletar dados do formulário de Cursos
+                dados = {
+                    codigo: document.getElementById('turmaCodigo')?.value,
+                    periodo: document.getElementById('turmaPeriodo')?.value,
+                    vagas: parseInt(document.getElementById('turmaVagas')?.value) || 40
+                };
+                
+                // Validação
+                if (!dados.codigo || !dados.periodo) {
+                    this.showToast('❌ Código e série são obrigatórios', 'error');
+                    return;
+                }
+                
+                const token = localStorage.getItem('auth_token');
+                const cursoId = this.cursoAtual?._id;
+                
+                if (!cursoId) {
+                    this.showToast('❌ ID do curso não encontrado', 'error');
+                    return;
+                }
+                
+                if (turmaId) {
+                    // EDITAR
+                    url = `/api/admin/cursos/${cursoId}/turmas/${turmaId}`;
+                    method = 'PUT';
+                } else {
+                    // CRIAR
+                    url = `/api/admin/cursos/${cursoId}/turmas`;
+                    method = 'POST';
+                }
+                
+                console.log(`📤 Enviando para ${method} ${url}:`, dados);
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast(turmaId ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
+                    this.closeModal();
+                    
+                    // 🔥 RECARREGAR AMBOS OS MENUS
+                    await this.loadCursos();  // Recarrega menu de Cursos
+                    await this.loadTurmas();  // Recarrega menu de Turmas
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar turma');
+                }
+            }
+            
+            // ===== CASO 2: MENU DE TURMAS =====
+            else if (isMenuTurmas) {
+                console.log('🔍 Salvando no menu de TURMAS');
+                
+                // Coletar dados do formulário de Turmas
+                dados = {
+                    nome: document.getElementById('turmaNome')?.value,
+                    disciplina: document.getElementById('turmaDisciplina')?.value,
+                    eixo: document.getElementById('turmaEixo')?.value,
+                    professorId: document.getElementById('turmaProfessor')?.value || null,
+                    descricao: document.getElementById('turmaDescricao')?.value || undefined,
+                    ativa: document.getElementById('turmaAtiva')?.checked !== false
+                };
+                
+                // Validação
+                if (!dados.nome || !dados.disciplina || !dados.eixo) {
+                    this.showToast('❌ Nome, disciplina e eixo são obrigatórios', 'error');
+                    return;
+                }
+                
+                const token = localStorage.getItem('auth_token');
+                url = turmaId ? `${this.apiBase}/turmas/${turmaId}` : `${this.apiBase}/turmas`;
+                method = turmaId ? 'PUT' : 'POST';
+                
+                console.log(`📤 Enviando para ${method} ${url}:`, dados);
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast(turmaId ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
+                    this.closeModal();
+                    
+                    // 🔥 RECARREGAR AMBOS OS MENUS
+                    await this.loadTurmas();  // Recarrega menu de Turmas
+                    await this.loadCursos();  // Recarrega menu de Cursos
+                    await this.carregarDadosReais(); // Atualizar dashboard
+                    
+                    // Se estiver na aba de provas ou resultados, recarregar
+                    if (this.currentSection === 'provas') {
+                        await this.loadProvas();
+                    } else if (this.currentSection === 'resultados') {
+                        await this.loadResultados();
+                    }
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar');
+                }
+            }
+            
+            // ===== CASO 3: NÃO CONSEGUIU DETECTAR =====
+            else {
+                console.error('❌ Não foi possível detectar o menu atual');
+                this.showToast('❌ Erro ao detectar o menu', 'error');
+                return;
             }
             
         } catch (error) {
@@ -3374,6 +3760,180 @@ class AdminPanel {
         }
     }
 
+    // ============ NOVAS FUNÇÕES PARA MENU DE CURSOS ============
+
+    // 1. Abrir modal para turma curricular (dentro de curso)
+    async abrirModalTurmaCurricular(cursoId, turmaId = null) {
+        console.log('📝 Abrindo modal de TURMA CURRICULAR. Curso ID:', cursoId, 'Turma ID:', turmaId);
+        
+        const curso = this.cursos.find(c => c._id === cursoId || c.id === cursoId);
+        if (!curso) {
+            this.showToast('❌ Curso não encontrado', 'error');
+            return;
+        }
+        
+        this.cursoAtual = curso;
+        const turma = turmaId ? curso.turmas.find(t => t._id === turmaId) : null;
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <form id="turmaCurricularForm" onsubmit="event.preventDefault(); admin.salvarTurmaCurricular('${cursoId}', '${turmaId || ''}')">
+                <div style="padding: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #1f2937;">Curso: ${curso.nome}</h4>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Código da Turma</label>
+                        <input type="text" id="turmaCodigo" class="form-control" 
+                            value="${turma?.codigo || ''}" 
+                            placeholder="Ex: 101" required
+                            style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Série</label>
+                        <select id="turmaPeriodo" class="form-control" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;" required>
+                            <option value="1" ${turma?.periodo === '1' ? 'selected' : ''}>1ª Série</option>
+                            <option value="2" ${turma?.periodo === '2' ? 'selected' : ''}>2ª Série</option>
+                            <option value="3" ${turma?.periodo === '3' ? 'selected' : ''}>3ª Série</option>
+                            <option value="4" ${turma?.periodo === '4' ? 'selected' : ''}>4ª Série</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Vagas</label>
+                        <input type="number" id="turmaVagas" class="form-control" 
+                            value="${turma?.vagas || 40}" min="1" max="100"
+                            style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                    </div>
+                    
+                    <div style="background: #f8fafc; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <input type="checkbox" id="turmaAtiva" ${turma?.ativa !== false ? 'checked' : ''}>
+                            <label for="turmaAtiva" style="font-weight: 600; cursor: pointer;">Turma Ativa</label>
+                        </div>
+                        <p style="margin: 0; font-size: 12px; color: #6b7280;">
+                            <i class="fas fa-info-circle"></i> 
+                            Se desativada, não aparecerá no cadastro de alunos
+                        </p>
+                    </div>
+                </div>
+            </form>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = turmaId ? 
+            '<i class="fas fa-edit"></i> Editar Turma do Curso' : 
+            '<i class="fas fa-plus"></i> Nova Turma no Curso';
+        
+        document.getElementById('modalSaveBtn').onclick = () => this.salvarTurmaCurricular(cursoId, turmaId);
+        document.getElementById('modalSaveBtn').style.display = 'inline-block';
+        document.getElementById('modalSaveBtn').textContent = turmaId ? 'Salvar Alterações' : 'Criar Turma';
+        
+        this.openModal();
+    }
+
+    // 2. Salvar turma curricular
+    async salvarTurmaCurricular(cursoId, turmaId = null) {
+        try {
+            const dados = {
+                codigo: document.getElementById('turmaCodigo')?.value,
+                periodo: document.getElementById('turmaPeriodo')?.value,
+                vagas: parseInt(document.getElementById('turmaVagas')?.value) || 40,
+                ativa: document.getElementById('turmaAtiva')?.checked !== false
+            };
+            
+            if (!dados.codigo || !dados.periodo) {
+                this.showToast('❌ Código e série são obrigatórios', 'error');
+                return;
+            }
+            
+            this.showToast('🔄 Salvando turma curricular...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const url = turmaId ? 
+                `/api/admin/cursos/${cursoId}/turmas/${turmaId}` : 
+                `/api/admin/cursos/${cursoId}/turmas`;
+            const method = turmaId ? 'PUT' : 'POST';
+            
+            console.log(`📤 Enviando para ${method} ${url}:`, dados);
+            
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(turmaId ? '✅ Turma curricular atualizada!' : '✅ Turma curricular criada!', 'success');
+                this.closeModal();
+                await this.loadCursos(); // Recarregar apenas cursos
+            } else {
+                throw new Error(data.error || 'Erro ao salvar turma curricular');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // 3. Editar turma curricular (chamada pelo botão)
+    async editarTurmaCurricular(cursoId, turmaId) {
+        console.log('✏️ Editando turma curricular:', { cursoId, turmaId });
+        this.abrirModalTurmaCurricular(cursoId, turmaId);
+    }
+
+    // 4. Excluir turma curricular
+    async excluirTurmaCurricular(cursoId, turmaId) {
+        console.log('🗑️ Excluindo turma curricular:', { cursoId, turmaId });
+        
+        const curso = this.cursos.find(c => c._id === cursoId || c.id === cursoId);
+        if (!curso) {
+            this.showToast('❌ Curso não encontrado', 'error');
+            return;
+        }
+        
+        const turma = curso.turmas.find(t => t._id === turmaId);
+        if (!turma) {
+            this.showToast('❌ Turma não encontrada', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🗑️ Excluir Turma do Curso',
+            `Tem certeza que deseja excluir a turma <strong>${turma.codigo} - ${turma.periodo}ª Série</strong> do curso <strong>${curso.nome}</strong>?`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🔄 Excluindo...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/cursos/${cursoId}/turmas/${turmaId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Turma curricular excluída!', 'success');
+                await this.loadCursos();
+            } else {
+                throw new Error(data.error || 'Erro ao excluir');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
     // ============ GERAR LISTA DE ALUNOS HTML ============
     gerarListaAlunosHTML(alunos) {
         if (!alunos || alunos.length === 0) {
@@ -3394,11 +3954,6 @@ class AdminPanel {
                     ''}
             </div>
         `).join('');
-    }
-
-    // ============ EDITAR TURMA ============
-    editarTurma(turmaId) {
-        this.abrirModalTurma(turmaId);
     }
 
     // ============ ATIVAR/INATIVAR TURMA (VERSÃO CORRIGIDA) ============
@@ -6455,94 +7010,128 @@ class AdminPanel {
                 dataLimite = new Date(ano, mes - 1, dia, 23, 59, 59).toISOString();
             }
             
-            // CORREÇÃO: Incluir professorId nos dados da prova
-            const dadosProva = {
-                professorId: professorId, // <-- ESSA LINHA É CRÍTICA
-                turmaId,
-                titulo,
+            // Dados base da prova
+            const dadosBase = {
+                professorId: professorId,
+                turmaId: turmaId,
+                titulo: titulo,
                 conteudo: tema,
-                tipoProva,
-                periodo,
+                tipoProva: tipoProva,
+                periodo: periodo,
                 quantidadeQuestoes: quantidade,
-                dificuldade,
-                dataLimite,
-                horarioInicio,
-                horarioTermino
+                dificuldade: dificuldade,
+                dataLimite: dataLimite,
+                horarioInicio: horarioInicio,
+                horarioTermino: horarioTermino
             };
             
-            console.log('📤 Enviando dados da prova:', {
-                ...dadosProva,
-                professorId: professorId,
-                professorSelecionado: professorNome
-            });
-            
             if (tipoProva === 'adaptada') {
-                dadosProva.adaptada = true;
-                dadosProva.alternativas = 3;
+                dadosBase.adaptada = true;
+                dadosBase.alternativas = 3;
             }
             
+            console.log('📤 Enviando dados da prova:', dadosBase);
+            
             // Fazer backup dos arquivos para regeneração
-            this.arquivosOriginaisBackupAdmin = [...this.arquivosParaUploadAdmin];
+            this.arquivosOriginaisBackupAdmin = [...(this.arquivosParaUploadAdmin || [])];
             
             let response;
+            const temAnexos = tipoProva === 'enem' && 
+                            ((this.anexosAdmin?.length || 0) + (this.arquivosParaUploadAdmin?.length || 0) > 0);
             
-            if (tipoProva === 'enem' && ((this.anexosAdmin?.length || 0) + (this.arquivosParaUploadAdmin?.length || 0) > 0)) {
-                const formData = new FormData();
-                Object.keys(dadosProva).forEach(key => {
-                    formData.append(key, dadosProva[key]);
-                });
+            if (temAnexos) {
+                // ===== CASO 1: ENEM COM ARQUIVOS =====
+                console.log('📤 Enviando como FormData (com arquivos)...');
                 
+                const formData = new FormData();
+                
+                // Adicionar todos os campos
+                formData.append('professorId', dadosBase.professorId);
+                formData.append('turmaId', dadosBase.turmaId);
+                formData.append('titulo', dadosBase.titulo);
+                formData.append('conteudo', dadosBase.conteudo);
+                formData.append('tipoProva', dadosBase.tipoProva);
+                formData.append('periodo', dadosBase.periodo);
+                formData.append('quantidadeQuestoes', dadosBase.quantidadeQuestoes);
+                formData.append('dificuldade', dadosBase.dificuldade);
+                formData.append('dataLimite', dadosBase.dataLimite || '');
+                formData.append('horarioInicio', dadosBase.horarioInicio);
+                formData.append('horarioTermino', dadosBase.horarioTermino);
+                
+                if (dadosBase.adaptada) {
+                    formData.append('adaptada', 'true');
+                    formData.append('alternativas', '3');
+                }
+                
+                // Preparar anexos (textos/links)
                 const todosAnexos = [...(this.anexosAdmin || [])];
                 
-                for (const file of (this.arquivosParaUploadAdmin || [])) {
-                    const fileFormData = new FormData();
-                    fileFormData.append('arquivo', file);
-                    
-                    const uploadResponse = await fetch('/api/upload/temp', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}` },
-                        body: fileFormData
+                // Adicionar arquivos físicos DIRETAMENTE (sem upload temporário)
+                if (this.arquivosParaUploadAdmin && this.arquivosParaUploadAdmin.length > 0) {
+                    console.log(`📎 Adicionando ${this.arquivosParaUploadAdmin.length} arquivo(s) diretamente`);
+                    this.arquivosParaUploadAdmin.forEach(file => {
+                        formData.append('arquivos', file);
                     });
-                    
-                    if (uploadResponse.ok) {
-                        const uploadData = await uploadResponse.json();
-                        if (uploadData.success) {
-                            todosAnexos.push({
-                                tipo: uploadData.file.tipo,
-                                titulo: uploadData.file.nome,
-                                nomeArquivo: uploadData.file.nomeArquivo,
-                                url: uploadData.file.url
-                            });
-                        }
+                }
+                
+                // Adicionar anexos como JSON
+                formData.append('anexosData', JSON.stringify(todosAnexos));
+                
+                // Log do FormData
+                console.log('📦 Conteúdo do FormData:');
+                for (let pair of formData.entries()) {
+                    if (pair[0] === 'arquivos') {
+                        console.log(`   arquivos: ${pair[1].name} (${pair[1].size} bytes)`);
+                    } else if (pair[0] === 'anexosData') {
+                        console.log(`   anexosData: JSON com ${todosAnexos.length} anexos`);
+                    } else {
+                        console.log(`   ${pair[0]}: ${pair[1]}`);
                     }
                 }
                 
-                formData.append('anexosData', JSON.stringify(todosAnexos));
-                
                 response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: formData
                 });
+                
             } else {
+                // ===== CASO 2: SEM ARQUIVOS =====
+                console.log('📤 Enviando como JSON (sem arquivos)...');
+                
                 response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(dadosProva)
+                    body: JSON.stringify(dadosBase)
                 });
             }
             
-            const data = await response.json();
+            // Processar resposta
+            const responseText = await response.text();
+            console.log('📥 Resposta do servidor:', responseText.substring(0, 200));
+            
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (e) {
+                console.error('❌ Resposta não é JSON:', responseText);
+                throw new Error(`Erro ${response.status}: ${responseText.substring(0, 100)}`);
+            }
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Erro HTTP ${response.status}`);
+            }
             
             if (data.success) {
                 this.provaGeradaAdmin = {
                     id: data.provaId,
                     ...data.prova,
                     questoes: data.questoes || [],
-                    // Garantir que o professor está correto
                     professor: {
                         id: professorId,
                         nome: professorNome
@@ -10952,6 +11541,789 @@ class AdminPanel {
             if (this.paginaAtual < totalPaginas) {
                 this.paginaAtual++;
                 this.atualizarTabelaPaginada();
+            }
+        }
+
+        // ============================================================================
+        // GERENCIAMENTO DE CURSOS E TURMAS (Admin e Super Admin)
+        // ============================================================================
+
+        // ============================================================================
+        // GERENCIAMENTO DE EIXOS
+        // ============================================================================
+
+        async loadEixos() {
+            const contentArea = document.getElementById('contentArea');
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/admin/eixos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                this.eixos = data.success ? data.eixos : [];
+                
+                contentArea.innerHTML = this.renderizarEixos();
+                
+            } catch (error) {
+                contentArea.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+            }
+        }
+
+        renderizarEixos() {
+            return `
+                <div class="eixos-container">
+                    <div class="page-header">
+                        <h1><i class="fas fa-sitemap"></i> Eixos Tecnológicos</h1>
+                        <button class="btn-primary" onclick="admin.abrirModalEixo()">
+                            <i class="fas fa-plus"></i> Novo Eixo
+                        </button>
+                    </div>
+
+                    <div class="eixos-grid">
+                        ${this.eixos.map(eixo => `
+                            <div class="eixo-card" style="border-left: 4px solid ${eixo.cor};">
+                                <div class="eixo-header">
+                                    <div>
+                                        <i class="fas ${eixo.icone}" style="color: ${eixo.cor};"></i>
+                                        <h3>${eixo.label}</h3>
+                                    </div>
+                                    <div class="eixo-actions">
+                                        <button onclick="admin.editarEixo('${eixo._id}')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button onclick="admin.excluirEixo('${eixo._id}')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="eixo-nome">${eixo.nome}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <style>
+                    .eixos-container { padding: 24px; }
+                    .page-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+                    .eixos-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                        gap: 20px;
+                    }
+                    .eixo-card {
+                        background: white;
+                        border-radius: 12px;
+                        padding: 20px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    }
+                    .eixo-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 10px;
+                    }
+                    .eixo-header div:first-child {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    }
+                    .eixo-header i { font-size: 24px; }
+                    .eixo-header h3 { margin: 0; font-size: 16px; }
+                    .eixo-nome { color: #666; font-size: 12px; margin: 0; }
+                    .eixo-actions button {
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        padding: 5px;
+                        color: #666;
+                    }
+                    .eixo-actions button:hover { color: #333; }
+                </style>
+            `;
+        }
+
+        abrirModalEixo(eixoId = null) {
+            const eixo = eixoId ? this.eixos.find(e => e._id === eixoId) : null;
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <form id="eixoForm">
+                    <div class="form-group">
+                        <label>Nome (identificador)</label>
+                        <input type="text" id="eixoNome" class="form-control" 
+                            value="${eixo?.nome || ''}" 
+                            placeholder="Ex: desenvolvimento" required>
+                        <small>Usado internamente no sistema</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Label (exibição)</label>
+                        <input type="text" id="eixoLabel" class="form-control" 
+                            value="${eixo?.label || ''}" 
+                            placeholder="Ex: 💻 Desenvolvimento de Sistemas" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Cor</label>
+                            <input type="color" id="eixoCor" class="form-control" 
+                                value="${eixo?.cor || '#667eea'}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Ícone</label>
+                            <select id="eixoIcone" class="form-control">
+                                <option value="fa-graduation-cap" ${eixo?.icone === 'fa-graduation-cap' ? 'selected' : ''}>🎓 Graduação</option>
+                                <option value="fa-code" ${eixo?.icone === 'fa-code' ? 'selected' : ''}>💻 Código</option>
+                                <option value="fa-network-wired" ${eixo?.icone === 'fa-network-wired' ? 'selected' : ''}>🌐 Rede</option>
+                                <option value="fa-utensils" ${eixo?.icone === 'fa-utensils' ? 'selected' : ''}>🍳 Gastronomia</option>
+                                <option value="fa-chart-line" ${eixo?.icone === 'fa-chart-line' ? 'selected' : ''}>📊 Gestão</option>
+                                <option value="fa-leaf" ${eixo?.icone === 'fa-leaf' ? 'selected' : ''}>🌱 Ambiente</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea id="eixoDescricao" class="form-control" rows="3">${eixo?.descricao || ''}</textarea>
+                    </div>
+                </form>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = eixoId ? 
+                '<i class="fas fa-edit"></i> Editar Eixo' : 
+                '<i class="fas fa-plus"></i> Novo Eixo';
+            
+            document.getElementById('modalSaveBtn').onclick = () => this.salvarEixo(eixoId);
+            this.openModal();
+        }
+
+        // ============ SALVAR EIXO ============
+        async salvarEixo(eixoId = null) {
+            try {
+                const dados = {
+                    nome: document.getElementById('eixoNome').value,
+                    label: document.getElementById('eixoLabel').value,
+                    cor: document.getElementById('eixoCor').value,
+                    icone: document.getElementById('eixoIcone').value,
+                    descricao: document.getElementById('eixoDescricao').value
+                };
+                
+                const token = localStorage.getItem('auth_token');
+                const url = eixoId ? `/api/admin/eixos/${eixoId}` : '/api/admin/eixos';
+                const method = eixoId ? 'PUT' : 'POST';
+                
+                this.showToast('🔄 Salvando eixo...', 'info');
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast(eixoId ? '✅ Eixo atualizado!' : '✅ Eixo criado!', 'success');
+                    this.closeModal();
+                    await this.loadEixos(); // Recarregar lista
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar eixo');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao salvar eixo:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            }
+        }
+
+        // ============ EXCLUIR EIXO ============
+        async excluirEixo(eixoId) {
+            const eixo = this.eixos.find(e => e._id === eixoId);
+            if (!eixo) return;
+            
+            const confirmar = await this.confirmar(
+                '🗑️ Excluir Eixo',
+                `Tem certeza que deseja excluir o eixo <strong>${eixo.label}</strong>?<br><br>
+                Esta ação não pode ser desfeita e afetará os cursos vinculados.`
+            );
+            
+            if (!confirmar) return;
+            
+            try {
+                this.showToast('🔄 Excluindo eixo...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/eixos/${eixoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast('✅ Eixo excluído!', 'success');
+                    await this.loadEixos(); // Recarregar lista
+                } else {
+                    throw new Error(data.error || 'Erro ao excluir eixo');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao excluir eixo:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            }
+        }
+
+        // ============================================================================
+        // GERENCIAMENTO DE CURSOS
+        // ============================================================================
+
+        // ============ GERENCIAMENTO DE CURSOS ============
+        async loadCursos() {
+            const contentArea = document.getElementById('contentArea');
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Carregar eixos primeiro
+                const eixosRes = await fetch('/api/admin/eixos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const eixosData = await eixosRes.json();
+                this.eixos = eixosData.success ? eixosData.eixos : [];
+                
+                // Carregar cursos
+                const cursosRes = await fetch('/api/admin/cursos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const cursosData = await cursosRes.json();
+                this.cursos = cursosData.success ? cursosData.cursos : [];
+                
+                contentArea.innerHTML = this.renderizarCursos();
+                
+                console.log(`✅ ${this.cursos.length} cursos carregados do banco`);
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar cursos:', error);
+                contentArea.innerHTML = `
+                    <div class="error-container">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Erro ao carregar cursos</h3>
+                        <p>${error.message}</p>
+                        <button class="btn-primary" onclick="admin.loadCursos()">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // ============ RENDERIZAR CURSOS (VERSÃO COMPLETA E CORRIGIDA) ============
+        renderizarCursos() {
+            if (!this.eixos || this.eixos.length === 0) {
+                return `
+                    <div class="cursos-container">
+                        <div class="page-header">
+                            <h1><i class="fas fa-graduation-cap"></i> Cursos</h1>
+                            <button class="btn-primary" onclick="admin.abrirModalCurso()">
+                                <i class="fas fa-plus"></i> Novo Curso
+                            </button>
+                        </div>
+                        <div class="empty-state">
+                            <i class="fas fa-sitemap"></i>
+                            <h3>Nenhum eixo cadastrado</h3>
+                            <p>Cadastre um eixo primeiro</p>
+                            <button class="btn-primary" onclick="admin.loadEixos()">
+                                <i class="fas fa-sync-alt"></i> Carregar Eixos
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Criar um mapa de eixos para acesso rápido por ID
+            const eixosMap = {};
+            this.eixos.forEach(eixo => {
+                eixosMap[eixo._id] = eixo;
+            });
+
+            return `
+                <div class="cursos-container">
+                    <div class="page-header">
+                        <h1><i class="fas fa-graduation-cap"></i> Cursos</h1>
+                        <button class="btn-primary" onclick="admin.abrirModalCurso()">
+                            <i class="fas fa-plus"></i> Novo Curso
+                        </button>
+                    </div>
+
+                    <div class="cursos-list">
+                        ${this.cursos.map(curso => {
+                            // ===== LÓGICA PARA ENCONTRAR O EIXO =====
+                            let eixo = null;
+                            
+                            // Caso 1: eixoId já veio populado do backend (objeto completo)
+                            if (curso.eixoId && typeof curso.eixoId === 'object' && curso.eixoId._id) {
+                                eixo = curso.eixoId;
+                            } 
+                            // Caso 2: eixoId é apenas um ID, buscar no mapa
+                            else if (curso.eixoId && eixosMap[curso.eixoId]) {
+                                eixo = eixosMap[curso.eixoId];
+                            }
+                            // Caso 3: procurar na lista de eixos (fallback)
+                            else if (curso.eixoId) {
+                                eixo = this.eixos.find(e => e._id === curso.eixoId);
+                            }
+                            
+                            // Definir valores baseados no eixo encontrado
+                            const icone = eixo?.icone || 'fa-graduation-cap';
+                            const cor = eixo?.cor || '#667eea';
+                            const eixoLabel = eixo?.label || 'Eixo não definido';
+                            
+                            return `
+                                <div class="curso-card" style="border-left: 4px solid ${cor};">
+                                    <div class="curso-header">
+                                        <div class="curso-title">
+                                            <i class="fas ${icone}" style="color: ${cor};"></i>
+                                            <h3>${curso.nome}</h3>
+                                            <span class="eixo-badge" style="background: ${cor}20; color: ${cor}; border: 1px solid ${cor}40;">
+                                                <i class="fas ${icone}"></i> ${eixoLabel}
+                                            </span>
+                                        </div>
+                                        <div class="curso-actions">
+                                            <button class="btn-icon" onclick="admin.editarCurso('${curso._id}')" title="Editar curso">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn-icon danger" onclick="admin.excluirCurso('${curso._id}')" title="Excluir curso">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="turmas-section">
+                                        <div class="turmas-header">
+                                            <span class="turmas-title">
+                                                <i class="fas fa-users"></i> Turmas (${curso.turmas?.length || 0})
+                                            </span>
+                                            <button class="btn-add-turma" onclick="admin.abrirModalTurma('${curso._id}')">
+                                                <i class="fas fa-plus"></i> Nova Turma
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="turmas-list">
+                                            ${curso.turmas?.map(t => `
+                                                <div class="turma-item ${t.ativa ? '' : 'inativa'}">
+                                                    <span class="turma-codigo">${t.codigo}</span>
+                                                    <span class="turma-periodo">${t.periodo}ª Série</span>
+                                                    <span class="turma-vagas">${t.vagas} vagas</span>
+                                                    <span class="turma-status ${t.ativa ? 'ativa' : 'inativa'}">
+                                                        ${t.ativa ? 'Ativa' : 'Inativa'}
+                                                    </span>
+                                                    <div class="turma-actions">
+                                                        <!-- 🔥 BOTÕES CORRIGIDOS - AGORA USAM editarTurmaCurricular -->
+                                                        <button class="btn-icon-small" onclick="admin.editarTurmaCurricular('${curso._id}', '${t._id}')" title="Editar turma do curso">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                        <button class="btn-icon-small danger" onclick="admin.excluirTurmaCurricular('${curso._id}', '${t._id}')" title="Excluir turma do curso">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            `).join('') || '<p class="sem-turmas">Nenhuma turma cadastrada</p>'}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="curso-footer">
+                                        <span class="curso-data">
+                                            <i class="fas fa-calendar-alt"></i> Criado em: ${new Date(curso.createdAt).toLocaleDateString('pt-BR')}
+                                        </span>
+                                        <span class="curso-status ${curso.ativo ? 'ativo' : 'inativo'}">
+                                            ${curso.ativo ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                        
+                        ${this.cursos.length === 0 ? `
+                            <div class="empty-state">
+                                <i class="fas fa-graduation-cap"></i>
+                                <h3>Nenhum curso cadastrado</h3>
+                                <p>Clique em "Novo Curso" para começar</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <style>
+                    .cursos-container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+                    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+                    .page-header h1 { margin: 0; font-size: 24px; color: #1f2937; display: flex; align-items: center; gap: 10px; }
+                    
+                    .cursos-list { display: flex; flex-direction: column; gap: 20px; }
+                    
+                    .curso-card {
+                        background: white;
+                        border-radius: 16px;
+                        padding: 20px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                        border: 1px solid #e5e7eb;
+                        transition: all 0.3s;
+                    }
+                    .curso-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+                    
+                    .curso-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 20px;
+                        padding-bottom: 15px;
+                        border-bottom: 1px solid #e5e7eb;
+                    }
+                    
+                    .curso-title {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        flex-wrap: wrap;
+                    }
+                    
+                    .curso-title i { font-size: 24px; }
+                    .curso-title h3 { margin: 0; font-size: 18px; color: #1f2937; }
+                    
+                    .eixo-badge {
+                        padding: 4px 12px;
+                        border-radius: 30px;
+                        font-size: 12px;
+                        display: flex;
+                        align-items: center;
+                        gap: 5px;
+                    }
+                    
+                    .curso-actions { display: flex; gap: 8px; }
+                    
+                    .turmas-section {
+                        background: #f9fafb;
+                        border-radius: 12px;
+                        padding: 15px;
+                        margin-bottom: 15px;
+                    }
+                    
+                    .turmas-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 15px;
+                    }
+                    
+                    .turmas-title {
+                        font-size: 14px;
+                        font-weight: 600;
+                        color: #4b5563;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    
+                    .btn-add-turma {
+                        background: #10b981;
+                        color: white;
+                        border: none;
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 5px;
+                    }
+                    .btn-add-turma:hover { background: #059669; }
+                    
+                    .turmas-list {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 8px;
+                    }
+                    
+                    .turma-item {
+                        background: white;
+                        border-radius: 8px;
+                        padding: 12px;
+                        display: flex;
+                        align-items: center;
+                        gap: 15px;
+                        border: 1px solid #e5e7eb;
+                    }
+                    .turma-item.inativa { opacity: 0.7; background: #f3f4f6; }
+                    
+                    .turma-codigo {
+                        font-weight: 600;
+                        color: #1f2937;
+                        min-width: 80px;
+                    }
+                    
+                    .turma-periodo {
+                        background: #667eea;
+                        color: white;
+                        padding: 2px 8px;
+                        border-radius: 20px;
+                        font-size: 11px;
+                    }
+                    
+                    .turma-vagas {
+                        color: #6b7280;
+                        font-size: 13px;
+                    }
+                    
+                    .turma-status {
+                        padding: 2px 8px;
+                        border-radius: 20px;
+                        font-size: 11px;
+                        font-weight: 500;
+                    }
+                    .turma-status.ativa { background: #d1fae5; color: #065f46; }
+                    .turma-status.inativa { background: #fee2e2; color: #991b1b; }
+                    
+                    .turma-actions {
+                        margin-left: auto;
+                        display: flex;
+                        gap: 5px;
+                    }
+                    
+                    .btn-icon-small {
+                        width: 28px;
+                        height: 28px;
+                        border: none;
+                        background: transparent;
+                        color: #6b7280;
+                        cursor: pointer;
+                        border-radius: 4px;
+                    }
+                    .btn-icon-small:hover { background: #f3f4f6; }
+                    .btn-icon-small.danger:hover { color: #dc3545; }
+                    
+                    .sem-turmas {
+                        text-align: center;
+                        color: #9ca3af;
+                        padding: 20px;
+                        margin: 0;
+                    }
+                    
+                    .curso-footer {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        font-size: 12px;
+                        color: #6b7280;
+                    }
+                    
+                    .curso-data i { margin-right: 5px; }
+                    
+                    .curso-status {
+                        padding: 4px 12px;
+                        border-radius: 30px;
+                    }
+                    .curso-status.ativo { background: #d1fae5; color: #065f46; }
+                    .curso-status.inativo { background: #fee2e2; color: #991b1b; }
+                    
+                    .empty-state {
+                        text-align: center;
+                        padding: 60px;
+                        background: white;
+                        border-radius: 16px;
+                    }
+                    .empty-state i { font-size: 64px; color: #d1d5db; margin-bottom: 15px; }
+                    .empty-state h3 { color: #374151; margin-bottom: 10px; }
+                    .empty-state p { color: #6b7280; margin-bottom: 20px; }
+                    
+                    .btn-primary {
+                        background: linear-gradient(135deg, #667eea, #764ba2);
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.3); }
+                    
+                    .btn-icon {
+                        width: 32px; height: 32px;
+                        border: none;
+                        border-radius: 6px;
+                        background: transparent;
+                        color: #6c757d;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: all 0.2s;
+                    }
+                    .btn-icon:hover { background: #e9ecef; color: #667eea; }
+                    .btn-icon.danger:hover { color: #dc3545; }
+                </style>
+            `;
+        }
+
+        // ============ EDITAR CURSO ============
+        async editarCurso(cursoId) {
+            console.log('✏️ Editando curso:', cursoId);
+            
+            const curso = this.cursos.find(c => c._id === cursoId);
+            if (!curso) {
+                this.showToast('❌ Curso não encontrado', 'error');
+                return;
+            }
+            
+            this.abrirModalCurso(cursoId);
+        }
+
+        // ============ EDITAR TURMA (SIMPLIFICADA) ============
+        async editarTurma(turmaId, cursoId = null) {
+            console.log('✏️ Editando turma - ID:', turmaId, 'Curso ID:', cursoId);
+            
+            if (!turmaId) {
+                this.showToast('❌ ID da turma não fornecido', 'error');
+                return;
+            }
+            
+            // Chama a função unificada, que detecta automaticamente o menu
+            this.abrirModalTurma(cursoId, turmaId);
+        }
+
+        // ============ ABRIR MODAL CURSO ============
+        abrirModalCurso(cursoId = null) {
+            const curso = cursoId ? this.cursos.find(c => c._id === cursoId) : null;
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <form id="cursoForm" onsubmit="event.preventDefault(); admin.salvarCurso('${cursoId || ''}')">
+                    <div class="form-group">
+                        <label>Nome do Curso</label>
+                        <input type="text" id="cursoNome" class="form-control" 
+                            value="${curso?.nome || ''}" 
+                            placeholder="Ex: TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Eixo</label>
+                        <select id="cursoEixoId" class="form-control" required>
+                            <option value="">Selecione um eixo...</option>
+                            ${this.eixos.map(e => `
+                                <option value="${e._id}" 
+                                    ${curso?.eixoId?._id === e._id || curso?.eixoId === e._id ? 'selected' : ''}
+                                    style="border-left: 3px solid ${e.cor};">
+                                    <i class="fas ${e.icone}"></i> ${e.label}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    
+                    ${curso ? `
+                    <div style="background: #f8fafc; border-radius: 10px; padding: 15px; margin-top: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="cursoAtivo" ${curso.ativo !== false ? 'checked' : ''}>
+                            <label for="cursoAtivo" style="font-weight: 600; cursor: pointer;">Curso Ativo</label>
+                        </div>
+                        <p style="margin: 5px 0 0; font-size: 12px; color: #6b7280;">
+                            <i class="fas fa-info-circle"></i> 
+                            Se inativado, o curso não aparecerá em novas matrículas
+                        </p>
+                    </div>
+                    ` : ''}
+                </form>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = cursoId ? 
+                '<i class="fas fa-edit"></i> Editar Curso' : 
+                '<i class="fas fa-plus"></i> Novo Curso';
+            
+            document.getElementById('modalSaveBtn').onclick = () => this.salvarCurso(cursoId);
+            document.getElementById('modalSaveBtn').style.display = 'inline-block';
+            document.getElementById('modalSaveBtn').textContent = cursoId ? 'Salvar Alterações' : 'Criar Curso';
+            
+            this.openModal();
+        }
+
+        // ============ SALVAR CURSO ============
+        async salvarCurso(cursoId = null) {
+            try {
+                const dados = {
+                    nome: document.getElementById('cursoNome').value,
+                    eixoId: document.getElementById('cursoEixoId').value
+                };
+                
+                // Validação
+                if (!dados.nome || !dados.eixoId) {
+                    this.showToast('❌ Nome do curso e eixo são obrigatórios', 'error');
+                    return;
+                }
+                
+                this.showToast('🔄 Salvando curso...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                const url = cursoId ? `/api/admin/cursos/${cursoId}` : '/api/admin/cursos';
+                const method = cursoId ? 'PUT' : 'POST';
+                
+                console.log(`📤 Enviando para ${method} ${url}:`, dados);
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast(cursoId ? '✅ Curso atualizado!' : '✅ Curso criado!', 'success');
+                    this.closeModal();
+                    await this.loadCursos(); // Recarregar lista
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar curso');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            }
+        }
+        async excluirCurso(cursoId) {
+            const confirmar = await this.confirmar(
+                '🗑️ Excluir Curso',
+                'Tem certeza? Todas as turmas serão removidas.'
+            );
+            
+            if (!confirmar) return;
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/cursos/${cursoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast('✅ Curso excluído!', 'success');
+                    await this.loadCursos();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                this.showToast('❌ ' + error.message, 'error');
             }
         }
 

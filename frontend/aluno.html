@@ -897,7 +897,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
 
                  <!-- COLE AQUI O LINK DO APP -->
-                <a href="https://drive.google.com/file/d/1BIQh5SfZsBx_q9jHBtnTQKgKX7CY0So8/view?usp=sharing" target="_blank" style="
+                <a href="https://drive.google.com/file/d/1Gvs9fTuuqb56ubub49actA8yQ5jw5zNJ/view?usp=sharing" target="_blank" style="
                     background: linear-gradient(135deg, #10b981, #059669);
                     color: white;
                     padding: 8px 16px;
@@ -1484,83 +1484,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
 
-        
-        // ========== MAPEAMENTO COMPLETO: CURSO -> TURMAS PERMITIDAS ==========
-        const TURMAS_POR_CURSO = {
-            "TÉCNICO EM EVENTOS": ["101", "201"],
-            "TÉCNICO EM REDES DE COMPUTADORES": ["103", "203"],
-            "TÉCNICO EM ÁUDIO E VÍDEO": ["105", "205", "305"],
-            "TÉCNICO EM GUIA DE TURISMO": ["106", "206"],
-            "TÉCNICO EM MARKETING": ["300"],
-            "TÉCNICO EM GASTRONOMIA": ["302"],
-            "TÉCNICO EM PUBLICIDADE": ["109","209"],
-            "TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS": ["104","204","304"],
-            "TÉCNICO EM SERVIÇOS JURÍDICOS": ["307"],
-            "TÉCNICO EM MEIO AMBIENTE": ["308"]
-        };
-
-        // ========== FUNÇÃO PARA OBTER CURSO PELA TURMA ==========
-        function getCursoPorTurma(turma) {
-            for (const [curso, turmas] of Object.entries(TURMAS_POR_CURSO)) {
-                if (turmas.includes(turma)) {
-                    return curso;
-                }
-            }
-            return null;
-        }
-
-        // ========== FUNÇÃO PARA OBTER EIXO PELA TURMA ==========
-        function getEixoPorTurma(turma) {
-            const curso = getCursoPorTurma(turma);
-            if (!curso) return null;
-            
-            const cursoLower = curso.toLowerCase();
-            
-            // Mapeamento de palavras-chave para eixos
-            if (cursoLower.includes('eventos') || cursoLower.includes('guia') || cursoLower.includes('gastronomia')) {
-                return 'turismo';
-            } else if (cursoLower.includes('redes')) { // Captura tanto "REDES" quanto "REDES DE COMPUTADORES"
-                return 'redes';
-            } else if (cursoLower.includes('desenvolvimento') || cursoLower.includes('sistemas')) {
-                return 'desenvolvimento';
-            } else if (cursoLower.includes('marketing') || cursoLower.includes('jurídicos') || cursoLower.includes('juridicos')) {
-                return 'gestao';
-            } else if (cursoLower.includes('áudio') || cursoLower.includes('video') || cursoLower.includes('publicidade')) {
-                return 'producao';
-            } else if (cursoLower.includes('meio ambiente') || cursoLower.includes('ambiente')) {
-                return 'ambiente';
-            }
-            
-            return null;
-        }
-
         // ========== VARIÁVEL GLOBAL PARA CONTROLAR O FILTRO ==========
         let filtroAtivo = 'todos';
         let eixoAlunoGlobal = '';
 
-        // ========== PROVAS CONCLUÍDAS - VERSÃO ESTÁVEL ==========
+        // ============ CARREGAR PROVAS CONCLUÍDAS ============
         async function carregarProvasConcluidas() {
             try {
                 const token = localStorage.getItem('auth_token');
-                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-                
-                // DADOS DO ALUNO LOGADO
-                const turmaAluno = userData.turma || '';
-                const cursoAluno = userData.curso || '';
-                
-                if (!turmaAluno) {
-                    console.error('❌ Turma do aluno não encontrada!');
-                    return;
-                }
-                
-                // PEGAR INFORMAÇÕES BASEADAS NA TURMA
-                eixoAlunoGlobal = getEixoPorTurma(turmaAluno) || '';
                 
                 console.log('%c🎯 CARREGANDO PROVAS CONCLUÍDAS', 'font-weight:bold; color:blue;');
-                console.log(`   🏫 Turma: ${turmaAluno}`);
-                console.log(`   📚 Curso: ${cursoAluno}`);
-                console.log(`   🎯 Eixo: ${eixoAlunoGlobal}`);
                 
+                // Buscar provas do aluno
                 const response = await fetch(`${API_BASE_URL}/aluno/provas`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -1568,27 +1503,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    // FILTRAR APENAS PROVAS DA TURMA DO ALUNO
-                    const provasDaTurma = (data.provas || []).filter(prova => {
-                        if (!prova.dataRealizacao) return false;
-                        
-                        const turmaProva = prova.turma?.codigo || prova.turma?.nome || prova.turmaId || '';
-                        return turmaProva === turmaAluno || 
-                            turmaProva.includes(turmaAluno) ||
-                            prova.turmaId?.includes(turmaAluno);
-                    });
+                    const provas = data.provas || [];
                     
-                    console.log(`📊 Total de provas na turma ${turmaAluno}: ${provasDaTurma.length}`);
+                    console.log(`📊 Total de provas: ${provas.length}`);
                     
                     // GUARDAR BACKUP COMPLETO
-                    window.provasConcluidas = provasDaTurma;
-                    localStorage.setItem('backupProvasConcluidas', JSON.stringify(provasDaTurma));
+                    window.provasConcluidas = provas;
+                    localStorage.setItem('backupProvasConcluidas', JSON.stringify(provas));
                     
-                    // APLICAR FILTRO ATUAL
-                    aplicarFiltroEStatus(provasDaTurma);
+                    // CONFIGURAR FILTROS COM DADOS DO BANCO
+                    await configurarFiltrosProvasBanco();
                     
-                    // INICIALIZAR FILTRO BASEADO NA TURMA
-                    inicializarFiltroPorTurma(turmaAluno, eixoAlunoGlobal);
+                    // APLICAR FILTRO INICIAL
+                    aplicarFiltroEStatus(provas);
                 }
             } catch (error) {
                 console.error('❌ Erro ao carregar provas concluídas:', error);
@@ -1599,6 +1526,133 @@ document.addEventListener('DOMContentLoaded', function() {
                         <p>Tente recarregar a página</p>
                     </div>
                 `;
+            }
+        }
+
+        // ========== CONFIGURAR FILTROS COM DADOS DO BANCO - VERSÃO CORRIGIDA ==========
+        async function configurarFiltrosProvasBanco() {
+            const filtroSelect = document.getElementById('filtroEixoProvasConcluidas');
+            if (!filtroSelect) return;
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Buscar curso completo do aluno (com eixo)
+                const response = await fetch(`${API_BASE_URL}/aluno/curso-completo`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao buscar dados do aluno');
+                }
+                
+                console.log('📚 Dados do aluno:', data);
+                
+                let eixoDoAluno = null;
+                if (data.eixo) {
+                    eixoDoAluno = data.eixo.nome;
+                    console.log(`🎯 Eixo do aluno (do banco): ${eixoDoAluno}`);
+                }
+                
+                // RECRIAR SELECT PARA LIMPAR LISTENERS ANTIGOS
+                const novoSelect = filtroSelect.cloneNode(true);
+                filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
+                
+                // Limpar opções existentes
+                novoSelect.innerHTML = '';
+                
+                // Adicionar opção "Todos"
+                const optionTodos = document.createElement('option');
+                optionTodos.value = 'todos';
+                optionTodos.textContent = 'Todas as disciplinas';
+                novoSelect.appendChild(optionTodos);
+                
+                // Eixos da BNCC (sempre aparecem)
+                const eixosBNCC = [
+                    { nome: 'natureza', label: '🔬 Natureza e Matemática' },
+                    { nome: 'humanas', label: '🏛️ Humanas' },
+                    { nome: 'linguagens', label: '🎭 Linguagens' }
+                ];
+                
+                // Adicionar eixos da BNCC
+                eixosBNCC.forEach(eixo => {
+                    const optionEixo = document.createElement('option');
+                    optionEixo.value = eixo.nome;
+                    optionEixo.textContent = eixo.label;
+                    optionEixo.style.fontWeight = '600';
+                    novoSelect.appendChild(optionEixo);
+                });
+                
+                // Adicionar SEPARADOR visual
+                const separator = document.createElement('option');
+                separator.disabled = true;
+                separator.textContent = '──────────';
+                novoSelect.appendChild(separator);
+                
+                // Adicionar APENAS o eixo do aluno (se existir)
+                if (eixoDoAluno) {
+                    // Verificar se não é um dos eixos da BNCC (para não duplicar)
+                    if (!eixosBNCC.some(e => e.nome === eixoDoAluno)) {
+                        const optionEixoAluno = document.createElement('option');
+                        optionEixoAluno.value = eixoDoAluno;
+                        
+                        // Personalizar label baseado no eixo
+                        const labels = {
+                            'desenvolvimento': '💻 Desenvolvimento de Sistemas',
+                            'redes': '🌐 Redes de Computadores',
+                            'turismo': '✈️ Turismo, Eventos e Gastronomia',
+                            'gestao': '📊 Gestão e Negócios',
+                            'producao': '🎬 Produção Cultural e Design',
+                            'ambiente': '🌱 Ambiente e Saúde'
+                        };
+                        
+                        optionEixoAluno.textContent = labels[eixoDoAluno] || 
+                            (data.eixo?.label || 'Eixo Técnico');
+                        optionEixoAluno.style.fontWeight = '600';
+                        optionEixoAluno.style.backgroundColor = '#f0f9ff';
+                        novoSelect.appendChild(optionEixoAluno);
+                        
+                        console.log(`✅ Eixo técnico adicionado: ${eixoDoAluno}`);
+                    }
+                }
+                
+                // ========== EVENTO DE MUDANÇA DO FILTRO ==========
+                novoSelect.addEventListener('change', function() {
+                    filtroAtivo = this.value;
+                    const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
+                    aplicarFiltroEStatus(backup);
+                });
+                
+                console.log('✅ Filtros configurados: BNCC + eixo do aluno');
+                
+            } catch (error) {
+                console.error('❌ Erro ao configurar filtros:', error);
+                
+                // Fallback - recriar select com opções básicas
+                const filtroSelect = document.getElementById('filtroEixoProvasConcluidas');
+                if (filtroSelect) {
+                    const novoSelect = filtroSelect.cloneNode(true);
+                    filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
+                    
+                    novoSelect.innerHTML = `
+                        <option value="todos">Todas as disciplinas</option>
+                        <option value="natureza">🔬 Natureza e Matemática</option>
+                        <option value="humanas">🏛️ Humanas</option>
+                        <option value="linguagens">🎭 Linguagens</option>
+                    `;
+                    
+                    novoSelect.addEventListener('change', function() {
+                        filtroAtivo = this.value;
+                        const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
+                        aplicarFiltroEStatus(backup);
+                    });
+                }
             }
         }
 
@@ -3709,37 +3763,147 @@ document.addEventListener('DOMContentLoaded', function() {
         // Chamar esta função periodicamente (a cada minuto)
         setInterval(verificarDatasProvasPendentes, 60000); // 60 segundos
         
-        // Carregar turmas do aluno
+        // ============ CARREGAR TURMAS DO ALUNO ============
         async function carregarTurmasAluno() {
             try {
                 const token = localStorage.getItem('auth_token');
+                
+                console.log('%c🏫 CARREGANDO TURMAS DO ALUNO', 'font-weight:bold; color:green;');
+                
+                // Buscar dados do aluno (para pegar o eixo igual nas provas)
+                const alunoResponse = await fetch(`${API_BASE_URL}/aluno/curso-completo`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                let eixoDoAluno = null;
+                if (alunoResponse.ok) {
+                    const alunoData = await alunoResponse.json();
+                    if (alunoData.success && alunoData.eixo) {
+                        eixoDoAluno = alunoData.eixo.nome;
+                        console.log(`🎯 Eixo do aluno (para turmas): ${eixoDoAluno}`);
+                    }
+                }
+                
+                // Usar a rota existente /api/turmas
                 const response = await fetch(`${API_BASE_URL}/turmas`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
                     turmas = data.turmas || [];
                     
-                    // Inicializar filtro baseado no curso
-                    inicializarFiltroTurmas();
+                    console.log(`📊 Total de turmas: ${turmas.length}`);
                     
-                    // Atualizar lista
-                    atualizarListaTurmas();
+                    // Salvar backup
+                    window.turmasBackup = [...turmas];
+                    
+                    // Inicializar filtro com o eixo do aluno
+                    await inicializarFiltroTurmas(eixoDoAluno);
+                    
+                    // Atualizar contador total
+                    const contadorSpan = document.getElementById('contadorTurmasNumerico');
+                    if (contadorSpan) {
+                        contadorSpan.innerText = turmas.length;
+                    }
+                    
+                    // Renderizar turmas
+                    renderizarTurmas(turmas);
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar turmas');
                 }
             } catch (error) {
-                console.error('Erro ao carregar turmas:', error);
+                console.error('❌ Erro ao carregar turmas:', error);
                 document.getElementById('turmasAluno').innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
                         <h3>Erro ao carregar turmas</h3>
-                        <p>Tente recarregar a página</p>
+                        <p>${error.message}</p>
+                        <button onclick="carregarTurmasAluno()" style="
+                            margin-top: 15px;
+                            padding: 8px 20px;
+                            background: #4f46e5;
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
                     </div>
                 `;
             }
+        }
+
+        // ========== RENDERIZAR TURMAS COM CORES DO EIXO ==========
+        function renderizarTurmas(turmasParaRenderizar) {
+            const container = document.getElementById('turmasAluno');
+            
+            if (turmasParaRenderizar.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>Nenhuma turma encontrada</h3>
+                        <p>Não há turmas com o filtro selecionado</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = turmasParaRenderizar.map(turma => {
+                // Usar a cor do eixo (se disponível) ou uma cor padrão
+                const cor = turma.eixoInfo?.cor || '#4f46e5';
+                const icone = turma.eixoInfo?.icone ? `fa-${turma.eixoInfo.icone}` : 'fa-school';
+                
+                const professorNome = turma.professor?.nome || 'Professor não informado';
+                
+                // Mostrar o eixo da turma para debug (pode remover depois)
+                const eixoDisplay = turma.eixo ? `<span style="font-size:0.7rem; color:${cor}; margin-left:5px;">(${turma.eixo})</span>` : '';
+                
+                return `
+                    <div class="turma-card" style="border-left-color: ${cor};">
+                        <div class="turma-info">
+                            <div>
+                                <h4 style="margin: 0 0 5px 0; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas ${icone}" style="color: ${cor};"></i>
+                                    ${turma.nome}
+                                    ${eixoDisplay}
+                                </h4>
+                                <p style="margin: 0; color: #6b7280; font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 10px;">
+                                    <span><i class="fas fa-book" style="color: ${cor};"></i> ${turma.disciplina || 'Disciplina não especificada'}</span>
+                                    <span><i class="fas fa-chalkboard-teacher" style="color: ${cor};"></i> ${professorNome}</span>
+                                    <span><i class="fas fa-users" style="color: ${cor};"></i> ${turma.totalAlunos || 0} alunos</span>
+                                </p>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <button onclick="verDetalhesTurma('${turma.id}')" 
+                                        style="
+                                            background: none;
+                                            border: 1px solid ${cor}40;
+                                            color: ${cor};
+                                            padding: 6px 12px;
+                                            border-radius: 20px;
+                                            font-size: 0.8rem;
+                                            cursor: pointer;
+                                            display: flex;
+                                            align-items: center;
+                                            gap: 4px;
+                                        ">
+                                    <i class="fas fa-info-circle"></i> Detalhes
+                                </button>
+                                <div class="turma-codigo" style="background: ${cor}20; color: ${cor};">${turma.codigo}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
         
         // Atualizar lista de turmas
@@ -3833,62 +3997,104 @@ document.addEventListener('DOMContentLoaded', function() {
             return null;
         }
 
-        // ========== INICIALIZAR FILTRO DAS TURMAS BASEADO NO CURSO ==========
-        function inicializarFiltroTurmas() {
-            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-            const cursoAluno = userData.curso || '';
+        // ========== INICIALIZAR FILTRO DE TURMAS - IGUAL AO DAS PROVAS ==========
+        async function inicializarFiltroTurmas(eixoDoAluno) {
+            const filtroSelect = document.getElementById('filtroEixoTurmas');
+            if (!filtroSelect) return;
             
-            console.log('🎯 Inicializando filtro de turmas para curso:', cursoAluno);
-            
-            // Obter eixo técnico do aluno
-            const eixoTecnico = getEixoTecnicoPorCurso(cursoAluno);
-            
-            if (eixoTecnico) {
-                console.log(`✅ Eixo técnico identificado: ${eixoTecnico}`);
+            try {
+                console.log(`🔧 Configurando filtro de turmas com eixo: ${eixoDoAluno}`);
                 
-                // Mostrar apenas o eixo técnico correspondente
-                const select = document.getElementById('filtroEixoTurmas');
-                if (select) {
-                    // Primeiro, esconder todos os eixos técnicos
-                    const opcoesTecnicas = ['desenvolvimento', 'redes', 'turismo', 'gestao', 'producao', 'ambiente'];
-                    
-                    opcoesTecnicas.forEach(eixo => {
-                        const option = select.querySelector(`option[value="${eixo}"]`);
-                        if (option) {
-                            option.style.display = 'none';
-                        }
-                    });
-                    
-                    // Mostrar apenas o eixo do aluno
-                    const optionAluno = select.querySelector(`option[value="${eixoTecnico}"]`);
-                    if (optionAluno) {
-                        optionAluno.style.display = 'block';
+                // RECRIAR SELECT PARA LIMPAR LISTENERS ANTIGOS
+                const novoSelect = filtroSelect.cloneNode(true);
+                filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
+                
+                // Limpar opções existentes
+                novoSelect.innerHTML = '';
+                
+                // Adicionar opção "Todas as disciplinas"
+                const optionTodos = document.createElement('option');
+                optionTodos.value = 'todos';
+                optionTodos.textContent = 'Todas as disciplinas';
+                novoSelect.appendChild(optionTodos);
+                
+                // Eixos da BNCC (sempre aparecem)
+                const eixosBNCC = [
+                    { nome: 'natureza', label: '🔬 Natureza e Matemática' },
+                    { nome: 'humanas', label: '🏛️ Humanas' },
+                    { nome: 'linguagens', label: '🎭 Linguagens' }
+                ];
+                
+                // Adicionar eixos da BNCC
+                eixosBNCC.forEach(eixo => {
+                    const optionEixo = document.createElement('option');
+                    optionEixo.value = eixo.nome;
+                    optionEixo.textContent = eixo.label;
+                    optionEixo.style.fontWeight = '600';
+                    novoSelect.appendChild(optionEixo);
+                });
+                
+                // Adicionar SEPARADOR visual
+                const separator = document.createElement('option');
+                separator.disabled = true;
+                separator.textContent = '──────────';
+                novoSelect.appendChild(separator);
+                
+                // Adicionar APENAS o eixo do aluno (se existir)
+                if (eixoDoAluno) {
+                    // Verificar se não é um dos eixos da BNCC
+                    if (!eixosBNCC.some(e => e.nome === eixoDoAluno)) {
+                        const optionEixoAluno = document.createElement('option');
+                        optionEixoAluno.value = eixoDoAluno;
                         
-                        // Personalizar texto baseado no eixo
-                        const textos = {
-                            'turismo': '✈️ Turismo, Eventos e Gastronomia',
+                        // Personalizar label baseado no eixo (MESMO DAS PROVAS)
+                        const labels = {
                             'desenvolvimento': '💻 Desenvolvimento de Sistemas',
                             'redes': '🌐 Redes de Computadores',
+                            'turismo': '✈️ Turismo, Eventos e Gastronomia',
                             'gestao': '📊 Gestão e Negócios',
                             'producao': '🎬 Produção Cultural e Design',
                             'ambiente': '🌱 Ambiente e Saúde'
                         };
                         
-                        optionAluno.textContent = textos[eixoTecnico] || optionAluno.textContent;
+                        optionEixoAluno.textContent = labels[eixoDoAluno] || 'Eixo Técnico';
+                        optionEixoAluno.style.fontWeight = '600';
+                        optionEixoAluno.style.backgroundColor = '#f0f9ff';
+                        novoSelect.appendChild(optionEixoAluno);
+                        
+                        console.log(`✅ Eixo técnico adicionado ao filtro de turmas: ${eixoDoAluno}`);
                     }
+                } else {
+                    console.log('⚠️ Nenhum eixo técnico encontrado para o aluno');
                 }
-            }
-            
-            // Adicionar evento de mudança
-            const select = document.getElementById('filtroEixoTurmas');
-            if (select) {
-                // Remover listener anterior se existir
-                const novoSelect = select.cloneNode(true);
-                select.parentNode.replaceChild(novoSelect, select);
                 
+                // ========== EVENTO DE MUDANÇA DO FILTRO ==========
                 novoSelect.addEventListener('change', function() {
-                    aplicarFiltroTurmas();
+                    aplicarFiltroTurmas(this.value);
                 });
+                
+                console.log('✅ Filtro de turmas configurado com sucesso');
+                
+            } catch (error) {
+                console.error('❌ Erro ao configurar filtro de turmas:', error);
+                
+                // Fallback
+                const filtroSelect = document.getElementById('filtroEixoTurmas');
+                if (filtroSelect) {
+                    const novoSelect = filtroSelect.cloneNode(true);
+                    filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
+                    
+                    novoSelect.innerHTML = `
+                        <option value="todos">Todas as disciplinas</option>
+                        <option value="natureza">🔬 Natureza e Matemática</option>
+                        <option value="humanas">🏛️ Humanas</option>
+                        <option value="linguagens">🎭 Linguagens</option>
+                    `;
+                    
+                    novoSelect.addEventListener('change', function() {
+                        aplicarFiltroTurmas(this.value);
+                    });
+                }
             }
         }
 
@@ -3920,50 +4126,32 @@ document.addEventListener('DOMContentLoaded', function() {
             aplicarFiltroTurmas();
         }
 
-        // ========== FUNÇÃO PARA APLICAR FILTRO NAS TURMAS (APENAS EIXO) ==========
-        function aplicarFiltroTurmas() {
+        // ========== APLICAR FILTRO NAS TURMAS USANDO EIXO DO BANCO ==========
+        function aplicarFiltroTurmas(eixoSelecionado) {
             const container = document.getElementById('turmasAluno');
-            const filtroEixo = document.getElementById('filtroEixoTurmas');
             
-            if (!container || !filtroEixo || !window.turmasBackup) return;
+            if (!container || !window.turmasBackup) return;
             
-            const eixoAtivo = filtroEixo.value;
-            
-            console.log('🔍 Aplicando filtros nas turmas (apenas eixo):', { eixo: eixoAtivo });
+            console.log(`🔍 Aplicando filtro de turmas: ${eixoSelecionado}`);
+            console.log('📦 Turmas disponíveis:', window.turmasBackup.map(t => ({
+                nome: t.nome,
+                eixo: t.eixo,
+                isDoEixoDoAluno: t.isDoEixoDoAluno
+            })));
             
             let turmasFiltradas = window.turmasBackup;
             
             // FILTRO POR EIXO
-            if (eixoAtivo !== 'todos') {
+            if (eixoSelecionado && eixoSelecionado !== 'todos') {
                 turmasFiltradas = window.turmasBackup.filter(turma => {
-                    const nomeTurma = (turma.nome || '').toLowerCase();
-                    const disciplinaTurma = (turma.disciplina || '').toLowerCase();
-                    const codigoTurma = (turma.codigo || '').toLowerCase();
+                    // Se não tem eixo, não mostra
+                    if (!turma.eixo) return false;
                     
-                    // Palavras-chave por eixo
-                    const palavrasChave = {
-                        'natureza': ['biologia', 'física', 'química', 'matemática', 'ciências', 'bio', 'fis', 'quim', 'mat'],
-                        'humanas': ['filosofia', 'sociologia', 'geografia', 'história', 'filo', 'socio', 'geo', 'hist'],
-                        'linguagens': ['artes', 'inglês', 'educação física', 'espanhol', 'português', 'literatura', 'redação', 'arte', 'ingles', 'ed fisica', 'port'],
-                        'desenvolvimento': ['desenvolvimento', 'programação', 'sistemas', 'banco de dados', 'algoritmo', 'software'],
-                        'redes': ['redes', 'computadores', 'protocolo', 'tcp/ip', 'roteador', 'infra'],
-                        'turismo': ['eventos', 'turismo', 'gastronomia', 'hospitalidade', 'lazer', 'guia',],
-                        'gestao': ['marketing', 'jurídico', 'gestão', 'negócios', 'administração', '300', '307'],
-                        'producao': ['áudio', 'vídeo', 'publicidade', 'design', 'produção', 'cultural'],
-                        'ambiente': ['ambiente', 'ecologia', 'sustentabilidade', 'reciclagem', 'meio ambiente']
-                    };
-                    
-                    const palavras = palavrasChave[eixoAtivo] || [eixoAtivo];
-                    
-                    for (const palavra of palavras) {
-                        if (nomeTurma.includes(palavra) || 
-                            disciplinaTurma.includes(palavra) ||
-                            codigoTurma.includes(palavra)) {
-                            return true;
-                        }
-                    }
-                    return false;
+                    // Comparação direta com o eixo selecionado
+                    return turma.eixo === eixoSelecionado;
                 });
+                
+                console.log(`📊 Após filtro: ${turmasFiltradas.length} turmas`);
             }
             
             // ATUALIZAR CONTADOR
@@ -3973,115 +4161,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // RENDERIZAR TURMAS FILTRADAS
-            if (turmasFiltradas.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-search"></i>
-                        <h3>Nenhuma turma encontrada</h3>
-                        <p>Não há turmas com o filtro selecionado</p>
-                    </div>
-                `;
-            } else {
-                container.innerHTML = turmasFiltradas.map(turma => {
-                    // Determinar ícone baseado na disciplina
-                    let iconeTurma = 'fa-school';
-                    let corTurma = '#4f46e5';
-                    
-                    if (turma.disciplina) {
-                        const disciplina = turma.disciplina.toLowerCase();
-                        
-                        if (disciplina.includes('evento') || disciplina.includes('turismo') || disciplina.includes('gastronomia')) {
-                            iconeTurma = 'fa-utensils';
-                            corTurma = '#f59e0b';
-                        } else if (disciplina.includes('redes')) {
-                            iconeTurma = 'fa-network-wired';
-                            corTurma = '#0ea5e9';
-                        } else if (disciplina.includes('desenvolvimento') || disciplina.includes('programação')) {
-                            iconeTurma = 'fa-code';
-                            corTurma = '#8b5cf6';
-                        } else if (disciplina.includes('marketing') || disciplina.includes('gestão')) {
-                            iconeTurma = 'fa-chart-line';
-                            corTurma = '#10b981';
-                        } else if (disciplina.includes('áudio') || disciplina.includes('vídeo') || disciplina.includes('publicidade')) {
-                            iconeTurma = 'fa-video';
-                            corTurma = '#ec4899';
-                        }
-                    }
-                    
-                    // 🔴 Determinar período pela turma (primeiro dígito do código) - APENAS PARA EXIBIÇÃO
-                    const codigo = turma.codigo || '';
-                    const primeiroDigito = codigo.toString().charAt(0);
-                    let periodoTexto = '';
-                    let periodoCor = '';
-                    
-                    if (primeiroDigito === '1') {
-                        periodoTexto = '1º Período';
-                        periodoCor = '#10b981';
-                    } else if (primeiroDigito === '2') {
-                        periodoTexto = '2º Período';
-                        periodoCor = '#f59e0b';
-                    } else if (primeiroDigito === '3') {
-                        periodoTexto = '3º Período';
-                        periodoCor = '#8b5cf6';
-                    } else if (primeiroDigito === '4') {
-                        periodoTexto = '4º Período';
-                        periodoCor = '#ef4444';
-                    }
-                    
-                    return `
-                        <div class="turma-card" style="border-left-color: ${corTurma};">
-                            <div class="turma-info">
-                                <div>
-                                    <h4 style="margin: 0 0 5px 0; display: flex; align-items: center; gap: 8px;">
-                                        <i class="fas ${iconeTurma}" style="color: ${corTurma};"></i>
-                                        ${turma.nome}
-                                        ${periodoTexto ? `
-                                        <span style="
-                                            background: ${periodoCor}20;
-                                            color: ${periodoCor};
-                                            padding: 2px 8px;
-                                            border-radius: 12px;
-                                            font-size: 0.7rem;
-                                            font-weight: 600;
-                                            margin-left: 5px;
-                                        ">
-                                            ${periodoTexto}
-                                        </span>
-                                        ` : ''}
-                                    </h4>
-                                    <p style="margin: 0; color: #6b7280; font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 10px;">
-                                        <span><i class="fas fa-book" style="color: ${corTurma};"></i> ${turma.disciplina || 'Disciplina não especificada'}</span>
-                                        <span><i class="fas fa-users" style="color: ${corTurma};"></i> ${turma.totalAlunos || 0} alunos</span>
-                                        <span><i class="fas fa-file-alt" style="color: ${corTurma};"></i> ${turma.totalProvas || 0} provas</span>
-                                    </p>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <button onclick="verDetalhesTurma('${turma._id || turma.id}')" 
-                                            style="
-                                                background: none;
-                                                border: 1px solid ${corTurma}40;
-                                                color: ${corTurma};
-                                                padding: 6px 12px;
-                                                border-radius: 20px;
-                                                font-size: 0.8rem;
-                                                cursor: pointer;
-                                                display: flex;
-                                                align-items: center;
-                                                gap: 4px;
-                                                transition: all 0.2s;
-                                            "
-                                            onmouseover="this.style.background='${corTurma}10'; this.style.borderColor='${corTurma}'"
-                                            onmouseout="this.style.background='none'; this.style.borderColor='${corTurma}40'">
-                                        <i class="fas fa-info-circle" style="font-size: 0.75rem;"></i>
-                                        Detalhes
-                                    </button>
-                                    <div class="turma-codigo" style="background: ${corTurma}20; color: ${corTurma};">${turma.codigo}</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
+            renderizarTurmas(turmasFiltradas);
         }
 
 

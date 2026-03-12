@@ -1835,7 +1835,7 @@ window.addEventListener('scroll', function() {
                     </div>
 
                     <!-- COLE AQUI O LINK DO APP (ANTES DAS NOTIFICAÇÕES) -->
-                    <a href="https://drive.google.com/file/d/1BIQh5SfZsBx_q9jHBtnTQKgKX7CY0So8/view?usp=sharing" target="_blank" style="
+                    <a href="https://drive.google.com/file/d/1Gvs9fTuuqb56ubub49actA8yQ5jw5zNJ/view?usp=sharing" target="_blank" style="
                         background: linear-gradient(135deg, #10b981, #059669);
                         color: white;
                         padding: 10px 20px;
@@ -2703,15 +2703,8 @@ window.addEventListener('scroll', function() {
                                     onfocus="this.style.borderColor='#10b981'; this.style.boxShadow='0 0 0 4px rgba(16,185,129,0.1)'"
                                     onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
                                 >
-                                    <option value="natureza">🔬 Natureza e Matemática</option>
-                                    <option value="humanas">🏛️ Humanas</option>
-                                    <option value="linguagens"> 🎭 Linguagens</option>
-                                    <option value="desenvolvimento">💻 Desenvolvimento de Sistemas</option>
-                                    <option value="redes">🌐 Redes de Computadores</option>
-                                    <option value="gestao">📊 Gestão e Negócios</option>
-                                    <option value="producao">🎬 Produção Cultural e Design</option>
-                                    <option value="turismo">✈️ Turismo, Hospitalidade e Lazer</option>
-                                    <option value="ambiente">🌱 Ambiente e Saúde</option>
+                                <select id="eixoTurma" class="form-control" required>
+                                    <option value="">Carregando eixos...</option>
                                 </select>
                             </div>
                             
@@ -6537,84 +6530,146 @@ window.addEventListener('scroll', function() {
                 esconderLoading();
             }
         }
-        
-        // Atualizar interface com dados do professor (VERSÃO FINAL COM CORES DIFERENCIADAS)
-        function atualizarInterfaceProfessor() {
-        try {
-            // Atualizar nome do professor
-            const professorNomeEl = document.getElementById('professorNome');
-            if (professorNomeEl) {
-            professorNomeEl.textContent = usuario.nome;
-            }
-            
-            // ✅ CORREÇÃO: Eixo com cores DIFERENCIADAS para CADA valor
-            const professorEixoEl = document.getElementById('professorEixo');
-            if (professorEixoEl) {
-            console.log('🎯 Eixo detectado:', usuario.eixo);
-            
-            // Mapeamento completo de todos os eixos (texto + classe CSS)
-            const eixoConfig = {
-                'natureza': { 
-                texto: 'Eixo Natureza',
-                classe: 'eixo-natureza'
-                },
-                'humanas': { 
-                texto: 'Eixo Humanas',
-                classe: 'eixo-humanas'
-                },
-                'linguagens': { 
-                texto: 'Eixo Linguagens',
-                classe: 'eixo-linguagens'
-                },
-                'desenvolvimento': { 
-                texto: 'Eixo Desenvolvimento de Sistemas',
-                classe: 'eixo-desenvolvimento'
-                },
-                'gestao': { 
-                texto: 'Eixo Gestão e Negócios',
-                classe: 'eixo-gestao'
-                },
-                'producao': { 
-                texto: 'Eixo Produção Cultural',
-                classe: 'eixo-producao'
-                },
-                'turismo': { 
-                texto: 'Eixo Turismo e Gastronomia',
-                classe: 'eixo-turismo'
-                },
-                'ambiente': { 
-                texto: 'Eixo Ambiente e Saúde',
-                classe: 'eixo-ambiente'
+
+        // ============ CARREGAR EIXOS DO BANCO PARA O SELECT (SEM ÍCONES ADICIONAIS) ============
+        async function carregarEixosParaSelect() {
+            try {
+                console.log('📥 Carregando eixos do banco...');
+                
+                const response = await fetch('/api/eixos');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao carregar eixos');
                 }
-            };
-            
-            if (usuario.eixo && eixoConfig[usuario.eixo]) {
-                const config = eixoConfig[usuario.eixo];
                 
-                // Aplicar texto e classe
-                professorEixoEl.textContent = config.texto;
-                professorEixoEl.className = `eixo-badge ${config.classe}`;
+                const selectEixo = document.getElementById('eixoTurma');
+                if (!selectEixo) return;
                 
-                console.log('✅ Eixo atualizado:', config.texto, 'com classe', config.classe);
-            } else if (usuario.eixo) {
-                // Fallback para eixos não mapeados
-                professorEixoEl.textContent = `Eixo ${usuario.eixo}`;
-                professorEixoEl.className = 'eixo-badge eixo-generico';
-            } else {
-                professorEixoEl.textContent = 'Sem eixo definido';
-                professorEixoEl.className = 'eixo-badge eixo-generico';
+                // Limpar e adicionar opção padrão
+                selectEixo.innerHTML = '<option value="">Selecione um eixo...</option>';
+                
+                // Adicionar eixos do banco - USANDO EXATAMENTE O QUE VEM DO BANCO
+                data.eixos.forEach(eixo => {
+                    const option = document.createElement('option');
+                    option.value = eixo.nome;
+                    
+                    // USA O QUE O BANCO ENVIOU - sem modificar!
+                    option.textContent = eixo.label; // Apenas o label, sem ícone
+                    
+                    // Adicionar estilo baseado na cor do eixo
+                    option.style.borderLeft = `3px solid ${eixo.cor || '#667eea'}`;
+                    option.style.padding = '5px 10px';
+                    option.style.marginBottom = '2px';
+                    
+                    selectEixo.appendChild(option);
+                });
+                
+                console.log(`✅ ${data.eixos.length} eixos carregados do banco`);
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar eixos:', error);
+                
+                // Fallback para eixos padrão em caso de erro
+                const selectEixo = document.getElementById('eixoTurma');
+                if (selectEixo) {
+                    selectEixo.innerHTML = `
+                        <option value="">Selecione um eixo...</option>
+                        <option value="natureza">🔬 Natureza e Matemática</option>
+                        <option value="humanas">🏛️ Humanas</option>
+                        <option value="linguagens">🎭 Linguagens</option>
+                        <option value="desenvolvimento">💻 Desenvolvimento de Sistemas</option>
+                        <option value="redes">🌐 Redes de Computadores</option>
+                        <option value="gestao">📊 Gestão e Negócios</option>
+                        <option value="producao">🎬 Produção Cultural e Design</option>
+                        <option value="turismo">✈️ Turismo, Hospitalidade e Lazer</option>
+                        <option value="ambiente">🌱 Ambiente e Saúde</option>
+                    `;
+                }
             }
-            }
-            
-            // Atualizar email
-            const professorEmailEl = document.getElementById('professorEmail');
-            if (professorEmailEl) {
-            professorEmailEl.textContent = usuario.email;
-            }
-            
-        } catch (error) {
-            console.error('Erro ao atualizar interface:', error);
         }
+        
+        // ============ ATUALIZAR INTERFACE DO PROFESSOR ============
+        function atualizarInterfaceProfessor() {
+            try {
+                // Atualizar nome do professor
+                const professorNomeEl = document.getElementById('professorNome');
+                if (professorNomeEl) {
+                    professorNomeEl.textContent = usuario.nome;
+                }
+                
+                // Atualizar email
+                const professorEmailEl = document.getElementById('professorEmail');
+                if (professorEmailEl) {
+                    professorEmailEl.textContent = usuario.email;
+                }
+                
+                // ✅ ATUALIZAR EIXO DO PROFESSOR
+                const professorEixoEl = document.getElementById('professorEixo');
+                if (professorEixoEl) {
+                    console.log('🎯 Eixo detectado:', usuario.eixo);
+                    
+                    // Mapeamento completo de todos os eixos (texto + classe CSS)
+                    const eixoConfig = {
+                        'natureza': { 
+                            texto: '🔬 Eixo Natureza e Matemática',
+                            classe: 'eixo-natureza'
+                        },
+                        'humanas': { 
+                            texto: '🏛️ Eixo Humanas',
+                            classe: 'eixo-humanas'
+                        },
+                        'linguagens': { 
+                            texto: '🎭 Eixo Linguagens',
+                            classe: 'eixo-linguagens'
+                        },
+                        'desenvolvimento': { 
+                            texto: '💻 Desenvolvimento de Sistemas',
+                            classe: 'eixo-desenvolvimento'
+                        },
+                        'redes': { 
+                            texto: '🌐 Redes de Computadores',
+                            classe: 'eixo-redes'
+                        },
+                        'gestao': { 
+                            texto: '📊 Gestão e Negócios',
+                            classe: 'eixo-gestao'
+                        },
+                        'producao': { 
+                            texto: '🎬 Produção Cultural e Design',
+                            classe: 'eixo-producao'
+                        },
+                        'turismo': { 
+                            texto: '✈️ Turismo, Hospitalidade e Lazer',
+                            classe: 'eixo-turismo'
+                        },
+                        'ambiente': { 
+                            texto: '🌱 Ambiente e Saúde',
+                            classe: 'eixo-ambiente'
+                        }
+                    };
+                    
+                    if (usuario.eixo && eixoConfig[usuario.eixo]) {
+                        const config = eixoConfig[usuario.eixo];
+                        
+                        // Aplicar texto e classe
+                        professorEixoEl.textContent = config.texto;
+                        professorEixoEl.className = `eixo-badge ${config.classe}`;
+                        
+                        console.log('✅ Eixo atualizado:', config.texto, 'com classe', config.classe);
+                    } else if (usuario.eixo) {
+                        // Fallback para eixos não mapeados
+                        professorEixoEl.textContent = `📌 Eixo ${usuario.eixo}`;
+                        professorEixoEl.className = 'eixo-badge eixo-generico';
+                    } else {
+                        professorEixoEl.textContent = '❓ Eixo não definido';
+                        professorEixoEl.className = 'eixo-badge eixo-generico';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao atualizar interface:', error);
+            }
         }
         
         // Carregar turmas do professor
@@ -12047,6 +12102,10 @@ window.addEventListener('scroll', function() {
             
             // Carregar dados do professor
             carregarDadosProfessor();
+
+            setTimeout(() => {
+                carregarEixosParaSelect();
+            }, 1000); // Pequeno delay para garantir que o DOM está pronto
             
             // Configurar timeout para esconder loading
             setTimeout(esconderLoading, 5000);

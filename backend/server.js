@@ -358,6 +358,8 @@ const User = require('./models/User');
 const Prova = require('./models/Prova');
 const Turma = require('./models/Turma');
 const Notificacao = require('./models/Notificacao');  
+const Eixo = require('./models/Eixo');      
+const Curso = require('./models/Cursos');    
 
 // ============================================================================
 // DEFINIÇÃO DE MODELOS INLINE
@@ -640,6 +642,50 @@ const uploadMiddleware = multer({
     }
 });
 
+// Configurar multer para upload de arquivos
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // Criar diretório de uploads se não existir
+    const uploadDir = path.join(__dirname, '..', 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Gerar nome único para o arquivo
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limite
+  },
+  fileFilter: function (req, file, cb) {
+    // Permitir apenas certos tipos de arquivo
+    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Tipo de arquivo não permitido'));
+    }
+  }
+});
+
+// Middleware para upload múltiplo
+const uploadMultiple = upload.fields([
+  { name: 'arquivos', maxCount: 10 },
+  { name: 'imagens', maxCount: 10 }
+]);
+
+
 // ============================================================================
 // MIDDLEWARES PERSONALIZADOS
 // ============================================================================
@@ -718,6 +764,7 @@ const validateInputs = (validations) => {
     next();
   };
 };
+
 
 // ============================================================================
 // ROTAS PÚBLICAS
@@ -2773,50 +2820,6 @@ app.put('/api/users/me', authenticateToken, async (req, res) => {
   }
 });
 
-// Configurar multer para upload de arquivos
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    // Criar diretório de uploads se não existir
-    const uploadDir = path.join(__dirname, '..', 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Gerar nome único para o arquivo
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limite
-  },
-  fileFilter: function (req, file, cb) {
-    // Permitir apenas certos tipos de arquivo
-    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Tipo de arquivo não permitido'));
-    }
-  }
-});
-
-// Middleware para upload múltiplo
-const uploadMultiple = upload.fields([
-  { name: 'arquivos', maxCount: 10 },
-  { name: 'imagens', maxCount: 10 }
-]);
-
-
 // ============ ROTA PARA PUBLICAR PROVA (CORRIGIDA COM PUSH) ============
 app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (req, res) => {
   try {
@@ -3215,23 +3218,33 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
     }
 });
 
-// ============ ROTAS DE TURMA (PROFESSOR) ============
+// ============ ROTA PARA CRIAR TURMA (PROFESSOR/ADMIN) ============
 app.post('/api/turmas', authenticateToken, async (req, res) => {
   try {
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
     if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
         success: false,
-        error: 'Apenas professores e administradores podem corrigir provas'
+        error: 'Apenas professores e administradores podem criar turmas'
       });
     }
 
     const { nome, disciplina, eixo, descricao } = req.body;
 
+    // Validar se o eixo existe no banco
+    const eixoExistente = await Eixo.findOne({ nome: eixo });
+    if (!eixoExistente) {
+      return res.status(400).json({
+        success: false,
+        error: 'Eixo não encontrado no sistema'
+      });
+    }
+
     const turma = new Turma({
       nome,
       disciplina,
-      eixo,
+      eixo: eixo, // Salvar o nome do eixo
+      eixoId: eixoExistente._id, // Salvar também o ID para referência
       descricao,
       professorId: req.userId
     });
@@ -3244,7 +3257,7 @@ app.post('/api/turmas', authenticateToken, async (req, res) => {
         id: turma._id,
         nome: turma.nome,
         disciplina: turma.disciplina,
-        eixo: turma.exito,
+        eixo: turma.eixo,
         codigo: turma.codigo,
         professorId: turma.professorId
       }
@@ -3259,45 +3272,90 @@ app.post('/api/turmas', authenticateToken, async (req, res) => {
   }
 });
 
+// ============ ROTA PARA LISTAR TURMAS DO ALUNO ============
 app.get('/api/turmas', authenticateToken, async (req, res) => {
   try {
     let query = {};
+    let eixoDoAluno = null;
+    
+    console.log(`🔍 Buscando turmas para usuário: ${req.userId} (${req.userRole})`);
     
     if (req.userRole === 'professor') {
       query.professorId = req.userId;
     } else if (req.userRole === 'aluno') {
+      // Buscar o aluno para saber seu curso
+      const aluno = await User.findById(req.userId).select('curso');
+      
+      if (aluno && aluno.curso) {
+        // Buscar o curso do aluno para obter o eixo
+        const curso = await Curso.findOne({ nome: aluno.curso }).populate('eixoId');
+        if (curso && curso.eixoId) {
+          eixoDoAluno = curso.eixoId.nome;
+          console.log(`🎯 Eixo do aluno: ${eixoDoAluno}`);
+        }
+      }
+      
+      // Filtrar turmas que o aluno participa
       query.alunos = req.userId;
     }
 
+    // Buscar todas as turmas do aluno
     const turmas = await Turma.find(query)
       .populate('professorId', 'nome email')
       .populate('alunos', 'nome email')
-      .sort({ dataCriacao: -1 });
+      .sort({ createdAt: -1 });
 
-    res.json({
-      success: true,
-      turmas: turmas.map(t => ({
+    console.log(`📊 Total de turmas encontradas: ${turmas.length}`);
+
+    // Para cada turma, buscar informações do eixo baseado no nome
+    const turmasComInfo = await Promise.all(turmas.map(async (t) => {
+      let eixoInfo = null;
+      
+      // Se a turma tem um eixo definido, buscar informações completas
+      if (t.eixo) {
+        const eixo = await Eixo.findOne({ nome: t.eixo });
+        if (eixo) {
+          eixoInfo = {
+            id: eixo._id,
+            nome: eixo.nome,
+            label: eixo.label,
+            cor: eixo.cor,
+            icone: eixo.icone
+          };
+        }
+      }
+      
+      return {
         id: t._id,
         nome: t.nome,
         disciplina: t.disciplina,
         descricao: t.descricao,
         codigo: t.codigo,
+        eixo: t.eixo, // Nome do eixo (ex: "natureza", "turismo")
+        eixoInfo: eixoInfo, // Informações completas do eixo
         professor: t.professorId ? {
+          id: t.professorId._id,
           nome: t.professorId.nome,
           email: t.professorId.email
         } : null,
-        totalAlunos: t.alunos.length,
-        totalProvas: t.provas.length,
-        dataCriacao: t.dataCriacao,
-        ativa: t.ativa
-      }))
+        totalAlunos: t.alunos ? t.alunos.length : 0,
+        totalProvas: t.provas ? t.provas.length : 0,
+        dataCriacao: t.createdAt || t.dataCriacao,
+        ativa: t.ativa !== false,
+        isDoEixoDoAluno: eixoDoAluno ? t.eixo === eixoDoAluno : false
+      };
+    }));
+
+    res.json({
+      success: true,
+      turmas: turmasComInfo
     });
 
   } catch (error) {
-    console.error('Erro ao listar turmas:', error);
+    console.error('❌ Erro ao listar turmas:', error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao listar turmas'
+      error: error.message
     });
   }
 });
@@ -3522,10 +3580,10 @@ app.get('/api/turmas/:id/provas', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ ROTA ATUALIZADA COM SUPORTE A PROVA ADAPTADA (3 ALTERNATIVAS) ============
+// ============ ROTA ATUALIZADA COM SUPORTE A PROVA ADAPTADA (3 ALTERNATIVAS) E NOTIFICAÇÕES ============
 app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (req, res) => {
   try {
-    const turma = await Turma.findById(req.params.id);
+    const turma = await Turma.findById(req.params.id).populate('professorId', '_id nome email');
 
     if (!turma) {
       return res.status(404).json({
@@ -3534,16 +3592,38 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       });
     }
 
-    // ===== CORREÇÃO: Permitir que admin crie prova para QUALQUER professor =====
-    // Professores só podem criar nas suas próprias turmas
-    // Admin pode criar em qualquer turma para qualquer professor
+    // ===== VERIFICAÇÃO DE PERMISSÃO CORRIGIDA =====
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
-    if (!isAdmin && turma.professorId.toString() !== req.userId) {
+    
+    let isProfessorDaTurma = false;
+    
+    // Verificar por professorId._id (após populate)
+    if (turma.professorId && turma.professorId._id) {
+        isProfessorDaTurma = turma.professorId._id.toString() === req.userId;
+    }
+    // Fallback: verificar se é o dono pelo ID direto
+    else if (turma.professorId && typeof turma.professorId === 'object' && turma.professorId.toString) {
+        isProfessorDaTurma = turma.professorId.toString() === req.userId;
+    }
+    // Fallback: verificar por professorId como string
+    else if (turma.professorId) {
+        isProfessorDaTurma = turma.professorId.toString() === req.userId;
+    }
+    
+    console.log('🔍 Verificação de permissão (prova-v2):', {
+        isAdmin,
+        isProfessorDaTurma,
+        userId: req.userId,
+        professorNaTurma: turma.professorId
+    });
+
+    if (!isAdmin && !isProfessorDaTurma) {
       return res.status(403).json({
         success: false,
         error: 'Apenas o professor desta turma pode criar provas'
       });
     }
+    // ===== FIM DA CORREÇÃO =====
 
     const { 
       titulo, 
@@ -3714,7 +3794,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
         role: 'aluno',
         _id: { $in: turma.alunos || [] },
         precisaAcessibilidade: true
-      }).select('_id nome email matricula precisaAcessibilidade condicaoAcessibilidade');
+      }).select('_id nome email matricula precisaAcessibilidade condicaoAcessibilidade onesignalPlayerId');
       
       if (alunosDestino.length === 0) {
         return res.status(400).json({
@@ -3727,7 +3807,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       alunosDestino = await User.find({
         role: 'aluno',
         _id: { $in: turma.alunos || [] }
-      }).select('_id nome email matricula');
+      }).select('_id nome email matricula onesignalPlayerId');
       
       console.log(`📚 Prova normal - Será enviada para ${alunosDestino.length} aluno(s)`);
     }
@@ -4513,10 +4593,66 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     console.log(`🎯 Alunos alvo: ${alunosDestino.length} alunos`);
     console.log(`⏱️ Duração: ${duracaoMinutos} minutos (validada pelas configurações)`);
 
-    // ===== 🔥 NOTIFICAR ALUNOS SOBRE NOVA PROVA (SÓ QUANDO FOR PUBLICADA) =====
-    // Como a prova é criada como rascunho, não notificamos agora.
-    // A notificação será enviada quando o professor publicar a prova.
-    // Isso já está implementado na rota de publicação.
+    // ===== 🔥 ADICIONAR NOTIFICAÇÃO QUANDO A PROVA É CRIADA =====
+    // IGUAL ÀS OUTRAS ROTAS DE NOTIFICAÇÃO
+    
+    if (alunosDestino.length > 0) {
+        const Config = mongoose.model('Config');
+        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const pushAtivado = configDoc?.valor?.push === true;
+        const OneSignalService = require('./services/onesignal-service');
+        const oneSignal = pushAtivado ? new OneSignalService() : null;
+        
+        // Buscar dados do criador
+        const criador = await User.findById(req.userId).select('nome');
+        
+        for (const aluno of alunosDestino) {
+            try {
+                // Notificação no sistema
+                const notificacao = new Notificacao({
+                    usuarioId: aluno._id,
+                    tipo: 'sistema',
+                    titulo: '📝 Nova Prova Criada',
+                    mensagem: `Uma nova prova "${prova.titulo}" foi criada na turma ${turma.nome}.`,
+                    icone: '📚',
+                    cor: '#3b82f6',
+                    link: `/aluno.html`,
+                    prioridade: 3,
+                    dados: {
+                        provaId: prova._id,
+                        provaTitulo: prova.titulo,
+                        turmaId: turma._id,
+                        turmaNome: turma.nome,
+                        criadoPor: criador?.nome || 'Professor',
+                        dataCriacao: new Date().toISOString(),
+                        tipo: 'nova_prova_criada',
+                        status: 'rascunho'
+                    }
+                });
+                
+                await notificacao.save();
+                console.log(`✅ Notificação criada para aluno ${aluno.nome}`);
+                
+                // Push se ativado
+                if (pushAtivado && oneSignal && aluno.onesignalPlayerId) {
+                    await oneSignal.enviarPush(
+                        aluno._id,
+                        '📝 Nova Prova',
+                        `Prova "${prova.titulo}" criada em ${turma.nome}`,
+                        {
+                            tipo: 'nova_prova_criada',
+                            provaId: prova._id,
+                            provaTitulo: prova.titulo
+                        }
+                    );
+                }
+            } catch (notifError) {
+                console.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, notifError.message);
+            }
+        }
+        
+        console.log(`✅ ${alunosDestino.length} alunos notificados sobre nova prova criada`);
+    }
 
     let mensagemSucesso = '';
     if (tipoProva === 'adaptada' || adaptada === true) {
@@ -4548,9 +4684,13 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
         fonteGeracao: prova.fonteGeracao,
         totalAlunosAlvo: alunosDestino.length,
         alunosComAcessibilidade: prova.alunosComAcessibilidade,
-        professorId: professorDaProva // <-- RETORNAR NA RESPOSTA
+        professorId: professorDaProva
       },
-      questoes: prova.questoes.slice(0, quantidadeQuestoes)
+      questoes: prova.questoes.slice(0, quantidadeQuestoes),
+      notificacoes: {
+        enviadas: alunosDestino.length,
+        alunosNotificados: alunosDestino.length
+      }
     });
 
   } catch (error) {
@@ -6469,23 +6609,50 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
     
-    // ========== VERIFICAR SE O ALUNO ESTÁ NA TURMA ==========
+    // ============ VERIFICAR SE O ALUNO ESTÁ NA TURMA ============
     if (prova.turmaId) {
-      const turma = prova.turmaId;
-      
-      const alunoNaTurma = turma.alunos.some(a => 
-        a.toString() === alunoId.toString()
-      );
-      
-      if (!alunoNaTurma) {
-        console.log(`   🚫 BLOQUEADO: Aluno não está na turma desta prova`);
-        return res.status(403).json({
-          success: false,
-          error: 'Você não está matriculado na turma desta prova.'
+        // Buscar a turma completa
+        const turma = await Turma.findById(prova.turmaId).populate('alunos');
+        
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+        
+        // VERIFICAÇÃO 1: Por ID do aluno (método tradicional)
+        const alunoPorId = turma.alunos.some(a => a._id.toString() === alunoId.toString());
+        
+        // VERIFICAÇÃO 2: Por código da turma no perfil do aluno
+        const aluno = await User.findById(alunoId);
+        const alunoPorCodigoTurma = aluno && aluno.turma === turma.codigo;
+        
+        // VERIFICAÇÃO 3: Por nome da turma
+        const alunoPorNomeTurma = aluno && aluno.turma === turma.nome;
+        
+        console.log('🔍 Verificações de acesso:', {
+            alunoId: alunoId,
+            turmaId: turma._id.toString(),
+            alunosNaTurma: turma.alunos.map(a => a._id.toString()),
+            alunoPorId: alunoPorId,
+            alunoPorCodigoTurma: alunoPorCodigoTurma,
+            alunoPorNomeTurma: alunoPorNomeTurma,
+            turmaCodigo: turma.codigo,
+            turmaNome: turma.nome,
+            alunoTurma: aluno?.turma
         });
-      }
-      
-      console.log(`   ✅ Aluno está na turma: ${turma.nome}`);
+        
+        // Se passar em QUALQUER uma das verificações, libera acesso
+        if (!alunoPorId && !alunoPorCodigoTurma && !alunoPorNomeTurma) {
+            console.log(`🚫 BLOQUEADO: Aluno não está na turma desta prova`);
+            return res.status(403).json({
+                success: false,
+                error: 'Você não está matriculado na turma desta prova.'
+            });
+        }
+        
+        console.log(`✅ Aluno autorizado a acessar a prova`);
     }
     
     // ========== VERIFICAR SE O ALUNO JÁ REALIZOU ESTA PROVA ==========
@@ -8374,7 +8541,7 @@ app.get('/api/monitor/logs/:provaId', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ ROTA PARA CANCELAR PROVA (VERSÃO FINAL COM PUSH) ============
+// ============ ROTA PARA CANCELAR PROVA (VERSÃO CORRIGIDA) ============
 app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) => {
     try {
         const provaId = req.params.provaId;
@@ -8391,7 +8558,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         ]);
         
         if (resultadoExistente || provaRealizadaExistente) {
-            console.log(`⏭️ Prova já finalizada - cancelamento ignorado`);
+            console.log(`⏭️ Prova já foi finalizada - cancelamento ignorado`);
             return res.json({
                 success: true,
                 message: 'Prova já foi finalizada',
@@ -8411,19 +8578,6 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
                 success: true,
                 message: 'Prova já foi cancelada',
                 ignorado: true
-            });
-        }
-        
-        // ========== VERIFICAR PERMISSÃO DE CANCELAMENTO ==========
-        const configPermitirCancelamento = await Config.findOne({ 
-            chave: 'provas.permitirCancelamento' 
-        });
-        const permitirCancelamento = configPermitirCancelamento?.valor !== false;
-        
-        if (!permitirCancelamento) {
-            return res.status(403).json({
-                success: false,
-                error: 'Cancelamento automático desabilitado'
             });
         }
         
@@ -8509,37 +8663,19 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         
         console.log(`✅ Registros de cancelamento criados com motivo: "${motivo}"`);
         
-        // ========== ATUALIZAR ESTATÍSTICAS DA PROVA ==========
-        prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
-        prova.mediaNotas = prova.mediaNotas 
-            ? ((prova.mediaNotas * (prova.totalParticipantes - 1)) / prova.totalParticipantes).toFixed(2)
-            : 0;
-        await prova.save();
-        
-        // ========== VERIFICAR CONFIGURAÇÕES DE PUSH ==========
-        const Config = mongoose.model('Config');
-        const configDoc = await Config.findOne({ chave: 'notificacoes' });
-        const pushAtivado = configDoc?.valor?.push === true;
-        
-        // ========== NOTIFICAR PROFESSOR (SÓ SE CANCELOU DE VERDADE) ==========
-        const configNotificarProfessor = await Config.findOne({ 
-            chave: 'provas.notificarProfessorCancelamento' 
-        });
-        const notificarProfessor = configNotificarProfessor?.valor !== false;
-        
-        if (notificarProfessor && prova.userId) {
+        // ========== NOTIFICAR PROFESSOR (usando a variável global Config) ==========
+        if (prova.userId) {
             try {
                 const professor = await User.findById(prova.userId).select('nome email');
                 const turma = await Turma.findById(prova.turmaId).select('nome disciplina codigo');
                 
                 if (professor) {
-                    const mensagem = `${aluno.nome} - ${prova.titulo} (${turma?.nome || 'Turma não identificada'}) - Motivo: ${motivo}`;
-                    
+                    // Criar notificação no sistema
                     const notificacao = new Notificacao({
                         usuarioId: professor._id,
                         tipo: 'cancelamento',
                         titulo: '🚫 Prova Cancelada',
-                        mensagem: mensagem,
+                        mensagem: `${aluno.nome} - ${prova.titulo} (${turma?.nome || 'Turma não identificada'}) - Motivo: ${motivo}`,
                         icone: '🚫',
                         cor: isViolacao ? '#dc2626' : '#ef4444',
                         link: `/index.html?prova=${provaId}`,
@@ -8563,28 +8699,10 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
                     });
                     
                     await notificacao.save();
-                    console.log(`✅ Professor notificado: ${professor.email} - Motivo: "${motivo}"`);
-                    
-                    // 🔥 ENVIAR PUSH PARA PROFESSOR SE ATIVADO
-                    if (pushAtivado) {
-                        const OneSignalService = require('./services/onesignal-service');
-                        const oneSignal = new OneSignalService();
-                        
-                        await oneSignal.enviarPush(
-                            professor._id,
-                            '🚫 Prova Cancelada',
-                            `Aluno ${aluno.nome} - Prova ${prova.titulo}`,
-                            {
-                                tipo: 'cancelamento',
-                                alunoId,
-                                provaId,
-                                motivo
-                            }
-                        );
-                    }
+                    console.log(`✅ Professor notificado: ${professor.email}`);
                 }
             } catch (notifError) {
-                console.error('⚠️ Erro não crítico ao notificar professor:', notifError.message);
+                console.error('⚠️ Erro ao notificar professor:', notifError.message);
             }
         }
         
@@ -12957,6 +13075,164 @@ app.post('/api/usuario/enviar-push', authenticateToken, async (req, res) => {
     }
 });
 
+// ============================================================================
+// SERVIÇO DE NOTIFICAÇÕES BASEADO NO TEMPO DO BOTÃO
+// ============================================================================
+
+const NotificacaoBotaoService = {
+    // Cache para evitar duplicatas
+    notificacoesEnviadas: new Set(),
+    
+    // Limpar cache antigo
+    limparCache: function() {
+        const umaHoraAtras = Date.now() - (60 * 60 * 1000);
+        for (const key of this.notificacoesEnviadas) {
+            const timestamp = parseInt(key.split('_')[2]);
+            if (timestamp && timestamp < umaHoraAtras) {
+                this.notificacoesEnviadas.delete(key);
+            }
+        }
+    },
+    
+    // Extrair minutos do texto do botão (ex: "Disponível em 10min" -> 10)
+    extrairMinutosDoTexto: function(texto) {
+        if (!texto) return null;
+        const match = texto.match(/(\d+)\s*min/);
+        return match ? parseInt(match[1]) : null;
+    },
+    
+    // Verificar provas que estão com botão "Disponível em X min"
+    verificarNotificacoes: async function() {
+        try {            
+            const agora = new Date();
+            const ano = agora.getFullYear();
+            const mes = String(agora.getMonth() + 1).padStart(2, '0');
+            const dia = String(agora.getDate()).padStart(2, '0');
+            
+            // Buscar provas ativas
+            const provas = await Prova.find({
+                publicada: true,
+                status: 'ativa',
+                dataLimite: { $gte: agora }
+            }).populate('turmaId', 'alunos nome').lean();
+            
+            for (const prova of provas) {
+                // Verificar se tem horário de início
+                if (!prova.horarioInicio) continue;
+                
+                // Calcular minutos até o início
+                const inicioProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioInicio}:00-03:00`);
+                const diffMinutos = Math.floor((inicioProva - agora) / (1000 * 60));
+                
+                // SÓ NOTIFICAR NOS VALORES QUE APARECEM NO BOTÃO: 10 e 5
+                if (diffMinutos === 10 || diffMinutos === 5) {
+                    const chave = `botao_${prova._id}_${diffMinutos}_${Date.now()}`;
+                    
+                    if (this.notificacoesEnviadas.has(chave)) {
+                        console.log(`   ⏭️ Notificação ${diffMinutos}min já enviada para "${prova.titulo}"`);
+                        continue;
+                    }
+                    
+                    console.log(`   🔔 BOTÃO: "Disponível em ${diffMinutos}min" detectado!`);
+                    
+                    // Buscar alunos da turma
+                    const turma = await Turma.findById(prova.turmaId).populate('alunos', 'nome onesignalPlayerId');
+                    const alunos = turma?.alunos || [];
+                    
+                    if (alunos.length === 0) continue;
+                    
+                    // Configurações de push
+                    const configDoc = await Config.findOne({ chave: 'notificacoes' });
+                    const pushAtivado = configDoc?.valor?.push === true;
+                    const OneSignalService = require('./services/onesignal-service');
+                    const oneSignal = pushAtivado ? new OneSignalService() : null;
+                    
+                    // Mensagens baseadas no tempo
+                    const mensagens = {
+                        10: {
+                            titulo: '⏰ 10 minutos para a prova!',
+                            mensagem: `A prova "${prova.titulo}" começa em 10 minutos. Prepare-se!`,
+                            cor: '#f59e0b',
+                            icone: '⏰'
+                        },
+                        5: {
+                            titulo: '🔥 5 minutos para a prova!',
+                            mensagem: `A prova "${prova.titulo}" começa em 5 minutos. Já está pronto?`,
+                            cor: '#ef4444',
+                            icone: '🔥'
+                        }
+                    };
+                    
+                    const msg = mensagens[diffMinutos];
+                    
+                    // Notificar cada aluno
+                    for (const aluno of alunos) {
+                        try {
+                            const notificacao = new Notificacao({
+                                usuarioId: aluno._id,
+                                tipo: 'lembrete_prova',
+                                titulo: msg.titulo,
+                                mensagem: msg.mensagem,
+                                icone: msg.icone,
+                                cor: msg.cor,
+                                link: `/aluno.html`,
+                                prioridade: diffMinutos === 5 ? 5 : 4,
+                                dados: {
+                                    provaId: prova._id,
+                                    provaTitulo: prova.titulo,
+                                    minutosRestantes: diffMinutos,
+                                    textoBotao: `Disponível em ${diffMinutos}min`,
+                                    tipo: 'notificacao_botao'
+                                }
+                            });
+                            
+                            await notificacao.save();
+                            
+                            if (pushAtivado && oneSignal && aluno.onesignalPlayerId) {
+                                await oneSignal.enviarPush(
+                                    aluno._id,
+                                    msg.titulo,
+                                    msg.mensagem,
+                                    {
+                                        tipo: 'lembrete_proximo',
+                                        provaId: prova._id,
+                                        minutos: diffMinutos
+                                    }
+                                );
+                            }
+                            
+                            console.log(`   ✅ Notificação ${diffMinutos}min enviada para ${aluno.nome || aluno._id}`);
+                            
+                        } catch (error) {
+                            console.error(`   ❌ Erro ao notificar aluno:`, error.message);
+                        }
+                    }
+                    
+                    this.notificacoesEnviadas.add(chave);
+                    console.log(`   ✅ Notificações ${diffMinutos}min enviadas para ${alunos.length} alunos`);
+                }
+            }
+            
+            this.limparCache();
+            
+        } catch (error) {
+            console.error('❌ Erro no serviço de notificações:', error);
+        }
+    },
+    
+    iniciar: function() {
+        console.log('='.repeat(60));
+        console.log('⏰ SERVIÇO DE NOTIFICAÇÕES DO BOTÃO INICIADO');
+        console.log('📱 Monitorando "Disponível em 10min" e "Disponível em 5min"');
+        console.log('='.repeat(60));
+        
+        setTimeout(() => this.verificarNotificacoes(), 5000);
+        setInterval(() => this.verificarNotificacoes(), 60 * 1000);
+    }
+};
+
+NotificacaoBotaoService.iniciar();
+
 // ============ ROTAS PARA MATRÍCULAS AUTORIZADAS (APENAS ADMIN) ============
 
 
@@ -14473,6 +14749,656 @@ app.get('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async (
     }
 });
 
+// ============================================================================
+// ROTAS PARA GERENCIAMENTO DE EIXOS (ADMIN)
+// ============================================================================
+
+// GET - Listar todos os eixos
+app.get('/api/admin/eixos', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        console.log(`📋 Admin ${req.userId} listando eixos`);
+        
+        const eixos = await Eixo.find().sort({ label: 1 }).lean();
+        
+        res.json({
+            success: true,
+            eixos: eixos
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar eixos:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao listar eixos: ' + error.message
+        });
+    }
+});
+
+// POST - Criar novo eixo
+app.post('/api/admin/eixos', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { nome, label, cor, icone, descricao } = req.body;
+        
+        console.log(`📝 Admin ${req.userId} criando eixo: ${nome}`);
+        
+        // Validar campos obrigatórios
+        if (!nome || !label) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nome e label são obrigatórios'
+            });
+        }
+        
+        // Verificar se já existe
+        const existe = await Eixo.findOne({ nome });
+        if (existe) {
+            return res.status(400).json({
+                success: false,
+                error: 'Já existe um eixo com este nome'
+            });
+        }
+        
+        const eixo = new Eixo({
+            nome,
+            label,
+            cor: cor || '#667eea',
+            icone: icone || 'fa-graduation-cap',
+            descricao,
+            ativo: true
+        });
+        
+        await eixo.save();
+        
+        console.log(`✅ Eixo ${nome} criado com sucesso`);
+        
+        res.status(201).json({
+            success: true,
+            message: 'Eixo criado com sucesso!',
+            eixo: {
+                _id: eixo._id,
+                nome: eixo.nome,
+                label: eixo.label,
+                cor: eixo.cor,
+                icone: eixo.icone,
+                descricao: eixo.descricao
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao criar eixo:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao criar eixo: ' + error.message
+        });
+    }
+});
+
+// PUT - Atualizar eixo
+app.put('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nome, label, cor, icone, descricao } = req.body;
+        
+        console.log(`✏️ Admin ${req.userId} atualizando eixo ${id}`);
+        
+        const eixo = await Eixo.findById(id);
+        if (!eixo) {
+            return res.status(404).json({
+                success: false,
+                error: 'Eixo não encontrado'
+            });
+        }
+        
+        // Verificar se o nome já existe em outro eixo
+        if (nome && nome !== eixo.nome) {
+            const existe = await Eixo.findOne({ nome, _id: { $ne: id } });
+            if (existe) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Já existe outro eixo com este nome'
+                });
+            }
+        }
+        
+        // Atualizar campos
+        if (nome) eixo.nome = nome;
+        if (label) eixo.label = label;
+        if (cor) eixo.cor = cor;
+        if (icone) eixo.icone = icone;
+        if (descricao !== undefined) eixo.descricao = descricao;
+        
+        await eixo.save();
+        
+        console.log(`✅ Eixo ${eixo.nome} atualizado com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Eixo atualizado com sucesso!',
+            eixo: {
+                _id: eixo._id,
+                nome: eixo.nome,
+                label: eixo.label,
+                cor: eixo.cor,
+                icone: eixo.icone,
+                descricao: eixo.descricao
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao atualizar eixo:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao atualizar eixo: ' + error.message
+        });
+    }
+});
+
+// DELETE - Excluir eixo
+app.delete('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} excluindo eixo ${id}`);
+        
+        // Verificar se existem cursos usando este eixo
+        const cursosComEixo = await Curso.countDocuments({ eixoId: id });
+        
+        if (cursosComEixo > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `Este eixo possui ${cursosComEixo} curso(s) vinculado(s). Remova os cursos primeiro ou reassocie-os a outro eixo.`
+            });
+        }
+        
+        const eixo = await Eixo.findByIdAndDelete(id);
+        
+        if (!eixo) {
+            return res.status(404).json({
+                success: false,
+                error: 'Eixo não encontrado'
+            });
+        }
+        
+        console.log(`✅ Eixo ${eixo.nome} excluído com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Eixo excluído com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir eixo:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao excluir eixo: ' + error.message
+        });
+    }
+});
+
+// ============================================================================
+// ROTAS PARA GERENCIAMENTO DE CURSOS (ADMIN)
+// ============================================================================
+
+// GET - Listar todos os cursos
+app.get('/api/admin/cursos', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        console.log(`📋 Admin ${req.userId} listando cursos`);
+        
+        const cursos = await Curso.find()
+            .populate('eixoId', 'nome label cor icone')
+            .sort({ nome: 1 })
+            .lean();
+        
+        // Adicionar informações sobre turmas
+        const cursosComInfo = cursos.map(curso => ({
+            _id: curso._id,
+            nome: curso.nome,
+            eixoId: curso.eixoId,
+            turmas: curso.turmas || [],
+            ativo: curso.ativo,
+            createdAt: curso.createdAt,
+            totalTurmas: curso.turmas?.length || 0
+        }));
+        
+        res.json({
+            success: true,
+            cursos: cursosComInfo
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar cursos:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao listar cursos: ' + error.message
+        });
+    }
+});
+
+// POST - Criar novo curso
+app.post('/api/admin/cursos', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { nome, eixoId } = req.body;
+        
+        console.log(`📝 Admin ${req.userId} criando curso: ${nome}`);
+        
+        // Validar campos obrigatórios
+        if (!nome || !eixoId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nome do curso e Eixo são obrigatórios'
+            });
+        }
+        
+        // Verificar se o eixo existe
+        const eixo = await Eixo.findById(eixoId);
+        if (!eixo) {
+            return res.status(404).json({
+                success: false,
+                error: 'Eixo não encontrado'
+            });
+        }
+        
+        // Verificar se já existe curso com este nome
+        const existe = await Curso.findOne({ nome: nome.toUpperCase() });
+        if (existe) {
+            return res.status(400).json({
+                success: false,
+                error: 'Já existe um curso com este nome'
+            });
+        }
+        
+        const curso = new Curso({
+            nome: nome.toUpperCase(),
+            eixoId,
+            turmas: [],
+            ativo: true
+        });
+        
+        await curso.save();
+        
+        console.log(`✅ Curso ${curso.nome} criado com sucesso`);
+        
+        // Popular o eixo para retornar dados completos
+        const cursoCompleto = await Curso.findById(curso._id).populate('eixoId');
+        
+        res.status(201).json({
+            success: true,
+            message: 'Curso criado com sucesso!',
+            curso: {
+                _id: cursoCompleto._id,
+                nome: cursoCompleto.nome,
+                eixoId: cursoCompleto.eixoId,
+                turmas: cursoCompleto.turmas,
+                ativo: cursoCompleto.ativo
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao criar curso:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao criar curso: ' + error.message
+        });
+    }
+});
+
+// PUT - Atualizar curso
+app.put('/api/admin/cursos/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nome, eixoId, ativo } = req.body;
+        
+        console.log(`✏️ Admin ${req.userId} atualizando curso ${id}`);
+        
+        const curso = await Curso.findById(id);
+        if (!curso) {
+            return res.status(404).json({
+                success: false,
+                error: 'Curso não encontrado'
+            });
+        }
+        
+        // Se for alterar o eixo, verificar se existe
+        if (eixoId && eixoId !== curso.eixoId.toString()) {
+            const eixo = await Eixo.findById(eixoId);
+            if (!eixo) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Eixo não encontrado'
+                });
+            }
+        }
+        
+        // Se for alterar o nome, verificar duplicata
+        if (nome && nome.toUpperCase() !== curso.nome) {
+            const existe = await Curso.findOne({ 
+                nome: nome.toUpperCase(), 
+                _id: { $ne: id } 
+            });
+            if (existe) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Já existe outro curso com este nome'
+                });
+            }
+        }
+        
+        // Atualizar campos
+        if (nome) curso.nome = nome.toUpperCase();
+        if (eixoId) curso.eixoId = eixoId;
+        if (ativo !== undefined) curso.ativo = ativo;
+        
+        await curso.save();
+        
+        console.log(`✅ Curso ${curso.nome} atualizado com sucesso`);
+        
+        // Popular o eixo para retornar dados completos
+        const cursoCompleto = await Curso.findById(curso._id).populate('eixoId');
+        
+        res.json({
+            success: true,
+            message: 'Curso atualizado com sucesso!',
+            curso: {
+                _id: cursoCompleto._id,
+                nome: cursoCompleto.nome,
+                eixoId: cursoCompleto.eixoId,
+                turmas: cursoCompleto.turmas,
+                ativo: cursoCompleto.ativo
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao atualizar curso:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao atualizar curso: ' + error.message
+        });
+    }
+});
+
+// DELETE - Excluir curso
+app.delete('/api/admin/cursos/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} excluindo curso ${id}`);
+        
+        const curso = await Curso.findById(id);
+        if (!curso) {
+            return res.status(404).json({
+                success: false,
+                error: 'Curso não encontrado'
+            });
+        }
+        
+        // Verificar se existem turmas neste curso
+        if (curso.turmas && curso.turmas.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `Este curso possui ${curso.turmas.length} turma(s). Exclua as turmas primeiro.`
+            });
+        }
+        
+        // Verificar se existem alunos usando este curso
+        const alunosNoCurso = await User.countDocuments({ 
+            curso: curso.nome,
+            role: 'aluno'
+        });
+        
+        if (alunosNoCurso > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `Este curso possui ${alunosNoCurso} aluno(s) matriculado(s). Remova os alunos do curso primeiro.`
+            });
+        }
+        
+        await Curso.findByIdAndDelete(id);
+        
+        console.log(`✅ Curso ${curso.nome} excluído com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Curso excluído com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir curso:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao excluir curso: ' + error.message
+        });
+    }
+});
+
+// ============================================================================
+// ROTAS PARA GERENCIAMENTO DE TURMAS DENTRO DE CURSOS
+// ============================================================================
+
+// POST - Adicionar turma a um curso
+app.post('/api/admin/cursos/:cursoId/turmas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { cursoId } = req.params;
+        const { codigo, periodo, vagas } = req.body;
+        
+        console.log(`📝 Admin ${req.userId} adicionando turma ao curso ${cursoId}`);
+        
+        const curso = await Curso.findById(cursoId);
+        if (!curso) {
+            return res.status(404).json({
+                success: false,
+                error: 'Curso não encontrado'
+            });
+        }
+        
+        // Validar campos
+        if (!codigo || !periodo) {
+            return res.status(400).json({
+                success: false,
+                error: 'Código e período são obrigatórios'
+            });
+        }
+        
+        // Verificar se já existe turma com este código neste curso
+        const turmaExistente = curso.turmas.find(t => t.codigo === codigo.toUpperCase());
+        if (turmaExistente) {
+            return res.status(400).json({
+                success: false,
+                error: 'Já existe uma turma com este código neste curso'
+            });
+        }
+        
+        // Criar nova turma
+        const novaTurma = {
+            codigo: codigo.toUpperCase(),
+            periodo,
+            vagas: vagas || 40,
+            ativa: true
+        };
+        
+        curso.turmas.push(novaTurma);
+        await curso.save();
+        
+        console.log(`✅ Turma ${codigo} adicionada ao curso ${curso.nome}`);
+        
+        res.status(201).json({
+            success: true,
+            message: 'Turma adicionada com sucesso!',
+            turma: novaTurma
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao adicionar turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao adicionar turma: ' + error.message
+        });
+    }
+});
+
+// PUT - Editar turma de um curso
+app.put('/api/admin/cursos/:cursoId/turmas/:turmaId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { cursoId, turmaId } = req.params;
+        const { codigo, periodo, vagas, ativa } = req.body;
+        
+        console.log(`✏️ Admin ${req.userId} editando turma ${turmaId} do curso ${cursoId}`);
+        
+        const curso = await Curso.findById(cursoId);
+        if (!curso) {
+            return res.status(404).json({
+                success: false,
+                error: 'Curso não encontrado'
+            });
+        }
+        
+        // Encontrar a turma
+        const turma = curso.turmas.id(turmaId);
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+        
+        // Atualizar campos
+        if (codigo) turma.codigo = codigo.toUpperCase();
+        if (periodo) turma.periodo = periodo;
+        if (vagas) turma.vagas = vagas;
+        if (ativa !== undefined) turma.ativa = ativa;
+        
+        await curso.save();
+        
+        console.log(`✅ Turma ${turma.codigo} atualizada com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Turma atualizada com sucesso!',
+            turma
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao editar turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao editar turma: ' + error.message
+        });
+    }
+});
+
+// DELETE - Remover turma de um curso
+app.delete('/api/admin/cursos/:cursoId/turmas/:turmaId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { cursoId, turmaId } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} removendo turma ${turmaId} do curso ${cursoId}`);
+        
+        const curso = await Curso.findById(cursoId);
+        if (!curso) {
+            return res.status(404).json({
+                success: false,
+                error: 'Curso não encontrado'
+            });
+        }
+        
+        // Encontrar e remover a turma
+        const turma = curso.turmas.id(turmaId);
+        if (!turma) {
+            return res.status(404).json({
+                success: false,
+                error: 'Turma não encontrada'
+            });
+        }
+        
+        // Remover usando $pull para garantir
+        await Curso.updateOne(
+            { _id: cursoId },
+            { $pull: { turmas: { _id: turmaId } } }
+        );
+        
+        console.log(`✅ Turma ${turma.codigo} removida com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Turma removida com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao remover turma:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao remover turma: ' + error.message
+        });
+    }
+});
+
+// ============================================================================
+// ROTAS PÚBLICAS PARA LISTAR EIXOS E CURSOS (usadas em cadastros)
+// ============================================================================
+
+// GET - Listar eixos (público)
+app.get('/api/eixos', async (req, res) => {
+    try {
+        const eixos = await Eixo.find({ ativo: true }).sort({ label: 1 }).lean();
+        
+        res.json({
+            success: true,
+            eixos: eixos
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar eixos (público):', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao listar eixos'
+        });
+    }
+});
+
+// GET - Listar cursos por eixo (público)
+app.get('/api/cursos', async (req, res) => {
+    try {
+        const { eixoId } = req.query;
+        
+        let query = { ativo: true };
+        if (eixoId) {
+            query.eixoId = eixoId;
+        }
+        
+        const cursos = await Curso.find(query)
+            .populate('eixoId', 'nome label')
+            .sort({ nome: 1 })
+            .lean();
+        
+        const cursosFormatados = cursos.map(c => ({
+            _id: c._id,
+            nome: c.nome,
+            eixoId: c.eixoId?._id,
+            eixoNome: c.eixoId?.label || c.eixoId?.nome,
+            turmas: (c.turmas || [])
+                .filter(t => t.ativa !== false)
+                .map(t => ({
+                    _id: t._id,
+                    codigo: t.codigo,
+                    periodo: t.periodo,
+                    vagas: t.vagas,
+                    ativa: t.ativa
+                }))
+        }));
+        
+        res.json({
+            success: true,
+            cursos: cursosFormatados
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar cursos (público):', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao listar cursos'
+        });
+    }
+});
+
 // ============ BUSCAR UMA TURMA ESPECÍFICA (ADMIN) ============
 app.get('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
@@ -14550,6 +15476,82 @@ app.post('/api/usuario/salvar-player-id', authenticateToken, async (req, res) =>
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// ============ ROTA PARA BUSCAR EIXO POR ID ============
+app.get('/api/eixos/:id', authenticateToken, async (req, res) => {
+    try {
+        const eixo = await Eixo.findById(req.params.id);
+        
+        if (!eixo) {
+            return res.status(404).json({
+                success: false,
+                error: 'Eixo não encontrado'
+            });
+        }
+        
+        res.json({
+            success: true,
+            eixo: eixo
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar eixo:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ ROTA PARA BUSCAR CURSO DO ALUNO COM EIXO ============
+app.get('/api/aluno/curso-completo', authenticateToken, async (req, res) => {
+    try {
+        const alunoId = req.userId;
+        
+        // Buscar dados do aluno
+        const aluno = await User.findById(alunoId).select('curso');
+        
+        if (!aluno || !aluno.curso) {
+            return res.json({
+                success: true,
+                curso: null,
+                eixo: null
+            });
+        }
+        
+        // Buscar o curso no banco
+        const curso = await Curso.findOne({ 
+            nome: aluno.curso 
+        }).populate('eixoId');
+        
+        if (!curso) {
+            return res.json({
+                success: true,
+                curso: aluno.curso,
+                eixo: null
+            });
+        }
+        
+        res.json({
+            success: true,
+            curso: curso.nome,
+            cursoId: curso._id,
+            eixo: curso.eixoId ? {
+                id: curso.eixoId._id,
+                nome: curso.eixoId.nome,
+                label: curso.eixoId.label,
+                cor: curso.eixoId.cor
+            } : null
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar curso do aluno:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
 });
 
 // ============ ROTA PARA RESETAR ACESSOS COM NOTIFICAÇÃO ============
