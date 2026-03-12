@@ -5058,6 +5058,7 @@ class AdminPanel {
     }
 
     // ============ GERAR LINHAS DA TABELA DE PROVAS ============
+    // ============ GERAR LINHAS DA TABELA DE PROVAS (COM BOTÃO ADIAR) ============
     gerarLinhasProvas(provas) {
         if (!provas || provas.length === 0) {
             return `
@@ -5077,10 +5078,11 @@ class AdminPanel {
             // Calcular status
             const agora = new Date();
             const dataLimite = prova.dataLimite ? new Date(prova.dataLimite) : null;
-            
+
             let statusClass = '';
             let statusText = '';
-            
+            let podeAdiar = false;
+
             if (prova.cancelada === true) {
                 statusClass = 'cancelada';
                 statusText = 'Cancelada';
@@ -5094,6 +5096,13 @@ class AdminPanel {
                 statusClass = 'ativa';
                 statusText = 'Ativa';
             }
+
+            // CORREÇÃO: Calcular podeAdiar de forma explícita
+            podeAdiar = 
+                prova.publicada === true &&           // Está publicada
+                prova.cancelada !== true &&           // Não está cancelada
+                dataLimite &&                         // Tem data limite
+                dataLimite > agora;                    // Data no futuro
 
             // Nome do professor
             let nomeProfessor = 'Desconhecido';
@@ -5137,16 +5146,30 @@ class AdminPanel {
                     </td>
                     <td>${dataCriacao}</td>
                     <td>
-                        <div class="action-buttons">
+                        <div class="action-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            <!-- Ver detalhes -->
                             <button class="btn-icon" onclick="admin.verProva('${prova.id}')" title="Ver detalhes">
                                 <i class="fas fa-eye"></i>
                             </button>
+                            
+                            <!-- Editar -->
                             <button class="btn-icon edit" onclick="admin.editarProva('${prova.id}')" title="Editar prova">
                                 <i class="fas fa-edit"></i>
                             </button>
+                            
+                            <!-- 🔥 BOTÃO ADIAR (só para provas ativas) -->
+                            ${podeAdiar ? `
+                            <button class="btn-icon" onclick="admin.adiarProva('${prova.id}')" title="Adiar data limite">
+                                <i class="fas fa-calendar-plus" style="color: #e67e22;"></i>
+                            </button>
+                            ` : ''}
+                            
+                            <!-- Exportar resultados -->
                             <button class="btn-icon success" onclick="admin.exportarResultadosProva('${prova.id}')" title="Exportar resultados">
                                 <i class="fas fa-download"></i>
                             </button>
+                            
+                            <!-- Excluir -->
                             <button class="btn-icon danger" onclick="admin.excluirProva('${prova.id}')" title="Excluir">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -18009,102 +18032,6 @@ class AdminPanel {
         }
     }
 
-    // ============ GERAR LINHAS DA TABELA DE PROVAS (COM BOTÃO EDITAR) ============
-    gerarLinhasProvas(provas) {
-        if (!provas || provas.length === 0) {
-            return `
-                <tr>
-                    <td colspan="9" style="text-align: center; padding: 40px;">
-                        <i class="fas fa-file-alt" style="font-size: 2rem; color: #dee2e6; margin-bottom: 10px; display: block;"></i>
-                        Nenhuma prova encontrada
-                    </td>
-                </tr>
-            `;
-        }
-
-        return provas.map(prova => {
-            const tipo = prova.tipoProva === 'enem' ? 'ENEM' : 
-                        (prova.adaptada ? 'Adaptada' : 'Simples');
-            const statusClass = prova.publicada ? 
-                (prova.cancelada ? 'inactive' : 
-                (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'warning' : 'active')) 
-                : 'inactive';
-            const statusText = prova.publicada ? 
-                (prova.cancelada ? 'Cancelada' : 
-                (prova.dataLimite && new Date(prova.dataLimite) < new Date() ? 'Concluída' : 'Ativa')) 
-                : 'Rascunho';
-
-            // Extrair nome do professor
-            let nomeProfessor = 'Desconhecido';
-            if (prova.professor) {
-                if (typeof prova.professor === 'object') {
-                    nomeProfessor = prova.professor.nome || prova.professor.name || 'Desconhecido';
-                } else if (typeof prova.professor === 'string') {
-                    nomeProfessor = prova.professor;
-                }
-            } else if (prova.professorId) {
-                if (this.usuarios && this.usuarios.length > 0) {
-                    const prof = this.usuarios.find(u => u._id === prova.professorId || u.id === prova.professorId);
-                    if (prof) {
-                        nomeProfessor = prof.nome || prof.name || 'Desconhecido';
-                    }
-                }
-            } else if (prova.professorNome) {
-                nomeProfessor = prova.professorNome;
-            } else if (prova.nomeProfessor) {
-                nomeProfessor = prova.nomeProfessor;
-            }
-
-            return `
-                <tr>
-                    <td>
-                        <strong>${prova.titulo || 'Sem título'}</strong>
-                        ${prova.adaptada ? '<span class="badge-acessibilidade" title="Adaptada"><i class="fas fa-universal-access"></i></span>' : ''}
-                    </td>
-                    <td>
-                        <span style="display: flex; align-items: center; gap: 5px;">
-                            <i class="fas fa-chalkboard-teacher" style="color: #0d6efd;"></i>
-                            ${nomeProfessor}
-                        </span>
-                    </td>
-                    <td>${prova.turma?.nome || prova.turma || 'N/A'}</td>
-                    <td>${prova.periodo ? prova.periodo + 'º' : '1º'}</td>
-                    <td>${tipo}</td>
-                    <td>${prova.quantidadeQuestoes || 0}</td>
-                    <td>
-                        <span class="status-badge ${statusClass}">
-                            ${statusText}
-                        </span>
-                    </td>
-                    <td>${prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'N/A'}</td>
-                    <td>
-                        <div class="action-buttons" style="display: flex; gap: 5px;">
-                            <!-- Botão Ver Detalhes -->
-                            <button class="btn-icon" onclick="admin.verProva('${prova.id}')" title="Ver detalhes">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            
-                            <!-- 🔥 NOVO BOTÃO EDITAR -->
-                            <button class="btn-icon edit" onclick="admin.editarProva('${prova.id}')" title="Editar prova">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            
-                            <!-- Botão Exportar Resultados -->
-                            <button class="btn-icon success" onclick="admin.exportarResultadosProva('${prova.id}')" title="Exportar resultados">
-                                <i class="fas fa-download"></i>
-                            </button>
-                            
-                            <!-- Botão Excluir -->
-                            <button class="btn-icon danger" onclick="admin.excluirProva('${prova.id}')" title="Excluir">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    }
-
     filtrarProvas() {
         this.filtros.provas.search = document.getElementById('searchProvas')?.value || '';
         this.filtros.provas.status = document.getElementById('filterStatus')?.value || 'todos';
@@ -18276,6 +18203,256 @@ class AdminPanel {
         } catch (error) {
             console.error('❌ Erro ao carregar detalhes da prova:', error);
             this.showToast('❌ Erro ao carregar detalhes: ' + error.message, 'error');
+        }
+    }
+
+    // ============ ADIAR PROVA (IGUAL AO ADMIN SIMPLES) ============
+    async adiarProva(provaId) {
+        console.log('📅 adiarProva chamado com ID:', provaId);
+        
+        // Buscar a prova na lista
+        const prova = this.provas.find(p => p.id === provaId || p._id === provaId);
+        if (!prova) {
+            this.showToast('❌ Prova não encontrada', 'error');
+            return;
+        }
+        
+        if (!prova.publicada) {
+            this.showToast('❌ Apenas provas publicadas podem ser adiadas', 'error');
+            return;
+        }
+        
+        if (prova.cancelada) {
+            this.showToast('❌ Não é possível adiar uma prova cancelada', 'error');
+            return;
+        }
+        
+        // Formatar data atual para o input date
+        const dataAtual = prova.dataLimite ? new Date(prova.dataLimite).toISOString().split('T')[0] : '';
+        const hoje = new Date().toISOString().split('T')[0];
+        
+        // Extrair horário de término atual
+        const horarioTerminoAtual = prova.horarioTermino || prova.horaTermino || '23:59';
+        
+        // Criar o HTML do modal
+        const html = `
+            <div style="padding: 20px;">
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <p><strong>Prova:</strong> ${prova.titulo}</p>
+                    <p><strong>Data limite atual:</strong> ${prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : 'Não definida'}</p>
+                    <p><strong>Horário atual:</strong> ${horarioTerminoAtual}</p>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nova data limite</label>
+                    <input type="date" id="novaDataLimite" class="form-control" value="${dataAtual}" min="${hoje}" 
+                        style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px;" required>
+                    <small style="color: #6c757d;">Escolha a nova data de encerramento</small>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Novo horário de término</label>
+                    <input type="time" id="novoHorarioTermino" class="form-control" value="${horarioTerminoAtual}" 
+                        style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px;">
+                    <small style="color: #6c757d;">Horário em que a prova será encerrada</small>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Justificativa (opcional)</label>
+                    <input type="text" id="justificativaAdiamento" class="form-control" placeholder="Motivo do adiamento..." 
+                        style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px;">
+                    <small style="color: #6c757d;">Informe o motivo para os alunos</small>
+                </div>
+                
+                <div style="background: #e7f3ff; border-left: 4px solid #0d6efd; padding: 15px; border-radius: 8px; margin-top: 20px; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-info-circle" style="color: #0d6efd; font-size: 18px;"></i>
+                    <div style="color: #084298; font-size: 13px;">
+                        <strong>Notificação:</strong> Os alunos serão notificados sobre a nova data e horário.
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 🔥 CORREÇÃO: usar openModal em vez de abrirModal
+        document.getElementById('modalTitle').innerHTML = '📅 Adiar Prova';
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('modalSaveBtn').style.display = 'inline-block';
+        document.getElementById('modalSaveBtn').onclick = () => this.confirmarAdiamento(provaId);
+        
+        this.openModal(); // <-- MUDANÇA AQUI!
+    }
+
+    // ============ CONFIRMAR ADIAMENTO (COM NOTIFICAÇÕES) ============
+    async confirmarAdiamento(provaId) {
+        const novaData = document.getElementById('novaDataLimite')?.value;
+        const novoHorario = document.getElementById('novoHorarioTermino')?.value;
+        const justificativa = document.getElementById('justificativaAdiamento')?.value;
+        
+        if (!novaData) {
+            this.showToast('❌ Selecione uma nova data', 'error');
+            return;
+        }
+        
+        try {
+            this.showToast('📅 Adiando prova...', 'info');
+            
+            // Buscar a prova completa
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar dados completos da prova (para pegar professor e turma)
+            const responseProva = await fetch(`/api/provas/${provaId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const dataProva = await responseProva.json();
+            const prova = dataProva.success ? dataProva.prova : null;
+            
+            if (!prova) {
+                throw new Error('Prova não encontrada');
+            }
+            
+            // Construir nova data com horário
+            const novaDataLimite = `${novaData}T${novoHorario || '23:59'}:00`;
+            const dataFormatada = new Date(novaDataLimite).toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+            
+            // Atualizar a prova via API
+            const response = await fetch(`/api/admin/provas/${provaId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    dataLimite: novaDataLimite,
+                    horarioTermino: novoHorario,
+                    justificativaAdiamento: justificativa
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // ===== NOTIFICAR PROFESSOR =====
+                if (prova.userId) {
+                    const professorNome = prova.professor?.nome || 'Professor';
+                    
+                    // Notificação no sistema para o professor
+                    await fetch('/api/notificacoes', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            usuarioId: prova.userId,
+                            tipo: 'sistema',
+                            titulo: '📅 Prova Adiada',
+                            mensagem: `A prova "${prova.titulo}" foi adiada para ${dataFormatada}. ${justificativa ? `Motivo: ${justificativa}` : ''}`,
+                            icone: '📅',
+                            cor: '#e67e22',
+                            link: `/admin.html?prova=${provaId}`,
+                            prioridade: 3,
+                            dados: {
+                                provaId: provaId,
+                                provaTitulo: prova.titulo,
+                                novaData: novaDataLimite,
+                                justificativa: justificativa,
+                                tipo: 'adiamento'
+                            }
+                        })
+                    });
+                    
+                    // Push para o professor
+                    await this.enviarPushParaUsuario(
+                        prova.userId,
+                        '📅 Prova Adiada',
+                        `A prova "${prova.titulo}" foi adiada para ${dataFormatada}`,
+                        {
+                            tipo: 'adiamento',
+                            provaId: provaId,
+                            novaData: novaDataLimite
+                        }
+                    );
+                    
+                    console.log('✅ Professor notificado sobre adiamento');
+                }
+                
+                // ===== NOTIFICAR ALUNOS DA TURMA =====
+                if (prova.turmaId && prova.turmaId.alunos && prova.turmaId.alunos.length > 0) {
+                    const alunos = prova.turmaId.alunos;
+                    console.log(`📢 Notificando ${alunos.length} alunos sobre adiamento...`);
+                    
+                    let notificacoesEnviadas = 0;
+                    
+                    for (const alunoId of alunos) {
+                        try {
+                            // Notificação no sistema para cada aluno
+                            await fetch('/api/notificacoes', {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    usuarioId: alunoId,
+                                    tipo: 'sistema',
+                                    titulo: '📅 Prova Adiada',
+                                    mensagem: `A prova "${prova.titulo}" foi adiada para ${dataFormatada}. ${justificativa ? `Motivo: ${justificativa}` : 'Verifique o novo prazo.'}`,
+                                    icone: '📅',
+                                    cor: '#e67e22',
+                                    link: `/aluno.html`,
+                                    prioridade: 3,
+                                    dados: {
+                                        provaId: provaId,
+                                        provaTitulo: prova.titulo,
+                                        novaData: novaDataLimite,
+                                        tipo: 'adiamento'
+                                    }
+                                })
+                            });
+                            
+                            // Push para o aluno
+                            await this.enviarPushParaUsuario(
+                                alunoId,
+                                '📅 Prova Adiada',
+                                `A prova "${prova.titulo}" foi adiada para ${dataFormatada}`,
+                                {
+                                    tipo: 'adiamento',
+                                    provaId: provaId,
+                                    novaData: novaDataLimite
+                                }
+                            );
+                            
+                            notificacoesEnviadas++;
+                            
+                        } catch (alunoError) {
+                            console.error(`Erro ao notificar aluno ${alunoId}:`, alunoError);
+                        }
+                    }
+                    
+                    console.log(`✅ ${notificacoesEnviadas} alunos notificados sobre adiamento`);
+                }
+                
+                this.showToast('✅ Data limite atualizada com sucesso!', 'success');
+                this.closeModal();
+                
+                // Recarregar a lista de provas
+                await this.loadProvas();
+                
+                // Mostrar mensagem detalhada
+                setTimeout(() => {
+                    this.showToast(`📅 Nova data: ${dataFormatada}`, 'info');
+                }, 1500);
+                
+            } else {
+                throw new Error(data.error || 'Erro ao adiar prova');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao adiar prova:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
     }
 
