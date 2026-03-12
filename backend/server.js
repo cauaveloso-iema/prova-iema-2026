@@ -770,18 +770,6 @@ const validateInputs = (validations) => {
 // ROTAS PÚBLICAS
 // ============================================================================
 
-// ============ CONFIGURAÇÃO DE UPLOAD DE ARQUIVOS ============
-const fileUpload = require('express-fileupload');
-app.use(fileUpload({
-    useTempFiles: false,
-    createParentPath: true,
-    limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB
-    },
-    abortOnLimit: true,
-    responseOnLimit: "Arquivo muito grande. Máximo 10MB."
-}));
-
 // ============ ROTA PÚBLICA DE REGISTRO ============
 app.post('/api/auth/register', [
   check('nome').not().isEmpty().withMessage('Nome é obrigatório'),
