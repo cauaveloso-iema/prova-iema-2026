@@ -11220,7 +11220,6 @@ window.addEventListener('scroll', function() {
             previewContainer.style.display = 'block';
         }
         
-        // Função para publicar prova (CORRIGIDA)
         async function publicarProva() {
             if (!provaGerada || !provaGerada.id) {
                 mostrarAlerta('alertProva', '⚠️ Nenhuma prova válida para publicar', 'info');
@@ -11238,6 +11237,14 @@ window.addEventListener('scroll', function() {
                 
                 console.log('📤 Publicando prova ID:', provaGerada.id);
                 
+                // 🔥 BUSCAR DADOS COMPLETOS DA PROVA (para pegar turma e alunos)
+                const responseProva = await fetch(`/api/provas/${provaGerada.id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const dataProva = await responseProva.json();
+                const provaCompleta = dataProva.success ? dataProva.prova : null;
+                
                 // Chamar API para publicar usando o ID ATUALIZADO
                 const response = await fetch(`/api/professor/provas/${provaGerada.id}/publicar`, {
                     method: 'POST',
@@ -11252,6 +11259,91 @@ window.addEventListener('scroll', function() {
                 if (data.success) {
                     mostrarAlerta('alertProva', '✅ Prova publicada com sucesso! Agora está visível para os alunos.', 'success');
                     
+                    // ===== NOTIFICAR ALUNOS SOBRE A NOVA PROVA =====
+                    if (provaCompleta && provaCompleta.turmaId) {
+                        try {
+                            // Buscar a turma com os alunos
+                            const turmaRes = await fetch(`/api/turmas/${provaCompleta.turmaId}`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            
+                            const turmaData = await turmaRes.json();
+                            const turma = turmaData.success ? turmaData.turma : null;
+                            
+                            if (turma && turma.alunos && turma.alunos.length > 0) {
+                                const alunos = turma.alunos;
+                                console.log(`📢 Notificando ${alunos.length} alunos sobre nova prova...`);
+                                
+                                // Buscar configurações de push
+                                const configRes = await fetch('/api/admin/configuracoes', {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                }).catch(() => ({ json: () => ({ configuracoes: { notificacoes: { push: false } } }) }));
+                                
+                                const configData = await configRes.json();
+                                const pushAtivado = configData.configuracoes?.notificacoes?.push === true;
+                                
+                                let notificacoesEnviadas = 0;
+                                
+                                for (const aluno of alunos) {
+                                    try {
+                                        const alunoId = aluno._id || aluno.id;
+                                        
+                                        // Notificação no sistema
+                                        await fetch('/api/notificacoes', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Authorization': `Bearer ${token}`,
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({
+                                                usuarioId: alunoId,
+                                                tipo: 'sistema',
+                                                titulo: '📝 Nova Prova Publicada',
+                                                mensagem: `A prova "${provaGerada.titulo}" foi publicada na turma ${turma.nome}.`,
+                                                icone: '📚',
+                                                cor: '#10b981',
+                                                link: `/aluno.html`,
+                                                prioridade: 3,
+                                                dados: {
+                                                    provaId: provaGerada.id,
+                                                    provaTitulo: provaGerada.titulo,
+                                                    turmaId: turma._id,
+                                                    turmaNome: turma.nome,
+                                                    tipo: 'nova_prova'
+                                                }
+                                            })
+                                        });
+                                        
+                                        // Push se ativado
+                                        if (pushAtivado) {
+                                            // 🔥 CHAMAR A FUNÇÃO GLOBAL
+                                            await enviarPushParaUsuario(
+                                                alunoId,
+                                                '📝 Nova Prova',
+                                                `Prova "${provaGerada.titulo}" publicada em ${turma.nome}`,
+                                                {
+                                                    tipo: 'nova_prova',
+                                                    provaId: provaGerada.id,
+                                                    provaTitulo: provaGerada.titulo
+                                                }
+                                            );
+                                        }
+                                        
+                                        notificacoesEnviadas++;
+                                        
+                                    } catch (alunoError) {
+                                        console.error(`Erro ao notificar aluno:`, alunoError);
+                                    }
+                                }
+                                
+                                console.log(`✅ ${notificacoesEnviadas} alunos notificados sobre nova prova`);
+                                mostrarAlerta('alertProva', `📢 ${notificacoesEnviadas} alunos notificados!`, 'info');
+                            }
+                        } catch (notifError) {
+                            console.error('❌ Erro ao notificar alunos:', notifError);
+                        }
+                    }
+                    
                     // Resetar formulário
                     document.getElementById('formNovaProva').reset();
                     document.getElementById('previewQuestoes').style.display = 'none';
@@ -11265,7 +11357,9 @@ window.addEventListener('scroll', function() {
                     
                     // Recarregar lista de provas
                     setTimeout(() => {
-                        carregarProvasProfessor();
+                        if (typeof carregarProvasProfessor === 'function') {
+                            carregarProvasProfessor();
+                        }
                     }, 2000);
                     
                 } else {
@@ -11284,7 +11378,54 @@ window.addEventListener('scroll', function() {
                 }
             }
         }
-        
+
+        // ============================================
+        // FUNÇÃO PARA ENVIAR PUSH - PROFESSOR
+        // ============================================
+        async function enviarPushParaUsuario(usuarioId, titulo, mensagem, dados = {}) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                if (!token) {
+                    console.error('❌ Token não encontrado');
+                    return false;
+                }
+                
+                console.log(`📱 Enviando push para usuário ${usuarioId}: ${titulo}`);
+                
+                const response = await fetch('/api/usuario/enviar-push', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        usuarioId: usuarioId,
+                        titulo: titulo,
+                        mensagem: mensagem,
+                        dados: {
+                            ...dados,
+                            timestamp: Date.now(),
+                            origem: 'professor'
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('✅ Push enviado com sucesso! ID:', data.notificationId);
+                    return true;
+                } else {
+                    console.log('⚠️ Push não enviado:', data.error);
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao enviar push:', error);
+                return false;
+            }
+        }
+                
         // Regenerar prova (CORRIGIDO COM ANIMAÇÃO)
         async function regenerarProva() {
             if (!provaGerada) {

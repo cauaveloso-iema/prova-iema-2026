@@ -5121,7 +5121,8 @@ class AdminPanel {
             
             // Data
             const dataCriacao = prova.createdAt ? 
-                new Date(prova.createdAt).toLocaleDateString('pt-BR') : 'N/A';
+                new Date(prova.createdAt).toLocaleDateString('pt-BR') : 
+                (prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'N/A');
 
             return `
                 <tr>
@@ -7567,7 +7568,7 @@ class AdminPanel {
         }
     }
 
-    // ============ PUBLICAR PROVA ============
+    // ============ PUBLICAR PROVA (COM NOTIFICAÇÕES PUSH) ============
     async publicarProvaAdmin() {
         if (!this.provaGeradaAdmin || !this.provaGeradaAdmin.id) {
             this.mostrarAlertaAdmin('❌ Nenhuma prova para publicar', 'error');
@@ -7587,6 +7588,15 @@ class AdminPanel {
             document.getElementById('step3').classList.remove('active');
             document.getElementById('step4').classList.add('active');
             
+            // 🔥 BUSCAR DADOS COMPLETOS DA PROVA (para pegar turma e alunos)
+            const responseProva = await fetch(`/api/provas/${this.provaGeradaAdmin.id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const dataProva = await responseProva.json();
+            const provaCompleta = dataProva.success ? dataProva.prova : null;
+            
+            // Publicar a prova
             const response = await fetch(`/api/professor/provas/${this.provaGeradaAdmin.id}/publicar`, {
                 method: 'POST',
                 headers: {
@@ -7599,6 +7609,91 @@ class AdminPanel {
             
             if (data.success) {
                 this.mostrarAlertaAdmin('✅ Prova publicada com sucesso! Agora está disponível para os alunos.', 'success');
+                
+                // ===== NOTIFICAR ALUNOS SOBRE A NOVA PROVA =====
+                if (provaCompleta && provaCompleta.turmaId) {
+                    try {
+                        // Buscar a turma com os alunos
+                        const turmaRes = await fetch(`/api/admin/turmas/${provaCompleta.turmaId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        
+                        const turmaData = await turmaRes.json();
+                        const turma = turmaData.success ? turmaData.turma : null;
+                        
+                        if (turma && turma.alunos && turma.alunos.length > 0) {
+                            const alunos = turma.alunos;
+                            console.log(`📢 Notificando ${alunos.length} alunos sobre nova prova...`);
+                            
+                            // Buscar configurações de push
+                            const configRes = await fetch('/api/admin/configuracoes', {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            
+                            const configData = await configRes.json();
+                            const pushAtivado = configData.configuracoes?.notificacoes?.push === true;
+                            
+                            let notificacoesEnviadas = 0;
+                            
+                            for (const aluno of alunos) {
+                                try {
+                                    const alunoId = aluno._id || aluno.id;
+                                    const alunoNome = aluno.nome || 'Aluno';
+                                    
+                                    // Notificação no sistema
+                                    await fetch('/api/notificacoes', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({
+                                            usuarioId: alunoId,
+                                            tipo: 'sistema',
+                                            titulo: '📝 Nova Prova Publicada',
+                                            mensagem: `A prova "${this.provaGeradaAdmin.titulo}" foi publicada na turma ${turma.nome}.`,
+                                            icone: '📚',
+                                            cor: '#10b981',
+                                            link: `/aluno.html`,
+                                            prioridade: 3,
+                                            dados: {
+                                                provaId: this.provaGeradaAdmin.id,
+                                                provaTitulo: this.provaGeradaAdmin.titulo,
+                                                turmaId: turma._id,
+                                                turmaNome: turma.nome,
+                                                tipo: 'nova_prova'
+                                            }
+                                        })
+                                    });
+                                    
+                                    // Push se ativado
+                                    if (pushAtivado) {
+                                        await this.enviarPushParaUsuario(
+                                            alunoId,
+                                            '📝 Nova Prova',
+                                            `Prova "${this.provaGeradaAdmin.titulo}" publicada em ${turma.nome}`,
+                                            {
+                                                tipo: 'nova_prova',
+                                                provaId: this.provaGeradaAdmin.id,
+                                                provaTitulo: this.provaGeradaAdmin.titulo
+                                            }
+                                        );
+                                    }
+                                    
+                                    notificacoesEnviadas++;
+                                    
+                                } catch (alunoError) {
+                                    console.error(`Erro ao notificar aluno ${aluno._id}:`, alunoError);
+                                }
+                            }
+                            
+                            console.log(`✅ ${notificacoesEnviadas} alunos notificados sobre nova prova`);
+                            this.mostrarAlertaAdmin(`📢 ${notificacoesEnviadas} alunos notificados!`, 'info');
+                        }
+                    } catch (notifError) {
+                        console.error('❌ Erro ao notificar alunos:', notifError);
+                    }
+                }
                 
                 // Limpar formulário
                 document.getElementById('formNovaProvaAdmin').reset();
@@ -16277,6 +16372,590 @@ class AdminPanel {
         `;
     }
 
+    // ============ ABRIR MODAL DE ENVIO DE NOTIFICAÇÃO ============
+    abrirModalEnvioNotificacao() {
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        
+        modalTitle.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Notificação';
+        
+        // Carregar usuários para o seletor
+        this.carregarUsuariosParaNotificacao();
+        
+        modalBody.innerHTML = `
+            <div style="padding: 20px; max-width: 600px;">
+                <!-- Abas para escolher o tipo de destinatário -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; flex-wrap: wrap;">
+                    <button class="tab-destinatario" data-tipo="todos" onclick="admin.mudarTabaDestinatario('todos')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #4f46e5; color: white; transition: all 0.2s;">
+                        <i class="fas fa-users"></i> Todos
+                    </button>
+                    <button class="tab-destinatario" data-tipo="alunos" onclick="admin.mudarTabaDestinatario('alunos')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #e5e7eb; color: #4b5563; transition: all 0.2s;">
+                        <i class="fas fa-user-graduate"></i> Alunos
+                    </button>
+                    <button class="tab-destinatario" data-tipo="professores" onclick="admin.mudarTabaDestinatario('professores')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #e5e7eb; color: #4b5563; transition: all 0.2s;">
+                        <i class="fas fa-chalkboard-teacher"></i> Professores
+                    </button>
+                    <button class="tab-destinatario" data-tipo="admins" onclick="admin.mudarTabaDestinatario('admins')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #e5e7eb; color: #4b5563; transition: all 0.2s;">
+                        <i class="fas fa-user-tie"></i> Admins
+                    </button>
+                    <button class="tab-destinatario" data-tipo="selecionar" onclick="admin.mudarTabaDestinatario('selecionar')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #e5e7eb; color: #4b5563; transition: all 0.2s;">
+                        <i class="fas fa-check-square"></i> Selecionar
+                    </button>
+                </div>
+                
+                <!-- Área de seleção de usuários (inicialmente oculta) -->
+                <div id="areaSelecaoUsuarios" style="display: none; margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                    <div style="margin-bottom: 10px;">
+                        <input type="text" id="buscaUsuarioNotificacao" placeholder="Buscar usuário por nome ou email..." 
+                            style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; margin-bottom: 10px; box-sizing: border-box;"
+                            onkeyup="admin.filtrarUsuariosNotificacao()">
+                    </div>
+                    <div id="listaUsuariosNotificacao" style="max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; background: #f9fafb;">
+                        <p style="text-align: center; color: #6b7280; padding: 20px;">Carregando usuários...</p>
+                    </div>
+                    <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: space-between; align-items: center; padding: 10px; background: #f3f4f6; border-radius: 6px;">
+                        <span id="usuariosSelecionadosCount" style="font-size: 0.85rem; color: #4b5563; font-weight: 500;">
+                            0 usuários selecionados
+                        </span>
+                        <button onclick="admin.selecionarTodosUsuarios()" style="background: none; border: none; color: #4f46e5; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 6px;">
+                            <i class="fas fa-check-double"></i> Selecionar todos
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 🔥 NOVA SEÇÃO: TEMPLATES DE MENSAGEM -->
+                <div style="margin-bottom: 20px; background: #f8fafc; border-radius: 8px; padding: 15px; border: 1px solid #e5e7eb;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                        <i class="fas fa-template" style="margin-right: 5px; color: #4f46e5;"></i> Modelos de Mensagem
+                    </label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                        <button type="button" onclick="admin.aplicarTemplateMensagem('informativo')" style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s; text-align: left;" onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)';">
+                            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">📢 Informativo</div>
+                            <div style="font-size: 0.8rem; color: #64748b;">Comunicado geral para todos</div>
+                        </button>
+                        
+                        <button type="button" onclick="admin.aplicarTemplateMensagem('lembrete')" style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s; text-align: left;" onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)';">
+                            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">⏰ Lembrete</div>
+                            <div style="font-size: 0.8rem; color: #64748b;">Prazo de provas, tarefas</div>
+                        </button>
+                        
+                        <button type="button" onclick="admin.aplicarTemplateMensagem('urgente')" style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s; text-align: left;" onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)';">
+                            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">⚠️ Urgente</div>
+                            <div style="font-size: 0.8rem; color: #64748b;">Avisos importantes e críticos</div>
+                        </button>
+                        
+                        <button type="button" onclick="admin.aplicarTemplateMensagem('manutencao')" style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s; text-align: left;" onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)';">
+                            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">🔧 Manutenção</div>
+                            <div style="font-size: 0.8rem; color: #64748b;">Sistema em manutenção</div>
+                        </button>
+                    </div>
+                    <div style="margin-top: 10px; padding: 10px; background: #eef2ff; border-radius: 6px; font-size: 0.8rem; color: #1e40af; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-lightbulb"></i>
+                        <span>Clique em um modelo para preencher automaticamente. Você pode editar depois.</span>
+                    </div>
+                </div>
+                
+                <!-- Formulário da notificação -->
+                <div style="margin-top: 20px;">
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                            <i class="fas fa-heading" style="margin-right: 5px; color: #4f46e5;"></i> Título
+                        </label>
+                        <input type="text" id="notificacaoTitulo" placeholder="Ex: Aviso importante" required
+                            style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.3s; background: white; box-sizing: border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                            <i class="fas fa-align-left" style="margin-right: 5px; color: #4f46e5;"></i> Mensagem
+                        </label>
+                        <textarea id="notificacaoMensagem" rows="4" placeholder="Digite sua mensagem..." required
+                            style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.3s; background: white; resize: vertical; min-height: 100px; box-sizing: border-box;"></textarea>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                                <i class="fas fa-palette" style="margin-right: 5px; color: #4f46e5;"></i> Cor
+                            </label>
+                            <input type="color" id="notificacaoCor" value="#4f46e5"
+                                style="width: 100%; height: 42px; padding: 4px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                                <i class="fas fa-star" style="margin-right: 5px; color: #4f46e5;"></i> Prioridade
+                            </label>
+                            <select id="notificacaoPrioridade" style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; background: white;">
+                                <option value="1">🔵 Baixa</option>
+                                <option value="3" selected>🟡 Média</option>
+                                <option value="5">🔴 Alta</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="notificacaoPush" checked style="width: 18px; height: 18px; cursor: pointer; accent-color: #4f46e5;">
+                            <label for="notificacaoPush" style="font-weight: 500; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-mobile-alt"></i> Enviar também via Push (celular)
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="notificacaoLink" style="width: 18px; height: 18px; cursor: pointer; accent-color: #4f46e5;">
+                            <label for="notificacaoLink" style="font-weight: 500; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-link"></i> Incluir link
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="areaLink" style="display: none; margin-bottom: 15px; animation: slideDown 0.3s ease;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">Link</label>
+                        <input type="text" id="notificacaoLinkUrl" class="form-control" placeholder="/aluno.html" style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box;">
+                    </div>
+                    
+                    <div style="background: #eef2ff; border-left: 4px solid #4f46e5; padding: 12px 15px; border-radius: 8px; margin: 15px 0; display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #1e40af;">
+                        <i class="fas fa-info-circle" style="font-size: 1.2rem; color: #4f46e5;"></i>
+                        <span>A notificação será enviada para todos os usuários selecionados.</span>
+                    </div>
+                </div>
+                
+                <style>
+                    @keyframes slideDown {
+                        from {
+                            opacity: 0;
+                            transform: translateY(-10px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateY(0);
+                        }
+                    }
+                    .tab-destinatario:hover {
+                        transform: translateY(-1px);
+                    }
+                    .tab-destinatario[data-tipo="todos"] {
+                        background: #4f46e5;
+                        color: white;
+                    }
+                    #buscaUsuarioNotificacao:focus {
+                        outline: none;
+                        border-color: #4f46e5;
+                        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+                    }
+                    #listaUsuariosNotificacao::-webkit-scrollbar {
+                        width: 6px;
+                    }
+                    #listaUsuariosNotificacao::-webkit-scrollbar-track {
+                        background: #f1f5f9;
+                        border-radius: 10px;
+                    }
+                    #listaUsuariosNotificacao::-webkit-scrollbar-thumb {
+                        background: #94a3b8;
+                        border-radius: 10px;
+                    }
+                    #listaUsuariosNotificacao::-webkit-scrollbar-thumb:hover {
+                        background: #64748b;
+                    }
+                </style>
+            </div>
+        `;
+        
+        modalSaveBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Notificação';
+        modalSaveBtn.onclick = () => this.enviarNotificacaoEmMassa();
+        modalSaveBtn.style.display = 'inline-block';
+        
+        // Carregar usuários
+        setTimeout(() => {
+            this.carregarUsuariosParaNotificacao();
+        }, 100);
+        
+        // Evento para mostrar/esconder campo de link
+        document.getElementById('notificacaoLink').addEventListener('change', function(e) {
+            document.getElementById('areaLink').style.display = e.target.checked ? 'block' : 'none';
+        });
+        
+        this.openModal();
+    }
+
+    // ============ APLICAR TEMPLATE DE MENSAGEM ============
+    aplicarTemplateMensagem(tipo) {
+        const tituloInput = document.getElementById('notificacaoTitulo');
+        const mensagemInput = document.getElementById('notificacaoMensagem');
+        const corInput = document.getElementById('notificacaoCor');
+        
+        const templates = {
+            'informativo': {
+                titulo: '📢 Informativo Geral',
+                mensagem: 'Prezados,\n\nInformamos que o sistema estará disponível normalmente. Qualquer novidade, comunicaremos em breve.\n\nAtenciosamente,\nAdministração',
+                cor: '#4f46e5'
+            },
+            'lembrete': {
+                titulo: '⏰ Lembrete Importante',
+                mensagem: 'Olá!\n\nLembramos que os prazos para entrega de atividades e realização de provas devem ser respeitados. Fiquem atentos ao calendário.\n\nEquipe de Ensino',
+                cor: '#f59e0b'
+            },
+            'urgente': {
+                titulo: '⚠️ AVISO URGENTE',
+                mensagem: 'ATENÇÃO!\n\nComunicado importante a todos. Por favor, verifiquem suas pendências com urgência.\n\nAdministração',
+                cor: '#dc2626'
+            },
+            'manutencao': {
+                titulo: '🔧 Manutenção Programada',
+                mensagem: 'Prezados,\n\nInformamos que o sistema passará por manutenção programada no dia [DATA] das [HORÁRIO]. O sistema poderá ficar indisponível durante este período.\n\nAgradecemos a compreensão.',
+                cor: '#2563eb'
+            }
+        };
+        
+        const template = templates[tipo];
+        if (template) {
+            tituloInput.value = template.titulo;
+            mensagemInput.value = template.mensagem;
+            corInput.value = template.cor;
+            
+            // Feedback visual
+            this.showToast(`✅ Template "${template.titulo}" aplicado!`, 'success');
+        }
+    }
+
+    // ============ CARREGAR USUÁRIOS PARA NOTIFICAÇÃO ============
+    async carregarUsuariosParaNotificacao() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/usuarios?limit=500', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.usuariosParaNotificacao = data.usuarios || [];
+                this.usuariosSelecionados = new Set();
+                this.filtroAtualNotificacao = '';
+                this.renderizarListaUsuariosNotificacao();
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar usuários:', error);
+        }
+    }
+
+    // ============ RENDERIZAR LISTA DE USUÁRIOS ============
+    renderizarListaUsuariosNotificacao() {
+        const container = document.getElementById('listaUsuariosNotificacao');
+        if (!container) return;
+        
+        let usuariosFiltrados = this.usuariosParaNotificacao || [];
+        
+        if (this.filtroAtualNotificacao) {
+            const termo = this.filtroAtualNotificacao.toLowerCase();
+            usuariosFiltrados = usuariosFiltrados.filter(u => 
+                u.nome?.toLowerCase().includes(termo) ||
+                u.email?.toLowerCase().includes(termo)
+            );
+        }
+        
+        // Filtrar por tipo se necessário
+        if (this.tipoDestinatarioAtual && this.tipoDestinatarioAtual !== 'selecionar' && this.tipoDestinatarioAtual !== 'todos') {
+            usuariosFiltrados = usuariosFiltrados.filter(u => u.role === this.tipoDestinatarioAtual);
+        }
+        
+        if (usuariosFiltrados.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">Nenhum usuário encontrado</p>';
+            return;
+        }
+        
+        let html = '';
+        usuariosFiltrados.forEach(usuario => {
+            const selecionado = this.usuariosSelecionados?.has(usuario._id) ? 'selecionado' : '';
+            const iniciais = (usuario.nome || 'U').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            
+            // Cores por role
+            let roleColor = '';
+            let roleBg = '';
+            if (usuario.role === 'aluno') {
+                roleColor = '#1e40af';
+                roleBg = '#dbeafe';
+            } else if (usuario.role === 'professor') {
+                roleColor = '#92400e';
+                roleBg = '#fed7aa';
+            } else if (usuario.role === 'admin') {
+                roleColor = '#991b1b';
+                roleBg = '#fee2e2';
+            } else if (usuario.role === 'super_admin') {
+                roleColor = '#6b21a8';
+                roleBg = '#e9d5ff';
+            }
+            
+            html += `
+                <div class="usuario-item" data-id="${usuario._id}" onclick="admin.toggleSelecionarUsuario('${usuario._id}')" style="
+                    display: flex;
+                    align-items: center;
+                    padding: 12px;
+                    border-bottom: 1px solid #e5e7eb;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    border-radius: 6px;
+                    margin-bottom: 4px;
+                    animation: fadeIn 0.3s ease-out;
+                    ${selecionado ? 'background: #e0e7ff; border-left: 4px solid #4f46e5; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.1);' : ''}
+                " onmouseover="this.style.background='${selecionado ? '#d1d5ff' : '#f3f4f6'}'; this.style.transform='translateX(4px)';" onmouseout="this.style.background='${selecionado ? '#e0e7ff' : 'transparent'}'; this.style.transform='translateX(0)';">
+                    <div style="
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 50%;
+                        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                        color: white;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: 600;
+                        font-size: 1rem;
+                        margin-right: 12px;
+                        flex-shrink: 0;
+                        box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+                    ">
+                        ${iniciais}
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px; font-size: 0.95rem;">
+                            ${usuario.nome || 'Sem nome'}
+                        </div>
+                        <div style="font-size: 0.8rem; color: #6b7280; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <i class="fas fa-envelope" style="font-size: 0.7rem; color: #9ca3af;"></i> ${usuario.email || 'Sem email'}
+                            <span style="padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: ${roleBg}; color: ${roleColor};">
+                                ${usuario.role === 'aluno' ? '👨‍🎓' : usuario.role === 'professor' ? '👨‍🏫' : '👑'} ${usuario.role || 'desconhecido'}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="width: 24px; text-align: center;">
+                        ${selecionado ? '<i class="fas fa-check-circle" style="color: #10b981; font-size: 1.2rem;"></i>' : '<i class="far fa-circle" style="color: #9ca3af; font-size: 1.2rem;"></i>'}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+            <style>
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .usuario-item:nth-child(1) { animation-delay: 0.05s; }
+                .usuario-item:nth-child(2) { animation-delay: 0.1s; }
+                .usuario-item:nth-child(3) { animation-delay: 0.15s; }
+                .usuario-item:nth-child(4) { animation-delay: 0.2s; }
+                .usuario-item:nth-child(5) { animation-delay: 0.25s; }
+                .usuario-item:nth-child(6) { animation-delay: 0.3s; }
+                .usuario-item:nth-child(7) { animation-delay: 0.35s; }
+                .usuario-item:nth-child(8) { animation-delay: 0.4s; }
+                .usuario-item:nth-child(9) { animation-delay: 0.45s; }
+                .usuario-item:nth-child(10) { animation-delay: 0.5s; }
+            </style>
+        `;
+        
+        container.innerHTML = html;
+        document.getElementById('usuariosSelecionadosCount').innerHTML = 
+            `<strong>${this.usuariosSelecionados?.size || 0}</strong> usuários selecionados`;
+    }
+
+    // ============ MUDAR ABA DE DESTINATÁRIO ============
+    mudarTabaDestinatario(tipo) {
+        this.tipoDestinatarioAtual = tipo;
+        
+        // Atualizar estilo das abas
+        document.querySelectorAll('.tab-destinatario').forEach(tab => {
+            tab.style.background = '#e5e7eb';
+            tab.style.color = '#4b5563';
+        });
+        
+        const tabAtiva = document.querySelector(`.tab-destinatario[data-tipo="${tipo}"]`);
+        if (tabAtiva) {
+            tabAtiva.style.background = '#4f46e5';
+            tabAtiva.style.color = 'white';
+        }
+        
+        // Mostrar/esconder área de seleção
+        const areaSelecao = document.getElementById('areaSelecaoUsuarios');
+        if (tipo === 'selecionar') {
+            areaSelecao.style.display = 'block';
+            this.usuariosSelecionados = new Set();
+            this.renderizarListaUsuariosNotificacao();
+        } else {
+            areaSelecao.style.display = 'none';
+        }
+    }
+
+    // ============ TOGGLE SELECIONAR USUÁRIO ============
+    toggleSelecionarUsuario(usuarioId) {
+        if (!this.usuariosSelecionados) {
+            this.usuariosSelecionados = new Set();
+        }
+        
+        if (this.usuariosSelecionados.has(usuarioId)) {
+            this.usuariosSelecionados.delete(usuarioId);
+        } else {
+            this.usuariosSelecionados.add(usuarioId);
+        }
+        
+        this.renderizarListaUsuariosNotificacao();
+    }
+
+    // ============ SELECIONAR TODOS OS USUÁRIOS ============
+    selecionarTodosUsuarios() {
+        if (!this.usuariosParaNotificacao) return;
+        
+        this.usuariosSelecionados = new Set();
+        
+        let usuariosFiltrados = this.usuariosParaNotificacao;
+        if (this.filtroAtualNotificacao) {
+            const termo = this.filtroAtualNotificacao.toLowerCase();
+            usuariosFiltrados = usuariosFiltrados.filter(u => 
+                u.nome?.toLowerCase().includes(termo) ||
+                u.email?.toLowerCase().includes(termo)
+            );
+        }
+        
+        usuariosFiltrados.forEach(u => {
+            this.usuariosSelecionados.add(u._id);
+        });
+        
+        this.renderizarListaUsuariosNotificacao();
+    }
+
+    // ============ FILTRAR USUÁRIOS NA NOTIFICAÇÃO ============
+    filtrarUsuariosNotificacao() {
+        const termo = document.getElementById('buscaUsuarioNotificacao')?.value || '';
+        this.filtroAtualNotificacao = termo;
+        this.renderizarListaUsuariosNotificacao();
+    }
+
+    // ============ ENVIAR NOTIFICAÇÃO EM MASSA ============
+    async enviarNotificacaoEmMassa() {
+        const titulo = document.getElementById('notificacaoTitulo')?.value;
+        const mensagem = document.getElementById('notificacaoMensagem')?.value;
+        const cor = document.getElementById('notificacaoCor')?.value || '#4f46e5';
+        const prioridade = parseInt(document.getElementById('notificacaoPrioridade')?.value) || 3;
+        const enviarPush = document.getElementById('notificacaoPush')?.checked || false;
+        const temLink = document.getElementById('notificacaoLink')?.checked || false;
+        const link = temLink ? document.getElementById('notificacaoLinkUrl')?.value : null;
+        const tipoDestinatario = this.tipoDestinatarioAtual || 'todos';
+        
+        if (!titulo || !mensagem) {
+            this.showToast('❌ Título e mensagem são obrigatórios', 'error');
+            return;
+        }
+        
+        let usuariosDestino = [];
+        
+        // Determinar lista de usuários
+        if (tipoDestinatario === 'selecionar') {
+            if (!this.usuariosSelecionados || this.usuariosSelecionados.size === 0) {
+                this.showToast('❌ Selecione pelo menos um usuário', 'error');
+                return;
+            }
+            usuariosDestino = Array.from(this.usuariosSelecionados);
+        } else {
+            // Buscar usuários por role
+            const token = localStorage.getItem('auth_token');
+            let url = '/api/admin/usuarios?limit=1000';
+            
+            if (tipoDestinatario !== 'todos') {
+                url += `&role=${tipoDestinatario}`;
+            }
+            
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            usuariosDestino = (data.usuarios || []).map(u => u._id);
+        }
+        
+        if (usuariosDestino.length === 0) {
+            this.showToast('❌ Nenhum usuário encontrado para envio', 'error');
+            return;
+        }
+        
+        // Confirmar envio
+        const confirmar = await this.confirmar(
+            '📢 Confirmar Envio',
+            `Deseja enviar esta notificação para <strong>${usuariosDestino.length}</strong> usuário(s)?<br><br>
+            <strong>Título:</strong> ${titulo}<br>
+            <strong>Mensagem:</strong> ${mensagem.substring(0, 100)}${mensagem.length > 100 ? '...' : ''}<br>
+            ${enviarPush ? '<br>📱 <strong>Push ativado</strong>' : ''}`
+        );
+        
+        if (!confirmar) return;
+        
+        this.showToast(`📤 Enviando para ${usuariosDestino.length} usuários...`, 'info');
+        
+        let enviados = 0;
+        let erros = 0;
+        
+        for (const usuarioId of usuariosDestino) {
+            try {
+                // Notificação no sistema
+                await fetch('/api/notificacoes', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        usuarioId: usuarioId,
+                        tipo: 'sistema',
+                        titulo: titulo,
+                        mensagem: mensagem,
+                        icone: '📢',
+                        cor: cor,
+                        link: link,
+                        prioridade: prioridade,
+                        dados: {
+                            tipo: 'notificacao_massa',
+                            enviadoPor: this.usuario?.nome || 'Administrador'
+                        }
+                    })
+                });
+                
+                // Push se ativado
+                if (enviarPush) {
+                    await this.enviarPushParaUsuario(
+                        usuarioId,
+                        titulo,
+                        mensagem,
+                        {
+                            tipo: 'notificacao_massa',
+                            prioridade: prioridade
+                        }
+                    );
+                }
+                
+                enviados++;
+                
+            } catch (error) {
+                console.error(`❌ Erro ao enviar para ${usuarioId}:`, error);
+                erros++;
+            }
+        }
+        
+        this.showToast(`✅ ${enviados} notificações enviadas, ${erros} erros`, 'success');
+        this.closeModal();
+    }
+
+    // ============ GET ROLE COLOR ============
+    getRoleColor(role) {
+        const cores = {
+            'aluno': '#10b981',
+            'professor': '#f59e0b',
+            'admin': '#3b82f6',
+            'super_admin': '#8b5cf6'
+        };
+        return cores[role] || '#6b7280';
+    }
+
     // ============ RENDERIZAR CONFIGURAÇÕES DE NOTIFICAÇÕES ============
     renderConfigNotificacoes(config) {
         return `
@@ -18204,6 +18883,84 @@ class AdminPanel {
             console.error('❌ Erro ao carregar detalhes da prova:', error);
             this.showToast('❌ Erro ao carregar detalhes: ' + error.message, 'error');
         }
+    }
+
+    // ============ ORDENAR PROVAS POR COLUNA ============
+    ordenarProvasPor(coluna) {
+        console.log(`🔤 Ordenando por: ${coluna}`);
+        
+        // Alternar ordem
+        this.ordenacaoProvas = this.ordenacaoProvas || {};
+        this.ordenacaoProvas[coluna] = this.ordenacaoProvas[coluna] === 'asc' ? 'desc' : 'asc';
+        const ordem = this.ordenacaoProvas[coluna];
+        
+        // Atualizar ícones
+        document.querySelectorAll('.sortable i').forEach(i => i.className = 'fas fa-sort');
+        const icone = document.getElementById(`sort-${coluna}`);
+        if (icone) {
+            icone.className = `fas fa-sort-${ordem === 'asc' ? 'up' : 'down'}`;
+        }
+        
+        // Ordenar as provas
+        const provasOrdenadas = [...this.provas];
+        
+        provasOrdenadas.sort((a, b) => {
+            let valA, valB;
+            
+            switch(coluna) {
+                case 'titulo':
+                    valA = a.titulo || '';
+                    valB = b.titulo || '';
+                    break;
+                case 'professor':
+                    valA = this.obterNomeProfessor(a) || '';
+                    valB = this.obterNomeProfessor(b) || '';
+                    break;
+                case 'turma':
+                    valA = a.turma?.nome || a.turma || '';
+                    valB = b.turma?.nome || b.turma || '';
+                    break;
+                case 'questoes':
+                    valA = a.quantidadeQuestoes || a.questoes?.length || 0;
+                    valB = b.quantidadeQuestoes || b.questoes?.length || 0;
+                    break;
+                case 'status':
+                    valA = this.obterStatusOrdenacao(a);
+                    valB = this.obterStatusOrdenacao(b);
+                    break;
+                case 'data':
+                    valA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+                    valB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+                    break;
+                default:
+                    return 0;
+            }
+            
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+            
+            if (valA < valB) return ordem === 'asc' ? -1 : 1;
+            if (valA > valB) return ordem === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        // Atualizar a tabela
+        const tbody = document.getElementById('tabelaProvasBody');
+        if (tbody) {
+            tbody.innerHTML = this.gerarLinhasProvas(provasOrdenadas);
+        }
+    }
+
+    // ============ OBTER STATUS PARA ORDENAÇÃO ============
+    obterStatusOrdenacao(prova) {
+        if (prova.cancelada === true) return 4; // Cancelada
+        if (prova.publicada !== true) return 3; // Rascunho
+        
+        const agora = new Date();
+        const dataLimite = prova.dataLimite ? new Date(prova.dataLimite) : null;
+        
+        if (dataLimite && dataLimite < agora) return 2; // Concluída
+        return 1; // Ativa
     }
 
     // ============ ADIAR PROVA (IGUAL AO ADMIN SIMPLES) ============

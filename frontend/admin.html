@@ -1548,6 +1548,28 @@
                         </div>
                     </div>
 
+                    <div class="header-actions">
+                    <!-- 🔥 NOVO BOTÃO DE ENVIO DE NOTIFICAÇÕES -->
+                    <button class="btn-notificacao-envio" onclick="admin.abrirModalEnvioNotificacao()" style="
+                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                        color: white;
+                        border: none;
+                        border-radius: 40px;
+                        padding: 8px 20px;
+                        font-size: 0.9rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin-right: 10px;
+                        transition: all 0.3s;
+                        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(245,158,11,0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(245,158,11,0.3)';">
+                        <i class="fas fa-bullhorn"></i>
+                        <span>Enviar Notificação</span>
+                    </button>
+
                     <!-- 🔥 NOVO: BOTÃO DE CONTROLE GLOBAL PUSH -->
                     <button id="btnPushGlobal" class="btn-push" style="
                         background: linear-gradient(135deg, #6b7280, #4b5563);
