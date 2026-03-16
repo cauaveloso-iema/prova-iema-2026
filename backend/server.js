@@ -746,9 +746,9 @@ const connectToDatabase = async () => {
   const options = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
-    connectTimeoutMS: 10000,
+    connectTimeoutMS: 30000,
     maxPoolSize: 10,
     retryWrites: true,
     w: 'majority'
@@ -768,6 +768,32 @@ const connectToDatabase = async () => {
     console.log(`📍 Host: ${host}`);
     console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
     console.log('='.repeat(60));
+    
+    // ============================================
+    // EVENTOS DE RECONEXÃO DO MONGODB (ADICIONADO)
+    // ============================================
+    mongoose.connection.on('disconnected', () => {
+      console.log('⚠️ MongoDB desconectado! Tentando reconectar em 5 segundos...');
+      setTimeout(() => {
+        console.log('🔄 Tentando reconectar ao MongoDB...');
+        mongoose.connect(connectionUri, options).catch(err => {
+          console.error('❌ Falha na reconexão:', err.message);
+        });
+      }, 5000);
+    });
+
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ Erro no MongoDB:', err);
+    });
+
+    mongoose.connection.on('reconnected', () => {
+      console.log('✅ MongoDB reconectado com sucesso!');
+    });
+
+    mongoose.connection.on('timeout', () => {
+      console.warn('⏰ Timeout na conexão com MongoDB');
+    });
+    // ============================================
     
     if (groq) {
       setTimeout(() => testarModelosDisponiveis(), 2000);
