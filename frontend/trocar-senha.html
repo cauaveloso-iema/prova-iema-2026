@@ -861,5 +861,18 @@
 })();
 </script>
 
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ Service Worker ativo'))
+            .catch(err => console.log('❌ Erro:', err));
+    });
+}
+
+window.addEventListener('online', () => console.log('🌐 Online'));
+window.addEventListener('offline', () => console.log('📴 Offline'));
+</script>
+
 </body>
 </html>

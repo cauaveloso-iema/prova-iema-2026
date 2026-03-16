@@ -317,6 +317,7 @@ class AdminPanel {
     async switchSection(section) {
         this.currentSection = section;
 
+        // Atualizar classe ativa no menu
         document.querySelectorAll('.nav-link[data-section]').forEach(item => {
             item.classList.remove('active');
             if (item.dataset.section === section) {
@@ -324,6 +325,7 @@ class AdminPanel {
             }
         });
 
+        // Títulos das seções
         const titles = {
             dashboard: 'Dashboard',
             usuarios: 'Gerenciar Usuários',
@@ -333,11 +335,10 @@ class AdminPanel {
             questoes: 'Banco de Questões',
             resultados: 'Resultados',
             matriculas: 'Matrículas Autorizadas',
-            cursos: 'Cursos e Turmas',
-            backups: 'Backups e Restauração',
             eixos: 'Gerenciar Eixos',
             cursos: 'Gerenciar Cursos',
-            monitoramento: 'Monitoramento do Sistema',  // <-- ADICIONAR ESTA LINHA
+            faceid: 'Gerenciar Face ID',  // 🔥 ADICIONE AQUI
+            monitoramento: 'Monitoramento do Sistema',
             configuracoes: 'Configurações do Sistema'
         };
         
@@ -382,6 +383,9 @@ class AdminPanel {
                 break;
             case 'matriculas':
                 await this.loadMatriculas();
+                break;
+            case 'faceid':
+                await this.loadFaceID();
                 break;
             case 'cursos':                    // <-- ADICIONE ESTE CASE
                 await this.loadCursos();       // <-- CHAMA O MÉTODO QUE CRIAMOS
@@ -4356,6 +4360,2288 @@ class AdminPanel {
         `;
     }
 
+
+    // ============================================================================
+    // MÓDULO DE FACE ID PARA PRODUÇÃO (ADICIONAR DENTRO DA CLASSE AdminPanel)
+    // ============================================================================
+
+    // ============ CARREGAR FACE ID ============
+    async loadFaceID() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Mostrar loading
+        contentArea.innerHTML = this.renderFaceIDLoading();
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar todas as faces cadastradas
+            const facesRes = await fetch('/api/admin/faces/todos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!facesRes.ok) {
+                throw new Error(`Erro HTTP: ${facesRes.status}`);
+            }
+
+            const facesData = await facesRes.json();
+
+            if (!facesData.success) {
+                throw new Error(facesData.error || 'Erro ao carregar faces');
+            }
+
+            // Buscar dados dos usuários em paralelo
+            const usuariosRes = await fetch('/api/admin/usuarios?limit=1000', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const usuariosData = await usuariosRes.json();
+            
+            // Mapear usuários para busca rápida
+            const usuariosMap = {};
+            if (usuariosData.success && usuariosData.usuarios) {
+                usuariosData.usuarios.forEach(u => {
+                    usuariosMap[u._id] = u;
+                });
+            }
+
+            // Combinar dados das faces com informações dos usuários
+            const faces = (facesData.faces || []).map(face => {
+                const usuario = usuariosMap[face.usuarioId] || {};
+                return {
+                    _id: face._id,
+                    usuarioId: face.usuarioId,
+                    alunoNome: usuario.nome || 'Aluno não encontrado',
+                    alunoEmail: usuario.email || '',
+                    alunoMatricula: usuario.matricula || '',
+                    alunoTurma: usuario.turma || '',
+                    alunoCurso: usuario.curso || '',
+                    role: usuario.role || 'desconhecido',
+                    imagemBase64: face.imagemBase64,
+                    imagemHash: face.imagemHash,
+                    faceDescriptor: face.faceDescriptor || [],
+                    dataCadastro: face.dataCadastro,
+                    ultimaValidacao: face.ultimaValidacao,
+                    totalValidacoes: face.totalValidacoes || 0,
+                    ativo: face.ativo !== false
+                };
+            });
+
+            // Filtrar apenas alunos (opcional - manter para referência)
+            const facesAlunos = faces.filter(f => f.role === 'aluno' || f.role === 'desconhecido');
+
+            // Calcular estatísticas reais
+            const estatisticas = {
+                total: faces.length,
+                comDescriptor: faces.filter(f => f.faceDescriptor && f.faceDescriptor.length > 0).length,
+                semDescriptor: faces.filter(f => !f.faceDescriptor || f.faceDescriptor.length === 0).length,
+                validacoesHoje: faces.filter(f => {
+                    if (!f.ultimaValidacao) return false;
+                    const hoje = new Date().toDateString();
+                    return new Date(f.ultimaValidacao).toDateString() === hoje;
+                }).length,
+                totalValidacoes: faces.reduce((acc, f) => acc + (f.totalValidacoes || 0), 0),
+                ativos: faces.filter(f => f.ativo).length,
+                inativos: faces.filter(f => !f.ativo).length
+            };
+
+            // Armazenar dados
+            this.facesData = faces;
+            this.facesFiltradas = [...faces];
+            this.paginaAtual = 1;
+            this.itensPorPagina = 20;
+
+            // Extrair turmas únicas para o filtro
+            const turmasUnicas = [...new Set(faces.map(f => f.alunoTurma).filter(t => t))];
+
+            // Renderizar interface
+            contentArea.innerHTML = this.renderFaceIDPrincipal(faces, estatisticas, turmasUnicas);
+
+            // Preencher select de turmas
+            this.preencherSelectTurmasFace(turmasUnicas);
+
+            // Renderizar tabela
+            setTimeout(() => {
+                this.renderizarTabelaFaces();
+                this.configurarEventosFaceID();
+                this.carregarLocalizacoesReais(); // Carregar localizações reais
+            }, 100);
+
+            console.log('✅ Faces carregadas:', faces.length);
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar faces:', error);
+            contentArea.innerHTML = this.renderFaceIDErro(error.message);
+        }
+    }
+
+    // ============ CARREGAR LOCALIZAÇÕES REAIS (DO BANCO) ============
+    async carregarLocalizacoesReais() {
+        try {
+            console.log('📍 Carregando localizações reais...');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar localizações ativas (últimos 15 minutos) + últimas localizações
+            const response = await fetch('/api/admin/localizacoes/ativas?minutos=15', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                console.warn('⚠️ Erro ao carregar localizações ativas:', response.status);
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log(`📍 ${data.localizacoes.length} localizações ativas, ${data.ultimasLocalizacoes.length} últimas`);
+                
+                const localizacoesAtivas = data.localizacoes || [];
+                const ultimasLocalizacoes = data.ultimasLocalizacoes || [];
+                
+                this.atualizarCardsLocalizacao(localizacoesAtivas);
+                this.renderizarListaLocalizacoes(localizacoesAtivas, ultimasLocalizacoes);
+            }
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar localizações:', error);
+        }
+    }
+
+    // ============ ATUALIZAR CARDS DE LOCALIZAÇÃO ============
+    atualizarCardsLocalizacao(localizacoes) {
+        const alunosComLocalizacao = document.getElementById('alunosComLocalizacao');
+        const mapaBadge = document.getElementById('mapaBadge');
+        
+        if (alunosComLocalizacao) {
+            alunosComLocalizacao.textContent = localizacoes.length;
+        }
+        
+        if (mapaBadge) {
+            mapaBadge.textContent = `${localizacoes.length} alunos online`;
+        }
+    }
+
+    // ============ RENDERIZAR LISTA DE LOCALIZAÇÕES (ATUAL + ÚLTIMA) ============
+    renderizarListaLocalizacoes(localizacoesAtivas, ultimasLocalizacoes) {
+        const container = document.getElementById('listaLocalizacoes');
+        if (!container) return;
+
+        // Combinar ativas e últimas, evitando duplicatas
+        const alunosMap = new Map();
+        
+        // Primeiro, adicionar as ativas (prioridade)
+        localizacoesAtivas.forEach(loc => {
+            alunosMap.set(loc.alunoId, {
+                ...loc,
+                tipo: 'ativa',
+                status: 'online',
+                cor: '#10b981',
+                icone: 'fa-circle'
+            });
+        });
+        
+        // Depois, adicionar as últimas que não estão ativas
+        ultimasLocalizacoes.forEach(loc => {
+            if (!alunosMap.has(loc.alunoId)) {
+                alunosMap.set(loc.alunoId, {
+                    ...loc,
+                    tipo: 'ultima',
+                    status: 'offline',
+                    cor: '#6b7280',
+                    icone: 'fa-clock'
+                });
+            }
+        });
+
+        const localizacoes = Array.from(alunosMap.values());
+
+        if (localizacoes.length === 0) {
+            container.innerHTML = `
+                <p style="text-align: center; padding: 40px; color: #6c757d;">
+                    <i class="fas fa-map-marked-alt" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i><br>
+                    Nenhuma localização registrada
+                </p>
+            `;
+            return;
+        }
+
+        // Ordenar: ativas primeiro, depois últimas
+        localizacoes.sort((a, b) => {
+            if (a.tipo === 'ativa' && b.tipo !== 'ativa') return -1;
+            if (a.tipo !== 'ativa' && b.tipo === 'ativa') return 1;
+            return new Date(b.timestamp) - new Date(a.timestamp);
+        });
+
+        let html = '';
+        localizacoes.forEach(loc => {
+            const data = new Date(loc.timestamp);
+            const tempoDecorrido = this.calcularTempoDecorrido(data);
+            const iniciais = (loc.alunoNome || 'A').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            
+            // Calcular distância da escola (se tiver coordenadas da escola configuradas)
+            let distanciaTexto = '';
+            if (loc.latitude && loc.longitude && this.escolaLat && this.escolaLon) {
+                const distancia = this.calcularDistancia(
+                    loc.latitude, loc.longitude,
+                    this.escolaLat, this.escolaLon
+                );
+                distanciaTexto = ` • ${Math.round(distancia)}m da escola`;
+                
+                // Se estiver fora do raio permitido, destacar
+                if (this.raioPermitido && distancia > this.raioPermitido) {
+                    distanciaTexto += ` <span style="color: #ef4444;">(fora do raio)</span>`;
+                }
+            }
+
+            html += `
+                <div class="localizacao-item ${loc.tipo}" data-id="${loc.alunoId}" style="
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                    padding: 15px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    margin-bottom: 10px;
+                    transition: all 0.3s;
+                    background: ${loc.tipo === 'ativa' ? '#f0fdf4' : '#f9fafb'};
+                    border-left: 4px solid ${loc.tipo === 'ativa' ? '#10b981' : '#6b7280'};
+                ">
+                    <div class="localizacao-avatar" style="
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 50%;
+                        background: ${loc.tipo === 'ativa' ? '#10b981' : '#6b7280'};
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: white;
+                        font-weight: 600;
+                        font-size: 18px;
+                        flex-shrink: 0;
+                    ">${iniciais}</div>
+                    
+                    <div class="localizacao-info" style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <span style="font-weight: 600; color: #1f2937;">${loc.alunoNome}</span>
+                            <span style="
+                                background: ${loc.tipo === 'ativa' ? '#d1fae5' : '#e5e7eb'};
+                                color: ${loc.tipo === 'ativa' ? '#065f46' : '#4b5563'};
+                                padding: 2px 8px;
+                                border-radius: 30px;
+                                font-size: 10px;
+                                font-weight: 600;
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 3px;
+                            ">
+                                <i class="fas fa-${loc.icone}" style="font-size: 8px;"></i>
+                                ${loc.tipo === 'ativa' ? 'Online' : 'Última localização'}
+                            </span>
+                        </div>
+                        
+                        <div style="font-size: 12px; color: #4b5563; margin-bottom: 4px;">
+                            <i class="fas fa-map-pin" style="color: ${loc.tipo === 'ativa' ? '#10b981' : '#6b7280'}; margin-right: 5px;"></i>
+                            ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)} 
+                            <span style="color: #6b7280; font-size: 11px;">(precisão: ${Math.round(loc.accuracy)}m)</span>
+                        </div>
+                        
+                        <div style="display: flex; gap: 15px; font-size: 11px; color: #6b7280;">
+                            <span><i class="fas fa-calendar-alt"></i> ${data.toLocaleDateString('pt-BR')}</span>
+                            <span><i class="fas fa-clock"></i> ${tempoDecorrido}</span>
+                            ${distanciaTexto}
+                        </div>
+                        
+                        <div style="margin-top: 8px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <span style="background: #f3f4f6; padding: 3px 10px; border-radius: 20px; font-size: 10px;">
+                                <i class="fas fa-id-card"></i> ${loc.alunoMatricula || 'Sem matrícula'}
+                            </span>
+                            <span style="background: #f3f4f6; padding: 3px 10px; border-radius: 20px; font-size: 10px;">
+                                <i class="fas fa-school"></i> ${loc.alunoTurma || 'Sem turma'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 5px; align-items: flex-end;">
+                        <a href="https://www.google.com/maps?q=${loc.latitude},${loc.longitude}" 
+                        target="_blank"
+                        style="
+                            background: #667eea;
+                            color: white;
+                            padding: 6px 12px;
+                            border-radius: 20px;
+                            font-size: 11px;
+                            text-decoration: none;
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                            white-space: nowrap;
+                        ">
+                            <i class="fas fa-external-link-alt"></i> Ver no mapa
+                        </a>
+                        <button onclick="admin.verHistoricoLocalizacao('${loc.alunoId}')" 
+                                style="
+                            background: none;
+                            border: 1px solid #e5e7eb;
+                            color: #4b5563;
+                            padding: 4px 12px;
+                            border-radius: 20px;
+                            font-size: 11px;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                        ">
+                            <i class="fas fa-history"></i> Histórico
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // ============ VER HISTÓRICO DE LOCALIZAÇÃO DO ALUNO ============
+    async verHistoricoLocalizacao(alunoId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/localizacoes/historico/${alunoId}?limite=20`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar histórico');
+            }
+            
+            const historico = data.localizacoes || [];
+            
+            const modalBody = document.getElementById('modalBody');
+            
+            let historicoHtml = '';
+            if (historico.length === 0) {
+                historicoHtml = '<p style="text-align: center; padding: 40px; color: #6b7280;">Nenhum histórico de localização encontrado</p>';
+            } else {
+                historico.forEach((loc, index) => {
+                    const data = new Date(loc.timestamp);
+                    const dataFormatada = data.toLocaleString('pt-BR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    });
+                    
+                    historicoHtml += `
+                        <div style="
+                            display: flex;
+                            align-items: center;
+                            gap: 15px;
+                            padding: 12px;
+                            border: 1px solid #e5e7eb;
+                            border-radius: 8px;
+                            margin-bottom: 8px;
+                            background: ${index === 0 ? '#f0f9ff' : 'white'};
+                        ">
+                            <div style="
+                                width: 36px;
+                                height: 36px;
+                                border-radius: 50%;
+                                background: ${index === 0 ? '#10b981' : '#6b7280'};
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-size: 14px;
+                            ">
+                                <i class="fas ${index === 0 ? 'fa-map-pin' : 'fa-history'}"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: #1f2937; margin-bottom: 3px;">
+                                    ${index === 0 ? '📍 Localização atual' : `Localização ${historico.length - index}`}
+                                </div>
+                                <div style="font-size: 12px; color: #4b5563;">
+                                    <i class="fas fa-map-marker-alt"></i> 
+                                    ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)} 
+                                    (${Math.round(loc.accuracy)}m)
+                                </div>
+                                <div style="font-size: 11px; color: #6b7280; margin-top: 3px;">
+                                    <i class="far fa-clock"></i> ${dataFormatada}
+                                </div>
+                            </div>
+                            <a href="https://www.google.com/maps?q=${loc.latitude},${loc.longitude}" 
+                            target="_blank"
+                            style="
+                                background: #667eea;
+                                color: white;
+                                padding: 4px 10px;
+                                border-radius: 20px;
+                                font-size: 11px;
+                                text-decoration: none;
+                                white-space: nowrap;
+                            ">
+                                <i class="fas fa-external-link-alt"></i> Ver
+                            </a>
+                        </div>
+                    `;
+                });
+            }
+            
+            modalBody.innerHTML = `
+                <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                    <h3 style="margin: 0 0 15px; color: #1f2937; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-history" style="color: #667eea;"></i>
+                        Histórico de Localizações
+                    </h3>
+                    <p style="color: #6b7280; font-size: 13px; margin-bottom: 20px;">
+                        Aluno: <strong>${historico[0]?.alunoNome || ''}</strong> (${historico[0]?.alunoMatricula || ''})
+                    </p>
+                    <div style="margin-bottom: 15px;">
+                        <span style="background: #f3f4f6; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                            <i class="fas fa-database"></i> Total: ${historico.length} registros
+                        </span>
+                    </div>
+                    ${historicoHtml}
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-map-marked-alt"></i> Histórico de Localizações';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            
+            this.configurarFechamentoModal();
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar histórico:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ CALCULAR TEMPO DECORRIDO ============
+    calcularTempoDecorrido(data) {
+        const agora = new Date();
+        const diffMs = agora - data;
+        const diffMin = Math.floor(diffMs / 60000);
+        
+        if (diffMin < 1) return 'agora mesmo';
+        if (diffMin === 1) return 'há 1 minuto';
+        if (diffMin < 60) return `há ${diffMin} minutos`;
+        
+        const diffH = Math.floor(diffMin / 60);
+        if (diffH === 1) return 'há 1 hora';
+        return `há ${diffH} horas`;
+    }
+
+    // ============ CALCULAR DISTÂNCIA (Haversine) ============
+    calcularDistancia(lat1, lon1, lat2, lon2) {
+        const R = 6371e3; // Raio da Terra em metros
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2 - lat1) * Math.PI/180;
+        const Δλ = (lon2 - lon1) * Math.PI/180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c; // Distância em metros
+    }
+
+    // ============ PREENCHER SELECT DE TURMAS ============
+    preencherSelectTurmasFace(turmas) {
+        const select = document.getElementById('filterFaceTurma');
+        if (!select) return;
+        
+        let options = '<option value="todas">Todas as turmas</option>';
+        turmas.sort().forEach(turma => {
+            options += `<option value="${turma}">${turma}</option>`;
+        });
+        select.innerHTML = options;
+    }
+
+    // ============ CONFIGURAR EVENTOS ============
+    configurarEventosFaceID() {
+        // Configurar busca com debounce
+        const searchInput = document.getElementById('searchFace');
+        if (searchInput) {
+            let timeout;
+            searchInput.addEventListener('keyup', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => this.filtrarFaces(), 300);
+            });
+        }
+        
+        // Atualizar localizações a cada 30 segundos
+        setInterval(() => this.carregarLocalizacoesReais(), 30000);
+    }
+
+    // ============ RENDERIZAR LOADING ============
+    renderFaceIDLoading() {
+        return `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                <p style="color: #495057;">Carregando dados de Face ID...</p>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+    }
+
+    // ============ RENDERIZAR ERRO ============
+    renderFaceIDErro(mensagem) {
+        return `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 16px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 20px;"></i>
+                <h3 style="color: #721c24; margin-bottom: 10px;">Erro ao carregar Face ID</h3>
+                <p style="color: #6c757d; margin-bottom: 20px;">${mensagem}</p>
+                <button onclick="admin.loadFaceID()" style="
+                    background: #0d6efd;
+                    color: white;
+                    border: none;
+                    padding: 10px 30px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                ">
+                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                </button>
+            </div>
+        `;
+    }
+
+    // ============ RENDERIZAR INTERFACE PRINCIPAL ============
+    renderFaceIDPrincipal(faces, estatisticas, turmas) {
+        return `
+            <div class="faceid-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="faceid-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-id-card"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>Gerenciamento de Face ID</h1>
+                            <p>Gerencie os cadastros faciais dos alunos</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.loadFaceID()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-header btn-primary" onclick="admin.abrirModalConfigFaceID()">
+                            <i class="fas fa-cog"></i>
+                            <span>Configurações</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE ESTATÍSTICAS REAIS -->
+                <div class="stats-grid">
+                    <div class="stat-card primary" onclick="admin.filtrarFacesPorStatus('todos')">
+                        <div class="stat-icon">
+                            <i class="fas fa-id-card"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Total de Faces</span>
+                            <span class="stat-value">${estatisticas.total}</span>
+                            <span class="stat-detail">${estatisticas.ativos} ativos • ${estatisticas.inativos} inativos</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card success" onclick="admin.filtrarFacesPorStatus('comDescriptor')">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Com Descriptor</span>
+                            <span class="stat-value">${estatisticas.comDescriptor}</span>
+                            <span class="stat-detail">${estatisticas.total > 0 ? Math.round(estatisticas.comDescriptor / estatisticas.total * 100) : 0}% do total</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card warning" onclick="admin.filtrarFacesPorStatus('semDescriptor')">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Sem Descriptor</span>
+                            <span class="stat-value">${estatisticas.semDescriptor}</span>
+                            <span class="stat-detail">Precisam recadastrar</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card info">
+                        <div class="stat-icon">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Localização Ativa</span>
+                            <span class="stat-value" id="alunosComLocalizacao">0</span>
+                            <span class="stat-detail">alunos nos últimos 15min</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAPA DE LOCALIZAÇÃO (OPCIONAL - PODE SER INTEGRADO COM GOOGLE MAPS) -->
+                <div class="mapa-container" id="mapaContainer" style="display: none;">
+                    <div class="mapa-header">
+                        <h3><i class="fas fa-map-marked-alt"></i> Localização em Tempo Real</h3>
+                        <span class="mapa-badge" id="mapaBadge">0 alunos online</span>
+                    </div>
+                    <div id="mapaCanvas" style="height: 300px; background: #f0f9ff; border-radius: 12px; overflow: hidden;">
+                        <!-- Placeholder do mapa - será substituído por mapa real -->
+                        <div style="height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                            <i class="fas fa-map-marked-alt" style="font-size: 64px; color: #667eea; margin-bottom: 15px;"></i>
+                            <p style="color: #6b7280;">Mapa será exibido aqui (integração com Google Maps)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BARRA DE FILTROS -->
+                <div class="filters-card">
+                    <div class="filters-header">
+                        <div class="filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <h3>Filtros</h3>
+                        </div>
+                        <span class="filters-badge" id="resultadosBadge">${faces.length} resultados</span>
+                    </div>
+                    
+                    <div class="filters-grid">
+                        <!-- Busca -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-search"></i> Buscar</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="searchFace" 
+                                    placeholder="Nome, email ou matrícula..." 
+                                    autocomplete="off">
+                                <i class="fas fa-search input-icon"></i>
+                                <button class="input-clear" id="clearSearchFace" onclick="admin.limparBuscaFace()" style="display: none;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Status -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-circle"></i> Status</label>
+                            <select id="filterFaceStatus" class="filter-select" onchange="admin.filtrarFaces()">
+                                <option value="todos">Todos</option>
+                                <option value="comDescriptor">✅ Com Descriptor</option>
+                                <option value="semDescriptor">❌ Sem Descriptor</option>
+                                <option value="validadosHoje">⏰ Validados Hoje</option>
+                                <option value="ativo">🟢 Ativos</option>
+                                <option value="inativo">🔴 Inativos</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Turma -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-school"></i> Turma</label>
+                            <select id="filterFaceTurma" class="filter-select" onchange="admin.filtrarFaces()">
+                                <option value="todas">Todas as turmas</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Botões -->
+                        <div class="filter-actions">
+                            <button class="btn-filter" onclick="admin.aplicarFiltrosFace()">
+                                <i class="fas fa-filter"></i> Filtrar
+                            </button>
+                            <button class="btn-filter btn-clear" onclick="admin.limparFiltrosFace()">
+                                <i class="fas fa-eraser"></i> Limpar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABS DE VISUALIZAÇÃO -->
+                <div class="view-tabs">
+                    <button class="tab-view active" onclick="admin.mudarViewFace('tabela')">
+                        <i class="fas fa-table"></i> Tabela
+                    </button>
+                    <button class="tab-view" onclick="admin.mudarViewFace('cards')">
+                        <i class="fas fa-id-card"></i> Cards
+                    </button>
+                    <button class="tab-view" onclick="admin.mudarViewFace('localizacao')">
+                        <i class="fas fa-map-marker-alt"></i> Localização
+                    </button>
+                </div>
+
+                <!-- TABELA DE FACES -->
+                <div id="view-tabela" class="view-content active">
+                    <div class="table-professional">
+                        <div class="table-header">
+                            <div class="table-title">
+                                <i class="fas fa-list"></i>
+                                <h3>Cadastros de Face ID</h3>
+                            </div>
+                            <div class="table-info">
+                                <span class="items-per-page">
+                                    <label>Mostrar:</label>
+                                    <select onchange="admin.mudarItensPorPaginaFace(this.value)">
+                                        <option value="10">10</option>
+                                        <option value="25" selected>25</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                </span>
+                                <span class="items-counter" id="itemsCounterFace">0 registros</span>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th onclick="admin.ordenarFacesPor('alunoNome')" class="sortable">
+                                            Aluno <i class="fas fa-sort" id="sort-alunoNome"></i>
+                                        </th>
+                                        <th onclick="admin.ordenarFacesPor('alunoEmail')" class="sortable">
+                                            Email <i class="fas fa-sort" id="sort-alunoEmail"></i>
+                                        </th>
+                                        <th onclick="admin.ordenarFacesPor('alunoMatricula')" class="sortable">
+                                            Matrícula <i class="fas fa-sort" id="sort-alunoMatricula"></i>
+                                        </th>
+                                        <th onclick="admin.ordenarFacesPor('alunoTurma')" class="sortable">
+                                            Turma <i class="fas fa-sort" id="sort-alunoTurma"></i>
+                                        </th>
+                                        <th onclick="admin.ordenarFacesPor('dataCadastro')" class="sortable">
+                                            Data Cadastro <i class="fas fa-sort" id="sort-dataCadastro"></i>
+                                        </th>
+                                        <th onclick="admin.ordenarFacesPor('ultimaValidacao')" class="sortable">
+                                            Última Validação <i class="fas fa-sort" id="sort-ultimaValidacao"></i>
+                                        </th>
+                                        <th>Descriptor</th>
+                                        <th>Status</th>
+                                        <th>Total</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaFacesBody">
+                                    <tr>
+                                        <td colspan="10" class="loading-row">
+                                            <div class="loading-spinner-small">
+                                                <i class="fas fa-spinner fa-spin"></i>
+                                                <span>Carregando...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- PAGINAÇÃO -->
+                        <div class="pagination-professional" id="paginacaoFaces">
+                            <div class="pagination-info">
+                                <span id="pageInfoFaces">Página 1 de 1</span>
+                            </div>
+                            <div class="pagination-controls">
+                                <button class="btn-pagination" onclick="admin.paginaAnteriorFace()" id="btnAnteriorFace" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <div class="pagination-pages" id="pageButtonsFace"></div>
+                                <button class="btn-pagination" onclick="admin.proximaPaginaFace()" id="btnProximaFace" disabled>
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW DE CARDS -->
+                <div id="view-cards" class="view-content">
+                    <div class="cards-grid" id="cardsFacesGrid">
+                        <!-- Cards serão renderizados aqui -->
+                    </div>
+                </div>
+
+                <!-- VIEW DE LOCALIZAÇÃO -->
+                <div id="view-localizacao" class="view-content">
+                    <div class="localizacao-detalhada">
+                        <div class="localizacao-header">
+                            <h3><i class="fas fa-map-pin"></i> Alunos com Localização Ativa (últimos 15min)</h3>
+                            <button class="btn-refresh-local" onclick="admin.carregarLocalizacoesReais()">
+                                <i class="fas fa-sync-alt"></i> Atualizar
+                            </button>
+                        </div>
+                        <div class="localizacao-lista" id="listaLocalizacoes">
+                            <p style="text-align: center; padding: 40px; color: #6c757d;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 48px; margin-bottom: 15px;"></i><br>
+                                Carregando localizações...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .faceid-container { padding: 24px; max-width: 1400px; margin: 0 auto; font-family: 'Inter', -apple-system, sans-serif; }
+                
+                /* Header com gradiente */
+                .faceid-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+                    position: relative;
+                    overflow: hidden;
+                }
+                
+                .faceid-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -50px;
+                    right: -50px;
+                    width: 200px;
+                    height: 200px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 50%;
+                }
+                
+                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
+                .header-icon {
+                    width: 70px; height: 70px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.2);
+                }
+                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
+                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
+                
+                .btn-header {
+                    padding: 12px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    border: none;
+                    position: relative;
+                    z-index: 2;
+                }
+                .btn-header.btn-primary {
+                    background: white;
+                    color: #667eea;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                }
+                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
+                .btn-header.btn-refresh {
+                    background: rgba(255,255,255,0.15);
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    backdrop-filter: blur(5px);
+                    padding: 12px;
+                }
+                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
+                
+                /* Stats cards */
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                .stat-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    transition: all 0.3s;
+                    border: 1px solid rgba(0,0,0,0.05);
+                    cursor: pointer;
+                }
+                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .stat-card.primary .stat-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
+                .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
+                .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+                .stat-icon {
+                    width: 60px; height: 60px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                    color: white;
+                }
+                .stat-content { flex: 1; }
+                .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
+                .stat-detail { font-size: 11px; color: #9ca3af; }
+                
+                /* Filtros */
+                .filters-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+                .filters-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+                .filters-title { display: flex; align-items: center; gap: 10px; }
+                .filters-title i { font-size: 18px; color: #667eea; background: #f0f4ff; padding: 8px; border-radius: 10px; }
+                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                .filters-badge { background: #667eea; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+                
+                .filters-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 1fr 1fr auto;
+                    gap: 15px;
+                }
+                .filter-group { display: flex; flex-direction: column; gap: 5px; }
+                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; display: flex; align-items: center; gap: 5px; }
+                
+                .input-wrapper { position: relative; }
+                .input-wrapper input {
+                    width: 100%;
+                    padding: 10px 35px 10px 40px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    transition: all 0.3s;
+                }
+                .input-wrapper input:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    box-shadow: 0 0 0 4px rgba(102,126,234,0.1);
+                }
+                .input-icon {
+                    position: absolute;
+                    left: 15px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #9ca3af;
+                    font-size: 14px;
+                }
+                .input-clear {
+                    position: absolute;
+                    right: 10px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background: none;
+                    border: none;
+                    color: #9ca3af;
+                    cursor: pointer;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .input-clear:hover { background: #f3f4f6; color: #4b5563; }
+                
+                .filter-select {
+                    width: 100%;
+                    padding: 10px 15px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    background: white;
+                    cursor: pointer;
+                }
+                
+                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+                .btn-filter {
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    white-space: nowrap;
+                }
+                .btn-filter { background: #667eea; color: white; }
+                .btn-filter:hover { background: #5a67d8; transform: translateY(-2px); }
+                .btn-filter.btn-clear { background: #6b7280; }
+                .btn-filter.btn-clear:hover { background: #4b5563; }
+                
+                /* View Tabs */
+                .view-tabs {
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: 20px;
+                    background: white;
+                    padding: 10px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                }
+                .tab-view {
+                    padding: 8px 16px;
+                    border: none;
+                    background: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #6b7280;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    transition: all 0.3s;
+                }
+                .tab-view:hover { background: #f3f4f6; color: #374151; }
+                .tab-view.active {
+                    background: #667eea;
+                    color: white;
+                }
+                
+                .view-content { display: none; }
+                .view-content.active { display: block; animation: fadeIn 0.3s ease; }
+                
+                /* Tabela */
+                .table-professional {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    overflow: hidden;
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+                .table-header {
+                    padding: 16px 20px;
+                    background: #f9fafb;
+                    border-bottom: 1px solid #e5e7eb;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .table-title { display: flex; align-items: center; gap: 10px; }
+                .table-title i { color: #667eea; font-size: 16px; }
+                .table-title h3 { margin: 0; font-size: 15px; color: #374151; }
+                .table-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                }
+                .items-per-page {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 13px;
+                    color: #6b7280;
+                }
+                .items-per-page select {
+                    padding: 5px 8px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    background: white;
+                }
+                .items-counter {
+                    font-size: 13px;
+                    color: #6b7280;
+                    font-weight: 500;
+                }
+                
+                .data-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .data-table th {
+                    padding: 15px 20px;
+                    text-align: left;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #4b5563;
+                    background: #f9fafb;
+                    border-bottom: 2px solid #e5e7eb;
+                }
+                .data-table th.sortable { cursor: pointer; transition: background 0.2s; }
+                .data-table th.sortable:hover { background: #f3f4f6; }
+                .data-table td {
+                    padding: 15px 20px;
+                    border-bottom: 1px solid #e5e7eb;
+                    font-size: 14px;
+                    color: #1f2937;
+                }
+                .data-table tr:hover td { background: #f9fafb; }
+                
+                .status-badge {
+                    display: inline-block;
+                    padding: 4px 10px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                .status-badge.success { background: #d1fae5; color: #065f46; }
+                .status-badge.warning { background: #fef3c7; color: #92400e; }
+                .status-badge.secondary { background: #e5e7eb; color: #4b5563; }
+                
+                .action-buttons { display: flex; gap: 5px; }
+                .btn-icon {
+                    width: 32px; height: 32px;
+                    border: none;
+                    border-radius: 6px;
+                    background: transparent;
+                    color: #6c757d;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s;
+                }
+                .btn-icon:hover { background: #e9ecef; color: #667eea; }
+                .btn-icon.danger:hover { color: #dc3545; }
+                
+                /* Paginação */
+                .pagination-professional {
+                    padding: 16px 20px;
+                    border-top: 1px solid #e5e7eb;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }
+                .pagination-info { font-size: 13px; color: #6b7280; }
+                .pagination-controls { display: flex; gap: 8px; align-items: center; }
+                .btn-pagination {
+                    min-width: 38px; height: 38px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #4b5563;
+                    transition: all 0.2s;
+                }
+                .btn-pagination:hover { background: #f3f4f6; border-color: #667eea; color: #667eea; }
+                .btn-pagination.active { background: #667eea; border-color: #667eea; color: white; }
+                
+                /* Cards Grid */
+                .cards-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                    gap: 20px;
+                }
+                
+                .face-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    border: 1px solid #e5e7eb;
+                    transition: all 0.3s;
+                    position: relative;
+                }
+                .face-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                
+                .card-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                }
+                .card-avatar {
+                    width: 60px;
+                    height: 60px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 24px;
+                    font-weight: 600;
+                }
+                .card-badge {
+                    padding: 4px 10px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                .badge-success { background: #d1fae5; color: #065f46; }
+                .badge-warning { background: #fef3c7; color: #92400e; }
+                
+                .card-info {
+                    margin-bottom: 15px;
+                }
+                .card-info-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 8px;
+                    font-size: 13px;
+                    color: #4b5563;
+                }
+                .card-info-item i {
+                    width: 18px;
+                    color: #9ca3af;
+                }
+                
+                .card-footer {
+                    display: flex;
+                    gap: 8px;
+                    justify-content: flex-end;
+                    border-top: 1px solid #e5e7eb;
+                    padding-top: 15px;
+                }
+                .card-btn {
+                    width: 36px;
+                    height: 36px;
+                    border: none;
+                    border-radius: 8px;
+                    background: #f3f4f6;
+                    color: #4b5563;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.3s;
+                }
+                .card-btn:hover { background: #e5e7eb; }
+                .card-btn.edit:hover { background: #667eea; color: white; }
+                .card-btn.delete:hover { background: #ef4444; color: white; }
+                
+                /* Localização */
+                .localizacao-detalhada {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                }
+                .localizacao-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #e5e7eb;
+                }
+                .btn-refresh-local {
+                    padding: 8px 16px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                    transition: all 0.3s;
+                }
+                .btn-refresh-local:hover { background: #f3f4f6; }
+                
+                .localizacao-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                    padding: 12px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    margin-bottom: 10px;
+                    transition: all 0.3s;
+                }
+                .localizacao-item:hover {
+                    background: #f9fafb;
+                    transform: translateX(5px);
+                }
+                .localizacao-avatar {
+                    width: 45px;
+                    height: 45px;
+                    border-radius: 50%;
+                    background: #667eea;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: 600;
+                }
+                .localizacao-info {
+                    flex: 1;
+                }
+                .localizacao-nome {
+                    font-weight: 600;
+                    color: #1f2937;
+                    margin-bottom: 3px;
+                }
+                .localizacao-coords {
+                    font-size: 11px;
+                    color: #6b7280;
+                }
+                .localizacao-tempo {
+                    font-size: 11px;
+                    color: #10b981;
+                    background: #d1fae5;
+                    padding: 4px 10px;
+                    border-radius: 30px;
+                    white-space: nowrap;
+                }
+                
+                .loading-spinner-small {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 10px;
+                    color: #6b7280;
+                    padding: 40px;
+                }
+                .loading-spinner-small i { font-size: 20px; color: #667eea; }
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                
+                @media (max-width: 1024px) {
+                    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+                    .filters-grid { grid-template-columns: 1fr; }
+                }
+                @media (max-width: 768px) {
+                    .stats-grid { grid-template-columns: 1fr; }
+                    .view-tabs { flex-wrap: wrap; }
+                    .tab-view { flex: 1; }
+                }
+            </style>
+        `;
+    }
+
+    // ============ RENDERIZAR TABELA DE FACES ============
+    renderizarTabelaFaces() {
+        const tbody = document.getElementById('tabelaFacesBody');
+        if (!tbody || !this.facesFiltradas) return;
+
+        const inicio = (this.paginaAtual - 1) * this.itensPorPagina;
+        const fim = inicio + this.itensPorPagina;
+        const paginaFaces = this.facesFiltradas.slice(inicio, fim);
+
+        if (paginaFaces.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="10" style="text-align: center; padding: 40px;">
+                        <i class="fas fa-id-card" style="font-size: 48px; color: #d1d5db; margin-bottom: 15px;"></i>
+                        <h3 style="color: #6b7280;">Nenhum cadastro facial encontrado</h3>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        paginaFaces.forEach(face => {
+            const dataCadastro = face.dataCadastro ? new Date(face.dataCadastro).toLocaleDateString('pt-BR') : '-';
+            const ultimaValidacao = face.ultimaValidacao ? 
+                new Date(face.ultimaValidacao).toLocaleString('pt-BR', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                }) : '-';
+            
+            const temDescriptor = face.faceDescriptor && face.faceDescriptor.length > 0;
+            
+            let statusClass = 'success';
+            let statusText = 'Ativo';
+            if (!face.ativo) {
+                statusClass = 'secondary';
+                statusText = 'Inativo';
+            } else if (!temDescriptor) {
+                statusClass = 'warning';
+                statusText = 'Incompleto';
+            }
+            
+            html += `
+                <tr>
+                    <td>
+                        <strong>${face.alunoNome || 'N/A'}</strong>
+                        ${face.role === 'aluno' ? '' : '<span style="color: #f59e0b;"> (professor)</span>'}
+                    </td>
+                    <td>${face.alunoEmail || '-'}</td>
+                    <td>${face.alunoMatricula || '-'}</td>
+                    <td>${face.alunoTurma || '-'}</td>
+                    <td>${dataCadastro}</td>
+                    <td>${ultimaValidacao}</td>
+                    <td>
+                        <span class="status-badge ${temDescriptor ? 'success' : 'warning'}">
+                            ${temDescriptor ? '✅ Ativo' : '❌ Incompleto'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            ${statusText}
+                        </span>
+                    </td>
+                    <td>${face.totalValidacoes || 0}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-icon" onclick="admin.verFaceDetalhes('${face._id}')" title="Ver detalhes">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn-icon edit" onclick="admin.editarFace('${face._id}')" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-icon ${face.ativo ? 'warning' : 'success'}" 
+                                    onclick="admin.toggleStatusFace('${face._id}', ${face.ativo})" 
+                                    title="${face.ativo ? 'Inativar' : 'Ativar'}">
+                                <i class="fas ${face.ativo ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
+                            </button>
+                            <button class="btn-icon danger" onclick="admin.excluirFace('${face._id}')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+
+        // Atualizar contadores
+        const total = this.facesFiltradas.length;
+        const inicioExibicao = (this.paginaAtual - 1) * this.itensPorPagina + 1;
+        const fimExibicao = Math.min(this.paginaAtual * this.itensPorPagina, total);
+        
+        const itemsCounter = document.getElementById('itemsCounterFace');
+        if (itemsCounter) {
+            itemsCounter.textContent = `${inicioExibicao}-${fimExibicao} de ${total}`;
+        }
+
+        const pageInfo = document.getElementById('pageInfoFaces');
+        if (pageInfo) {
+            const totalPaginas = Math.ceil(total / this.itensPorPagina);
+            pageInfo.textContent = `Página ${this.paginaAtual} de ${totalPaginas}`;
+        }
+
+        this.atualizarBotoesPaginacaoFace();
+    }
+
+    // ============ RENDERIZAR CARDS ============
+    renderizarCardsFaces() {
+        const container = document.getElementById('cardsFacesGrid');
+        if (!container || !this.facesFiltradas) return;
+        
+        if (this.facesFiltradas.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 60px;">
+                    <i class="fas fa-id-card" style="font-size: 48px; color: #d1d5db; margin-bottom: 15px;"></i>
+                    <h3 style="color: #6b7280;">Nenhum cadastro encontrado</h3>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        const inicio = (this.paginaAtual - 1) * this.itensPorPagina;
+        const fim = inicio + this.itensPorPagina;
+        const paginaFaces = this.facesFiltradas.slice(inicio, fim);
+        
+        paginaFaces.forEach(face => {
+            const temDescriptor = face.faceDescriptor && face.faceDescriptor.length > 0;
+            const iniciais = (face.alunoNome || 'A').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            const dataCadastro = face.dataCadastro ? new Date(face.dataCadastro).toLocaleDateString('pt-BR') : '-';
+            const ultimaValidacao = face.ultimaValidacao ? new Date(face.ultimaValidacao).toLocaleDateString('pt-BR') : 'Nunca';
+            
+            html += `
+                <div class="face-card">
+                    <div class="card-header">
+                        <div class="card-avatar">${iniciais}</div>
+                        <span class="card-badge ${temDescriptor ? 'badge-success' : 'badge-warning'}">
+                            ${temDescriptor ? 'Ativo' : 'Incompleto'}
+                        </span>
+                    </div>
+                    
+                    <div class="card-info">
+                        <div class="card-info-item">
+                            <i class="fas fa-user"></i>
+                            <strong>${face.alunoNome || 'N/A'}</strong>
+                        </div>
+                        <div class="card-info-item">
+                            <i class="fas fa-envelope"></i>
+                            ${face.alunoEmail || '-'}
+                        </div>
+                        <div class="card-info-item">
+                            <i class="fas fa-id-card"></i>
+                            ${face.alunoMatricula || '-'}
+                        </div>
+                        <div class="card-info-item">
+                            <i class="fas fa-school"></i>
+                            ${face.alunoTurma || '-'}
+                        </div>
+                        <div class="card-info-item">
+                            <i class="fas fa-calendar-alt"></i>
+                            Cadastro: ${dataCadastro}
+                        </div>
+                        <div class="card-info-item">
+                            <i class="fas fa-clock"></i>
+                            Última: ${ultimaValidacao}
+                        </div>
+                        <div class="card-info-item">
+                            <i class="fas fa-chart-bar"></i>
+                            Validações: ${face.totalValidacoes || 0}
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer">
+                        <button class="card-btn edit" onclick="admin.verFaceDetalhes('${face._id}')" title="Ver detalhes">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="card-btn edit" onclick="admin.editarFace('${face._id}')" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="card-btn ${face.ativo ? 'warning' : 'success'}" 
+                                onclick="admin.toggleStatusFace('${face._id}', ${face.ativo})" 
+                                title="${face.ativo ? 'Inativar' : 'Ativar'}">
+                            <i class="fas ${face.ativo ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
+                        </button>
+                        <button class="card-btn delete" onclick="admin.excluirFace('${face._id}')" title="Excluir">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    // ============ FILTRAR FACES ============
+    filtrarFaces() {
+        const termo = document.getElementById('searchFace')?.value.toLowerCase() || '';
+        const status = document.getElementById('filterFaceStatus')?.value || 'todos';
+        const turma = document.getElementById('filterFaceTurma')?.value || 'todas';
+        
+        // Mostrar botão de limpar busca
+        const clearBtn = document.getElementById('clearSearchFace');
+        if (clearBtn) {
+            clearBtn.style.display = termo ? 'flex' : 'none';
+        }
+        
+        this.facesFiltradas = this.facesData.filter(face => {
+            // Filtro de busca
+            const matchSearch = termo === '' || 
+                (face.alunoNome && face.alunoNome.toLowerCase().includes(termo)) ||
+                (face.alunoEmail && face.alunoEmail.toLowerCase().includes(termo)) ||
+                (face.alunoMatricula && face.alunoMatricula.toLowerCase().includes(termo));
+            
+            if (!matchSearch) return false;
+            
+            // Filtro de status
+            if (status !== 'todos') {
+                const temDescriptor = face.faceDescriptor && face.faceDescriptor.length > 0;
+                if (status === 'comDescriptor' && !temDescriptor) return false;
+                if (status === 'semDescriptor' && temDescriptor) return false;
+                if (status === 'validadosHoje') {
+                    if (!face.ultimaValidacao) return false;
+                    const hoje = new Date().toDateString();
+                    const dataValidacao = new Date(face.ultimaValidacao).toDateString();
+                    if (dataValidacao !== hoje) return false;
+                }
+                if (status === 'ativo' && !face.ativo) return false;
+                if (status === 'inativo' && face.ativo) return false;
+            }
+            
+            // Filtro de turma
+            if (turma !== 'todas' && face.alunoTurma !== turma) return false;
+            
+            return true;
+        });
+        
+        this.paginaAtual = 1;
+        this.renderizarTabelaFaces();
+        this.renderizarCardsFaces();
+        
+        const resultadosBadge = document.getElementById('resultadosBadge');
+        if (resultadosBadge) {
+            resultadosBadge.textContent = `${this.facesFiltradas.length} resultados`;
+        }
+    }
+
+    // ============ FILTRAR POR STATUS (CLICANDO NOS CARDS) ============
+    filtrarFacesPorStatus(status) {
+        const select = document.getElementById('filterFaceStatus');
+        if (select) {
+            select.value = status;
+            this.filtrarFaces();
+        }
+    }
+
+    // ============ LIMPAR BUSCA ============
+    limparBuscaFace() {
+        document.getElementById('searchFace').value = '';
+        document.getElementById('clearSearchFace').style.display = 'none';
+        this.filtrarFaces();
+    }
+
+    // ============ APLICAR FILTROS ============
+    aplicarFiltrosFace() {
+        this.filtrarFaces();
+    }
+
+    // ============ LIMPAR FILTROS ============
+    limparFiltrosFace() {
+        document.getElementById('searchFace').value = '';
+        document.getElementById('clearSearchFace').style.display = 'none';
+        document.getElementById('filterFaceStatus').value = 'todos';
+        document.getElementById('filterFaceTurma').value = 'todas';
+        this.facesFiltradas = [...this.facesData];
+        this.paginaAtual = 1;
+        this.renderizarTabelaFaces();
+        this.renderizarCardsFaces();
+        
+        const resultadosBadge = document.getElementById('resultadosBadge');
+        if (resultadosBadge) {
+            resultadosBadge.textContent = `${this.facesFiltradas.length} resultados`;
+        }
+    }
+
+    // ============ ORDENAÇÃO ============
+    ordenarFacesPor(campo) {
+        this.ordenacaoFaces = this.ordenacaoFaces || {};
+        this.ordenacaoFaces[campo] = this.ordenacaoFaces[campo] === 'asc' ? 'desc' : 'asc';
+        const ordem = this.ordenacaoFaces[campo];
+        
+        // Atualizar ícones
+        document.querySelectorAll('.sortable i').forEach(i => i.className = 'fas fa-sort');
+        const icone = document.getElementById(`sort-${campo}`);
+        if (icone) {
+            icone.className = `fas fa-sort-${ordem === 'asc' ? 'up' : 'down'}`;
+        }
+        
+        this.facesFiltradas.sort((a, b) => {
+            let valA = a[campo] || '';
+            let valB = b[campo] || '';
+            
+            if (campo.includes('Data') || campo.includes('data') || campo.includes('ultima')) {
+                valA = a[campo] ? new Date(a[campo]).getTime() : 0;
+                valB = b[campo] ? new Date(b[campo]).getTime() : 0;
+            } else {
+                if (typeof valA === 'string') valA = valA.toLowerCase();
+                if (typeof valB === 'string') valB = valB.toLowerCase();
+            }
+            
+            if (valA < valB) return ordem === 'asc' ? -1 : 1;
+            if (valA > valB) return ordem === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        this.paginaAtual = 1;
+        this.renderizarTabelaFaces();
+    }
+
+    // ============ MUDAR VIEW ============
+    mudarViewFace(view) {
+        document.querySelectorAll('.tab-view').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.view-content').forEach(content => content.classList.remove('active'));
+        
+        // Encontrar a aba clicada
+        const tabs = document.querySelectorAll('.tab-view');
+        let tabAtiva;
+        if (view === 'tabela') tabAtiva = tabs[0];
+        else if (view === 'cards') tabAtiva = tabs[1];
+        else if (view === 'localizacao') tabAtiva = tabs[2];
+        
+        if (tabAtiva) {
+            tabAtiva.classList.add('active');
+            document.getElementById(`view-${view}`).classList.add('active');
+        }
+        
+        if (view === 'cards') {
+            this.renderizarCardsFaces();
+        } else if (view === 'localizacao') {
+            this.carregarLocalizacoesReais();
+        } else if (view === 'tabela') {
+            this.renderizarTabelaFaces();
+        }
+    }
+
+    // ============ PAGINAÇÃO ============
+    irParaPaginaFace(pagina) {
+        const totalPaginas = Math.ceil(this.facesFiltradas.length / this.itensPorPagina);
+        if (pagina >= 1 && pagina <= totalPaginas) {
+            this.paginaAtual = pagina;
+            this.renderizarTabelaFaces();
+            this.renderizarCardsFaces();
+        }
+    }
+
+    paginaAnteriorFace() {
+        if (this.paginaAtual > 1) {
+            this.paginaAtual--;
+            this.renderizarTabelaFaces();
+            this.renderizarCardsFaces();
+        }
+    }
+
+    proximaPaginaFace() {
+        const totalPaginas = Math.ceil(this.facesFiltradas.length / this.itensPorPagina);
+        if (this.paginaAtual < totalPaginas) {
+            this.paginaAtual++;
+            this.renderizarTabelaFaces();
+            this.renderizarCardsFaces();
+        }
+    }
+
+    mudarItensPorPaginaFace(quantidade) {
+        this.itensPorPagina = parseInt(quantidade);
+        this.paginaAtual = 1;
+        this.renderizarTabelaFaces();
+        this.renderizarCardsFaces();
+    }
+
+    // ============ ATUALIZAR BOTÕES DE PAGINAÇÃO ============
+    atualizarBotoesPaginacaoFace() {
+        const total = this.facesFiltradas.length;
+        const totalPaginas = Math.ceil(total / this.itensPorPagina);
+        
+        document.getElementById('btnAnteriorFace').disabled = this.paginaAtual === 1;
+        document.getElementById('btnProximaFace').disabled = this.paginaAtual === totalPaginas;
+        
+        // Gerar botões de página
+        const container = document.getElementById('pageButtonsFace');
+        if (!container) return;
+        
+        let html = '';
+        const maxBotoes = 5;
+        let inicio = Math.max(1, this.paginaAtual - 2);
+        let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
+        
+        if (fim - inicio < maxBotoes - 1) {
+            inicio = Math.max(1, fim - maxBotoes + 1);
+        }
+        
+        for (let i = inicio; i <= fim; i++) {
+            html += `<button class="btn-page ${i === this.paginaAtual ? 'active' : ''}" onclick="admin.irParaPaginaFace(${i})">${i}</button>`;
+        }
+        
+        container.innerHTML = html;
+    }
+
+    // ============ VER DETALHES DA FACE (VERSÃO COMPLETA E CORRIGIDA) ============
+    async verFaceDetalhes(faceId) {
+        try {
+            console.log('🔍 Buscando detalhes da face:', faceId);
+            this.showToast('🔄 Carregando detalhes...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // 1. Buscar dados da face
+            const faceResponse = await fetch(`/api/admin/faces/${faceId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!faceResponse.ok) {
+                throw new Error(`Erro HTTP: ${faceResponse.status}`);
+            }
+            
+            const faceData = await faceResponse.json();
+            
+            if (!faceData.success) {
+                throw new Error(faceData.error || 'Erro ao carregar detalhes da face');
+            }
+            
+            const face = faceData.face;
+            console.log('✅ Face encontrada:', face);
+            
+            // 2. Buscar dados do usuário associado
+            let usuario = null;
+            if (face.usuarioId) {
+                try {
+                    const userResponse = await fetch(`/api/admin/usuarios/${face.usuarioId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (userResponse.ok) {
+                        const userData = await userResponse.json();
+                        usuario = userData.success ? userData.user : null;
+                        console.log('✅ Usuário encontrado:', usuario?.nome);
+                    } else {
+                        console.warn('⚠️ Usuário não encontrado para ID:', face.usuarioId);
+                    }
+                } catch (userError) {
+                    console.warn('⚠️ Erro ao buscar usuário:', userError.message);
+                }
+            }
+            
+            // 3. Buscar histórico de validações (opcional)
+            let historico = [];
+            try {
+                const historicoResponse = await fetch(`/api/admin/faces/${faceId}/historico`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (historicoResponse.ok) {
+                    const historicoData = await historicoResponse.json();
+                    historico = historicoData.success ? historicoData.historico : [];
+                }
+            } catch (histError) {
+                console.warn('⚠️ Erro ao buscar histórico:', histError.message);
+            }
+            
+            // 4. Preparar dados para exibição
+            const nomeAluno = usuario?.nome || face.alunoNome || 'Aluno não identificado';
+            const emailAluno = usuario?.email || face.alunoEmail || '';
+            const matriculaAluno = usuario?.matricula || face.alunoMatricula || '-';
+            const turmaAluno = usuario?.turma || face.alunoTurma || '-';
+            
+            const dataCadastro = face.dataCadastro ? 
+                new Date(face.dataCadastro).toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : 'Data não disponível';
+            
+            const ultimaValidacao = face.ultimaValidacao ? 
+                new Date(face.ultimaValidacao).toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : 'Nunca validou';
+            
+            const temDescriptor = face.faceDescriptor && face.faceDescriptor.length > 0;
+            const iniciais = nomeAluno.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            
+            // 5. Construir HTML do modal
+            const modalBody = document.getElementById('modalBody');
+            
+            modalBody.innerHTML = `
+                <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                    <!-- Cabeçalho com avatar -->
+                    <div style="text-align: center; margin-bottom: 25px;">
+                        <div style="
+                            width: 120px;
+                            height: 120px;
+                            background: linear-gradient(135deg, #667eea, #764ba2);
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin: 0 auto 15px;
+                            border: 4px solid white;
+                            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                            overflow: hidden;
+                        ">
+                            ${face.imagemBase64 ? 
+                                `<img src="data:image/jpeg;base64,${face.imagemBase64}" 
+                                    style="width: 100%; height: 100%; object-fit: cover;"
+                                    alt="Face ID">` :
+                                `<span style="font-size: 48px; color: white; font-weight: bold;">${iniciais}</span>`
+                            }
+                        </div>
+                        <h2 style="margin: 0; color: #1f2937; font-size: 22px;">${nomeAluno}</h2>
+                        <p style="color: #6b7280; margin: 5px 0; font-size: 14px;">
+                            <i class="fas fa-envelope"></i> ${emailAluno || 'Email não cadastrado'}
+                        </p>
+                        <div style="margin-top: 10px;">
+                            <span class="status-badge ${face.ativo ? 'success' : 'secondary'}" 
+                                style="display: inline-block; padding: 5px 15px; border-radius: 30px; font-size: 12px; font-weight: 600; background: ${face.ativo ? '#d1fae5' : '#e5e7eb'}; color: ${face.ativo ? '#065f46' : '#4b5563'};">
+                                <i class="fas fa-circle" style="font-size: 8px; margin-right: 5px;"></i>
+                                ${face.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                            <span class="status-badge ${temDescriptor ? 'success' : 'warning'}" 
+                                style="display: inline-block; padding: 5px 15px; border-radius: 30px; font-size: 12px; font-weight: 600; background: ${temDescriptor ? '#d1fae5' : '#fef3c7'}; color: ${temDescriptor ? '#065f46' : '#92400e'}; margin-left: 8px;">
+                                <i class="fas ${temDescriptor ? 'fa-check-circle' : 'fa-exclamation-triangle'}"></i>
+                                ${temDescriptor ? 'Com Descriptor' : 'Sem Descriptor'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Informações do Aluno -->
+                    <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #374151; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-user-graduate" style="color: #667eea;"></i>
+                            Dados do Aluno
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Matrícula</div>
+                                <div style="font-weight: 600; color: #1f2937;">${matriculaAluno}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Turma</div>
+                                <div style="font-weight: 600; color: #1f2937;">${turmaAluno}</div>
+                            </div>
+                            ${usuario?.curso ? `
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Curso</div>
+                                <div style="font-weight: 600; color: #1f2937;">${usuario.curso}</div>
+                            </div>
+                            ` : ''}
+                            ${usuario?.telefone ? `
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Telefone</div>
+                                <div style="font-weight: 600; color: #1f2937;">${usuario.telefone}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Informações da Face -->
+                    <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #374151; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-id-card" style="color: #667eea;"></i>
+                            Dados da Face ID
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Data do Cadastro</div>
+                                <div style="font-weight: 600; color: #1f2937;">${dataCadastro}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Última Validação</div>
+                                <div style="font-weight: 600; color: #1f2937;">${ultimaValidacao}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Total de Validações</div>
+                                <div style="font-size: 24px; font-weight: 700; color: #1f2937;">${face.totalValidacoes || 0}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Hash da Imagem</div>
+                                <div style="font-family: monospace; font-size: 11px; color: #6b7280; word-break: break-all;">
+                                    ${face.imagemHash ? face.imagemHash.substring(0, 20) + '...' : '-'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Histórico de Validações -->
+                    <div style="background: #f8fafc; border-radius: 16px; padding: 20px;">
+                        <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #374151; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-history" style="color: #667eea;"></i>
+                            Histórico de Validações
+                        </h3>
+                        <div id="historicoValidacoes" style="max-height: 200px; overflow-y: auto;">
+                            ${historico.length > 0 ? 
+                                historico.map(h => `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                                        <span><i class="fas fa-check-circle" style="color: #10b981;"></i> Validação realizada</span>
+                                        <span style="color: #6b7280; font-size: 12px;">${new Date(h.data).toLocaleString('pt-BR')}</span>
+                                    </div>
+                                `).join('') :
+                                '<p style="text-align: center; color: #9ca3af; padding: 20px;">Nenhuma validação registrada</p>'
+                            }
+                        </div>
+                    </div>
+
+                    <!-- ID da Face -->
+                    <div style="margin-top: 15px; text-align: right; font-size: 10px; color: #9ca3af;">
+                        <i class="fas fa-fingerprint"></i> ID: ${face._id}
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-id-card" style="color: #667eea;"></i> Detalhes da Face ID';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            
+            this.configurarFechamentoModal();
+            this.openModal();
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar detalhes da face:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ EDITAR FACE ============
+    async editarFace(faceId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/faces/${faceId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar dados');
+            }
+            
+            const face = data.face;
+            
+            const modalBody = document.getElementById('modalBody');
+            
+            modalBody.innerHTML = `
+                <form id="editFaceForm" onsubmit="event.preventDefault(); admin.salvarEdicaoFace('${faceId}')">
+                    <div style="padding: 20px;">
+                        <div class="form-group">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Status</label>
+                            <select id="editFaceStatus" class="form-control">
+                                <option value="true" ${face.ativo ? 'selected' : ''}>Ativo</option>
+                                <option value="false" ${!face.ativo ? 'selected' : ''}>Inativo</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Total de Validações</label>
+                            <input type="number" id="editFaceValidacoes" class="form-control" 
+                                value="${face.totalValidacoes || 0}" min="0">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Registrar Validação Agora</label>
+                            <button type="button" class="btn-primary" onclick="admin.registrarValidacaoFace('${faceId}')" 
+                                    style="width: 100%; padding: 10px;">
+                                <i class="fas fa-camera"></i> Registrar Validação
+                            </button>
+                        </div>
+                        
+                        <div class="info-card" style="background: #eef2ff; padding: 12px; border-radius: 8px; margin-top: 15px;">
+                            <i class="fas fa-info-circle"></i>
+                            <div>
+                                <strong>Recadastrar Face:</strong> Para alterar a imagem, o aluno deve refazer o cadastro no aplicativo.
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Face ID';
+            document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoFace(faceId);
+            document.getElementById('modalSaveBtn').textContent = 'Salvar Alterações';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ SALVAR EDIÇÃO DA FACE ============
+    async salvarEdicaoFace(faceId) {
+        try {
+            const dados = {
+                ativo: document.getElementById('editFaceStatus').value === 'true',
+                totalValidacoes: parseInt(document.getElementById('editFaceValidacoes').value) || 0
+            };
+            
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/faces/${faceId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Face atualizada com sucesso!', 'success');
+                this.closeModal();
+                this.loadFaceID(); // Recarregar lista
+            } else {
+                throw new Error(data.error || 'Erro ao atualizar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ REGISTRAR VALIDAÇÃO FACE ============
+    async registrarValidacaoFace(faceId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/faces/${faceId}/registrar-validacao`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Validação registrada!', 'success');
+                
+                // Atualizar campo
+                const input = document.getElementById('editFaceValidacoes');
+                if (input) {
+                    input.value = parseInt(input.value) + 1;
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao registrar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ TOGGLE STATUS DA FACE ============
+    async toggleStatusFace(faceId, ativoAtual) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/faces/${faceId}/toggle-status`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ativo: !ativoAtual })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(ativoAtual ? '✅ Face desativada!' : '✅ Face ativada!', 'success');
+                this.loadFaceID(); // Recarregar lista
+            } else {
+                throw new Error(data.error || 'Erro ao alterar status');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ EXCLUIR FACE ============
+    async excluirFace(faceId) {
+        const face = this.facesData.find(f => f._id === faceId);
+        
+        if (!face) return;
+        
+        const confirmar = await this.confirmar(
+            '🗑️ Excluir Face ID',
+            `Tem certeza que deseja excluir permanentemente o cadastro facial de <strong>${face.alunoNome}</strong>?<br><br>
+            <span style="color: #dc3545;">Esta ação não pode ser desfeita!</span>`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🗑️ Excluindo...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/faces/${faceId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Face excluída com sucesso!', 'success');
+                this.loadFaceID(); // Recarregar lista
+            } else {
+                throw new Error(data.error || 'Erro ao excluir');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ ABRIR MODAL CONFIG FACE ID ============
+    abrirModalConfigFaceID() {
+        const modalBody = document.getElementById('modalBody');
+        
+        modalBody.innerHTML = `
+            <div style="padding: 20px;">
+                <h3 style="margin: 0 0 20px;">Configurações do Face ID</h3>
+                
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">
+                        <i class="fas fa-map-marker-alt"></i> Coordenadas da Escola
+                    </label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <input type="text" id="configEscolaLat" class="form-control" placeholder="Latitude" 
+                            value="${this.escolaLat || ''}">
+                        <input type="text" id="configEscolaLon" class="form-control" placeholder="Longitude" 
+                            value="${this.escolaLon || ''}">
+                    </div>
+                    <small style="color: #6c757d;">Usado para calcular distância nas localizações</small>
+                </div>
+                
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">
+                        <i class="fas fa-map-pin"></i> Raio Permitido (metros)
+                    </label>
+                    <input type="number" id="configRaioPermitido" class="form-control" value="${this.raioPermitido || 5000}" min="100" step="100">
+                    <small style="color: #6c757d;">Distância máxima da escola para validar localização</small>
+                </div>
+                
+                <div class="info-card" style="background: #eef2ff; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>Coordenadas atuais da escola:</strong><br>
+                        <code id="coordAtual">${this.escolaLat ? `${this.escolaLat}, ${this.escolaLon}` : 'Não configurado'}</code>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-cog"></i> Configurações do Face ID';
+        document.getElementById('modalSaveBtn').onclick = () => this.salvarConfigFaceID();
+        document.getElementById('modalSaveBtn').textContent = 'Salvar Configurações';
+        this.openModal();
+    }
+
+    // ============ SALVAR CONFIG FACE ID ============
+    salvarConfigFaceID() {
+        const lat = document.getElementById('configEscolaLat')?.value;
+        const lon = document.getElementById('configEscolaLon')?.value;
+        const raio = document.getElementById('configRaioPermitido')?.value;
+        
+        if (lat && lon) {
+            this.escolaLat = parseFloat(lat);
+            this.escolaLon = parseFloat(lon);
+        }
+        
+        if (raio) {
+            this.raioPermitido = parseInt(raio);
+        }
+        
+        // Salvar no localStorage para persistência
+        localStorage.setItem('faceConfigEscolaLat', this.escolaLat || '');
+        localStorage.setItem('faceConfigEscolaLon', this.escolaLon || '');
+        localStorage.setItem('faceConfigRaioPermitido', this.raioPermitido || '5000');
+        
+        this.showToast('✅ Configurações salvas!', 'success');
+        this.closeModal();
+    }
+
+    // ============ CARREGAR CONFIG FACE ID ============
+    carregarConfigFaceID() {
+        this.escolaLat = localStorage.getItem('faceConfigEscolaLat') || null;
+        this.escolaLon = localStorage.getItem('faceConfigEscolaLon') || null;
+        this.raioPermitido = localStorage.getItem('faceConfigRaioPermitido') || 5000;
+    }
 
     // ============ PROVAS ============
 

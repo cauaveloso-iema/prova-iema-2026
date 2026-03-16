@@ -367,6 +367,135 @@
             font-size: 2rem;
             color: #4f46e5;
         }
+
+        /* ===== MINI BANNER DE FACE ID PENDENTE ===== */
+        .face-pendente-banner {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 50px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+            animation: slideDownBanner 0.5s ease;
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(5px);
+        }
+
+        .face-pendente-banner .banner-content {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .face-pendente-banner .banner-icon {
+            background: rgba(255,255,255,0.2);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .face-pendente-banner .banner-text {
+            flex: 1;
+        }
+
+        .face-pendente-banner .banner-text strong {
+            display: block;
+            font-size: 0.95rem;
+            margin-bottom: 3px;
+        }
+
+        .face-pendente-banner .banner-text p {
+            margin: 0;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .face-pendente-banner .banner-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .face-pendente-banner .btn-cadastrar-agora {
+            background: white;
+            color: #f97316;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.3s;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .face-pendente-banner .btn-cadastrar-agora:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .face-pendente-banner .btn-fechar-banner {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+
+        .face-pendente-banner .btn-fechar-banner:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+
+        @keyframes slideDownBanner {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Responsividade */
+        @media (max-width: 768px) {
+            .face-pendente-banner {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+                border-radius: 20px;
+            }
+            
+            .face-pendente-banner .banner-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .face-pendente-banner .btn-cadastrar-agora {
+                flex: 1;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <!-- Incluir Font Awesome -->
@@ -1254,6 +1383,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let provaSelecionada = null;
         let filtroPeriodoAtivo = 'todos';
         let filtroPeriodoTurmasAtivo = 'todos';
+        let bannerFaceAtivo = false;
         
         // Funções do modal
         function mostrarModal(id) {
@@ -1316,6 +1446,171 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (error) {
                 console.error('Erro ao carregar dados do aluno:', error);
                 mostrarErro('Erro ao carregar dados. Verifique sua conexão.');
+            }
+        }
+
+        function mostrarMiniBannerFacePendente() {
+            // Verificar se já existe
+            if (document.getElementById('miniBannerFacePendente')) return;
+            if (bannerFaceAtivo) return;
+            
+            bannerFaceAtivo = true;
+            
+            const banner = document.createElement('div');
+            banner.id = 'miniBannerFacePendente';
+            banner.className = 'face-pendente-banner';
+            
+            banner.innerHTML = `
+                <div class="banner-content">
+                    <div class="banner-icon">
+                        <i class="fas fa-id-card"></i>
+                    </div>
+                    <div class="banner-text">
+                        <strong>📸 Cadastro de Face ID Pendente</strong>
+                        <p>Você ainda não cadastrou sua Face ID. Isso é necessário para acessar as provas.</p>
+                    </div>
+                </div>
+                <div class="banner-actions">
+                    <button class="btn-cadastrar-agora" onclick="window.location.href='capturar-face.html'">
+                        <i class="fas fa-camera"></i> Cadastrar Agora
+                    </button>
+                    <button class="btn-fechar-banner" onclick="fecharMiniBannerFacePendente()" title="Fechar">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            // Inserir no topo do container principal
+            const container = document.querySelector('.container');
+            if (container) {
+                container.insertBefore(banner, container.firstChild);
+            }
+        }
+
+        function fecharMiniBannerFacePendente() {
+            const banner = document.getElementById('miniBannerFacePendente');
+            if (banner) {
+                banner.remove();
+                bannerFaceAtivo = false;
+                
+                // Salvar no localStorage que o usuário fechou o banner
+                localStorage.setItem('banner_face_fechado', Date.now().toString());
+            }
+        }
+
+        // Modificar a função verificarPendenciaFace para mostrar o banner
+        async function verificarPendenciaFace() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const user = JSON.parse(localStorage.getItem('user_data') || '{}');
+                
+                if (!token || !user.id || user.role !== 'aluno') return;
+                
+                console.log('🔍 Verificando pendência de Face ID...');
+                
+                const response = await fetch(`/api/auth/verificar-face/${user.id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.temFace) {
+                    console.log('✅ Face ID já cadastrada');
+                    
+                    // Se tinha banner, remover
+                    const banner = document.getElementById('miniBannerFacePendente');
+                    if (banner) {
+                        banner.remove();
+                        bannerFaceAtivo = false;
+                    }
+                    
+                    if (verificacaoFaceInterval) {
+                        clearInterval(verificacaoFaceInterval);
+                        verificacaoFaceInterval = null;
+                    }
+                    return;
+                }
+                
+                console.log('⚠️ Face ID NÃO cadastrada - mostrando banner');
+                
+                // MOSTRAR O MINI BANNER (sempre visível)
+                mostrarMiniBannerFacePendente();
+                
+                // Verificar se já notificou hoje (para não encher)
+                const hoje = new Date().toDateString();
+                const ultimaNotificacao = localStorage.getItem('ultima_notificacao_face');
+                
+                if (ultimaNotificacao !== hoje) {
+                    
+                    // Verificar se o banner foi fechado recentemente
+                    const bannerFechado = localStorage.getItem('banner_face_fechado');
+                    if (bannerFechado) {
+                        const fechadoHa = Date.now() - parseInt(bannerFechado);
+                        // Se fechou há mais de 1 hora, pode notificar novamente
+                        if (fechadoHa < 60 * 60 * 1000) {
+                            console.log('⏭️ Banner fechado recentemente, não vai notificar');
+                            return;
+                        }
+                    }
+                    
+                    // Enviar notificação no sistema
+                    try {
+                        await fetch('/api/notificacoes', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                usuarioId: user.id,
+                                tipo: 'sistema',
+                                titulo: '📸 Cadastro de Face ID Pendente',
+                                mensagem: 'Você ainda não cadastrou sua Face ID. Clique aqui para cadastrar agora.',
+                                icone: '📸',
+                                cor: '#f97316',
+                                link: '/capturar-face.html',
+                                prioridade: 4,
+                                dados: {
+                                    tipo: 'lembrete_face',
+                                    acao: 'cadastrar_face',
+                                    data: new Date().toISOString()
+                                }
+                            })
+                        });
+                        console.log('✅ Notificação no sistema enviada');
+                    } catch (error) {
+                        console.error('❌ Erro ao enviar notificação no sistema:', error);
+                    }
+                    
+                    // Enviar push notification
+                    try {
+                        await fetch('/api/usuario/enviar-push', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                usuarioId: user.id,
+                                titulo: '📸 Cadastre sua Face ID',
+                                mensagem: 'Você ainda não cadastrou sua Face ID. Isso é necessário para acessar as provas.',
+                                dados: {
+                                    tipo: 'lembrete_face',
+                                    url: '/capturar-face.html',
+                                    prioridade: 'alta'
+                                }
+                            })
+                        });
+                        console.log('✅ Push notification enviada');
+                    } catch (error) {
+                        console.error('❌ Erro ao enviar push:', error);
+                    }
+                    
+                    localStorage.setItem('ultima_notificacao_face', hoje);
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao verificar pendência de Face ID:', error);
             }
         }
         
@@ -4585,6 +4880,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <li>O tempo será contado a partir do horário de início da prova</li>
                     <li>Não recarregue a página durante a prova</li>
                     <li>Após finalizar, não será possível retornar</li>
+                    <li>Certifique-se que a localização esteja habilitada para validar o acesso</li>
                     ${alertaData ? '<li><strong>Esta prova precisa ser entregue HOJE!</strong></li>' : ''}
                     ${provaSelecionada.horarioInicio ? 
                         `<li><strong>Horário específico:</strong> Esta prova só pode ser realizada das <strong>${provaSelecionada.horarioInicio}</strong> às <strong>${provaSelecionada.horarioTermino}</strong> (${provaSelecionada.duracaoFormatada || provaSelecionada.duracaoMinutos + ' minutos'})</li>` : 
@@ -4617,110 +4913,166 @@ document.addEventListener('DOMContentLoaded', function() {
             iniciarProva(provaSelecionada._id);
         }
     
-        // Função principal para iniciar prova - VERSÃO CORRIGIDA
+        // ============================================
+        // FUNÇÃO PARA INICIAR PROVA COM VALIDAÇÃO FACIAL
+        // ============================================
         async function iniciarProva(provaId) {
-        console.log('🚀 Iniciando prova com ID:', provaId);
-        
-        try {
-            // 1. Verificar se está autenticado
-            const token = localStorage.getItem('auth_token');
-            if (!token) {
-            alert('Você precisa estar logado para acessar a prova');
-            window.location.href = '/login.html';
-            return;
+            console.log('🚀 Iniciando prova com ID:', provaId);
+            
+            try {
+                // 1. Verificar autenticação
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    alert('Você precisa estar logado para acessar a prova');
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                // 2. Verificar dados do usuário
+                const userData = localStorage.getItem('user_data');
+                if (!userData) {
+                    alert('Dados do usuário não encontrados');
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                const usuario = JSON.parse(userData);
+                if (usuario.role !== 'aluno') {
+                    alert('Apenas alunos podem acessar provas');
+                    window.location.href = usuario.role === 'professor' ? '/index.html' : '/login.html';
+                    return;
+                }
+                
+                // 3. VERIFICAR SE JÁ VALIDOU FACE NESTA SESSÃO
+                const jaValidou = sessionStorage.getItem('face_validado_' + provaId);
+                if (jaValidou === 'true') {
+                    console.log('✅ Face já validada nesta sessão, redirecionando direto');
+                    
+                    // Buscar token de acesso
+                    const response = await fetch(`${API_BASE_URL}/provas/${provaId}/acesso`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.error || 'Erro ao acessar a prova');
+                    }
+                    
+                    if (data.provaToken) {
+                        localStorage.setItem('provaToken', data.provaToken);
+                        localStorage.setItem('provaAtual', provaId);
+                        
+                        if (data.prova) {
+                            localStorage.setItem('provaData', JSON.stringify(data.prova));
+                        }
+                        
+                        window.location.href = `/realizar-prova.html?token=${data.provaToken}`;
+                    }
+                    return;
+                }
+                
+                // 4. VERIFICAR SE TEM FACE CADASTRADA
+                console.log('🔍 Verificando se tem Face ID cadastrada...');
+                mostrarLoading('Verificando cadastro facial...');
+                
+                const faceResponse = await fetch(`/api/auth/verificar-face/${usuario.id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const faceData = await faceResponse.json();
+                esconderLoading();
+                
+                if (!faceData.success) {
+                    console.error('❌ Erro ao verificar face:', faceData.error);
+                    alert('Erro ao verificar cadastro facial. Tente novamente.');
+                    return;
+                }
+                
+                if (!faceData.temFace) {
+                    console.log('⚠️ Usuário sem Face ID cadastrada');
+                    
+                    if (confirm('📸 Você precisa cadastrar sua Face ID antes de acessar as provas. Deseja cadastrar agora?')) {
+                        window.location.href = '/capturar-face.html';
+                    }
+                    return;
+                }
+                
+                console.log('✅ Face ID encontrada, obtendo token de acesso...');
+                
+                // 5. OBTER TOKEN DE ACESSO À PROVA
+                mostrarLoading('Preparando acesso à prova...');
+                
+                const acessoResponse = await fetch(`${API_BASE_URL}/provas/${provaId}/acesso`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const acessoData = await acessoResponse.json();
+                
+                if (!acessoResponse.ok || !acessoData.success) {
+                    throw new Error(acessoData.error || 'Erro ao acessar a prova');
+                }
+                
+                if (!acessoData.provaToken) {
+                    throw new Error('Token de acesso não gerado');
+                }
+                
+                console.log('✅ Token de acesso obtido, salvando temporariamente...');
+                
+                // 6. SALVAR DADOS TEMPORARIAMENTE
+                localStorage.setItem('provaToken_temp', acessoData.provaToken);
+                localStorage.setItem('provaId_temp', provaId);
+                
+                if (acessoData.prova) {
+                    localStorage.setItem('provaData_temp', JSON.stringify(acessoData.prova));
+                }
+                
+                esconderLoading();
+                
+                // 7. REDIRECIONAR PARA VALIDAÇÃO FACIAL
+                console.log('🔄 Redirecionando para validação facial...');
+                window.location.href = `/validar-face-prova.html?provaId=${provaId}`;
+                
+            } catch (error) {
+                console.error('❌ Erro ao iniciar prova:', error);
+                esconderLoading();
+                
+                // Limpar dados temporários em caso de erro
+                localStorage.removeItem('provaToken_temp');
+                localStorage.removeItem('provaData_temp');
+                localStorage.removeItem('provaId_temp');
+                
+                // Mensagens de erro amigáveis
+                let mensagem = 'Erro ao acessar a prova. ';
+                
+                if (error.message.includes('401') || error.message.includes('token')) {
+                    mensagem += 'Sua sessão expirou. Faça login novamente.';
+                    localStorage.clear();
+                    setTimeout(() => {
+                        window.location.href = '/login.html';
+                    }, 2000);
+                } else if (error.message.includes('403')) {
+                    mensagem += 'Você não tem permissão para acessar esta prova.';
+                } else if (error.message.includes('404')) {
+                    mensagem += 'Prova não encontrada.';
+                } else if (error.message.includes('já realizou')) {
+                    mensagem += 'Você já completou esta prova.';
+                } else if (error.message.includes('data limite')) {
+                    mensagem += 'O prazo para esta prova já expirou.';
+                } else {
+                    mensagem += error.message || 'Tente novamente.';
+                }
+                
+                alert(mensagem);
             }
-            
-            // 2. Verificar dados do usuário
-            const userData = localStorage.getItem('user_data');
-            if (!userData) {
-            alert('Dados do usuário não encontrados');
-            window.location.href = '/login.html';
-            return;
-            }
-            
-            const usuario = JSON.parse(userData);
-            if (usuario.role !== 'aluno') {
-            alert('Apenas alunos podem acessar provas');
-            window.location.href = usuario.role === 'professor' ? '/index.html' : '/login.html';
-            return;
-            }
-            
-            // 3. Limpar tokens antigos de prova
-            localStorage.removeItem('provaToken');
-            localStorage.removeItem('provaAtual');
-            localStorage.removeItem('provaData');
-            
-            console.log('🔄 Solicitando acesso à prova...');
-            
-            // 4. Mostrar loading
-            mostrarLoading('Validando acesso à prova...');
-            
-            // 5. Chamar endpoint de acesso
-            const response = await fetch(`${API_BASE_URL}/provas/${provaId}/acesso`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-            });
-            
-            const data = await response.json();
-            
-            // 6. Verificar resposta
-            if (!response.ok || !data.success) {
-            throw new Error(data.error || 'Erro ao acessar a prova');
-            }
-            
-            console.log('✅ Acesso autorizado:', data);
-            
-            // 7. Armazenar tokens corretamente
-            if (data.provaToken) {
-            localStorage.setItem('provaToken', data.provaToken);
-            localStorage.setItem('provaAtual', provaId);
-            
-            // Armazenar dados da prova para usar na página de realização
-            if (data.prova) {
-                localStorage.setItem('provaData', JSON.stringify(data.prova));
-            }
-            }
-            
-            // 8. Redirecionar
-            if (data.redirectTo) {
-            console.log('🔄 Redirecionando para:', data.redirectTo);
-            window.location.href = data.redirectTo;
-            } else if (data.provaToken) {
-            window.location.href = `/realizar-prova.html?token=${data.provaToken}`;
-            } else {
-            throw new Error('Não foi possível redirecionar para a prova');
-            }
-            
-        } catch (error) {
-            console.error('❌ Erro ao iniciar prova:', error);
-            esconderLoading();
-            
-            // Mensagens de erro amigáveis
-            let mensagem = 'Erro ao acessar a prova. ';
-            
-            if (error.message.includes('401') || error.message.includes('token')) {
-            mensagem += 'Sua sessão expirou. Faça login novamente.';
-            localStorage.clear();
-            setTimeout(() => {
-                window.location.href = '/login.html';
-            }, 2000);
-            } else if (error.message.includes('403')) {
-            mensagem += 'Você não tem permissão para acessar esta prova.';
-            } else if (error.message.includes('404')) {
-            mensagem += 'Prova não encontrada.';
-            } else if (error.message.includes('já realizou')) {
-            mensagem += 'Você já completou esta prova.';
-            } else if (error.message.includes('data limite')) {
-            mensagem += 'O prazo para esta prova já expirou.';
-            } else {
-            mensagem += error.message || 'Tente novamente.';
-            }
-            
-            alert(mensagem);
-        }
         }
 
         // Adicionar esta função no início do código
@@ -5025,12 +5377,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
             }
+
+            
             
             // Carregar dados do aluno
             carregarDadosAluno().then(() => {
                 // Iniciar verificação periódica de atualizações
                 verificarAtualizacoesStatus();
                 iniciarVerificacaoPeriodica();
+                iniciarVerificacaoPeriodicaFace();
+                
             });
         });
 
@@ -5663,6 +6019,23 @@ window.testarNotificacao = function() {
     console.log('✅ Sistema de escalonamento mobile ativo!');
     
 })();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ Service Worker ativo'))
+            .catch(err => console.log('❌ Erro:', err));
+    });
+}
+
+window.addEventListener('online', () => console.log('🌐 Online'));
+window.addEventListener('offline', () => console.log('📴 Offline'));
+</script>
+
+<script>
+
 </script>
 
 </body>

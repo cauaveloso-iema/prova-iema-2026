@@ -431,7 +431,7 @@
             
             <!-- Botão de WhatsApp no lugar do "Continuar como visitante" -->
             <div class="whatsapp-contact">
-                <a href="https://wa.me/qr/F4U5WMT37EUDB1" target="_blank">
+                <a href="https://wa.me/98983086504" target="_blank">
                     <i class="fab fa-whatsapp"></i> Entre em contato via WhatsApp
                 </a>
             </div>
@@ -1285,9 +1285,12 @@
                             window.location.href = 'admin.html'; // Super Admin
                         } else if (dados.user.role === 'admin') {
                             window.location.href = 'admin-simples.html'; // Admin normal
+                        } else if (dados.user.role === 'aluno') {
+                            // 🔥 NOVO: Aluno vai para captura de Face ID
+                            window.location.href = 'capturar-face.html';
                         } else {
-                            window.location.href = dados.redirectTo || 
-                                (dados.user.role === 'professor' ? 'index.html' : 'aluno.html');
+                            // Professor
+                            window.location.href = 'index.html';
                         }
                     }, 1500);
                     
@@ -2021,6 +2024,19 @@ window.testarNotificacao = function() {
     console.log('✅ Sistema de escalonamento mobile ativo!');
     
 })();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ Service Worker ativo'))
+            .catch(err => console.log('❌ Erro:', err));
+    });
+}
+
+window.addEventListener('online', () => console.log('🌐 Online'));
+window.addEventListener('offline', () => console.log('📴 Offline'));
 </script>
     
 </body>

@@ -31,6 +31,163 @@ const cookieParser = require('cookie-parser');
 // ============================================================================
 process.env.TZ = 'America/Sao_Paulo';
 
+// ============================================
+// RECONHECIMENTO FACIAL COM FACE-API.JS (VERSÃO RÁPIDA)
+// ============================================
+// ============================================
+// RECONHECIMENTO FACIAL COM FACE-API.JS (VERSÃO COMPLETA)
+// ============================================
+const faceapi = require('face-api.js');
+const canvas = require('canvas');
+const tf = require('@tensorflow/tfjs');
+
+// Configurar ambiente Node.js para face-api
+const { Canvas, Image, ImageData } = canvas;
+faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
+
+const MODELS_PATH = path.join(__dirname, '..', 'models');
+let modelsLoaded = false;
+
+// Função para verificar se todos os arquivos de modelo existem
+function verificarArquivosModelos() {
+    const arquivosNecessarios = [
+        'tiny_face_detector_model-weights_manifest.json',
+        'tiny_face_detector_model-shard1',
+        'face_landmark_68_model-weights_manifest.json',
+        'face_landmark_68_model-shard1',
+        'face_recognition_model-weights_manifest.json',
+        'face_recognition_model-shard1',
+        'face_recognition_model-shard2'
+    ];
+    
+    const arquivosFaltando = [];
+    
+    for (const arquivo of arquivosNecessarios) {
+        const caminhoCompleto = path.join(MODELS_PATH, arquivo);
+        if (!fs.existsSync(caminhoCompleto)) {
+            arquivosFaltando.push(arquivo);
+        }
+    }
+    
+    return arquivosFaltando;
+}
+
+// Função para carregar os modelos (VERSÃO COMPLETA)
+async function loadFaceModels() {
+    if (modelsLoaded) {
+        console.log('✅ Modelos já carregados anteriormente');
+        return true;
+    }
+    
+    console.log('='.repeat(60));
+    console.log('🔄 INICIANDO CARREGAMENTO DOS MODELOS DE RECONHECIMENTO FACIAL');
+    console.log('📁 Diretório dos modelos:', MODELS_PATH);
+    console.log('='.repeat(60));
+    
+    // Verificar se o diretório existe
+    if (!fs.existsSync(MODELS_PATH)) {
+        console.error('❌ Diretório de modelos não encontrado!');
+        console.log('📁 Criando diretório:', MODELS_PATH);
+        fs.mkdirSync(MODELS_PATH, { recursive: true });
+    }
+    
+    // Verificar arquivos necessários
+    const arquivosFaltando = verificarArquivosModelos();
+    
+    if (arquivosFaltando.length > 0) {
+        console.error('❌ Arquivos de modelo ausentes:');
+        arquivosFaltando.forEach(arquivo => console.error('   -', arquivo));
+        console.log('\n📥 Para baixar os modelos, execute:');
+        console.log('   node download-models-complete.js');
+        console.log('='.repeat(60));
+        return false;
+    }
+    
+    console.log('✅ Todos os arquivos de modelo encontrados');
+    console.log('='.repeat(60));
+    
+    try {
+        // PASSO 1: Carregar TinyFaceDetector (para detecção rápida)
+        console.log('📦 PASSO 1: Carregando TinyFaceDetector...');
+        const startTime1 = Date.now();
+        await faceapi.nets.tinyFaceDetector.loadFromDisk(MODELS_PATH);
+        const time1 = Date.now() - startTime1;
+        console.log(`✅ TinyFaceDetector carregado em ${time1}ms`);
+        
+        // PASSO 2: Carregar FaceLandmark68 (para landmarks faciais)
+        console.log('📦 PASSO 2: Carregando FaceLandmark68...');
+        const startTime2 = Date.now();
+        await faceapi.nets.faceLandmark68Net.loadFromDisk(MODELS_PATH);
+        const time2 = Date.now() - startTime2;
+        console.log(`✅ FaceLandmark68 carregado em ${time2}ms`);
+        
+        // PASSO 3: Carregar FaceRecognitionNet (PARA GERAR DESCRIPTORS!)
+        console.log('📦 PASSO 3: Carregando FaceRecognitionNet...');
+        const startTime3 = Date.now();
+        await faceapi.nets.faceRecognitionNet.loadFromDisk(MODELS_PATH);
+        const time3 = Date.now() - startTime3;
+        console.log(`✅ FaceRecognitionNet carregado em ${time3}ms`);
+        
+        const tempoTotal = time1 + time2 + time3;
+        
+        console.log('='.repeat(60));
+        console.log('✅ TODOS OS MODELOS CARREGADOS COM SUCESSO!');
+        console.log(`⏱️  Tempo total: ${tempoTotal}ms`);
+        console.log('📊 Modelos disponíveis:');
+        console.log('   - TinyFaceDetector (detecção rápida)');
+        console.log('   - FaceLandmark68 (pontos faciais)');
+        console.log('   - FaceRecognitionNet (descriptors)');
+        console.log('='.repeat(60));
+        
+        modelsLoaded = true;
+        return true;
+        
+    } catch (error) {
+        console.error('❌ ERRO AO CARREGAR MODELOS:');
+        console.error('   Nome:', error.name);
+        console.error('   Mensagem:', error.message);
+        console.error('   Stack:', error.stack);
+        console.log('='.repeat(60));
+        console.log('💡 SOLUÇÕES:');
+        console.log('   1. Verifique se os arquivos de modelo existem em:', MODELS_PATH);
+        console.log('   2. Execute: node download-models-complete.js');
+        console.log('   3. Verifique as permissões de leitura dos arquivos');
+        console.log('='.repeat(60));
+        
+        return false;
+    }
+}
+
+// Função para verificar status dos modelos
+function getModelStatus() {
+    return {
+        modelsLoaded,
+        modelsPath: MODELS_PATH,
+        arquivosPresentes: verificarArquivosModelos().length === 0,
+        timestamp: new Date().toISOString()
+    };
+}
+
+// Chamar no startup com tratamento de erro
+(async () => {
+    console.log('🚀 Inicializando sistema de reconhecimento facial...');
+    const loaded = await loadFaceModels();
+    
+    if (!loaded) {
+        console.warn('⚠️  Sistema de reconhecimento facial não está totalmente funcional!');
+        console.log('💡 O cadastro de Face ID pode não funcionar corretamente.');
+    } else {
+        console.log('✅ Sistema de reconhecimento facial pronto para uso!');
+    }
+})();
+
+// Exportar funções para uso em outras partes do código
+module.exports = {
+    loadFaceModels,
+    getModelStatus,
+    modelsLoaded: () => modelsLoaded
+};
+
 // ============================================================================
 // INICIALIZAÇÃO DO EXPRESS E SERVIDOR
 // ============================================================================
@@ -228,7 +385,8 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cookieParser());
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO GLOBAL ============
@@ -447,6 +605,41 @@ try {
   ProvaRealizadaSchema.index({ provaId: 1, alunoId: 1 }, { unique: true });
   ProvaRealizada = mongoose.model('ProvaRealizada', ProvaRealizadaSchema);
 }
+
+// ============================================
+// MODELO PARA ARMAZENAR FACE ID (ATUALIZADO)
+// ============================================
+const FaceIDSchema = new mongoose.Schema({
+    usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    imagemBase64: { type: String, required: true },
+    imagemHash: { type: String, required: true },
+    faceDescriptor: { type: [Number], required: false }, // Array de 128 números
+    dataCadastro: { type: Date, default: Date.now },
+    ultimaValidacao: { type: Date },
+    totalValidacoes: { type: Number, default: 0 },
+    ativo: { type: Boolean, default: true }
+});
+
+const FaceID = mongoose.models.FaceID || mongoose.model('FaceID', FaceIDSchema);
+
+// ============================================
+// MODELO LOCALIZACAO (adicione APÓS os outros modelos)
+// ============================================
+const LocalizacaoSchema = new mongoose.Schema({
+    alunoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    provaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Prova' },
+    latitude: { type: Number, required: true },
+    longitude: { type: Number, required: true },
+    accuracy: { type: Number },
+    timestamp: { type: Date, default: Date.now, index: true }
+}, { timestamps: true });
+
+// Índices para consultas rápidas
+LocalizacaoSchema.index({ alunoId: 1, timestamp: -1 });
+LocalizacaoSchema.index({ timestamp: -1 });
+
+const Localizacao = mongoose.models.Localizacao || mongoose.model('Localizacao', LocalizacaoSchema);
+console.log('✅ Modelo Localizacao carregado');
 
 // ============ ROTAS DE PUSH ============
 const pushRoutes = require('./routes/push-routes');
@@ -1105,11 +1298,18 @@ app.post('/api/auth/register', [
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
     
-    // 🔴 CORREÇÃO: Usar 'user' em vez de 'userCompleto'
-    const redirectTo = user.role === 'super_admin' 
-        ? '/admin.html' 
-        : (user.role === 'admin' ? '/admin-simples.html' 
-        : (user.role === 'professor' ? '/index.html' : '/aluno.html'));
+    let redirectTo = '';
+    if (user.role === 'super_admin') {
+        redirectTo = '/admin.html';
+    } else if (user.role === 'admin') {
+        redirectTo = '/admin-simples.html';
+    } else if (user.role === 'professor') {
+        redirectTo = '/index.html';
+    } else if (user.role === 'aluno') {
+        redirectTo = '/capturar-face.html';  // ← ALTERADO AQUI!
+    } else {
+        redirectTo = '/aluno.html';
+    }
     
     res.status(201).json({
       success: true,
@@ -10252,15 +10452,16 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, verificarPermis
 });
 
 // ============ BUSCAR USUÁRIO POR ID (PARA EDIÇÃO) ============
+// ============ BUSCAR USUÁRIO POR ID (PARA EDIÇÃO) - CORRIGIDO ============
 app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
         console.log(`🔍 Admin ${req.userId} buscando usuário ${id}`);
         
-        // 🔥 CORREÇÃO: Incluir onesignalPlayerId explicitamente
+        // 🔥 CORREÇÃO: Usar apenas inclusão de campos, sem exclusão
         const user = await User.findById(id)
-            .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret +onesignalPlayerId')
+            .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor twoFactorEnabled twoFactorBackupCodesShown telefoneVerificado lastLogin loginAttempts lockUntil onesignalPlayerId createdAt updatedAt')
             .lean();
         
         if (!user) {
@@ -10293,10 +10494,12 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
                 condicaoAcessibilidade: user.condicaoAcessibilidade || null,
                 dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade || null,
                 twoFactorEnabled: user.twoFactorEnabled || false,
+                twoFactorBackupCodesShown: user.twoFactorBackupCodesShown || false,
                 telefoneVerificado: user.telefoneVerificado || false,
-                // 🔥 CAMPO ADICIONADO!
+                lastLogin: user.lastLogin,
                 onesignalPlayerId: user.onesignalPlayerId || null,
-                createdAt: user.createdAt
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt
             }
         });
         
@@ -15452,6 +15655,392 @@ app.get('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
     }
 });
 
+// ============================================
+// ROTAS ADMIN PARA FACE ID (COMPLETAS)
+// ============================================
+
+// GET - Listar todas as faces (com paginação)
+app.get('/api/admin/faces/todos', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { page = 1, limit = 50 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        console.log(`📋 Admin ${req.userId} listando faces (página ${page}, limite ${limit})`);
+        
+        const [faces, total] = await Promise.all([
+            FaceID.find()
+                .sort({ dataCadastro: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            FaceID.countDocuments()
+        ]);
+        
+        console.log(`✅ ${faces.length} faces encontradas (total: ${total})`);
+        
+        res.json({
+            success: true,
+            faces,
+            total,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar faces:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET - Buscar face por ID
+app.get('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🔍 Admin ${req.userId} buscando face ${id}`);
+        
+        const face = await FaceID.findById(id).lean();
+        
+        if (!face) {
+            return res.status(404).json({
+                success: false,
+                error: 'Face não encontrada'
+            });
+        }
+        
+        res.json({ success: true, face });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar face:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET - Buscar face por usuário ID
+app.get('/api/admin/faces/usuario/:usuarioId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { usuarioId } = req.params;
+        
+        const face = await FaceID.findOne({ usuarioId }).lean();
+        
+        res.json({
+            success: true,
+            temFace: !!face,
+            face: face || null
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar face por usuário:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// PUT - Atualizar face
+app.put('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ativo, totalValidacoes } = req.body;
+        
+        console.log(`✏️ Admin ${req.userId} atualizando face ${id}`);
+        
+        const face = await FaceID.findById(id);
+        
+        if (!face) {
+            return res.status(404).json({
+                success: false,
+                error: 'Face não encontrada'
+            });
+        }
+        
+        if (ativo !== undefined) face.ativo = ativo;
+        if (totalValidacoes !== undefined) face.totalValidacoes = totalValidacoes;
+        
+        await face.save();
+        
+        console.log(`✅ Face ${id} atualizada com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Face atualizada com sucesso'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao atualizar face:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST - Registrar validação manual
+app.post('/api/admin/faces/:id/registrar-validacao', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`📸 Admin ${req.userId} registrando validação manual para face ${id}`);
+        
+        const face = await FaceID.findById(id);
+        
+        if (!face) {
+            return res.status(404).json({
+                success: false,
+                error: 'Face não encontrada'
+            });
+        }
+        
+        face.totalValidacoes = (face.totalValidacoes || 0) + 1;
+        face.ultimaValidacao = new Date();
+        await face.save();
+        
+        console.log(`✅ Validação registrada para face ${id}. Total: ${face.totalValidacoes}`);
+        
+        res.json({
+            success: true,
+            message: 'Validação registrada',
+            totalValidacoes: face.totalValidacoes,
+            ultimaValidacao: face.ultimaValidacao
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao registrar validação:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET - Histórico de validações (simulado por enquanto)
+app.get('/api/admin/faces/:id/historico', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const face = await FaceID.findById(id).lean();
+        
+        if (!face) {
+            return res.status(404).json({
+                success: false,
+                error: 'Face não encontrada'
+            });
+        }
+        
+        // Simular histórico com base nos dados disponíveis
+        const historico = [];
+        
+        if (face.dataCadastro) {
+            historico.push({
+                tipo: 'cadastro',
+                data: face.dataCadastro,
+                descricao: 'Face ID cadastrada'
+            });
+        }
+        
+        if (face.ultimaValidacao) {
+            historico.push({
+                tipo: 'validacao',
+                data: face.ultimaValidacao,
+                descricao: 'Validação facial realizada'
+            });
+        }
+        
+        // Ordenar por data (mais recente primeiro)
+        historico.sort((a, b) => new Date(b.data) - new Date(a.data));
+        
+        res.json({
+            success: true,
+            historico
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar histórico:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// PUT - Toggle status (ativar/inativar)
+app.put('/api/admin/faces/:id/toggle-status', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ativo } = req.body;
+        
+        console.log(`🔄 Admin ${req.userId} alterando status da face ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        
+        const face = await FaceID.findById(id);
+        
+        if (!face) {
+            return res.status(404).json({
+                success: false,
+                error: 'Face não encontrada'
+            });
+        }
+        
+        face.ativo = ativo;
+        await face.save();
+        
+        console.log(`✅ Status da face ${id} alterado para ${ativo ? 'ativo' : 'inativo'}`);
+        
+        res.json({
+            success: true,
+            message: `Face ${ativo ? 'ativada' : 'inativada'} com sucesso`
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao alterar status:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// DELETE - Excluir face
+app.delete('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} excluindo face ${id}`);
+        
+        const face = await FaceID.findByIdAndDelete(id);
+        
+        if (!face) {
+            return res.status(404).json({
+                success: false,
+                error: 'Face não encontrada'
+            });
+        }
+        
+        console.log(`✅ Face ${id} excluída com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Face excluída com sucesso'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir face:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET - Localizações ativas (últimos N minutos) + últimas localizações
+app.get('/api/admin/localizacoes/ativas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { minutos = 15 } = req.query;
+        const dataLimite = new Date(Date.now() - minutos * 60 * 1000);
+                
+        // Verificar se o modelo Localizacao existe
+        const Localizacao = mongoose.models.Localizacao;
+        if (!Localizacao) {
+            console.error('❌ Modelo Localizacao não encontrado!');
+            return res.status(500).json({
+                success: false,
+                error: 'Modelo de localização não configurado'
+            });
+        }
+        
+        // 1. Buscar localizações ativas (últimos minutos)        
+        const localizacoesAtivas = await Localizacao.find({
+            timestamp: { $gte: dataLimite }
+        })
+        .populate('alunoId', 'nome email matricula turma')
+        .sort({ timestamp: -1 })
+        .limit(50)
+        .lean();
+                
+        // 2. Buscar a ÚLTIMA localização de cada aluno (agregação mais simples)        
+        // Buscar todos os alunos que têm localizações
+        const alunosComLocalizacao = await Localizacao.distinct('alunoId');        
+        const ultimasLocalizacoes = [];
+        
+        for (const alunoId of alunosComLocalizacao) {
+            // Verificar se já está nas ativas
+            const jaEstaAtivo = localizacoesAtivas.some(l => 
+                l.alunoId && l.alunoId._id && l.alunoId._id.toString() === alunoId.toString()
+            );
+            
+            if (!jaEstaAtivo) {
+                const ultima = await Localizacao.findOne({ alunoId })
+                    .populate('alunoId', 'nome email matricula turma')
+                    .sort({ timestamp: -1 })
+                    .limit(1)
+                    .lean();
+                
+                if (ultima) {
+                    ultimasLocalizacoes.push(ultima);
+                }
+            }
+        }
+                
+        // Formatar resultado
+        const formatarLocalizacao = (l) => ({
+            alunoId: l.alunoId?._id,
+            alunoNome: l.alunoId?.nome || 'Aluno',
+            alunoEmail: l.alunoId?.email,
+            alunoMatricula: l.alunoId?.matricula,
+            alunoTurma: l.alunoId?.turma,
+            latitude: l.latitude,
+            longitude: l.longitude,
+            accuracy: l.accuracy,
+            timestamp: l.timestamp
+        });
+        
+        const ativas = localizacoesAtivas.map(formatarLocalizacao);
+        const ultimas = ultimasLocalizacoes.map(formatarLocalizacao);
+                
+        res.json({
+            success: true,
+            localizacoes: ativas,
+            ultimasLocalizacoes: ultimas,
+            total: ativas.length + ultimas.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar localizações:');
+        console.error('   Nome:', error.name);
+        console.error('   Mensagem:', error.message);
+        console.error('   Stack:', error.stack);
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// GET - Histórico de localizações de um aluno específico
+app.get('/api/admin/localizacoes/historico/:alunoId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { alunoId } = req.params;
+        const { limite = 20 } = req.query;
+        
+        console.log(`📋 Admin ${req.userId} buscando histórico de localizações do aluno ${alunoId}`);
+        
+        const localizacoes = await Localizacao.find({ alunoId })
+            .populate('alunoId', 'nome email matricula turma')
+            .sort({ timestamp: -1 })
+            .limit(parseInt(limite))
+            .lean();
+        
+        const resultado = localizacoes.map(l => ({
+            alunoId: l.alunoId?._id,
+            alunoNome: l.alunoId?.nome,
+            alunoMatricula: l.alunoId?.matricula,
+            latitude: l.latitude,
+            longitude: l.longitude,
+            accuracy: l.accuracy,
+            timestamp: l.timestamp,
+            provaId: l.provaId
+        }));
+        
+        console.log(`✅ ${resultado.length} registros encontrados`);
+        
+        res.json({
+            success: true,
+            localizacoes: resultado,
+            total: resultado.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar histórico:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Adicione no seu server.js
 app.post('/api/usuario/salvar-player-id', authenticateToken, async (req, res) => {
   try {
@@ -15731,6 +16320,479 @@ app.get('/api/usuario/status-push', authenticateToken, async (req, res) => {
     }
 });
 
+// ROTA PARA CADASTRAR FACE ID (CORRIGIDA)
+// ============================================
+app.post('/api/auth/cadastrar-face', authenticateToken, async (req, res) => {
+    try {
+        const { usuarioId, imagem } = req.body;
+        
+        console.log('='.repeat(50));
+        console.log('📸 CADASTRANDO FACE ID');
+        console.log('📌 Usuário ID:', usuarioId);
+        console.log('📦 Tamanho da imagem:', Math.round(imagem?.length / 1024 || 0), 'KB');
+        console.log('='.repeat(50));
+        
+        if (!usuarioId || !imagem) {
+            return res.status(400).json({
+                success: false,
+                error: 'Dados incompletos para cadastro de face'
+            });
+        }
+
+        // Verificar se usuário existe
+        const user = await User.findById(usuarioId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+
+        // Verificar modelos
+        if (!modelsLoaded) {
+            console.log('⏳ Carregando modelos...');
+            await loadFaceModels();
+        }
+
+        console.log('🔍 Detectando face...');
+        
+        // Converter base64 para buffer
+        const imageBuffer = Buffer.from(imagem, 'base64');
+        const img = await canvas.loadImage(imageBuffer);
+        
+        // 🔥 CORREÇÃO: Detectar face primeiro, DEPOIS obter o descriptor
+        const options = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 224,
+            scoreThreshold: 0.3
+        });
+        
+        // 1. Detectar a face
+        const detection = await faceapi.detectSingleFace(img, options);
+        
+        if (!detection) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhum rosto detectado na imagem'
+            });
+        }
+
+        console.log('✅ Face detectada, computando descriptor...');
+        
+        // 2. Calcular o descriptor (face recognition)
+        // Nota: Em algumas versões, você precisa carregar a faceRecognitionNet
+        const descriptorResult = await faceapi.computeFaceDescriptor(img, detection);
+        
+        if (!descriptorResult) {
+            return res.status(400).json({
+                success: false,
+                error: 'Não foi possível gerar o descriptor facial'
+            });
+        }
+
+        // Descriptor é um array de 128 números
+        const faceDescriptor = Array.from(descriptorResult);
+        
+        console.log(`✅ Descriptor gerado: ${faceDescriptor.length} valores`);
+        console.log(`   Primeiros valores: ${faceDescriptor.slice(0, 5).join(', ')}...`);
+        
+        // Gerar hash da imagem
+        const crypto = require('crypto');
+        const imagemHash = crypto.createHash('sha256').update(imagem).digest('hex');
+        
+        // Modelo FaceID
+        const FaceIDSchema = new mongoose.Schema({
+            usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+            imagemBase64: { type: String, required: true },
+            imagemHash: { type: String, required: true },
+            faceDescriptor: { type: [Number] },
+            dataCadastro: { type: Date, default: Date.now },
+            ultimaValidacao: { type: Date },
+            totalValidacoes: { type: Number, default: 0 },
+            ativo: { type: Boolean, default: true }
+        });
+        
+        const FaceID = mongoose.models.FaceID || mongoose.model('FaceID', FaceIDSchema);
+        
+        // Verificar se já existe
+        const faceExistente = await FaceID.findOne({ usuarioId });
+        
+        if (faceExistente) {
+            faceExistente.imagemBase64 = imagem;
+            faceExistente.imagemHash = imagemHash;
+            faceExistente.faceDescriptor = faceDescriptor;
+            faceExistente.dataCadastro = new Date();
+            await faceExistente.save();
+            console.log('✅ Registro atualizado');
+        } else {
+            const novaFace = new FaceID({
+                usuarioId,
+                imagemBase64: imagem,
+                imagemHash,
+                faceDescriptor,
+                dataCadastro: new Date()
+            });
+            await novaFace.save();
+            console.log('✅ Novo registro criado');
+        }
+        
+        res.json({
+            success: true,
+            message: 'Face ID cadastrado com sucesso',
+            usuario: user.nome
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro no cadastro:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+
+// ============================================
+// ROTA PARA TESTAR DETECÇÃO (SEM SALVAR)
+// ============================================
+app.post('/api/auth/testar-deteccao', authenticateToken, async (req, res) => {
+    try {
+        const { imagem } = req.body;
+        
+        console.log('🧪 TESTANDO DETECÇÃO FACIAL');
+        
+        if (!imagem) {
+            return res.status(400).json({ error: 'Imagem não fornecida' });
+        }
+        
+        // Garantir que modelos estão carregados
+        if (!modelsLoaded) {
+            await loadFaceModels();
+        }
+        
+        const imageBuffer = Buffer.from(imagem, 'base64');
+        const img = await canvas.loadImage(imageBuffer);
+        
+        // Testar com diferentes configurações
+        const resultados = [];
+        
+        const configuracoes = [
+            { inputSize: 128, threshold: 0.2 },
+            { inputSize: 160, threshold: 0.3 },
+            { inputSize: 224, threshold: 0.3 },
+            { inputSize: 320, threshold: 0.3 }
+        ];
+        
+        for (const config of configuracoes) {
+            const startTime = Date.now();
+            
+            const options = new faceapi.TinyFaceDetectorOptions({
+                inputSize: config.inputSize,
+                scoreThreshold: config.threshold
+            });
+            
+            const detection = await faceapi.detectSingleFace(img, options)
+                .withFaceDescriptor();
+            
+            const time = Date.now() - startTime;
+            
+            resultados.push({
+                config: `inputSize: ${config.inputSize}, threshold: ${config.threshold}`,
+                tempo: time + 'ms',
+                detectou: !!detection,
+                descriptorLength: detection ? detection.descriptor.length : 0
+            });
+        }
+        
+        res.json({
+            success: true,
+            resultados
+        });
+        
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// ROTA PARA VERIFICAR SE USUÁRIO TEM FACE CADASTRADA
+// ============================================
+app.get('/api/auth/verificar-face/:usuarioId', authenticateToken, async (req, res) => {
+    try {
+        const { usuarioId } = req.params;
+        
+        const face = await FaceID.findOne({ usuarioId }).select('faceDescriptor dataCadastro ultimaValidacao totalValidacoes');
+        
+        res.json({
+            success: true,
+            temFace: !!face,
+            temDescriptor: !!(face && face.faceDescriptor),
+            dataCadastro: face?.dataCadastro || null,
+            ultimaValidacao: face?.ultimaValidacao || null,
+            totalValidacoes: face?.totalValidacoes || 0
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao verificar face:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================
+// ROTA PARA VALIDAR CAMERA (CORRIGIDA)
+// ============================================
+app.post('/api/auth/validar-camera', authenticateToken, async (req, res) => {
+    try {
+        const { usuarioId, imagem } = req.body;
+        
+        console.log('='.repeat(50));
+        console.log('🔍 VALIDAÇÃO DE IMAGEM');
+        console.log('📌 Usuário ID:', usuarioId);
+        console.log('📦 Tamanho da imagem:', Math.round(imagem.length / 1024), 'KB');
+        console.log('='.repeat(50));
+        
+        if (!usuarioId || !imagem) {
+            return res.status(400).json({
+                success: false,
+                error: 'Dados incompletos para validação'
+            });
+        }
+        
+        // Garantir que modelos estão carregados
+        if (!modelsLoaded) {
+            await loadFaceModels();
+        }
+        
+        // Buscar face cadastrada
+        const FaceID = mongoose.models.FaceID;
+        const faceCadastrada = await FaceID.findOne({ usuarioId });
+        
+        if (!faceCadastrada || !faceCadastrada.faceDescriptor || faceCadastrada.faceDescriptor.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Nenhum Face ID cadastrado para este usuário'
+            });
+        }
+        
+        // Processar imagem atual
+        const imageBuffer = Buffer.from(imagem, 'base64');
+        const img = await canvas.loadImage(imageBuffer);
+        
+        // Detectar face na nova imagem
+        const options = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 224,
+            scoreThreshold: 0.3
+        });
+        
+        const detection = await faceapi.detectSingleFace(img, options);
+        
+        if (!detection) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhum rosto detectado na imagem. Tente novamente com melhor iluminação.'
+            });
+        }
+
+        // Calcular descriptor da nova imagem
+        const novoDescriptor = await faceapi.computeFaceDescriptor(img, detection);
+        
+        if (!novoDescriptor) {
+            return res.status(400).json({
+                success: false,
+                error: 'Não foi possível gerar o descriptor da imagem'
+            });
+        }
+
+        // Criar descriptor a partir do salvo no banco
+        const descriptorSalvo = new Float32Array(faceCadastrada.faceDescriptor);
+        
+        // Calcular distância euclidiana
+        const distancia = faceapi.euclideanDistance(novoDescriptor, descriptorSalvo);
+        
+        // Threshold: 0.6 é um bom valor
+        const threshold = 0.6;
+        const reconhecido = distancia < threshold;
+        
+        // Converter para similaridade percentual
+        const similaridade = Math.max(0, Math.min(100, (1 - distancia) * 100));
+
+        if (reconhecido) {
+            // Atualizar estatísticas
+            faceCadastrada.ultimaValidacao = new Date();
+            faceCadastrada.totalValidacoes += 1;
+            await faceCadastrada.save();
+            
+            console.log(`✅ Face ID validado! (distância: ${distancia.toFixed(3)}, similaridade: ${similaridade.toFixed(1)}%)`);
+            
+            res.json({
+                success: true,
+                message: 'Face ID validado com sucesso',
+                similaridade: similaridade.toFixed(1),
+                distancia: distancia.toFixed(3),
+                totalValidacoes: faceCadastrada.totalValidacoes
+            });
+            
+        } else {
+            console.log(`❌ Falha na validação facial (distância: ${distancia.toFixed(3)}, similaridade: ${similaridade.toFixed(1)}%)`);
+            
+            res.status(400).json({
+                success: false,
+                error: 'Face não reconhecida. Tente novamente com melhor iluminação.',
+                similaridade: similaridade.toFixed(1),
+                distancia: distancia.toFixed(3)
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro na validação facial:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno: ' + error.message
+        });
+    }
+});
+
+// ============================================
+// ROTA PARA OBTER FACE DO USUÁRIO (APENAS ADMIN)
+// ============================================
+app.get('/api/admin/faces/:usuarioId', authenticateToken, async (req, res) => {
+    try {
+        // Verificar se é admin
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Apenas administradores podem acessar faces'
+            });
+        }
+        
+        const { usuarioId } = req.params;
+        
+        const face = await FaceID.findOne({ usuarioId }).select('-imagemBase64');
+        
+        if (!face) {
+            return res.status(404).json({
+                success: false,
+                error: 'Nenhum Face ID encontrado'
+            });
+        }
+        
+        res.json({
+            success: true,
+            face: {
+                usuarioId: face.usuarioId,
+                dataCadastro: face.dataCadastro,
+                ultimaValidacao: face.ultimaValidacao,
+                totalValidacoes: face.totalValidacoes,
+                ativo: face.ativo,
+                temDescriptor: !!face.faceDescriptor
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar face:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================
+// ROTA PARA REGISTRAR LOCALIZAÇÃO DA PROVA (ATUALIZADA)
+// ============================================
+app.post('/api/provas/registrar-localizacao', authenticateToken, async (req, res) => {
+    try {
+        const { provaId, latitude, longitude, accuracy } = req.body;
+        const alunoId = req.userId;
+        
+        console.log('='.repeat(50));
+        console.log('📍 Registrando localização');
+        console.log(`   Prova ID: ${provaId}`);
+        console.log(`   Aluno ID: ${alunoId}`);
+        console.log(`   Coordenadas: ${latitude}, ${longitude} (precisão: ${accuracy}m)`);
+        console.log('='.repeat(50));
+        
+        // Validar coordenadas
+        if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Coordenadas inválidas'
+            });
+        }
+        
+        // Garantir que o modelo Localizacao existe
+        const Localizacao = mongoose.models.Localizacao;
+        if (!Localizacao) {
+            console.error('❌ Modelo Localizacao não encontrado!');
+            return res.status(500).json({
+                success: false,
+                error: 'Modelo de localização não configurado'
+            });
+        }
+        
+        // Buscar a prova realizada (opcional)
+        const ProvaRealizada = mongoose.models.ProvaRealizada;
+        
+        if (ProvaRealizada) {
+            try {
+                let provaRealizada = await ProvaRealizada.findOne({
+                    provaId: provaId,
+                    alunoId: alunoId
+                });
+                
+                if (provaRealizada) {
+                    // Atualizar estatísticas de cancelamento com a localização
+                    if (!provaRealizada.estatisticasCancelamento) {
+                        provaRealizada.estatisticasCancelamento = {};
+                    }
+                    
+                    provaRealizada.estatisticasCancelamento.latitude = latitude;
+                    provaRealizada.estatisticasCancelamento.longitude = longitude;
+                    provaRealizada.estatisticasCancelamento.accuracy = accuracy;
+                    provaRealizada.estatisticasCancelamento.timestamp = new Date().toISOString();
+                    
+                    await provaRealizada.save();
+                    console.log('✅ Localização atualizada na prova realizada');
+                }
+            } catch (provaError) {
+                console.warn('⚠️ Erro ao atualizar prova realizada:', provaError.message);
+            }
+        }
+        
+        // 🔥 SALVAR NA COLEÇÃO LOCALIZACAO (sempre)
+        const localizacao = new Localizacao({
+            alunoId,
+            provaId,
+            latitude,
+            longitude,
+            accuracy: accuracy || 0,
+            timestamp: new Date()
+        });
+        
+        await localizacao.save();
+        console.log(`✅ Localização salva no histórico (ID: ${localizacao._id})`);
+        
+        res.json({
+            success: true,
+            message: 'Localização registrada',
+            localizacaoId: localizacao._id
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao registrar localização:');
+        console.error('   Nome:', error.name);
+        console.error('   Mensagem:', error.message);
+        console.error('   Stack:', error.stack);
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 
 // ============================================================================
 // VERIFICADOR AUTOMÁTICO DE NOTIFICAÇÕES (A CADA 1 MINUTO)
@@ -15778,3 +16840,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  • GET  /api/aluno/resultados - Resultados do aluno');
   console.log('='.repeat(50));
 });
+
+server.timeout = 120000; // 2 minutos de timeout
+server.keepAliveTimeout = 120000;
+console.log('⏱️ Timeout do servidor configurado para 2 minutos');

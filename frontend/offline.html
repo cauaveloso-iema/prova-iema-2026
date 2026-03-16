@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+
+        <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+
+    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - Sistema de Provas</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 40px;
+            background: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .offline-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .icon {
+            font-size: 80px;
+            color: #f59e0b;
+            margin-bottom: 20px;
+        }
+        h1 { color: #1f2937; margin-bottom: 10px; }
+        p { color: #6b7280; margin-bottom: 30px; }
+        .btn {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover { background: #4338ca; }
+        .dicas {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 10px;
+            text-align: left;
+        }
+        .dicas h3 { margin-top: 0; color: #374151; }
+        .dicas ul { padding-left: 20px; color: #6b7280; }
+        .dicas li { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="offline-card">
+        <div class="icon">
+            <i class="fas fa-wifi-slash"></i>
+        </div>
+        <h1>📴 Você está offline</h1>
+        <p>Não foi possível carregar esta página. Conecte-se à internet e tente novamente.</p>
+        
+        <button class="btn" onclick="window.location.reload()">
+            <i class="fas fa-sync-alt"></i> Tentar novamente
+        </button>
+        
+        <div class="dicas">
+            <h3><i class="fas fa-lightbulb"></i> Dicas:</h3>
+            <ul>
+                <li>Verifique sua conexão WiFi</li>
+                <li>Desative o modo avião</li>
+                <li>Provas em andamento continuam disponíveis</li>
+                <li>Seus dados serão sincronizados automaticamente</li>
+            </ul>
+        </div>
+    </div>
+        <script>
+// ============================================
+// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+// ============================================
+
+(function() {
+    // Só ativar em telas menores que 768px
+    if (window.innerWidth > 768) {
+        console.log('📐 Desktop detectado - escalonamento desativado');
+        return;
+    }
+    
+    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+    
+    // Função para calcular a escala baseada na largura (apenas mobile)
+    function calcularEscalaMobile() {
+        const width = window.innerWidth;
+        
+        // Largura de referência para mobile (768px)
+        const baseWidth = 768;
+        
+        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
+        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+        
+        // Ajustes específicos para faixas de tamanho
+        if (width <= 320) escala = 0.55;
+        else if (width <= 360) escala = 0.6;
+        else if (width <= 400) escala = 0.65;
+        else if (width <= 500) escala = 0.75;
+        else if (width <= 600) escala = 0.85;
+        else if (width <= 700) escala = 0.95;
+        else escala = 1;
+        
+        return escala;
+    }
+    
+    // Função para aplicar a escala
+    function aplicarEscalaMobile() {
+        // Só aplicar se ainda estiver em mobile
+        if (window.innerWidth > 768) return;
+        
+        const escala = calcularEscalaMobile();
+        
+        // Atualizar variável CSS
+        document.documentElement.style.setProperty('--scale-ratio', escala);
+        document.documentElement.style.setProperty('--current-width', window.innerWidth);
+        
+        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+    }
+    
+    // Aplicar inicial
+    aplicarEscalaMobile();
+    
+    // Aplicar ao redimensionar (com debounce)
+    let timeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            // Verificar se ainda está em mobile
+            if (window.innerWidth <= 768) {
+                aplicarEscalaMobile();
+            } else {
+                // Se passou para desktop, resetar escala
+                document.documentElement.style.setProperty('--scale-ratio', '1');
+                console.log('📐 Modo desktop - escala resetada');
+            }
+        }, 100);
+    });
+    
+    // Também aplicar quando orientação mudar
+    window.addEventListener('orientationchange', function() {
+        setTimeout(() => {
+            if (window.innerWidth <= 768) {
+                aplicarEscalaMobile();
+            }
+        }, 200);
+    });
+    
+    console.log('✅ Sistema de escalonamento mobile ativo!');
+    
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ Service Worker ativo'))
+            .catch(err => console.log('❌ Erro:', err));
+    });
+}
+
+window.addEventListener('online', () => console.log('🌐 Online'));
+window.addEventListener('offline', () => console.log('📴 Offline'));
+</script>
+
+</body>
+</html>
