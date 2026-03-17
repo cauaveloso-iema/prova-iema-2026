@@ -6721,7 +6721,7 @@ app.get('/api/professor/provas/:provaId/cancelamento-detailed', authenticateToke
     }
 });
 
-// ============ ROTA PARA VALIDAR ACESSO À PROVA - VERSÃO COMPLETA E CORRIGIDA ============
+// ============ ROTA PARA VALIDAR ACESSO À PROVA - VERSÃO COM FACE ID ============
 app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
   try {
     const provaId = req.params.id;
@@ -6742,13 +6742,13 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
     
-    const precisaAcessibilidade = aluno.precisaAcessibilidade === true;
+    // ========== BUSCAR CONFIGURAÇÕES DE SEGURANÇA ==========
+    const configFaceId = await Config.findOne({ chave: 'seguranca.exigirFaceIdProvas' });
+    const exigirFaceId = configFaceId ? configFaceId.valor : false;
     
-    console.log(`   👤 Aluno: ${aluno.nome} (${aluno.email})`);
-    console.log(`   🎯 Precisa de acessibilidade: ${precisaAcessibilidade ? 'SIM' : 'NÃO'}`);
-    console.log(`   📋 Condição: ${aluno.condicaoAcessibilidade || 'não especificada'}`);
+    console.log(`   👤 Configuração Face ID: ${exigirFaceId ? 'ATIVADO' : 'DESATIVADO'}`);
     
-    // ========== BUSCAR PROVA COM TODOS OS CAMPOS ==========
+    // ========== BUSCAR PROVA ==========
     const prova = await Prova.findById(provaId)
       .populate('turmaId', 'nome disciplina alunos')
       .populate('userId', 'nome email')
@@ -6762,32 +6762,15 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
     
-    // ========== DETECÇÃO ROBUSTA DE PROVA ADAPTADA ==========
+    // ========== DETECÇÃO DE PROVA ADAPTADA ==========
     const isAdaptada = 
-        // 1. Verificar campo tipoProva
         prova.tipoProva === 'adaptada' || 
-        (prova.tipoProva && prova.tipoProva.toLowerCase() === 'adaptada') ||
-        
-        // 2. Verificar campo adaptada (booleano ou string)
         prova.adaptada === true || 
-        prova.adaptada === 'true' || 
-        prova.adaptada === 1 ||
-        
-        // 3. Verificar por alternativas
         prova.alternativas === 3 ||
-        
-        // 4. Fallback
         false;
     
-    console.log(`   📋 Prova: "${prova.titulo}"`);
-    console.log(`      ├─ tipoProva: ${prova.tipoProva || 'NÃO DEFINIDO'}`);
-    console.log(`      ├─ adaptada: ${prova.adaptada !== undefined ? prova.adaptada : 'NÃO DEFINIDO'}`);
-    console.log(`      ├─ alternativas: ${prova.alternativas || 'NÃO DEFINIDO'}`);
-    console.log(`      └─ isAdaptada: ${isAdaptada ? 'SIM 🎯' : 'NÃO 📝'}`);
-    
-    // ========== REGRA 1: ALUNO SEM ACESSIBILIDADE NÃO PODE ACESSAR PROVA ADAPTADA ==========
-    if (isAdaptada && !precisaAcessibilidade) {
-      console.log(`   🚫 BLOQUEADO: Aluno SEM acessibilidade tentando acessar prova ADAPTADA`);
+    // ========== REGRAS DE ACESSIBILIDADE ==========
+    if (isAdaptada && !aluno.precisaAcessibilidade) {
       return res.status(403).json({
         success: false,
         error: 'Esta prova é exclusiva para alunos com necessidades de acessibilidade.',
@@ -6795,9 +6778,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
     
-    // ========== REGRA 2: ALUNO COM ACESSIBILIDADE SÓ PODE ACESSAR PROVAS ADAPTADAS ==========
-    if (precisaAcessibilidade && !isAdaptada) {
-      console.log(`   🚫 BLOQUEADO: Aluno COM acessibilidade tentando acessar prova NORMAL`);
+    if (aluno.precisaAcessibilidade && !isAdaptada) {
       return res.status(403).json({
         success: false,
         error: 'Você só pode acessar provas adaptadas. Entre em contato com seu professor.',
@@ -6807,25 +6788,14 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
     
     // ========== VERIFICAR SE A PROVA ESTÁ PUBLICADA ==========
     if (!prova.publicada) {
-      console.log(`   🚫 BLOQUEADO: Prova não foi publicada pelo professor`);
       return res.status(400).json({
         success: false,
         error: 'Esta prova ainda não foi publicada pelo professor.'
       });
     }
     
-    // ========== VERIFICAR SE A PROVA ESTÁ ATIVA ==========
-    if (prova.status !== 'ativa') {
-      console.log(`   🚫 BLOQUEADO: Prova não está ativa (status: ${prova.status})`);
-      return res.status(400).json({
-        success: false,
-        error: 'Esta prova não está disponível no momento.'
-      });
-    }
-    
-    // ============ VERIFICAR SE O ALUNO ESTÁ NA TURMA ============
+    // ========== VERIFICAR SE O ALUNO ESTÁ NA TURMA ==========
     if (prova.turmaId) {
-        // Buscar a turma completa
         const turma = await Turma.findById(prova.turmaId).populate('alunos');
         
         if (!turma) {
@@ -6835,30 +6805,9 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
             });
         }
         
-        // VERIFICAÇÃO 1: Por ID do aluno (método tradicional)
         const alunoPorId = turma.alunos.some(a => a._id.toString() === alunoId.toString());
         
-        // VERIFICAÇÃO 2: Por código da turma no perfil do aluno
-        const aluno = await User.findById(alunoId);
-        const alunoPorCodigoTurma = aluno && aluno.turma === turma.codigo;
-        
-        // VERIFICAÇÃO 3: Por nome da turma
-        const alunoPorNomeTurma = aluno && aluno.turma === turma.nome;
-        
-        console.log('🔍 Verificações de acesso:', {
-            alunoId: alunoId,
-            turmaId: turma._id.toString(),
-            alunosNaTurma: turma.alunos.map(a => a._id.toString()),
-            alunoPorId: alunoPorId,
-            alunoPorCodigoTurma: alunoPorCodigoTurma,
-            alunoPorNomeTurma: alunoPorNomeTurma,
-            turmaCodigo: turma.codigo,
-            turmaNome: turma.nome,
-            alunoTurma: aluno?.turma
-        });
-        
-        // Se passar em QUALQUER uma das verificações, libera acesso
-        if (!alunoPorId && !alunoPorCodigoTurma && !alunoPorNomeTurma) {
+        if (!alunoPorId) {
             console.log(`🚫 BLOQUEADO: Aluno não está na turma desta prova`);
             return res.status(403).json({
                 success: false,
@@ -6905,9 +6854,6 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       const dataLimiteFimDia = new Date(dataLimite);
       dataLimiteFimDia.setHours(23, 59, 59, 999);
       
-      console.log(`   📅 Data limite (fim do dia): ${dataLimiteFimDia.toLocaleString('pt-BR')}`);
-      console.log(`   📅 Data atual: ${hoje.toLocaleString('pt-BR')}`);
-      
       if (hoje > dataLimiteFimDia) {
         const dataFormatada = dataLimiteFimDia.toLocaleDateString('pt-BR', {
           day: '2-digit',
@@ -6915,7 +6861,6 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
           year: 'numeric'
         });
         
-        console.log(`   🚫 BLOQUEADO: Prova expirada em ${dataFormatada}`);
         return res.status(400).json({
           success: false,
           error: `📅 Esta prova só estava disponível até ${dataFormatada}`,
@@ -6926,45 +6871,33 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
     
     // ========== VERIFICAÇÃO DE HORÁRIO ==========
     if (prova.horarioInicio && prova.horarioTermino) {
-      // Usar data LOCAL, não UTC
-      const agora = new Date();
-      const ano = agora.getFullYear();
-      const mes = String(agora.getMonth() + 1).padStart(2, '0');
-      const dia = String(agora.getDate()).padStart(2, '0');
+      const ano = hoje.getFullYear();
+      const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+      const dia = String(hoje.getDate()).padStart(2, '0');
       
       const inicioProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioInicio}:00`);
       const terminoProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00`);
       
-      console.log('📅 VERIFICAÇÃO DE HORÁRIO (BACKEND):');
-      console.log(`   Data usada: ${ano}-${mes}-${dia}`);
-      console.log(`   Início: ${inicioProva.toLocaleString('pt-BR')}`);
-      console.log(`   Término: ${terminoProva.toLocaleString('pt-BR')}`);
-      console.log(`   Agora: ${agora.toLocaleString('pt-BR')}`);
-      
-      if (agora < inicioProva) {
-        const diffMinutos = Math.floor((inicioProva - agora) / 60000);
+      if (hoje < inicioProva) {
+        const diffMinutos = Math.floor((inicioProva - hoje) / 60000);
         return res.status(400).json({
           success: false,
           error: `A prova só estará disponível a partir das ${prova.horarioInicio} (em ${diffMinutos} minutos)`
         });
       }
       
-      if (agora > terminoProva) {
+      if (hoje > terminoProva) {
         return res.status(400).json({
           success: false,
           error: `⏰ O horário para esta prova terminou às ${prova.horarioTermino}`
         });
       }
-      
-      // Se chegou aqui, a prova está disponível!
-      console.log('✅ PROVA DISPONÍVEL!');
     }
     
-    // 🔥 ========== APLICAR TEMPO ADICIONAL PARA ACESSIBILIDADE ========== 🔥
+    // ========== APLICAR TEMPO ADICIONAL PARA ACESSIBILIDADE ==========
     let duracaoFinal = prova.duracaoMinutos;
     
-    if (isAdaptada && precisaAcessibilidade) {
-      // Buscar configurações de tempo adicional
+    if (isAdaptada && aluno.precisaAcessibilidade) {
       const configTempoAdicional = await Config.findOne({ 
         chave: 'provas.tempoAdicionalAcessibilidade' 
       });
@@ -6976,40 +6909,26 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       const percentAdicional = configPercent?.valor || 50;
       
       if (tempoAdicionalHabilitado) {
-        // Calcular tempo adicional
         const tempoOriginal = prova.duracaoMinutos || 60;
         const acrescimo = Math.round(tempoOriginal * (percentAdicional / 100));
         duracaoFinal = tempoOriginal + acrescimo;
-        
-        console.log(`⏱️ TEMPO ADICIONAL APLICADO:`);
-        console.log(`   Original: ${tempoOriginal} minutos`);
-        console.log(`   Percentual adicional: ${percentAdicional}%`);
-        console.log(`   Acréscimo: ${acrescimo} minutos`);
-        console.log(`   Duração final: ${duracaoFinal} minutos`);
       }
     }
     
-    // ========== GERAR TOKEN ESPECÍFICO PARA A PROVA ==========
-    // Calcular expiração baseada no término da prova
+    // ========== GERAR TOKEN DE ACESSO À PROVA ==========
     let expiracaoToken;
 
     if (prova.horarioTermino && prova.dataLimite) {
-      // Usar a data limite + horário de término
       const dataLimite = new Date(prova.dataLimite);
       const ano = dataLimite.getFullYear();
       const mes = String(dataLimite.getMonth() + 1).padStart(2, '0');
       const dia = String(dataLimite.getDate()).padStart(2, '0');
       
-      // Criar data de expiração no fuso de Brasília
       const dataExpiracao = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00-03:00`);
-      
-      // Adicionar 1 hora de margem após o término
       dataExpiracao.setHours(dataExpiracao.getHours() + 1);
       
       expiracaoToken = Math.floor(dataExpiracao.getTime() / 1000);
-      console.log(`📅 Token expira em: ${dataExpiracao.toLocaleString('pt-BR')}`);
     } else {
-      // Fallback: 24 horas
       expiracaoToken = Math.floor(Date.now() / 1000) + (24 * 60 * 60);
     }
 
@@ -7021,45 +6940,34 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
         iat: Math.floor(Date.now() / 1000),
         exp: expiracaoToken,
         adaptada: isAdaptada,
-        duracaoMinutos: duracaoFinal // Duração com possível tempo adicional
+        duracaoMinutos: duracaoFinal
       },
       process.env.JWT_SECRET
     );
     
     console.log(`   ✅ ACESSO AUTORIZADO!`);
     console.log(`   🎟️ Token gerado: ${provaToken.substring(0, 30)}...`);
-    console.log(`   🔗 Redirect: /realizar-prova.html?token=${provaToken.substring(0, 20)}...`);
-    console.log(`🔐 ===== FIM DA VALIDAÇÃO =====\n`);
     
     // ========== RETORNAR SUCESSO COM DADOS DA PROVA ==========
     res.json({
       success: true,
       provaToken: provaToken,
+      // ===== NOVO: INFORMAR SE FACE ID É EXIGIDO =====
+      exigirFaceId: exigirFaceId,
       prova: {
         id: prova._id,
         titulo: prova.titulo,
         conteudo: prova.conteudo,
-        duracaoMinutos: duracaoFinal, // Duração com possível tempo adicional
+        duracaoMinutos: duracaoFinal,
         quantidadeQuestoes: prova.quantidadeQuestoes,
         dataLimite: prova.dataLimite,
         horarioInicio: prova.horarioInicio,
         horarioTermino: prova.horarioTermino,
-        
-        // ========== CAMPOS DE ACESSIBILIDADE ==========
         adaptada: isAdaptada,
         tipoProva: isAdaptada ? 'adaptada' : (prova.tipoProva || 'simples'),
         alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
-        
-        // ========== INFORMAÇÕES DE TEMPO ADICIONAL ==========
-        tempoAdicionalAplicado: (isAdaptada && precisaAcessibilidade && duracaoFinal !== prova.duracaoMinutos),
+        tempoAdicionalAplicado: (isAdaptada && aluno.precisaAcessibilidade && duracaoFinal !== prova.duracaoMinutos),
         duracaoOriginal: prova.duracaoMinutos,
-        
-        // ========== TEMPO RESTANTE ==========
-        tempoRestanteMinutos: prova.horarioTermino ? 
-          Math.floor((new Date(`${hoje.toISOString().split('T')[0]}T${prova.horarioTermino}:00`) - hoje) / (1000 * 60)) : 
-          null,
-        
-        // ========== INFORMAÇÕES DA TURMA E PROFESSOR ==========
         turma: prova.turmaId ? {
           id: prova.turmaId._id,
           nome: prova.turmaId.nome,
@@ -7073,41 +6981,17 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       aluno: {
         id: aluno._id,
         nome: aluno.nome,
-        precisaAcessibilidade: precisaAcessibilidade,
+        precisaAcessibilidade: aluno.precisaAcessibilidade,
         condicaoAcessibilidade: aluno.condicaoAcessibilidade
       },
       redirectTo: `/realizar-prova.html?token=${provaToken}`
     });
     
   } catch (error) {
-    console.error('❌ ERRO AO VALIDAR ACESSO À PROVA:');
-    console.error(`   Mensagem: ${error.message}`);
-    console.error(`   Stack: ${error.stack}`);
-    
-    // ========== TRATAMENTO DE ERROS ESPECÍFICOS ==========
-    let mensagemErro = 'Erro interno do servidor';
-    let statusCode = 500;
-    let codigoErro = 'ERRO_INTERNO';
-    
-    if (error.name === 'CastError') {
-      mensagemErro = 'ID da prova inválido. Formato incorreto.';
-      statusCode = 400;
-      codigoErro = 'ID_INVALIDO';
-    } else if (error.name === 'JsonWebTokenError') {
-      mensagemErro = 'Erro ao gerar token de acesso.';
-      statusCode = 500;
-      codigoErro = 'ERRO_TOKEN';
-    } else if (error.message.includes('ECONNREFUSED')) {
-      mensagemErro = 'Erro de conexão com o banco de dados.';
-      statusCode = 503;
-      codigoErro = 'BD_OFFLINE';
-    }
-    
-    res.status(statusCode).json({
+    console.error('❌ ERRO AO VALIDAR ACESSO À PROVA:', error.message);
+    res.status(500).json({
       success: false,
-      error: mensagemErro,
-      codigo: codigoErro,
-      detalhe: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: 'Erro interno do servidor'
     });
   }
 });
@@ -13890,12 +13774,12 @@ app.put('/api/admin/professores/:id/reativar', authenticateToken, isSuperAdmin, 
 
 // ============ ROTAS DE CONFIGURAÇÕES DO SISTEMA (VERSÃO ÚNICA E CORRIGIDA) ============
 
-// GET - Todas as configurações (apenas admin)
+// ============ GET - Todas as configurações (apenas admin) - VERSÃO CORRIGIDA ============
 app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req, res) => {
   try {
     console.log('📋 Admin buscando configurações do sistema');
     
-    // Configurações padrão completas (SEM instituicao)
+    // Configurações padrão completas (COM O CAMPO FACE ID)
     const configPadrao = {
       aparencia: {
         corPrimaria: '#667eea',
@@ -13922,6 +13806,7 @@ app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
         tentativasLogin: 5,
         bloqueioTempo: 15,
         doisFatores: false,
+        exigirFaceIdProvas: false,  // ← CAMPO ADICIONADO AQUI!
         permitirMultiplosLogins: true,
         senha: {
           forcarTrocaInicial: true,
@@ -14032,35 +13917,48 @@ app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
     // Criar uma cópia profunda do objeto padrão
     const configObj = JSON.parse(JSON.stringify(configPadrao));
     
-    // Aplicar configurações do banco sobre o padrão com SEGURANÇA
+    // 🔥 MAPA PARA RASTREAR QUAIS CAMPOS FORAM ENCONTRADOS
+    const camposEncontrados = new Set();
+    
+    // Aplicar configurações do banco sobre o padrão - VERSÃO CORRIGIDA
     configuracoes.forEach(c => {
       if (!c || !c.chave) return;
       
       try {
         const parts = c.chave.split('.');
         let target = configObj;
-        let pathExists = true;
         
-        // Verificar se o caminho existe, se não existir, ignorar
+        // 🔥 CRIAR O CAMINHO SE ELE NÃO EXISTIR
         for (let i = 0; i < parts.length - 1; i++) {
           if (!target[parts[i]]) {
-            pathExists = false;
-            break;
+            target[parts[i]] = {};
           }
           target = target[parts[i]];
         }
         
-        // Só atribuir se o caminho inteiro existir
-        if (pathExists) {
-          const lastKey = parts[parts.length - 1];
-          if (target && target[lastKey] !== undefined) {
-            target[lastKey] = c.valor;
-          }
-        }
+        const lastKey = parts[parts.length - 1];
+        target[lastKey] = c.valor;
+        camposEncontrados.add(c.chave);
+        
+        console.log(`✅ Configuração aplicada: ${c.chave} = ${c.valor}`);
+        
       } catch (pathError) {
         console.warn(`⚠️ Erro ao processar chave ${c.chave}:`, pathError.message);
       }
     });
+
+    // 🔥 VERIFICAR ESPECIFICAMENTE O CAMPO FACE ID
+    console.log('📊 Campos encontrados no banco:', Array.from(camposEncontrados));
+    
+    // 🔥 GARANTIR QUE O CAMPO FACE ID EXISTA (buscar diretamente se necessário)
+    const faceIdDoc = await Config.findOne({ chave: 'seguranca.exigirFaceIdProvas' }).lean();
+    if (faceIdDoc) {
+      if (!configObj.seguranca) configObj.seguranca = {};
+      configObj.seguranca.exigirFaceIdProvas = faceIdDoc.valor;
+      console.log(`✅ Face ID carregado diretamente: ${faceIdDoc.valor}`);
+    }
+
+    console.log('🎯 Objeto seguranca final:', configObj.seguranca);
 
     res.json({
       success: true,
@@ -14070,119 +13968,10 @@ app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
 
   } catch (error) {
     console.error('❌ Erro ao buscar configurações:', error);
-    // Em caso de erro, retornar as configurações padrão
+    // Em caso de erro, retornar as configurações padrão (com o campo)
     res.json({
       success: true,
-      configuracoes: {
-        aparencia: {
-          corPrimaria: '#667eea',
-          corSecundaria: '#764ba2',
-          modoEscuro: false,
-          tema: 'padrao',
-          animacoes: true,
-          arredondamento: true,
-          logoUrl: '',
-          faviconUrl: ''
-        },
-        sistema: {
-          nome: 'Sistema de Provas IEMA 2026',
-          versao: '1.0.0',
-          ambiente: process.env.NODE_ENV || 'development',
-          urlBase: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
-          modoManutencao: false,
-          modoDebug: process.env.NODE_ENV !== 'production',
-          timeoutSessao: 60,
-          manutencaoMensagem: 'Sistema em manutenção. Volte mais tarde.'
-        },
-        seguranca: {
-          jwtExpiracao: process.env.JWT_EXPIRES_IN || '24h',
-          tentativasLogin: 5,
-          bloqueioTempo: 15,
-          doisFatores: false,
-          permitirMultiplosLogins: true,
-          senha: {
-            forcarTrocaInicial: true,
-            tamanhoMinimo: 6,
-            expiracaoDias: 90,
-            exigirMaiuscula: false,
-            exigirNumero: false,
-            exigirEspecial: false
-          }
-        },
-        provas: {
-          tempoMaximo: 240,
-          tempoMinimo: 10,
-          tempoAdicionalAcessibilidade: true,
-          tempoAdicionalPercent: 50,
-          questoesMinimas: 5,
-          questoesMaximas: 50,
-          correcaoAutomatica: true,
-          liberacaoAutomatica: false,
-          permitirRevisao: true,
-          mostrarGabarito: false,
-          permitirCancelamento: true,
-          notificarProfessorCancelamento: true
-        },
-        notificacoes: {
-          email: true,
-          sistema: true,
-          push: false,
-          whatsapp: false,
-          lembreteProva: 24,
-          lembreteCorrecao: true,
-          notificarResultado: true,
-          notificarCancelamento: true
-        },
-        email: {
-          servico: process.env.EMAIL_SERVICE || 'brevo',
-          host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
-          porta: parseInt(process.env.EMAIL_PORT) || 587,
-          seguranca: process.env.EMAIL_SECURITY || 'tls',
-          usuario: process.env.EMAIL_USER || '',
-          senha: process.env.EMAIL_PASS ? '********' : '',
-          remetente: process.env.EMAIL_FROM || 'naoresponder@iemasaoluiscentro.net',
-          nomeRemetente: process.env.EMAIL_FROM_NAME || 'Sistema de Provas',
-          notificacoes: true,
-          lembretes: true,
-          resultados: true
-        },
-        logs: {
-          nivel: process.env.LOG_LEVEL || 'info',
-          retencaoDias: 30,
-          console: true,
-          arquivo: true,
-          auditoria: true,
-          nivelAuditoria: 'medio'
-        },
-        backups: {
-          automatico: true,
-          frequencia: 'daily',
-          horario: '03:00',
-          manterPor: 30,
-          local: 'local',
-          maxBackups: 50,
-          incluirArquivos: true,
-          compactar: true,
-          ultimoBackup: null,
-          espacoUtilizado: '0 MB'
-        },
-        desempenho: {
-          cacheTempo: 300,
-          paginacaoPadrao: 20,
-          maxResultados: 1000,
-          compressaoRespostas: true,
-          timeoutRequisicao: 30,
-          limiteArquivo: 10
-        },
-        api: {
-          rateLimit: 100,
-          versao: 'v1',
-          documentacao: true,
-          chaveObrigatoria: false,
-          cors: true,
-          dominiosPermitidos: ['localhost']
-        }
-      },
+      configuracoes: configPadrao,
       origem: 'fallback'
     });
   }

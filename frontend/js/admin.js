@@ -17726,7 +17726,7 @@ class AdminPanel {
         console.log('Professores carregados:', this.professores);
     }
 
-    // ============ CONFIGURAÇÕES DO SISTEMA (VERSÃO CORRIGIDA - SEM INSTITUIÇÃO) ============
+    // ============ LOAD CONFIGURAÇÕES - VERSÃO COMPLETA E CORRIGIDA ============
     async loadConfiguracoes() {
         const contentArea = document.getElementById('contentArea');
         
@@ -17747,11 +17747,33 @@ class AdminPanel {
             });
             
             const data = await response.json();
-            const config = data.success ? data.configuracoes : this.getConfiguracoesPadrao();
+            let config = data.success ? data.configuracoes : this.getConfiguracoesPadrao();
+
+            // ===== 🔥 CORREÇÃO 1: CARREGAR O VALOR DO FACE ID DIRETAMENTE DO BANCO =====
+            try {
+                const faceResponse = await fetch('/api/admin/configuracoes/seguranca%2EexigirFaceIdProvas', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const faceData = await faceResponse.json();
+                
+                if (faceData.success && faceData.configuracao) {
+                    // Garantir que seguranca existe
+                    if (!config.seguranca) {
+                        config.seguranca = {};
+                    }
+                    
+                    // Adicionar/sobrescrever o valor
+                    config.seguranca.exigirFaceIdProvas = faceData.configuracao.valor;
+                    console.log('✅ Face ID carregado do banco:', faceData.configuracao.valor);
+                }
+            } catch (e) {
+                console.log('⚠️ Erro ao carregar Face ID específico, usando valor do objeto principal');
+            }
 
             // Aplicar modo escuro se estiver ativado
             this.aplicarModoEscuro(config);
 
+            // RENDERIZAR O HTML
             contentArea.innerHTML = `
                 <div class="configuracoes-container">
                     <!-- HEADER PROFISSIONAL -->
@@ -18192,45 +18214,6 @@ class AdminPanel {
                         background: #e5e7eb;
                     }
 
-                    /* Modo Escuro */
-                    body.dark-mode {
-                        background-color: #1a1a1a;
-                        color: #f0f0f0;
-                    }
-
-                    body.dark-mode .sidebar {
-                        background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%);
-                        border-right: 1px solid #404040;
-                    }
-
-                    body.dark-mode .main-content {
-                        background-color: #1a1a1a;
-                    }
-
-                    body.dark-mode .config-tabs,
-                    body.dark-mode .config-content,
-                    body.dark-mode .config-card {
-                        background-color: #2d2d2d;
-                        border-color: #404040;
-                        color: #f0f0f0;
-                    }
-
-                    body.dark-mode .form-control {
-                        background-color: #3d3d3d;
-                        border-color: #505050;
-                        color: #f0f0f0;
-                    }
-
-                    body.dark-mode .section-title {
-                        color: #f0f0f0;
-                        border-bottom-color: #404040;
-                    }
-
-                    body.dark-mode .info-box {
-                        background: #1e3a5f;
-                        color: #e6f7ff;
-                    }
-
                     @keyframes slideIn {
                         from { opacity: 0; transform: translateY(-10px); }
                         to { opacity: 1; transform: translateY(0); }
@@ -18262,9 +18245,28 @@ class AdminPanel {
                 </style>
             `;
 
-            // Inicializar eventos
+            // ===== 🔥 CORREÇÃO 2: SALVAR CONFIGURAÇÃO NO OBJETO =====
             this.configAtual = config;
+            
+            // ===== 🔥 CORREÇÃO 3: INICIALIZAR EVENTOS =====
             this.inicializarEventosConfig();
+            
+            // ===== 🔥 CORREÇÃO 4: APLICAR CONFIGURAÇÕES NOS CAMPOS =====
+            setTimeout(() => {
+                this.aplicarConfiguracoesNosCampos(config);
+                
+                // ===== 🔥 CORREÇÃO 5: VERIFICAR ESPECIFICAMENTE O CHECKBOX DO FACE ID =====
+                const checkbox = document.getElementById('config_exigir_faceid_provas');
+                if (checkbox && config.seguranca) {
+                    checkbox.checked = config.seguranca.exigirFaceIdProvas === true;
+                    console.log('✅ Checkbox Face ID configurado para:', checkbox.checked);
+                }
+                
+                // Se for a tab de email, atualizar campos
+                if (document.querySelector('.tab-btn.active')?.textContent.includes('Email')) {
+                    this.atualizarCamposEmail();
+                }
+            }, 100);
 
         } catch (error) {
             console.error('❌ Erro ao carregar configurações:', error);
@@ -18278,6 +18280,323 @@ class AdminPanel {
                     </button>
                 </div>
             `;
+        }
+    }
+
+    // ============ APLICAR CONFIGURAÇÕES NOS CAMPOS DO FORMULÁRIO ============
+    aplicarConfiguracoesNosCampos(config) {
+        try {
+            console.log('🔄 Aplicando configurações nos campos...');
+            
+            if (!config) return;
+            
+            // ===== APARÊNCIA =====
+            if (config.aparencia) {
+                const corPrimaria = document.getElementById('config_cor_primaria');
+                const corPrimariaText = document.getElementById('config_cor_primaria_text');
+                if (corPrimaria) corPrimaria.value = config.aparencia.corPrimaria || '#667eea';
+                if (corPrimariaText) corPrimariaText.value = config.aparencia.corPrimaria || '#667eea';
+                
+                const corSecundaria = document.getElementById('config_cor_secundaria');
+                const corSecundariaText = document.getElementById('config_cor_secundaria_text');
+                if (corSecundaria) corSecundaria.value = config.aparencia.corSecundaria || '#764ba2';
+                if (corSecundariaText) corSecundariaText.value = config.aparencia.corSecundaria || '#764ba2';
+                
+                const tema = document.getElementById('config_tema');
+                if (tema) tema.value = config.aparencia.tema || 'padrao';
+                
+                const modoEscuro = document.getElementById('config_modo_escuro');
+                if (modoEscuro) modoEscuro.checked = config.aparencia.modoEscuro || false;
+                
+                const animacoes = document.getElementById('config_animacoes');
+                if (animacoes) animacoes.checked = config.aparencia.animacoes !== false;
+                
+                const arredondamento = document.getElementById('config_arredondamento');
+                if (arredondamento) arredondamento.checked = config.aparencia.arredondamento !== false;
+                
+                const logoUrl = document.getElementById('config_logo_url');
+                if (logoUrl) logoUrl.value = config.aparencia.logoUrl || '';
+                
+                const faviconUrl = document.getElementById('config_favicon_url');
+                if (faviconUrl) faviconUrl.value = config.aparencia.faviconUrl || '';
+            }
+            
+            // ===== SISTEMA =====
+            if (config.sistema) {
+                const nomeSistema = document.getElementById('config_nome_sistema');
+                if (nomeSistema) nomeSistema.value = config.sistema.nome || 'Sistema de Provas IEMA 2026';
+                
+                const ambiente = document.getElementById('config_ambiente');
+                if (ambiente) ambiente.value = config.sistema.ambiente || 'production';
+                
+                const urlBase = document.getElementById('config_url_base');
+                if (urlBase) urlBase.value = config.sistema.urlBase || window.location.origin;
+                
+                const manutencao = document.getElementById('config_manutencao');
+                if (manutencao) manutencao.checked = config.sistema.modoManutencao || false;
+                
+                const debug = document.getElementById('config_debug');
+                if (debug) debug.checked = config.sistema.modoDebug || false;
+                
+                const timeoutSessao = document.getElementById('config_timeout_sessao');
+                if (timeoutSessao) timeoutSessao.value = config.sistema.timeoutSessao || 60;
+                
+                const mensagemManutencao = document.getElementById('config_mensagem_manutencao');
+                if (mensagemManutencao) mensagemManutencao.value = config.sistema.manutencaoMensagem || 'Sistema em manutenção. Volte mais tarde.';
+            }
+            
+            // ===== SEGURANÇA =====
+            if (config.seguranca) {
+                const jwtExpira = document.getElementById('config_jwt_expira');
+                if (jwtExpira) {
+                    const expiracao = config.seguranca.jwtExpiracao || '24h';
+                    const valorNumerico = expiracao.replace('h', '');
+                    jwtExpira.value = parseInt(valorNumerico) || 24;
+                }
+                
+                const tentativasLogin = document.getElementById('config_tentativas_login');
+                if (tentativasLogin) tentativasLogin.value = config.seguranca.tentativasLogin || 5;
+                
+                const bloqueioTempo = document.getElementById('config_bloqueio_tempo');
+                if (bloqueioTempo) bloqueioTempo.value = config.seguranca.bloqueioTempo || 15;
+                
+                const doisFatores = document.getElementById('config_2fa');
+                if (doisFatores) doisFatores.checked = config.seguranca.doisFatores || false;
+                
+                // ===== 🔥 CAMPO FACE ID - EXPLICITAMENTE TRATADO =====
+                const exigirFaceIdProvas = document.getElementById('config_exigir_faceid_provas');
+                if (exigirFaceIdProvas) {
+                    const valor = config.seguranca.exigirFaceIdProvas !== undefined 
+                        ? config.seguranca.exigirFaceIdProvas 
+                        : false;
+                    exigirFaceIdProvas.checked = valor;
+                    console.log('✅ Checkbox Face ID configurado para:', valor);
+                }
+                
+                const permitirMultiplosLogins = document.getElementById('config_permitir_multiplos_logins');
+                if (permitirMultiplosLogins) permitirMultiplosLogins.checked = config.seguranca.permitirMultiplosLogins !== false;
+                
+                // Política de Senhas
+                if (config.seguranca.senha) {
+                    const senhaForcarTroca = document.getElementById('config_senha_forcar_troca');
+                    if (senhaForcarTroca) senhaForcarTroca.checked = config.seguranca.senha.forcarTrocaInicial !== false;
+                    
+                    const senhaTamanho = document.getElementById('config_senha_tamanho');
+                    if (senhaTamanho) senhaTamanho.value = config.seguranca.senha.tamanhoMinimo || 6;
+                    
+                    const senhaExpiracao = document.getElementById('config_senha_expiracao');
+                    if (senhaExpiracao) senhaExpiracao.value = config.seguranca.senha.expiracaoDias || 90;
+                    
+                    const senhaMaiuscula = document.getElementById('config_senha_maiuscula');
+                    if (senhaMaiuscula) senhaMaiuscula.checked = config.seguranca.senha.exigirMaiuscula || false;
+                    
+                    const senhaNumero = document.getElementById('config_senha_numero');
+                    if (senhaNumero) senhaNumero.checked = config.seguranca.senha.exigirNumero || false;
+                    
+                    const senhaEspecial = document.getElementById('config_senha_especial');
+                    if (senhaEspecial) senhaEspecial.checked = config.seguranca.senha.exigirEspecial || false;
+                }
+            }
+            
+            // ===== PROVAS =====
+            if (config.provas) {
+                const tempoMaximo = document.getElementById('config_tempo_maximo');
+                if (tempoMaximo) tempoMaximo.value = config.provas.tempoMaximo || 240;
+                
+                const tempoMinimo = document.getElementById('config_tempo_minimo');
+                if (tempoMinimo) tempoMinimo.value = config.provas.tempoMinimo || 10;
+                
+                const tempoAdicional = document.getElementById('config_tempo_adicional');
+                if (tempoAdicional) tempoAdicional.checked = config.provas.tempoAdicionalAcessibilidade !== false;
+                
+                const tempoAdicionalPercent = document.getElementById('config_tempo_adicional_percent');
+                if (tempoAdicionalPercent) tempoAdicionalPercent.value = config.provas.tempoAdicionalPercent || 50;
+                
+                const questoesMin = document.getElementById('config_questoes_min');
+                if (questoesMin) questoesMin.value = config.provas.questoesMinimas || 5;
+                
+                const questoesMax = document.getElementById('config_questoes_max');
+                if (questoesMax) questoesMax.value = config.provas.questoesMaximas || 50;
+                
+                const correcaoAutomatica = document.getElementById('config_correcao_automatica');
+                if (correcaoAutomatica) correcaoAutomatica.checked = config.provas.correcaoAutomatica !== false;
+                
+                const liberacaoAutomatica = document.getElementById('config_liberacao_automatica');
+                if (liberacaoAutomatica) liberacaoAutomatica.checked = config.provas.liberacaoAutomatica || false;
+                
+                const permitirRevisao = document.getElementById('config_permitir_revisao');
+                if (permitirRevisao) permitirRevisao.checked = config.provas.permitirRevisao !== false;
+                
+                const mostrarGabarito = document.getElementById('config_mostrar_gabarito');
+                if (mostrarGabarito) mostrarGabarito.checked = config.provas.mostrarGabarito || false;
+                
+                const permitirCancelamento = document.getElementById('config_permitir_cancelamento');
+                if (permitirCancelamento) permitirCancelamento.checked = config.provas.permitirCancelamento !== false;
+                
+                const notificarProfessorCancelamento = document.getElementById('config_notificar_professor_cancelamento');
+                if (notificarProfessorCancelamento) notificarProfessorCancelamento.checked = config.provas.notificarProfessorCancelamento !== false;
+            }
+            
+            // ===== NOTIFICAÇÕES =====
+            if (config.notificacoes) {
+                const notificacaoEmail = document.getElementById('config_notificacao_email');
+                if (notificacaoEmail) notificacaoEmail.checked = config.notificacoes.email !== false;
+                
+                const notificacaoSistema = document.getElementById('config_notificacao_sistema');
+                if (notificacaoSistema) notificacaoSistema.checked = config.notificacoes.sistema !== false;
+                
+                const notificacaoPush = document.getElementById('config_notificacao_push');
+                if (notificacaoPush) notificacaoPush.checked = config.notificacoes.push || false;
+                
+                const notificacaoWhatsapp = document.getElementById('config_notificacao_whatsapp');
+                if (notificacaoWhatsapp) notificacaoWhatsapp.checked = config.notificacoes.whatsapp || false;
+                
+                const lembreteProva = document.getElementById('config_lembrete_prova');
+                if (lembreteProva) lembreteProva.value = config.notificacoes.lembreteProva || 24;
+                
+                const lembreteCorrecao = document.getElementById('config_lembrete_correcao');
+                if (lembreteCorrecao) lembreteCorrecao.checked = config.notificacoes.lembreteCorrecao !== false;
+                
+                const notificarResultado = document.getElementById('config_notificar_resultado');
+                if (notificarResultado) notificarResultado.checked = config.notificacoes.notificarResultado !== false;
+                
+                const notificarCancelamento = document.getElementById('config_notificar_cancelamento');
+                if (notificarCancelamento) notificarCancelamento.checked = config.notificacoes.notificarCancelamento !== false;
+            }
+            
+            // ===== EMAIL =====
+            if (config.email) {
+                const servico = document.getElementById('config_email_servico');
+                if (servico) servico.value = config.email.servico || 'brevo';
+                
+                const host = document.getElementById('config_email_host');
+                if (host) host.value = config.email.host || 'smtp-relay.brevo.com';
+                
+                const porta = document.getElementById('config_email_porta');
+                if (porta) porta.value = config.email.porta || 587;
+                
+                const seguranca = document.getElementById('config_email_seguranca');
+                if (seguranca) seguranca.value = config.email.seguranca || 'tls';
+                
+                const usuario = document.getElementById('config_email_usuario');
+                if (usuario) usuario.value = config.email.usuario || '';
+                
+                const senha = document.getElementById('config_email_senha');
+                if (senha) senha.value = config.email.senha || '';
+                
+                const remetente = document.getElementById('config_email_remetente');
+                if (remetente) remetente.value = config.email.remetente || 'naoresponder@iemasaoluiscentro.net';
+                
+                const nome = document.getElementById('config_email_nome');
+                if (nome) nome.value = config.email.nomeRemetente || 'Sistema de Provas IEMA';
+                
+                const emailNotificacoes = document.getElementById('config_email_notificacoes');
+                if (emailNotificacoes) emailNotificacoes.checked = config.email.notificacoes !== false;
+                
+                const emailLembretes = document.getElementById('config_email_lembretes');
+                if (emailLembretes) emailLembretes.checked = config.email.lembretes !== false;
+                
+                const emailResultados = document.getElementById('config_email_resultados');
+                if (emailResultados) emailResultados.checked = config.email.resultados !== false;
+            }
+            
+            // ===== LOGS =====
+            if (config.logs) {
+                const logLevel = document.getElementById('config_log_level');
+                if (logLevel) logLevel.value = config.logs.nivel || 'info';
+                
+                const logRetention = document.getElementById('config_log_retention');
+                if (logRetention) logRetention.value = config.logs.retencaoDias || 30;
+                
+                const logConsole = document.getElementById('config_log_console');
+                if (logConsole) logConsole.checked = config.logs.console !== false;
+                
+                const logArquivo = document.getElementById('config_log_arquivo');
+                if (logArquivo) logArquivo.checked = config.logs.arquivo !== false;
+                
+                const logAuditoria = document.getElementById('config_log_auditoria');
+                if (logAuditoria) logAuditoria.checked = config.logs.auditoria !== false;
+                
+                const logAuditoriaNivel = document.getElementById('config_log_auditoria_nivel');
+                if (logAuditoriaNivel) logAuditoriaNivel.value = config.logs.nivelAuditoria || 'medio';
+            }
+            
+            // ===== BACKUPS =====
+            if (config.backups) {
+                const backupAuto = document.getElementById('config_backup_auto');
+                if (backupAuto) backupAuto.checked = config.backups.automatico !== false;
+                
+                const backupFrequencia = document.getElementById('config_backup_frequencia');
+                if (backupFrequencia) backupFrequencia.value = config.backups.frequencia || 'daily';
+                
+                const backupHorario = document.getElementById('config_backup_horario');
+                if (backupHorario) backupHorario.value = config.backups.horario || '03:00';
+                
+                const backupRetention = document.getElementById('config_backup_retention');
+                if (backupRetention) backupRetention.value = config.backups.manterPor || 30;
+                
+                const backupLocal = document.getElementById('config_backup_local');
+                if (backupLocal) backupLocal.value = config.backups.local || 'local';
+                
+                const backupMax = document.getElementById('config_backup_max');
+                if (backupMax) backupMax.value = config.backups.maxBackups || 50;
+                
+                const backupIncluirArquivos = document.getElementById('config_backup_incluir_arquivos');
+                if (backupIncluirArquivos) backupIncluirArquivos.checked = config.backups.incluirArquivos !== false;
+                
+                const backupCompactar = document.getElementById('config_backup_compactar');
+                if (backupCompactar) backupCompactar.checked = config.backups.compactar !== false;
+            }
+            
+            // ===== DESEMPENHO =====
+            if (config.desempenho) {
+                const cacheTempo = document.getElementById('config_cache_tempo');
+                if (cacheTempo) cacheTempo.value = config.desempenho.cacheTempo || 300;
+                
+                const paginacaoPadrao = document.getElementById('config_paginacao_padrao');
+                if (paginacaoPadrao) paginacaoPadrao.value = config.desempenho.paginacaoPadrao || 20;
+                
+                const maxResultados = document.getElementById('config_max_resultados');
+                if (maxResultados) maxResultados.value = config.desempenho.maxResultados || 1000;
+                
+                const compressao = document.getElementById('config_compressao');
+                if (compressao) compressao.checked = config.desempenho.compressaoRespostas !== false;
+                
+                const timeoutRequisicao = document.getElementById('config_timeout_requisicao');
+                if (timeoutRequisicao) timeoutRequisicao.value = config.desempenho.timeoutRequisicao || 30;
+                
+                const limiteArquivo = document.getElementById('config_limite_arquivo');
+                if (limiteArquivo) limiteArquivo.value = config.desempenho.limiteArquivo || 10;
+            }
+            
+            // ===== API =====
+            if (config.api) {
+                const rateLimit = document.getElementById('config_rate_limit');
+                if (rateLimit) rateLimit.value = config.api.rateLimit || 100;
+                
+                const apiVersao = document.getElementById('config_api_versao');
+                if (apiVersao) apiVersao.value = config.api.versao || 'v1';
+                
+                const apiDocumentacao = document.getElementById('config_api_documentacao');
+                if (apiDocumentacao) apiDocumentacao.checked = config.api.documentacao !== false;
+                
+                const apiChaveObrigatoria = document.getElementById('config_api_chave_obrigatoria');
+                if (apiChaveObrigatoria) apiChaveObrigatoria.checked = config.api.chaveObrigatoria || false;
+                
+                const apiCors = document.getElementById('config_api_cors');
+                if (apiCors) apiCors.checked = config.api.cors !== false;
+                
+                const apiDominios = document.getElementById('config_api_dominios');
+                if (apiDominios) {
+                    const dominios = config.api.dominiosPermitidos || ['localhost'];
+                    apiDominios.value = dominios.join('\n');
+                }
+            }
+            
+            console.log('✅ Configurações aplicadas nos campos com sucesso!');
+            
+        } catch (error) {
+            console.error('❌ Erro ao aplicar configurações nos campos:', error);
         }
     }
 
@@ -18482,6 +18801,15 @@ class AdminPanel {
                         <div class="checkbox-group">
                             <input type="checkbox" id="config_2fa" ${config.seguranca?.doisFatores ? 'checked' : ''}>
                             <label for="config_2fa"><i class="fas fa-mobile-alt"></i> Exigir 2FA para admins</label>
+                        </div>
+                        
+                        <!-- ===== NOVO CHECKBOX PARA FACE ID NAS PROVAS ===== -->
+                        <div class="checkbox-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e5e7eb;">
+                            <input type="checkbox" id="config_exigir_faceid_provas" ${config.seguranca?.exigirFaceIdProvas ? 'checked' : ''}>
+                            <label for="config_exigir_faceid_provas">
+                                <i class="fas fa-id-card"></i> Exigir validação facial antes de cada prova
+                            </label>
+                            <div class="input-hint" style="margin-left: 28px;">Se ativado, alunos precisarão validar o rosto antes de iniciar cada prova (válido por sessão)</div>
                         </div>
                     </div>
 
@@ -19729,6 +20057,8 @@ class AdminPanel {
                 tentativasLogin: 5,
                 bloqueioTempo: 15,
                 doisFatores: false,
+                // ===== NOVO CAMPO PADRÃO =====
+                exigirFaceIdProvas: false,
                 permitirMultiplosLogins: true,
                 senha: {
                     forcarTrocaInicial: true,
@@ -20305,6 +20635,8 @@ class AdminPanel {
                     tentativasLogin: parseInt(document.getElementById('config_tentativas_login')?.value) || 5,
                     bloqueioTempo: parseInt(document.getElementById('config_bloqueio_tempo')?.value) || 15,
                     doisFatores: document.getElementById('config_2fa')?.checked || false,
+                    // ===== NOVO CAMPO PARA FACE ID NAS PROVAS =====
+                    exigirFaceIdProvas: document.getElementById('config_exigir_faceid_provas')?.checked || false,
                     permitirMultiplosLogins: document.getElementById('config_permitir_multiplos_logins')?.checked !== false,
                     senha: {
                         forcarTrocaInicial: document.getElementById('config_senha_forcar_troca')?.checked !== false,
@@ -20404,7 +20736,7 @@ class AdminPanel {
             if (data.success) {
                 this.mostrarStatus('✅ Configurações salvas com sucesso!', 'success');
                 
-                // 👇 ADICIONAR ESTA LINHA
+                // 👇 APLICAR MODO ESCURO SE ATIVADO
                 this.aplicarModoEscuro(configuracoes);
                 
                 setTimeout(() => {

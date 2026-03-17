@@ -4912,10 +4912,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Chamar função principal para iniciar prova
             iniciarProva(provaSelecionada._id);
         }
-    
-        // ============================================
-        // FUNÇÃO PARA INICIAR PROVA COM VALIDAÇÃO FACIAL
-        // ============================================
+
+        // ============ FUNÇÃO PARA INICIAR PROVA (ATUALIZADA COM FACE ID) ============
         async function iniciarProva(provaId) {
             console.log('🚀 Iniciando prova com ID:', provaId);
             
@@ -4993,6 +4991,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
+                // 5. Se não tem face cadastrada, redirecionar para cadastro
                 if (!faceData.temFace) {
                     console.log('⚠️ Usuário sem Face ID cadastrada');
                     
@@ -5004,7 +5003,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 console.log('✅ Face ID encontrada, obtendo token de acesso...');
                 
-                // 5. OBTER TOKEN DE ACESSO À PROVA
+                // 6. OBTER TOKEN DE ACESSO À PROVA (COM INFORMAÇÃO DE FACE ID)
                 mostrarLoading('Preparando acesso à prova...');
                 
                 const acessoResponse = await fetch(`${API_BASE_URL}/provas/${provaId}/acesso`, {
@@ -5025,21 +5024,38 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error('Token de acesso não gerado');
                 }
                 
-                console.log('✅ Token de acesso obtido, salvando temporariamente...');
+                // 7. VERIFICAR SE A CONFIGURAÇÃO EXIGE FACE ID
+                if (acessoData.exigirFaceId === true) {
+                    console.log('🔐 Face ID exigido para esta prova - redirecionando para validação');
+                    
+                    // Salvar dados temporariamente
+                    localStorage.setItem('provaToken_temp', acessoData.provaToken);
+                    localStorage.setItem('provaId_temp', provaId);
+                    
+                    if (acessoData.prova) {
+                        localStorage.setItem('provaData_temp', JSON.stringify(acessoData.prova));
+                    }
+                    
+                    esconderLoading();
+                    
+                    // Redirecionar para validação facial
+                    console.log('🔄 Redirecionando para validação facial...');
+                    window.location.href = `/validar-face-prova.html?provaId=${provaId}`;
+                    return;
+                }
                 
-                // 6. SALVAR DADOS TEMPORARIAMENTE
-                localStorage.setItem('provaToken_temp', acessoData.provaToken);
-                localStorage.setItem('provaId_temp', provaId);
+                // 8. SE NÃO EXIGE FACE ID, IR DIRETO PARA A PROVA
+                console.log('✅ Face ID não exigido, redirecionando direto para a prova');
+                
+                localStorage.setItem('provaToken', acessoData.provaToken);
+                localStorage.setItem('provaAtual', provaId);
                 
                 if (acessoData.prova) {
-                    localStorage.setItem('provaData_temp', JSON.stringify(acessoData.prova));
+                    localStorage.setItem('provaData', JSON.stringify(acessoData.prova));
                 }
                 
                 esconderLoading();
-                
-                // 7. REDIRECIONAR PARA VALIDAÇÃO FACIAL
-                console.log('🔄 Redirecionando para validação facial...');
-                window.location.href = `/validar-face-prova.html?provaId=${provaId}`;
+                window.location.href = `/realizar-prova.html?token=${acessoData.provaToken}`;
                 
             } catch (error) {
                 console.error('❌ Erro ao iniciar prova:', error);
