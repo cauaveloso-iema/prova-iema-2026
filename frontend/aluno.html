@@ -6051,6 +6051,127 @@ window.addEventListener('offline', () => console.log('📴 Offline'));
 </script>
 
 <script>
+// ============================================
+// SOLICITAÇÃO DE PERMISSÕES - CÂMERA E GEOLOCALIZAÇÃO
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 Verificando permissões...');
+    
+    // Verificar se está em um WebView (Kodular)
+    const isWebView = navigator.userAgent.includes('wv') || 
+                      navigator.userAgent.includes('WebView') ||
+                      /; wv\)/.test(navigator.userAgent);
+    
+    if (isWebView) {
+        console.log('📱 WebView detectado - solicitando permissões');
+    }
+    
+    // ===== SOLICITAR PERMISSÃO DE CÂMERA =====
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        // Verificar se já tem permissão
+        navigator.permissions.query({ name: 'camera' }).then(function(result) {
+            if (result.state === 'granted') {
+                console.log('✅ Permissão de câmera já concedida');
+            } else if (result.state === 'prompt') {
+                console.log('📸 Solicitando permissão de câmera...');
+                // Solicitar permissão
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(function(stream) {
+                        console.log('✅ Permissão de câmera concedida');
+                        // Parar a stream imediatamente
+                        stream.getTracks().forEach(track => track.stop());
+                    })
+                    .catch(function(err) {
+                        console.log('❌ Permissão de câmera negada:', err.message);
+                    });
+            } else {
+                console.log('❌ Permissão de câmera bloqueada');
+            }
+        }).catch(function(err) {
+            // Fallback para navegadores que não suportam permissions API
+            console.log('📸 Solicitando permissão de câmera (fallback)...');
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    console.log('✅ Permissão de câmera concedida');
+                    stream.getTracks().forEach(track => track.stop());
+                })
+                .catch(function(err) {
+                    console.log('❌ Permissão de câmera negada:', err.message);
+                });
+        });
+    } else {
+        console.log('❌ API de mídia não suportada');
+    }
+    
+    // ===== SOLICITAR PERMISSÃO DE GEOLOCALIZAÇÃO =====
+    if ('geolocation' in navigator) {
+        navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
+            if (result.state === 'granted') {
+                console.log('✅ Permissão de geolocalização já concedida');
+            } else if (result.state === 'prompt') {
+                console.log('📍 Solicitando permissão de geolocalização...');
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        console.log('✅ Permissão de geolocalização concedida');
+                    },
+                    function(err) {
+                        console.log('❌ Permissão de geolocalização negada:', err.message);
+                    }
+                );
+            } else {
+                console.log('❌ Permissão de geolocalização bloqueada');
+            }
+        }).catch(function() {
+            // Fallback
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    console.log('✅ Permissão de geolocalização concedida');
+                },
+                function(err) {
+                    console.log('❌ Permissão de geolocalização negada:', err.message);
+                }
+            );
+        });
+    }
+});
+
+// ===== FUNÇÃO PARA VERIFICAR PERMISSÕES MANUALMENTE =====
+function verificarPermissoes() {
+    let status = {
+        camera: 'desconhecido',
+        geolocation: 'desconhecido'
+    };
+    
+    // Verificar câmera
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        navigator.mediaDevices.enumerateDevices()
+            .then(function(devices) {
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                if (videoDevices.length > 0) {
+                    status.camera = 'disponível';
+                    console.log('📸 Câmeras disponíveis:', videoDevices.length);
+                } else {
+                    status.camera = 'indisponível';
+                }
+            })
+            .catch(function(err) {
+                console.log('Erro ao enumerar dispositivos:', err);
+            });
+    }
+    
+    // Verificar geolocalização
+    if ('geolocation' in navigator) {
+        status.geolocation = 'disponível';
+    } else {
+        status.geolocation = 'indisponível';
+    }
+    
+    return status;
+}
+
+// Chamar verificação
+setTimeout(verificarPermissoes, 2000);
+
 
 </script>
 
