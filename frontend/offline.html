@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-
-        <!-- PWA Meta Tags -->
+    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -54,8 +53,14 @@
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
+            margin: 5px 0;
+            transition: all 0.3s;
         }
         .btn:hover { background: #4338ca; }
+        .btn-success {
+            background: #10b981;
+        }
+        .btn-success:hover { background: #059669; }
         .dicas {
             margin-top: 30px;
             padding: 20px;
@@ -66,6 +71,30 @@
         .dicas h3 { margin-top: 0; color: #374151; }
         .dicas ul { padding-left: 20px; color: #6b7280; }
         .dicas li { margin: 10px 0; }
+        .status-online {
+            color: #10b981;
+            font-weight: bold;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            margin: 20px 0;
+            overflow: hidden;
+            display: none;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #4f46e5;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .countdown {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -73,12 +102,43 @@
         <div class="icon">
             <i class="fas fa-wifi-slash"></i>
         </div>
-        <h1>📴 Você está offline</h1>
-        <p>Não foi possível carregar esta página. Conecte-se à internet e tente novamente.</p>
+        <h1 id="statusTitle">📴 Você está offline</h1>
+        <p id="statusMessage">Não foi possível carregar esta página. Conecte-se à internet e tente novamente.</p>
         
-        <button class="btn" onclick="window.location.reload()">
-            <i class="fas fa-sync-alt"></i> Tentar novamente
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div id="countdownDisplay" class="countdown"></div>
+        
+        <button class="btn" onclick="window.location.reload()" id="reloadBtn">
+            <i class="fas fa-sync-alt"></i> Tentar agora
         </button>
+
+        <button class="btn btn-success" onclick="voltarParaPaginaAnterior()" id="backBtn" style="display: none;">
+            <i class="fas fa-arrow-left"></i> Voltar para página anterior
+        </button>
+
+        <!-- COLE AQUI O LINK DO APP (antes do voltar para login) -->
+        <div style="text-align: center; margin: 20px 0 15px;">
+            <a href="https://drive.google.com/file/d/1ZswvoQW6pEKwDL-suQLTl8sW9ToF4T00/view?usp=sharing" target="_blank" style="
+                background: linear-gradient(135deg, #10b981, #059669);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 30px;
+                text-decoration: none;
+                font-size: 0.9rem;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                border: 1px solid #059669;
+                box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+                transition: all 0.3s;
+            ">
+                <i class="fas fa-download"></i> Baixar aplicativo oficial
+            </a>
+        </div>
         
         <div class="dicas">
             <h3><i class="fas fa-lightbulb"></i> Dicas:</h3>
@@ -90,101 +150,214 @@
             </ul>
         </div>
     </div>
-        <script>
-// ============================================
-// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-// ============================================
 
-(function() {
-    // Só ativar em telas menores que 768px
-    if (window.innerWidth > 768) {
-        console.log('📐 Desktop detectado - escalonamento desativado');
-        return;
-    }
-    
-    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-    
-    // Função para calcular a escala baseada na largura (apenas mobile)
-    function calcularEscalaMobile() {
-        const width = window.innerWidth;
+    <script>
+        // ============================================
+        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+        // ============================================
+        (function() {
+            if (window.innerWidth > 768) {
+                console.log('📐 Desktop detectado - escalonamento desativado');
+                return;
+            }
+            
+            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+            
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                const baseWidth = 768;
+                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+                
+                if (width <= 320) escala = 0.55;
+                else if (width <= 360) escala = 0.6;
+                else if (width <= 400) escala = 0.65;
+                else if (width <= 500) escala = 0.75;
+                else if (width <= 600) escala = 0.85;
+                else if (width <= 700) escala = 0.95;
+                else escala = 1;
+                
+                return escala;
+            }
+            
+            function aplicarEscalaMobile() {
+                if (window.innerWidth > 768) return;
+                
+                const escala = calcularEscalaMobile();
+                document.documentElement.style.setProperty('--scale-ratio', escala);
+                document.documentElement.style.setProperty('--current-width', window.innerWidth);
+                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+            }
+            
+            aplicarEscalaMobile();
+            
+            let timeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    } else {
+                        document.documentElement.style.setProperty('--scale-ratio', '1');
+                        console.log('📐 Modo desktop - escala resetada');
+                    }
+                }, 100);
+            });
+            
+            window.addEventListener('orientationchange', function() {
+                setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    }
+                }, 200);
+            });
+            
+            console.log('✅ Sistema de escalonamento mobile ativo!');
+        })();
+
+        // ============================================
+        // SISTEMA DE DETECÇÃO DE CONEXÃO E REDIRECIONAMENTO
+        // ============================================
         
-        // Largura de referência para mobile (768px)
-        const baseWidth = 768;
+        // Variáveis de controle
+        let tentativas = 0;
+        const MAX_TENTATIVAS = 10;
+        let intervalo;
+        let tempoRestante = 5;
+        let contadorAtivo = false;
+        let paginaAnterior = document.referrer || localStorage.getItem('ultimaPagina') || '/';
         
-        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
-        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+        // Elementos DOM
+        const statusTitle = document.getElementById('statusTitle');
+        const statusMessage = document.getElementById('statusMessage');
+        const reloadBtn = document.getElementById('reloadBtn');
+        const backBtn = document.getElementById('backBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const countdownDisplay = document.getElementById('countdownDisplay');
         
-        // Ajustes específicos para faixas de tamanho
-        if (width <= 320) escala = 0.55;
-        else if (width <= 360) escala = 0.6;
-        else if (width <= 400) escala = 0.65;
-        else if (width <= 500) escala = 0.75;
-        else if (width <= 600) escala = 0.85;
-        else if (width <= 700) escala = 0.95;
-        else escala = 1;
+        // Salvar página atual como última visitada
+        localStorage.setItem('ultimaPagina', window.location.pathname);
         
-        return escala;
-    }
-    
-    // Função para aplicar a escala
-    function aplicarEscalaMobile() {
-        // Só aplicar se ainda estiver em mobile
-        if (window.innerWidth > 768) return;
+        // Função para verificar conexão
+        async function verificarConexao() {
+            try {
+                const response = await fetch('/api/health-check', {
+                    method: 'GET',
+                    mode: 'no-cors',
+                    cache: 'no-cache',
+                    timeout: 3000
+                });
+                return navigator.onLine;
+            } catch (error) {
+                return false;
+            }
+        }
         
-        const escala = calcularEscalaMobile();
-        
-        // Atualizar variável CSS
-        document.documentElement.style.setProperty('--scale-ratio', escala);
-        document.documentElement.style.setProperty('--current-width', window.innerWidth);
-        
-        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-    }
-    
-    // Aplicar inicial
-    aplicarEscalaMobile();
-    
-    // Aplicar ao redimensionar (com debounce)
-    let timeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // Verificar se ainda está em mobile
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
+        // Função para voltar à página anterior
+        function voltarParaPaginaAnterior() {
+            if (paginaAnterior && paginaAnterior !== window.location.href) {
+                window.location.href = paginaAnterior;
             } else {
-                // Se passou para desktop, resetar escala
-                document.documentElement.style.setProperty('--scale-ratio', '1');
-                console.log('📐 Modo desktop - escala resetada');
+                window.location.href = '/';
             }
-        }, 100);
-    });
-    
-    // Também aplicar quando orientação mudar
-    window.addEventListener('orientationchange', function() {
-        setTimeout(() => {
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
+        }
+        
+        // Função para atualizar interface quando online
+        function quandoOnline() {
+            statusTitle.innerHTML = '✅ Conexão restaurada!';
+            statusTitle.style.color = '#10b981';
+            statusMessage.innerHTML = 'Redirecionando para a página anterior...';
+            
+            reloadBtn.style.display = 'none';
+            backBtn.style.display = 'inline-block';
+            
+            // Mostrar progresso
+            progressBar.style.display = 'block';
+            
+            // Iniciar contagem regressiva
+            tempoRestante = 5;
+            contadorAtivo = true;
+            
+            intervalo = setInterval(() => {
+                tempoRestante--;
+                
+                // Atualizar barra de progresso
+                const progresso = ((5 - tempoRestante) / 5) * 100;
+                progressFill.style.width = progresso + '%';
+                
+                // Atualizar contador
+                countdownDisplay.innerHTML = `Redirecionando em ${tempoRestante} segundos...`;
+                
+                if (tempoRestante <= 0) {
+                    clearInterval(intervalo);
+                    voltarParaPaginaAnterior();
+                }
+            }, 1000);
+        }
+        
+        // Função para atualizar interface quando offline
+        function quandoOffline() {
+            statusTitle.innerHTML = '📴 Você está offline';
+            statusTitle.style.color = '#1f2937';
+            statusMessage.innerHTML = 'Não foi possível carregar esta página. Conecte-se à internet e tente novamente.';
+            
+            reloadBtn.style.display = 'inline-block';
+            backBtn.style.display = 'none';
+            progressBar.style.display = 'none';
+            countdownDisplay.innerHTML = '';
+            
+            if (intervalo) {
+                clearInterval(intervalo);
             }
-        }, 200);
-    });
-    
-    console.log('✅ Sistema de escalonamento mobile ativo!');
-    
-})();
-</script>
+        }
+        
+        // Monitorar mudanças de conexão
+        window.addEventListener('online', async () => {
+            console.log('🌐 Conexão detectada!');
+            
+            // Verificar se realmente está online (evitar falsos positivos)
+            const realmenteOnline = await verificarConexao();
+            
+            if (realmenteOnline) {
+                quandoOnline();
+            } else {
+                console.log('⚠️ Falso positivo de conexão');
+            }
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('📴 Desconectado');
+            quandoOffline();
+        });
+        
+        // Verificar conexão inicial
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (navigator.onLine) {
+                const realmenteOnline = await verificarConexao();
+                if (realmenteOnline) {
+                    // Se estiver online mas caiu aqui, significa que a página offline foi carregada
+                    // Provavelmente o service worker serviu esta página
+                    quandoOnline();
+                }
+            }
+        });
 
-<script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker ativo'))
-            .catch(err => console.log('❌ Erro:', err));
-    });
-}
+        // ============================================
+        // SERVICE WORKER
+        // ============================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro no Service Worker:', err));
+            });
+        }
 
-window.addEventListener('online', () => console.log('🌐 Online'));
-window.addEventListener('offline', () => console.log('📴 Offline'));
-</script>
-
+        // ============================================
+        // TORNAR FUNÇÕES GLOBAIS
+        // ============================================
+        window.voltarParaPaginaAnterior = voltarParaPaginaAnterior;
+        
+    </script>
 </body>
 </html>
