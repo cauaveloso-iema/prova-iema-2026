@@ -6177,54 +6177,47 @@ setTimeout(verificarPermissoes, 2000);
 
 <script>
 // ============================================
-// SISTEMA DE PUSH - VERSÃO COM LOGS
+// SISTEMA AUTOMÁTICO DE PUSH - VERSÃO FUNCIONAL
 // ============================================
 
 (function() {
-    console.log('%c📱 SISTEMA DE PUSH INICIADO', 'color: blue; font-size: 14px');
+    console.log('📱 Sistema de push iniciado');
     
-    function aguardarOneSignal() {
-        if (window.OneSignal) {
-            console.log('%c✅ OneSignal carregado!', 'color: green');
-            verificarPlayerId();
-        } else {
-            console.log('%c⏳ Aguardando OneSignal...', 'color: orange');
-            setTimeout(aguardarOneSignal, 1000);
+    function verificarEEnviar() {
+        // Tenta pegar o ID de várias formas
+        let playerId = null;
+        
+        // Método 1: API moderna
+        if (window.OneSignal?.User?.PushSubscription?.id) {
+            playerId = window.OneSignal.User.PushSubscription.id;
         }
-    }
-    
-    function verificarPlayerId() {
-        const playerId = window.OneSignal.User?.PushSubscription?.id;
-        const optedIn = window.OneSignal.User?.PushSubscription?.optedIn;
         
-        console.log('\n📊 STATUS ATUAL:');
-        console.log(`   🆔 Player ID: ${playerId || 'NÃO GERADO'}`);
-        console.log(`   ✅ Opted In: ${optedIn ? 'SIM' : 'NÃO'}`);
-        
-        if (playerId && optedIn) {
-            console.log('%c📤 Player ID disponível!', 'color: blue');
-            enviarPlayerId(playerId);
-        } else {
-            console.log('%c⏳ Aguardando permissão do usuário...', 'color: orange');
-            setTimeout(verificarPlayerId, 3000);
-        }
-    }
-    
-    function enviarPlayerId(playerId) {
-        const token = localStorage.getItem('auth_token');
-        
-        console.log('\n🔐 VERIFICANDO AUTENTICAÇÃO:');
-        console.log(`   Token: ${token ? '✅ Presente' : '❌ Ausente'}`);
-        
-        if (!token) {
-            console.log('%c⏳ Usuário não logado. Tentando novamente em 5s...', 'color: orange');
-            setTimeout(() => enviarPlayerId(playerId), 5000);
+        // Método 2: Fallback para versões antigas
+        if (!playerId && window.OneSignal?.getUserId) {
+            window.OneSignal.getUserId(function(id) {
+                if (id) processarEnvio(id);
+            });
             return;
         }
         
-        console.log('%c📤 ENVIANDO PARA O SERVIDOR...', 'color: purple');
-        console.log(`   URL: /api/usuario/salvar-player-id`);
-        console.log(`   Payload: { playerId: "${playerId}" }`);
+        if (playerId) {
+            processarEnvio(playerId);
+        } else {
+            console.log('⏳ Aguardando ID do OneSignal...');
+            setTimeout(verificarEEnviar, 3000);
+        }
+    }
+    
+    function processarEnvio(playerId) {
+        const token = localStorage.getItem('auth_token');
+        
+        if (!token) {
+            console.log('⏳ Aguardando login...');
+            setTimeout(verificarEEnviar, 3000);
+            return;
+        }
+        
+        console.log('📤 Enviando ID:', playerId);
         
         fetch('/api/usuario/salvar-player-id', {
             method: 'POST',
@@ -6234,29 +6227,23 @@ setTimeout(verificarPermissoes, 2000);
             },
             body: JSON.stringify({ playerId: playerId })
         })
-        .then(res => {
-            console.log(`📥 Status da resposta: ${res.status}`);
-            return res.json();
-        })
+        .then(res => res.json())
         .then(data => {
-            console.log('📦 Resposta do servidor:', data);
-            
             if (data.success) {
-                console.log('%c SUCESSO! Player ID salvo! ', 'color: green; font-size: 16px');
+                console.log('✅ SUCESSO! ID salvo!');
             } else {
-                console.log('%c❌ Erro no servidor:', 'color: red', data.error);
-                console.log('⏳ Tentando novamente em 10s...');
-                setTimeout(() => enviarPlayerId(playerId), 10000);
+                console.log('❌ Erro:', data.error);
+                setTimeout(verificarEEnviar, 5000);
             }
         })
         .catch(err => {
-            console.log('%c❌ Erro de rede:', 'color: red', err);
-            console.log('⏳ Tentando novamente em 10s...');
-            setTimeout(() => enviarPlayerId(playerId), 10000);
+            console.log('❌ Erro de rede');
+            setTimeout(verificarEEnviar, 5000);
         });
     }
     
-    aguardarOneSignal();
+    // Iniciar após 2 segundos
+    setTimeout(verificarEEnviar, 2000);
 })();
 </script>
 
