@@ -6176,6 +6176,41 @@ setTimeout(verificarPermissoes, 2000);
 </script>
 
 <script>
+
+    <div id="log-push" style="
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    background: black;
+    color: lime;
+    padding: 10px;
+    z-index: 9999;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    border-radius: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+">
+    📱 LOGS DO PUSH
+</div>
+
+// Redirecionar console para a div
+const logDiv = document.getElementById('log-push');
+
+// Sobrescrever console.log
+console.log = function(msg) {
+    logDiv.innerHTML += '<br>📌 ' + new Date().toLocaleTimeString() + ': ' + msg;
+    logDiv.scrollTop = logDiv.scrollHeight;
+};
+
+console.error = function(msg) {
+    logDiv.innerHTML += '<br>❌ ' + new Date().toLocaleTimeString() + ': ' + msg;
+    logDiv.scrollTop = logDiv.scrollHeight;
+};
+
+
 // ============================================
 // SISTEMA AUTOMÁTICO DE PUSH - VERSÃO FUNCIONAL
 // ============================================
