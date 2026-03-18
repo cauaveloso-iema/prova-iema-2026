@@ -6177,7 +6177,7 @@ setTimeout(verificarPermissoes, 2000);
 
 <script>
 // ============================================
-// SISTEMA DE PUSH NOTIFICATION - VERSÃO DEFINITIVA
+// SISTEMA DE PUSH NOTIFICATION - VERSÃO ATUALIZADA
 // ============================================
 
 (function() {
@@ -6187,28 +6187,29 @@ setTimeout(verificarPermissoes, 2000);
     function aguardarOneSignal() {
         if (window.OneSignal) {
             console.log('✅ OneSignal carregado!');
-            configurarOneSignal();
+            // Aguarda um pouco para o usuário ser identificado
+            setTimeout(verificarPlayerId, 2000);
         } else {
             console.log('⏳ Aguardando OneSignal...');
             setTimeout(aguardarOneSignal, 1000);
         }
     }
     
-    // 2. CONFIGURAR E ENVIAR PLAYER ID
-    function configurarOneSignal() {
-        window.OneSignal.push(function() {
-            // Pegar o Player ID
-            window.OneSignal.getUserId(function(playerId) {
-                console.log('📱 Player ID obtido:', playerId);
-                
-                if (playerId) {
-                    enviarPlayerId(playerId);
-                } else {
-                    console.log('⏳ Aguardando Player ID...');
-                    setTimeout(configurarOneSignal, 2000);
-                }
-            });
-        });
+    // 2. VERIFICAR PLAYER ID (MÉTODO CORRETO!)
+    function verificarPlayerId() {
+        // 🔥 MÉTODO CORRETO DA VERSÃO ATUAL
+        const playerId = window.OneSignal.User?.PushSubscription?.id;
+        const optedIn = window.OneSignal.User?.PushSubscription?.optedIn;
+        
+        console.log('📱 Player ID:', playerId || '❌ Nenhum');
+        console.log('📱 Opted In:', optedIn ? '✅ Sim' : '❌ Não');
+        
+        if (playerId && optedIn) {
+            enviarPlayerId(playerId);
+        } else {
+            console.log('⏳ Aguardando permissão do usuário...');
+            setTimeout(verificarPlayerId, 3000);
+        }
     }
     
     // 3. ENVIAR PARA O SERVIDOR (EXATAMENTE COMO FUNCIONOU!)
@@ -6235,7 +6236,6 @@ setTimeout(verificarPermissoes, 2000);
         .then(data => {
             if (data.success) {
                 console.log('✅ Player ID salvo com sucesso!');
-                // Opcional: mostrar notificação
                 if (typeof Notificacao !== 'undefined') {
                     Notificacao.sucesso('✅ Notificações ativadas!');
                 }
