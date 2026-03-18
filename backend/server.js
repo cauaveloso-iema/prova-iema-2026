@@ -15856,18 +15856,73 @@ app.get('/api/admin/localizacoes/historico/:alunoId', authenticateToken, isSuper
     }
 });
 
-// Adicione no seu server.js
+// ============ ROTA PARA SALVAR PLAYER ID (COM LOGS) ============
 app.post('/api/usuario/salvar-player-id', authenticateToken, async (req, res) => {
-  try {
-    const { playerId } = req.body;
-    const userId = req.userId;
+    const startTime = Date.now();
     
-    await User.findByIdAndUpdate(userId, { onesignalPlayerId: playerId });
+    console.log('\n' + '='.repeat(60));
+    console.log(' REQUISIÇÃO DE PUSH RECEBIDA ');
+    console.log('='.repeat(60));
+    console.log(`⏰ Timestamp: ${new Date().toLocaleString('pt-BR')}`);
     
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+    try {
+        const { playerId } = req.body;
+        const userId = req.userId;
+        
+        console.log('\n📦 DADOS RECEBIDOS:');
+        console.log(`   👤 userId: ${userId}`);
+        console.log(`   🆔 playerId: ${playerId}`);
+        
+        // 1. BUSCAR USUÁRIO
+        console.log('\n🔍 Buscando usuário no banco...');
+        const user = await User.findById(userId);
+        
+        if (!user) {
+            console.log('❌ USUÁRIO NÃO ENCONTRADO!');
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Usuário não encontrado' 
+            });
+        }
+        
+        console.log(`✅ Usuário encontrado: ${user.nome} (${user.email})`);
+        console.log(`   📌 Player ID ANTES: ${user.onesignalPlayerId || 'NÃO DEFINIDO'}`);
+        
+        // 2. ATUALIZAR
+        console.log('\n📝 Atualizando playerId no banco...');
+        user.onesignalPlayerId = playerId;
+        await user.save();
+        
+        console.log(`   ✅ Player ID DEPOIS: ${user.onesignalPlayerId}`);
+        
+        // 3. VERIFICAR SE REALMENTE SALVOU
+        if (user.onesignalPlayerId === playerId) {
+            const duration = Date.now() - startTime;
+            console.log(`\n🎉 SUCESSO! Player ID salvo em ${duration}ms 🎉`);
+            console.log('='.repeat(60) + '\n');
+            
+            res.json({ success: true });
+        } else {
+            console.log('\n❌ FALHA: Player ID não foi salvo!');
+            console.log('='.repeat(60) + '\n');
+            
+            res.json({ 
+                success: false, 
+                error: 'Não foi possível salvar o ID' 
+            });
+        }
+        
+    } catch (error) {
+        console.error('\n🔥 ERRO CRÍTICO:');
+        console.error(`   Mensagem: ${error.message}`);
+        console.error(`   Stack: ${error.stack}`);
+        console.error('='.repeat(60) + '\n');
+        
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
 });
 
 // ============ ROTA PARA BUSCAR EIXO POR ID ============
