@@ -15856,41 +15856,16 @@ app.get('/api/admin/localizacoes/historico/:alunoId', authenticateToken, isSuper
     }
 });
 
+// Adicione no seu server.js
 app.post('/api/usuario/salvar-player-id', authenticateToken, async (req, res) => {
   try {
     const { playerId } = req.body;
     const userId = req.userId;
     
-    console.log('📱 ===== SALVANDO PLAYER ID =====');
-    console.log('   userId:', userId);
-    console.log('   playerId:', playerId);
+    await User.findByIdAndUpdate(userId, { onesignalPlayerId: playerId });
     
-    // 1. VERIFICAR SE O USUÁRIO EXISTE
-    const userExists = await User.findById(userId);
-    if (!userExists) {
-      console.log('❌ Usuário não encontrado');
-      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
-    }
-    
-    console.log('✅ Usuário encontrado:', userExists.email);
-    console.log('   Valor ANTES:', userExists.onesignalPlayerId);
-    
-    // 2. ATUALIZAR (funciona tanto para criar quanto para atualizar)
-    userExists.onesignalPlayerId = playerId;
-    await userExists.save();  // ← Outra forma de fazer
-    
-    console.log('   Valor DEPOIS:', userExists.onesignalPlayerId);
-    
-    if (userExists.onesignalPlayerId === playerId) {
-      console.log('🎯 SUCESSO! ID salvo!');
-      res.json({ success: true });
-    } else {
-      console.log('❌ FALHA: ID não foi salvo');
-      res.json({ success: false, error: 'Não foi possível salvar' });
-    }
-    
+    res.json({ success: true });
   } catch (error) {
-    console.error('❌ Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
