@@ -6175,5 +6175,85 @@ setTimeout(verificarPermissoes, 2000);
 
 </script>
 
+<script>
+// ============================================
+// SISTEMA DE PUSH NOTIFICATION - VERSÃO DEFINITIVA
+// ============================================
+
+(function() {
+    console.log('📱 Inicializando sistema de push...');
+    
+    // 1. AGUARDAR O ONESIGNAL CARREGAR
+    function aguardarOneSignal() {
+        if (window.OneSignal) {
+            console.log('✅ OneSignal carregado!');
+            configurarOneSignal();
+        } else {
+            console.log('⏳ Aguardando OneSignal...');
+            setTimeout(aguardarOneSignal, 1000);
+        }
+    }
+    
+    // 2. CONFIGURAR E ENVIAR PLAYER ID
+    function configurarOneSignal() {
+        window.OneSignal.push(function() {
+            // Pegar o Player ID
+            window.OneSignal.getUserId(function(playerId) {
+                console.log('📱 Player ID obtido:', playerId);
+                
+                if (playerId) {
+                    enviarPlayerId(playerId);
+                } else {
+                    console.log('⏳ Aguardando Player ID...');
+                    setTimeout(configurarOneSignal, 2000);
+                }
+            });
+        });
+    }
+    
+    // 3. ENVIAR PARA O SERVIDOR (EXATAMENTE COMO FUNCIONOU!)
+    function enviarPlayerId(playerId) {
+        const token = localStorage.getItem('auth_token');
+        
+        if (!token) {
+            console.log('⏳ Usuário não logado. Tentando novamente em 5s...');
+            setTimeout(() => enviarPlayerId(playerId), 5000);
+            return;
+        }
+        
+        console.log('📤 Enviando playerId:', playerId);
+        
+        fetch('/api/usuario/salvar-player-id', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ playerId: playerId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                console.log('✅ Player ID salvo com sucesso!');
+                // Opcional: mostrar notificação
+                if (typeof Notificacao !== 'undefined') {
+                    Notificacao.sucesso('✅ Notificações ativadas!');
+                }
+            } else {
+                console.log('❌ Erro no servidor:', data.error);
+                setTimeout(() => enviarPlayerId(playerId), 10000);
+            }
+        })
+        .catch(err => {
+            console.log('❌ Erro de rede:', err);
+            setTimeout(() => enviarPlayerId(playerId), 10000);
+        });
+    }
+    
+    // 4. INICIAR
+    aguardarOneSignal();
+})();
+</script>
+
 </body>
 </html>
