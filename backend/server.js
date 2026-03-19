@@ -16214,29 +16214,104 @@ app.get('/api/admin/onesignal/estatisticas', authenticateToken, isSuperAdmin, as
     }
 });
 
-// ============ SOMENTE O QUE VOCÊ PRECISA ============
-
-// 1️⃣ ROTA PARA KODULAR ENVIAR PLAYER ID (NOVA)
-app.post('/api/onesignal/vincular-kodular', authenticateToken, async (req, res) => {
+// ============ ROTA PARA KODULAR ENVIAR PLAYER ID (VERSÃO CORRIGIDA) ============
+app.post('/api/onesignal/vincular-kodular', async (req, res) => {
     try {
-        const { playerId } = req.body;
-        const userId = req.userId; // VEM DO TOKEN!
+        const { playerId, token } = req.body; // Token vem do body agora!
         
-        console.log('📱 Vínculo Kodular - Usuário:', userId, 'Player:', playerId);
-
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+        console.log('='.repeat(50));
+        console.log('📱 Vínculo Kodular - Nova versão');
+        console.log('📦 Dados recebidos:', { playerId, token: token ? token.substring(0, 20) + '...' : null });
+        
+        // Validações básicas
+        if (!playerId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'playerId é obrigatório' 
+            });
+        }
+        
+        if (!token) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'token é obrigatório' 
+            });
         }
 
+        // Verificar token JWT
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (jwtError) {
+            console.error('❌ Token inválido:', jwtError.message);
+            return res.status(401).json({ 
+                success: false, 
+                error: 'Token inválido ou expirado' 
+            });
+        }
+
+        const userId = decoded.id;
+        console.log('👤 Usuário ID do token:', userId);
+
+        // Buscar usuário no banco
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Usuário não encontrado' 
+            });
+        }
+
+        console.log('✅ Usuário encontrado:', user.nome, user.email);
+
         // ATUALIZAR BANCO
+        const oldPlayerId = user.onesignalPlayerId;
         user.onesignalPlayerId = playerId;
         user.ultimaValidacaoPush = new Date();
         await user.save();
 
-        res.json({ success: true });
+        console.log(`✅ Banco atualizado:`);
+        console.log(`   Antigo: ${oldPlayerId || 'nenhum'}`);
+        console.log(`   Novo: ${playerId}`);
+
+        // Opcional: Notificar usuário no sistema
+        try {
+            const Notificacao = require('./models/Notificacao');
+            await Notificacao.create({
+                usuarioId: user._id,
+                tipo: 'sistema',
+                titulo: '📱 Notificações Ativadas',
+                mensagem: 'Agora você receberá notificações push no seu celular!',
+                icone: '📱',
+                cor: '#10b981',
+                link: '/perfil',
+                prioridade: 2,
+                dados: {
+                    tipo: 'vinculo_onesignal',
+                    playerId: playerId
+                }
+            });
+            console.log('✅ Notificação de boas-vindas criada');
+        } catch (notifError) {
+            console.log('⚠️ Erro ao criar notificação:', notifError.message);
+        }
+
+        res.json({ 
+            success: true,
+            message: 'Dispositivo vinculado com sucesso',
+            usuario: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email
+            }
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error('❌ Erro no vínculo Kodular:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
 });
 
