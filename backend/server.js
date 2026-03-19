@@ -242,6 +242,8 @@ console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Co
 const monitoramentoRoutes = require('./routes/monitoramento');
 const EmailService = require('./services/email-service');
 const matriculasManager = require('./matriculas/index');
+const OneSignalAdminService = require('./services/onesignal-admin-service');
+const oneSignalAdmin = new OneSignalAdminService();
 
 // ============================================================================
 // CONFIGURAÇÃO DO QR CODE (TOTP)
@@ -15856,6 +15858,388 @@ app.get('/api/admin/localizacoes/historico/:alunoId', authenticateToken, isSuper
     }
 });
 
+// ============================================================================
+// ROTAS ADMIN DO ONESIGNAL - PRODUÇÃO
+// ============================================================================
+
+// ============ 1. LISTAR TODOS OS DISPOSITIVOS (COM DADOS DO BANCO) ============
+app.get('/api/admin/onesignal/dispositivos', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { limit = 300, offset = 0 } = req.query;
+                
+        // 1. Buscar dispositivos da API do OneSignal
+        const oneSignalRes = await oneSignalAdmin.listarDispositivos(parseInt(limit), parseInt(offset));
+        
+        if (!oneSignalRes.success) {
+            return res.status(500).json({
+                success: false,
+                error: oneSignalRes.error
+            });
+        }
+
+        // 2. Buscar usuários do banco que têm player ID
+        const usuarios = await User.find({ 
+            onesignalPlayerId: { $exists: true, $ne: null, $ne: '' } 
+        }).select('nome email role matricula turma ativo onesignalPlayerId ultimaValidacaoPush');
+
+        // 3. Criar mapa de usuários por player ID
+        const usuariosMap = {};
+        usuarios.forEach(u => {
+            if (u.onesignalPlayerId) {
+                usuariosMap[u.onesignalPlayerId] = u;
+            }
+        });
+
+        // 4. Combinar dados
+        const dispositivos = oneSignalRes.players.map(p => {
+            const usuario = usuariosMap[p.id] || null;
+            return {
+                playerId: p.id,
+                identifier: p.identifier || null,
+                deviceType: p.device_type,
+                deviceModel: p.device_model,
+                deviceOs: p.device_os,
+                createdAt: p.created_at,
+                lastActive: p.last_active,
+                language: p.language,
+                timezone: p.timezone,
+                tags: p.tags || {},
+                testType: p.test_type,
+                sessionCount: p.session_count,
+                sdk: p.sdk,
+                notificationTypes: p.notification_types,
+                
+                // Dados do banco
+                usuario: usuario ? {
+                    id: usuario._id,
+                    nome: usuario.nome,
+                    email: usuario.email,
+                    role: usuario.role,
+                    matricula: usuario.matricula,
+                    turma: usuario.turma,
+                    ativo: usuario.ativo,
+                    ultimaValidacao: usuario.ultimaValidacaoPush
+                } : null,
+                
+                // Status do vínculo
+                status: usuario ? 'vinculado' : 'nao_vinculado'
+            };
+        });
+
+        // 5. Calcular estatísticas
+        const total = oneSignalRes.total;
+        const vinculados = dispositivos.filter(d => d.status === 'vinculado').length;
+        const naoVinculados = total - vinculados;
+
+        res.json({
+            success: true,
+            dispositivos,
+            paginacao: {
+                total,
+                offset: oneSignalRes.offset,
+                limit: oneSignalRes.limit,
+                temMais: (oneSignalRes.offset + oneSignalRes.limit) < total
+            },
+            estatisticas: {
+                total,
+                vinculados,
+                naoVinculados
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar dispositivos:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ 2. BUSCAR DISPOSITIVO ESPECÍFICO ============
+app.get('/api/admin/onesignal/dispositivo/:playerId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { playerId } = req.params;
+        
+        // Buscar no OneSignal
+        const oneSignalRes = await oneSignalAdmin.buscarDispositivo(playerId);
+        
+        if (!oneSignalRes.success) {
+            return res.status(404).json({
+                success: false,
+                error: oneSignalRes.error
+            });
+        }
+
+        // Buscar no banco
+        const usuario = await User.findOne({ onesignalPlayerId: playerId })
+            .select('nome email role matricula turma ativo onesignalPlayerId ultimaValidacaoPush');
+
+        res.json({
+            success: true,
+            dispositivo: oneSignalRes.dispositivo,
+            usuario: usuario || null
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar dispositivo:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ 3. VINCULAR DISPOSITIVO A USUÁRIO ============
+app.post('/api/admin/onesignal/vincular', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { playerId, usuarioId } = req.body;
+        
+        console.log(`🔗 Admin ${req.userId} vinculando dispositivo ${playerId} ao usuário ${usuarioId}`);
+        
+        // Buscar usuário
+        const usuario = await User.findById(usuarioId);
+        
+        if (!usuario) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+
+        // Se já tinha outro player ID, remover tags do antigo
+        if (usuario.onesignalPlayerId && usuario.onesignalPlayerId !== playerId) {
+            await oneSignalAdmin.atualizarTags(usuario.onesignalPlayerId, {
+                usuario_id: null,
+                nome: null,
+                email: null,
+                role: null,
+                desvinculado_em: new Date().toISOString()
+            });
+        }
+
+        // Atualizar no banco
+        usuario.onesignalPlayerId = playerId;
+        usuario.ultimaValidacaoPush = new Date();
+        await usuario.save();
+
+        // Atualizar tags no OneSignal
+        await oneSignalAdmin.atualizarTags(playerId, {
+            usuario_id: usuario._id.toString(),
+            nome: usuario.nome,
+            email: usuario.email,
+            role: usuario.role,
+            matricula: usuario.matricula || '',
+            vinculado_em: new Date().toISOString(),
+            vinculado_por: req.userNome || 'Admin'
+        });
+
+        // Buscar admin que fez o vínculo
+        const admin = await User.findById(req.userId).select('nome');
+
+        res.json({
+            success: true,
+            message: 'Dispositivo vinculado com sucesso',
+            usuario: {
+                id: usuario._id,
+                nome: usuario.nome,
+                email: usuario.email,
+                role: usuario.role
+            },
+            admin: admin?.nome || 'Administrador'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao vincular dispositivo:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ 4. DESVINCULAR DISPOSITIVO ============
+app.post('/api/admin/onesignal/desvincular/:playerId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { playerId } = req.params;
+        
+        console.log(`🔓 Admin ${req.userId} desvinculando dispositivo ${playerId}`);
+        
+        // Buscar usuário com este player ID
+        const usuario = await User.findOne({ onesignalPlayerId: playerId });
+        
+        if (usuario) {
+            // Remover do banco
+            usuario.onesignalPlayerId = null;
+            await usuario.save();
+        }
+
+        // Remover tags no OneSignal
+        await oneSignalAdmin.atualizarTags(playerId, {
+            usuario_id: null,
+            nome: null,
+            email: null,
+            role: null,
+            matricula: null,
+            desvinculado_em: new Date().toISOString(),
+            desvinculado_por: req.userNome || 'Admin'
+        });
+
+        res.json({
+            success: true,
+            message: 'Dispositivo desvinculado com sucesso'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao desvincular dispositivo:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ 5. DELETAR DISPOSITIVO DO ONESIGNAL ============
+app.delete('/api/admin/onesignal/dispositivo/:playerId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { playerId } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} deletando dispositivo ${playerId} do OneSignal`);
+        
+        // Remover do banco se estiver vinculado
+        await User.findOneAndUpdate(
+            { onesignalPlayerId: playerId },
+            { onesignalPlayerId: null }
+        );
+
+        // Deletar do OneSignal
+        const resultado = await oneSignalAdmin.deletarDispositivo(playerId);
+        
+        if (!resultado.success) {
+            return res.status(500).json({
+                success: false,
+                error: resultado.error
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Dispositivo removido permanentemente do OneSignal'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao deletar dispositivo:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ 6. ENVIAR NOTIFICAÇÃO DE TESTE ============
+app.post('/api/admin/onesignal/testar/:playerId', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { playerId } = req.params;
+        const { titulo, mensagem } = req.body;
+        
+        console.log(`📱 Admin ${req.userId} enviando teste para ${playerId}`);
+        
+        // Buscar admin
+        const admin = await User.findById(req.userId).select('nome');
+        const adminNome = admin?.nome || 'Administrador';
+        
+        const resultado = await oneSignalAdmin.enviarNotificacaoTeste(
+            playerId,
+            titulo || '🔔 Teste do Administrador',
+            mensagem || 'Esta é uma notificação de teste enviada pelo administrador.',
+            adminNome
+        );
+        
+        if (!resultado.success) {
+            return res.status(500).json({
+                success: false,
+                error: resultado.error
+            });
+        }
+
+        // Atualizar última validação no banco se estiver vinculado
+        await User.findOneAndUpdate(
+            { onesignalPlayerId: playerId },
+            { ultimaValidacaoPush: new Date() }
+        );
+
+        res.json({
+            success: true,
+            message: 'Notificação de teste enviada com sucesso',
+            notificationId: resultado.notificationId
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao enviar teste:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ 7. ESTATÍSTICAS DO ONESIGNAL ============
+app.get('/api/admin/onesignal/estatisticas', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        // Estatísticas da API
+        const statsAPI = await oneSignalAdmin.obterEstatisticas();
+        
+        // Estatísticas do banco
+        const [totalUsuarios, usuariosComPush] = await Promise.all([
+            User.countDocuments(),
+            User.countDocuments({ onesignalPlayerId: { $exists: true, $ne: null, $ne: '' } })
+        ]);
+
+        res.json({
+            success: true,
+            oneSignal: statsAPI.success ? statsAPI.estatisticas : null,
+            banco: {
+                totalUsuarios,
+                usuariosComPush,
+                taxaAdesao: totalUsuarios > 0 ? ((usuariosComPush / totalUsuarios) * 100).toFixed(1) : 0
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar estatísticas:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ SOMENTE O QUE VOCÊ PRECISA ============
+
+// 1️⃣ ROTA PARA KODULAR ENVIAR PLAYER ID (NOVA)
+app.post('/api/onesignal/vincular-kodular', authenticateToken, async (req, res) => {
+    try {
+        const { playerId } = req.body;
+        const userId = req.userId; // VEM DO TOKEN!
+        
+        console.log('📱 Vínculo Kodular - Usuário:', userId, 'Player:', playerId);
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+        }
+
+        // ATUALIZAR BANCO
+        user.onesignalPlayerId = playerId;
+        user.ultimaValidacaoPush = new Date();
+        await user.save();
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Adicione no seu server.js
 app.post('/api/usuario/salvar-player-id', authenticateToken, async (req, res) => {
   try {
@@ -15869,6 +16253,7 @@ app.post('/api/usuario/salvar-player-id', authenticateToken, async (req, res) =>
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // ============ ROTA PARA BUSCAR EIXO POR ID ============
 app.get('/api/eixos/:id', authenticateToken, async (req, res) => {

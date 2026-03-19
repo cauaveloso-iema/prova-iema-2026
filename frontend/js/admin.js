@@ -337,7 +337,8 @@ class AdminPanel {
             matriculas: 'Matrículas Autorizadas',
             eixos: 'Gerenciar Eixos',
             cursos: 'Gerenciar Cursos',
-            faceid: 'Gerenciar Face ID',  // 🔥 ADICIONE AQUI
+            faceid: 'Gerenciar Face ID',
+            onesignal: '📱 Notificações Push (OneSignal)',  // <-- ADICIONAR ESTA LINHA
             monitoramento: 'Monitoramento do Sistema',
             configuracoes: 'Configurações do Sistema'
         };
@@ -390,6 +391,9 @@ class AdminPanel {
             case 'cursos':                    // <-- ADICIONE ESTE CASE
                 await this.loadCursos();       // <-- CHAMA O MÉTODO QUE CRIAMOS
                 break;
+            case 'onesignal':
+                await this.loadOneSignal();
+                break;
             case 'eixos':
                 await this.loadEixos();
                 break;
@@ -407,6 +411,1879 @@ class AdminPanel {
                 break;
         }
     }
+
+    
+    // ============================================================================
+    // MÓDULO ONESIGNAL ADMIN - COMPLETO (VINCULAR, DESVINCULAR, APAGAR, EDITAR, NOTIFICAR)
+    // ============================================================================
+
+    // ============ CARREGAR PÁGINA ONESIGNAL ============
+    async loadOneSignal() {
+        const contentArea = document.getElementById('contentArea');
+        
+        contentArea.innerHTML = `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #e54b4b; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                <p style="color: #6b7280;">Carregando dispositivos do OneSignal...</p>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch('/api/admin/onesignal/dispositivos?limit=300', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar dispositivos');
+
+            this.onesignalDispositivos = data.dispositivos || [];
+            this.onesignalFiltrados = [...this.onesignalDispositivos];
+            this.onesignalPaginacao = data.paginacao || { total: 0, limit: 300, offset: 0 };
+            this.onesignalEstatisticas = data.estatisticas || { total: 0, vinculados: 0, naoVinculados: 0 };
+            this.paginaAtualOneSignal = 1;
+            this.itensPorPaginaOneSignal = 25;
+
+            contentArea.innerHTML = this.renderOneSignal();
+            
+            setTimeout(() => {
+                this.renderizarTabelaOneSignal();
+                this.configurarEventosOneSignal();
+            }, 100);
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar OneSignal:', error);
+            contentArea.innerHTML = this.renderOneSignalErro(error.message);
+        }
+    }
+
+    // ============ RENDERIZAR INTERFACE ============
+    renderOneSignal() {
+        const estatisticas = this.onesignalEstatisticas || { total: 0, vinculados: 0, naoVinculados: 0 };
+        const total = estatisticas.total;
+        const vinculados = estatisticas.vinculados;
+        const naoVinculados = estatisticas.naoVinculados;
+        
+        return `
+            <div class="onesignal-container">
+                <!-- HEADER -->
+                <div class="onesignal-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-bell"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>📱 OneSignal - Dispositivos</h1>
+                            <p>Gerencie os dispositivos cadastrados e vincule aos usuários</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.atualizarOneSignal()" title="Sincronizar com OneSignal">
+                            <i class="fas fa-sync-alt"></i> Sincronizar
+                        </button>
+                        <button class="btn-header btn-primary" onclick="admin.abrirModalEnvioMassa()">
+                            <i class="fas fa-paper-plane"></i> Envio em Massa
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE ESTATÍSTICAS -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #e54b4b, #c13b3b);">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value">${total}</span>
+                            <span class="stat-label">Total no OneSignal</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" onclick="admin.filtrarOneSignalPor('vinculados')">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <i class="fas fa-link"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value">${vinculados}</span>
+                            <span class="stat-label">Vinculados</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" onclick="admin.filtrarOneSignalPor('nao_vinculados')">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            <i class="fas fa-unlink"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value">${naoVinculados}</span>
+                            <span class="stat-label">Não Vinculados</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-value">${this.onesignalPaginacao?.limit || 300}</span>
+                            <span class="stat-label">Limite por página</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FILTROS -->
+                <div class="filters-card">
+                    <div class="filters-header">
+                        <div class="filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <h3>Filtros</h3>
+                        </div>
+                        <span class="filters-badge" id="resultadosBadge">${this.onesignalFiltrados.length} resultados</span>
+                    </div>
+                    
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label><i class="fas fa-search"></i> Buscar</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="searchOneSignal" placeholder="Player ID, identifier, usuário...">
+                                <i class="fas fa-search input-icon"></i>
+                                <button class="input-clear" id="clearSearchOneSignal" onclick="admin.limparBuscaOneSignal()" style="display: none;">×</button>
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-link"></i> Vínculo</label>
+                            <select id="filterVinculo" class="filter-select" onchange="admin.filtrarOneSignal()">
+                                <option value="todos">Todos</option>
+                                <option value="vinculados">Vinculados</option>
+                                <option value="nao_vinculados">Não vinculados</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-mobile"></i> Dispositivo</label>
+                            <select id="filterTipo" class="filter-select" onchange="admin.filtrarOneSignal()">
+                                <option value="todos">Todos</option>
+                                <option value="0">📱 iOS</option>
+                                <option value="1">📱 Android</option>
+                                <option value="4">🌐 Chrome</option>
+                                <option value="5">🌐 Firefox</option>
+                                <option value="6">🌐 Safari</option>
+                                <option value="7">🌐 Edge</option>
+                                <option value="9">💻 MacOS</option>
+                                <option value="10">💻 Windows</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-actions">
+                            <button class="btn-filter" onclick="admin.aplicarFiltrosOneSignal()">
+                                <i class="fas fa-filter"></i> Filtrar
+                            </button>
+                            <button class="btn-filter btn-clear" onclick="admin.limparFiltrosOneSignal()">
+                                <i class="fas fa-eraser"></i> Limpar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABELA -->
+                <div class="table-professional">
+                    <div class="table-header">
+                        <div class="table-title">
+                            <i class="fas fa-list"></i>
+                            <h3>Dispositivos</h3>
+                        </div>
+                        <div class="table-info">
+                            <span class="items-per-page">
+                                <label>Mostrar:</label>
+                                <select onchange="admin.mudarItensPorPaginaOneSignal(this.value)">
+                                    <option value="10">10</option>
+                                    <option value="25" selected>25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </span>
+                            <span class="items-counter" id="itemsCounterOneSignal">0 registros</span>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Usuário</th>
+                                    <th>Identifier</th>
+                                    <th>Player ID</th>
+                                    <th>Dispositivo</th>
+                                    <th>Última Atividade</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaOneSignalBody">
+                                <tr><td colspan="7" class="loading-row">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- PAGINAÇÃO -->
+                    <div class="pagination-professional" id="paginacaoOneSignal">
+                        <div class="pagination-info">
+                            <span id="pageInfoOneSignal">Página 1 de 1</span>
+                        </div>
+                        <div class="pagination-controls">
+                            <button class="btn-page" onclick="admin.paginaAnteriorOneSignal()" id="btnAnteriorOneSignal" disabled>‹</button>
+                            <div class="pagination-pages" id="pageButtonsOneSignal"></div>
+                            <button class="btn-page" onclick="admin.proximaPaginaOneSignal()" id="btnProximaOneSignal" disabled>›</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .onesignal-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+                .onesignal-header { background: linear-gradient(135deg, #e54b4b 0%, #c13b3b 100%); border-radius: 20px; padding: 30px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; box-shadow: 0 10px 30px rgba(229, 75, 75, 0.3); }
+                .header-left { display: flex; align-items: center; gap: 20px; }
+                .header-icon { width: 70px; height: 70px; background: rgba(255,255,255,0.15); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; color: white; }
+                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
+                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
+                .btn-header { padding: 12px 24px; border-radius: 40px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; border: none; }
+                .btn-header.btn-primary { background: white; color: #e54b4b; }
+                .btn-header.btn-refresh { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+                .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+                .stat-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; border: 1px solid rgba(0,0,0,0.05); cursor: pointer; }
+                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .stat-icon { width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; }
+                .stat-content { flex: 1; }
+                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; }
+                .stat-label { font-size: 12px; color: #6b7280; }
+                .filters-card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.05); }
+                .filters-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0; }
+                .filters-title i { font-size: 18px; color: #e54b4b; background: #fee2e2; padding: 8px; border-radius: 10px; }
+                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                .filters-badge { background: #e54b4b; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+                .filters-grid { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 15px; }
+                .filter-group { display: flex; flex-direction: column; gap: 5px; }
+                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; }
+                .input-wrapper { position: relative; }
+                .input-wrapper input { width: 100%; padding: 10px 35px 10px 40px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; }
+                .input-wrapper input:focus { outline: none; border-color: #e54b4b; box-shadow: 0 0 0 4px rgba(229, 75, 75, 0.1); }
+                .input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; }
+                .input-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #9ca3af; cursor: pointer; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+                .filter-select { width: 100%; padding: 10px 15px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; background: white; }
+                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+                .btn-filter { padding: 10px 20px; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; background: #e54b4b; color: white; white-space: nowrap; }
+                .btn-filter.btn-clear { background: #6b7280; }
+                .table-professional { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); overflow: hidden; }
+                .table-header { padding: 16px 20px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+                .table-title i { color: #e54b4b; }
+                .data-table { width: 100%; border-collapse: collapse; }
+                .data-table th { padding: 15px 20px; text-align: left; font-size: 13px; font-weight: 600; color: #4b5563; background: #f9fafb; border-bottom: 2px solid #e5e7eb; }
+                .data-table td { padding: 15px 20px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: #1f2937; }
+                .data-table tr:hover td { background: #f9fafb; }
+                .player-id { font-family: monospace; background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+                .status-badge { display: inline-block; padding: 4px 10px; border-radius: 30px; font-size: 11px; font-weight: 600; }
+                .status-badge.vinculado { background: #d1fae5; color: #065f46; }
+                .status-badge.nao_vinculado { background: #fee2e2; color: #991b1b; }
+                .action-buttons { display: flex; gap: 5px; }
+                .btn-icon { width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #6c757d; cursor: pointer; }
+                .btn-icon:hover { background: #e9ecef; color: #e54b4b; }
+                .pagination-professional { padding: 16px 20px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+                .btn-page { min-width: 38px; height: 38px; border: 1px solid #e5e7eb; background: white; border-radius: 10px; cursor: pointer; }
+                .btn-page.active { background: #e54b4b; border-color: #e54b4b; color: white; }
+            </style>
+        `;
+    }
+
+    // ============ RENDERIZAR TABELA ONESIGNAL ============
+    renderizarTabelaOneSignal() {
+        const tbody = document.getElementById('tabelaOneSignalBody');
+        if (!tbody || !this.onesignalFiltrados) return;
+
+        const inicio = (this.paginaAtualOneSignal - 1) * this.itensPorPaginaOneSignal;
+        const fim = inicio + this.itensPorPaginaOneSignal;
+        const paginaDispositivos = this.onesignalFiltrados.slice(inicio, fim);
+
+        if (paginaDispositivos.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 40px;">
+                        <i class="fas fa-bell-slash" style="font-size: 48px; color: #d1d5db; margin-bottom: 15px;"></i>
+                        <h3 style="color: #6b7280;">Nenhum dispositivo encontrado</h3>
+                        <p style="color: #9ca3af;">Nenhum dispositivo corresponde aos filtros aplicados</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        paginaDispositivos.forEach(d => {
+            const usuario = d.usuario;
+            
+            let ultimaAtividade = 'Nunca';
+            if (d.lastActive) {
+                const data = new Date(d.lastActive * 1000);
+                ultimaAtividade = data.toLocaleDateString('pt-BR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            }
+
+            const tipos = {
+                '0': '📱 iOS', '1': '📱 Android', '2': '📱 Amazon', '3': '📱 Windows Phone',
+                '4': '🌐 Chrome', '5': '🌐 Firefox', '6': '🌐 Safari', '7': '🌐 Edge',
+                '8': '🌐 Opera', '9': '💻 MacOS', '10': '💻 Windows'
+            };
+            const tipo = tipos[d.deviceType] || `📱 Desconhecido (${d.deviceType})`;
+            const modelo = d.deviceModel ? ` ${d.deviceModel}` : '';
+
+            html += `
+                <tr>
+                    <td>
+                        ${usuario ? `
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #e54b4b, #c13b3b); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px;">
+                                    ${usuario.nome ? usuario.nome.charAt(0).toUpperCase() : '?'}
+                                </div>
+                                <div>
+                                    <strong>${usuario.nome || 'Sem nome'}</strong>
+                                    <div style="font-size: 11px; color: #6b7280;">${usuario.email || ''}</div>
+                                    <div style="font-size: 10px; color: #9ca3af;">${usuario.role || ''}</div>
+                                </div>
+                            </div>
+                        ` : `
+                            <div style="color: #9ca3af; font-style: italic;">Não vinculado</div>
+                        `}
+                    </td>
+                    <td>
+                        <span title="${d.identifier || ''}" style="font-size: 12px;">
+                            ${d.identifier ? d.identifier.substring(0, 20) + '...' : '—'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="player-id" title="${d.playerId}">
+                            ${d.playerId.substring(0, 15)}...
+                        </span>
+                    </td>
+                    <td>
+                        <div><strong>${tipo}</strong></div>
+                        <div style="font-size: 11px; color: #6b7280;">${d.deviceOs || ''}${modelo}</div>
+                    </td>
+                    <td>
+                        <div>${ultimaAtividade}</div>
+                        <div style="font-size: 11px; color: #6b7280;">
+                            Sessões: ${d.sessionCount || 0}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="status-badge ${d.status === 'vinculado' ? 'vinculado' : 'nao_vinculado'}">
+                            ${d.status === 'vinculado' ? '✅ Vinculado' : '❌ Não vinculado'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <!-- 🔥 ENVIAR NOTIFICAÇÃO PUSH -->
+                            <button class="btn-icon" onclick="admin.enviarPushOneSignal('${d.playerId}')" title="Enviar notificação push">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                            
+                            <!-- 🔥 EDITAR DISPOSITIVO -->
+                            <button class="btn-icon" onclick="admin.editarDispositivo('${d.playerId}')" title="Editar tags do dispositivo">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            
+                            ${d.status === 'vinculado' ? `
+                                <!-- 🔥 DESVINCULAR (manter no OneSignal, remover do banco) -->
+                                <button class="btn-icon warning" onclick="admin.desvincularDispositivo('${d.playerId}', '${usuario.nome}')" title="Desvincular do usuário">
+                                    <i class="fas fa-unlink"></i>
+                                </button>
+                            ` : `
+                                <!-- 🔥 VINCULAR (linkar a um usuário) -->
+                                <button class="btn-icon success" onclick="admin.abrirModalVincular('${d.playerId}')" title="Vincular a usuário">
+                                    <i class="fas fa-link"></i>
+                                </button>
+                            `}
+                            
+                            <!-- 🔥 APAGAR (deletar do OneSignal) -->
+                            <button class="btn-icon danger" onclick="admin.apagarDispositivo('${d.playerId}')" title="Apagar permanentemente do OneSignal">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+        this.atualizarPaginacaoOneSignal();
+    }
+
+    // ============ 🔥 ABRIR MODAL DE VÍNCULO (CORRIGIDO) ============
+    async abrirModalVincular(playerId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar usuários disponíveis (apenas ativos)
+            const response = await fetch('/api/admin/usuarios?limit=100&status=ativo', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
+            
+            const usuarios = data.usuarios || [];
+            
+            // Buscar dispositivo
+            const dispositivo = this.onesignalDispositivos.find(d => d.playerId === playerId);
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
+                    <!-- HEADER DO MODAL -->
+                    <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 25px; color: white; position: sticky; top: 0; z-index: 10;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                                <i class="fas fa-link"></i>
+                            </div>
+                            <div>
+                                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">Vincular Dispositivo</h2>
+                                <p style="margin: 5px 0 0; opacity: 0.9;">Link dispositivo a um usuário do sistema</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 25px;">
+                        <!-- INFORMAÇÕES DO DISPOSITIVO -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-info-circle" style="color: #10b981;"></i>
+                                Dispositivo
+                            </h3>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div>
+                                    <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Player ID</div>
+                                    <div style="font-family: monospace; background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem;">
+                                        ${playerId.substring(0, 20)}...
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Tipo</div>
+                                    <div style="background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem;">
+                                        ${this.getTipoDispositivo(dispositivo?.deviceType)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- SELEÇÃO DE USUÁRIO -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-user" style="color: #10b981;"></i>
+                                Vincular a Usuário
+                            </h3>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Buscar usuário</label>
+                                <input type="text" id="buscaUsuarioVincular" class="form-control" 
+                                    placeholder="Digite nome ou email..."
+                                    style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem;">
+                            </div>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Selecione o usuário</label>
+                                <select id="selectUsuarioVinculo" class="form-control" size="5" 
+                                    style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.95rem;">
+                                    <option value="">Selecione um usuário...</option>
+                                    ${usuarios.map(u => `
+                                        <option value="${u._id}">
+                                            ${u.nome} (${u.email}) - ${u.role}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            
+                            <div style="padding: 12px; background: #e6f7ff; border-left: 4px solid #10b981; border-radius: 8px;">
+                                <i class="fas fa-info-circle" style="color: #10b981; margin-right: 8px;"></i>
+                                <span style="font-size: 0.85rem; color: #334155;">
+                                    Ao vincular, o usuário receberá uma notificação no sistema.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-link"></i> Vincular Dispositivo';
+            document.getElementById('modalSaveBtn').onclick = () => this.vincularDispositivo(playerId);
+            document.getElementById('modalSaveBtn').textContent = '🔗 Vincular';
+            this.openModal();
+            
+            // Adicionar busca em tempo real
+            setTimeout(() => {
+                const buscaInput = document.getElementById('buscaUsuarioVincular');
+                if (buscaInput) {
+                    buscaInput.addEventListener('keyup', () => {
+                        const termo = buscaInput.value.toLowerCase();
+                        const select = document.getElementById('selectUsuarioVinculo');
+                        const options = select.options;
+                        
+                        for (let i = 0; i < options.length; i++) {
+                            const texto = options[i].text.toLowerCase();
+                            if (texto.includes(termo) || termo === '') {
+                                options[i].style.display = '';
+                            } else {
+                                options[i].style.display = 'none';
+                            }
+                        }
+                    });
+                }
+            }, 100);
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ 🔥 VINCULAR DISPOSITIVO (CORRIGIDO) ============
+    async vincularDispositivo(playerId) {
+        const usuarioId = document.getElementById('selectUsuarioVinculo')?.value;
+        
+        if (!usuarioId) {
+            this.showToast('❌ Selecione um usuário', 'error');
+            return;
+        }
+        
+        try {
+            this.showToast('🔄 Vinculando dispositivo...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar nome do admin para a notificação
+            const adminResponse = await fetch('/api/auth/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const adminData = await adminResponse.json();
+            const adminNome = adminData.user?.nome || 'Administrador';
+            
+            const response = await fetch('/api/admin/onesignal/vincular', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ playerId, usuarioId })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Dispositivo vinculado com sucesso!', 'success');
+                
+                // Notificar usuário
+                await fetch('/api/notificacoes', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        usuarioId: usuarioId,
+                        tipo: 'sistema',
+                        titulo: '📱 Dispositivo Vinculado',
+                        mensagem: `Seu dispositivo foi vinculado ao sistema pelo administrador ${adminNome}.`,
+                        icone: '📱',
+                        cor: '#10b981',
+                        link: '/perfil',
+                        prioridade: 2,
+                        dados: {
+                            provaId: null,
+                            tipo: 'vinculo_onesignal'
+                        }
+                    })
+                });
+                
+                this.closeModal();
+                await this.atualizarOneSignal();
+            } else {
+                throw new Error(data.error || 'Erro ao vincular');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ FUNÇÃO AUXILIAR PARA TIPO DE DISPOSITIVO ============
+    getTipoDispositivo(tipo) {
+        const tipos = {
+            '0': '📱 iOS', '1': '📱 Android', '2': '📱 Amazon', '3': '📱 Windows Phone',
+            '4': '🌐 Chrome', '5': '🌐 Firefox', '6': '🌐 Safari', '7': '🌐 Edge',
+            '8': '🌐 Opera', '9': '💻 MacOS', '10': '💻 Windows'
+        };
+        return tipos[tipo] || `📱 Desconhecido (${tipo})`;
+    }
+
+    // ============ CONFIGURAR EVENTOS ============
+    configurarEventosOneSignal() {
+        const searchInput = document.getElementById('searchOneSignal');
+        if (searchInput) {
+            const novoSearch = searchInput.cloneNode(true);
+            searchInput.parentNode.replaceChild(novoSearch, searchInput);
+            
+            let timeout;
+            novoSearch.addEventListener('keyup', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => this.filtrarOneSignal(), 300);
+            });
+        }
+        
+        ['filterVinculo', 'filterTipo'].forEach(id => {
+            const select = document.getElementById(id);
+            if (select) {
+                const novoSelect = select.cloneNode(true);
+                select.parentNode.replaceChild(novoSelect, select);
+                novoSelect.addEventListener('change', () => this.filtrarOneSignal());
+            }
+        });
+    }
+
+    // ============ FILTRAR DISPOSITIVOS ============
+    filtrarOneSignal() {
+        const termo = document.getElementById('searchOneSignal')?.value.toLowerCase() || '';
+        const vinculo = document.getElementById('filterVinculo')?.value || 'todos';
+        const tipo = document.getElementById('filterTipo')?.value || 'todos';
+        
+        const clearBtn = document.getElementById('clearSearchOneSignal');
+        if (clearBtn) clearBtn.style.display = termo ? 'flex' : 'none';
+        
+        this.onesignalFiltrados = this.onesignalDispositivos.filter(d => {
+            const matchSearch = termo === '' || 
+                (d.playerId && d.playerId.toLowerCase().includes(termo)) ||
+                (d.identifier && d.identifier.toLowerCase().includes(termo)) ||
+                (d.usuario?.nome && d.usuario.nome.toLowerCase().includes(termo)) ||
+                (d.usuario?.email && d.usuario.email.toLowerCase().includes(termo));
+            
+            if (!matchSearch) return false;
+            
+            if (vinculo === 'vinculados' && d.status !== 'vinculado') return false;
+            if (vinculo === 'nao_vinculados' && d.status !== 'nao_vinculado') return false;
+            
+            if (tipo !== 'todos' && d.deviceType.toString() !== tipo) return false;
+            
+            return true;
+        });
+        
+        this.paginaAtualOneSignal = 1;
+        this.renderizarTabelaOneSignal();
+        
+        const resultadosBadge = document.getElementById('resultadosBadge');
+        if (resultadosBadge) resultadosBadge.textContent = `${this.onesignalFiltrados.length} resultados`;
+    }
+
+    // ============ LIMPAR FILTROS ============
+    limparFiltrosOneSignal() {
+        document.getElementById('searchOneSignal').value = '';
+        document.getElementById('clearSearchOneSignal').style.display = 'none';
+        document.getElementById('filterVinculo').value = 'todos';
+        document.getElementById('filterTipo').value = 'todos';
+        
+        this.onesignalFiltrados = [...this.onesignalDispositivos];
+        this.paginaAtualOneSignal = 1;
+        this.renderizarTabelaOneSignal();
+        
+        const resultadosBadge = document.getElementById('resultadosBadge');
+        if (resultadosBadge) resultadosBadge.textContent = `${this.onesignalFiltrados.length} resultados`;
+    }
+
+    // ============ LIMPAR BUSCA ============
+    limparBuscaOneSignal() {
+        document.getElementById('searchOneSignal').value = '';
+        document.getElementById('clearSearchOneSignal').style.display = 'none';
+        this.filtrarOneSignal();
+    }
+
+    // ============ APLICAR FILTROS ============
+    aplicarFiltrosOneSignal() {
+        this.filtrarOneSignal();
+    }
+
+    // ============ FILTRAR POR VÍNCULO ============
+    filtrarOneSignalPor(tipo) {
+        const select = document.getElementById('filterVinculo');
+        if (select) {
+            select.value = tipo === 'todos' ? 'todos' : tipo;
+            this.filtrarOneSignal();
+        }
+    }
+
+    // ============ PAGINAÇÃO ============
+    mudarItensPorPaginaOneSignal(quantidade) {
+        this.itensPorPaginaOneSignal = parseInt(quantidade);
+        this.paginaAtualOneSignal = 1;
+        this.renderizarTabelaOneSignal();
+    }
+
+    paginaAnteriorOneSignal() {
+        if (this.paginaAtualOneSignal > 1) {
+            this.paginaAtualOneSignal--;
+            this.renderizarTabelaOneSignal();
+        }
+    }
+
+    proximaPaginaOneSignal() {
+        const totalPaginas = Math.ceil(this.onesignalFiltrados.length / this.itensPorPaginaOneSignal);
+        if (this.paginaAtualOneSignal < totalPaginas) {
+            this.paginaAtualOneSignal++;
+            this.renderizarTabelaOneSignal();
+        }
+    }
+
+    atualizarPaginacaoOneSignal() {
+        const total = this.onesignalFiltrados.length;
+        const totalPaginas = Math.ceil(total / this.itensPorPaginaOneSignal);
+        const paginaAtual = this.paginaAtualOneSignal;
+        
+        const itemsCounter = document.getElementById('itemsCounterOneSignal');
+        const pageInfo = document.getElementById('pageInfoOneSignal');
+        const btnAnterior = document.getElementById('btnAnteriorOneSignal');
+        const btnProxima = document.getElementById('btnProximaOneSignal');
+        
+        if (itemsCounter) {
+            const inicio = (paginaAtual - 1) * this.itensPorPaginaOneSignal + 1;
+            const fim = Math.min(paginaAtual * this.itensPorPaginaOneSignal, total);
+            itemsCounter.textContent = total > 0 ? `${inicio}-${fim} de ${total}` : '0 registros';
+        }
+        
+        if (pageInfo) pageInfo.textContent = `Página ${paginaAtual} de ${totalPaginas}`;
+        if (btnAnterior) btnAnterior.disabled = paginaAtual === 1;
+        if (btnProxima) btnProxima.disabled = paginaAtual === totalPaginas;
+        
+        const container = document.getElementById('pageButtonsOneSignal');
+        if (!container) return;
+        
+        let html = '';
+        const maxBotoes = 5;
+        let inicioPaginas = Math.max(1, paginaAtual - 2);
+        let fimPaginas = Math.min(totalPaginas, inicioPaginas + maxBotoes - 1);
+        
+        if (fimPaginas - inicioPaginas < maxBotoes - 1) {
+            inicioPaginas = Math.max(1, fimPaginas - maxBotoes + 1);
+        }
+        
+        for (let i = inicioPaginas; i <= fimPaginas; i++) {
+            html += `<button class="btn-page ${i === paginaAtual ? 'active' : ''}" onclick="admin.irParaPaginaOneSignal(${i})">${i}</button>`;
+        }
+        
+        container.innerHTML = html;
+    }
+
+    irParaPaginaOneSignal(pagina) {
+        const totalPaginas = Math.ceil(this.onesignalFiltrados.length / this.itensPorPaginaOneSignal);
+        if (pagina >= 1 && pagina <= totalPaginas) {
+            this.paginaAtualOneSignal = pagina;
+            this.renderizarTabelaOneSignal();
+        }
+    }
+
+    // ============ ATUALIZAR/SINCRONIZAR ============
+    async atualizarOneSignal() {
+        const refreshBtn = document.querySelector('.onesignal-header .btn-refresh i');
+        
+        try {
+            if (refreshBtn) refreshBtn.className = 'fas fa-spinner fa-spin';
+            this.showToast('🔄 Sincronizando com OneSignal...', 'info');
+            await this.loadOneSignal();
+            this.showToast('✅ Sincronização concluída!', 'success');
+        } catch (error) {
+            console.error('Erro:', error);
+            this.showToast('❌ Erro ao sincronizar', 'error');
+        } finally {
+            if (refreshBtn) setTimeout(() => refreshBtn.className = 'fas fa-sync-alt', 500);
+        }
+    }
+
+    // ============ 🔥 ENVIAR PUSH PARA DISPOSITIVO ============
+    async enviarPushOneSignal(playerId) {
+        const titulo = prompt('Título da notificação:', '📢 Notificação do Sistema');
+        if (!titulo) return;
+        
+        const mensagem = prompt('Mensagem da notificação:');
+        if (!mensagem) return;
+        
+        const dispositivo = this.onesignalDispositivos.find(d => d.playerId === playerId);
+        
+        try {
+            this.showToast('📤 Enviando notificação push...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/onesignal/testar/${playerId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    titulo, 
+                    mensagem,
+                    dados: {
+                        tipo: 'notificacao_admin',
+                        adminId: this.usuario?.id,
+                        timestamp: Date.now()
+                    }
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Push enviado com sucesso!', 'success');
+            } else {
+                throw new Error(data.error || 'Erro ao enviar push');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ 🔥 EDITAR DISPOSITIVO (MODAL APRIMORADO) ============
+    async editarDispositivo(playerId) {
+        const dispositivo = this.onesignalDispositivos.find(d => d.playerId === playerId);
+        
+        // Mapear tipos de dispositivo para nomes amigáveis
+        const tipos = {
+            '0': '📱 iOS', '1': '📱 Android', '2': '📱 Amazon', '3': '📱 Windows Phone',
+            '4': '🌐 Chrome', '5': '🌐 Firefox', '6': '🌐 Safari', '7': '🌐 Edge',
+            '8': '🌐 Opera', '9': '💻 MacOS', '10': '💻 Windows'
+        };
+        
+        const tipoDispositivo = tipos[dispositivo.deviceType] || `📱 Desconhecido (${dispositivo.deviceType})`;
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
+                <!-- HEADER DO MODAL -->
+                <div style="background: linear-gradient(135deg, #e54b4b, #c13b3b); padding: 25px; color: white; position: sticky; top: 0; z-index: 10;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                            <i class="fas fa-edit"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">Editar Dispositivo</h2>
+                            <p style="margin: 5px 0 0; opacity: 0.9;">${tipoDispositivo}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="padding: 25px;">
+                    <!-- INFORMAÇÕES DO DISPOSITIVO -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-info-circle" style="color: #e54b4b;"></i>
+                            Informações do Dispositivo
+                        </h3>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Player ID</div>
+                                <div style="font-family: monospace; background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem; word-break: break-all;">
+                                    ${dispositivo.playerId}
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Device OS</div>
+                                <div style="background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem;">
+                                    ${dispositivo.deviceOs || 'Desconhecido'}
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Modelo</div>
+                                <div style="background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem;">
+                                    ${dispositivo.deviceModel || 'Desconhecido'}
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">SDK Version</div>
+                                <div style="background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem;">
+                                    ${dispositivo.sdk || 'Desconhecido'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- EDIÇÃO DAS TAGS -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-tags" style="color: #e54b4b;"></i>
+                            Tags do Dispositivo
+                        </h3>
+                        
+                        <div id="tags-container">
+                            <!-- Tags serão inseridas aqui via JavaScript -->
+                        </div>
+                        
+                        <button type="button" onclick="admin.adicionarTag()" style="
+                            margin-top: 15px;
+                            width: 100%;
+                            padding: 10px;
+                            background: white;
+                            border: 2px dashed #cbd5e0;
+                            border-radius: 8px;
+                            color: #64748b;
+                            font-size: 0.9rem;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 8px;
+                            transition: all 0.3s;
+                        ">
+                            <i class="fas fa-plus" style="color: #e54b4b;"></i>
+                            Adicionar Nova Tag
+                        </button>
+                        
+                        <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-lightbulb" style="color: #856404;"></i>
+                            <div style="font-size: 0.85rem; color: #856404;">
+                                <strong>Dica:</strong> Tags são pares chave/valor que ajudam a identificar e segmentar dispositivos.
+                                Ex: <code>{"turma": "3A", "curso": "Informática"}</code>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- EDIÇÃO DO IDENTIFIER -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-id-card" style="color: #e54b4b;"></i>
+                            Identifier (Token de Push)
+                        </h3>
+                        
+                        <input type="text" id="editIdentifier" class="form-control" 
+                            value="${dispositivo.identifier || ''}" 
+                            placeholder="Ex: fcm-token-123456..."
+                            style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.95rem; font-family: monospace;">
+                        
+                        <div style="margin-top: 10px; font-size: 0.8rem; color: #64748b;">
+                            <i class="fas fa-info-circle"></i> 
+                            Identifier é o token único do dispositivo para receber notificações (FCM/APNS).
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Dispositivo';
+        document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoDispositivo(playerId);
+        document.getElementById('modalSaveBtn').textContent = '💾 Salvar Alterações';
+        
+        // Inicializar as tags
+        setTimeout(() => {
+            this.inicializarTags(dispositivo.tags || {});
+        }, 100);
+        
+        this.openModal();
+    }
+
+    // ============ INICIALIZAR TAGS NO MODAL ============
+    inicializarTags(tags) {
+        const container = document.getElementById('tags-container');
+        if (!container) return;
+        
+        let html = '';
+        let index = 0;
+        
+        for (const [chave, valor] of Object.entries(tags)) {
+            html += this.renderTagInput(index, chave, valor);
+            index++;
+        }
+        
+        if (index === 0) {
+            html = this.renderTagInput(0, '', '');
+        }
+        
+        container.innerHTML = html;
+        this.tagCount = index;
+    }
+
+    // ============ RENDERIZAR INPUT DE TAG ============
+    renderTagInput(index, chave = '', valor = '') {
+        return `
+            <div class="tag-item" data-index="${index}" style="
+                display: flex;
+                gap: 10px;
+                margin-bottom: 12px;
+                align-items: center;
+                background: white;
+                padding: 10px;
+                border-radius: 10px;
+                border: 1px solid #e2e8f0;
+                transition: all 0.3s;
+            ">
+                <div style="flex: 1;">
+                    <input type="text" class="tag-chave" value="${chave}" 
+                        placeholder="Chave (ex: turma)"
+                        style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;">
+                </div>
+                <div style="flex: 1;">
+                    <input type="text" class="tag-valor" value="${valor}" 
+                        placeholder="Valor (ex: 3A)"
+                        style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;">
+                </div>
+                <button type="button" onclick="admin.removerTag(${index})" 
+                    style="
+                        width: 36px;
+                        height: 36px;
+                        border: none;
+                        background: #fee2e2;
+                        color: #dc2626;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 1rem;
+                        transition: all 0.3s;
+                        flex-shrink: 0;
+                    "
+                    onmouseover="this.style.background='#fecaca';"
+                    onmouseout="this.style.background='#fee2e2';">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+    }
+
+    // ============ ADICIONAR NOVA TAG ============
+    adicionarTag() {
+        const container = document.getElementById('tags-container');
+        if (!container) return;
+        
+        this.tagCount = (this.tagCount || 0) + 1;
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = this.renderTagInput(this.tagCount);
+        
+        container.insertAdjacentHTML('beforeend', tempDiv.innerHTML);
+    }
+
+    // ============ REMOVER TAG ============
+    removerTag(index) {
+        const tagItem = document.querySelector(`.tag-item[data-index="${index}"]`);
+        if (tagItem) {
+            tagItem.remove();
+        }
+    }
+
+    // ============ SALVAR EDIÇÃO DO DISPOSITIVO ============
+    async salvarEdicaoDispositivo(playerId) {
+        try {
+            // Coletar tags
+            const tags = {};
+            const tagItems = document.querySelectorAll('.tag-item');
+            
+            tagItems.forEach(item => {
+                const chave = item.querySelector('.tag-chave')?.value?.trim();
+                const valor = item.querySelector('.tag-valor')?.value?.trim();
+                
+                if (chave && valor) {
+                    tags[chave] = valor;
+                }
+            });
+            
+            const identifier = document.getElementById('editIdentifier')?.value;
+            
+            this.showToast('🔄 Atualizando dispositivo...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/onesignal/dispositivo/${playerId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    tags,
+                    identifier 
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Dispositivo atualizado com sucesso!', 'success');
+                this.closeModal();
+                await this.atualizarOneSignal();
+            } else {
+                throw new Error(data.error || 'Erro ao atualizar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ 🔥 ENVIO EM MASSA (MODAL APRIMORADO) ============
+    async abrirModalEnvioMassa() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/onesignal/estatisticas', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            const stats = data.success ? data.oneSignal : null;
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
+                    <!-- HEADER DO MODAL -->
+                    <div style="background: linear-gradient(135deg, #e54b4b, #c13b3b); padding: 25px; color: white; position: sticky; top: 0; z-index: 10;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                                <i class="fas fa-paper-plane"></i>
+                            </div>
+                            <div>
+                                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">Envio em Massa</h2>
+                                <p style="margin: 5px 0 0; opacity: 0.9;">Envie notificações para múltiplos dispositivos</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 25px;">
+                        <!-- CARDS DE ESTATÍSTICAS -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #e2e8f0;">
+                                <div style="font-size: 28px; font-weight: 700; color: #e54b4b;">${stats?.total || 0}</div>
+                                <div style="font-size: 12px; color: #64748b;">Total de Dispositivos</div>
+                            </div>
+                            
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #e2e8f0;">
+                                <div style="font-size: 28px; font-weight: 700; color: #10b981;">${stats?.ativos7dias || 0}</div>
+                                <div style="font-size: 12px; color: #64748b;">Ativos (7 dias)</div>
+                            </div>
+                            
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #e2e8f0;">
+                                <div style="font-size: 28px; font-weight: 700; color: #f59e0b;">${stats?.ativos30dias || 0}</div>
+                                <div style="font-size: 12px; color: #64748b;">Ativos (30 dias)</div>
+                            </div>
+                        </div>
+                        
+                        <!-- SEGMENTOS -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-chart-pie" style="color: #e54b4b;"></i>
+                                Segmentação
+                            </h3>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                                <label class="segmento-card" style="
+                                    background: white;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 12px;
+                                    padding: 15px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                    text-align: center;
+                                ">
+                                    <input type="radio" name="segmento" value="todos" checked style="display: none;">
+                                    <i class="fas fa-globe" style="font-size: 24px; color: #64748b; margin-bottom: 8px; display: block;"></i>
+                                    <strong style="display: block; color: #334155;">Todos</strong>
+                                    <span style="font-size: 11px; color: #64748b;">${stats?.total || 0} dispositivos</span>
+                                </label>
+                                
+                                <label class="segmento-card" style="
+                                    background: white;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 12px;
+                                    padding: 15px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                    text-align: center;
+                                ">
+                                    <input type="radio" name="segmento" value="ativos" style="display: none;">
+                                    <i class="fas fa-check-circle" style="font-size: 24px; color: #10b981; margin-bottom: 8px; display: block;"></i>
+                                    <strong style="display: block; color: #334155;">Ativos (7 dias)</strong>
+                                    <span style="font-size: 11px; color: #64748b;">${stats?.ativos7dias || 0} dispositivos</span>
+                                </label>
+                                
+                                <label class="segmento-card" style="
+                                    background: white;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 12px;
+                                    padding: 15px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                    text-align: center;
+                                ">
+                                    <input type="radio" name="segmento" value="vinculados" style="display: none;">
+                                    <i class="fas fa-link" style="font-size: 24px; color: #8b5cf6; margin-bottom: 8px; display: block;"></i>
+                                    <strong style="display: block; color: #334155;">Vinculados</strong>
+                                    <span style="font-size: 11px; color: #64748b;">${this.onesignalEstatisticas?.vinculados || 0} dispositivos</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- MENSAGEM -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-envelope" style="color: #e54b4b;"></i>
+                                Mensagem
+                            </h3>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Título</label>
+                                <input type="text" id="massaTitulo" class="form-control" 
+                                    placeholder="Ex: Comunicado Importante"
+                                    value="📢 Comunicado do Sistema"
+                                    style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem;">
+                            </div>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Mensagem</label>
+                                <textarea id="massaMensagem" class="form-control" rows="4" 
+                                    placeholder="Digite sua mensagem..."
+                                    style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; resize: vertical;">Esta é uma notificação enviada pela administração do sistema.</textarea>
+                            </div>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="massaIncluirDados" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                    <span style="font-size: 0.9rem; color: #374151;">Incluir dados adicionais (timestamp, origem)</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- TEMPLATES RÁPIDOS -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-bolt" style="color: #e54b4b;"></i>
+                                Templates Rápidos
+                            </h3>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                                <button type="button" onclick="admin.aplicarTemplate('manutencao')" style="
+                                    background: white;
+                                    border: 1px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    padding: 10px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                    font-size: 0.8rem;
+                                ">
+                                    🔧 Manutenção
+                                </button>
+                                
+                                <button type="button" onclick="admin.aplicarTemplate('atualizacao')" style="
+                                    background: white;
+                                    border: 1px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    padding: 10px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                    font-size: 0.8rem;
+                                ">
+                                    🚀 Atualização
+                                </button>
+                                
+                                <button type="button" onclick="admin.aplicarTemplate('lembrete')" style="
+                                    background: white;
+                                    border: 1px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    padding: 10px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                    font-size: 0.8rem;
+                                ">
+                                    ⏰ Lembrete
+                                </button>
+                                
+                                <button type="button" onclick="admin.aplicarTemplate('urgente')" style="
+                                    background: white;
+                                    border: 1px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    padding: 10px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                    font-size: 0.8rem;
+                                ">
+                                    ⚠️ Urgente
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- RESUMO DO ENVIO -->
+                        <div style="background: #f0f9ff; border-radius: 12px; padding: 20px; border: 1px solid #bae6fd;">
+                            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                <div style="width: 45px; height: 45px; background: #0ea5e9; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
+                                    <i class="fas fa-calculator"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 1rem; color: #0369a1;">Resumo do Envio</h4>
+                                    <p style="margin: 3px 0 0; font-size: 0.85rem; color: #0284c7;" id="resumoEnvio">
+                                        Aguardando seleção...
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <div style="background: white; padding: 8px 15px; border-radius: 30px; font-size: 0.8rem; color: #0369a1;">
+                                    <i class="fas fa-clock"></i> Envio imediato
+                                </div>
+                                <div style="background: white; padding: 8px 15px; border-radius: 30px; font-size: 0.8rem; color: #0369a1;">
+                                    <i class="fas fa-mobile-alt"></i> Push notification
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <style>
+                    .segmento-card {
+                        transition: all 0.3s;
+                    }
+                    .segmento-card:hover {
+                        border-color: #e54b4b !important;
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(229, 75, 75, 0.1);
+                    }
+                    input[type="radio"]:checked + .segmento-card {
+                        border-color: #e54b4b;
+                        background: #fff5f5;
+                    }
+                </style>
+            `;
+            
+            // Adicionar evento para atualizar resumo
+            setTimeout(() => {
+                document.querySelectorAll('input[name="segmento"]').forEach(radio => {
+                    radio.addEventListener('change', () => this.atualizarResumoEnvio());
+                });
+                this.atualizarResumoEnvio();
+            }, 100);
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-paper-plane"></i> Envio em Massa';
+            document.getElementById('modalSaveBtn').onclick = () => this.enviarNotificacaoMassa();
+            document.getElementById('modalSaveBtn').textContent = '📤 Enviar Notificações';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ ATUALIZAR RESUMO DO ENVIO ============
+    atualizarResumoEnvio() {
+        const resumoEl = document.getElementById('resumoEnvio');
+        if (!resumoEl) return;
+        
+        const segmento = document.querySelector('input[name="segmento"]:checked')?.value;
+        let quantidade = 0;
+        
+        if (segmento === 'todos') {
+            quantidade = this.onesignalEstatisticas?.total || 0;
+        } else if (segmento === 'ativos') {
+            quantidade = this.onesignalEstatisticas?.ativos7dias || 0;
+        } else if (segmento === 'vinculados') {
+            quantidade = this.onesignalEstatisticas?.vinculados || 0;
+        }
+        
+        resumoEl.innerHTML = `<strong>${quantidade}</strong> dispositivo(s) serão notificados`;
+    }
+
+    // ============ APLICAR TEMPLATE DE MENSAGEM ============
+    aplicarTemplate(tipo) {
+        const tituloInput = document.getElementById('massaTitulo');
+        const mensagemInput = document.getElementById('massaMensagem');
+        
+        const templates = {
+            'manutencao': {
+                titulo: '🔧 Manutenção Programada',
+                mensagem: 'Informamos que o sistema passará por manutenção programada no dia XX/XX/XXXX das HH:MM às HH:MM. O sistema poderá ficar indisponível durante este período.'
+            },
+            'atualizacao': {
+                titulo: '🚀 Nova Atualização',
+                mensagem: 'O sistema foi atualizado com novas funcionalidades! Acesse para conferir as novidades.'
+            },
+            'lembrete': {
+                titulo: '⏰ Lembrete Importante',
+                mensagem: 'Lembramos que o prazo para entrega das atividades está se aproximando. Não deixe para última hora!'
+            },
+            'urgente': {
+                titulo: '⚠️ AVISO URGENTE',
+                mensagem: 'Comunicado importante a todos os usuários. Por favor, verifiquem suas pendências com urgência.'
+            }
+        };
+        
+        const template = templates[tipo];
+        if (template) {
+            tituloInput.value = template.titulo;
+            mensagemInput.value = template.mensagem;
+            this.showToast(`✅ Template "${template.titulo}" aplicado!`, 'success');
+        }
+    }
+
+    // ============ 🔥 DESVINCULAR DISPOSITIVO ============
+    async desvincularDispositivo(playerId, nomeUsuario) {
+        const confirmar = await this.confirmar(
+            '🔓 Desvincular Dispositivo',
+            `Deseja desvincular o dispositivo de <strong>${nomeUsuario}</strong>?<br><br>
+            O dispositivo continuará no OneSignal mas não terá mais vínculo com o usuário.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🔄 Desvinculando dispositivo...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            const dispositivo = this.onesignalDispositivos.find(d => d.playerId === playerId);
+            const usuarioId = dispositivo?.usuario?.id;
+            
+            const response = await fetch(`/api/admin/onesignal/desvincular/${playerId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Dispositivo desvinculado!', 'success');
+                
+                // Notificar usuário
+                if (usuarioId) {
+                    await this.criarNotificacaoDesvinculo(usuarioId, playerId);
+                }
+                
+                await this.atualizarOneSignal();
+            } else {
+                throw new Error(data.error || 'Erro ao desvincular');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ 🔥 APAGAR DISPOSITIVO ============
+    async apagarDispositivo(playerId) {
+        const confirmar = await this.confirmar(
+            '🗑️ Apagar Dispositivo',
+            `<strong style="color: #dc3545;">ATENÇÃO!</strong><br><br>
+            Deseja apagar permanentemente este dispositivo do OneSignal?<br><br>
+            Esta ação não pode ser desfeita.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🗑️ Apagando dispositivo...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/onesignal/dispositivo/${playerId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Dispositivo apagado!', 'success');
+                await this.atualizarOneSignal();
+            } else {
+                throw new Error(data.error || 'Erro ao apagar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ 🔥 NOTIFICAÇÕES DO SISTEMA ============
+    async criarNotificacaoVinculo(usuarioId, playerId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            await fetch('/api/notificacoes', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    usuarioId: usuarioId,
+                    tipo: 'sistema',
+                    titulo: '📱 Dispositivo Vinculado',
+                    mensagem: 'Seu dispositivo foi vinculado ao sistema com sucesso.',
+                    icone: '📱',
+                    cor: '#10b981',
+                    link: '/perfil',
+                    prioridade: 2,
+                    dados: {
+                        provaId: null,
+                        tipo: 'vinculo_onesignal'
+                    }
+                })
+            });
+        } catch (error) {
+            console.error('❌ Erro ao notificar vínculo:', error);
+        }
+    }
+
+    async criarNotificacaoDesvinculo(usuarioId, playerId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            await fetch('/api/notificacoes', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    usuarioId: usuarioId,
+                    tipo: 'sistema',
+                    titulo: '📱 Dispositivo Desvinculado',
+                    mensagem: 'Seu dispositivo foi desvinculado do sistema.',
+                    icone: '📱',
+                    cor: '#ef4444',
+                    link: '/perfil',
+                    prioridade: 2,
+                    dados: {
+                        provaId: null,
+                        tipo: 'desvinculo_onesignal'
+                    }
+                })
+            });
+        } catch (error) {
+            console.error('❌ Erro ao notificar desvínculo:', error);
+        }
+    }
+
+    // ============ 🔥 NOTIFICAÇÕES EM MASSA ============
+    async abrirModalEnvioMassa() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/onesignal/estatisticas', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            const stats = data.success ? data.oneSignal : null;
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 20px;">
+                    <h3 style="margin-bottom: 15px;">Envio em Massa</h3>
+                    
+                    <div style="background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 15px; margin-bottom: 20px;">
+                        <p><strong>Total de dispositivos:</strong> ${stats?.total || 0}</p>
+                        <p><strong>Ativos (7 dias):</strong> ${stats?.ativos7dias || 0}</p>
+                        <p><strong>Ativos (30 dias):</strong> ${stats?.ativos30dias || 0}</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Título</label>
+                        <input type="text" id="massaTitulo" class="form-control" placeholder="Título da notificação" value="📢 Comunicado Geral">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mensagem</label>
+                        <textarea id="massaMensagem" class="form-control" rows="4" placeholder="Digite sua mensagem..."></textarea>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Segmento</label>
+                        <select id="massaSegmento" class="form-control">
+                            <option value="todos">Todos os dispositivos</option>
+                            <option value="ativos">Apenas ativos (últimos 7 dias)</option>
+                            <option value="vinculados">Apenas vinculados</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-paper-plane"></i> Envio em Massa';
+            document.getElementById('modalSaveBtn').onclick = () => this.enviarNotificacaoMassa();
+            document.getElementById('modalSaveBtn').textContent = 'Enviar';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ 🔥 ENVIO EM MASSA (MODAL APRIMORADO - MESMO PADRÃO) ============
+    async abrirModalEnvioMassa() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/onesignal/estatisticas', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            const stats = data.success ? data.oneSignal : null;
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
+                    <!-- HEADER DO MODAL (MESMO PADRÃO DO EDITAR) -->
+                    <div style="background: linear-gradient(135deg, #e54b4b, #c13b3b); padding: 25px; color: white; position: sticky; top: 0; z-index: 10;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                                <i class="fas fa-paper-plane"></i>
+                            </div>
+                            <div>
+                                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">Envio em Massa</h2>
+                                <p style="margin: 5px 0 0; opacity: 0.9;">Envie notificações para múltiplos dispositivos</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 25px;">
+                        <!-- CARDS DE ESTATÍSTICAS (MESMO ESTILO) -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
+                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 8px;">Total de Dispositivos</div>
+                                <div style="font-size: 32px; font-weight: 700; color: #e54b4b;">${stats?.total || 0}</div>
+                            </div>
+                            
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
+                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 8px;">Ativos (7 dias)</div>
+                                <div style="font-size: 32px; font-weight: 700; color: #10b981;">${stats?.ativos7dias || 0}</div>
+                            </div>
+                            
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
+                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 8px;">Ativos (30 dias)</div>
+                                <div style="font-size: 32px; font-weight: 700; color: #f59e0b;">${stats?.ativos30dias || 0}</div>
+                            </div>
+                        </div>
+                        
+                        <!-- SEGMENTAÇÃO -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-chart-pie" style="color: #e54b4b;"></i>
+                                Segmentação
+                            </h3>
+                            
+                            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                <label style="flex: 1; min-width: 150px; cursor: pointer;">
+                                    <input type="radio" name="segmentoMassa" value="todos" checked style="display: none;">
+                                    <div style="
+                                        border: 2px solid #e2e8f0;
+                                        border-radius: 12px;
+                                        padding: 15px;
+                                        text-align: center;
+                                        transition: all 0.3s;
+                                        background: white;
+                                    " class="segmento-option">
+                                        <i class="fas fa-globe" style="font-size: 24px; color: #64748b; margin-bottom: 8px; display: block;"></i>
+                                        <strong style="display: block; color: #334155;">Todos</strong>
+                                        <span style="font-size: 11px; color: #64748b;">${stats?.total || 0} dispositivos</span>
+                                    </div>
+                                </label>
+                                
+                                <label style="flex: 1; min-width: 150px; cursor: pointer;">
+                                    <input type="radio" name="segmentoMassa" value="ativos" style="display: none;">
+                                    <div style="
+                                        border: 2px solid #e2e8f0;
+                                        border-radius: 12px;
+                                        padding: 15px;
+                                        text-align: center;
+                                        transition: all 0.3s;
+                                        background: white;
+                                    " class="segmento-option">
+                                        <i class="fas fa-check-circle" style="font-size: 24px; color: #10b981; margin-bottom: 8px; display: block;"></i>
+                                        <strong style="display: block; color: #334155;">Ativos (7 dias)</strong>
+                                        <span style="font-size: 11px; color: #64748b;">${stats?.ativos7dias || 0} dispositivos</span>
+                                    </div>
+                                </label>
+                                
+                                <label style="flex: 1; min-width: 150px; cursor: pointer;">
+                                    <input type="radio" name="segmentoMassa" value="vinculados" style="display: none;">
+                                    <div style="
+                                        border: 2px solid #e2e8f0;
+                                        border-radius: 12px;
+                                        padding: 15px;
+                                        text-align: center;
+                                        transition: all 0.3s;
+                                        background: white;
+                                    " class="segmento-option">
+                                        <i class="fas fa-link" style="font-size: 24px; color: #8b5cf6; margin-bottom: 8px; display: block;"></i>
+                                        <strong style="display: block; color: #334155;">Vinculados</strong>
+                                        <span style="font-size: 11px; color: #64748b;">${this.onesignalEstatisticas?.vinculados || 0} dispositivos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- MENSAGEM -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-envelope" style="color: #e54b4b;"></i>
+                                Mensagem
+                            </h3>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Título</label>
+                                <input type="text" id="massaTitulo" class="form-control" 
+                                    placeholder="Ex: Comunicado Importante"
+                                    value="📢 Comunicado do Sistema"
+                                    style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem;">
+                            </div>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Mensagem</label>
+                                <textarea id="massaMensagem" class="form-control" rows="4" 
+                                    placeholder="Digite sua mensagem..."
+                                    style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; resize: vertical;">Esta é uma notificação enviada pela administração do sistema.</textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- RESUMO DO ENVIO -->
+                        <div style="background: #fef2f2; border-radius: 12px; padding: 20px; border: 1px solid #fecaca;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="width: 45px; height: 45px; background: #e54b4b; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
+                                    <i class="fas fa-calculator"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 1rem; color: #991b1b;">Resumo do Envio</h4>
+                                    <p style="margin: 3px 0 0; font-size: 0.9rem; color: #b91c1c;" id="resumoEnvio">
+                                        Aguardando seleção...
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <style>
+                    .segmento-option {
+                        transition: all 0.3s;
+                    }
+                    .segmento-option:hover {
+                        border-color: #e54b4b !important;
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(229, 75, 75, 0.1);
+                    }
+                    input[type="radio"]:checked + .segmento-option {
+                        border-color: #e54b4b;
+                        background: #fff5f5;
+                    }
+                    input[type="radio"]:checked + .segmento-option i:first-of-type {
+                        color: #e54b4b !important;
+                    }
+                </style>
+            `;
+            
+            // Adicionar evento para atualizar resumo
+            setTimeout(() => {
+                document.querySelectorAll('input[name="segmentoMassa"]').forEach(radio => {
+                    radio.addEventListener('change', () => this.atualizarResumoEnvio());
+                });
+                this.atualizarResumoEnvio();
+            }, 100);
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-paper-plane"></i> Envio em Massa';
+            document.getElementById('modalSaveBtn').onclick = () => this.enviarNotificacaoMassa();
+            document.getElementById('modalSaveBtn').textContent = '📤 Enviar Notificações';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ ATUALIZAR RESUMO DO ENVIO ============
+    atualizarResumoEnvio() {
+        const resumoEl = document.getElementById('resumoEnvio');
+        if (!resumoEl) return;
+        
+        const segmento = document.querySelector('input[name="segmentoMassa"]:checked')?.value;
+        let quantidade = 0;
+        
+        if (segmento === 'todos') {
+            quantidade = this.onesignalEstatisticas?.total || 0;
+        } else if (segmento === 'ativos') {
+            quantidade = this.onesignalEstatisticas?.ativos7dias || 0;
+        } else if (segmento === 'vinculados') {
+            quantidade = this.onesignalEstatisticas?.vinculados || 0;
+        }
+        
+        resumoEl.innerHTML = `<strong>${quantidade}</strong> dispositivo(s) serão notificados`;
+    }
+
+    // ============ VER DETALHES DO USUÁRIO ============
+    async verDetalhesUsuario(usuarioId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar usuário');
+            
+            const usuario = data.user;
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 20px;">
+                    <h3 style="margin-bottom: 15px;">${usuario.nome}</h3>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                        <p><strong>Email:</strong> ${usuario.email}</p>
+                        <p><strong>Perfil:</strong> ${usuario.role}</p>
+                        <p><strong>Matrícula:</strong> ${usuario.matricula || '—'}</p>
+                        <p><strong>Turma:</strong> ${usuario.turma || '—'}</p>
+                        <p><strong>Status:</strong> ${usuario.ativo ? '✅ Ativo' : '❌ Inativo'}</p>
+                        ${usuario.onesignalPlayerId ? `
+                            <p><strong>Player ID:</strong> <span class="player-id">${usuario.onesignalPlayerId}</span></p>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user"></i> Detalhes do Usuário';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ RENDERIZAR ERRO ============
+    renderOneSignalErro(mensagem) {
+        return `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 16px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #e54b4b; margin-bottom: 20px;"></i>
+                <h3 style="color: #7f1d1d;">Erro ao conectar com OneSignal</h3>
+                <p style="color: #6c757d; margin-bottom: 20px;">${mensagem}</p>
+                <button onclick="admin.loadOneSignal()" style="background: #e54b4b; color: white; border: none; padding: 10px 30px; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                </button>
+            </div>
+        `;
+    }
+
 
     // ============ DASHBOARD ============
 

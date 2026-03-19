@@ -76,7 +76,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
 },
-
+ultimaValidacaoPush: {
+    type: Date,
+    default: null
+},
 role: {
   type: String,
   enum: ['aluno', 'professor', 'admin', 'super_admin'], // <-- ADICIONADO super_admin
