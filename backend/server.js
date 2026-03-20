@@ -370,6 +370,14 @@ const emailService = new EmailService();
 // ============================================================================
 // MIDDLEWARES GLOBAIS
 // ============================================================================
+// ========== CONFIGURAÇÃO DO EXPRESS PARA CAPTURAR RAW BODY ==========
+app.use(express.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf.toString();
+    }
+}));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
@@ -16217,13 +16225,53 @@ app.get('/api/admin/onesignal/estatisticas', authenticateToken, isSuperAdmin, as
 // ============ ROTA PARA KODULAR ENVIAR PLAYER ID (VERSÃO CORRIGIDA) ============
 app.post('/api/onesignal/vincular-kodular', async (req, res) => {
     try {
-        const { playerId, token } = req.body; // Token vem do body agora!
+        console.log('='.repeat(60));
+        console.log('📱 Vínculo Kodular - Versão Corrigida');
         
-        console.log('='.repeat(50));
-        console.log('📱 Vínculo Kodular - Nova versão');
-        console.log('📦 Dados recebidos:', { playerId, token: token ? token.substring(0, 20) + '...' : null });
+        // 1️⃣ MOSTRAR O RAW BODY (como chega do Kodular)
+        console.log('📦 Raw body:', req.rawBody);
         
-        // Validações básicas
+        // 2️⃣ LIMPAR O JSON (remover as barras escapadas)
+        let cleanedJson = req.rawBody;
+        
+        // Remove as barras invertidas que escapam as aspas
+        cleanedJson = cleanedJson.replace(/\\"/g, '"');
+        
+        // Remove aspas extras no início e fim se houver
+        cleanedJson = cleanedJson.replace(/^"|"$/g, '');
+        
+        console.log('📦 Cleaned JSON:', cleanedJson);
+        
+        // 3️⃣ FAZER O PARSE DO JSON LIMPO
+        let data;
+        try {
+            data = JSON.parse(cleanedJson);
+        } catch (parseError) {
+            console.error('❌ Erro ao fazer parse do JSON:', parseError.message);
+            
+            // Tentativa alternativa: extrair com regex
+            const playerIdMatch = cleanedJson.match(/"playerId":"([^"]+)"/);
+            const tokenMatch = cleanedJson.match(/"token":"([^"]+)"/);
+            
+            if (playerIdMatch && tokenMatch) {
+                data = {
+                    playerId: playerIdMatch[1],
+                    token: tokenMatch[1]
+                };
+                console.log('📦 Dados extraídos com regex:', data);
+            } else {
+                throw new Error('Não foi possível extrair os dados do JSON');
+            }
+        }
+        
+        const { playerId, token } = data;
+        
+        console.log('📦 Dados processados:', { 
+            playerId, 
+            token: token ? token.substring(0, 30) + '...' : null 
+        });
+
+        // 4️⃣ VALIDAÇÕES
         if (!playerId) {
             return res.status(400).json({ 
                 success: false, 
@@ -16238,7 +16286,7 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
             });
         }
 
-        // Verificar token JWT
+        // 5️⃣ VERIFICAR TOKEN JWT
         let decoded;
         try {
             decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -16253,7 +16301,7 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
         const userId = decoded.id;
         console.log('👤 Usuário ID do token:', userId);
 
-        // Buscar usuário no banco
+        // 6️⃣ BUSCAR USUÁRIO NO BANCO
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ 
@@ -16264,7 +16312,7 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
 
         console.log('✅ Usuário encontrado:', user.nome, user.email);
 
-        // ATUALIZAR BANCO
+        // 7️⃣ ATUALIZAR BANCO
         const oldPlayerId = user.onesignalPlayerId;
         user.onesignalPlayerId = playerId;
         user.ultimaValidacaoPush = new Date();
@@ -16274,9 +16322,9 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
         console.log(`   Antigo: ${oldPlayerId || 'nenhum'}`);
         console.log(`   Novo: ${playerId}`);
 
-        // Opcional: Notificar usuário no sistema
+        // 8️⃣ NOTIFICAÇÃO OPCIONAL
         try {
-            const Notificacao = require('./models/Notificacao');
+            const Notificacao = mongoose.model('Notificacao');
             await Notificacao.create({
                 usuarioId: user._id,
                 tipo: 'sistema',
@@ -16296,6 +16344,7 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
             console.log('⚠️ Erro ao criar notificação:', notifError.message);
         }
 
+        // 9️⃣ RESPOSTA DE SUCESSO
         res.json({ 
             success: true,
             message: 'Dispositivo vinculado com sucesso',
