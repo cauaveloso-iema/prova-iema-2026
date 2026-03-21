@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-        <!-- PWA Meta Tags -->
+    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
 
-    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <!-- FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
@@ -256,6 +256,25 @@
             color: #6b7280;
             font-size: 0.9rem;
         }
+
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 15px;
+        }
+
+        .btn-retry {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 30px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -283,21 +302,6 @@
             <span class="attempt-badge" id="attemptCounter">Tentativa 1/3</span>
         </div>
 
-        <!-- NOVO: Indicador de localização -->
-        <div class="localizacao-status" id="localizacaoStatus" style="
-            padding: 8px 15px;
-            background: #f0f9ff;
-            border-bottom: 1px solid #bae6fd;
-            font-size: 0.85rem;
-            color: #0369a1;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        ">
-            <i class="fas fa-map-marker-alt"></i>
-            <span id="localizacaoTexto">Verificando localização...</span>
-        </div>
-
         <div class="prova-info-card" id="provaInfo">
             <h3><i class="fas fa-file-alt"></i> Prova selecionada:</h3>
             <p id="provaTitulo">Carregando...</p>
@@ -305,10 +309,10 @@
         </div>
         
         <div class="btn-group">
-            <button class="btn btn-primary" id="btnValidar" onclick="iniciarValidacao()">
+            <button class="btn btn-primary" id="btnValidar">
                 <i class="fas fa-camera"></i> Iniciar Validação
             </button>
-            <button class="btn btn-outline" id="btnCancelar" onclick="cancelarValidacao()">
+            <button class="btn btn-outline" id="btnCancelar">
                 <i class="fas fa-times"></i> Cancelar
             </button>
         </div>
@@ -320,37 +324,6 @@
     </div>
 
     <script>
-        // ============================================
-        // CONFIGURAÇÃO DE GEOLOCALIZAÇÃO (NOVO)
-        // ============================================
-        const LOCALIZACAO_ESCOLA = {
-            latitude: -2.5298,   // Latitude do IEMA
-            longitude: -44.2564,  // Longitude do IEMA
-            raioPermitido: 5000,  // 5000 metros = 5km de raio
-            nome: 'IEMA'
-        };
-
-        let localizacaoAtual = null;
-        let localizacaoVerificada = false;
-
-        // ============================================
-        // CALCULAR DISTÂNCIA ENTRE COORDENADAS (NOVO)
-        // ============================================
-        function calcularDistancia(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Raio da Terra em metros
-            const φ1 = lat1 * Math.PI/180;
-            const φ2 = lat2 * Math.PI/180;
-            const Δφ = (lat2 - lat1) * Math.PI/180;
-            const Δλ = (lon2 - lon1) * Math.PI/180;
-
-            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                    Math.cos(φ1) * Math.cos(φ2) *
-                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-            return R * c; // Distância em metros
-        }
-
         // ============================================
         // CONFIGURAÇÃO
         // ============================================
@@ -394,14 +367,13 @@
         }
 
         // ============================================
-        // CARREGAR DADOS DA PROVA (COM GEOLOCALIZAÇÃO - SEM VALIDAÇÃO)
+        // CARREGAR DADOS DA PROVA
         // ============================================
         async function carregarDadosProva() {
             const params = getQueryParams();
             provaId = params.provaId;
             
             if (!provaId) {
-                // Tentar recuperar do localStorage
                 provaId = localStorage.getItem('provaId_temp');
                 
                 if (!provaId) {
@@ -411,41 +383,7 @@
                 }
             }
             
-            // 🔥 VERIFICAR SE JÁ TEM LOCALIZAÇÃO SALVA
-            const localizacaoSalva = sessionStorage.getItem('ultima_localizacao');
-            const statusEl = document.getElementById('localizacaoTexto');
-            const statusDiv = document.getElementById('localizacaoStatus');
-            
-            if (localizacaoSalva && statusEl) {
-                try {
-                    const loc = JSON.parse(localizacaoSalva);
-                    
-                    // 🔥 COMENTADO: não calcular distância para não bloquear
-                    /*
-                    const distancia = calcularDistancia(
-                        loc.latitude,
-                        loc.longitude,
-                        LOCALIZACAO_ESCOLA.latitude,
-                        LOCALIZACAO_ESCOLA.longitude
-                    );
-                    
-                    const dentroDoRaio = distancia <= LOCALIZACAO_ESCOLA.raioPermitido;
-                    */
-                    
-                    // 🔥 APENAS MOSTRAR A LOCALIZAÇÃO SALVA
-                    statusEl.innerHTML = `📍 Localização salva: (${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)})`;
-                    statusDiv.style.background = '#f0fdf4';
-                    statusDiv.style.color = '#166534';
-                    localizacaoVerificada = true;
-                    localizacaoAtual = loc;
-                    
-                } catch (e) {
-                    console.warn('Erro ao ler localização salva');
-                }
-            }
-            
             try {
-                // Buscar dados da prova
                 let dadosTemp = localStorage.getItem('provaDados_temp');
                 let tokenTemp = localStorage.getItem('provaToken_temp');
                 
@@ -539,229 +477,35 @@
                 
             } catch (error) {
                 console.error('❌ Erro na câmera:', error);
-                instructionText.innerHTML = '❌ Erro ao acessar câmera';
+                
+                let errorMsg = '';
+                if (error.name === 'NotAllowedError') {
+                    errorMsg = 'Permissão da câmera negada. Por favor, permita o acesso à câmera nas configurações do app.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMsg = 'Nenhuma câmera encontrada no dispositivo.';
+                } else {
+                    errorMsg = 'Erro ao acessar câmera: ' + error.message;
+                }
+                
+                document.querySelector('.camera-box').innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-camera"></i>
+                        <p>${errorMsg}</p>
+                        <button class="btn-retry" onclick="location.reload()">Tentar novamente</button>
+                    </div>
+                `;
+                instructionText.innerHTML = '❌ ' + errorMsg;
             }
         }
 
         // ============================================
-        // VERIFICAR GEOLOCALIZAÇÃO (APENAS CAPTURA - SEM VALIDAÇÃO)
-        // ============================================
-        async function verificarGeolocalizacao() {
-            return new Promise((resolve) => {
-                console.log('📍 Verificando geolocalização...');
-                
-                // Atualizar status visual
-                const statusEl = document.getElementById('localizacaoTexto');
-                const statusDiv = document.getElementById('localizacaoStatus');
-                
-                if (statusEl) statusEl.innerHTML = '📍 Solicitando permissão de localização...';
-                if (statusDiv) {
-                    statusDiv.style.background = '#f0f9ff';
-                    statusDiv.style.color = '#0369a1';
-                }
-                
-                // Verificar se o navegador suporta geolocalização
-                if (!navigator.geolocation) {
-                    console.warn('⚠️ Navegador não suporta geolocalização');
-                    if (statusEl) statusEl.innerHTML = '⚠️ Geolocalização não suportada';
-                    if (statusDiv) {
-                        statusDiv.style.background = '#fef3c7';
-                        statusDiv.style.color = '#92400e';
-                    }
-                    resolve({ 
-                        success: false, 
-                        error: 'Navegador não suporta geolocalização',
-                        podeContinuar: true 
-                    });
-                    return;
-                }
-                
-                const options = {
-                    enableHighAccuracy: true,
-                    timeout: 15000,
-                    maximumAge: 0
-                };
-                
-                navigator.geolocation.getCurrentPosition(
-                    // SUCESSO
-                    (position) => {
-                        localizacaoAtual = {
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude,
-                            accuracy: position.coords.accuracy,
-                            timestamp: new Date().toISOString()
-                        };
-                        
-                        console.log('✅ Localização obtida:', localizacaoAtual);
-                        
-                        // 🔥 COMENTADO: Cálculo de distância e validação de raio
-                        /*
-                        // Calcular distância até a escola
-                        const distancia = calcularDistancia(
-                            localizacaoAtual.latitude,
-                            localizacaoAtual.longitude,
-                            LOCALIZACAO_ESCOLA.latitude,
-                            LOCALIZACAO_ESCOLA.longitude
-                        );
-                        
-                        console.log(`📏 Distância da escola: ${Math.round(distancia)} metros`);
-                        console.log(`🎯 Raio permitido: ${LOCALIZACAO_ESCOLA.raioPermitido} metros`);
-                        
-                        // Verificar se está dentro do raio
-                        const dentroDoRaio = distancia <= LOCALIZACAO_ESCOLA.raioPermitido;
-                        */
-                        
-                        // 🔥 SEMPRE CONSIDERAR QUE ESTÁ DENTRO DO RAIO (para teste)
-                        const dentroDoRaio = true;
-                        
-                        if (dentroDoRaio) {
-                            console.log('✅ Localização capturada com sucesso!');
-                            if (statusEl) statusEl.innerHTML = `✅ Localização obtida (${localizacaoAtual.latitude.toFixed(4)}, ${localizacaoAtual.longitude.toFixed(4)})`;
-                            if (statusDiv) {
-                                statusDiv.style.background = '#f0fdf4';
-                                statusDiv.style.color = '#166534';
-                            }
-                        } else {
-                            console.warn(`⚠️ Fora da área (ignorado para teste)`);
-                            if (statusEl) statusEl.innerHTML = `⚠️ Localização capturada (teste)`;
-                            if (statusDiv) {
-                                statusDiv.style.background = '#fef3c7';
-                                statusDiv.style.color = '#92400e';
-                            }
-                        }
-                        
-                        // Salvar no sessionStorage
-                        sessionStorage.setItem('ultima_localizacao', JSON.stringify(localizacaoAtual));
-                        localizacaoVerificada = true;
-                        
-                        resolve({
-                            success: true,
-                            coords: localizacaoAtual,
-                            // 🔥 COMENTADO: não enviar distância
-                            // distancia: Math.round(distancia),
-                            dentroDoRaio: dentroDoRaio,
-                            podeContinuar: true, // 🔥 SEMPRE PERMITIR CONTINUAR
-                            mensagem: `📍 Localização: ${localizacaoAtual.latitude.toFixed(4)}, ${localizacaoAtual.longitude.toFixed(4)}`
-                        });
-                    },
-                    // ERRO
-                    (error) => {
-                        let mensagem = '';
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                mensagem = '❌ Permissão de localização negada';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                mensagem = '❌ Localização indisponível';
-                                break;
-                            case error.TIMEOUT:
-                                mensagem = '❌ Tempo excedido';
-                                break;
-                            default:
-                                mensagem = '❌ Erro desconhecido';
-                        }
-                        
-                        console.warn('⚠️ Erro de geolocalização:', mensagem);
-                        
-                        if (statusEl) statusEl.innerHTML = mensagem;
-                        if (statusDiv) {
-                            statusDiv.style.background = '#fee2e2';
-                            statusDiv.style.color = '#dc2626';
-                        }
-                        
-                        resolve({ 
-                            success: false, 
-                            error: mensagem,
-                            podeContinuar: true // 🔥 MESMO COM ERRO, PERMITE CONTINUAR
-                        });
-                    },
-                    options
-                );
-            });
-        }
-        
-        // ============================================
-        // INICIAR VALIDAÇÃO (COM GEOLOCALIZAÇÃO OBRIGATÓRIA)
+        // INICIAR VALIDAÇÃO
         // ============================================
         async function iniciarValidacao() {
             if (validando) return;
             
-            // Desabilitar botão
-            btnValidar.disabled = true;
-            btnValidar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obtendo localização...';
-            
-            instructionText.innerHTML = '📍 Obtendo localização...';
-            
-            // 🔥 CAPTURAR LOCALIZAÇÃO AGORA (ANTES DA VALIDAÇÃO)
-            try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, {
-                        enableHighAccuracy: true,
-                        timeout: 15000,
-                        maximumAge: 0
-                    });
-                });
-                
-                localizacaoAtual = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                    accuracy: position.coords.accuracy,
-                    timestamp: new Date().toISOString()
-                };
-                
-                console.log('✅ Localização obtida:', localizacaoAtual);
-                
-                // Salvar no sessionStorage
-                sessionStorage.setItem('ultima_localizacao', JSON.stringify(localizacaoAtual));
-                
-                // Atualizar status visual
-                const statusEl = document.getElementById('localizacaoTexto');
-                const statusDiv = document.getElementById('localizacaoStatus');
-                
-                if (statusEl) {
-                    statusEl.innerHTML = `📍 Localização obtida (${localizacaoAtual.latitude.toFixed(4)}, ${localizacaoAtual.longitude.toFixed(4)})`;
-                }
-                if (statusDiv) {
-                    statusDiv.style.background = '#f0fdf4';
-                    statusDiv.style.color = '#166534';
-                }
-                
-            } catch (error) {
-                console.error('❌ Erro ao obter localização:', error);
-                
-                let mensagem = '';
-                switch(error.code) {
-                    case error.PERMISSION_DENIED:
-                        mensagem = '❌ Permissão de localização negada. A prova não pode ser iniciada sem localização.';
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        mensagem = '❌ Localização indisponível. Ative o GPS e tente novamente.';
-                        break;
-                    case error.TIMEOUT:
-                        mensagem = '❌ Tempo excedido para obter localização. Tente novamente.';
-                        break;
-                    default:
-                        mensagem = '❌ Erro ao obter localização: ' + error.message;
-                }
-                
-                instructionText.innerHTML = mensagem;
-                btnValidar.disabled = false;
-                btnValidar.innerHTML = '<i class="fas fa-camera"></i> Tentar Novamente';
-                
-                // Atualizar status visual
-                const statusEl = document.getElementById('localizacaoTexto');
-                const statusDiv = document.getElementById('localizacaoStatus');
-                
-                if (statusEl) statusEl.innerHTML = mensagem;
-                if (statusDiv) {
-                    statusDiv.style.background = '#fee2e2';
-                    statusDiv.style.color = '#dc2626';
-                }
-                
-                return; // IMPEDIR CONTINUAÇÃO SEM LOCALIZAÇÃO
-            }
-            
             validando = true;
+            btnValidar.disabled = true;
             btnValidar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validando...';
             
             if (modelsLoaded && !detectionInterval) {
@@ -893,7 +637,7 @@
         }
         
         // ============================================
-        // CAPTURAR E VALIDAR FOTO (COM ENVIO DE LOCALIZAÇÃO)
+        // CAPTURAR E VALIDAR FOTO
         // ============================================
         async function capturarEValidar() {
             if (!videoEl || !provaId) return;
@@ -911,10 +655,10 @@
             const canvas = document.createElement('canvas');
             canvas.width = 320;
             canvas.height = 240;
-            const ctx = canvas.getContext('2d');
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
-            ctx.drawImage(videoEl, 0, 0, 320, 240);
+            const ctxCanvas = canvas.getContext('2d');
+            ctxCanvas.translate(canvas.width, 0);
+            ctxCanvas.scale(-1, 1);
+            ctxCanvas.drawImage(videoEl, 0, 0, 320, 240);
             
             const imagemBase64 = canvas.toDataURL('image/jpeg', 0.7);
             
@@ -925,56 +669,6 @@
                 const user = JSON.parse(localStorage.getItem('user_data') || '{}');
                 
                 console.log('📤 Enviando imagem para validação...');
-                
-                // 🔥 OBTER A LOCALIZAÇÃO ATUAL (que já foi capturada)
-                let latitude = null;
-                let longitude = null;
-                let accuracy = null;
-                
-                // Tentar obter a localização do sessionStorage (salva na verificação inicial)
-                const localizacaoSalva = sessionStorage.getItem('ultima_localizacao');
-                if (localizacaoSalva) {
-                    try {
-                        const loc = JSON.parse(localizacaoSalva);
-                        latitude = loc.latitude;
-                        longitude = loc.longitude;
-                        accuracy = loc.accuracy;
-                        console.log('📍 Usando localização salva:', { latitude, longitude, accuracy });
-                    } catch (e) {
-                        console.warn('⚠️ Erro ao parsear localização salva:', e);
-                    }
-                }
-                
-                // Se não tiver localização salva, tentar capturar agora
-                if (!latitude || !longitude) {
-                    console.log('📍 Tentando capturar localização agora...');
-                    try {
-                        const position = await new Promise((resolve, reject) => {
-                            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                                enableHighAccuracy: true,
-                                timeout: 10000,
-                                maximumAge: 0
-                            });
-                        });
-                        
-                        latitude = position.coords.latitude;
-                        longitude = position.coords.longitude;
-                        accuracy = position.coords.accuracy;
-                        
-                        console.log('📍 Localização capturada agora:', { latitude, longitude, accuracy });
-                        
-                        // Salvar para uso futuro
-                        sessionStorage.setItem('ultima_localizacao', JSON.stringify({
-                            latitude,
-                            longitude,
-                            accuracy,
-                            timestamp: new Date().toISOString()
-                        }));
-                        
-                    } catch (geoError) {
-                        console.warn('⚠️ Não foi possível capturar localização:', geoError.message);
-                    }
-                }
                 
                 // Enviar para validação facial
                 const response = await fetch('/api/auth/validar-camera', {
@@ -997,28 +691,6 @@
                     
                     // Salvar que validou
                     sessionStorage.setItem('face_validado_' + provaId, 'true');
-                    
-                    // ENVIAR LOCALIZAÇÃO PARA O SERVIDOR (associada à prova)
-                    if (latitude && longitude) {
-                        try {
-                            await fetch('/api/provas/registrar-localizacao', {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    provaId: provaId,
-                                    latitude: latitude,
-                                    longitude: longitude,
-                                    accuracy: accuracy || 0
-                                })
-                            });
-                            console.log('📍 Localização enviada com sucesso');
-                        } catch (locError) {
-                            console.warn('⚠️ Erro ao enviar localização:', locError);
-                        }
-                    }
                     
                     // RECUPERAR O TOKEN SALVO TEMPORARIAMENTE
                     const tokenProva = localStorage.getItem('provaToken_temp');
@@ -1090,6 +762,12 @@
         }
         
         // ============================================
+        // EVENTOS
+        // ============================================
+        btnValidar.addEventListener('click', iniciarValidacao);
+        btnCancelar.addEventListener('click', cancelarValidacao);
+        
+        // ============================================
         // LIMPEZA AO SAIR
         // ============================================
         window.addEventListener('beforeunload', () => {
@@ -1103,112 +781,81 @@
         // ============================================
         carregarDadosProva();
         iniciarCamera();
-
-        // ============================================
-        // VERIFICAR LOCALIZAÇÃO AUTOMATICAMENTE APÓS 2 SEGUNDOS
-        // ============================================
-        setTimeout(() => {
-            if (!localizacaoVerificada) {
-                verificarGeolocalizacao();
-            }
-        }, 2000);
     </script>
 
-        <script>
-// ============================================
-// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-// ============================================
-
-(function() {
-    // Só ativar em telas menores que 768px
-    if (window.innerWidth > 768) {
-        console.log('📐 Desktop detectado - escalonamento desativado');
-        return;
-    }
-    
-    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-    
-    // Função para calcular a escala baseada na largura (apenas mobile)
-    function calcularEscalaMobile() {
-        const width = window.innerWidth;
-        
-        // Largura de referência para mobile (768px)
-        const baseWidth = 768;
-        
-        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
-        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-        
-        // Ajustes específicos para faixas de tamanho
-        if (width <= 320) escala = 0.55;
-        else if (width <= 360) escala = 0.6;
-        else if (width <= 400) escala = 0.65;
-        else if (width <= 500) escala = 0.75;
-        else if (width <= 600) escala = 0.85;
-        else if (width <= 700) escala = 0.95;
-        else escala = 1;
-        
-        return escala;
-    }
-    
-    // Função para aplicar a escala
-    function aplicarEscalaMobile() {
-        // Só aplicar se ainda estiver em mobile
-        if (window.innerWidth > 768) return;
-        
-        const escala = calcularEscalaMobile();
-        
-        // Atualizar variável CSS
-        document.documentElement.style.setProperty('--scale-ratio', escala);
-        document.documentElement.style.setProperty('--current-width', window.innerWidth);
-        
-        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-    }
-    
-    // Aplicar inicial
-    aplicarEscalaMobile();
-    
-    // Aplicar ao redimensionar (com debounce)
-    let timeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // Verificar se ainda está em mobile
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            } else {
-                // Se passou para desktop, resetar escala
-                document.documentElement.style.setProperty('--scale-ratio', '1');
-                console.log('📐 Modo desktop - escala resetada');
+    <script>
+        // ============================================
+        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+        // ============================================
+        (function() {
+            if (window.innerWidth > 768) {
+                console.log('📐 Desktop detectado - escalonamento desativado');
+                return;
             }
-        }, 100);
-    });
-    
-    // Também aplicar quando orientação mudar
-    window.addEventListener('orientationchange', function() {
-        setTimeout(() => {
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
+            
+            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+            
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                const baseWidth = 768;
+                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+                
+                if (width <= 320) escala = 0.55;
+                else if (width <= 360) escala = 0.6;
+                else if (width <= 400) escala = 0.65;
+                else if (width <= 500) escala = 0.75;
+                else if (width <= 600) escala = 0.85;
+                else if (width <= 700) escala = 0.95;
+                else escala = 1;
+                
+                return escala;
             }
-        }, 200);
-    });
-    
-    console.log('✅ Sistema de escalonamento mobile ativo!');
-    
-})();
-</script>
+            
+            function aplicarEscalaMobile() {
+                if (window.innerWidth > 768) return;
+                const escala = calcularEscalaMobile();
+                document.documentElement.style.setProperty('--scale-ratio', escala);
+                document.documentElement.style.setProperty('--current-width', window.innerWidth);
+                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+            }
+            
+            aplicarEscalaMobile();
+            
+            let timeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    } else {
+                        document.documentElement.style.setProperty('--scale-ratio', '1');
+                        console.log('📐 Modo desktop - escala resetada');
+                    }
+                }, 100);
+            });
+            
+            window.addEventListener('orientationchange', function() {
+                setTimeout(() => {
+                    if (window.innerWidth <= 768) aplicarEscalaMobile();
+                }, 200);
+            });
+            
+            console.log('✅ Sistema de escalonamento mobile ativo!');
+        })();
+    </script>
 
-<script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker ativo'))
-            .catch(err => console.log('❌ Erro:', err));
-    });
-}
-
-window.addEventListener('online', () => console.log('🌐 Online'));
-window.addEventListener('offline', () => console.log('📴 Offline'));
-</script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
+        
+        window.addEventListener('online', () => console.log('🌐 Online'));
+        window.addEventListener('offline', () => console.log('📴 Offline'));
+    </script>
 
 </body>
 </html>
