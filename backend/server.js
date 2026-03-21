@@ -381,36 +381,60 @@ app.post('/api/onesignal/vincular-kodular', (req, res) => {
         try {
             console.log('='.repeat(60));
             console.log('📱 Vínculo Kodular - Recebido');
-            console.log('📦 Raw body:', rawBody);
             
             // Extrair dados com regex
-            const playerIdMatch = rawBody.match(/\\?"playerId\\?"\s*:\s*\\?"([^\\"]+)/i) ||
-                                 rawBody.match(/"playerId":"([^"]+)"/i);
+            let playerId = null;
+            let token = null;
             
-            const tokenMatch = rawBody.match(/\\?"token\\?"\s*:\s*\\?"([^\\"]+)/i) ||
-                              rawBody.match(/"token":"([^"]+)"/i);
+            // Limpar o body
+            let cleaned = rawBody.replace(/\\"/g, '"');
+            cleaned = cleaned.replace(/^"|"$/g, '');
             
-            if (!playerIdMatch || !tokenMatch) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'Não foi possível extrair playerId e token',
-                    raw: rawBody.substring(0, 200)
-                });
+            // Extrair playerId
+            const playerIdMatch = cleaned.match(/"playerId":"([^"]+)"/i);
+            if (playerIdMatch) {
+                playerId = playerIdMatch[1];
             }
             
-            const playerId = playerIdMatch[1];
-            const token = tokenMatch[1];
+            // Extrair token
+            const tokenMatch = cleaned.match(/"token":"([^"]+)"/i);
+            if (tokenMatch) {
+                token = tokenMatch[1];
+            }
             
-            console.log('✅ PlayerId:', playerId);
-            console.log('✅ Token:', token?.substring(0, 30) + '...');
+            if (!playerId || !token) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Não foi possível extrair os dados' 
+                });
+            }
             
             // Verificar token JWT
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             const userId = decoded.id;
             
+            // Buscar usuário
             const user = await User.findById(userId);
             if (!user) {
-                return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+                return res.status(404).json({ 
+                    success: false, 
+                    error: 'Usuário não encontrado' 
+                });
+            }
+            
+            // 🔥 NOVA VERIFICAÇÃO: Se já tem o MESMO playerId, não atualiza
+            if (user.onesignalPlayerId === playerId) {
+                console.log(`⚠️ Usuário ${user.nome} já está vinculado ao dispositivo ${playerId}`);
+                return res.json({ 
+                    success: true, 
+                    message: 'Dispositivo já vinculado',
+                    alreadyLinked: true
+                });
+            }
+            
+            // 🔥 Se já tem OUTRO playerId, atualiza (troca de dispositivo)
+            if (user.onesignalPlayerId && user.onesignalPlayerId !== playerId) {
+                console.log(`🔄 Usuário ${user.nome} trocando de dispositivo: ${user.onesignalPlayerId} → ${playerId}`);
             }
             
             // Atualizar banco
@@ -420,11 +444,18 @@ app.post('/api/onesignal/vincular-kodular', (req, res) => {
             
             console.log(`✅ Banco atualizado para ${user.nome}`);
             
-            res.json({ success: true });
+            res.json({ 
+                success: true,
+                message: 'Dispositivo vinculado com sucesso',
+                alreadyLinked: false
+            });
             
         } catch (error) {
             console.error('❌ Erro:', error);
-            res.status(500).json({ success: false, error: error.message });
+            res.status(500).json({ 
+                success: false, 
+                error: error.message 
+            });
         }
     });
 });
