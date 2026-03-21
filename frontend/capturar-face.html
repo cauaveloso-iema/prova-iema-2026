@@ -32,49 +32,29 @@
         }
         .camera-box {
             width: 100%;
-            height: 400px;
-            background: #000;
-            position: relative;
-            overflow: hidden;
+            height: 300px;
+            background: #1e1e2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 15px;
         }
-        #video {
+        .camera-placeholder {
+            text-align: center;
+            color: #9ca3af;
+        }
+        .camera-placeholder i {
+            font-size: 48px;
+            margin-bottom: 10px;
+            display: block;
+        }
+        .preview-img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1);
+            display: none;
         }
-        #overlayCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
-            pointer-events: none;
-        }
-        .circle-guide {
-            width: 220px;
-            height: 220px;
-            border: 4px solid rgba(255,255,255,0.5);
-            border-radius: 50%;
-            margin: 0 auto;
-            box-shadow: 0 0 0 500px rgba(0,0,0,0.5);
-            transition: all 0.2s;
-        }
-        .circle-guide.waiting { border-color: #f59e0b; animation: pulse 1.5s infinite; }
-        .circle-guide.good { border-color: #10b981; border-width: 6px; animation: pulseGreen 1.5s infinite; }
-        .circle-guide.error { border-color: #ef4444; border-width: 6px; }
         .instruction-box {
             background: rgba(0,0,0,0.8);
             color: white;
@@ -83,90 +63,138 @@
             text-align: center;
             font-size: 1rem;
             font-weight: bold;
+            margin: 15px;
         }
-        .timer-bar {
-            height: 6px;
-            background: rgba(255,255,255,0.3);
-            border-radius: 3px;
-            margin-top: 10px;
-            overflow: hidden;
+        .status-bar {
+            padding: 15px;
+            background: #f8fafc;
+            text-align: center;
+        }
+        .attempt-badge {
+            background: #4f46e5;
+            color: white;
+            padding: 6px 15px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+        }
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #10b981;
+            color: white;
+        }
+        .btn-outline {
+            background: white;
+            border: 2px solid #e5e7eb;
+            color: #4b5563;
+        }
+        .btn-skip {
+            background: #9ca3af;
+            color: white;
+            width: calc(100% - 30px);
+            margin: 0 15px 15px;
+        }
+        .info-text {
+            font-size: 0.8rem;
+            color: #6b7280;
+            text-align: center;
+            padding: 15px;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #10b981;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .reminder-banner {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            margin: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #92400e;
             display: none;
         }
-        .timer-fill {
-            height: 100%;
-            background: #10b981;
-            width: 0%;
-            transition: width 0.1s linear;
+        .reminder-banner.show {
+            display: block;
         }
-        .status-bar { padding: 15px; background: #f8fafc; text-align: center; }
-        .attempt-badge { background: #4f46e5; color: white; padding: 6px 15px; border-radius: 30px; font-size: 0.9rem; font-weight: bold; display: inline-block; }
-        .preview-box { padding: 15px; background: #f8fafc; border-top: 2px solid #e5e7eb; display: none; }
-        .preview-box.show { display: block; animation: slideUp 0.3s ease; }
-        .preview-image { width: 100%; height: 180px; object-fit: cover; border-radius: 10px; border: 2px solid #10b981; margin-bottom: 10px; }
-        .preview-dicas { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 8px; margin: 10px 0; font-size: 0.9rem; color: #92400e; }
-        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
-        .btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
-        .btn-primary { background: #10b981; color: white; }
-        .btn-outline { background: white; border: 2px solid #e5e7eb; color: #4b5563; }
-        .btn-skip { background: #9ca3af; color: white; margin-top: 10px; width: 100%; }
-        .info-text { font-size: 0.8rem; color: #6b7280; text-align: center; padding: 15px; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(245,158,11,0.5); } 70% { box-shadow: 0 0 0 20px rgba(245,158,11,0); } }
-        @keyframes pulseGreen { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); } 70% { box-shadow: 0 0 0 20px rgba(16,185,129,0); } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
-        .reminder-banner { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 10px 0; border-radius: 8px; display: none; }
-        .reminder-banner.show { display: block; animation: slideDown 0.3s ease; }
-        @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-        .error-message { background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 12px; text-align: center; margin: 15px; }
-        .btn-retry { background: #10b981; color: white; border: none; padding: 12px 24px; border-radius: 30px; margin-top: 10px; cursor: pointer; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>📸 Cadastro de Face ID</h1>
-            <p>Posicione seu rosto no círculo</p>
+            <p>Clique no botão para tirar uma foto do seu rosto</p>
         </div>
         
         <div class="reminder-banner" id="reminderBanner">
             <i class="fas fa-bell"></i>
-            <strong>Lembrete:</strong> Você precisará cadastrar sua Face ID para acessar as provas.
+            <strong>Lembrete:</strong> Você precisará cadastrar sua Face ID para acessar as provas
         </div>
         
         <div class="camera-box">
-            <video id="video" autoplay playsinline muted></video>
-            <canvas id="overlayCanvas"></canvas>
-            <div class="overlay">
-                <div class="circle-guide" id="circle"></div>
-                <div class="instruction-box" id="instruction">
-                    <span id="instructionText">Inicializando...</span>
-                    <div class="timer-bar" id="timerBar">
-                        <div class="timer-fill" id="timerFill"></div>
-                    </div>
-                </div>
+            <div id="cameraPlaceholder" class="camera-placeholder">
+                <i class="fas fa-camera"></i>
+                <p>Clique em "Tirar Foto" para abrir a câmera</p>
             </div>
+            <img id="previewImg" class="preview-img" alt="Preview">
+        </div>
+        
+        <div class="instruction-box" id="instruction">
+            <span id="instructionText">Aguardando ação...</span>
         </div>
         
         <div class="status-bar">
             <span class="attempt-badge" id="attemptCounter">Tentativa 1/3</span>
         </div>
         
-        <div class="preview-box" id="previewBox">
-            <div class="preview-title"><i class="fas fa-exclamation-triangle"></i> A foto não ficou boa</div>
-            <img class="preview-image" id="previewImg" src="">
-            <div class="preview-dicas" id="previewDicas"></div>
-            <div class="btn-group">
-                <button class="btn btn-outline" id="btnTentarNovamente"><i class="fas fa-redo"></i> Tentar de novo</button>
-                <button class="btn btn-primary" id="btnForcarEnvio"><i class="fas fa-check"></i> Enviar mesmo assim</button>
-            </div>
+        <div class="btn-group">
+            <button class="btn btn-primary" id="btnCapturar">
+                <i class="fas fa-camera"></i> Tirar Foto
+            </button>
+            <button class="btn btn-outline" id="btnTentarNovamente" style="display: none;">
+                <i class="fas fa-redo"></i> Tentar de novo
+            </button>
         </div>
         
-        <div style="padding: 0 15px 15px;">
-            <button class="btn btn-skip" id="btnSkip"><i class="fas fa-forward"></i> Fazer depois</button>
-        </div>
+        <button class="btn btn-skip" id="btnSkip">
+            <i class="fas fa-forward"></i> Fazer depois
+        </button>
         
         <div class="info-text">
-            <i class="fas fa-shield-alt"></i> Sua imagem é usada apenas para validar seu acesso às provas
+            <i class="fas fa-shield-alt"></i>
+            Sua imagem é usada apenas para validar seu acesso às provas
         </div>
     </div>
 
@@ -175,41 +203,173 @@
         // CONFIGURAÇÃO
         // ============================================
         const MAX_TENTATIVAS = 3;
-        const TEMPO_ESTAVEL = 3000;
-        const TAMANHO_CIRCULO = 220;
-        
         let tentativas = 0;
-        let stream = null;
-        let videoEl = null;
-        let ultimaFoto = null;
-        let detectionInterval = null;
-        let modelsLoaded = false;
-        let contando = false;
         let enviando = false;
-        let capturando = false;
-        let faceJaCadastrada = false;
+        let modelsLoaded = false;
+        let ultimaFoto = null;
         
-        const video = document.getElementById('video');
-        const overlayCanvas = document.getElementById('overlayCanvas');
-        const ctx = overlayCanvas.getContext('2d');
-        const circle = document.getElementById('circle');
         const instructionText = document.getElementById('instructionText');
-        const timerBar = document.getElementById('timerBar');
-        const timerFill = document.getElementById('timerFill');
         const attemptCounter = document.getElementById('attemptCounter');
-        const previewBox = document.getElementById('previewBox');
-        const previewImg = document.getElementById('previewImg');
-        const previewDicas = document.getElementById('previewDicas');
+        const btnCapturar = document.getElementById('btnCapturar');
         const btnTentarNovamente = document.getElementById('btnTentarNovamente');
-        const btnForcarEnvio = document.getElementById('btnForcarEnvio');
         const btnSkip = document.getElementById('btnSkip');
+        const previewImg = document.getElementById('previewImg');
+        const cameraPlaceholder = document.getElementById('cameraPlaceholder');
         const reminderBanner = document.getElementById('reminderBanner');
         
         // ============================================
-        // VERIFICAR AUTENTICAÇÃO
+        // FUNÇÃO PARA COMUNICAR COM KODULAR
         // ============================================
-        if (!localStorage.getItem('auth_token')) {
-            window.location.href = '/login.html';
+        function abrirCameraKodular() {
+            console.log('📱 Solicitando abertura da câmera no Kodular...');
+            
+            if (window.kodularCamera && window.kodularCamera.capture) {
+                window.kodularCamera.capture();
+            } else {
+                alert('Câmera não disponível. Tente novamente.');
+            }
+        }
+        
+        // ============================================
+        // FUNÇÃO PARA RECEBER IMAGEM DO KODULAR
+        // ============================================
+        window.receberImagemKodular = function(imagemBase64) {
+            console.log('📸 Imagem recebida do Kodular!');
+            
+            // Mostrar preview
+            previewImg.src = imagemBase64;
+            previewImg.style.display = 'block';
+            cameraPlaceholder.style.display = 'none';
+            btnTentarNovamente.style.display = 'block';
+            btnCapturar.style.display = 'none';
+            
+            ultimaFoto = imagemBase64;
+            
+            // Validar a imagem
+            validarImagem(imagemBase64);
+        };
+        
+        // ============================================
+        // VALIDAR IMAGEM COM FACE-API
+        // ============================================
+        async function validarImagem(imagemBase64) {
+            if (enviando) return;
+            
+            tentativas++;
+            attemptCounter.textContent = `Tentativa ${tentativas}/${MAX_TENTATIVAS}`;
+            instructionText.innerHTML = '<span class="loading-spinner"></span> Analisando imagem...';
+            
+            try {
+                // Carregar imagem para validação
+                const img = new Image();
+                img.src = imagemBase64;
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                });
+                
+                // Verificar se Face-API está carregada
+                if (!modelsLoaded) {
+                    instructionText.innerHTML = '⏳ Aguardando carregamento do detector...';
+                    const carregado = await carregarFaceAPI();
+                    if (!carregado) throw new Error('Falha ao carregar detector');
+                }
+                
+                // Detectar rosto
+                const detections = await faceapi.detectAllFaces(
+                    img, 
+                    new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 })
+                );
+                
+                if (detections.length === 0) {
+                    throw new Error('Nenhum rosto detectado na imagem');
+                }
+                
+                if (detections.length > 1) {
+                    throw new Error('Múltiplos rostos detectados');
+                }
+                
+                instructionText.innerHTML = '<span class="loading-spinner"></span> Enviando para cadastro...';
+                
+                // Enviar para o servidor
+                const token = localStorage.getItem('auth_token');
+                const user = JSON.parse(localStorage.getItem('user_data') || '{}');
+                
+                const response = await fetch('/api/auth/cadastrar-face', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        usuarioId: user.id,
+                        imagem: imagemBase64.split(',')[1]
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    instructionText.innerHTML = '✅ Face cadastrada com sucesso!';
+                    localStorage.setItem('face_cadastrado', 'true');
+                    
+                    setTimeout(() => {
+                        window.location.href = '/aluno.html';
+                    }, 1500);
+                    
+                } else {
+                    throw new Error(data.error || 'Erro no cadastro');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                
+                if (tentativas >= MAX_TENTATIVAS) {
+                    instructionText.innerHTML = '❌ Muitas tentativas. Você pode cadastrar depois.';
+                    btnCapturar.style.display = 'none';
+                    btnTentarNovamente.style.display = 'none';
+                    setTimeout(() => {
+                        window.location.href = '/aluno.html';
+                    }, 2000);
+                } else {
+                    instructionText.innerHTML = '❌ ' + error.message;
+                    btnTentarNovamente.style.display = 'block';
+                    btnCapturar.style.display = 'none';
+                }
+            }
+        }
+        
+        // ============================================
+        // CARREGAR FACE-API
+        // ============================================
+        async function carregarFaceAPI() {
+            if (modelsLoaded) return true;
+            
+            instructionText.innerHTML = '⏳ Carregando detector facial...';
+            try {
+                await faceapi.nets.tinyFaceDetector.load('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+                await faceapi.nets.faceLandmark68Net.load('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+                modelsLoaded = true;
+                console.log('✅ Face-API carregada');
+                instructionText.innerHTML = 'Clique em "Tirar Foto" para começar';
+                return true;
+            } catch (error) {
+                console.error('❌ Erro ao carregar Face-API:', error);
+                instructionText.innerHTML = '❌ Erro ao carregar detector. Recarregue a página.';
+                return false;
+            }
+        }
+        
+        // ============================================
+        // TENTAR NOVAMENTE
+        // ============================================
+        function tentarNovamente() {
+            previewImg.style.display = 'none';
+            cameraPlaceholder.style.display = 'flex';
+            btnTentarNovamente.style.display = 'none';
+            btnCapturar.style.display = 'block';
+            instructionText.innerHTML = 'Clique em "Tirar Foto" para começar';
+            ultimaFoto = null;
         }
         
         // ============================================
@@ -219,309 +379,95 @@
             try {
                 const token = localStorage.getItem('auth_token');
                 const user = JSON.parse(localStorage.getItem('user_data') || '{}');
+                
                 if (!user.id) return false;
                 
                 const res = await fetch(`/api/auth/verificar-face/${user.id}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                
                 const data = await res.json();
                 
                 if (data.success && data.temFace) {
-                    faceJaCadastrada = true;
                     instructionText.innerHTML = '✅ Face ID já cadastrado! Redirecionando...';
-                    setTimeout(() => window.location.href = '/aluno.html', 2000);
+                    setTimeout(() => {
+                        window.location.href = '/aluno.html';
+                    }, 2000);
                     return true;
                 }
                 return false;
+                
             } catch (error) {
-                console.error('❌ Erro:', error);
+                console.error('❌ Erro ao verificar face:', error);
                 return false;
             }
         }
         
         // ============================================
-        // CARREGAR MODELOS FACE-API
+        // ENVIAR LEMBRETE
         // ============================================
-        async function carregarModelos() {
-            instructionText.innerHTML = '⏳ Carregando detector facial...';
-            try {
-                await faceapi.nets.tinyFaceDetector.load('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
-                await faceapi.nets.faceLandmark68Net.load('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
-                console.log('✅ Modelos carregados');
-                modelsLoaded = true;
-                
-                const jaCadastrada = await verificarFaceCadastrada();
-                if (!jaCadastrada) {
-                    instructionText.innerHTML = 'Posicione o rosto no círculo';
-                    iniciarDeteccao();
-                }
-            } catch (error) {
-                console.error('❌ Erro:', error);
-                instructionText.innerHTML = '❌ Erro no detector. Recarregue a página.';
-            }
-        }
-        
-        // ============================================
-        // INICIAR DETECÇÃO CONTÍNUA
-        // ============================================
-        function iniciarDeteccao() {
-            if (!modelsLoaded) return;
-            
-            detectionInterval = setInterval(async () => {
-                if (!videoEl || videoEl.videoWidth === 0 || previewBox.classList.contains('show') || enviando || faceJaCadastrada) return;
-                
-                try {
-                    const detections = await faceapi.detectAllFaces(
-                        videoEl, 
-                        new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
-                    );
-                    
-                    ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-                    
-                    if (detections.length === 0) {
-                        circle.className = 'circle-guide error';
-                        instructionText.innerHTML = '<span class="status-dot" style="background:#ef4444;"></span> Nenhum rosto';
-                        resetTimer();
-                        return;
-                    }
-                    
-                    if (detections.length > 1) {
-                        circle.className = 'circle-guide error';
-                        instructionText.innerHTML = '<span class="status-dot" style="background:#ef4444;"></span> Apenas uma pessoa';
-                        resetTimer();
-                        return;
-                    }
-                    
-                    const face = detections[0];
-                    ctx.strokeStyle = '#10b981';
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(face.box.x, face.box.y, face.box.width, face.box.height);
-                    
-                    const faceCenterX = face.box.x + face.box.width/2;
-                    const faceCenterY = face.box.y + face.box.height/2;
-                    const screenCenterX = overlayCanvas.width / 2;
-                    const screenCenterY = overlayCanvas.height / 2;
-                    
-                    const distX = Math.abs(faceCenterX - screenCenterX) / (overlayCanvas.width/2) * 100;
-                    const distY = Math.abs(faceCenterY - screenCenterY) / (overlayCanvas.height/2) * 100;
-                    const desvio = Math.max(distX, distY);
-                    
-                    const tamanhoRosto = Math.max(face.box.width, face.box.height);
-                    const proporcao = (tamanhoRosto / TAMANHO_CIRCULO) * 100;
-                    
-                    const centralizado = desvio < 25;
-                    const tamanhoOk = proporcao > 65 && proporcao < 90;
-                    
-                    if (centralizado && tamanhoOk) {
-                        circle.className = 'circle-guide good';
-                        instructionText.innerHTML = '<span class="status-dot" style="background:#10b981;"></span> Perfeito! Aguarde 3s...';
-                        if (!contando && !capturando && !enviando) iniciarContagem();
-                    } else {
-                        circle.className = 'circle-guide waiting';
-                        if (!centralizado && !tamanhoOk) instructionText.innerHTML = '<span class="status-dot" style="background:#f59e0b;"></span> Centralize e ajuste a distância';
-                        else if (!centralizado) instructionText.innerHTML = '<span class="status-dot" style="background:#f59e0b;"></span> Centralize o rosto';
-                        else instructionText.innerHTML = '<span class="status-dot" style="background:#f59e0b;"></span> Ajuste a distância';
-                        resetTimer();
-                    }
-                } catch (error) {
-                    console.error('Erro:', error);
-                }
-            }, 100);
-        }
-        
-        function iniciarContagem() {
-            if (contando) return;
-            contando = true;
-            timerBar.style.display = 'block';
-            const startTime = Date.now();
-            const timer = setInterval(() => {
-                const elapsed = Date.now() - startTime;
-                timerFill.style.width = Math.min((elapsed / TEMPO_ESTAVEL) * 100, 100) + '%';
-                if (elapsed >= TEMPO_ESTAVEL) {
-                    clearInterval(timer);
-                    timerBar.style.display = 'none';
-                    capturarFoto();
-                    contando = false;
-                }
-            }, 50);
-            window.contagemTimer = timer;
-        }
-        
-        function resetTimer() {
-            if (window.contagemTimer) clearInterval(window.contagemTimer);
-            contando = false;
-            timerBar.style.display = 'none';
-            timerFill.style.width = '0%';
-        }
-        
-        // ============================================
-        // CAPTURAR FOTO
-        // ============================================
-        async function capturarFoto() {
-            if (capturando || enviando || faceJaCadastrada) return;
-            capturando = true;
-            if (!videoEl) return;
-            
-            tentativas++;
-            attemptCounter.textContent = `Tentativa ${tentativas}/${MAX_TENTATIVAS}`;
-            if (detectionInterval) clearInterval(detectionInterval);
-            resetTimer();
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = videoEl.videoWidth || 640;
-            canvas.height = videoEl.videoHeight || 480;
-            const ctxCanvas = canvas.getContext('2d');
-            ctxCanvas.translate(canvas.width, 0);
-            ctxCanvas.scale(-1, 1);
-            ctxCanvas.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-            
-            const imagemBase64 = canvas.toDataURL('image/jpeg', 0.8);
-            ultimaFoto = imagemBase64;
-            
-            instructionText.innerHTML = '📤 Enviando para servidor...';
-            enviarParaServidor();
-        }
-        
-        // ============================================
-        // ENVIAR PARA O SERVIDOR
-        // ============================================
-        async function enviarParaServidor() {
-            if (enviando) return;
-            if (!ultimaFoto) return;
-            enviando = true;
-            
+        async function enviarLembrete() {
             try {
                 const token = localStorage.getItem('auth_token');
                 const user = JSON.parse(localStorage.getItem('user_data') || '{}');
                 
-                const imagem = ultimaFoto.split(',')[1];
-                
-                const res = await fetch('/api/auth/cadastrar-face', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ usuarioId: user.id, imagem: imagem })
-                });
-                
-                const data = await res.json();
-                
-                if (data.success) {
-                    instructionText.innerHTML = '✅ Face cadastrada com sucesso!';
-                    localStorage.setItem('face_cadastrado', 'true');
-                    setTimeout(() => window.location.href = '/aluno.html', 1500);
-                } else {
-                    throw new Error(data.error || 'Erro no cadastro');
+                if (token && user.id) {
+                    await fetch('/api/notificacoes', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            usuarioId: user.id,
+                            tipo: 'sistema',
+                            titulo: '📸 Cadastro de Face ID Pendente',
+                            mensagem: 'Você ainda não cadastrou sua Face ID. Clique aqui para cadastrar agora.',
+                            icone: '📸',
+                            cor: '#f97316',
+                            link: '/capturar-face.html',
+                            prioridade: 4
+                        })
+                    });
+                    
+                    reminderBanner.classList.add('show');
+                    setTimeout(() => {
+                        reminderBanner.classList.remove('show');
+                    }, 10000);
                 }
             } catch (error) {
-                instructionText.innerHTML = '❌ ' + error.message;
-                enviando = false;
-                capturando = false;
-                mostrarPreviewComDicas(ultimaFoto, error.message);
-            }
-        }
-        
-        function mostrarPreviewComDicas(imagemBase64, erro) {
-            previewImg.src = imagemBase64;
-            previewDicas.innerHTML = `<strong>❌ ${erro || 'Erro ao processar'}</strong><ul><li>Tente novamente com melhor posicionamento</li><li>Certifique-se que seu rosto está visível</li><li>Melhore a iluminação</li></ul>`;
-            previewBox.classList.add('show');
-        }
-        
-        function reiniciarAposPreview() {
-            previewBox.classList.remove('show');
-            capturando = false;
-            enviando = false;
-            if (modelsLoaded && !detectionInterval && !faceJaCadastrada) iniciarDeteccao();
-            instructionText.innerHTML = 'Posicione o rosto no círculo';
-        }
-        
-        // ============================================
-        // INICIAR CÂMERA
-        // ============================================
-        async function iniciarCamera() {
-            try {
-                instructionText.innerHTML = '📷 Solicitando permissão de câmera...';
-                
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
-                });
-                
-                videoEl = video;
-                videoEl.srcObject = stream;
-                videoEl.onloadedmetadata = () => {
-                    videoEl.play();
-                    overlayCanvas.width = videoEl.videoWidth;
-                    overlayCanvas.height = videoEl.videoHeight;
-                    carregarModelos();
-                };
-            } catch (error) {
-                console.error('❌ Erro na câmera:', error);
-                
-                let errorMsg = '';
-                if (error.name === 'NotAllowedError') {
-                    errorMsg = 'Permissão da câmera negada. Por favor, permita o acesso à câmera nas configurações do app.';
-                } else if (error.name === 'NotFoundError') {
-                    errorMsg = 'Nenhuma câmera encontrada no dispositivo.';
-                } else {
-                    errorMsg = 'Erro ao acessar câmera: ' + error.message;
-                }
-                
-                document.querySelector('.camera-box').innerHTML = `
-                    <div class="error-message">
-                        <i class="fas fa-camera"></i>
-                        <p>${errorMsg}</p>
-                        <button class="btn-retry" onclick="location.reload()">Tentar novamente</button>
-                    </div>
-                `;
-                instructionText.innerHTML = '❌ ' + errorMsg;
+                console.error('❌ Erro:', error);
             }
         }
         
         // ============================================
         // EVENTOS
         // ============================================
-        btnTentarNovamente.addEventListener('click', reiniciarAposPreview);
-        btnForcarEnvio.addEventListener('click', () => {
-            if (ultimaFoto) {
-                previewBox.classList.remove('show');
-                enviarParaServidor();
-            }
+        btnCapturar.addEventListener('click', () => {
+            abrirCameraKodular();
         });
+        
+        btnTentarNovamente.addEventListener('click', tentarNovamente);
         
         btnSkip.addEventListener('click', async function(e) {
             e.preventDefault();
             if (confirm('Deseja pular o cadastro facial? Você poderá fazer depois.')) {
-                try {
-                    const token = localStorage.getItem('auth_token');
-                    const user = JSON.parse(localStorage.getItem('user_data') || '{}');
-                    if (token && user.id) {
-                        await fetch('/api/notificacoes', {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                usuarioId: user.id, tipo: 'sistema',
-                                titulo: '📸 Cadastro de Face ID Pendente',
-                                mensagem: 'Você ainda não cadastrou sua Face ID. Clique aqui para cadastrar agora.',
-                                icone: '📸', cor: '#f97316', link: '/capturar-face.html', prioridade: 4
-                            })
-                        });
-                    }
-                } catch (error) { console.error(error); }
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+                this.disabled = true;
+                await enviarLembrete();
                 window.location.href = '/aluno.html';
             }
-        });
-        
-        window.addEventListener('beforeunload', () => {
-            if (detectionInterval) clearInterval(detectionInterval);
-            if (window.contagemTimer) clearInterval(window.contagemTimer);
-            if (stream) stream.getTracks().forEach(t => t.stop());
         });
         
         // ============================================
         // INICIAR
         // ============================================
-        iniciarCamera();
+        (async function() {
+            const jaCadastrada = await verificarFaceCadastrada();
+            if (!jaCadastrada) {
+                await carregarFaceAPI();
+            }
+        })();
     </script>
 </body>
 </html>
