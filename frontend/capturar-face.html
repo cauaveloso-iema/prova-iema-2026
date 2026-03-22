@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-        <!-- PWA Meta Tags -->
+    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -303,7 +303,6 @@
             margin-right: 5px;
         }
 
-        /* Banner de lembrete */
         .reminder-banner {
             background: #fef3c7;
             border-left: 4px solid #f59e0b;
@@ -322,20 +321,33 @@
             from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Estilo para a sequência de captura */
+        .quality-indicator {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: white;
+            text-align: center;
+            z-index: 20;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>📸 Cadastro de Face ID</h1>
-            <p>Posicione seu rosto no círculo</p>
+            <p>Siga as instruções para um cadastro de alta qualidade</p>
         </div>
         
-        <!-- Banner de lembrete -->
         <div class="reminder-banner" id="reminderBanner">
             <i class="fas fa-bell"></i>
-            <strong>Lembrete:</strong> Você precisará cadastrar sua Face ID para acessar as provas. 
-            Não se esqueça de fazer isso antes da próxima prova!
+            <strong>Importante:</strong> Mantenha o rosto centralizado e siga todas as instruções para garantir um cadastro de qualidade.
         </div>
         
         <div class="camera-box">
@@ -350,13 +362,15 @@
                     </div>
                 </div>
             </div>
+            <div class="quality-indicator" id="qualityIndicator">
+                📊 Aguardando...
+            </div>
         </div>
         
         <div class="status-bar">
-            <span class="attempt-badge" id="attemptCounter">Tentativa 1/3</span>
+            <span class="attempt-badge" id="attemptCounter">Etapa 1/3</span>
         </div>
         
-        <!-- PREVIEW - SÓ APARECE QUANDO A FOTO NÃO FICA BOA -->
         <div class="preview-box" id="previewBox">
             <div class="preview-title">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -374,7 +388,6 @@
             </div>
         </div>
         
-        <!-- BOTÃO PULAR -->
         <div style="padding: 0 15px 15px;">
             <button class="btn btn-skip" id="btnSkip">
                 <i class="fas fa-forward"></i> Fazer depois
@@ -389,23 +402,34 @@
 
     <script>
         // ============================================
-        // CONFIGURAÇÃO
+        // CONFIGURAÇÃO DE CAPTURA REFORÇADA
         // ============================================
         const MAX_TENTATIVAS = 3;
-        const TEMPO_ESTAVEL = 3000; // 3 segundos
+        const TEMPO_ESTAVEL = 3000; // 3 segundos de estabilidade
         const TAMANHO_CIRCULO = 220;
+        
+        // 🔥 SEQUÊNCIA PARA CAPTURA DE ALTA QUALIDADE
+        const sequenciasCaptura = [
+            { acao: 'neutral', instrucao: '😐 Mantenha expressão neutra', duracao: 2000, dica: 'Fique sério' },
+            { acao: 'sorrir', instrucao: '😊 Sorria levemente', duracao: 2000, dica: 'Sorriso natural' },
+            { acao: 'olhos', instrucao: '👁️ Abra bem os olhos', duracao: 2000, dica: 'Olhe para a câmera' }
+        ];
         
         // Controle de estado
         let tentativas = 0;
         let stream = null;
         let videoEl = null;
-        let ultimaFoto = null;
-        let detectionInterval = null;
         let modelsLoaded = false;
         let contando = false;
         let enviando = false;
         let capturando = false;
-        let faceJaCadastrada = false; // NOVA VARIÁVEL
+        let faceJaCadastrada = false;
+        
+        // 🔥 NOVAS VARIÁVEIS PARA CAPTURA REFORÇADA
+        let framesCapturados = [];
+        let capturaInterval = null;
+        let sequenciaAtual = 0;
+        let qualidadeFrame = 0;
         
         // Elementos DOM
         const video = document.getElementById('video');
@@ -422,7 +446,8 @@
         const btnTentarNovamente = document.getElementById('btnTentarNovamente');
         const btnForcarEnvio = document.getElementById('btnForcarEnvio');
         const btnSkip = document.getElementById('btnSkip');
-        const reminderBanner = document.getElementById('reminderBanner'); // NOVO ELEMENTO
+        const reminderBanner = document.getElementById('reminderBanner');
+        const qualityIndicator = document.getElementById('qualityIndicator');
         
         // ============================================
         // VERIFICAR AUTENTICAÇÃO
@@ -432,7 +457,7 @@
         }
         
         // ============================================
-        // VERIFICAR SE FACE JÁ FOI CADASTRADA (NOVA FUNÇÃO)
+        // VERIFICAR SE FACE JÁ FOI CADASTRADA
         // ============================================
         async function verificarFaceCadastrada() {
             try {
@@ -466,62 +491,25 @@
         }
         
         // ============================================
-        // ENVIAR NOTIFICAÇÃO DE LEMBRETE (NOVA FUNÇÃO)
-        // ============================================
-        async function enviarLembreteFace() {
-            try {
-                const token = localStorage.getItem('auth_token');
-                const user = JSON.parse(localStorage.getItem('user_data') || '{}');
-                
-                if (!user.id) return;
-                
-                // Notificação push se permitido
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    new Notification('📸 Lembrete: Cadastre sua Face ID', {
-                        body: 'Não se esqueça de cadastrar sua Face ID para acessar as provas!',
-                        icon: '/icons/favicon.ico',
-                        requireInteraction: true
-                    });
-                }
-                
-                // Mostrar banner
-                reminderBanner.classList.add('show');
-                
-                // Esconder após 10 segundos
-                setTimeout(() => {
-                    reminderBanner.classList.remove('show');
-                }, 10000);
-                
-                console.log('📱 Lembrete de face ID enviado');
-                
-            } catch (error) {
-                console.error('❌ Erro ao enviar lembrete:', error);
-            }
-        }
-        
-        // ============================================
         // CARREGAR MODELOS FACE-API
         // ============================================
         async function carregarModelos() {
             instructionText.innerHTML = '⏳ Carregando detector facial...';
             
             try {
-                // Carregar apenas o TinyFaceDetector (mais rápido)
                 await faceapi.nets.tinyFaceDetector.load('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
                 console.log('✅ TinyFaceDetector carregado');
                 
-                // Carregar landmarks (opcional, mas ajuda na precisão)
                 await faceapi.nets.faceLandmark68Net.load('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
                 console.log('✅ FaceLandmark68 carregado');
                 
                 modelsLoaded = true;
                 
-                // Verificar se face já existe (NOVO)
                 const jaCadastrada = await verificarFaceCadastrada();
                 
                 if (!jaCadastrada) {
-                    instructionText.innerHTML = 'Posicione o rosto no círculo';
-                    iniciarDeteccao();
+                    instructionText.innerHTML = 'Siga as instruções para cadastro de alta qualidade';
+                    iniciarSequenciaCaptura();
                 }
             } catch (error) {
                 console.error('❌ Erro ao carregar modelos:', error);
@@ -530,352 +518,116 @@
         }
         
         // ============================================
-        // INICIAR DETECÇÃO CONTÍNUA
+        // INICIAR SEQUÊNCIA DE CAPTURA
         // ============================================
-        function iniciarDeteccao() {
-            if (!modelsLoaded) return;
+        async function iniciarSequenciaCaptura() {
+            if (!modelsLoaded || faceJaCadastrada) return;
             
-            detectionInterval = setInterval(async () => {
-                if (!videoEl || videoEl.videoWidth === 0 || previewBox.classList.contains('show') || enviando || faceJaCadastrada) return; // ADICIONADO faceJaCadastrada
-                
-                try {
-                    const detections = await faceapi.detectAllFaces(
-                        videoEl, 
-                        new faceapi.TinyFaceDetectorOptions({
-                            inputSize: 320,
-                            scoreThreshold: 0.3
-                        })
-                    );
-                    
-                    ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-                    
-                    if (detections.length === 0) {
-                        circle.className = 'circle-guide error';
-                        instructionText.innerHTML = '<span class="status-dot" style="background:#ef4444;"></span> Nenhum rosto';
-                        resetTimer();
-                        return;
-                    }
-                    
-                    if (detections.length > 1) {
-                        circle.className = 'circle-guide error';
-                        instructionText.innerHTML = '<span class="status-dot" style="background:#ef4444;"></span> Apenas uma pessoa';
-                        resetTimer();
-                        return;
-                    }
-                    
-                    const face = detections[0];
-                    
-                    // Desenhar caixa ao redor do rosto
-                    ctx.strokeStyle = '#10b981';
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(face.box.x, face.box.y, face.box.width, face.box.height);
-                    
-                    // Calcular centro do rosto
-                    const faceCenterX = face.box.x + face.box.width/2;
-                    const faceCenterY = face.box.y + face.box.height/2;
-                    const screenCenterX = overlayCanvas.width / 2;
-                    const screenCenterY = overlayCanvas.height / 2;
-                    
-                    // Calcular desvio do centro (%)
-                    const distX = Math.abs(faceCenterX - screenCenterX) / (overlayCanvas.width/2) * 100;
-                    const distY = Math.abs(faceCenterY - screenCenterY) / (overlayCanvas.height/2) * 100;
-                    const desvio = Math.max(distX, distY);
-                    
-                    // Calcular tamanho do rosto em relação ao círculo
-                    const tamanhoRosto = Math.max(face.box.width, face.box.height);
-                    const proporcao = (tamanhoRosto / TAMANHO_CIRCULO) * 100;
-                    
-                    // Verificar se está na posição ideal
-                    const centralizado = desvio < 25;
-                    const tamanhoOk = proporcao > 65 && proporcao < 90;
-                    
-                    if (centralizado && tamanhoOk) {
-                        circle.className = 'circle-guide good';
-                        instructionText.innerHTML = '<span class="status-dot" style="background:#10b981;"></span> Perfeito! Aguarde 3s...';
-                        
-                        if (!contando && !capturando && !enviando) {
-                            iniciarContagem();
-                        }
-                    } else {
-                        circle.className = 'circle-guide waiting';
-                        
-                        if (!centralizado && !tamanhoOk) {
-                            instructionText.innerHTML = '<span class="status-dot" style="background:#f59e0b;"></span> Centralize e ajuste a distância';
-                        } else if (!centralizado) {
-                            instructionText.innerHTML = '<span class="status-dot" style="background:#f59e0b;"></span> Centralize o rosto';
-                        } else {
-                            instructionText.innerHTML = '<span class="status-dot" style="background:#f59e0b;"></span> Ajuste a distância';
-                        }
-                        
-                        resetTimer();
-                    }
-                    
-                } catch (error) {
-                    console.error('Erro na detecção:', error);
-                }
-                
-            }, 100);
+            framesCapturados = [];
+            sequenciaAtual = 0;
+            executarSequenciaCaptura();
         }
         
         // ============================================
-        // INICIAR CONTAGEM REGRESSIVA
+        // EXECUTAR SEQUÊNCIA DE CAPTURA
         // ============================================
-        function iniciarContagem() {
-            if (contando) return;
-            
-            contando = true;
-            timerBar.style.display = 'block';
-            const startTime = Date.now();
-            
-            const timer = setInterval(() => {
-                const elapsed = Date.now() - startTime;
-                const progresso = (elapsed / TEMPO_ESTAVEL) * 100;
-                timerFill.style.width = Math.min(progresso, 100) + '%';
-                
-                if (elapsed >= TEMPO_ESTAVEL) {
-                    clearInterval(timer);
-                    timerBar.style.display = 'none';
-                    capturarFoto();
-                    contando = false;
-                }
-            }, 50);
-            
-            window.contagemTimer = timer;
-        }
-        
-        // ============================================
-        // RESETAR CONTAGEM
-        // ============================================
-        function resetTimer() {
-            if (window.contagemTimer) {
-                clearInterval(window.contagemTimer);
-            }
-            contando = false;
-            timerBar.style.display = 'none';
-            timerFill.style.width = '0%';
-        }
-        
-        // ============================================
-        // VALIDAR IMAGEM LOCALMENTE (NO NAVEGADOR)
-        // ============================================
-        async function validarImagemLocalmente(imagemBase64) {
-            try {
-                instructionText.innerHTML = '🔍 Verificando qualidade...';
-                
-                // Criar imagem a partir do base64
-                const img = new Image();
-                img.src = imagemBase64;
-                
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                });
-                
-                // Detectar rosto
-                const detections = await faceapi.detectAllFaces(
-                    img, 
-                    new faceapi.TinyFaceDetectorOptions({
-                        inputSize: 320,
-                        scoreThreshold: 0.3
-                    })
-                );
-                
-                if (detections.length === 0) {
-                    return { 
-                        success: false, 
-                        error: 'Nenhum rosto detectado' 
-                    };
-                }
-                
-                if (detections.length > 1) {
-                    return { 
-                        success: false, 
-                        error: 'Múltiplos rostos detectados' 
-                    };
-                }
-                
-                // Verificar tamanho do rosto
-                const face = detections[0];
-                const faceArea = face.box.width * face.box.height;
-                const imageArea = img.width * img.height;
-                const proportion = (faceArea / imageArea) * 100;
-                
-                if (proportion < 15) {
-                    return { 
-                        success: false, 
-                        error: 'Rosto muito distante' 
-                    };
-                }
-                
-                if (proportion > 50) {
-                    return { 
-                        success: false, 
-                        error: 'Rosto muito próximo' 
-                    };
-                }
-                
-                // Verificar centralização
-                const centerX = img.width / 2;
-                const centerY = img.height / 2;
-                const faceCenterX = face.box.x + face.box.width / 2;
-                const faceCenterY = face.box.y + face.box.height / 2;
-                
-                const offsetX = Math.abs(faceCenterX - centerX) / (img.width / 2) * 100;
-                const offsetY = Math.abs(faceCenterY - centerY) / (img.height / 2) * 100;
-                
-                if (offsetX > 30 || offsetY > 30) {
-                    return { 
-                        success: false, 
-                        error: 'Centralize melhor o rosto' 
-                    };
-                }
-                
-                return { 
-                    success: true, 
-                    message: 'Imagem válida!',
-                    face: face
-                };
-                
-            } catch (error) {
-                console.error('❌ Erro na validação:', error);
-                return { 
-                    success: false, 
-                    error: 'Erro ao processar imagem' 
-                };
-            }
-        }
-        
-        // ============================================
-        // CAPTURAR FOTO (VERSÃO SUPER OTIMIZADA)
-        // ============================================
-        async function capturarFoto() {
-            if (capturando || enviando || faceJaCadastrada) return;
-            
-            capturando = true;
-            
-            if (!videoEl) return;
-            
-            tentativas++;
-            attemptCounter.textContent = `Tentativa ${tentativas}/${MAX_TENTATIVAS}`;
-            
-            if (detectionInterval) {
-                clearInterval(detectionInterval);
-                detectionInterval = null;
-            }
-            resetTimer();
-            
-            // ===== CAPTURA 1: Imagem PEQUENA para validação =====
-            const canvasValidacao = document.createElement('canvas');
-            canvasValidacao.width = 160;  // REDUZIDO de 320 para 160
-            canvasValidacao.height = 120; // REDUZIDO de 240 para 120
-            const ctxValidacao = canvasValidacao.getContext('2d');
-            ctxValidacao.translate(canvasValidacao.width, 0);
-            ctxValidacao.scale(-1, 1);
-            ctxValidacao.drawImage(videoEl, 0, 0, 160, 120);
-            
-            const imagemValidacao = canvasValidacao.toDataURL('image/jpeg', 0.6); // Qualidade 0.6
-            
-            instructionText.innerHTML = '🔍 Validando imagem...';
-            
-            // VALIDAR usando a imagem pequena
-            const resultado = await validarImagemLocalmente(imagemValidacao);
-            
-            if (!resultado.success) {
-                mostrarPreviewComDicas(imagemValidacao, resultado.error);
-                instructionText.innerHTML = '❌ ' + resultado.error;
-                capturando = false;
-                
-                if (modelsLoaded && !detectionInterval) {
-                    iniciarDeteccao();
-                }
+        async function executarSequenciaCaptura() {
+            if (sequenciaAtual >= sequenciasCaptura.length) {
+                // Todas as sequências executadas, capturar a melhor imagem
+                await capturarMelhorFrame();
                 return;
             }
             
-            instructionText.innerHTML = '✅ Capturando imagem para cadastro...';
+            const sequencia = sequenciasCaptura[sequenciaAtual];
+            attemptCounter.textContent = `Etapa ${sequenciaAtual + 1}/${sequenciasCaptura.length}`;
+            instructionText.innerHTML = `${sequencia.instrucao}<br><small style="font-size:0.7rem">${sequencia.dica}</small>`;
+            circle.className = 'circle-guide waiting';
+            qualityIndicator.innerHTML = '📸 Mantenha a posição...';
             
-            // ===== CAPTURA 2: Imagem para cadastro (TAMBÉM REDUZIDA) =====
-            const canvasEnvio = document.createElement('canvas');
-            canvasEnvio.width = 160;  // MESMO TAMANHO DA VALIDAÇÃO
-            canvasEnvio.height = 120;
-            const ctxEnvio = canvasEnvio.getContext('2d');
-            ctxEnvio.translate(canvasEnvio.width, 0);
-            ctxEnvio.scale(-1, 1);
-            ctxEnvio.drawImage(videoEl, 0, 0, 160, 120);
+            // Capturar frames durante a sequência
+            const framesPorSegundo = 5;
+            const tempoFrame = 1000 / framesPorSegundo;
+            const numeroFrames = Math.ceil(sequencia.duracao / tempoFrame);
             
-            // Qualidade 0.6 (mais baixa)
-            const imagemBase64 = canvasEnvio.toDataURL('image/jpeg', 0.6);
-            ultimaFoto = imagemBase64;
+            let framesColetados = 0;
             
-            instructionText.innerHTML = '📤 Aguarde...';
-            enviarParaServidor();
+            capturaInterval = setInterval(async () => {
+                if (framesColetados >= numeroFrames) {
+                    clearInterval(capturaInterval);
+                    sequenciaAtual++;
+                    setTimeout(() => executarSequenciaCaptura(), 500);
+                    return;
+                }
+                
+                // Capturar e analisar qualidade do frame
+                if (videoEl && videoEl.videoWidth > 0) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 320;
+                    canvas.height = 240;
+                    const canvasCtx = canvas.getContext('2d');
+                    canvasCtx.translate(canvas.width, 0);
+                    canvasCtx.scale(-1, 1);
+                    canvasCtx.drawImage(videoEl, 0, 0, 320, 240);
+                    
+                    const frameBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                    const imagemBase64 = frameBase64.split(',')[1];
+                    
+                    // Analisar qualidade do frame
+                    const qualidade = await analisarQualidadeFrame(imagemBase64);
+                    
+                    framesCapturados.push({
+                        frame: imagemBase64,
+                        acao: sequencia.acao,
+                        timestamp: Date.now(),
+                        qualidade: qualidade
+                    });
+                    
+                    // Atualizar indicador de qualidade
+                    let qualidadeTexto = '';
+                    if (qualidade > 80) qualidadeTexto = '🟢 Excelente';
+                    else if (qualidade > 60) qualidadeTexto = '🟡 Boa';
+                    else if (qualidade > 40) qualidadeTexto = '🟠 Regular';
+                    else qualidadeTexto = '🔴 Ruim - Aproxime-se';
+                    
+                    qualityIndicator.innerHTML = `📊 Qualidade: ${qualidadeTexto} (${qualidade}%)`;
+                    
+                    framesColetados++;
+                }
+            }, tempoFrame);
         }
-
+        
         // ============================================
-        // VALIDAR IMAGEM LOCALMENTE (AJUSTADA)
+        // ANALISAR QUALIDADE DO FRAME (SIMULADA + DETECÇÃO)
         // ============================================
-        async function validarImagemLocalmente(imagemBase64) {
+        async function analisarQualidadeFrame(imagemBase64) {
             try {
-                // Criar imagem a partir do base64
+                const imageBuffer = Buffer.from(imagemBase64, 'base64');
                 const img = new Image();
-                img.src = imagemBase64;
+                img.src = `data:image/jpeg;base64,${imagemBase64}`;
                 
                 await new Promise((resolve, reject) => {
                     img.onload = resolve;
                     img.onerror = reject;
                 });
                 
-                console.log(`📏 Imagem de validação: ${img.width}x${img.height}`);
-                
-                // Detectar rosto com parâmetros ajustados
                 const detections = await faceapi.detectAllFaces(
                     img, 
                     new faceapi.TinyFaceDetectorOptions({
-                        inputSize: 224,      // Reduzido para ficar mais rápido
-                        scoreThreshold: 0.2   // Threshold mais baixo para detectar faces mesmo em baixa qualidade
+                        inputSize: 224,
+                        scoreThreshold: 0.25
                     })
                 );
                 
-                console.log(`🔍 Detecções: ${detections.length}`);
-                
-                if (detections.length === 0) {
-                    return { 
-                        success: false, 
-                        error: 'Nenhum rosto detectado' 
-                    };
-                }
-                
-                if (detections.length > 1) {
-                    return { 
-                        success: false, 
-                        error: 'Múltiplos rostos detectados' 
-                    };
-                }
+                if (detections.length === 0) return 0;
                 
                 const face = detections[0];
                 
-                // Calcular proporção do rosto em relação à imagem
+                // Calcular proporção do rosto
                 const faceArea = face.box.width * face.box.height;
                 const imageArea = img.width * img.height;
                 const proportion = (faceArea / imageArea) * 100;
                 
-                console.log(`📊 Proporção do rosto: ${proportion.toFixed(1)}%`);
-                
-                // Ajustar os limites para webcam de PC
-                if (proportion < 10) {  // Reduzido de 15 para 10
-                    return { 
-                        success: false, 
-                        error: 'Rosto muito distante. Aproxime-se.' 
-                    };
-                }
-                
-                if (proportion > 60) {  // Aumentado de 50 para 60
-                    return { 
-                        success: false, 
-                        error: 'Rosto muito próximo. Afaste-se um pouco.' 
-                    };
-                }
-                
-                // Verificar centralização (mais tolerante)
+                // Calcular centralização
                 const centerX = img.width / 2;
                 const centerY = img.height / 2;
                 const faceCenterX = face.box.x + face.box.width / 2;
@@ -884,95 +636,77 @@
                 const offsetX = Math.abs(faceCenterX - centerX) / (img.width / 2) * 100;
                 const offsetY = Math.abs(faceCenterY - centerY) / (img.height / 2) * 100;
                 
-                console.log(`📍 Centralização: X:${offsetX.toFixed(1)}%, Y:${offsetY.toFixed(1)}%`);
+                // Pontuação: tamanho ideal (30% da imagem) + centralização
+                let score = 100;
                 
-                if (offsetX > 40 || offsetY > 40) {  // Aumentado de 30 para 40
-                    return { 
-                        success: false, 
-                        error: 'Centralize melhor o rosto' 
-                    };
-                }
+                // Penalizar tamanho inadequado
+                if (proportion < 15) score -= 40;
+                else if (proportion < 20) score -= 20;
+                else if (proportion > 45) score -= 30;
+                else if (proportion > 35) score -= 15;
                 
-                return { 
-                    success: true, 
-                    message: 'Imagem válida!',
-                    proportion: proportion,
-                    face: face
-                };
+                // Penalizar descentralização
+                if (offsetX > 30 || offsetY > 30) score -= 30;
+                else if (offsetX > 20 || offsetY > 20) score -= 15;
+                else if (offsetX > 15 || offsetY > 15) score -= 8;
+                
+                return Math.max(0, Math.min(100, score));
                 
             } catch (error) {
-                console.error('❌ Erro na validação:', error);
-                return { 
-                    success: false, 
-                    error: 'Erro ao processar imagem' 
-                };
+                console.warn('Erro ao analisar qualidade:', error);
+                return 50;
             }
         }
-
+        
         // ============================================
-        // FUNÇÃO DE TESTE PARA VER RESOLUÇÃO DA CÂMERA
+        // CAPTURAR MELHOR FRAME DOS CAPTURADOS
         // ============================================
-        function verificarResolucaoCamera() {
-            if (videoEl) {
-                console.log('📸 Resolução da câmera:');
-                console.log(`   Largura: ${videoEl.videoWidth}px`);
-                console.log(`   Altura: ${videoEl.videoHeight}px`);
-                console.log(`   Proporção: ${(videoEl.videoWidth/videoEl.videoHeight).toFixed(2)}`);
-                
-                alert(`Resolução da câmera: ${videoEl.videoWidth}x${videoEl.videoHeight}`);
+        async function capturarMelhorFrame() {
+            if (framesCapturados.length === 0) {
+                instructionText.innerHTML = '❌ Não foi possível capturar frames. Tente novamente.';
+                return;
             }
+            
+            // Encontrar o frame de melhor qualidade
+            const melhorFrame = framesCapturados.reduce((melhor, atual) => 
+                (atual.qualidade > melhor.qualidade) ? atual : melhor, framesCapturados[0]);
+            
+            console.log(`📸 Melhor frame selecionado: qualidade ${melhorFrame.qualidade}%`);
+            
+            if (melhorFrame.qualidade < 50) {
+                mostrarPreviewComDicas(melhorFrame.frame, 'Qualidade insuficiente');
+                return;
+            }
+            
+            instructionText.innerHTML = '📤 Enviando cadastro de alta qualidade...';
+            await enviarParaServidor(melhorFrame.frame);
         }
-
-        // Adicione esta linha temporariamente no console do navegador para testar:
-        verificarResolucaoCamera();
         
         // ============================================
         // MOSTRAR PREVIEW COM DICAS
         // ============================================
         function mostrarPreviewComDicas(imagemBase64, erro) {
-            previewImg.src = imagemBase64;
+            previewImg.src = `data:image/jpeg;base64,${imagemBase64}`;
             
             let dicas = '';
-            if (erro.includes('rosto')) {
+            if (erro.includes('rosto') || erro.includes('detectado')) {
                 dicas = `
                     <strong>❌ Nenhum rosto detectado!</strong>
                     <ul>
                         <li>Centralize seu rosto no círculo</li>
                         <li>Melhore a iluminação do ambiente</li>
-                        <li>Remova óculos se estiver usando</li>
+                        <li>Remova óculos escuros</li>
                         <li>Mantenha uma expressão neutra</li>
                     </ul>
                 `;
-            } else if (erro.includes('distante')) {
+            } else if (erro.includes('qualidade')) {
                 dicas = `
-                    <strong>📏 Rosto muito distante!</strong>
+                    <strong>⚠️ Qualidade insuficiente!</strong>
                     <ul>
-                        <li>Aproxime-se da câmera</li>
-                        <li>O rosto deve ocupar a maior parte do círculo</li>
-                    </ul>
-                `;
-            } else if (erro.includes('próximo')) {
-                dicas = `
-                    <strong>📏 Rosto muito próximo!</strong>
-                    <ul>
-                        <li>Afaste-se um pouco da câmera</li>
-                        <li>O rosto deve caber completamente no círculo</li>
-                    </ul>
-                `;
-            } else if (erro.includes('Centralize')) {
-                dicas = `
-                    <strong>🎯 Rosto descentralizado!</strong>
-                    <ul>
-                        <li>Centralize seu rosto no círculo</li>
-                        <li>Mantenha o rosto no centro da tela</li>
-                    </ul>
-                `;
-            } else if (erro.includes('Múltiplos')) {
-                dicas = `
-                    <strong>👥 Múltiplas pessoas detectadas!</strong>
-                    <ul>
-                        <li>Apenas uma pessoa por vez</li>
-                        <li>Certifique-se de que só você está no quadro</li>
+                        <li>Aproxime-se mais da câmera</li>
+                        <li>Centralize melhor o rosto</li>
+                        <li>Garanta boa iluminação no rosto</li>
+                        <li>Evite movimento durante a captura</li>
                     </ul>
                 `;
             } else {
@@ -982,6 +716,7 @@
                         <li>Tente novamente com melhor posicionamento</li>
                         <li>Certifique-se que seu rosto está visível</li>
                         <li>Evite movimento no momento da captura</li>
+                        <li>Mantenha o rosto centralizado no círculo</li>
                     </ul>
                 `;
             }
@@ -989,31 +724,18 @@
             previewDicas.innerHTML = dicas;
             previewBox.classList.add('show');
         }
-
+        
         // ============================================
-        // ENVIAR PARA O SERVIDOR (COM TIMEOUT)
+        // ENVIAR PARA O SERVIDOR
         // ============================================
-        async function enviarParaServidor() {
+        async function enviarParaServidor(imagemBase64) {
             if (enviando) return;
-            if (!ultimaFoto) return;
             
             enviando = true;
-            
-            instructionText.innerHTML = '⏳ Aguarde...';
-            timerBar.style.display = 'block';
-            timerFill.style.width = '30%';
             
             try {
                 const token = localStorage.getItem('auth_token');
                 const user = JSON.parse(localStorage.getItem('user_data') || '{}');
-                
-                timerFill.style.width = '60%';
-                
-                console.log('📤 Enviando imagem para cadastro...');
-                
-                // Criar promise com timeout de 30 segundos
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000);
                 
                 const res = await fetch('/api/auth/cadastrar-face', {
                     method: 'POST',
@@ -1023,21 +745,15 @@
                     },
                     body: JSON.stringify({
                         usuarioId: user.id,
-                        imagem: ultimaFoto.split(',')[1]
-                    }),
-                    signal: controller.signal
+                        imagem: imagemBase64
+                    })
                 });
-                
-                clearTimeout(timeoutId);
-                
-                timerFill.style.width = '90%';
                 
                 const data = await res.json();
                 console.log('📦 Resposta do servidor:', data);
                 
                 if (data.success) {
                     instructionText.innerHTML = '✅ Face cadastrada com sucesso!';
-                    timerFill.style.width = '100%';
                     localStorage.setItem('face_cadastrado', 'true');
                     
                     setTimeout(() => {
@@ -1049,18 +765,11 @@
                 }
                 
             } catch (error) {
-                if (error.name === 'AbortError') {
-                    instructionText.innerHTML = '❌ Tempo esgotado. Tente novamente.';
-                } else {
-                    instructionText.innerHTML = '❌ Erro: ' + error.message;
-                }
-                
                 console.error('❌ Erro no envio:', error);
-                timerBar.style.display = 'none';
+                instructionText.innerHTML = '❌ Erro: ' + error.message;
                 enviando = false;
-                capturando = false;
                 
-                mostrarPreviewComDicas(ultimaFoto, error.message);
+                mostrarPreviewComDicas(imagemBase64, error.message);
             }
         }
         
@@ -1069,14 +778,15 @@
         // ============================================
         function reiniciarAposPreview() {
             previewBox.classList.remove('show');
-            capturando = false;
             enviando = false;
+            framesCapturados = [];
+            sequenciaAtual = 0;
             
-            if (modelsLoaded && !detectionInterval && !faceJaCadastrada) { // ADICIONADO faceJaCadastrada
-                iniciarDeteccao();
+            if (modelsLoaded && !faceJaCadastrada) {
+                iniciarSequenciaCaptura();
             }
             
-            instructionText.innerHTML = 'Posicione o rosto no círculo';
+            instructionText.innerHTML = 'Siga as instruções para cadastro de alta qualidade';
         }
         
         // ============================================
@@ -1111,23 +821,12 @@
         }
         
         // ============================================
-        // EVENTOS
+        // PULAR CADASTRO
         // ============================================
-        btnTentarNovamente.addEventListener('click', reiniciarAposPreview);
-        
-        btnForcarEnvio.addEventListener('click', () => {
-            if (ultimaFoto) {
-                previewBox.classList.remove('show');
-                enviarParaServidor();
-            }
-        });
-        
         btnSkip.addEventListener('click', async function(e) {
             e.preventDefault();
             
             if (confirm('Deseja pular o cadastro facial? Você poderá fazer depois.')) {
-                
-                // Mostrar loading no botão
                 this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
                 this.disabled = true;
                 
@@ -1136,7 +835,6 @@
                     const user = JSON.parse(localStorage.getItem('user_data') || '{}');
                     
                     if (token && user.id) {
-                        // Enviar notificação no sistema
                         await fetch('/api/notificacoes', {
                             method: 'POST',
                             headers: {
@@ -1154,34 +852,26 @@
                                 prioridade: 4
                             })
                         });
-                        
-                        // Enviar push notification
-                        await fetch('/api/usuario/enviar-push', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                usuarioId: user.id,
-                                titulo: '📸 Cadastre sua Face ID',
-                                mensagem: 'Não se esqueça de cadastrar sua Face ID para acessar as provas!',
-                                dados: {
-                                    tipo: 'lembrete_face',
-                                    url: '/capturar-face.html'
-                                }
-                            })
-                        });
-                        
-                        // Limpar flag de banner fechado para aparecer novamente
-                        localStorage.removeItem('banner_face_fechado');
                     }
                 } catch (error) {
                     console.error('❌ Erro ao enviar lembretes:', error);
                 }
                 
-                // Redirecionar para o painel do aluno
                 window.location.href = '/aluno.html';
+            }
+        });
+        
+        // ============================================
+        // EVENTOS DOS BOTÕES
+        // ============================================
+        btnTentarNovamente.addEventListener('click', reiniciarAposPreview);
+        
+        btnForcarEnvio.addEventListener('click', async () => {
+            if (framesCapturados.length > 0) {
+                const melhorFrame = framesCapturados.reduce((melhor, atual) => 
+                    (atual.qualidade > melhor.qualidade) ? atual : melhor, framesCapturados[0]);
+                previewBox.classList.remove('show');
+                await enviarParaServidor(melhorFrame.frame);
             }
         });
         
@@ -1189,13 +879,13 @@
         // LIMPEZA AO SAIR
         // ============================================
         window.addEventListener('beforeunload', () => {
-            if (detectionInterval) clearInterval(detectionInterval);
+            if (capturaInterval) clearInterval(capturaInterval);
             if (window.contagemTimer) clearInterval(window.contagemTimer);
             if (stream) stream.getTracks().forEach(t => t.stop());
         });
         
         // ============================================
-        // SOLICITAR PERMISSÃO DE NOTIFICAÇÃO (NOVO)
+        // SOLICITAR PERMISSÃO DE NOTIFICAÇÃO
         // ============================================
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
@@ -1207,101 +897,81 @@
         iniciarCamera();
     </script>
 
-        <script>
-// ============================================
-// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-// ============================================
-
-(function() {
-    // Só ativar em telas menores que 768px
-    if (window.innerWidth > 768) {
-        console.log('📐 Desktop detectado - escalonamento desativado');
-        return;
-    }
-    
-    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-    
-    // Função para calcular a escala baseada na largura (apenas mobile)
-    function calcularEscalaMobile() {
-        const width = window.innerWidth;
-        
-        // Largura de referência para mobile (768px)
-        const baseWidth = 768;
-        
-        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
-        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-        
-        // Ajustes específicos para faixas de tamanho
-        if (width <= 320) escala = 0.55;
-        else if (width <= 360) escala = 0.6;
-        else if (width <= 400) escala = 0.65;
-        else if (width <= 500) escala = 0.75;
-        else if (width <= 600) escala = 0.85;
-        else if (width <= 700) escala = 0.95;
-        else escala = 1;
-        
-        return escala;
-    }
-    
-    // Função para aplicar a escala
-    function aplicarEscalaMobile() {
-        // Só aplicar se ainda estiver em mobile
-        if (window.innerWidth > 768) return;
-        
-        const escala = calcularEscalaMobile();
-        
-        // Atualizar variável CSS
-        document.documentElement.style.setProperty('--scale-ratio', escala);
-        document.documentElement.style.setProperty('--current-width', window.innerWidth);
-        
-        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-    }
-    
-    // Aplicar inicial
-    aplicarEscalaMobile();
-    
-    // Aplicar ao redimensionar (com debounce)
-    let timeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // Verificar se ainda está em mobile
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            } else {
-                // Se passou para desktop, resetar escala
-                document.documentElement.style.setProperty('--scale-ratio', '1');
-                console.log('📐 Modo desktop - escala resetada');
+    <script>
+        // ============================================
+        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+        // ============================================
+        (function() {
+            if (window.innerWidth > 768) {
+                console.log('📐 Desktop detectado - escalonamento desativado');
+                return;
             }
-        }, 100);
-    });
-    
-    // Também aplicar quando orientação mudar
-    window.addEventListener('orientationchange', function() {
-        setTimeout(() => {
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
+            
+            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+            
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                const baseWidth = 768;
+                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+                
+                if (width <= 320) escala = 0.55;
+                else if (width <= 360) escala = 0.6;
+                else if (width <= 400) escala = 0.65;
+                else if (width <= 500) escala = 0.75;
+                else if (width <= 600) escala = 0.85;
+                else if (width <= 700) escala = 0.95;
+                else escala = 1;
+                
+                return escala;
             }
-        }, 200);
-    });
-    
-    console.log('✅ Sistema de escalonamento mobile ativo!');
-    
-})();
-</script>
+            
+            function aplicarEscalaMobile() {
+                if (window.innerWidth > 768) return;
+                const escala = calcularEscalaMobile();
+                document.documentElement.style.setProperty('--scale-ratio', escala);
+                document.documentElement.style.setProperty('--current-width', window.innerWidth);
+                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+            }
+            
+            aplicarEscalaMobile();
+            
+            let timeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    } else {
+                        document.documentElement.style.setProperty('--scale-ratio', '1');
+                        console.log('📐 Modo desktop - escala resetada');
+                    }
+                }, 100);
+            });
+            
+            window.addEventListener('orientationchange', function() {
+                setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    }
+                }, 200);
+            });
+            
+            console.log('✅ Sistema de escalonamento mobile ativo!');
+        })();
+    </script>
 
-<script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker ativo'))
-            .catch(err => console.log('❌ Erro:', err));
-    });
-}
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
 
-window.addEventListener('online', () => console.log('🌐 Online'));
-window.addEventListener('offline', () => console.log('📴 Offline'));
-</script>
+        window.addEventListener('online', () => console.log('🌐 Online'));
+        window.addEventListener('offline', () => console.log('📴 Offline'));
+    </script>
 
 </body>
 </html>

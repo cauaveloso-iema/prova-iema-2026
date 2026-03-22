@@ -16817,19 +16817,29 @@ app.get('/api/auth/verificar-face/:usuarioId', authenticateToken, async (req, re
 });
 
 // ============================================
-// ROTA PARA VALIDAR CAMERA (CORRIGIDA)
+// ROTA PARA VALIDAR CAMERA (VERSÃO REFORÇADA COM LIVENESS)
 // ============================================
 app.post('/api/auth/validar-camera', authenticateToken, async (req, res) => {
     try {
-        const { usuarioId, imagem } = req.body;
+        const { usuarioId, frames, acoes, timestamps, localizacao } = req.body;
         
         console.log('='.repeat(50));
-        console.log('🔍 VALIDAÇÃO DE IMAGEM');
+        console.log('🔍 VALIDAÇÃO REFORÇADA COM LIVENESS');
         console.log('📌 Usuário ID:', usuarioId);
-        console.log('📦 Tamanho da imagem:', Math.round(imagem.length / 1024), 'KB');
+        console.log(`📦 Frames recebidos: ${frames?.length || 0}`);
+        console.log(`📍 Localização:`, localizacao || 'Não informada');
         console.log('='.repeat(50));
         
-        if (!usuarioId || !imagem) {
+        // 🔥 ACEITAR TANTO FRAME ÚNICO (LEGADO) QUANTO MÚLTIPLOS FRAMES (NOVO)
+        let framesArray = frames;
+        
+        // Se for um único frame (formato antigo), converter para array
+        if (!framesArray && req.body.imagem) {
+            framesArray = [req.body.imagem];
+            console.log('📸 Modo legado: frame único recebido');
+        }
+        
+        if (!usuarioId || !framesArray || framesArray.length === 0) {
             return res.status(400).json({
                 success: false,
                 error: 'Dados incompletos para validação'
@@ -16852,72 +16862,140 @@ app.post('/api/auth/validar-camera', authenticateToken, async (req, res) => {
             });
         }
         
-        // Processar imagem atual
-        const imageBuffer = Buffer.from(imagem, 'base64');
-        const img = await canvas.loadImage(imageBuffer);
-        
-        // Detectar face na nova imagem
-        const options = new faceapi.TinyFaceDetectorOptions({
-            inputSize: 224,
-            scoreThreshold: 0.3
-        });
-        
-        const detection = await faceapi.detectSingleFace(img, options);
-        
-        if (!detection) {
-            return res.status(400).json({
-                success: false,
-                error: 'Nenhum rosto detectado na imagem. Tente novamente com melhor iluminação.'
-            });
-        }
-
-        // Calcular descriptor da nova imagem
-        const novoDescriptor = await faceapi.computeFaceDescriptor(img, detection);
-        
-        if (!novoDescriptor) {
-            return res.status(400).json({
-                success: false,
-                error: 'Não foi possível gerar o descriptor da imagem'
-            });
-        }
-
-        // Criar descriptor a partir do salvo no banco
         const descriptorSalvo = new Float32Array(faceCadastrada.faceDescriptor);
         
-        // Calcular distância euclidiana
-        const distancia = faceapi.euclideanDistance(novoDescriptor, descriptorSalvo);
+        // Processar cada frame e coletar métricas
+        let melhoresDistancias = [];
+        let variacoesDetectadas = [];
+        let framesValidos = 0;
         
-        // Threshold: 0.6 é um bom valor
-        const threshold = 0.6;
-        const reconhecido = distancia < threshold;
+        for (let i = 0; i < framesArray.length; i++) {
+            try {
+                const imageBuffer = Buffer.from(framesArray[i], 'base64');
+                const img = await canvas.loadImage(imageBuffer);
+                
+                // Detectar rosto
+                const options = new faceapi.TinyFaceDetectorOptions({
+                    inputSize: 224,
+                    scoreThreshold: 0.3
+                });
+                
+                const detection = await faceapi.detectSingleFace(img, options);
+                
+                if (!detection) continue;
+                
+                // Calcular descriptor
+                const descriptor = await faceapi.computeFaceDescriptor(img, detection);
+                
+                if (!descriptor) continue;
+                
+                framesValidos++;
+                
+                // Calcular distância
+                const distancia = faceapi.euclideanDistance(descriptor, descriptorSalvo);
+                melhoresDistancias.push(distancia);
+                
+                // Registrar variação entre frames (para detectar movimento)
+                if (i > 0 && melhoresDistancias.length > 1) {
+                    const variacao = Math.abs(distancia - melhoresDistancias[melhoresDistancias.length - 2]);
+                    variacoesDetectadas.push(variacao);
+                }
+                
+            } catch (frameError) {
+                console.warn(`⚠️ Erro ao processar frame ${i}:`, frameError.message);
+            }
+        }
         
-        // Converter para similaridade percentual
-        const similaridade = Math.max(0, Math.min(100, (1 - distancia) * 100));
-
-        if (reconhecido) {
+        if (framesValidos === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhum rosto detectado nos frames'
+            });
+        }
+        
+        // Calcular melhor distância (menor é melhor)
+        const melhorDistancia = Math.min(...melhoresDistancias);
+        const mediaDistancias = melhoresDistancias.reduce((a,b) => a+b, 0) / melhoresDistancias.length;
+        
+        // Calcular variabilidade (se houver movimento natural)
+        const variabilidadeMedia = variacoesDetectadas.length > 0 
+            ? variacoesDetectadas.reduce((a,b) => a+b, 0) / variacoesDetectadas.length 
+            : 0;
+        
+        const similaridade = Math.max(0, Math.min(100, (1 - (melhorDistancia / 0.8)) * 100));
+        
+        // 🔥 CRITÉRIOS DE VALIDAÇÃO RÍGIDOS:
+        const threshold = 0.55;  // Quanto menor, mais restritivo
+        const reconhecido = melhorDistancia < threshold;
+        
+        // Para múltiplos frames, verificar movimento natural
+        let temMovimentoNatural = true;
+        if (framesArray.length > 3) {
+            temMovimentoNatural = variabilidadeMedia > 0.02;
+        }
+        
+        console.log(`📊 Resultados da validação:`);
+        console.log(`   Frames válidos: ${framesValidos}/${framesArray.length}`);
+        console.log(`   Melhor distância: ${melhorDistancia.toFixed(4)}`);
+        console.log(`   Média distâncias: ${mediaDistancias.toFixed(4)}`);
+        console.log(`   Similaridade: ${similaridade.toFixed(1)}%`);
+        console.log(`   Variabilidade: ${variabilidadeMedia.toFixed(4)}`);
+        console.log(`   Movimento natural: ${temMovimentoNatural ? 'SIM ✅' : 'NÃO ❌'}`);
+        console.log(`   Reconhecido: ${reconhecido ? 'SIM ✅' : 'NÃO ❌'}`);
+        console.log(`   Threshold: ${threshold}`);
+        
+        // VALIDAÇÃO FINAL
+        const aprovado = reconhecido && temMovimentoNatural;
+        
+        if (aprovado) {
             // Atualizar estatísticas
             faceCadastrada.ultimaValidacao = new Date();
             faceCadastrada.totalValidacoes += 1;
             await faceCadastrada.save();
             
-            console.log(`✅ Face ID validado! (distância: ${distancia.toFixed(3)}, similaridade: ${similaridade.toFixed(1)}%)`);
+            // Registrar localização se fornecida
+            if (localizacao && localizacao.latitude) {
+                try {
+                    const Localizacao = mongoose.models.Localizacao;
+                    if (Localizacao) {
+                        const novaLocalizacao = new Localizacao({
+                            alunoId: usuarioId,
+                            latitude: localizacao.latitude,
+                            longitude: localizacao.longitude,
+                            accuracy: localizacao.accuracy || 0,
+                            timestamp: new Date()
+                        });
+                        await novaLocalizacao.save();
+                        console.log('📍 Localização registrada no histórico');
+                    }
+                } catch (locError) {
+                    console.warn('⚠️ Erro ao salvar localização:', locError.message);
+                }
+            }
             
             res.json({
                 success: true,
-                message: 'Face ID validado com sucesso',
+                reconhecido: true,
+                mensagem: 'Validação facial concluída com sucesso',
                 similaridade: similaridade.toFixed(1),
-                distancia: distancia.toFixed(3),
-                totalValidacoes: faceCadastrada.totalValidacoes
+                melhorDistancia: melhorDistancia.toFixed(4),
+                framesValidados: framesValidos
             });
             
         } else {
-            console.log(`❌ Falha na validação facial (distância: ${distancia.toFixed(3)}, similaridade: ${similaridade.toFixed(1)}%)`);
+            let erroMsg = '';
+            if (!reconhecido) {
+                erroMsg = `Face não reconhecida (similaridade: ${similaridade.toFixed(0)}%). Tente novamente com melhor iluminação.`;
+            } else if (!temMovimentoNatural) {
+                erroMsg = '❌ FALHA DE SEGURANÇA: Movimento natural não detectado. Não use fotos ou vídeos.';
+            }
             
             res.status(400).json({
                 success: false,
-                error: 'Face não reconhecida. Tente novamente com melhor iluminação.',
+                reconhecido: false,
+                error: erroMsg || 'Validação facial falhou',
                 similaridade: similaridade.toFixed(1),
-                distancia: distancia.toFixed(3)
+                melhorDistancia: melhorDistancia.toFixed(4)
             });
         }
         
