@@ -452,11 +452,7 @@
                     instructionText.innerHTML = '✅ Face ID já cadastrado! Redirecionando...';
                     
                     setTimeout(() => {
-                        // 🔥 CAPTURAR: só volta para o painel
-                        window.close();
-                        setTimeout(() => {
-                            window.location.href = '/aluno.html';
-                        }, 500);
+                        window.location.href = '/aluno.html';
                     }, 2000);
                     
                     return true;
@@ -1041,15 +1037,11 @@
                 
                 if (data.success) {
                     instructionText.innerHTML = '✅ Face cadastrada com sucesso!';
+                    timerFill.style.width = '100%';
                     localStorage.setItem('face_cadastrado', 'true');
                     
-                    // 🔥 NÃO SALVA FLAG validacao_para_prova
-                    // Apenas volta para o app
                     setTimeout(() => {
-                        window.close();
-                        setTimeout(() => {
-                            window.location.href = 'https://sistema-avaliativo-iemacentro.onrender.com/aluno.html';
-                        }, 500);
+                        window.location.href = '/aluno.html';
                     }, 1500);
                     
                 } else {

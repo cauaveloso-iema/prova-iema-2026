@@ -519,19 +519,6 @@
 // ============================================
 // SISTEMA DE NOTIFICAÇÕES DO ALUNO
 // ============================================
-// No aluno.html, adicione no início
-(function() {
-    // 🔥 SÓ REDIRECIONA SE VEIO DA VALIDAÇÃO
-    const validacaoParaProva = localStorage.getItem('validacao_para_prova');
-    const provaToken = localStorage.getItem('provaToken');
-    const provaAtual = localStorage.getItem('provaAtual');
-    
-    if (validacaoParaProva === 'true' && provaToken) {
-        localStorage.removeItem('validacao_para_prova');  // Remove a flag
-        window.location.href = `/realizar-prova.html?token=${provaToken}`;
-    }
-})();
-
 let notificacoesInterval;
 
 // Iniciar notificações quando a página carregar
