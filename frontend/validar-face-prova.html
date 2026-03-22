@@ -574,11 +574,10 @@
         }
         
         // ============================================
-        // EXECUTAR SEQUÊNCIA DE LIVENESS
+        // EXECUTAR SEQUÊNCIA DE LIVENESS (OTIMIZADA)
         // ============================================
         async function executarSequenciaLiveness() {
             if (sequenciaAtual >= sequenciasAcao.length) {
-                // Todas as sequências executadas, validar todos os frames
                 await validarTodosFrames();
                 return;
             }
@@ -587,13 +586,12 @@
             instructionText.innerHTML = `${sequencia.instrucao}<br><small style="font-size:0.7rem">${sequencia.dica}</small>`;
             circle.className = 'circle-guide waiting';
             
-            // Capturar frames durante a sequência
-            const framesPorSegundo = 5; // 5 frames por segundo
+            // 🔥 REDUZIR QUANTIDADE DE FRAMES
+            const framesPorSegundo = 3;        // Reduzido de 5 para 3 frames por segundo
             const tempoFrame = 1000 / framesPorSegundo;
-            const numeroFrames = Math.ceil(sequencia.duracao / tempoFrame);
+            const numeroFrames = Math.min(8, Math.ceil(sequencia.duracao / tempoFrame)); // Máximo 8 frames por sequência
             
             let framesColetados = 0;
-            const framesDestaSequencia = [];
             
             livenessInterval = setInterval(() => {
                 if (framesColetados >= numeroFrames) {
@@ -603,17 +601,18 @@
                     return;
                 }
                 
-                // Capturar frame do vídeo
                 if (videoEl && videoEl.videoWidth > 0) {
                     const canvas = document.createElement('canvas');
-                    canvas.width = 160;
-                    canvas.height = 120;
+                    // 🔥 REDUZIR TAMANHO DA IMAGEM (de 160x120 para 128x96)
+                    canvas.width = 128;
+                    canvas.height = 96;
                     const canvasCtx = canvas.getContext('2d');
                     canvasCtx.translate(canvas.width, 0);
                     canvasCtx.scale(-1, 1);
-                    canvasCtx.drawImage(videoEl, 0, 0, 160, 120);
+                    canvasCtx.drawImage(videoEl, 0, 0, 128, 96);
                     
-                    const frameBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                    // 🔥 QUALIDADE REDUZIDA (de 0.6 para 0.5)
+                    const frameBase64 = canvas.toDataURL('image/jpeg', 0.5);
                     
                     livenessFrames.push({
                         frame: frameBase64.split(',')[1],

@@ -533,7 +533,6 @@
         // ============================================
         async function executarSequenciaCaptura() {
             if (sequenciaAtual >= sequenciasCaptura.length) {
-                // Todas as sequências executadas, capturar a melhor imagem
                 await capturarMelhorFrame();
                 return;
             }
@@ -544,10 +543,10 @@
             circle.className = 'circle-guide waiting';
             qualityIndicator.innerHTML = '📸 Mantenha a posição...';
             
-            // Capturar frames durante a sequência
-            const framesPorSegundo = 5;
+            // 🔥 REDUZIR QUANTIDADE DE FRAMES NA CAPTURA
+            const framesPorSegundo = 3;
             const tempoFrame = 1000 / framesPorSegundo;
-            const numeroFrames = Math.ceil(sequencia.duracao / tempoFrame);
+            const numeroFrames = Math.min(6, Math.ceil(sequencia.duracao / tempoFrame));
             
             let framesColetados = 0;
             
@@ -559,20 +558,20 @@
                     return;
                 }
                 
-                // Capturar e analisar qualidade do frame
                 if (videoEl && videoEl.videoWidth > 0) {
                     const canvas = document.createElement('canvas');
-                    canvas.width = 320;
-                    canvas.height = 240;
+                    // 🔥 TAMANHO REDUZIDO
+                    canvas.width = 160;
+                    canvas.height = 120;
                     const canvasCtx = canvas.getContext('2d');
                     canvasCtx.translate(canvas.width, 0);
                     canvasCtx.scale(-1, 1);
-                    canvasCtx.drawImage(videoEl, 0, 0, 320, 240);
+                    canvasCtx.drawImage(videoEl, 0, 0, 160, 120);
                     
-                    const frameBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                    // 🔥 QUALIDADE REDUZIDA
+                    const frameBase64 = canvas.toDataURL('image/jpeg', 0.6);
                     const imagemBase64 = frameBase64.split(',')[1];
                     
-                    // Analisar qualidade do frame
                     const qualidade = await analisarQualidadeFrame(imagemBase64);
                     
                     framesCapturados.push({
@@ -582,7 +581,6 @@
                         qualidade: qualidade
                     });
                     
-                    // Atualizar indicador de qualidade
                     let qualidadeTexto = '';
                     if (qualidade > 80) qualidadeTexto = '🟢 Excelente';
                     else if (qualidade > 60) qualidadeTexto = '🟡 Boa';
