@@ -492,30 +492,6 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
-// ============================================================================
-// CONFIGURAÇÕES DE LIMITE PARA EVITAR PayloadTooLargeError
-// ============================================================================
-
-// Configurar raw-body também
-const rawBody = require('raw-body');
-app.use(async (req, res, next) => {
-    if (req.method === 'POST' || req.method === 'PUT') {
-        try {
-            const body = await rawBody(req, { limit: '50mb' });
-            req.rawBody = body;
-        } catch (err) {
-            if (err.type === 'entity.too.large') {
-                return res.status(413).json({
-                    success: false,
-                    error: 'Arquivo muito grande. Tente novamente com uma imagem menor.'
-                });
-            }
-            next(err);
-        }
-    }
-    next();
-});
-
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO GLOBAL ============
 // Middleware de autenticação JWT (global)
