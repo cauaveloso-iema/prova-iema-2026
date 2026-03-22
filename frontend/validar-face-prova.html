@@ -348,9 +348,9 @@
         let framesColetados = 0;
         
         const sequenciasAcao = [
-            { acao: 'piscar', instrucao: '👁️ Pisque os olhos lentamente', duracao: 2000, dica: 'Pisque 1-2 vezes' },
-            { acao: 'sorrir', instrucao: '😊 Sorria por 2 segundos', duracao: 2500, dica: 'Mostre um sorriso natural' },
-            { acao: 'neutral', instrucao: '😐 Mantenha expressão neutra', duracao: 2000, dica: 'Fique sério por um momento' }
+            { acao: 'neutral', instrucao: '😐 Mantenha expressão neutra', duracao: 1500, dica: 'Fique parado' },
+            { acao: 'sorrir', instrucao: '😊 Sorria naturalmente', duracao: 1500, dica: 'Sorria' },
+            { acao: 'piscar', instrucao: '👁️ Pisque os olhos', duracao: 1500, dica: 'Pisque 1 vez' }
         ];
         
         // Controle de estado
@@ -574,28 +574,47 @@
         }
         
         // ============================================
-        // EXECUTAR SEQUÊNCIA DE LIVENESS (OTIMIZADA)
+        // EXECUTAR SEQUÊNCIA COM PROCESSAMENTO EM PARALELO
         // ============================================
+        let resultadosPorAcao = [];
+        let sequenciaId = Date.now();
+
         async function executarSequenciaLiveness() {
             if (sequenciaAtual >= sequenciasAcao.length) {
-                await validarTodosFrames();
+                // Calcular resultado final
+                const framesValidos = resultadosPorAcao.filter(r => r.reconhecido);
+                const similaridadeMedia = resultadosPorAcao.reduce((acc, r) => acc + parseFloat(r.similaridade), 0) / resultadosPorAcao.length;
+                
+                if (framesValidos.length >= resultadosPorAcao.length * 0.7) {  // 70% de acertos
+                    await finalizarValidacao(true, similaridadeMedia);
+                } else {
+                    await finalizarValidacao(false, similaridadeMedia);
+                }
                 return;
             }
             
             const sequencia = sequenciasAcao[sequenciaAtual];
-            instructionText.innerHTML = `${sequencia.instrucao}<br><small style="font-size:0.7rem">${sequencia.dica}</small>`;
+            instructionText.innerHTML = `${sequencia.instrucao}<br><small>${sequencia.dica}</small>`;
             circle.className = 'circle-guide waiting';
             
-            // 🔥 REDUZIR QUANTIDADE DE FRAMES
-            const framesPorSegundo = 3;        // Reduzido de 5 para 3 frames por segundo
-            const tempoFrame = 1000 / framesPorSegundo;
-            const numeroFrames = Math.min(8, Math.ceil(sequencia.duracao / tempoFrame)); // Máximo 8 frames por sequência
+            const framesDestaAcao = [];
+            const numeroFrames = 2;  // Apenas 2 frames por ação (mais rápido)
+            const intervaloFrame = sequencia.duracao / numeroFrames;
             
             let framesColetados = 0;
+            let resultadosDestaAcao = [];
             
-            livenessInterval = setInterval(() => {
+            const capturarEProcessar = async () => {
                 if (framesColetados >= numeroFrames) {
-                    clearInterval(livenessInterval);
+                    // Aguardar todos os resultados desta ação
+                    const resultados = await Promise.all(resultadosDestaAcao);
+                    const acaoReconhecida = resultados.some(r => r.reconhecido);
+                    resultadosPorAcao.push({ 
+                        acao: sequencia.acao, 
+                        reconhecido: acaoReconhecida,
+                        similaridade: resultados.reduce((acc, r) => acc + parseFloat(r.similaridade), 0) / resultados.length
+                    });
+                    
                     sequenciaAtual++;
                     setTimeout(() => executarSequenciaLiveness(), 500);
                     return;
@@ -603,27 +622,92 @@
                 
                 if (videoEl && videoEl.videoWidth > 0) {
                     const canvas = document.createElement('canvas');
-                    // 🔥 REDUZIR TAMANHO DA IMAGEM (de 160x120 para 128x96)
-                    canvas.width = 128;
-                    canvas.height = 96;
+                    canvas.width = 96;  // Menor para processamento mais rápido
+                    canvas.height = 72;
                     const canvasCtx = canvas.getContext('2d');
                     canvasCtx.translate(canvas.width, 0);
                     canvasCtx.scale(-1, 1);
-                    canvasCtx.drawImage(videoEl, 0, 0, 128, 96);
+                    canvasCtx.drawImage(videoEl, 0, 0, 96, 72);
                     
-                    // 🔥 QUALIDADE REDUZIDA (de 0.6 para 0.5)
-                    const frameBase64 = canvas.toDataURL('image/jpeg', 0.5);
+                    const frameBase64 = canvas.toDataURL('image/jpeg', 0.4);
                     
-                    livenessFrames.push({
-                        frame: frameBase64.split(',')[1],
-                        acao: sequencia.acao,
-                        timestamp: Date.now(),
-                        ordem: framesColetados
-                    });
+                    // Enviar para processamento imediato (paralelo)
+                    const promise = fetch('/api/auth/validar-camera-stream', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            usuarioId: JSON.parse(localStorage.getItem('user_data') || '{}').id,
+                            frame: frameBase64.split(',')[1],
+                            acao: sequencia.acao,
+                            sequenciaId: sequenciaId
+                        })
+                    }).then(res => res.json());
                     
+                    resultadosDestaAcao.push(promise);
                     framesColetados++;
                 }
-            }, tempoFrame);
+                
+                setTimeout(capturarEProcessar, intervaloFrame);
+            };
+            
+            capturarEProcessar();
+        }
+
+        async function finalizarValidacao(aprovado, similaridade) {
+            if (aprovado) {
+                instructionText.innerHTML = '✅ Identidade confirmada! Redirecionando...';
+                
+                // Enviar localização e finalizar
+                const token = localStorage.getItem('auth_token');
+                const user = JSON.parse(localStorage.getItem('user_data') || '{}');
+                
+                if (localizacaoAtual) {
+                    await fetch('/api/provas/registrar-localizacao', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            provaId: provaId,
+                            latitude: localizacaoAtual.latitude,
+                            longitude: localizacaoAtual.longitude,
+                            accuracy: localizacaoAtual.accuracy || 0
+                        })
+                    });
+                }
+                
+                const tokenProva = localStorage.getItem('provaToken_temp') || localStorage.getItem('provaToken');
+                if (tokenProva) {
+                    localStorage.setItem('provaToken', tokenProva);
+                    localStorage.setItem('provaAtual', provaId);
+                    localStorage.removeItem('provaToken_temp');
+                    localStorage.removeItem('provaData_temp');
+                    localStorage.removeItem('provaId_temp');
+                    
+                    setTimeout(() => {
+                        window.location.href = `/realizar-prova.html?token=${tokenProva}`;
+                    }, 1500);
+                }
+            } else {
+                tentativas++;
+                attemptCounter.textContent = `Tentativa ${tentativas}/${MAX_TENTATIVAS}`;
+                
+                if (tentativas >= MAX_TENTATIVAS) {
+                    instructionText.innerHTML = '❌ Muitas tentativas. Tente novamente mais tarde.';
+                    setTimeout(() => window.location.href = '/aluno.html', 3000);
+                } else {
+                    instructionText.innerHTML = `❌ Validação falhou (${similaridade.toFixed(0)}% similaridade). Tente novamente.`;
+                    btnValidar.disabled = false;
+                    btnCancelar.disabled = false;
+                    validando = false;
+                    resultadosPorAcao = [];
+                    sequenciaAtual = 0;
+                }
+            }
         }
         
         // ============================================

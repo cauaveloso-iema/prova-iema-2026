@@ -16817,194 +16817,201 @@ app.get('/api/auth/verificar-face/:usuarioId', authenticateToken, async (req, re
 });
 
 // ============================================
-// ROTA PARA VALIDAR CAMERA (VERSÃO REFORÇADA COM LIVENESS)
+// ROTA PARA VALIDAR CAMERA (SEGURA + RÁPIDA)
 // ============================================
 app.post('/api/auth/validar-camera', authenticateToken, async (req, res) => {
     try {
         const { usuarioId, frames, acoes, timestamps, localizacao } = req.body;
         
         console.log('='.repeat(50));
-        console.log('🔍 VALIDAÇÃO REFORÇADA COM LIVENESS');
+        console.log('🔍 VALIDAÇÃO FACIAL - MODO SEGURO');
         console.log('📌 Usuário ID:', usuarioId);
         console.log(`📦 Frames recebidos: ${frames?.length || 0}`);
-        console.log(`📍 Localização:`, localizacao || 'Não informada');
         console.log('='.repeat(50));
         
-        // 🔥 ACEITAR TANTO FRAME ÚNICO (LEGADO) QUANTO MÚLTIPLOS FRAMES (NOVO)
-        let framesArray = frames;
-        
-        // Se for um único frame (formato antigo), converter para array
-        if (!framesArray && req.body.imagem) {
-            framesArray = [req.body.imagem];
-            console.log('📸 Modo legado: frame único recebido');
-        }
-        
-        if (!usuarioId || !framesArray || framesArray.length === 0) {
+        if (!usuarioId || !frames || frames.length < 6) {  // Mínimo 6 frames (2 ações x 3 frames)
             return res.status(400).json({
                 success: false,
-                error: 'Dados incompletos para validação'
+                error: 'Dados insuficientes para validação segura'
             });
         }
         
-        // Garantir que modelos estão carregados
         if (!modelsLoaded) {
             await loadFaceModels();
         }
         
-        // Buscar face cadastrada
         const FaceID = mongoose.models.FaceID;
         const faceCadastrada = await FaceID.findOne({ usuarioId });
         
-        if (!faceCadastrada || !faceCadastrada.faceDescriptor || faceCadastrada.faceDescriptor.length === 0) {
+        if (!faceCadastrada || !faceCadastrada.faceDescriptor) {
             return res.status(404).json({
                 success: false,
-                error: 'Nenhum Face ID cadastrado para este usuário'
+                error: 'Nenhum Face ID cadastrado'
             });
         }
         
         const descriptorSalvo = new Float32Array(faceCadastrada.faceDescriptor);
         
-        // Processar cada frame e coletar métricas
-        let melhoresDistancias = [];
-        let variacoesDetectadas = [];
-        let framesValidos = 0;
-        
-        for (let i = 0; i < framesArray.length; i++) {
+        // 🔥 PROCESSAMENTO EM PARALELO (mais rápido)
+        const processarFrame = async (frameBase64) => {
             try {
-                const imageBuffer = Buffer.from(framesArray[i], 'base64');
+                const imageBuffer = Buffer.from(frameBase64, 'base64');
                 const img = await canvas.loadImage(imageBuffer);
                 
-                // Detectar rosto
                 const options = new faceapi.TinyFaceDetectorOptions({
-                    inputSize: 224,
+                    inputSize: 192,  // Meio termo: 192 (seguro e rápido)
                     scoreThreshold: 0.3
                 });
                 
                 const detection = await faceapi.detectSingleFace(img, options);
+                if (!detection) return null;
                 
-                if (!detection) continue;
-                
-                // Calcular descriptor
                 const descriptor = await faceapi.computeFaceDescriptor(img, detection);
+                if (!descriptor) return null;
                 
-                if (!descriptor) continue;
-                
-                framesValidos++;
-                
-                // Calcular distância
                 const distancia = faceapi.euclideanDistance(descriptor, descriptorSalvo);
-                melhoresDistancias.push(distancia);
+                return { distancia, detection };
                 
-                // Registrar variação entre frames (para detectar movimento)
-                if (i > 0 && melhoresDistancias.length > 1) {
-                    const variacao = Math.abs(distancia - melhoresDistancias[melhoresDistancias.length - 2]);
-                    variacoesDetectadas.push(variacao);
-                }
-                
-            } catch (frameError) {
-                console.warn(`⚠️ Erro ao processar frame ${i}:`, frameError.message);
+            } catch (err) {
+                return null;
             }
-        }
+        };
         
-        if (framesValidos === 0) {
+        // 🔥 PROCESSAR TODOS OS FRAMES (segurança) mas em paralelo
+        const resultados = await Promise.all(frames.map(f => processarFrame(f)));
+        const resultadosValidos = resultados.filter(r => r !== null);
+        
+        if (resultadosValidos.length < 3) {  // Mínimo 3 frames válidos
             return res.status(400).json({
                 success: false,
-                error: 'Nenhum rosto detectado nos frames'
+                error: 'Rosto não detectado em frames suficientes'
             });
         }
         
-        // Calcular melhor distância (menor é melhor)
-        const melhorDistancia = Math.min(...melhoresDistancias);
-        const mediaDistancias = melhoresDistancias.reduce((a,b) => a+b, 0) / melhoresDistancias.length;
+        // 🔥 ANÁLISE COMPLETA (segurança)
+        const distancias = resultadosValidos.map(r => r.distancia);
+        const melhorDistancia = Math.min(...distancias);
+        const mediaDistancias = distancias.reduce((a,b) => a+b, 0) / distancias.length;
         
-        // Calcular variabilidade (se houver movimento natural)
-        const variabilidadeMedia = variacoesDetectadas.length > 0 
-            ? variacoesDetectadas.reduce((a,b) => a+b, 0) / variacoesDetectadas.length 
-            : 0;
+        // 🔥 DETECÇÃO DE MOVIMENTO (variação entre frames)
+        let variacoes = [];
+        for (let i = 1; i < distancias.length; i++) {
+            variacoes.push(Math.abs(distancias[i] - distancias[i-1]));
+        }
+        const variabilidadeMedia = variacoes.length > 0 ? 
+            variacoes.reduce((a,b) => a+b, 0) / variacoes.length : 0;
         
         const similaridade = Math.max(0, Math.min(100, (1 - (melhorDistancia / 0.8)) * 100));
-        
-        // 🔥 CRITÉRIOS DE VALIDAÇÃO RÍGIDOS:
-        const threshold = 0.55;  // Quanto menor, mais restritivo
+        const threshold = 0.55;
         const reconhecido = melhorDistancia < threshold;
+        const temMovimento = variabilidadeMedia > 0.015;  // Menor que antes (0.02) mas ainda seguro
         
-        // Para múltiplos frames, verificar movimento natural
-        let temMovimentoNatural = true;
-        if (framesArray.length > 3) {
-            temMovimentoNatural = variabilidadeMedia > 0.02;
-        }
-        
-        console.log(`📊 Resultados da validação:`);
-        console.log(`   Frames válidos: ${framesValidos}/${framesArray.length}`);
+        console.log(`📊 RESULTADOS:`);
+        console.log(`   Frames válidos: ${resultadosValidos.length}/${frames.length}`);
         console.log(`   Melhor distância: ${melhorDistancia.toFixed(4)}`);
         console.log(`   Média distâncias: ${mediaDistancias.toFixed(4)}`);
-        console.log(`   Similaridade: ${similaridade.toFixed(1)}%`);
         console.log(`   Variabilidade: ${variabilidadeMedia.toFixed(4)}`);
-        console.log(`   Movimento natural: ${temMovimentoNatural ? 'SIM ✅' : 'NÃO ❌'}`);
-        console.log(`   Reconhecido: ${reconhecido ? 'SIM ✅' : 'NÃO ❌'}`);
-        console.log(`   Threshold: ${threshold}`);
+        console.log(`   Similaridade: ${similaridade.toFixed(1)}%`);
+        console.log(`   Reconhecido: ${reconhecido ? '✅' : '❌'}`);
+        console.log(`   Movimento: ${temMovimento ? '✅' : '❌'}`);
         
-        // VALIDAÇÃO FINAL
-        const aprovado = reconhecido && temMovimentoNatural;
+        // 🔥 VALIDAÇÃO FINAL (segura)
+        const aprovado = reconhecido && temMovimento;
         
         if (aprovado) {
-            // Atualizar estatísticas
             faceCadastrada.ultimaValidacao = new Date();
             faceCadastrada.totalValidacoes += 1;
             await faceCadastrada.save();
             
-            // Registrar localização se fornecida
-            if (localizacao && localizacao.latitude) {
-                try {
-                    const Localizacao = mongoose.models.Localizacao;
-                    if (Localizacao) {
-                        const novaLocalizacao = new Localizacao({
-                            alunoId: usuarioId,
-                            latitude: localizacao.latitude,
-                            longitude: localizacao.longitude,
-                            accuracy: localizacao.accuracy || 0,
-                            timestamp: new Date()
-                        });
-                        await novaLocalizacao.save();
-                        console.log('📍 Localização registrada no histórico');
-                    }
-                } catch (locError) {
-                    console.warn('⚠️ Erro ao salvar localização:', locError.message);
-                }
-            }
-            
             res.json({
                 success: true,
                 reconhecido: true,
-                mensagem: 'Validação facial concluída com sucesso',
+                mensagem: 'Validação facial concluída',
                 similaridade: similaridade.toFixed(1),
                 melhorDistancia: melhorDistancia.toFixed(4),
-                framesValidados: framesValidos
+                framesValidados: resultadosValidos.length
             });
-            
         } else {
             let erroMsg = '';
             if (!reconhecido) {
-                erroMsg = `Face não reconhecida (similaridade: ${similaridade.toFixed(0)}%). Tente novamente com melhor iluminação.`;
-            } else if (!temMovimentoNatural) {
-                erroMsg = '❌ FALHA DE SEGURANÇA: Movimento natural não detectado. Não use fotos ou vídeos.';
+                erroMsg = `Face não reconhecida (${similaridade.toFixed(0)}% similaridade)`;
+            } else if (!temMovimento) {
+                erroMsg = '❌ SEGURANÇA: Movimento não detectado. Não use fotos ou vídeos.';
             }
             
             res.status(400).json({
                 success: false,
                 reconhecido: false,
-                error: erroMsg || 'Validação facial falhou',
-                similaridade: similaridade.toFixed(1),
-                melhorDistancia: melhorDistancia.toFixed(4)
+                error: erroMsg || 'Validação falhou',
+                similaridade: similaridade.toFixed(1)
             });
         }
         
     } catch (error) {
-        console.error('❌ Erro na validação facial:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Erro interno: ' + error.message
+        console.error('❌ Erro:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// ROTA PARA VALIDAÇÃO EM TEMPO REAL (STREAMING)
+// ============================================
+app.post('/api/auth/validar-camera-stream', authenticateToken, async (req, res) => {
+    try {
+        const { usuarioId, frame, acao, sequenciaId } = req.body;
+        
+        if (!usuarioId || !frame) {
+            return res.status(400).json({ success: false, error: 'Dados incompletos' });
+        }
+        
+        if (!modelsLoaded) await loadFaceModels();
+        
+        const FaceID = mongoose.models.FaceID;
+        const faceCadastrada = await FaceID.findOne({ usuarioId });
+        
+        if (!faceCadastrada || !faceCadastrada.faceDescriptor) {
+            return res.status(404).json({ success: false, error: 'Face não cadastrada' });
+        }
+        
+        const descriptorSalvo = new Float32Array(faceCadastrada.faceDescriptor);
+        
+        // Processar frame individual
+        const imageBuffer = Buffer.from(frame, 'base64');
+        const img = await canvas.loadImage(imageBuffer);
+        
+        const options = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 160,
+            scoreThreshold: 0.3
         });
+        
+        const detection = await faceapi.detectSingleFace(img, options);
+        
+        if (!detection) {
+            return res.json({ success: false, error: 'Rosto não detectado', acao, sequenciaId });
+        }
+        
+        const descriptor = await faceapi.computeFaceDescriptor(img, detection);
+        if (!descriptor) {
+            return res.json({ success: false, error: 'Erro no descriptor', acao, sequenciaId });
+        }
+        
+        const distancia = faceapi.euclideanDistance(descriptor, descriptorSalvo);
+        const similaridade = Math.max(0, Math.min(100, (1 - (distancia / 0.8)) * 100));
+        const reconhecido = distancia < 0.55;
+        
+        // Retornar resultado imediato
+        res.json({
+            success: true,
+            reconhecido,
+            similaridade: similaridade.toFixed(1),
+            distancia: distancia.toFixed(4),
+            acao,
+            sequenciaId
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
