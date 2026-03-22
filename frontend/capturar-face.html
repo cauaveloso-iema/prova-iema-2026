@@ -806,7 +806,7 @@
             const imagemBase64 = canvasEnvio.toDataURL('image/jpeg', 0.6);
             ultimaFoto = imagemBase64;
             
-            instructionText.innerHTML = '📤 Enviando para servidor...';
+            instructionText.innerHTML = '📤 Aguarde...';
             enviarParaServidor();
         }
 
@@ -999,7 +999,7 @@
             
             enviando = true;
             
-            instructionText.innerHTML = '⏳ Enviando para o servidor...';
+            instructionText.innerHTML = '⏳ Aguarde...';
             timerBar.style.display = 'block';
             timerFill.style.width = '30%';
             
