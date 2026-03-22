@@ -449,31 +449,14 @@
                 
                 if (data.success && data.temFace) {
                     faceJaCadastrada = true;
-                    instructionText.innerHTML = '✅ Face ID já cadastrado!';
-                    
-                    // 🔥 VERIFICAR SE VEIO DA VALIDAÇÃO
-                    const validacaoParaProva = localStorage.getItem('validacao_para_prova');
-                    const tokenProva = localStorage.getItem('provaToken');
-                    const provaId = localStorage.getItem('provaAtual');
+                    instructionText.innerHTML = '✅ Face ID já cadastrado! Redirecionando...';
                     
                     setTimeout(() => {
-                        if (validacaoParaProva === 'true' && tokenProva && provaId) {
-                            // 🔥 MOBILE: tenta fechar a aba (volta para o app)
-                            window.close();
-                            
-                            // 🔥 FALLBACK: se não fechar (desktop), redireciona
-                            setTimeout(() => {
-                                window.location.href = `/realizar-prova.html?token=${tokenProva}`;
-                            }, 500);
-                        } else {
-                            // 🔥 MOBILE: fecha a aba (volta para o app)
-                            window.close();
-                            
-                            // 🔥 FALLBACK: redireciona para o painel
-                            setTimeout(() => {
-                                window.location.href = '/aluno.html';
-                            }, 500);
-                        }
+                        // 🔥 CAPTURAR: só volta para o painel
+                        window.close();
+                        setTimeout(() => {
+                            window.location.href = '/aluno.html';
+                        }, 500);
                     }, 2000);
                     
                     return true;
