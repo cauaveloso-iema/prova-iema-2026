@@ -993,34 +993,26 @@
                 console.log('📦 Resposta da validação:', data);
                 
                 if (data.success) {
-                    instructionText.innerHTML = '✅ Identidade confirmada! Redirecionando...';
+                    instructionText.innerHTML = '✅ Identidade confirmada!';
                     
-                    // Salvar que validou
+                    // 🔥 SALVAR FLAG ESPECÍFICA PARA VALIDAÇÃO
                     sessionStorage.setItem('face_validado_' + provaId, 'true');
+                    localStorage.setItem('validacao_para_prova', 'true');  // Flag específica
                     
-                    // ENVIAR LOCALIZAÇÃO PARA O SERVIDOR (associada à prova)
+                    // ENVIAR LOCALIZAÇÃO
                     if (latitude && longitude) {
                         try {
                             await fetch('/api/provas/registrar-localizacao', {
                                 method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    provaId: provaId,
-                                    latitude: latitude,
-                                    longitude: longitude,
-                                    accuracy: accuracy || 0
-                                })
+                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ provaId, latitude, longitude, accuracy: accuracy || 0 })
                             });
-                            console.log('📍 Localização enviada com sucesso');
                         } catch (locError) {
                             console.warn('⚠️ Erro ao enviar localização:', locError);
                         }
                     }
                     
-                    // RECUPERAR O TOKEN SALVO TEMPORARIAMENTE
+                    // RECUPERAR O TOKEN SALVO
                     const tokenProva = localStorage.getItem('provaToken_temp');
                     const provaData = localStorage.getItem('provaData_temp');
                     
@@ -1028,7 +1020,7 @@
                         throw new Error('Token de acesso não encontrado');
                     }
                     
-                    // MOVER DADOS TEMPORÁRIOS PARA OS LOCAIS DEFINITIVOS
+                    // SALVAR DADOS DA PROVA
                     localStorage.setItem('provaToken', tokenProva);
                     localStorage.setItem('provaAtual', provaId);
                     
@@ -1041,9 +1033,14 @@
                     localStorage.removeItem('provaData_temp');
                     localStorage.removeItem('provaId_temp');
                     
-                    // Redirecionar para a prova
+                    // 🔥 VOLTAR PARA O APP
                     setTimeout(() => {
-                        window.location.href = `/realizar-prova.html?token=${tokenProva}`;
+                        window.close();
+                        
+                        // Fallback
+                        setTimeout(() => {
+                            window.location.href = `https://sistema-avaliativo-iemacentro.onrender.com/aluno.html`;
+                        }, 500);
                     }, 1500);
                     
                 } else {
