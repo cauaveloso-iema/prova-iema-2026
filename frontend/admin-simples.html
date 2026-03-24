@@ -1109,9 +1109,14 @@
 
             <!-- User Info (mantido igual) -->
             <div class="user-info" id="userInfo">
-                <div class="user-name" id="adminNome">Carregando...</div>
-                <div class="user-email" id="adminEmail">...</div>
-                
+                <div class="user-avatar" style="position: relative; width: 48px; height: 48px; background: linear-gradient(135deg, #3498db, #2980b9); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; overflow: hidden;">
+                    <img id="adminFotoPerfil" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                    <i id="adminAvatarIcon" class="fas fa-user-shield" style="font-size: 24px; color: white;"></i>
+                </div>
+                <div style="flex: 1;">
+                    <div class="user-name" id="adminNome">Carregando...</div>
+                    <div class="user-email" id="adminEmail">...</div>
+                </div>
                 <div class="notificacao-sidebar" onclick="adminSimples.abrirPainelNotificacoes()">
                     <i class="fas fa-bell"></i>
                     <span class="badge" id="sidebarNotificacaoBadge">0</span>
@@ -1342,6 +1347,18 @@
                 await this.carregarResultados();
                 
                 await this.carregarDashboard();
+                await this.carregarFotoPerfilAdmin();
+                // No construtor ou no método init, adicione:
+                window.addEventListener('pageshow', async (event) => {
+                    if (event.persisted || (document.referrer && document.referrer.includes('editar-perfil'))) {
+                        console.log('🔄 Página restaurada, recarregando foto...');
+                        setTimeout(() => {
+                            if (adminSimples && typeof adminSimples.carregarFotoPerfilAdmin === 'function') {
+                                adminSimples.carregarFotoPerfilAdmin();
+                            }
+                        }, 300);
+                    }
+                });
             }
 
             async verificarAuth() {
@@ -8175,6 +8192,38 @@
                         closeBtn.addEventListener('click', handlerNao);
                     }
                 });
+            }
+
+            // ============ CARREGAR FOTO DE PERFIL DO ADMIN ============
+            async carregarFotoPerfilAdmin() {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    if (!token) return;
+                    
+                    console.log('🔍 Buscando foto de perfil do admin...');
+                    
+                    const response = await fetch('/api/perfil/me', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.perfil && data.perfil.fotoPerfil) {
+                        const imgElement = document.getElementById('adminFotoPerfil');
+                        const iconElement = document.getElementById('adminAvatarIcon');
+                        
+                        if (imgElement && iconElement) {
+                            imgElement.src = data.perfil.fotoPerfil;
+                            imgElement.style.display = 'block';
+                            iconElement.style.display = 'none';
+                            console.log('✅ Foto de perfil do admin carregada!');
+                        }
+                    } else {
+                        console.log('📸 Nenhuma foto de perfil cadastrada');
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao carregar foto:', error);
+                }
             }
 
             fecharConfirmModal() {

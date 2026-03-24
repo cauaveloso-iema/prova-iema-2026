@@ -38,6 +38,34 @@ class AdminPanel {
         }
     }
 
+    // ============ CARREGAR FOTO DE PERFIL DO ADMIN ============
+    async carregarFotoPerfilAdmin() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            if (!token) return;
+            
+            const response = await fetch('/api/perfil/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.perfil.fotoPerfil) {
+                const imgElement = document.getElementById('adminFotoPerfil');
+                const iconElement = document.getElementById('adminAvatarIcon');
+                
+                if (imgElement && iconElement) {
+                    imgElement.src = data.perfil.fotoPerfil;
+                    imgElement.style.display = 'block';
+                    iconElement.style.display = 'none';
+                    console.log('✅ Foto de perfil do admin carregada!');
+                }
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar foto:', error);
+        }
+    }
+
     async init() {
         console.log('🚀 Inicializando Super Admin Panel...');
         await this.checkAuth();
@@ -55,6 +83,18 @@ class AdminPanel {
         // ===== NOVO: Verificar conexão WebSocket =====
         setTimeout(() => this.verificarConexaoWebSocket(), 2000);
         setTimeout(() => this.mostrarStatusConexao(), 3000);
+
+        // Atualizar foto quando voltar da página de edição
+        window.addEventListener('pageshow', async function(event) {
+            if (event.persisted || (document.referrer && document.referrer.includes('editar-perfil'))) {
+                console.log('🔄 Página restaurada, recarregando foto...');
+                setTimeout(() => {
+                    if (admin && typeof admin.carregarFotoPerfilAdmin === 'function') {
+                        admin.carregarFotoPerfilAdmin();
+                    }
+                }, 300);
+            }
+        });
     }
 
     async checkAuth() {
@@ -83,6 +123,8 @@ class AdminPanel {
             const iniciais = (userData.nome || 'Admin').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
             adminAvatar.textContent = iniciais || 'A';
         }
+
+        await this.carregarFotoPerfilAdmin();
 
         console.log('✅ Autenticação OK - Role:', userData.role);
     }

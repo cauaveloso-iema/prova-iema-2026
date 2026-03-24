@@ -1436,12 +1436,33 @@
 
             <div class="sidebar-footer">
                 <div class="user-info">
-                    <div class="user-avatar" id="adminAvatar">A</div>
+                    <div class="user-avatar" id="adminAvatar">
+                        <img id="adminFotoPerfil" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; display: none;">
+                        <i id="adminAvatarIcon" class="fas fa-user-shield" style="font-size: 24px;"></i>
+                    </div>
                     <div class="user-details">
                         <p id="adminNome">Carregando...</p>
                         <small id="adminEmail">admin@iemasaoluiscentro.net</small>
                     </div>
                 </div>
+                <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'" style="
+                    margin-top: 1rem;
+                    padding: 0.75rem;
+                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                    color: white;
+                    border: none;
+                    border-radius: 12px;
+                    font-weight: 600;
+                    font-size: 0.9rem;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 0.5rem;
+                    transition: all 0.2s;
+                ">
+                    <i class="fas fa-user-edit"></i> Editar Perfil
+                </button>
                 <button class="logout-btn" id="logoutBtn">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Sair</span>
