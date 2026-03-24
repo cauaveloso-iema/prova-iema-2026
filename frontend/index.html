@@ -1760,8 +1760,9 @@ window.addEventListener('scroll', function() {
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="professor-info">
-                <div class="professor-avatar">
-                    <i class="fas fa-chalkboard-teacher"></i>
+                <div class="professor-avatar" id="professorAvatar">
+                    <img id="professorFotoPerfil" class="foto-perfil-sidebar" style="display: none; width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                    <i id="professorAvatarIcon" class="fas fa-chalkboard-teacher" style="font-size: 2rem; color: white;"></i>
                 </div>
                 <h3 id="professorNome">Professor</h3>
                 <p id="professorEmail">carregando...</p>
@@ -1786,6 +1787,25 @@ window.addEventListener('scroll', function() {
                     <i class="fas fa-chart-bar"></i> Resultados
                 </button>
             </nav>
+
+            <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'" style="
+                margin-top: 1rem;
+                padding: 0.75rem;
+                background: linear-gradient(135deg, #10b981, #059669);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-weight: 600;
+                font-size: 0.9rem;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.5rem;
+                transition: all 0.2s;
+            ">
+                <i class="fas fa-user-edit"></i> Editar Perfil
+            </button>
             
             <!-- Botão logout -->
             <button class="btn-logout" id="btnLogout">
@@ -15154,6 +15174,118 @@ if ('serviceWorker' in navigator) {
 
 window.addEventListener('online', () => console.log('🌐 Online'));
 window.addEventListener('offline', () => console.log('📴 Offline'));
+
+// ============================================
+// CARREGAR FOTO DE PERFIL NA SIDEBAR
+// ============================================
+async function carregarFotoPerfilSidebar() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+            console.log('❌ Token não encontrado');
+            return;
+        }
+        
+        console.log('🔍 Buscando foto de perfil...');
+        
+        const response = await fetch('/api/perfil/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            console.error('❌ Erro ao buscar perfil:', response.status);
+            return;
+        }
+        
+        const data = await response.json();
+        
+        console.log('📸 Dados do perfil recebidos:', {
+            temFoto: !!data.perfil?.fotoPerfil,
+            fotoLength: data.perfil?.fotoPerfil?.length || 0
+        });
+        
+        if (data.success && data.perfil) {
+            const imgElement = document.getElementById('professorFotoPerfil');
+            const iconElement = document.getElementById('professorAvatarIcon');
+            
+            if (imgElement && iconElement) {
+                if (data.perfil.fotoPerfil && data.perfil.fotoPerfil.startsWith('data:image')) {
+                    // Tem foto - mostra a imagem
+                    imgElement.src = data.perfil.fotoPerfil;
+                    imgElement.style.display = 'block';
+                    iconElement.style.display = 'none';
+                    console.log('✅ Foto de perfil carregada com sucesso!');
+                } else {
+                    // Não tem foto - mostra o ícone
+                    imgElement.style.display = 'none';
+                    iconElement.style.display = 'block';
+                    console.log('📸 Nenhuma foto cadastrada, usando ícone padrão');
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar foto:', error);
+    }
+}
+
+// ============================================
+// ATUALIZAR DADOS DO PROFESSOR NA INTERFACE
+// ============================================
+async function atualizarDadosProfessor() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        const response = await fetch('/api/auth/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const usuario = data.user;
+            
+            // Atualizar nome e email
+            document.getElementById('professorNome').textContent = usuario.nome;
+            document.getElementById('professorEmail').textContent = usuario.email;
+            
+            // Atualizar eixo
+            const eixoConfig = {
+                'natureza': { texto: '🔬 Eixo Natureza e Matemática', classe: 'eixo-natureza' },
+                'humanas': { texto: '🏛️ Eixo Humanas', classe: 'eixo-humanas' },
+                'linguagens': { texto: '🎭 Eixo Linguagens', classe: 'eixo-linguagens' },
+                'desenvolvimento': { texto: '💻 Desenvolvimento de Sistemas', classe: 'eixo-desenvolvimento' },
+                'gestao': { texto: '📊 Gestão e Negócios', classe: 'eixo-gestao' },
+                'producao': { texto: '🎬 Produção Cultural e Design', classe: 'eixo-producao' },
+                'turismo': { texto: '✈️ Turismo, Hospitalidade e Lazer', classe: 'eixo-turismo' },
+                'ambiente': { texto: '🌱 Ambiente e Saúde', classe: 'eixo-ambiente' }
+            };
+            
+            const eixoElement = document.getElementById('professorEixo');
+            if (usuario.eixo && eixoConfig[usuario.eixo]) {
+                eixoElement.textContent = eixoConfig[usuario.eixo].texto;
+                eixoElement.className = `eixo-badge ${eixoConfig[usuario.eixo].classe}`;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Erro ao atualizar dados:', error);
+    }
+}
+
+// ============================================
+// CHAMAR AS FUNÇÕES QUANDO A PÁGINA CARREGAR
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Carregar dados do professor
+    atualizarDadosProfessor();
+    
+    // Carregar foto de perfil
+    setTimeout(() => {
+        carregarFotoPerfilSidebar();
+    }, 500);
+});
 </script>
 
 </body>

@@ -88,6 +88,108 @@ role: {
 
 tokenExpired: { type: Boolean, default: false },
 
+  // ========== CAMPOS DE PERFIL COMPLETO ==========
+  fotoPerfil: {
+    type: String,
+    default: null,
+    description: 'URL da foto de perfil do usuário (armazenada em Base64)'
+  },
+  
+  fotoPerfilTipo: {
+    type: String,
+    default: null,
+    description: 'Tipo da imagem (image/jpeg, image/png, etc)'
+  },
+  
+  bio: {
+    type: String,
+    default: null,
+    trim: true,
+    maxlength: 500
+  },
+  
+  dataNascimento: {
+    type: Date,
+    default: null
+  },
+  
+  genero: {
+    type: String,
+    enum: ['masculino', 'feminino', 'outro', null],
+    default: null
+  },
+  
+  endereco: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  
+  cidade: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  
+  estado: {
+    type: String,
+    default: null,
+    trim: true,
+    uppercase: true,
+    maxlength: 2
+  },
+  
+  cep: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  
+  instagram: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  
+  linkedin: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  
+  website: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  
+  interesses: {
+    type: [String],
+    default: []
+  },
+  
+  preferenciasNotificacao: {
+    type: Object,
+    default: {
+      email: true,
+      push: true,
+      whatsapp: false,
+      lembreteProvas: true,
+      resultadoProvas: true,
+      novidades: false
+    }
+  },
+  
+  ultimaAtualizacaoPerfil: {
+    type: Date,
+    default: null
+  },
+  
+  ultimoLoginDispositivo: {
+    type: String,
+    default: null
+  },
+
 // ========== CAMPOS DE SUPERUSUÁRIO ==========
 isSuperUser: {
   type: Boolean,

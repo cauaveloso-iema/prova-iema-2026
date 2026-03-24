@@ -3173,7 +3173,7 @@ class AdminPanel {
         `;
     }
 
-    // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (COM BOTÃO ATIVAR/DESATIVAR) ============
+    // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (COM BOTÃO VISUALIZAR) ============
     gerarLinhasUsuarios(usuarios) {
         if (!usuarios || usuarios.length === 0) {
             return `
@@ -3186,53 +3186,379 @@ class AdminPanel {
             `;
         }
 
-        return usuarios.map(user => `
-            <tr>
-                <td>
-                    <strong>${user.nome || 'N/A'}</strong>
-                    ${user.precisaAcessibilidade ? '<span class="badge-acessibilidade" title="Necessita acessibilidade"><i class="fas fa-wheelchair"></i></span>' : ''}
-                </td>
-                <td>${user.email || 'N/A'}</td>
-                <td>
-                    <span class="role-badge ${user.role === 'super_admin' ? 'admin' : user.role}">
-                        ${user.role === 'super_admin' ? '👑 Super Admin' : 
-                        user.role === 'admin' ? '👑 Admin' : 
-                        user.role === 'professor' ? '👨‍🏫 Professor' : 
-                        '👨‍🎓 Aluno'}
-                    </span>
-                </td>
-                <td>${user.matricula || '-'}</td>
-                <td>${user.cpf ? user.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '-'}</td>
-                <td>${user.telefone ? user.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-'}</td>
-                <td>
-                    <span class="status-badge ${user.ativo ? 'active' : 'inactive'}">
-                        ${user.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                </td>
-                <td>
-                    <div class="action-buttons">
+        return usuarios.map(user => {
+            // Role badge
+            let roleBadge = '';
+            if (user.role === 'aluno') {
+                roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
+            } else if (user.role === 'professor') {
+                roleBadge = '<span class="role-badge professor"><i class="fas fa-chalkboard-teacher"></i> Professor</span>';
+            } else if (user.role === 'admin') {
+                roleBadge = '<span class="role-badge admin"><i class="fas fa-user-shield"></i> Admin</span>';
+            } else if (user.role === 'super_admin') {
+                roleBadge = '<span class="role-badge super_admin"><i class="fas fa-crown"></i> Super Admin</span>';
+            } else {
+                roleBadge = `<span class="role-badge">${user.role || 'Desconhecido'}</span>`;
+            }
+            
+            // Status badge
+            const statusBadge = user.ativo 
+                ? '<span class="status-badge active"><i class="fas fa-check-circle"></i> Ativo</span>'
+                : '<span class="status-badge inactive"><i class="fas fa-ban"></i> Inativo</span>';
+            
+            // Acessibilidade badge
+            const acessibilidadeBadge = user.precisaAcessibilidade 
+                ? '<span class="badge-acessibilidade" title="Necessita acessibilidade"><i class="fas fa-wheelchair"></i></span>' 
+                : '';
+            
+            // Formatar CPF
+            const cpfFormatado = user.cpf ? 
+                user.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '-';
+            
+            // Formatar telefone
+            const telefoneFormatado = user.telefone ? 
+                user.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
+            
+            return `
+                <tr data-user-id="${user._id}">
+                    <td>
+                        <strong>${user.nome || 'N/A'}</strong>
+                        ${acessibilidadeBadge}
+                        ${user.role === 'aluno' && user.turma ? `<div style="font-size: 11px; color: #6b7280;">Turma: ${user.turma}</div>` : ''}
+                    </td>
+                    <td>${user.email || '-'}</td>
+                    <td>${cpfFormatado}</td>
+                    <td>${telefoneFormatado}</td>
+                    <td>${user.matricula || '-'}</td>
+                    <td>${roleBadge}</td>
+                    <td>${statusBadge}</td>
+                    <td>${new Date(user.createdAt).toLocaleDateString('pt-BR')}</td>
+                    <td class="action-buttons">
+                        <!-- 🔥 BOTÃO VISUALIZAR PERFIL (OLHO) -->
+                        <button class="btn-icon" onclick="admin.visualizarPerfilUsuario('${user._id}')" title="Visualizar Perfil Completo">
+                            <i class="fas fa-eye"></i>
+                        </button>
                         <button class="btn-icon" onclick="admin.editarUsuario('${user._id}')" title="Editar">
                             <i class="fas fa-edit"></i>
                         </button>
-                        
-                        <!-- 🔥 NOVO: Botão Ativar/Inativar -->
                         <button class="btn-icon ${user.ativo ? 'warning' : 'success'}" 
                                 onclick="admin.toggleStatusUsuario('${user._id}', ${user.ativo})" 
                                 title="${user.ativo ? 'Inativar usuário' : 'Ativar usuário'}">
                             <i class="fas ${user.ativo ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
                         </button>
-                        
                         <button class="btn-icon" onclick="admin.resetarSenha('${user._id}')" title="Resetar Senha">
                             <i class="fas fa-key"></i>
                         </button>
-                        
                         <button class="btn-icon danger" onclick="admin.excluirUsuario('${user._id}')" title="Excluir">
                             <i class="fas fa-trash"></i>
                         </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // ============ VISUALIZAR PERFIL COMPLETO DO USUÁRIO (MODAL DETALHADO) ============
+    async visualizarPerfilUsuario(usuarioId) {
+        try {
+            console.log('👁️ Visualizando perfil do usuário:', usuarioId);
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar dados completos do usuário
+            const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Erro ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar perfil');
+            }
+            
+            const user = data.user;
+            
+            // Formatar data de cadastro
+            const dataCadastro = user.createdAt ? 
+                new Date(user.createdAt).toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : 'Não informada';
+            
+            // Formatar última atualização
+            const ultimaAtualizacao = user.ultimaAtualizacaoPerfil ? 
+                new Date(user.ultimaAtualizacaoPerfil).toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : 'Nunca';
+            
+            // Formatar CPF
+            const cpfFormatado = user.cpf ? 
+                user.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : 'Não informado';
+            
+            // Formatar telefone
+            const telefoneFormatado = user.telefone ? 
+                user.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : 'Não informado';
+            
+            // Iniciais para avatar
+            const iniciais = (user.nome || 'U').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            
+            // Data de nascimento
+            const dataNascimento = user.dataNascimento ? 
+                new Date(user.dataNascimento).toLocaleDateString('pt-BR') : 'Não informada';
+            
+            // Role com ícone
+            let roleIcon = '';
+            let roleColor = '';
+            let roleBg = '';
+            
+            switch(user.role) {
+                case 'aluno':
+                    roleIcon = '👨‍🎓';
+                    roleColor = '#10b981';
+                    roleBg = '#d1fae5';
+                    break;
+                case 'professor':
+                    roleIcon = '👨‍🏫';
+                    roleColor = '#f59e0b';
+                    roleBg = '#fef3c7';
+                    break;
+                case 'admin':
+                    roleIcon = '👨‍💼';
+                    roleColor = '#3b82f6';
+                    roleBg = '#dbeafe';
+                    break;
+                case 'super_admin':
+                    roleIcon = '👑';
+                    roleColor = '#8b5cf6';
+                    roleBg = '#ede9fe';
+                    break;
+                default:
+                    roleIcon = '👤';
+                    roleColor = '#6b7280';
+                    roleBg = '#f3f4f6';
+            }
+            
+            const modalBody = document.getElementById('modalBody');
+            
+            modalBody.innerHTML = `
+                <div style="padding: 0; max-height: 85vh; overflow-y: auto;">
+                    <!-- HEADER COM AVATAR -->
+                    <div style="background: linear-gradient(135deg, ${roleColor}, ${roleColor}cc); padding: 30px; color: white; text-align: center; position: sticky; top: 0; z-index: 10;">
+                        <div style="
+                            width: 100px;
+                            height: 100px;
+                            background: white;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin: 0 auto 15px;
+                            border: 4px solid white;
+                            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+                        ">
+                            <span style="font-size: 48px; font-weight: bold; color: ${roleColor};">${iniciais}</span>
+                        </div>
+                        <h2 style="margin: 0 0 5px; font-size: 24px;">${user.nome || 'Usuário'}</h2>
+                        <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 30px; margin-top: 8px;">
+                            <span style="font-size: 18px;">${roleIcon}</span>
+                            <span style="font-weight: 600;">${user.role === 'super_admin' ? 'Super Administrador' : 
+                                    user.role === 'admin' ? 'Administrador' : 
+                                    user.role === 'professor' ? 'Professor' : 'Aluno'}</span>
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <span class="status-badge ${user.ativo ? 'active' : 'inactive'}" style="background: rgba(255,255,255,0.2); color: white; border: none;">
+                                <i class="fas ${user.ativo ? 'fa-check-circle' : 'fa-ban'}"></i>
+                                ${user.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                            ${user.precisaAcessibilidade ? `
+                                <span class="status-badge" style="background: #ffc107; color: #1e293b; margin-left: 8px;">
+                                    <i class="fas fa-wheelchair"></i> Acessibilidade
+                                </span>
+                            ` : ''}
+                        </div>
                     </div>
-                </td>
-            </tr>
-        `).join('');
+                    
+                    <div style="padding: 25px;">
+                        <!-- SEÇÃO 1: INFORMAÇÕES PESSOAIS -->
+                        <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-user" style="color: ${roleColor};"></i>
+                                Informações Pessoais
+                            </h3>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Nome Completo</div>
+                                    <div style="font-weight: 600; color: #0f172a;">${user.nome || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Email</div>
+                                    <div style="font-weight: 600; color: #0f172a;">${user.email || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">CPF</div>
+                                    <div>${cpfFormatado}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Telefone</div>
+                                    <div>${telefoneFormatado}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Data de Nascimento</div>
+                                    <div>${dataNascimento}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Gênero</div>
+                                    <div>${user.genero ? (user.genero === 'masculino' ? 'Masculino' : user.genero === 'feminino' ? 'Feminino' : 'Outro') : '—'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- SEÇÃO 2: DADOS ACADÊMICOS/PROFISSIONAIS -->
+                        <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas ${user.role === 'aluno' ? 'fa-graduation-cap' : user.role === 'professor' ? 'fa-chalkboard-teacher' : 'fa-user-tie'}" style="color: ${roleColor};"></i>
+                                ${user.role === 'aluno' ? 'Dados Acadêmicos' : user.role === 'professor' ? 'Dados Profissionais' : 'Dados Administrativos'}
+                            </h3>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                                ${user.role === 'aluno' ? `
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Curso</div>
+                                        <div style="font-weight: 600; color: #0f172a;">${user.curso || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Turma</div>
+                                        <div>${user.turma || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Período</div>
+                                        <div>${user.periodo ? user.periodo + 'º Período' : '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Matrícula</div>
+                                        <div style="font-family: monospace;">${user.matricula || '—'}</div>
+                                    </div>
+                                ` : user.role === 'professor' ? `
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Eixo</div>
+                                        <div style="font-weight: 600; color: #0f172a;">${user.eixo ? (user.eixo === 'natureza' ? '🌿 Natureza' : 
+                                                user.eixo === 'humanas' ? '📜 Humanas' : 
+                                                user.eixo === 'linguagens' ? '📚 Linguagens' : 
+                                                user.eixo === 'desenvolvimento' ? '💻 Desenvolvimento' : 
+                                                user.eixo === 'gestao' ? '📊 Gestão' : 
+                                                user.eixo === 'turismo' ? '✈️ Turismo' : 
+                                                user.eixo === 'ambiente' ? '🌱 Ambiente' : user.eixo) : '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Departamento</div>
+                                        <div>${user.departamento || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Titulação</div>
+                                        <div>${user.titulacao || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Matrícula</div>
+                                        <div style="font-family: monospace;">${user.matricula || '—'}</div>
+                                    </div>
+                                ` : `
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Departamento</div>
+                                        <div style="font-weight: 600; color: #0f172a;">${user.departamento || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Nível</div>
+                                        <div>${user.role === 'super_admin' ? 'Super Administrador' : 'Administrador'}</div>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                        
+                        <!-- SEÇÃO 3: ENDEREÇO E REDES SOCIAIS -->
+                        <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-map-marker-alt" style="color: ${roleColor};"></i>
+                                Endereço & Contato
+                            </h3>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Endereço</div>
+                                    <div>${user.endereco || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Cidade</div>
+                                    <div>${user.cidade || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Estado</div>
+                                    <div>${user.estado || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">CEP</div>
+                                    <div>${user.cep || '—'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- SEÇÃO 4: SISTEMA E SEGURANÇA -->
+                        <div style="background: #f8fafc; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-shield-alt" style="color: ${roleColor};"></i>
+                                Sistema & Segurança
+                            </h3>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Data de Cadastro</div>
+                                    <div>${dataCadastro}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Última Atualização</div>
+                                    <div>${ultimaAtualizacao}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">2FA (Autenticação)</div>
+                                    <div>${user.twoFactorEnabled ? '<span style="color: #10b981;"><i class="fas fa-check-circle"></i> Ativado</span>' : '<span style="color: #6b7280;"><i class="fas fa-times-circle"></i> Desativado</span>'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Telefone Verificado</div>
+                                    <div>${user.telefoneVerificado ? '<span style="color: #10b981;">✅ Sim</span>' : '<span style="color: #6b7280;">❌ Não</span>'}</div>
+                                </div>
+                                ${user.precisaAcessibilidade ? `
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Condição de Acessibilidade</div>
+                                        <div>${user.condicaoAcessibilidade || 'Não especificada'} ${user.outraCondicao ? `- ${user.outraCondicao}` : ''}</div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        
+                        <!-- FOOTER COM ID -->
+                        <div style="margin-top: 20px; text-align: right; font-size: 0.7rem; color: #94a3b8;">
+                            <i class="fas fa-fingerprint"></i> ID: ${user._id}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = `<i class="fas fa-user-circle" style="color: ${roleColor};"></i> Perfil de ${user.nome || 'Usuário'}`;
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro ao visualizar perfil:', error);
+            this.showToast('❌ Erro ao carregar perfil: ' + error.message, 'error');
+        }
     }
 
     gerarPaginacao(pagination, tipo) {
@@ -5879,7 +6205,7 @@ class AdminPanel {
                     ativa: novoStatus
                 })
             });
-            
+        
             const data = await response.json();
             
             if (!data.success) {

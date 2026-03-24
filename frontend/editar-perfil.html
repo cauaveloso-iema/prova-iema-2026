@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Editar Perfil">
+
+    <!-- 🔥 FAVICON LOCAL -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <!-- VLibras Oficial -->
+    <script src="js/vlibras-oficial.js"></script>
+
+    <!-- Sistema de Acessibilidade -->
+    <script src="js/acessibilidade.js"></script>
+
+    <!-- Client Push -->
+    <script src="js/push-client.js"></script>
+
+    <!-- Incluir o chatbot -->
+    <script src="js/chatbot-frontend.js"></script>
+
+    <!-- Botões arrastáveis -->
+    <script src="js/draggable.js"></script>
+
+    <!-- ===== MOBILE OPTIMIZATION ===== -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <link rel="stylesheet" href="css/mobile.css">
+    <script src="js/toggle-buttons.js"></script>
+    
+    <meta charset="UTF-8">
+    <title>Editar Perfil | Sistema de Provas</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ===== ESTILOS ESPECÍFICOS DA PÁGINA DE PERFIL ===== */
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #3730a3;
+            --primary-light: #818cf8;
+            --secondary: #10b981;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .perfil-container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .perfil-card {
+            background: white;
+            border-radius: 32px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+
+        .perfil-header {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .btn-voltar {
+            position: absolute;
+            top: 1.5rem;
+            left: 1.5rem;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 12px;
+            padding: 0.5rem 1rem;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .btn-voltar:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateX(-3px);
+        }
+
+        .foto-perfil-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        .foto-perfil {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid white;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+            background: #f3f4f6;
+        }
+
+        .foto-perfil-placeholder {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: white;
+            border: 4px solid white;
+        }
+
+        .btn-edit-foto {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #4f46e5;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+
+        .btn-edit-foto:hover {
+            transform: scale(1.1);
+            background: #f3f4f6;
+        }
+
+        .btn-remove-foto {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            background: #ef4444;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+
+        .btn-remove-foto:hover {
+            background: #dc2626;
+            transform: scale(1.05);
+        }
+
+        .perfil-header h1 {
+            margin: 0.5rem 0 0;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .perfil-header .role-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 0.25rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        .perfil-body {
+            padding: 2rem;
+        }
+
+        .form-section {
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .form-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .form-section-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--gray-800);
+        }
+
+        .form-section-title i {
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .form-group {
+            margin-bottom: 0;
+        }
+
+        .form-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.85rem;
+            color: var(--gray-700);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        select.form-control {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 12px;
+            padding-right: 2.5rem;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .btn-salvar {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            transition: all 0.2s;
+            margin-top: 1.5rem;
+        }
+
+        .btn-salvar:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn-salvar:disabled {
+            opacity: 0.6;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #7f1d1d;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .loading-spinner {
+            background: white;
+            padding: 2rem;
+            border-radius: 24px;
+            text-align: center;
+        }
+
+        .loading-spinner i {
+            font-size: 2rem;
+            color: var(--primary);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Estilo para tags de interesse */
+        .interesse-tag {
+            background: #e0e7ff;
+            color: #4f46e5;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .interesse-tag button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #4f46e5;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .interesse-tag button:hover {
+            color: #ef4444;
+        }
+
+        @media (max-width: 768px) {
+            .perfil-container {
+                margin: 1rem auto;
+            }
+            
+            .foto-perfil, .foto-perfil-placeholder {
+                width: 100px;
+                height: 100px;
+            }
+            
+            .btn-edit-foto {
+                width: 32px;
+                height: 32px;
+            }
+            
+            .perfil-body {
+                padding: 1.5rem;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="perfil-container">
+        <div class="perfil-card">
+            <!-- Cabeçalho com Foto de Perfil -->
+            <div class="perfil-header">
+                <a href="javascript:history.back()" class="btn-voltar">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+                
+                <div class="foto-perfil-container" id="fotoContainer">
+                    <div id="fotoPlaceholder" class="foto-perfil-placeholder">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <img id="fotoPerfilImg" class="foto-perfil" style="display: none;" alt="Foto de perfil">
+                    <button class="btn-edit-foto" id="btnEditFoto" onclick="document.getElementById('inputFoto').click()">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                    <button class="btn-remove-foto" id="btnRemoveFoto" style="display: none;" onclick="removerFotoPerfil()">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <h1 id="perfilNome">Carregando...</h1>
+                <div class="role-badge" id="perfilRole">Carregando...</div>
+            </div>
+            
+            <!-- Corpo -->
+            <div class="perfil-body">
+                <div id="alertMessage" class="alert"></div>
+                
+                <form id="formPerfil">
+                    <!-- Seção 1: Informações Pessoais -->
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-user"></i>
+                            <span>Informações Pessoais</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-user"></i> Nome Completo
+                                </label>
+                                <input type="text" id="nome" name="nome" class="form-control" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-envelope"></i> Email
+                                </label>
+                                <input type="email" id="email" class="form-control" disabled>
+                                <small style="color: #6b7280; font-size: 0.7rem;">O email não pode ser alterado</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-phone"></i> Telefone
+                                </label>
+                                <input type="tel" id="telefone" name="telefone" class="form-control" placeholder="(00) 00000-0000">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar"></i> Data de Nascimento
+                                </label>
+                                <input type="date" id="dataNascimento" name="dataNascimento" class="form-control">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-venus-mars"></i> Gênero
+                                </label>
+                                <select id="genero" name="genero" class="form-control">
+                                    <option value="">Selecione...</option>
+                                    <option value="masculino">Masculino</option>
+                                    <option value="feminino">Feminino</option>
+                                    <option value="outro">Outro</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-id-card"></i> CPF
+                                </label>
+                                <input type="text" id="cpf" class="form-control" disabled>
+                                <small style="color: #6b7280; font-size: 0.7rem;">O CPF não pode ser alterado</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seção 2: Biografia -->
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-align-left"></i>
+                            <span>Sobre Mim</span>
+                        </div>
+                        <div class="form-group">
+                            <textarea id="bio" name="bio" class="form-control" rows="3" placeholder="Conte um pouco sobre você, sua formação, interesses, etc..."></textarea>
+                            <small style="color: #6b7280; font-size: 0.7rem;">Máximo 500 caracteres</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Seção 3: Endereço -->
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>Endereço</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-home"></i> Endereço
+                                </label>
+                                <input type="text" id="endereco" name="endereco" class="form-control" placeholder="Rua, número, complemento">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-city"></i> Cidade
+                                </label>
+                                <input type="text" id="cidade" name="cidade" class="form-control">
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-map-pin"></i> Estado
+                                    </label>
+                                    <input type="text" id="estado" name="estado" class="form-control" maxlength="2" placeholder="UF">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-mail-bulk"></i> CEP
+                                    </label>
+                                    <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seção 4: Redes Sociais -->
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-share-alt"></i>
+                            <span>Redes Sociais</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fab fa-instagram"></i> Instagram
+                                </label>
+                                <input type="text" id="instagram" name="instagram" class="form-control" placeholder="@seuusuario">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fab fa-linkedin"></i> LinkedIn
+                                </label>
+                                <input type="text" id="linkedin" name="linkedin" class="form-control" placeholder="linkedin.com/in/seuusuario">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-globe"></i> Website
+                                </label>
+                                <input type="url" id="website" name="website" class="form-control" placeholder="https://seusite.com">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seção 5: Interesses (Tags) -->
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-tags"></i>
+                            <span>Interesses</span>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-plus-circle"></i> Áreas de Interesse
+                            </label>
+                            <div id="interessesContainer" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;"></div>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="novoInteresse" class="form-control" placeholder="Digite um interesse e aperte Enter" style="flex: 1;">
+                                <button type="button" onclick="adicionarInteresse()" class="btn-salvar" style="width: auto; padding: 0.75rem 1.5rem; margin: 0;">
+                                    <i class="fas fa-plus"></i> Adicionar
+                                </button>
+                            </div>
+                            <input type="hidden" id="interesses" name="interesses">
+                        </div>
+                    </div>
+                    
+                    <!-- Seção 6: Dados Específicos do Perfil (dinâmico conforme role) -->
+                    <div id="dadosEspecificos"></div>
+                    
+                    <!-- Botão Salvar -->
+                    <button type="submit" class="btn-salvar" id="btnSalvar">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p style="margin-top: 1rem;">Salvando alterações...</p>
+        </div>
+    </div>
+    
+    <input type="file" id="inputFoto" accept="image/*" style="display: none;" onchange="uploadFotoPerfil(this.files[0])">
+    
+    <script>
+        // ============================================
+        // VARIÁVEIS GLOBAIS
+        // ============================================
+        let userRole = '';
+        let userData = {};
+        let interessesList = [];
+        let leitorAtivo = false;
+        let synth = window.speechSynthesis;
+        
+        // ============================================
+        // CARREGAR DADOS DO PERFIL
+        // ============================================
+        async function carregarPerfil() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                if (!token) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                
+                const response = await fetch('/api/perfil/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    userData = data.perfil;
+                    userRole = userData.role;
+                    
+                    console.log('🎯 Role detectado:', userRole);
+                    console.log('📦 Dados do usuário:', userData);
+                    
+                    // Preencher formulário
+                    preencherFormulario(userData);
+                    
+                    // Carregar foto de perfil
+                    carregarFotoPerfil(userData.fotoPerfil);
+                    
+                    // Carregar campos específicos conforme role
+                    carregarCamposEspecificos(userData);
+                    
+                    // Atualizar título e badge
+                    document.getElementById('perfilNome').textContent = userData.nome;
+                    
+                    let roleText = '';
+                    let roleIcon = '';
+                    if (userData.role === 'aluno') {
+                        roleText = '👨‍🎓 Aluno';
+                        roleIcon = 'fa-user-graduate';
+                    } else if (userData.role === 'professor') {
+                        roleText = '👨‍🏫 Professor';
+                        roleIcon = 'fa-chalkboard-teacher';
+                    } else if (userData.role === 'admin') {
+                        roleText = '👨‍💼 Administrador';
+                        roleIcon = 'fa-user-shield';
+                    } else if (userData.role === 'super_admin') {
+                        roleText = '⭐ Super Administrador';
+                        roleIcon = 'fa-crown';
+                    }
+                    
+                    document.getElementById('perfilRole').textContent = roleText;
+                    
+                    // Atualizar ícone do placeholder
+                    const placeholderIcon = document.querySelector('#fotoPlaceholder i');
+                    if (placeholderIcon) {
+                        placeholderIcon.className = `fas ${roleIcon}`;
+                    }
+                    
+                } else {
+                    mostrarAlerta('Erro ao carregar perfil: ' + (data.error || 'Erro desconhecido'), 'error');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar perfil:', error);
+                mostrarAlerta('Erro ao carregar perfil. Tente novamente.', 'error');
+            }
+        }
+        
+        // ============================================
+        // PREENCHER FORMULÁRIO COM DADOS DO BANCO
+        // ============================================
+        function preencherFormulario(data) {
+            document.getElementById('nome').value = data.nome || '';
+            document.getElementById('email').value = data.email || '';
+            document.getElementById('telefone').value = data.telefone || '';
+            document.getElementById('cpf').value = data.cpf || '';
+            document.getElementById('dataNascimento').value = data.dataNascimento || '';
+            document.getElementById('genero').value = data.genero || '';
+            document.getElementById('bio').value = data.bio || '';
+            document.getElementById('endereco').value = data.endereco || '';
+            document.getElementById('cidade').value = data.cidade || '';
+            document.getElementById('estado').value = data.estado || '';
+            document.getElementById('cep').value = data.cep || '';
+            document.getElementById('instagram').value = data.instagram || '';
+            document.getElementById('linkedin').value = data.linkedin || '';
+            document.getElementById('website').value = data.website || '';
+            
+            // Interesses
+            if (data.interesses && data.interesses.length > 0) {
+                interessesList = [...data.interesses];
+                atualizarListaInteresses();
+            }
+        }
+        
+        // ============================================
+        // CARREGAR CAMPOS ESPECÍFICOS POR ROLE (CORRIGIDO)
+        // ============================================
+        function carregarCamposEspecificos(data) {
+            const container = document.getElementById('dadosEspecificos');
+            
+            if (!container) return;
+            
+            console.log('🎯 Carregando campos para role:', userRole);
+            
+            if (userRole === 'aluno') {
+                container.innerHTML = `
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-graduation-cap"></i>
+                            <span>Dados Acadêmicos</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-book"></i> Curso
+                                </label>
+                                <input type="text" id="curso" name="curso" class="form-control" value="${data.curso || ''}" placeholder="Ex: Desenvolvimento de Sistemas">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-users"></i> Turma
+                                </label>
+                                <input type="text" id="turma" name="turma" class="form-control" value="${data.turma || ''}" placeholder="Ex: 3º Ano A">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-week"></i> Período
+                                </label>
+                                <select id="periodo" name="periodo" class="form-control">
+                                    <option value="">Selecione...</option>
+                                    <option value="1" ${data.periodo === '1' ? 'selected' : ''}>1º Período</option>
+                                    <option value="2" ${data.periodo === '2' ? 'selected' : ''}>2º Período</option>
+                                    <option value="3" ${data.periodo === '3' ? 'selected' : ''}>3º Período</option>
+                                    <option value="4" ${data.periodo === '4' ? 'selected' : ''}>4º Período</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-id-card"></i> Matrícula
+                                </label>
+                                <input type="text" class="form-control" value="${data.matricula || ''}" disabled>
+                                <small style="color: #6b7280;">A matrícula não pode ser alterada</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (userRole === 'professor') {
+                container.innerHTML = `
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                            <span>Dados Profissionais</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Eixo</label>
+                                <select id="eixo" name="eixo" class="form-control">
+                                    <option value="">Selecione...</option>
+                                    <option value="natureza" ${data.eixo === 'natureza' ? 'selected' : ''}>🔬 Natureza e Matemática</option>
+                                    <option value="humanas" ${data.eixo === 'humanas' ? 'selected' : ''}>🏛️ Humanas</option>
+                                    <option value="linguagens" ${data.eixo === 'linguagens' ? 'selected' : ''}>🎭 Linguagens</option>
+                                    <option value="desenvolvimento" ${data.eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento de Sistemas</option>
+                                    <option value="gestao" ${data.eixo === 'gestao' ? 'selected' : ''}>📊 Gestão e Negócios</option>
+                                    <option value="producao" ${data.eixo === 'producao' ? 'selected' : ''}>🎬 Produção Cultural e Design</option>
+                                    <option value="turismo" ${data.eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo, Hospitalidade e Lazer</option>
+                                    <option value="ambiente" ${data.eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente e Saúde</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Departamento</label>
+                                <input type="text" id="departamento" name="departamento" class="form-control" value="${data.departamento || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Titulação</label>
+                                <input type="text" id="titulacao" name="titulacao" class="form-control" placeholder="Ex: Mestre, Doutor, Especialista" value="${data.titulacao || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Matrícula</label>
+                                <input type="text" class="form-control" value="${data.matricula || ''}" disabled>
+                                <small style="color: #6b7280;">A matrícula não pode ser alterada</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (userRole === 'admin' || userRole === 'super_admin') {
+                container.innerHTML = `
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Dados Administrativos</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Departamento</label>
+                                <input type="text" id="departamento" name="departamento" class="form-control" value="${data.departamento || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Nível</label>
+                                <input type="text" class="form-control" value="${userRole === 'super_admin' ? 'Super Administrador' : 'Administrador'}" disabled>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // ============================================
+        // GERENCIAR INTERESSES
+        // ============================================
+        function adicionarInteresse() {
+            const input = document.getElementById('novoInteresse');
+            const interesse = input.value.trim();
+            
+            if (interesse && !interessesList.includes(interesse)) {
+                interessesList.push(interesse);
+                atualizarListaInteresses();
+                input.value = '';
+                if (leitorAtivo) falar('Interesse ' + interesse + ' adicionado');
+            } else if (interessesList.includes(interesse)) {
+                mostrarAlerta('Este interesse já foi adicionado!', 'info');
+            }
+        }
+        
+        function removerInteresse(interesse) {
+            interessesList = interessesList.filter(i => i !== interesse);
+            atualizarListaInteresses();
+            if (leitorAtivo) falar('Interesse ' + interesse + ' removido');
+        }
+        
+        function atualizarListaInteresses() {
+            const container = document.getElementById('interessesContainer');
+            const hiddenInput = document.getElementById('interesses');
+            
+            container.innerHTML = '';
+            interessesList.forEach(interesse => {
+                const tag = document.createElement('span');
+                tag.className = 'interesse-tag';
+                tag.innerHTML = `${interesse} <button type="button" onclick="removerInteresse('${interesse.replace(/'/g, "\\'")}')">×</button>`;
+                container.appendChild(tag);
+            });
+            
+            hiddenInput.value = JSON.stringify(interessesList);
+        }
+        
+        // ============================================
+        // FOTO DE PERFIL
+        // ============================================
+        function carregarFotoPerfil(fotoBase64) {
+            const img = document.getElementById('fotoPerfilImg');
+            const placeholder = document.getElementById('fotoPlaceholder');
+            const btnRemove = document.getElementById('btnRemoveFoto');
+            
+            if (fotoBase64 && fotoBase64.startsWith('data:image')) {
+                img.src = fotoBase64;
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
+                btnRemove.style.display = 'flex';
+                console.log('✅ Foto de perfil carregada do banco');
+            } else {
+                img.style.display = 'none';
+                placeholder.style.display = 'flex';
+                btnRemove.style.display = 'none';
+                console.log('📸 Nenhuma foto de perfil cadastrada');
+            }
+        }
+        
+        async function uploadFotoPerfil(file) {
+            if (!file) return;
+            
+            if (file.size > 2 * 1024 * 1024) {
+                mostrarAlerta('A imagem deve ter no máximo 2MB', 'error');
+                return;
+            }
+            
+            const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!tiposPermitidos.includes(file.type)) {
+                mostrarAlerta('Tipo de imagem não suportado. Use JPEG, PNG, GIF ou WebP.', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('foto', file);
+            
+            try {
+                mostrarAlerta('Enviando foto...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/perfil/upload-foto', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    carregarFotoPerfil(data.fotoPerfil);
+                    mostrarAlerta('Foto de perfil atualizada!', 'success');
+                    if (leitorAtivo) falar('Foto de perfil atualizada');
+                } else {
+                    throw new Error(data.error || 'Erro ao enviar foto');
+                }
+                
+            } catch (error) {
+                console.error('Erro no upload:', error);
+                mostrarAlerta(error.message, 'error');
+            }
+        }
+        
+        async function removerFotoPerfil() {
+            if (!confirm('Tem certeza que deseja remover sua foto de perfil?')) return;
+            
+            try {
+                mostrarAlerta('Removendo foto...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/perfil/remover-foto', {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    carregarFotoPerfil(null);
+                    mostrarAlerta('Foto de perfil removida!', 'success');
+                    if (leitorAtivo) falar('Foto de perfil removida');
+                } else {
+                    throw new Error(data.error || 'Erro ao remover foto');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao remover foto:', error);
+                mostrarAlerta(error.message, 'error');
+            }
+        }
+        
+        // ============================================
+        // FUNÇÕES DO LEITOR DE TELA (SIMPLES)
+        // ============================================
+        function falar(texto) {
+            if (!leitorAtivo) return;
+            
+            if (synth.speaking) {
+                synth.cancel();
+            }
+            
+            const utterance = new SpeechSynthesisUtterance(texto);
+            utterance.lang = 'pt-BR';
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+            
+            synth.speak(utterance);
+        }
+        
+        // ============================================
+        // SALVAR PERFIL (CORRIGIDO PARA TODOS OS ROLES)
+        // ============================================
+        async function salvarPerfil(event) {
+            event.preventDefault();
+            
+            const btn = document.getElementById('btnSalvar');
+            const loading = document.getElementById('loadingOverlay');
+            
+            btn.disabled = true;
+            loading.style.display = 'flex';
+            
+            if (leitorAtivo) falar('Salvando alterações do perfil');
+            
+            try {
+                const dados = {
+                    nome: document.getElementById('nome').value,
+                    telefone: document.getElementById('telefone').value,
+                    bio: document.getElementById('bio').value,
+                    dataNascimento: document.getElementById('dataNascimento').value || null,
+                    genero: document.getElementById('genero').value || null,
+                    endereco: document.getElementById('endereco').value,
+                    cidade: document.getElementById('cidade').value,
+                    estado: document.getElementById('estado').value,
+                    cep: document.getElementById('cep').value,
+                    instagram: document.getElementById('instagram').value,
+                    linkedin: document.getElementById('linkedin').value,
+                    website: document.getElementById('website').value,
+                    interesses: interessesList
+                };
+                
+                // 🔥 ADICIONAR CAMPOS ESPECÍFICOS POR ROLE
+                if (userRole === 'aluno') {
+                    dados.curso = document.getElementById('curso')?.value;
+                    dados.turma = document.getElementById('turma')?.value;
+                    dados.periodo = document.getElementById('periodo')?.value;
+                    console.log('📚 Salvando dados de ALUNO:', { curso: dados.curso, turma: dados.turma, periodo: dados.periodo });
+                } 
+                else if (userRole === 'professor') {
+                    dados.eixo = document.getElementById('eixo')?.value;
+                    dados.departamento = document.getElementById('departamento')?.value;
+                    dados.titulacao = document.getElementById('titulacao')?.value;
+                    console.log('👨‍🏫 Salvando dados de PROFESSOR:', { eixo: dados.eixo, departamento: dados.departamento });
+                } 
+                else if (userRole === 'admin' || userRole === 'super_admin') {
+                    dados.departamento = document.getElementById('departamento')?.value;
+                    console.log('👨‍💼 Salvando dados de ADMIN:', { departamento: dados.departamento });
+                }
+                
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/perfil/me', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarAlerta('Perfil atualizado com sucesso!', 'success');
+                    document.getElementById('perfilNome').textContent = dados.nome;
+                    
+                    const userDataStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    userDataStorage.nome = dados.nome;
+                    
+                    // Atualizar dados específicos no localStorage
+                    if (userRole === 'aluno') {
+                        userDataStorage.curso = dados.curso;
+                        userDataStorage.turma = dados.turma;
+                        userDataStorage.periodo = dados.periodo;
+                    } else if (userRole === 'professor') {
+                        userDataStorage.eixo = dados.eixo;
+                        userDataStorage.departamento = dados.departamento;
+                        userDataStorage.titulacao = dados.titulacao;
+                    } else if (userRole === 'admin' || userRole === 'super_admin') {
+                        userDataStorage.departamento = dados.departamento;
+                    }
+                    
+                    localStorage.setItem('user_data', JSON.stringify(userDataStorage));
+                    
+                    if (leitorAtivo) falar('Perfil atualizado com sucesso');
+                    
+                    setTimeout(() => {
+                        window.location.href = 'javascript:history.back()';
+                    }, 2000);
+                    
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar perfil');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao salvar:', error);
+                mostrarAlerta(error.message, 'error');
+                if (leitorAtivo) falar('Erro ao salvar: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+        
+        // ============================================
+        // MOSTRAR ALERTA
+        // ============================================
+        function mostrarAlerta(mensagem, tipo) {
+            const alertDiv = document.getElementById('alertMessage');
+            alertDiv.className = `alert alert-${tipo}`;
+            alertDiv.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                    <span>${mensagem}</span>
+                </div>
+            `;
+            alertDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                alertDiv.style.display = 'none';
+            }, 3000);
+        }
+        
+        // ============================================
+        // INICIALIZAÇÃO
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarPerfil();
+            
+            const form = document.getElementById('formPerfil');
+            form.addEventListener('submit', salvarPerfil);
+            
+            // Formatação de telefone
+            const telefoneInput = document.getElementById('telefone');
+            telefoneInput.addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length <= 10) {
+                    value = value.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+                } else {
+                    value = value.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+                }
+                e.target.value = value;
+            });
+            
+            // Formatação de CEP
+            const cepInput = document.getElementById('cep');
+            cepInput.addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length > 5) {
+                    value = value.replace(/^(\d{5})(\d{0,3})/, '$1-$2');
+                }
+                e.target.value = value;
+            });
+            
+            // Enter para adicionar interesse
+            const interesseInput = document.getElementById('novoInteresse');
+            interesseInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    adicionarInteresse();
+                }
+            });
+        });
+    </script>
+
+    <script>
+        // ============================================
+        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+        // ============================================
+        (function() {
+            if (window.innerWidth > 768) {
+                console.log('📐 Desktop detectado - escalonamento desativado');
+                return;
+            }
+            
+            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+            
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                const baseWidth = 768;
+                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+                
+                if (width <= 320) escala = 0.55;
+                else if (width <= 360) escala = 0.6;
+                else if (width <= 400) escala = 0.65;
+                else if (width <= 500) escala = 0.75;
+                else if (width <= 600) escala = 0.85;
+                else if (width <= 700) escala = 0.95;
+                else escala = 1;
+                
+                return escala;
+            }
+            
+            function aplicarEscalaMobile() {
+                if (window.innerWidth > 768) return;
+                const escala = calcularEscalaMobile();
+                document.documentElement.style.setProperty('--scale-ratio', escala);
+                document.documentElement.style.setProperty('--current-width', window.innerWidth);
+                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+            }
+            
+            aplicarEscalaMobile();
+            
+            let timeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    } else {
+                        document.documentElement.style.setProperty('--scale-ratio', '1');
+                        console.log('📐 Modo desktop - escala resetada');
+                    }
+                }, 100);
+            });
+            
+            window.addEventListener('orientationchange', function() {
+                setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    }
+                }, 200);
+            });
+            
+            console.log('✅ Sistema de escalonamento mobile ativo!');
+        })();
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
+
+        window.addEventListener('online', () => console.log('🌐 Online'));
+        window.addEventListener('offline', () => console.log('📴 Offline'));
+    </script>
+</body>
+</html>

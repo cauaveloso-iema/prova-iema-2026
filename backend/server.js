@@ -17154,6 +17154,375 @@ app.post('/api/provas/registrar-localizacao', authenticateToken, async (req, res
     }
 });
 
+// ============ ROTAS DE PERFIL DO USUÁRIO (UNIFICADO) ============
+
+// GET - Obter perfil completo do usuário logado
+app.get('/api/perfil/me', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.userId)
+            .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Formatar data de nascimento
+        let dataNascimentoFormatada = null;
+        if (user.dataNascimento) {
+            const data = new Date(user.dataNascimento);
+            dataNascimentoFormatada = data.toISOString().split('T')[0];
+        }
+        
+        // Dados comuns a todos os perfis
+        const perfilBase = {
+            id: user._id,
+            nome: user.nome,
+            email: user.email,
+            cpf: user.cpf,
+            telefone: user.telefone,
+            role: user.role,
+            ativo: user.ativo,
+            fotoPerfil: user.fotoPerfil,
+            fotoPerfilTipo: user.fotoPerfilTipo,
+            bio: user.bio,
+            dataNascimento: dataNascimentoFormatada,
+            genero: user.genero,
+            endereco: user.endereco,
+            cidade: user.cidade,
+            estado: user.estado,
+            cep: user.cep,
+            instagram: user.instagram,
+            linkedin: user.linkedin,
+            website: user.website,
+            interesses: user.interesses || [],
+            preferenciasNotificacao: user.preferenciasNotificacao || {
+                email: true,
+                push: true,
+                whatsapp: false,
+                lembreteProvas: true,
+                resultadoProvas: true,
+                novidades: false
+            },
+            precisaAcessibilidade: user.precisaAcessibilidade,
+            condicaoAcessibilidade: user.condicaoAcessibilidade,
+            dataCadastro: user.createdAt,
+            ultimaAtualizacaoPerfil: user.ultimaAtualizacaoPerfil,
+            twoFactorEnabled: user.twoFactorEnabled
+        };
+        
+        // Dados específicos por role
+        const dadosEspecificos = {};
+        
+        if (user.role === 'aluno') {
+            dadosEspecificos.curso = user.curso;
+            dadosEspecificos.turma = user.turma;
+            dadosEspecificos.periodo = user.periodo;
+            dadosEspecificos.matricula = user.matricula;
+        } else if (user.role === 'professor') {
+            dadosEspecificos.eixo = user.eixo;
+            dadosEspecificos.departamento = user.departamento;
+            dadosEspecificos.titulacao = user.titulacao;
+            dadosEspecificos.matricula = user.matricula;
+        } else if (user.role === 'admin' || user.role === 'super_admin') {
+            dadosEspecificos.departamento = user.departamento;
+            dadosEspecificos.nivel = user.role === 'super_admin' ? 'Super Administrador' : 'Administrador';
+        }
+        
+        res.json({
+            success: true,
+            perfil: {
+                ...perfilBase,
+                ...dadosEspecificos
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar perfil:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao buscar perfil: ' + error.message
+        });
+    }
+});
+
+// PUT - Atualizar perfil do usuário
+app.put('/api/perfil/me', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.userId;
+        const updates = req.body;
+        
+        console.log(`✏️ Usuário ${userId} (${req.userRole}) atualizando perfil`);
+        
+        // Campos permitidos para atualização (todos os perfis)
+        const camposPermitidos = [
+            'nome', 'telefone', 'bio', 'dataNascimento', 'genero',
+            'endereco', 'cidade', 'estado', 'cep',
+            'instagram', 'linkedin', 'website', 'interesses',
+            'preferenciasNotificacao', 'fotoPerfil', 'fotoPerfilTipo'
+        ];
+        
+        // Campos específicos por role (verificar permissão)
+        if (req.userRole === 'aluno') {
+            camposPermitidos.push('curso', 'turma', 'periodo');
+        } else if (req.userRole === 'professor') {
+            camposPermitidos.push('eixo', 'departamento', 'titulacao');
+        } else if (req.userRole === 'admin' || req.userRole === 'super_admin') {
+            camposPermitidos.push('departamento');
+        }
+        
+        // Filtrar apenas campos permitidos
+        const dadosAtualizar = {};
+        for (const campo of camposPermitidos) {
+            if (updates[campo] !== undefined) {
+                dadosAtualizar[campo] = updates[campo];
+            }
+        }
+        
+        // Validações específicas
+        if (dadosAtualizar.estado) {
+            dadosAtualizar.estado = dadosAtualizar.estado.toUpperCase().substring(0, 2);
+        }
+        
+        if (dadosAtualizar.website && dadosAtualizar.website.trim()) {
+            if (!dadosAtualizar.website.startsWith('http')) {
+                dadosAtualizar.website = 'https://' + dadosAtualizar.website;
+            }
+        }
+        
+        if (dadosAtualizar.instagram && dadosAtualizar.instagram.trim()) {
+            // Remover @ se existir
+            dadosAtualizar.instagram = dadosAtualizar.instagram.replace(/^@/, '');
+        }
+        
+        if (dadosAtualizar.linkedin && dadosAtualizar.linkedin.trim()) {
+            // Se for apenas o nome do perfil, adicionar URL base
+            if (!dadosAtualizar.linkedin.includes('linkedin.com')) {
+                dadosAtualizar.linkedin = 'https://linkedin.com/in/' + dadosAtualizar.linkedin.replace(/^\/+/, '');
+            }
+        }
+        
+        // Adicionar data de atualização
+        dadosAtualizar.ultimaAtualizacaoPerfil = new Date();
+        
+        // Atualizar usuário
+        const user = await User.findByIdAndUpdate(
+            userId,
+            dadosAtualizar,
+            { new: true, runValidators: true }
+        ).select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        console.log(`✅ Perfil do usuário ${user.email} atualizado`);
+        
+        // Preparar resposta com dados do perfil
+        const perfilAtualizado = {
+            id: user._id,
+            nome: user.nome,
+            email: user.email,
+            telefone: user.telefone,
+            fotoPerfil: user.fotoPerfil,
+            bio: user.bio,
+            dataNascimento: user.dataNascimento,
+            genero: user.genero,
+            endereco: user.endereco,
+            cidade: user.cidade,
+            estado: user.estado,
+            cep: user.cep,
+            instagram: user.instagram,
+            linkedin: user.linkedin,
+            website: user.website,
+            interesses: user.interesses,
+            preferenciasNotificacao: user.preferenciasNotificacao,
+            ultimaAtualizacaoPerfil: user.ultimaAtualizacaoPerfil
+        };
+        
+        // Adicionar campos específicos
+        if (user.role === 'aluno') {
+            perfilAtualizado.curso = user.curso;
+            perfilAtualizado.turma = user.turma;
+            perfilAtualizado.periodo = user.periodo;
+        } else if (user.role === 'professor') {
+            perfilAtualizado.eixo = user.eixo;
+            perfilAtualizado.departamento = user.departamento;
+            perfilAtualizado.titulacao = user.titulacao;
+        } else if (user.role === 'admin' || user.role === 'super_admin') {
+            perfilAtualizado.departamento = user.departamento;
+        }
+        
+        res.json({
+            success: true,
+            message: 'Perfil atualizado com sucesso!',
+            perfil: perfilAtualizado
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao atualizar perfil:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao atualizar perfil: ' + error.message
+        });
+    }
+});
+
+// POST - Upload de foto de perfil
+app.post('/api/perfil/upload-foto', authenticateToken, uploadMiddleware.single('foto'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhuma imagem enviada'
+            });
+        }
+        
+        const file = req.file;
+        
+        // Validar tipo
+        const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!tiposPermitidos.includes(file.mimetype)) {
+            // Limpar arquivo temporário
+            fs.unlinkSync(file.path);
+            return res.status(400).json({
+                success: false,
+                error: 'Tipo de imagem não suportado. Use JPEG, PNG, GIF ou WebP.'
+            });
+        }
+        
+        // Validar tamanho (máx 2MB)
+        if (file.size > 2 * 1024 * 1024) {
+            fs.unlinkSync(file.path);
+            return res.status(400).json({
+                success: false,
+                error: 'Imagem muito grande. Máximo 2MB.'
+            });
+        }
+        
+        // Converter para Base64 para armazenar no banco
+        const imageBuffer = fs.readFileSync(file.path);
+        const base64Image = imageBuffer.toString('base64');
+        const dataUrl = `data:${file.mimetype};base64,${base64Image}`;
+        
+        // Atualizar usuário
+        const user = await User.findByIdAndUpdate(
+            req.userId,
+            {
+                fotoPerfil: dataUrl,
+                fotoPerfilTipo: file.mimetype,
+                ultimaAtualizacaoPerfil: new Date()
+            },
+            { new: true }
+        ).select('fotoPerfil fotoPerfilTipo nome email');
+        
+        // Remover arquivo temporário
+        fs.unlinkSync(file.path);
+        
+        console.log(`✅ Foto de perfil atualizada para ${user.nome} (${user.email})`);
+        
+        res.json({
+            success: true,
+            message: 'Foto de perfil atualizada com sucesso!',
+            fotoPerfil: user.fotoPerfil,
+            fotoPerfilTipo: user.fotoPerfilTipo
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro no upload da foto:', error);
+        // Limpar arquivo se existir
+        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao fazer upload da foto: ' + error.message
+        });
+    }
+});
+
+// DELETE - Remover foto de perfil
+app.delete('/api/perfil/remover-foto', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.userId,
+            {
+                fotoPerfil: null,
+                fotoPerfilTipo: null,
+                ultimaAtualizacaoPerfil: new Date()
+            },
+            { new: true }
+        );
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        console.log(`🗑️ Foto de perfil removida para ${user.nome} (${user.email})`);
+        
+        res.json({
+            success: true,
+            message: 'Foto de perfil removida com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao remover foto:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao remover foto de perfil: ' + error.message
+        });
+    }
+});
+
+// GET - Obter perfil público de um usuário (para visualização)
+app.get('/api/perfil/publico/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const user = await User.findById(id).select(
+            'nome email fotoPerfil bio role eixo curso turma dataCadastro'
+        );
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        res.json({
+            success: true,
+            perfil: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email,
+                fotoPerfil: user.fotoPerfil,
+                bio: user.bio,
+                role: user.role,
+                eixo: user.eixo,
+                curso: user.curso,
+                turma: user.turma,
+                dataCadastro: user.dataCadastro
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar perfil público:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao buscar perfil: ' + error.message
+        });
+    }
+});
+
 
 // ============================================================================
 // VERIFICADOR AUTOMÁTICO DE NOTIFICAÇÕES (A CADA 1 MINUTO)
