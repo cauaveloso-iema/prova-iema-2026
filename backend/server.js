@@ -10465,17 +10465,22 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, verificarPermis
     }
 });
 
-// ============ BUSCAR USUÁRIO POR ID (PARA EDIÇÃO) ============
-// ============ BUSCAR USUÁRIO POR ID (PARA EDIÇÃO) - CORRIGIDO ============
+// ============ BUSCAR USUÁRIO POR ID (PARA EDIÇÃO) - CORRIGIDO COM TODOS OS CAMPOS ============
 app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
         console.log(`🔍 Admin ${req.userId} buscando usuário ${id}`);
         
-        // 🔥 CORREÇÃO: Usar apenas inclusão de campos, sem exclusão
+        // 🔥 CORREÇÃO: Incluir TODOS os campos de perfil
         const user = await User.findById(id)
-            .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor twoFactorEnabled twoFactorBackupCodesShown telefoneVerificado lastLogin loginAttempts lockUntil onesignalPlayerId createdAt updatedAt')
+            .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor twoFactorEnabled twoFactorBackupCodesShown telefoneVerificado lastLogin loginAttempts lockUntil onesignalPlayerId createdAt updatedAt' +
+                // 🔥 ADICIONAR CAMPOS DE PERFIL
+                ' fotoPerfil fotoPerfilTipo bio' +
+                ' endereco numero complemento bairro cidade estado cep' +
+                ' dataNascimento genero' +
+                ' instagram linkedin website interesses' +
+                ' ultimaAtualizacaoPerfil')
             .lean();
         
         if (!user) {
@@ -10484,6 +10489,15 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
                 error: 'Usuário não encontrado' 
             });
         }
+        
+        // 🔥 ADICIONAR LOG PARA VERIFICAR SE OS CAMPOS VIERAM
+        console.log('📦 Dados do usuário retornados:', {
+            nome: user.nome,
+            email: user.email,
+            fotoPerfil: user.fotoPerfil ? '✅ EXISTE' : '❌ NÃO',
+            endereco: user.endereco || '—',
+            cidade: user.cidade || '—'
+        });
         
         res.json({
             success: true,
@@ -10513,7 +10527,34 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
                 lastLogin: user.lastLogin,
                 onesignalPlayerId: user.onesignalPlayerId || null,
                 createdAt: user.createdAt,
-                updatedAt: user.updatedAt
+                updatedAt: user.updatedAt,
+                
+                // 🔥 CAMPOS DE PERFIL ADICIONADOS
+                fotoPerfil: user.fotoPerfil || null,
+                fotoPerfilTipo: user.fotoPerfilTipo || null,
+                bio: user.bio || '',
+                
+                // Endereço completo
+                endereco: user.endereco || '',
+                numero: user.numero || '',
+                complemento: user.complemento || '',
+                bairro: user.bairro || '',
+                cidade: user.cidade || '',
+                estado: user.estado || '',
+                cep: user.cep || '',
+                
+                // Dados pessoais
+                dataNascimento: user.dataNascimento || null,
+                genero: user.genero || '',
+                
+                // Redes sociais
+                instagram: user.instagram || '',
+                linkedin: user.linkedin || '',
+                website: user.website || '',
+                interesses: user.interesses || [],
+                
+                // Metadados
+                ultimaAtualizacaoPerfil: user.ultimaAtualizacaoPerfil || null
             }
         });
         

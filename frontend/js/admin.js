@@ -38,34 +38,6 @@ class AdminPanel {
         }
     }
 
-    // ============ CARREGAR FOTO DE PERFIL DO ADMIN ============
-    async carregarFotoPerfilAdmin() {
-        try {
-            const token = localStorage.getItem('auth_token');
-            if (!token) return;
-            
-            const response = await fetch('/api/perfil/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success && data.perfil.fotoPerfil) {
-                const imgElement = document.getElementById('adminFotoPerfil');
-                const iconElement = document.getElementById('adminAvatarIcon');
-                
-                if (imgElement && iconElement) {
-                    imgElement.src = data.perfil.fotoPerfil;
-                    imgElement.style.display = 'block';
-                    iconElement.style.display = 'none';
-                    console.log('✅ Foto de perfil do admin carregada!');
-                }
-            }
-        } catch (error) {
-            console.error('❌ Erro ao carregar foto:', error);
-        }
-    }
-
     async init() {
         console.log('🚀 Inicializando Super Admin Panel...');
         await this.checkAuth();
@@ -80,10 +52,12 @@ class AdminPanel {
         this.aplicarModoEscuro(this.getConfiguracoesPadrao());
         this.criarBotaoModoEscuro();
         
-        // ===== NOVO: Verificar conexão WebSocket =====
         setTimeout(() => this.verificarConexaoWebSocket(), 2000);
         setTimeout(() => this.mostrarStatusConexao(), 3000);
-
+        
+        // ===== 🔥 ADICIONAR ESTA LINHA - GARANTIR QUE A FOTO CARREGUE =====
+        setTimeout(() => this.carregarFotoPerfilAdmin(), 1000);
+        
         // Atualizar foto quando voltar da página de edição
         window.addEventListener('pageshow', async function(event) {
             if (event.persisted || (document.referrer && document.referrer.includes('editar-perfil'))) {
@@ -3300,7 +3274,7 @@ class AdminPanel {
         }).join('');
     }
 
-    // ============ VISUALIZAR PERFIL COMPLETO DO USUÁRIO (MODAL DETALHADO) ============
+    // ============ VISUALIZAR PERFIL COMPLETO DO USUÁRIO (VERSÃO CORRIGIDA COM FOTO) ============
     async visualizarPerfilUsuario(usuarioId) {
         try {
             console.log('👁️ Visualizando perfil do usuário:', usuarioId);
@@ -3323,6 +3297,12 @@ class AdminPanel {
             }
             
             const user = data.user;
+            
+            // Log para verificar se a foto veio
+            console.log('📸 Foto do usuário:', user.fotoPerfil ? 'EXISTE' : 'NÃO EXISTE');
+            if (user.fotoPerfil) {
+                console.log('   Tamanho da foto:', user.fotoPerfil.length, 'caracteres');
+            }
             
             // Formatar data de cadastro
             const dataCadastro = user.createdAt ? 
@@ -3352,14 +3332,14 @@ class AdminPanel {
             const telefoneFormatado = user.telefone ? 
                 user.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : 'Não informado';
             
-            // Iniciais para avatar
+            // Iniciais para avatar (fallback)
             const iniciais = (user.nome || 'U').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
             
             // Data de nascimento
             const dataNascimento = user.dataNascimento ? 
                 new Date(user.dataNascimento).toLocaleDateString('pt-BR') : 'Não informada';
             
-            // Role com ícone
+            // Role com ícone e cores
             let roleIcon = '';
             let roleColor = '';
             let roleBg = '';
@@ -3393,9 +3373,14 @@ class AdminPanel {
             
             const modalBody = document.getElementById('modalBody');
             
+            // 🔥 CORREÇÃO: Mostrar a foto se existir, senão mostrar as iniciais
+            const avatarHtml = user.fotoPerfil ? 
+                `<img src="${user.fotoPerfil}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">` :
+                `<span style="font-size: 48px; font-weight: bold; color: ${roleColor};">${iniciais}</span>`;
+            
             modalBody.innerHTML = `
                 <div style="padding: 0; max-height: 85vh; overflow-y: auto;">
-                    <!-- HEADER COM AVATAR -->
+                    <!-- HEADER COM AVATAR (AGORA COM FOTO!) -->
                     <div style="background: linear-gradient(135deg, ${roleColor}, ${roleColor}cc); padding: 30px; color: white; text-align: center; position: sticky; top: 0; z-index: 10;">
                         <div style="
                             width: 100px;
@@ -3408,8 +3393,9 @@ class AdminPanel {
                             margin: 0 auto 15px;
                             border: 4px solid white;
                             box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+                            overflow: hidden;
                         ">
-                            <span style="font-size: 48px; font-weight: bold; color: ${roleColor};">${iniciais}</span>
+                            ${avatarHtml}
                         </div>
                         <h2 style="margin: 0 0 5px; font-size: 24px;">${user.nome || 'Usuário'}</h2>
                         <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 30px; margin-top: 8px;">
@@ -3466,7 +3452,47 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- SEÇÃO 2: DADOS ACADÊMICOS/PROFISSIONAIS -->
+                        <!-- SEÇÃO 2: ENDEREÇO (se tiver algum dado) -->
+                        ${user.endereco || user.cidade || user.estado ? `
+                        <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-map-marker-alt" style="color: ${roleColor};"></i>
+                                Endereço
+                            </h3>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Endereço</div>
+                                    <div>${user.endereco || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Número</div>
+                                    <div>${user.numero || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Complemento</div>
+                                    <div>${user.complemento || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Bairro</div>
+                                    <div>${user.bairro || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Cidade</div>
+                                    <div>${user.cidade || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Estado</div>
+                                    <div>${user.estado || '—'}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">CEP</div>
+                                    <div>${user.cep || '—'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        <!-- SEÇÃO 3: DADOS ACADÊMICOS/PROFISSIONAIS -->
                         <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                             <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
                                 <i class="fas ${user.role === 'aluno' ? 'fa-graduation-cap' : user.role === 'professor' ? 'fa-chalkboard-teacher' : 'fa-user-tie'}" style="color: ${roleColor};"></i>
@@ -3526,33 +3552,23 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- SEÇÃO 3: ENDEREÇO E REDES SOCIAIS -->
+                        <!-- SEÇÃO 4: FOTO DE PERFIL (se houver) -->
+                        ${user.fotoPerfil ? `
                         <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                             <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-map-marker-alt" style="color: ${roleColor};"></i>
-                                Endereço & Contato
+                                <i class="fas fa-image" style="color: ${roleColor};"></i>
+                                Foto de Perfil
                             </h3>
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Endereço</div>
-                                    <div>${user.endereco || '—'}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Cidade</div>
-                                    <div>${user.cidade || '—'}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Estado</div>
-                                    <div>${user.estado || '—'}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">CEP</div>
-                                    <div>${user.cep || '—'}</div>
+                            <div style="text-align: center;">
+                                <img src="${user.fotoPerfil}" style="max-width: 250px; max-height: 250px; border-radius: 12px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                <div style="margin-top: 8px; font-size: 0.7rem; color: #64748b;">
+                                    <i class="fas fa-calendar-alt"></i> Atualizada em: ${ultimaAtualizacao}
                                 </div>
                             </div>
                         </div>
+                        ` : ''}
                         
-                        <!-- SEÇÃO 4: SISTEMA E SEGURANÇA -->
+                        <!-- SEÇÃO 5: SISTEMA E SEGURANÇA -->
                         <div style="background: #f8fafc; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0;">
                             <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
                                 <i class="fas fa-shield-alt" style="color: ${roleColor};"></i>
@@ -25274,6 +25290,64 @@ class AdminPanel {
                 }
             `;
             document.head.appendChild(style);
+        }
+    }
+
+    // ============ CARREGAR FOTO DE PERFIL DO ADMIN ============
+    async carregarFotoPerfilAdmin() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            if (!token) return;
+            
+            console.log('📸 Carregando foto do perfil...');
+            
+            const response = await fetch('/api/perfil/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            console.log('📦 Resposta do perfil:', data);
+            
+            // 🔥 BUSCAR OS ELEMENTOS NOVAMENTE (garantir que existem)
+            const imgElement = document.getElementById('adminFotoPerfil');
+            const iconElement = document.getElementById('adminAvatarIcon');
+            
+            if (!imgElement || !iconElement) {
+                console.warn('⚠️ Elementos não encontrados, tentando recriar...');
+                const avatarDiv = document.getElementById('adminAvatar');
+                if (avatarDiv) {
+                    avatarDiv.innerHTML = `
+                        <img id="adminFotoPerfil" style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; display: none;">
+                        <i id="adminAvatarIcon" class="fas fa-user-shield" style="font-size: 24px; color: white; position: relative; z-index: 2;"></i>
+                    `;
+                    // Tentar pegar novamente
+                    const newImg = document.getElementById('adminFotoPerfil');
+                    const newIcon = document.getElementById('adminAvatarIcon');
+                    if (newImg && newIcon) {
+                        imgElement = newImg;
+                        iconElement = newIcon;
+                    }
+                }
+            }
+            
+            if (imgElement && iconElement) {
+                if (data.success && data.perfil && data.perfil.fotoPerfil) {
+                    console.log('✅ Foto encontrada! Aplicando...');
+                    imgElement.src = data.perfil.fotoPerfil;
+                    imgElement.style.display = 'block';
+                    iconElement.style.display = 'none';
+                    console.log('✅ Foto aplicada com sucesso!');
+                } else {
+                    console.log('📸 Nenhuma foto cadastrada');
+                    iconElement.style.display = 'block';
+                    imgElement.style.display = 'none';
+                }
+            } else {
+                console.error('❌ Elementos não encontrados após recriação');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar foto:', error);
         }
     }
 
