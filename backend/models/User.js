@@ -82,7 +82,7 @@ ultimaValidacaoPush: {
 },
 role: {
   type: String,
-  enum: ['aluno', 'professor', 'admin', 'super_admin'], // <-- ADICIONADO super_admin
+  enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico'], // ADICIONADO
   default: 'aluno'
 },
 

@@ -1097,12 +1097,34 @@
                     localStorage.setItem('auth_token', dados.token);
                     localStorage.setItem('user_data', JSON.stringify(dados.user));
                     
-                    // 🔴 CORREÇÃO: USAR O REDIRECT TO DO BACKEND
-                    console.log('🔄 Redirecionando para:', dados.redirectTo);
+                    // 🔥 CORREÇÃO: VERIFICAR SE O REDIRECT TO VEIO DO BACKEND
+                    let destino = dados.redirectTo;
+                    
+                    // Se por algum motivo o redirectTo não veio, usar fallback baseado no role
+                    if (!destino) {
+                        console.log('⚠️ redirectTo não veio do backend, usando fallback');
+                        if (dados.user.role === 'super_admin') {
+                            destino = '/admin.html';
+                        } else if (dados.user.role === 'admin') {
+                            destino = '/admin-simples.html';
+                        } else if (dados.user.role === 'professor') {
+                            destino = '/index.html';
+                        } else if (dados.user.role === 'setor_pedagogico') {
+                            destino = '/setor-pedagogico.html';
+                        } else if (dados.user.role === 'aluno') {
+                            destino = '/aluno.html';
+                        } else {
+                            destino = '/login.html';
+                        }
+                        console.log('📌 Fallback definido:', destino);
+                    }
+                    
+                    console.log('🔄 Redirecionando para:', destino);
+                    console.log('👤 Perfil:', dados.user.role);
                     console.log('🔐 Precisa trocar senha:', dados.precisaTrocarSenha);
                     
                     setTimeout(() => {
-                        window.location.href = dados.redirectTo;
+                        window.location.href = destino;
                     }, 1000);
                     
                 } else {
@@ -1185,7 +1207,7 @@
                 return;
             }
             
-            // 🟢🟢🟢 VALIDAR TURMA PARA ALUNOS! 🟢🟢🟢
+            // VALIDAR TURMA PARA ALUNOS!
             if (role === 'aluno' && !turma) {
                 mostrarAlerta('Selecione sua turma');
                 return;
@@ -1214,7 +1236,7 @@
             
             // Adicionar dados específicos por role
             if (role === 'aluno') {
-                // 🟢🟢🟢 USAR A VARIÁVEL turma CAPTURADA ACIMA! 🟢🟢🟢
+                //  USAR A VARIÁVEL turma CAPTURADA ACIMA! 
                 if (!turma) {
                     mostrarAlerta('Selecione sua turma');
                     return;
@@ -1279,17 +1301,19 @@
                     localStorage.setItem('auth_token', dados.token);
                     localStorage.setItem('user_data', JSON.stringify(dados.user));
                     
-                    // Após receber a resposta do login
+                    // 🔥 CORREÇÃO: REDIRECIONAMENTO COM PERFIL setor_pedagogico
                     setTimeout(() => {
                         if (dados.user.role === 'super_admin') {
-                            window.location.href = 'admin.html'; // Super Admin
+                            window.location.href = 'admin.html';
                         } else if (dados.user.role === 'admin') {
-                            window.location.href = 'admin-simples.html'; // Admin normal
+                            window.location.href = 'admin-simples.html';
+                        } else if (dados.user.role === 'professor') {
+                            window.location.href = 'index.html';
+                        } else if (dados.user.role === 'setor_pedagogico') {
+                            window.location.href = 'setor-pedagogico.html';
                         } else if (dados.user.role === 'aluno') {
-                            // 🔥 NOVO: Aluno vai para captura de Face ID
                             window.location.href = 'capturar-face.html';
                         } else {
-                            // Professor
                             window.location.href = 'index.html';
                         }
                     }, 1500);
@@ -1493,9 +1517,27 @@
             
             if (token && userData.role) {
                 console.log('Usuário já autenticado como:', userData.role);
-                // Redirecionar automaticamente
-                const redirectUrl = userData.role === 'professor' ? 'index.html' : 'aluno.html';
+                
+                // 🔥 REDIRECIONAMENTO CORRETO PARA TODOS OS PERFIS
+                let redirectUrl = '';
+                
+                if (userData.role === 'super_admin') {
+                    redirectUrl = 'admin.html';
+                } else if (userData.role === 'admin') {
+                    redirectUrl = 'admin-simples.html';
+                } else if (userData.role === 'professor') {
+                    redirectUrl = 'index.html';
+                } else if (userData.role === 'setor_pedagogico') {
+                    redirectUrl = 'setor-pedagogico.html';
+                } else if (userData.role === 'aluno') {
+                    redirectUrl = 'aluno.html';
+                } else {
+                    redirectUrl = 'login.html';
+                }
+                
+                console.log('🔄 Redirecionando para:', redirectUrl);
                 window.location.href = redirectUrl;
+                return; // Importante: parar a execução após redirecionar
             }
 
             const radioSim = document.getElementById('acessibilidadeSim');
@@ -1545,6 +1587,7 @@
                 input.min = hoje;
             });
         });
+
     </script>
 
     <!-- VLibras Oficial (PRIMEIRO) -->

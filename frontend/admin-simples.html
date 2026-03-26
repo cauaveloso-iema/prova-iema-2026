@@ -1088,6 +1088,22 @@
             font-size: 10px;
             margin-left: 5px;
         }
+
+        /* Badge para Setor Pedagógico */
+        .role-badge.setor_pedagogico {
+            background: #a855f7;
+            color: white;
+        }
+        .role-badge.setor_pedagogico i {
+            color: white;
+            margin-right: 4px;
+        }
+
+        /* Estilo para o avatar no modal de notificações */
+        .usuario-item .role-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -1903,21 +1919,35 @@
                     const selecionado = this.usuariosSelecionados?.has(usuario._id) ? 'selecionado' : '';
                     const iniciais = (usuario.nome || 'U').split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
                     
-                    // Cores por role
+                    // 🔥 CORREÇÃO: Cores por role com suporte ao Setor Pedagógico
                     let roleColor = '';
                     let roleBg = '';
+                    let roleIcon = '';
+                    
                     if (usuario.role === 'aluno') {
                         roleColor = '#1e40af';
                         roleBg = '#dbeafe';
+                        roleIcon = '👨‍🎓';
                     } else if (usuario.role === 'professor') {
                         roleColor = '#92400e';
                         roleBg = '#fed7aa';
+                        roleIcon = '👨‍🏫';
                     } else if (usuario.role === 'admin') {
                         roleColor = '#991b1b';
                         roleBg = '#fee2e2';
+                        roleIcon = '👑';
                     } else if (usuario.role === 'super_admin') {
                         roleColor = '#6b21a8';
                         roleBg = '#e9d5ff';
+                        roleIcon = '👑';
+                    } else if (usuario.role === 'setor_pedagogico') {
+                        roleColor = '#a855f7';
+                        roleBg = '#f3e8ff';
+                        roleIcon = '👩‍🏫';
+                    } else {
+                        roleColor = '#6b7280';
+                        roleBg = '#f3f4f6';
+                        roleIcon = '👤';
                     }
                     
                     html += `
@@ -1957,7 +1987,7 @@
                                 <div style="font-size: 0.8rem; color: #6b7280; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     <i class="fas fa-envelope" style="font-size: 0.7rem; color: #9ca3af;"></i> ${usuario.email || 'Sem email'}
                                     <span style="padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: ${roleBg}; color: ${roleColor};">
-                                        ${usuario.role === 'aluno' ? '👨‍🎓' : usuario.role === 'professor' ? '👨‍🏫' : '👑'} ${usuario.role || 'desconhecido'}
+                                        ${roleIcon} ${usuario.role === 'setor_pedagogico' ? 'Setor Pedagógico' : (usuario.role || 'desconhecido')}
                                     </span>
                                 </div>
                             </div>
@@ -2488,11 +2518,32 @@
                     const cpfFormatado = u.cpf ? u.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '-';
                     const telefoneFormatado = u.telefone ? u.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
                     
+                    // 🔥 CORREÇÃO: Badge com suporte ao Setor Pedagógico
+                    let roleBadge = '';
+                    let roleIcon = '';
+                    
+                    if (u.role === 'aluno') {
+                        roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
+                        roleIcon = '👨‍🎓';
+                    } else if (u.role === 'professor') {
+                        roleBadge = '<span class="role-badge professor"><i class="fas fa-chalkboard-teacher"></i> Professor</span>';
+                        roleIcon = '👨‍🏫';
+                    } else if (u.role === 'admin') {
+                        roleBadge = '<span class="role-badge admin"><i class="fas fa-user-shield"></i> Admin</span>';
+                        roleIcon = '👑';
+                    } else if (u.role === 'setor_pedagogico') {
+                        roleBadge = '<span class="role-badge setor_pedagogico"><i class="fas fa-chalkboard-user"></i> Setor Pedagógico</span>';
+                        roleIcon = '👩‍🏫';
+                    } else {
+                        roleBadge = `<span class="role-badge">${u.role || 'aluno'}</span>`;
+                        roleIcon = '👤';
+                    }
+                    
                     return `
                         <tr>
                             <td><strong>${u.nome || 'N/A'}</strong></td>
                             <td>${u.email || '-'}</td>
-                            <td><span class="role-badge ${u.role || 'aluno'}">${u.role || 'aluno'}</span></td>
+                            <td>${roleBadge}</td>
                             <td>${u.matricula || '-'}</td>
                             <td>
                                 <span class="status-badge ${u.ativo ? 'active' : 'inactive'}">
@@ -2692,6 +2743,7 @@
                                     <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>Aluno</option>
                                     <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professor</option>
                                     <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                                    <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>Setor Pedagógico</option>
                                 </select>
                             </div>
                             
@@ -2750,6 +2802,22 @@
                                 </select>
                             </div>
                         </div>
+
+                        <!-- Campos específicos para Setor Pedagógico -->
+                        <div id="setorPedagogicoFields" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
+                            <div class="form-group">
+                                <label>Departamento</label>
+                                <input type="text" id="departamentoUsuario" class="form-control" value="${escapeStr(usuario?.departamento || '')}" placeholder="Ex: AEE, Psicopedagogia, Coordenação">
+                            </div>
+                            <div class="form-group">
+                                <label>Atribuições</label>
+                                <textarea id="atribuicoesUsuario" class="form-control" rows="3" placeholder="Ex: Acompanhamento AEE, Sala de Recursos, Atendimento Psicopedagógico...">${escapeStr(usuario?.atribuicoes || '')}</textarea>
+                            </div>
+                            <div class="info-card" style="background: #f3e8ff; margin-top: 10px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>O Setor Pedagógico tem acesso ao dashboard AEE e pode acompanhar alunos com necessidades especiais.</span>
+                            </div>
+                        </div>
                         
                         ${!usuario ? `
                         <div class="form-group">
@@ -2794,12 +2862,16 @@
                 const role = document.getElementById('roleUsuario')?.value;
                 const alunoFields = document.getElementById('alunoFields');
                 const professorFields = document.getElementById('professorFields');
+                const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
                 
                 if (alunoFields) {
                     alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
                 }
                 if (professorFields) {
                     professorFields.style.display = role === 'professor' ? 'block' : 'none';
+                }
+                if (setorPedagogicoFields) {
+                    setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
                 }
             }
 
@@ -2817,8 +2889,28 @@
                     ativo: document.getElementById('statusUsuario').value === 'true'
                 };
 
+                // Campos adicionais
+                const cpf = document.getElementById('cpfUsuario')?.value;
+                const telefone = document.getElementById('telefoneUsuario')?.value;
+                const matricula = document.getElementById('matriculaUsuario')?.value;
+                
+                if (cpf) dados.cpf = cpf;
+                if (telefone) dados.telefone = telefone;
+                if (matricula) dados.matricula = matricula;
+
+                // Campos específicos por role
+                if (roleSelecionada === 'aluno') {
+                    dados.curso = document.getElementById('cursoUsuario')?.value;
+                    dados.turma = document.getElementById('turmaUsuario')?.value;
+                } else if (roleSelecionada === 'professor') {
+                    dados.eixo = document.getElementById('eixoUsuario')?.value;
+                } else if (roleSelecionada === 'setor_pedagogico') {
+                    dados.departamento = document.getElementById('departamentoUsuario')?.value;
+                    dados.atribuicoes = document.getElementById('atribuicoesUsuario')?.value;
+                }
+
                 if (!id) {
-                    const senha = document.getElementById('senhaUsuario').value;
+                    const senha = document.getElementById('senhaUsuario')?.value;
                     if (senha) dados.password = senha;
                 }
 

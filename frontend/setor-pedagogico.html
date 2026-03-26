@@ -1,0 +1,2314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+
+    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Setor Pedagógico - IEMA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #eef2f7 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            overflow-y: auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            box-shadow: 2px 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar::-webkit-scrollbar {
+            width: 5px;
+        }
+        
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+        }
+        
+        .sidebar-header {
+            padding: 30px 24px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+            background: rgba(0,0,0,0.1);
+        }
+        
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .sidebar-header p {
+            font-size: 0.75rem;
+            opacity: 0.85;
+            margin: 8px 0 0;
+            font-weight: 500;
+        }
+        
+        .nav-link {
+            color: rgba(255,255,255,0.85);
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: all 0.3s;
+            font-weight: 500;
+            margin: 4px 12px;
+            border-radius: 12px;
+            text-decoration: none;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .nav-link i {
+            width: 24px;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+        
+        .main-content {
+            margin-left: 280px;
+            padding: 25px 30px;
+            min-height: 100vh;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 24px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+            overflow: hidden;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        
+        .stat-card i {
+            font-size: 2.5rem;
+            opacity: 0.3;
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover i {
+            opacity: 0.5;
+            transform: scale(1.1);
+        }
+        
+        .stat-card-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+        
+        .stat-card-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .stat-card-info {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 24px;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        
+        .table-container .table-header {
+            padding: 20px 24px;
+            background: linear-gradient(135deg, #f8fafc, #ffffff);
+            border-bottom: 2px solid #eef2f7;
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table thead th {
+            background: #f8fafc;
+            border-bottom: 2px solid #eef2f7;
+            color: #1f2937;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 15px 20px;
+        }
+        
+        .table tbody td {
+            padding: 14px 20px;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+            color: #374151;
+        }
+        
+        .table tbody tr:hover {
+            background: #fef9e7;
+            transition: background 0.2s;
+        }
+        
+        .badge-acessibilidade {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #d97706;
+            padding: 5px 12px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .badge-status {
+            padding: 5px 12px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .badge-status.aprovada {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .badge-status.pendente {
+            background: #fed7aa;
+            color: #9b3412;
+        }
+        
+        .filtros-card {
+            background: white;
+            border-radius: 24px;
+            padding: 20px 24px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            transition: all 0.3s;
+        }
+        
+        .filtros-card:hover {
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        
+        .form-control, .form-select {
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+        }
+        
+        .btn {
+            border-radius: 12px;
+            padding: 10px 20px;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+        }
+        
+        .btn-print {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .btn-print:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(16,185,129,0.4);
+        }
+        
+        .btn-outline-primary {
+            border: 2px solid #667eea;
+            color: #667eea;
+            background: transparent;
+        }
+        
+        .btn-outline-primary:hover {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: translateY(-2px);
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .modal-content {
+            border-radius: 28px;
+            border: none;
+            overflow: hidden;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 20px 25px;
+        }
+        
+        .modal-header .btn-close {
+            filter: brightness(0) invert(1);
+        }
+        
+        .prova-preview {
+            font-family: 'Inter', 'Times New Roman', serif;
+            padding: 40px;
+            background: white;
+            line-height: 1.6;
+        }
+        
+        .questao-item {
+            margin-bottom: 35px;
+            page-break-inside: avoid;
+            background: #fafafa;
+            padding: 20px;
+            border-radius: 16px;
+        }
+        
+        .questao-pergunta {
+            font-weight: 700;
+            margin-bottom: 15px;
+            font-size: 1.05rem;
+            color: #1f2937;
+        }
+        
+        .opcoes-list {
+            list-style: none;
+            padding-left: 20px;
+        }
+        
+        .opcoes-list li {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .progress {
+            height: 8px;
+            border-radius: 10px;
+            background: #e5e7eb;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 10px;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .animated {
+            animation: fadeInUp 0.5s ease forwards;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 260px;
+            }
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 15px;
+            }
+            .mobile-menu-btn {
+                display: block;
+                position: fixed;
+                top: 15px;
+                left: 15px;
+                z-index: 1001;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 10px 14px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            }
+            .stat-card .stat-value {
+                font-size: 1.5rem;
+            }
+        }
+        
+        .mobile-menu-btn {
+            display: none;
+        }
+        
+        .page-header {
+            background: white;
+            border-radius: 24px;
+            padding: 20px 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        /* Avatar com foto de perfil */
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            margin-right: 12px;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .user-avatar i {
+            font-size: 24px;
+            color: white;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #f8fafc, #ffffff);
+            padding: 6px 16px 6px 8px;
+            border-radius: 60px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        /* Botão Editar Perfil */
+        .btn-editar-perfil {
+            margin: 1rem 1.5rem;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+        
+        .btn-editar-perfil:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+        }
+        
+        /* Notificações */
+        .notificacao-icone {
+            position: relative;
+            cursor: pointer;
+            margin-left: 15px;
+        }
+        
+        .notificacao-icone i {
+            font-size: 1.2rem;
+            color: #4b5563;
+        }
+        
+        .notificacao-icone .badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ef4444;
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+            display: none;
+        }
+        
+        .notificacoes-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 380px;
+            max-width: calc(100% - 40px);
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            z-index: 2000;
+            display: none;
+            animation: slideDown 0.3s ease;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .notificacoes-panel.active {
+            display: block;
+        }
+        
+        .notificacoes-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 16px 16px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .notificacoes-header h3 {
+            margin: 0;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .notificacoes-header h3 i {
+            color: #3498db;
+        }
+        
+        .notificacoes-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-notificacao {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+        
+        .btn-notificacao:hover {
+            background: #e9ecef;
+            color: #333;
+        }
+        
+        .notificacoes-list {
+            padding: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .notificacao-item {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-left: 4px solid transparent;
+            transition: 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .notificacao-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+        
+        .notificacao-item.nao-lida {
+            background: #e8f4fd;
+            border-left-color: #3498db;
+        }
+        
+        .notificacao-item .notificacao-titulo {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .notificacao-item .notificacao-mensagem {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+        
+        .notificacao-item .notificacao-tempo {
+            font-size: 11px;
+            color: #999;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .notificacao-item .notificacao-icone {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+        }
+        
+        .notificacao-actions {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: none;
+            gap: 5px;
+        }
+        
+        .notificacao-item:hover .notificacao-actions {
+            display: flex;
+        }
+        
+        .notificacao-actions button {
+            background: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .notificacao-actions button:hover {
+            background: #f0f0f0;
+        }
+        
+        .notificacao-actions button.delete:hover {
+            color: #e74c3c;
+        }
+        
+        .empty-notificacoes {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+        
+        .empty-notificacoes i {
+            font-size: 48px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+        
+        @keyframes slideDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Toast */
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 12px 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideInRight 0.3s ease;
+        }
+        
+        .toast-notification.success { border-left: 4px solid #10b981; }
+        .toast-notification.error { border-left: 4px solid #ef4444; }
+        .toast-notification.info { border-left: 4px solid #3b82f6; }
+        .toast-notification.warning { border-left: 4px solid #f59e0b; }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @media print {
+            .sidebar, .navbar, .btn, .filtros-card, .no-print, .mobile-menu-btn, .page-header, .btn-editar-perfil, .notificacao-icone, .notificacoes-panel {
+                display: none !important;
+            }
+            .main-content {
+                margin: 0;
+                padding: 0;
+            }
+            .prova-preview {
+                padding: 20px;
+            }
+            .questao-item {
+                background: none;
+                padding: 0;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Botão menu mobile -->
+    <button class="mobile-menu-btn" id="mobileMenuBtn">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3><i class="fas fa-chalkboard-user"></i> Setor Pedagógico</h3>
+            <p>AEE | Psicopedagogia</p>
+            <div class="mt-3">
+                <span class="badge bg-light text-dark" style="font-size: 0.7rem;">
+                    <i class="fas fa-heart text-danger"></i> Inclusão
+                </span>
+            </div>
+        </div>
+        <nav class="nav flex-column">
+            <a href="#" class="nav-link active" data-section="dashboard">
+                <i class="fas fa-chart-line"></i> Dashboard
+            </a>
+            <a href="#" class="nav-link" data-section="alunos">
+                <i class="fas fa-users"></i> Alunos AEE
+            </a>
+            <a href="#" class="nav-link" data-section="provas">
+                <i class="fas fa-file-alt"></i> Provas
+            </a>
+            <a href="#" class="nav-link" data-section="relatorios">
+                <i class="fas fa-chart-bar"></i> Relatórios
+            </a>
+            <hr style="margin: 16px 24px; border-color: rgba(255,255,255,0.15);">
+            
+            <!-- Botão Editar Perfil -->
+            <a href="editar-perfil.html" class="btn-editar-perfil">
+                <i class="fas fa-user-edit"></i> Editar Perfil
+            </a>
+            
+            <a href="#" class="nav-link" id="logoutBtn">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </a>
+        </nav>
+        
+        <div class="position-absolute bottom-0 start-0 end-0 p-3 text-center" style="font-size: 0.7rem; opacity: 0.6;">
+            <i class="fas fa-shield-alt"></i> Sistema de Provas IEMA
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header Moderno com Foto de Perfil e Notificações -->
+        <div class="page-header d-flex justify-content-between align-items-center">
+            <div>
+                <h2 id="pageTitle" class="mb-0" style="font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                    Dashboard
+                </h2>
+                <p class="text-muted mb-0 mt-1">Acompanhamento de alunos com necessidades especiais</p>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">
+                        <i class="fas fa-user-circle"></i>
+                    </div>
+                    <div>
+                        <div id="userName" class="fw-semibold" style="font-size: 0.9rem;">Carregando...</div>
+                        <small class="text-muted" style="font-size: 0.7rem;">Setor Pedagógico</small>
+                    </div>
+                </div>
+                <div class="notificacao-icone" onclick="setorPedagogico.abrirPainelNotificacoes()">
+                    <i class="fas fa-bell"></i>
+                    <span id="notificacaoBadge" class="badge">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Conteúdo dinâmico -->
+        <div id="content">
+            <div class="text-center py-5">
+                <div class="loading"></div>
+                <p class="mt-3 text-muted">Carregando dados...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Painel de Notificações -->
+    <div class="notificacoes-panel" id="notificacoesPanel">
+        <div class="notificacoes-header">
+            <h3><i class="fas fa-bell"></i> Notificações</h3>
+            <div class="notificacoes-actions">
+                <button class="btn-notificacao" onclick="setorPedagogico.marcarTodasLidas()" title="Marcar todas como lidas">
+                    <i class="fas fa-check-double"></i>
+                </button>
+                <button class="btn-notificacao" onclick="setorPedagogico.fecharPainelNotificacoes()" title="Fechar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="notificacoes-list" id="notificacoesList">
+            <div class="empty-notificacoes">
+                <i class="fas fa-bell-slash"></i>
+                <p>Nenhuma notificação</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Visualizar Prova -->
+    <div class="modal fade" id="provaModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-file-alt me-2"></i> Visualizar Prova</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="provaModalBody" style="max-height: 80vh; overflow-y: auto;">
+                    <div class="loading text-center py-5"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i> Fechar
+                    </button>
+                    <button type="button" class="btn btn-print" id="printProvaBtn" style="display: none;">
+                        <i class="fas fa-print me-2"></i> Imprimir Prova
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ============ CLASSE SETOR PEDAGÓGICO ============
+        class SetorPedagogico {
+            constructor() {
+                this.token = localStorage.getItem('auth_token');
+                this.currentUser = null;
+                this.notificacoes = [];
+                
+                this.init();
+            }
+            
+            async init() {
+                console.log('🚀 Inicializando Setor Pedagógico...');
+                
+                if (!this.token) {
+                    console.log('❌ Token não encontrado, redirecionando para login');
+                    window.location.href = '/login.html';
+                }
+                
+                await this.loadUser();
+                await this.carregarFotoPerfil();
+                await this.carregarNotificacoes();
+                this.loadDashboard();
+                this.setupNavigation();
+                
+                // Atualizar notificações a cada 30 segundos
+                setInterval(() => this.carregarNotificacoes(), 30000);
+            }
+            
+            async loadUser() {
+                try {
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    if (userData.nome) {
+                        this.currentUser = userData;
+                        document.getElementById('userName').textContent = userData.nome;
+                        console.log('✅ Usuário carregado do localStorage:', userData.nome);
+                    }
+                    
+                    const data = await this.apiRequest('/api/auth/me');
+                    if (data.success) {
+                        this.currentUser = data.user;
+                        document.getElementById('userName').textContent = this.currentUser.nome;
+                        localStorage.setItem('user_data', JSON.stringify(this.currentUser));
+                        
+                        if (this.currentUser.role !== 'setor_pedagogico' && this.currentUser.role !== 'admin' && this.currentUser.role !== 'super_admin') {
+                            console.log('❌ Perfil inválido:', this.currentUser.role);
+                            window.location.href = '/login.html';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar usuário:', error);
+                }
+            }
+            
+            async carregarFotoPerfil() {
+                try {
+                    const data = await this.apiRequest('/api/perfil/me');
+                    
+                    if (data.success && data.perfil && data.perfil.fotoPerfil) {
+                        const avatarDiv = document.getElementById('userAvatar');
+                        if (avatarDiv) {
+                            avatarDiv.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto de perfil">`;
+                            console.log('✅ Foto de perfil carregada!');
+                        }
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao carregar foto:', error);
+                }
+            }
+            
+            async apiRequest(url, options = {}) {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`,
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok && (response.status === 401 || response.status === 403)) {
+                    console.log('🔐 Sessão expirada');
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user_data');
+                    window.location.href = '/login.html';
+                    throw new Error('Sessão expirada');
+                }
+                
+                return data;
+            }
+            
+            showToast(mensagem, tipo = 'info') {
+                const toast = document.createElement('div');
+                toast.className = `toast-notification ${tipo}`;
+                toast.innerHTML = `
+                    <i class="fas ${tipo === 'success' ? 'fa-check-circle' : tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+                    <span>${mensagem}</span>
+                `;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            }
+            
+            setupNavigation() {
+                document.querySelectorAll('.nav-link[data-section]').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const section = link.getAttribute('data-section');
+                        this.navigateTo(section);
+                        
+                        if (window.innerWidth < 768) {
+                            document.getElementById('sidebar').classList.remove('mobile-open');
+                        }
+                    });
+                });
+                
+                document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+                    document.getElementById('sidebar').classList.toggle('mobile-open');
+                });
+                
+                document.getElementById('logoutBtn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user_data');
+                    window.location.href = '/login.html';
+                });
+            }
+            
+            navigateTo(section) {
+                document.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                document.querySelector(`[data-section="${section}"]`).classList.add('active');
+                
+                const titles = {
+                    dashboard: 'Dashboard - Setor Pedagógico',
+                    alunos: 'Alunos com Necessidades Especiais (AEE)',
+                    provas: 'Provas Publicadas',
+                    relatorios: 'Relatórios'
+                };
+                document.getElementById('pageTitle').innerHTML = `<i class="fas ${section === 'dashboard' ? 'fa-chart-line' : section === 'alunos' ? 'fa-users' : section === 'provas' ? 'fa-file-alt' : 'fa-chart-bar'} me-2"></i> ${titles[section]}`;
+                
+                if (section === 'dashboard') this.loadDashboard();
+                else if (section === 'alunos') this.loadAlunos();
+                else if (section === 'provas') this.loadProvas();
+                else if (section === 'relatorios') this.loadRelatorios();
+            }
+            
+            // ============ DASHBOARD ============
+            async loadDashboard() {
+                const content = document.getElementById('content');
+                content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando dashboard...</p></div>';
+                
+                try {
+                    const data = await this.apiRequest('/api/setor-pedagogico/dashboard');
+                    
+                    if (data.success) {
+                        const d = data.dashboard;
+                        
+                        content.innerHTML = `
+                            <div class="row g-4 mb-4">
+                                <div class="col-md-6 col-xl-3">
+                                    <div class="card stat-card">
+                                        <div class="card-body p-4">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <small class="opacity-75">Total de Alunos</small>
+                                                    <div class="stat-value mt-2">${d.totalAlunos}</div>
+                                                </div>
+                                                <i class="fas fa-users"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-xl-3">
+                                    <div class="card stat-card stat-card-warning">
+                                        <div class="card-body p-4">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <small class="opacity-75">Alunos AEE</small>
+                                                    <div class="stat-value mt-2">${d.totalAlunosComAcessibilidade}</div>
+                                                </div>
+                                                <i class="fas fa-hand-holding-heart"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-xl-3">
+                                    <div class="card stat-card stat-card-success">
+                                        <div class="card-body p-4">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <small class="opacity-75">Taxa Acessibilidade</small>
+                                                    <div class="stat-value mt-2">${d.taxaAcessibilidade}%</div>
+                                                </div>
+                                                <i class="fas fa-chart-line"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-xl-3">
+                                    <div class="card stat-card stat-card-info">
+                                        <div class="card-body p-4">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <small class="opacity-75">Total de Provas</small>
+                                                    <div class="stat-value mt-2">${d.totalProvas}</div>
+                                                </div>
+                                                <i class="fas fa-file-alt"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-4">
+                                <div class="col-lg-6">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-white border-0 pt-4 px-4">
+                                            <h5 class="mb-0 fw-bold"><i class="fas fa-chart-pie me-2 text-primary"></i> Distribuição por Condição</h5>
+                                        </div>
+                                        <div class="card-body px-4 pb-4">
+                                            <div id="condicoesChart" class="mb-4"></div>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm">
+                                                    <thead class="table-light">
+                                                        32q<th>Condição</th><th>Quantidade</th><th>%</th> </thead>
+                                                    <tbody>
+                                                        ${d.distribuicaoCondicoes.map(c => `
+                                                            <tr>
+                                                                <td>${c.label}</td>
+                                                                <td><strong>${c.count}</strong></td>
+                                                                <td>${((c.count / d.totalAlunosComAcessibilidade) * 100).toFixed(1)}%</td>
+                                                            </tr>
+                                                        `).join('')}
+                                                        ${d.distribuicaoCondicoes.length === 0 ? '<tr><td colspan="3" class="text-center text-muted">Nenhum dado disponível</td></tr>' : ''}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-lg-6">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-white border-0 pt-4 px-4">
+                                            <h5 class="mb-0 fw-bold"><i class="fas fa-bolt me-2 text-warning"></i> Ações Rápidas</h5>
+                                        </div>
+                                        <div class="card-body px-4 pb-4">
+                                            <div class="d-grid gap-3">
+                                                <button class="btn btn-outline-primary py-3" onclick="setorPedagogico.navigateTo('alunos')">
+                                                    <i class="fas fa-users me-2"></i> Listar Alunos AEE
+                                                    <i class="fas fa-arrow-right ms-2"></i>
+                                                </button>
+                                                <button class="btn btn-outline-success py-3" onclick="setorPedagogico.navigateTo('provas')">
+                                                    <i class="fas fa-file-alt me-2"></i> Visualizar Provas
+                                                    <i class="fas fa-arrow-right ms-2"></i>
+                                                </button>
+                                                <button class="btn btn-outline-warning py-3" onclick="setorPedagogico.navigateTo('relatorios')">
+                                                    <i class="fas fa-chart-bar me-2"></i> Gerar Relatório
+                                                    <i class="fas fa-arrow-right ms-2"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        if (d.distribuicaoCondicoes.length > 0) {
+                            this.drawSimpleChart(d.distribuicaoCondicoes);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar dashboard:', error);
+                    content.innerHTML = '<div class="alert alert-danger">Erro ao carregar dashboard</div>';
+                }
+            }
+            
+            drawSimpleChart(data) {
+                const container = document.getElementById('condicoesChart');
+                if (!container) return;
+                
+                const total = data.reduce((sum, d) => sum + d.count, 0);
+                
+                container.innerHTML = data.map(d => `
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="fw-medium">${d.label}</span>
+                            <span class="text-muted">${((d.count / total) * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: ${(d.count / total) * 100}%"></div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            // ============ ALUNOS AEE ============
+            async loadAlunos() {
+                const content = document.getElementById('content');
+                content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando alunos...</p></div>';
+                
+                try {
+                    const data = await this.apiRequest('/api/setor-pedagogico/alunos-acessibilidade');
+                    
+                    if (data.success) {
+                        content.innerHTML = `
+                            <div class="filtros-card">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Condição</label>
+                                        <select class="form-select" id="filtroCondicao">
+                                            <option value="todos">Todas</option>
+                                            ${data.filtros.condicoes.map(c => `<option value="${c.valor}">${c.label}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Turma</label>
+                                        <select class="form-select" id="filtroTurma">
+                                            <option value="">Todas</option>
+                                            ${data.filtros.turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Curso</label>
+                                        <select class="form-select" id="filtroCurso">
+                                            <option value="">Todos</option>
+                                            ${data.filtros.cursos.map(c => `<option value="${c}">${c}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-primary flex-grow-1" onclick="setorPedagogico.aplicarFiltrosAlunos()">
+                                                <i class="fas fa-search me-2"></i> Filtrar
+                                            </button>
+                                            <button class="btn btn-outline-secondary" onclick="setorPedagogico.limparFiltrosAlunos()">
+                                                <i class="fas fa-eraser"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
+                                <div class="table-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0 fw-bold"><i class="fas fa-users me-2 text-primary"></i> Alunos com Necessidades Especiais</h5>
+                                    <span class="badge bg-primary px-3 py-2">${data.total} alunos</span>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Nome</th>
+                                                <th>Matrícula</th>
+                                                <th>Turma</th>
+                                                <th>Curso</th>
+                                                <th>Condição</th>
+                                                <th>Status</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${data.alunos.map(aluno => `
+                                                <tr>
+                                                    <td><strong>${aluno.nome}</strong></td>
+                                                    <td>${aluno.matricula}</td>
+                                                    <td>${aluno.turma || '-'}</td>
+                                                    <td>${aluno.curso || '-'}</td>
+                                                    <td>
+                                                        <span class="badge-acessibilidade">
+                                                            <i class="fas fa-heart me-1"></i> ${aluno.condicao.label}
+                                                            ${aluno.condicao.descricao ? `<br><small>${aluno.condicao.descricao}</small>` : ''}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge-status ${aluno.status === 'aprovada' ? 'aprovada' : 'pendente'}">
+                                                            ${aluno.status === 'aprovada' ? '✓ Aprovada' : '⏳ Pendente'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-primary" onclick="setorPedagogico.verDetalhesAluno('${aluno.id}')">
+                                                            <i class="fas fa-eye me-1"></i> Ver
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                            ${data.alunos.length === 0 ? '<tr><td colspan="7" class="text-center text-muted py-5">Nenhum aluno encontrado</td></tr>' : ''}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                        
+                        window.alunosData = data;
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar alunos:', error);
+                    content.innerHTML = '<div class="alert alert-danger">Erro ao carregar alunos</div>';
+                }
+            }
+            
+            async verDetalhesAluno(alunoId) {
+                try {
+                    const data = await this.apiRequest(`/api/setor-pedagogico/aluno/${alunoId}`);
+                    
+                    if (data.success) {
+                        const a = data.aluno;
+                        
+                        const modalHtml = `
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <div class="bg-light rounded-3 p-4 h-100">
+                                        <h6 class="fw-bold mb-3"><i class="fas fa-user-graduate me-2 text-primary"></i> Dados Pessoais</h6>
+                                        <hr class="my-2">
+                                        <p class="mb-2"><strong>Nome:</strong> ${a.nome}</p>
+                                        <p class="mb-2"><strong>Email:</strong> ${a.email}</p>
+                                        <p class="mb-2"><strong>Matrícula:</strong> ${a.matricula || 'Não informada'}</p>
+                                        <p class="mb-2"><strong>Turma:</strong> ${a.turma || '-'}</p>
+                                        <p class="mb-0"><strong>Curso:</strong> ${a.curso || '-'}</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="bg-light rounded-3 p-4 h-100">
+                                        <h6 class="fw-bold mb-3"><i class="fas fa-hand-holding-heart me-2 text-warning"></i> Acessibilidade</h6>
+                                        <hr class="my-2">
+                                        <p class="mb-2"><strong>Condição:</strong> ${a.acessibilidade.condicao.label}</p>
+                                        ${a.acessibilidade.condicao.detalhes ? `<p class="mb-2"><strong>Detalhes:</strong> ${a.acessibilidade.condicao.detalhes}</p>` : ''}
+                                        <p class="mb-2"><strong>Data Solicitação:</strong> ${new Date(a.acessibilidade.dataSolicitacao).toLocaleDateString('pt-BR')}</p>
+                                        <p class="mb-0"><strong>Status:</strong> <span class="badge ${a.acessibilidade.status === 'aprovada' ? 'bg-success' : 'bg-warning'}">${a.acessibilidade.status === 'aprovada' ? 'Aprovada' : 'Pendente'}</span></p>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="bg-light rounded-3 p-4">
+                                        <h6 class="fw-bold mb-3"><i class="fas fa-file-alt me-2 text-success"></i> Últimas Provas Realizadas</h6>
+                                        <hr class="my-2">
+                                        ${a.provasRealizadas.length > 0 ? `
+                                            <div class="list-group">
+                                                ${a.provasRealizadas.map(p => `
+                                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong>${p.provaTitulo}</strong>
+                                                            <br><small class="text-muted">${p.adaptada ? 'Adaptada' : 'Normal'}</small>
+                                                        </div>
+                                                        <span class="badge ${p.notaLiberada ? 'bg-success' : 'bg-secondary'}">
+                                                            ${p.notaLiberada ? `Nota: ${p.nota}` : 'Aguardando'}
+                                                        </span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : '<p class="text-muted text-center py-3">Nenhuma prova realizada ainda</p>'}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        const modal = new bootstrap.Modal(document.getElementById('provaModal'));
+                        document.getElementById('provaModalBody').innerHTML = modalHtml;
+                        document.getElementById('provaModal').querySelector('.modal-title').innerHTML = `<i class="fas fa-user-circle me-2"></i> Detalhes: ${a.nome}`;
+                        document.getElementById('printProvaBtn').style.display = 'none';
+                        modal.show();
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar detalhes:', error);
+                    alert('Erro ao carregar detalhes do aluno');
+                }
+            }
+            
+            // ============ PROVAS ============
+            async loadProvas() {
+                const content = document.getElementById('content');
+                content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando provas...</p></div>';
+                
+                try {
+                    const data = await this.apiRequest('/api/setor-pedagogico/provas');
+                    
+                    if (data.success) {
+                        content.innerHTML = `
+                            <div class="filtros-card">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Tipo de Prova</label>
+                                        <select class="form-select" id="filtroTipoProva">
+                                            <option value="">Todos</option>
+                                            <option value="adaptada">Adaptadas (3 alternativas)</option>
+                                            <option value="normal">Normais (5 alternativas)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Turma</label>
+                                        <select class="form-select" id="filtroTurmaProva">
+                                            <option value="">Todas</option>
+                                            ${data.filtros.turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Status</label>
+                                        <select class="form-select" id="filtroStatusProva">
+                                            <option value="">Todos</option>
+                                            <option value="ativa">Ativas</option>
+                                            <option value="encerrada">Encerradas</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-primary flex-grow-1" onclick="setorPedagogico.aplicarFiltrosProvas()">
+                                                <i class="fas fa-search me-2"></i> Filtrar
+                                            </button>
+                                            <button class="btn btn-outline-secondary" onclick="setorPedagogico.limparFiltrosProvas()">
+                                                <i class="fas fa-eraser"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
+                                <div class="table-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0 fw-bold"><i class="fas fa-file-alt me-2 text-primary"></i> Provas Publicadas</h5>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="setorPedagogico.carregarProvas()">
+                                            <i class="fas fa-sync-alt me-1"></i> Atualizar
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Código</th>
+                                                <th>Título</th>
+                                                <th>Tipo</th>
+                                                <th>Turma</th>
+                                                <th>Professor</th>
+                                                <th>Questões</th>
+                                                <th>Data Limite</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${data.provas.map(prova => `
+                                                <tr>
+                                                    <td><code class="bg-light px-2 py-1 rounded">${prova.codigo}</code></td>
+                                                    <td><strong>${prova.titulo}</strong></td>
+                                                    <td>
+                                                        <span class="badge ${prova.tipo === 'adaptada' ? 'bg-warning' : 'bg-info'} px-3 py-2">
+                                                            ${prova.tipo === 'adaptada' ? '🎯 Adaptada' : '📝 Normal'}
+                                                        </span>
+                                                    </td>
+                                                    <td>${prova.turma?.nome || '-'}</td>
+                                                    <td>${prova.professor}</td>
+                                                    <td><span class="fw-bold">${prova.quantidadeQuestoes}</span></td>
+                                                    <td>${prova.dataLimite ? new Date(prova.dataLimite).toLocaleDateString('pt-BR') : '-'}</td>
+                                                    <td>
+                                                        <div class="d-flex gap-2">
+                                                            <button class="btn btn-sm btn-outline-info" onclick="setorPedagogico.visualizarProva('${prova.id}')">
+                                                                <i class="fas fa-eye"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm btn-print" onclick="setorPedagogico.imprimirProva('${prova.id}', '${prova.titulo}')">
+                                                                <i class="fas fa-print"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                            ${data.provas.length === 0 ? '<tr><td colspan="8" class="text-center text-muted py-5">Nenhuma prova encontrada</td></tr>' : ''}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                        
+                        window.provasData = data;
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar provas:', error);
+                    content.innerHTML = '<div class="alert alert-danger">Erro ao carregar provas</div>';
+                }
+            }
+            
+            async visualizarProva(provaId) {
+                try {
+                    const data = await this.apiRequest(`/api/setor-pedagogico/provas/${provaId}/visualizar`);
+                    
+                    if (data.success) {
+                        const p = data.prova;
+                        
+                        let questoesHtml = '';
+                        p.questoes.forEach((q, index) => {
+                            questoesHtml += `
+                                <div class="questao-item">
+                                    <div class="questao-pergunta">
+                                        <span class="badge bg-primary me-2">${index + 1}</span> ${q.pergunta}
+                                    </div>
+                                    <ul class="opcoes-list">
+                                        ${q.opcoes.map(opcao => `<li>${opcao}</li>`).join('')}
+                                    </ul>
+                                    <div class="mt-2 text-muted small bg-light p-2 rounded">
+                                        <i class="fas fa-lightbulb text-warning me-1"></i> ${q.explicacao}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        const modalHtml = `
+                            <div class="prova-preview">
+                                <div class="text-center mb-5">
+                                    <h1 class="fw-bold" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${p.titulo}</h1>
+                                    <div class="row mt-4">
+                                        <div class="col-md-3"><div class="border rounded p-2"><small class="text-muted">Código</small><div><strong>${p.codigo}</strong></div></div></div>
+                                        <div class="col-md-3"><div class="border rounded p-2"><small class="text-muted">Turma</small><div><strong>${p.turma?.nome || '-'}</strong></div></div></div>
+                                        <div class="col-md-3"><div class="border rounded p-2"><small class="text-muted">Professor</small><div><strong>${p.professor}</strong></div></div></div>
+                                        <div class="col-md-3"><div class="border rounded p-2"><small class="text-muted">Duração</small><div><strong>${p.duracaoMinutos} min</strong></div></div></div>
+                                    </div>
+                                    <hr class="my-4">
+                                </div>
+                                <div class="questoes">${questoesHtml}</div>
+                                <div class="text-center mt-5"><hr><p class="text-muted small">Documento gerado pelo Sistema de Provas IEMA - Setor Pedagógico</p></div>
+                            </div>
+                        `;
+                        
+                        const modal = new bootstrap.Modal(document.getElementById('provaModal'));
+                        document.getElementById('provaModalBody').innerHTML = modalHtml;
+                        document.getElementById('provaModal').querySelector('.modal-title').innerHTML = `<i class="fas fa-file-alt me-2"></i> ${p.titulo}`;
+                        document.getElementById('printProvaBtn').style.display = 'block';
+                        
+                        const printBtn = document.getElementById('printProvaBtn');
+                        printBtn.onclick = () => {
+                            this.imprimirProva(provaId, p.titulo);
+                        };
+                        
+                        modal.show();
+                    }
+                } catch (error) {
+                    console.error('Erro ao visualizar prova:', error);
+                    this.showToast('Erro ao carregar prova para visualização', 'error');
+                }
+            }
+            
+            // ============ IMPRESSÃO COM ADAPTAÇÃO ============
+            async imprimirProva(provaId, titulo) {
+                console.log('🖨️ Preparando impressão da prova:', provaId);
+                
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    
+                    const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                    const IS_RENDER = window.location.hostname.includes('render.com') || window.location.hostname.includes('sistema-avaliativo');
+                    
+                    let API_BASE_URL;
+                    if (IS_LOCALHOST) API_BASE_URL = 'http://localhost:3000/api';
+                    else if (IS_RENDER) API_BASE_URL = window.location.origin + '/api';
+                    else API_BASE_URL = '/api';
+                    
+                    const response = await fetch(`${API_BASE_URL}/provas/${provaId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (!response.ok) throw new Error('Erro ao carregar dados da prova');
+                    
+                    const data = await response.json();
+                    if (!data.success) throw new Error(data.error || 'Erro ao carregar prova');
+                    
+                    const prova = data.prova;
+                    const questoes = data.questoes || [];
+                    
+                    let qrCodeDataUrl = '';
+                    try {
+                        const correcaoUrl = `${window.location.origin}/corrigir-prova.html?prova=${provaId}`;
+                        const qrResponse = await fetch(`${API_BASE_URL}/qrcode/gerar`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: correcaoUrl })
+                        });
+                        const qrData = await qrResponse.json();
+                        if (qrData.success && qrData.qrCode) qrCodeDataUrl = qrData.qrCode;
+                    } catch (qrError) { console.error('❌ Erro ao buscar QR Code:', qrError); }
+                    
+                    window.provaParaImpressao = { prova, questoes, qrCodeDataUrl, API_BASE_URL, token };
+                    this.mostrarModalPerguntaAdaptacao();
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao preparar impressão:', error);
+                    this.showToast(`❌ Erro: ${error.message}`, 'error');
+                }
+            }
+            
+            mostrarModalPerguntaAdaptacao() {
+                let modal = document.getElementById('modalPerguntaAdaptacao');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.id = 'modalPerguntaAdaptacao';
+                    modal.style.display = 'none';
+                    modal.style.position = 'fixed';
+                    modal.style.top = '0';
+                    modal.style.left = '0';
+                    modal.style.width = '100%';
+                    modal.style.height = '100%';
+                    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                    modal.style.zIndex = '10000';
+                    modal.style.alignItems = 'center';
+                    modal.style.justifyContent = 'center';
+                    document.body.appendChild(modal);
+                }
+                
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 450px; border-radius: 24px; padding: 0; margin: auto;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0;">
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-print"></i> Imprimir Prova</h3>
+                            <button class="modal-close" onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao')" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer;">&times;</button>
+                        </div>
+                        <div style="padding: 25px;">
+                            <p style="color: #4b5563; margin-bottom: 20px; text-align: center; font-size: 1.1rem;">Deseja adaptar esta prova para acessibilidade?</p>
+                            <div style="display: flex; gap: 15px; margin-top: 20px;">
+                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao'); setorPedagogico.gerarImpressaoNormal()" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-times"></i> Não, imprimir normal</button>
+                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao'); setorPedagogico.mostrarModalOpcoesAdaptacao()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-universal-access"></i> Sim, adaptar</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                modal.style.display = 'flex';
+            }
+            
+            mostrarModalOpcoesAdaptacao() {
+                let modal = document.getElementById('modalOpcoesAdaptacao');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.id = 'modalOpcoesAdaptacao';
+                    modal.style.display = 'none';
+                    modal.style.position = 'fixed';
+                    modal.style.top = '0';
+                    modal.style.left = '0';
+                    modal.style.width = '100%';
+                    modal.style.height = '100%';
+                    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                    modal.style.zIndex = '10001';
+                    modal.style.alignItems = 'center';
+                    modal.style.justifyContent = 'center';
+                    document.body.appendChild(modal);
+                }
+                
+                const { prova } = window.provaParaImpressao || {};
+                const isOriginalmenteAdaptada = prova?.tipoProva === 'adaptada' || prova?.adaptada === true;
+                const avisoAdaptadaOriginal = isOriginalmenteAdaptada ? `<div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 10px 12px; margin-bottom: 15px; border-radius: 8px;"><p style="margin: 0; font-size: 0.85rem; color: #1e40af;"><i class="fas fa-info-circle"></i> <strong>Prova originalmente adaptada</strong> - Esta prova já possui 3 alternativas por questão.</p></div>` : '';
+                
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 550px; border-radius: 24px; padding: 0; margin: auto;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0;">
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-universal-access"></i> Opções de Adaptação</h3>
+                            <button class="modal-close" onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao')" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer;">&times;</button>
+                        </div>
+                        <div style="padding: 25px;">
+                            <p style="color: #4b5563; margin-bottom: 20px;">Selecione as adaptações desejadas para a impressão:</p>
+                            ${avisoAdaptadaOriginal}
+                            <div style="display: flex; flex-direction: column; gap: 15px;">
+                                <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
+                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="optFonteAmpliada" style="width: 20px; height: 20px;">
+                                        <div><strong style="font-size: 1rem;">📏 Fonte Ampliada</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aumentar o tamanho da fonte para melhor legibilidade</p></div>
+                                    </label>
+                                </div>
+                                <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
+                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="optNegrito" style="width: 20px; height: 20px;">
+                                        <div><strong style="font-size: 1rem;">🔤 Texto em Negrito</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aplicar negrito em todo o texto da prova</p></div>
+                                    </label>
+                                </div>
+                                <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
+                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="optAltoContraste" style="width: 20px; height: 20px;">
+                                        <div><strong style="font-size: 1rem;">🎨 Alto Contraste</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Fundo escuro com texto claro para melhor visualização</p></div>
+                                    </label>
+                                </div>
+                                <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
+                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="optLayoutSimplificado" style="width: 20px; height: 20px;">
+                                        <div><strong style="font-size: 1rem;">📄 Layout Simplificado</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Remover elementos decorativos, manter apenas o essencial</p></div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-radius: 12px;">
+                                <p style="margin: 0; font-size: 0.85rem; color: #92400e;"><i class="fas fa-lightbulb"></i> <strong>Dica:</strong> Você pode combinar várias opções conforme a necessidade do aluno.</p>
+                            </div>
+                            <div style="display: flex; gap: 12px; margin-top: 25px;">
+                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao'); setorPedagogico.gerarImpressaoAdaptada()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-print"></i> Imprimir com Adaptações</button>
+                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao')" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                modal.style.display = 'flex';
+            }
+            
+            fecharModalAdaptacao(modalId) {
+                const modal = document.getElementById(modalId);
+                if (modal) modal.style.display = 'none';
+            }
+            
+            async gerarImpressaoNormal() {
+                const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
+                if (!prova) { this.showToast('❌ Erro: dados da prova não encontrados', 'error'); return; }
+                await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {});
+            }
+            
+            async gerarImpressaoAdaptada() {
+                const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
+                if (!prova) { this.showToast('❌ Erro: dados da prova não encontrados', 'error'); return; }
+                
+                const opcoes = {
+                    fonteAmpliada: document.getElementById('optFonteAmpliada')?.checked || false,
+                    negrito: document.getElementById('optNegrito')?.checked || false,
+                    altoContraste: document.getElementById('optAltoContraste')?.checked || false,
+                    layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false
+                };
+                
+                const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado;
+                if (nenhumaOpcao) {
+                    const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
+                    if (confirmar) await this.gerarImpressaoNormal();
+                    else this.mostrarModalOpcoesAdaptacao();
+                    return;
+                }
+                await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes);
+            }
+            
+            async gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}) {
+                this.showToast('🖨️ Preparando impressão...', 'info');
+                
+                try {
+                    const provaTitulo = prova.titulo || 'Prova sem título';
+                    const logoIema = '/uploads/logo-iema.png';
+                    const dataAtual = new Date();
+                    const dataFormatada = dataAtual.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    const totalQuestoes = questoes.length;
+                    const turmaNome = prova.turma?.nome || 'Turma não especificada';
+                    const disciplina = prova.turma?.disciplina || 'Disciplina não especificada';
+                    const professorNome = prova.professor?.nome || 'Professor';
+                    const periodo = prova.periodo ? `${prova.periodo}º Período` : '1º Período';
+                    const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
+                    const letrasUsadas = isAdaptada ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D', 'E'];
+                    
+                    let adaptacoesTexto = '';
+                    const temAdaptacoes = opcoesAdaptacao.fonteAmpliada || opcoesAdaptacao.negrito || opcoesAdaptacao.altoContraste || opcoesAdaptacao.layoutSimplificado;
+                    if (temAdaptacoes) {
+                        const adaptacoesSelecionadas = [];
+                        if (opcoesAdaptacao.fonteAmpliada) adaptacoesSelecionadas.push('Fonte Ampliada');
+                        if (opcoesAdaptacao.negrito) adaptacoesSelecionadas.push('Texto em Negrito');
+                        if (opcoesAdaptacao.altoContraste) adaptacoesSelecionadas.push('Alto Contraste');
+                        if (opcoesAdaptacao.layoutSimplificado) adaptacoesSelecionadas.push('Layout Simplificado');
+                        adaptacoesTexto = `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 8px 12px; margin: 10px 0; border-radius: 8px;"><p style="margin: 0; font-size: 0.85rem; color: #92400e;"><i class="fas fa-universal-access"></i> <strong>Prova Adaptada</strong> - Esta impressão inclui as seguintes adaptações: ${adaptacoesSelecionadas.join(', ')}.</p></div>`;
+                    }
+                    
+                    let questoesHTML = '';
+                    questoes.forEach((questao, index) => {
+                        const opcoes = questao.opcoes || [];
+                        const opcoesFormatadas = opcoes.map((opcao, optIndex) => {
+                            const letra = letrasUsadas[optIndex];
+                            let opcaoLimpa = opcao || 'Opção não disponível';
+                            if (opcaoLimpa.startsWith(`${letra})`) || opcaoLimpa.startsWith(`${letra}.`)) opcaoLimpa = opcaoLimpa.substring(2).trim();
+                            return { letra, texto: opcaoLimpa };
+                        });
+                        questoesHTML += `
+                            <div class="questao-print">
+                                <div class="questao-numero">Questão ${index + 1} ${isAdaptada ? '(Prova Adaptada - 3 alternativas)' : ''}</div>
+                                <div class="questao-texto"><strong>${questao.pergunta || 'Pergunta não disponível'}</strong></div>
+                                <div class="opcoes-print">${opcoesFormatadas.map(op => `<div class="opcao-linha"><span class="opcao-letra">${op.letra})</span><span class="opcao-texto">${op.texto}</span></div>`).join('')}</div>
+                                <div class="rascunho-area"><small>Espaço para rascunho</small><div class="rascunho-linhas"></div></div>
+                            </div>
+                        `;
+                    });
+                    
+                    const gerarCartaoResposta = () => {
+                        const grupos = [];
+                        for (let i = 0; i < totalQuestoes; i += 5) grupos.push(Array.from({ length: Math.min(5, totalQuestoes - i) }, (_, j) => i + j + 1));
+                        const qrCodeArea = qrCodeDataUrl ? `<div style="text-align: center; margin-top: 12px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;"><div style="display: flex; align-items: center; justify-content: center; gap: 10px;"><img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code"><div style="font-size: 7px; color: #666; text-align: left;"><strong>📱 Correção Automática</strong><br>Escaneie este QR Code</div></div></div>` : '';
+                        const quadradosCantos = opcoesAdaptacao.layoutSimplificado ? '' : `<div style="position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; background: #000; border: 1px solid #000; z-index: 5;"></div><div style="position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; background: #000; border: 1px solid #000; z-index: 5;"></div><div style="position: absolute; bottom: -3px; left: -3px; width: 10px; height: 10px; background: #000; border: 1px solid #000; z-index: 5;"></div><div style="position: absolute; bottom: -3px; right: -3px; width: 10px; height: 10px; background: #000; border: 1px solid #000; z-index: 5;"></div>`;
+                        return `<div style="text-align: center;"><div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 10px; background: #fff; display: inline-block; width: 100%; box-sizing: border-box;">${quadradosCantos}<div class="cartao-header" style="margin-bottom: 10px;"><h4 style="margin: 0 0 5px 0; font-size: 11pt; font-weight: bold; text-align: center;">📝 CARTÃO-RESPOSTA</h4><div class="instrucoes-cartao" style="font-size: 8pt; color: #333; text-align: center; padding: 8px; background: #fef3c7; border-radius: 6px;"><p style="margin: 0;"><strong>INSTRUÇÕES PARA PREENCHIMENTO DO CARTÃO-RESPOSTA</strong></p><p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p></div></div><div class="cartao-grid" style="display: flex; flex-direction: column; gap: 6px;">${grupos.map(grupo => `<div class="cartao-linha" style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">${grupo.map(num => `<div class="cartao-coluna" style="text-align: center; padding: 4px; border: 1px solid #ccc; background: #fafafa; min-width: 65px;"><div class="questao-numero-cartao" style="font-weight: bold; font-size: 8pt; margin-bottom: 4px; padding-bottom: 2px; border-bottom: 1px solid #ddd;">${num}</div><div class="opcoes-cartao" style="display: flex; justify-content: center; gap: 6px;">${letrasUsadas.map(letra => `<div class="opcao-cartao" style="display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 8pt;"><input type="radio" name="q${num}" value="${letra}" style="width: 12px; height: 12px; margin: 0;"><span style="font-size: 7pt; font-weight: bold;">${letra}</span></div>`).join('')}</div></div>`).join('')}</div>`).join('')}</div></div>${qrCodeArea}</div>`;
+                    };
+                    
+                    let cssAdaptacoes = '';
+                    if (opcoesAdaptacao.fonteAmpliada) cssAdaptacoes += `body { font-size: 16pt !important; }.questao-texto { font-size: 16pt !important; }.opcao-linha { font-size: 14pt !important; }`;
+                    if (opcoesAdaptacao.negrito) cssAdaptacoes += `body, .questao-texto, .opcao-linha, .instrucoes-cartao, .questao-numero, .cartao-header h4, .print-header h1, .print-prova-info h3, .label, .campo-label, .instrucoes-box h4, .info-label, .info-linha, .instrucoes-box li, .print-footer { font-weight: bold !important; }`;
+                    if (opcoesAdaptacao.altoContraste) cssAdaptacoes += `body { background: #000000 !important; color: #ffffff !important; }.print-header, .campos-box, .instrucoes-box, .print-prova-info, .cartao-resposta, .questao-print, .rascunho-area, .info-linha { background: #000000 !important; color: #ffffff !important; border-color: #ffffff !important; }`;
+                    if (opcoesAdaptacao.layoutSimplificado) cssAdaptacoes += `.print-logo, .logo-iema { display: none !important; }`;
+                    
+                    const printHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Prova - ${provaTitulo}</title><style>@media print{body{margin:0;padding:0}.questao-print{page-break-inside:avoid}.cartao-resposta{page-break-inside:avoid}.questoes-container{page-break-before:always;margin-top:0}}body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.3;margin:0;padding:0.4in;background:white;color:black;position:relative}.print-header{text-align:center;margin-bottom:6px;padding-bottom:6px;border-bottom:2px solid #000}.print-logo{max-width:999px;width:100%;height:auto;display:block;margin:0 auto 3px auto}.print-header h1{font-size:14pt;font-weight:bold;margin:0 0 5px 0}.student-row{display:flex;justify-content:space-between;margin:4px 0;gap:15px}.student-item{flex:1;display:flex;align-items:baseline;gap:6px}.label{font-weight:bold;min-width:65px;font-size:10pt}.underline{border-bottom:1px dotted #000;flex:1;height:16px}.campos-box{margin:6px 0;border:2px solid #000;padding:5px 12px;display:flex;justify-content:space-between;gap:20px}.campo-item{flex:1;display:flex;align-items:baseline;gap:6px}.campo-label{font-weight:bold;min-width:35px;font-size:10pt}.campo-underline{border-bottom:1px dotted #000;flex:1;height:16px}.instrucoes-box{margin:6px 0;border:1px solid #ccc;padding:8px 12px;background:#fefefe;border-radius:4px}.instrucoes-box h4{margin:0 0 5px 0;font-size:10pt;font-weight:bold;color:#4f46e5;text-align:center}.instrucoes-box ul{margin:0;padding-left:20px}.instrucoes-box li{margin-bottom:3px;font-size:8.5pt;line-height:1.3}.print-prova-info{margin:8px 0;padding:5px 8px;border:1px solid #ddd;background:#fafafa}.print-prova-info h3{margin:0 0 3px 0;font-size:11pt;text-align:center;font-weight:bold}.info-linha{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:8pt;border-top:1px solid #eee;padding-top:4px;margin-top:4px}.info-item{display:inline-flex;gap:4px}.cartao-resposta{margin:10px 0;border:2px solid #000;padding:12px;background:#fff;position:relative;display:inline-block;width:100%;box-sizing:border-box}.cartao-header{margin-bottom:10px}.cartao-header h4{margin:0 0 5px 0;font-size:11pt;font-weight:bold;text-align:center}.instrucoes-cartao{font-size:8pt;color:#333;text-align:center;padding:8px;background:#fef3c7;border-radius:6px}.instrucoes-cartao p{margin:0}.cartao-grid{display:flex;flex-direction:column;gap:6px}.cartao-linha{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.cartao-coluna{text-align:center;padding:4px;border:1px solid #ccc;background:#fafafa;min-width:65px}.questao-numero-cartao{font-weight:bold;font-size:8pt;margin-bottom:4px;padding-bottom:2px;border-bottom:1px solid #ddd}.opcoes-cartao{display:flex;justify-content:center;gap:6px}.opcao-cartao{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:8pt}.opcao-cartao input{width:12px;height:12px;margin:0}.opcao-cartao span{font-size:7pt;font-weight:bold}.questoes-container{page-break-before:always;margin-top:0}.questao-print{margin-bottom:20px}.questao-numero{font-weight:bold;margin-bottom:6px;border-bottom:1px solid #ccc;padding-bottom:3px;font-size:10pt}.questao-texto{margin-bottom:10px;margin-left:8px;line-height:1.4;font-size:11pt}.opcao-linha{margin:6px 0 6px 18px;display:flex;font-size:10pt}.opcao-letra{min-width:22px;font-weight:500}.rascunho-area{margin-top:8px;border-top:1px dashed #ccc;padding-top:5px}.rascunho-area small{font-size:7pt}.rascunho-linhas{min-height:35px;background:repeating-linear-gradient(transparent,transparent 16px,#eee 16px,#eee 18px)}.print-footer{margin-top:25px;text-align:center;font-size:7.5pt;color:#666;border-top:1px solid #ccc;padding-top:8px}${cssAdaptacoes}</style></head><body><div class="print-header"><img src="${logoIema}" class="print-logo" alt="IEMA" onerror="this.style.display='none'"><h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1><div class="student-row"><div class="student-item"><span class="label">ESTUDANTE:</span><span class="underline"></span></div></div><div class="student-row"><div class="student-item"><span class="label">CURSO:</span><span class="underline"></span></div><div class="student-item"><span class="label">TURMA:</span><span class="underline"></span></div></div></div><div class="campos-box"><div class="campo-item"><span class="campo-label">Nota:</span><span class="campo-underline"></span></div><div class="campo-item"><span class="campo-label">Ass.:</span><span class="campo-underline"></span></div><div class="campo-item"><span class="campo-label">Data:</span><span class="campo-underline">${dataFormatada}</span></div></div><div class="instrucoes-box"><h4>📋 INSTRUÇÕES GERAIS</h4><ul><li>Escreva seu nome de registro legível e não esqueça de assinar a lista de frequência.</li><li>Todas as anotações e cálculos devem ser feitos no caderno de prova.</li><li>O estudante que cometer quaisquer atos no intuito de fraudar a avaliação terá sua prova recolhida e ficará sujeito a penalidades do Regimento Interno da Rede, podendo obter nota zero.</li><li>Os celulares <strong>deverão ser desligados</strong> durante todo o período de realização da prova.</li><li>O estudante só poderá se retirar da sala após o término de dois horários destinados para a aplicação da prova.</li><li>O estudante poderá ausentar-se para ir ao banheiro, um por vez, após 30 min do início da prova.</li><li>Cada questão contém apenas uma alternativa correta.</li><li>Leia e siga as instruções de preenchimento do cartão-resposta (GABARITO) abaixo.</li></ul></div>${adaptacoesTexto}<div class="print-prova-info"><h3>${provaTitulo}</h3><div class="info-linha"><span class="info-item"><span class="info-label">Período:</span> ${periodo}</span><span class="info-item"><span class="info-label">Turma:</span> ${turmaNome}</span><span class="info-item"><span class="info-label">Disciplina:</span> ${disciplina}</span><span class="info-item"><span class="info-label">Professor:</span> ${professorNome}</span><span class="info-item"><span class="info-label">Questões:</span> ${totalQuestoes}</span></div></div>${gerarCartaoResposta()}<div class="questoes-container">${questoesHTML}</div><div class="print-footer"><p>Sistema de Provas IEMA - ${dataFormatada}</p><p>📱 Escaneie o QR Code abaixo do cartão-resposta para correção automática</p></div></body></html>`;
+                    
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(printHTML);
+                    printWindow.document.close();
+                    printWindow.onload = function() { printWindow.print(); printWindow.onafterprint = function() { printWindow.close(); }; };
+                    this.showToast('✅ Impressão preparada!', 'success');
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast(`❌ Erro: ${error.message}`, 'error');
+                }
+            }
+            
+            // ============ SISTEMA DE NOTIFICAÇÕES ============
+            async carregarNotificacoes() {
+                try {
+                    const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', { headers: { 'Authorization': `Bearer ${this.token}` } });
+                    if (countResponse.ok) {
+                        const countData = await countResponse.json();
+                        this.atualizarBadgesNotificacoes(countData.count || 0);
+                    }
+                    const response = await fetch('/api/notificacoes?limite=20', { headers: { 'Authorization': `Bearer ${this.token}` } });
+                    const data = await response.json();
+                    if (data.success) {
+                        this.notificacoes = data.notificacoes || [];
+                        this.renderizarNotificacoes();
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar notificações:', error);
+                }
+            }
+            
+            atualizarBadgesNotificacoes(total) {
+                const badge = document.getElementById('notificacaoBadge');
+                if (badge) {
+                    if (total > 0) {
+                        badge.textContent = total > 99 ? '99+' : total;
+                        badge.style.display = 'inline';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            }
+            
+            renderizarNotificacoes() {
+                const list = document.getElementById('notificacoesList');
+                if (!list) return;
+                if (!this.notificacoes || this.notificacoes.length === 0) {
+                    list.innerHTML = `<div class="empty-notificacoes"><i class="fas fa-bell-slash"></i><p>Nenhuma notificação</p></div>`;
+                    return;
+                }
+                let html = '';
+                this.notificacoes.slice(0, 10).forEach(notif => {
+                    const data = new Date(notif.createdAt);
+                    const agora = new Date();
+                    const diffMin = Math.floor((agora - data) / 60000);
+                    let tempoTexto = diffMin < 1 ? 'agora mesmo' : diffMin < 60 ? `há ${diffMin} min` : diffMin < 1440 ? `há ${Math.floor(diffMin / 60)} h` : `há ${Math.floor(diffMin / 1440)} d`;
+                    const naoLida = !notif.lida ? 'nao-lida' : '';
+                    html += `<div class="notificacao-item ${naoLida}" data-id="${notif._id}" onclick="setorPedagogico.verNotificacao('${notif._id}')"><div class="notificacao-titulo"><span class="notificacao-icone" style="background: ${notif.cor || '#3498db'}20; color: ${notif.cor || '#3498db'};"><i class="fas ${notif.icone || 'fa-bell'}"></i></span>${notif.titulo || 'Notificação'}</div><div class="notificacao-mensagem">${notif.mensagem || ''}</div><div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}</div><div class="notificacao-actions"><button onclick="event.stopPropagation(); setorPedagogico.marcarLida('${notif._id}')" title="Marcar como lida"><i class="fas fa-check"></i></button><button class="delete" onclick="event.stopPropagation(); setorPedagogico.excluirNotificacao('${notif._id}')" title="Excluir"><i class="fas fa-trash"></i></button></div></div>`;
+                });
+                list.innerHTML = html;
+            }
+            
+            abrirPainelNotificacoes() {
+                const panel = document.getElementById('notificacoesPanel');
+                if (panel) {
+                    panel.classList.toggle('active');
+                    this.carregarNotificacoes();
+                }
+            }
+            
+            fecharPainelNotificacoes() {
+                const panel = document.getElementById('notificacoesPanel');
+                if (panel) panel.classList.remove('active');
+            }
+            
+            async marcarLida(id) {
+                try {
+                    const response = await fetch(`/api/notificacoes/${id}/lida`, { method: 'PUT', headers: { 'Authorization': `Bearer ${this.token}` } });
+                    const data = await response.json();
+                    if (data.success) await this.carregarNotificacoes();
+                } catch (error) { console.error('Erro ao marcar como lida:', error); }
+            }
+            
+            async marcarTodasLidas() {
+                try {
+                    const response = await fetch('/api/notificacoes/marcar-todas-lidas', { method: 'PUT', headers: { 'Authorization': `Bearer ${this.token}` } });
+                    const data = await response.json();
+                    if (data.success) {
+                        await this.carregarNotificacoes();
+                        this.showToast('✅ Todas notificações marcadas como lidas', 'success');
+                    }
+                } catch (error) { console.error('Erro ao marcar todas como lidas:', error); }
+            }
+            
+            async excluirNotificacao(id) {
+                try {
+                    const response = await fetch(`/api/notificacoes/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${this.token}` } });
+                    const data = await response.json();
+                    if (data.success) {
+                        await this.carregarNotificacoes();
+                        this.showToast('✅ Notificação excluída', 'success');
+                    }
+                } catch (error) { console.error('Erro ao excluir notificação:', error); }
+            }
+            
+            async verNotificacao(id) {
+                await this.marcarLida(id);
+                const notif = this.notificacoes.find(n => n._id === id);
+                if (notif && notif.link) window.location.href = notif.link;
+            }
+            
+            // ============ RELATÓRIOS ============
+            async loadRelatorios() {
+                const content = document.getElementById('content');
+                content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando relatórios...</p></div>';
+                
+                try {
+                    const data = await this.apiRequest('/api/setor-pedagogico/relatorio/acessibilidade');
+                    
+                    if (data.success) {
+                        const r = data.relatorio;
+                        
+                        content.innerHTML = `
+                            <div class="filtros-card">
+                                <h5 class="fw-bold mb-3"><i class="fas fa-chart-bar me-2 text-primary"></i> Gerar Relatório de Alunos com Acessibilidade</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Condição</label>
+                                        <select class="form-select" id="relatorioCondicao">
+                                            <option value="">Todas</option>
+                                            ${this.obterListaCondicoes().map(c => `<option value="${c.valor}">${c.label}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Turma</label>
+                                        <input type="text" class="form-control" id="relatorioTurma" placeholder="Nome da turma">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="fw-semibold mb-2">Curso</label>
+                                        <input type="text" class="form-control" id="relatorioCurso" placeholder="Nome do curso">
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-end">
+                                        <button class="btn btn-primary w-100" onclick="setorPedagogico.gerarRelatorioFiltrado()">
+                                            <i class="fas fa-chart-bar me-2"></i> Gerar Relatório
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-4 mt-2">
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-white border-0 pt-4 px-4">
+                                            <h5 class="mb-0 fw-bold"><i class="fas fa-chart-pie me-2 text-primary"></i> Resumo Geral</h5>
+                                        </div>
+                                        <div class="card-body px-4 pb-4">
+                                            <p><strong>Data de geração:</strong> ${new Date(r.dataGeracao).toLocaleString('pt-BR')}</p>
+                                            <p><strong>Total de alunos com acessibilidade:</strong> <span class="fw-bold fs-4 text-primary">${r.totalAlunos}</span></p>
+                                            <hr>
+                                            <h6 class="fw-bold">Distribuição por Condição:</h6>
+                                            <ul class="list-unstyled">
+                                                ${r.porCondicao.map(c => `<li class="mb-2"><span class="badge-acessibilidade me-2">${c.condicao}</span> ${c.total} aluno(s)</li>`).join('')}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-white border-0 pt-4 px-4">
+                                            <h5 class="mb-0 fw-bold"><i class="fas fa-download me-2 text-success"></i> Exportar</h5>
+                                        </div>
+                                        <div class="card-body px-4 pb-4">
+                                            <div class="d-grid gap-3">
+                                                <button class="btn btn-print py-3" onclick="setorPedagogico.imprimirRelatorioAtual()">
+                                                    <i class="fas fa-print me-2"></i> Imprimir Relatório
+                                                </button>
+                                                <button class="btn btn-outline-primary py-3" onclick="setorPedagogico.exportarRelatorioCSV()">
+                                                    <i class="fas fa-file-csv me-2"></i> Exportar para CSV
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container mt-4">
+                                <div class="table-header">
+                                    <h5 class="mb-0 fw-bold"><i class="fas fa-users me-2 text-primary"></i> Alunos por Turma</h5>
+                                </div>
+                                ${r.porTurma.map(turma => `
+                                    <div class="mt-4 px-4 pb-4">
+                                        <h6 class="fw-bold mb-3"><i class="fas fa-school me-2 text-warning"></i> ${turma.turma} <span class="badge bg-primary ms-2">${turma.total} alunos</span></h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead class="table-light"><tr><th>Nome</th><th>Matrícula</th><th>Condição</th><th>Detalhes</th></tr></thead>
+                                                <tbody>
+                                                    ${turma.alunos.map(a => `<tr><td>${a.nome}</td><td>${a.matricula || '-'}</td><td>${a.condicao}如果<td>${a.detalhes || '-'}如果`).join('')}
+                                                </tbody>
+                                             </table>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                                ${r.porTurma.length === 0 ? '<div class="text-center text-muted py-5">Nenhum dado disponível</div>' : ''}
+                            </div>
+                        `;
+                        
+                        window.relatorioData = r;
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar relatórios:', error);
+                    content.innerHTML = '<div class="alert alert-danger">Erro ao carregar relatórios</div>';
+                }
+            }
+            
+            async gerarRelatorioFiltrado() {
+                const condicao = document.getElementById('relatorioCondicao')?.value || '';
+                const turma = document.getElementById('relatorioTurma')?.value || '';
+                const curso = document.getElementById('relatorioCurso')?.value || '';
+                let url = '/api/setor-pedagogico/relatorio/acessibilidade?';
+                if (condicao) url += `condicao=${condicao}&`;
+                if (turma) url += `turma=${turma}&`;
+                if (curso) url += `curso=${curso}&`;
+                try {
+                    const data = await this.apiRequest(url);
+                    if (data.success) {
+                        window.relatorioData = data.relatorio;
+                        alert(`✅ Relatório gerado com ${data.relatorio.totalAlunos} alunos`);
+                        this.loadRelatorios();
+                    }
+                } catch (error) {
+                    console.error('Erro:', error);
+                    alert('Erro ao gerar relatório filtrado');
+                }
+            }
+            
+            imprimirRelatorioAtual() {
+                if (!window.relatorioData) { alert('Nenhum relatório carregado'); return; }
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(`<!DOCTYPE html><html><head><title>Relatório Acessibilidade - IEMA</title><style>body{font-family:Arial,sans-serif;padding:40px}h1{color:#4f46e5}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background-color:#f3f4f6}.header{text-align:center;margin-bottom:30px}@media print{body{padding:20px}}</style></head><body><div class="header"><h1>Relatório de Alunos com Necessidades Especiais</h1><p>Setor Pedagógico - IEMA</p><p>Data: ${new Date().toLocaleString('pt-BR')}</p></div><h3>Resumo Geral</h3><p><strong>Total de alunos:</strong> ${window.relatorioData.totalAlunos}</p><p><strong>Distribuição por condição:</strong></p><ul>${window.relatorioData.porCondicao.map(c => `<li>${c.condicao}: ${c.total}</li>`).join('')}</ul><h3>Alunos por Turma</h3>${window.relatorioData.porTurma.map(turma => `<h4>${turma.turma} (${turma.total} alunos)</h4><table><thead><tr><th>Nome</th><th>Matrícula</th><th>Condição</th><th>Detalhes</th></tr></thead><tbody>${turma.alunos.map(a => `<tr><td>${a.nome}</td><td>${a.matricula || '-'}</td><td>${a.condicao}</td><td>${a.detalhes || '-'}</td></tr>`).join('')}</tbody></table>`).join('')}<div class="footer"><p><small>Documento gerado pelo Sistema de Provas IEMA</small></p></div></body></html>`);
+                printWindow.document.close();
+                printWindow.print();
+            }
+            
+            exportarRelatorioCSV() {
+                if (!window.relatorioData) { alert('Nenhum relatório carregado'); return; }
+                let csv = "Turma,Nome,Matrícula,Condição,Detalhes\n";
+                window.relatorioData.porTurma.forEach(turma => {
+                    turma.alunos.forEach(aluno => {
+                        csv += `"${turma.turma}","${aluno.nome}","${aluno.matricula || ''}","${aluno.condicao}","${aluno.detalhes || ''}"\n`;
+                    });
+                });
+                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `relatorio_acessibilidade_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = "hidden";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            
+            obterListaCondicoes() {
+                return [
+                    { valor: 'visual', label: 'Deficiência Visual' },
+                    { valor: 'auditiva', label: 'Deficiência Auditiva' },
+                    { valor: 'motora', label: 'Deficiência Motora' },
+                    { valor: 'intelectual', label: 'Deficiência Intelectual' },
+                    { valor: 'dislexia', label: 'Dislexia' },
+                    { valor: 'tdah', label: 'TDAH' },
+                    { valor: 'outra', label: 'Outra Condição' }
+                ];
+            }
+            
+            aplicarFiltrosAlunos() { this.loadAlunos(); }
+            limparFiltrosAlunos() {
+                if (document.getElementById('filtroCondicao')) document.getElementById('filtroCondicao').value = 'todos';
+                if (document.getElementById('filtroTurma')) document.getElementById('filtroTurma').value = '';
+                if (document.getElementById('filtroCurso')) document.getElementById('filtroCurso').value = '';
+                this.loadAlunos();
+            }
+            aplicarFiltrosProvas() { this.loadProvas(); }
+            limparFiltrosProvas() {
+                if (document.getElementById('filtroTipoProva')) document.getElementById('filtroTipoProva').value = '';
+                if (document.getElementById('filtroTurmaProva')) document.getElementById('filtroTurmaProva').value = '';
+                if (document.getElementById('filtroStatusProva')) document.getElementById('filtroStatusProva').value = '';
+                this.loadProvas();
+            }
+            carregarProvas() { this.loadProvas(); }
+        }
+        
+        // Inicializar
+        const setorPedagogico = new SetorPedagogico();
+        window.setorPedagogico = setorPedagogico;
+    </script>
+    
+    <!-- Acessibilidade -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    
+    <!-- Chatbot -->
+    <script src="js/chatbot-frontend.js"></script>
+
+    <script>
+    // ============================================
+    // PULL-TO-REFRESH - MENOS SENSÍVEL (CORRIGIDO)
+    // ============================================
+
+    let touchStartY = 0;
+    let touchCurrentY = 0;
+    let isPulling = false;
+    const PULL_THRESHOLD = 600; // AUMENTADO para 200px (bem menos sensível)
+    const TOP_TOLERANCE = 100;    // Tolerância maior para considerar "topo"
+
+    document.addEventListener('touchstart', function(e) {
+        // Só ativa se estiver no topo da página (com tolerância)
+        if (window.scrollY <= TOP_TOLERANCE) {
+            touchStartY = e.touches[0].clientY;
+            isPulling = true;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+        if (!isPulling) return;
+        
+        touchCurrentY = e.touches[0].clientY;
+        const pullDistance = touchCurrentY - touchStartY;
+        
+        // Só considera movimento para BAIXO
+        if (pullDistance > 0) {
+            // NÃO bloqueia o scroll! (removido e.preventDefault)
+            
+            // Mostrar indicador visual apenas se passar de 50px
+            if (pullDistance > 50) {
+                mostrarIndicadorPull(pullDistance);
+            }
+            
+            // Se passou do limite MUITO MAIOR, atualiza
+            if (pullDistance > PULL_THRESHOLD) {
+                // Agora sim bloqueia para não dar conflito
+                e.preventDefault();
+                atualizarPagina();
+            }
+        }
+    }, { passive: true }); // MUDADO para passive: true (não bloqueia)
+
+    document.addEventListener('touchend', function(e) {
+        if (!isPulling) return;
+        
+        const pullDistance = touchCurrentY - touchStartY;
+        
+        // Se não passou do limite, apenas esconde o indicador
+        if (pullDistance < PULL_THRESHOLD) {
+            esconderIndicadorPull();
+        }
+        
+        isPulling = false;
+        touchStartY = 0;
+        touchCurrentY = 0;
+    }, { passive: true });
+
+    // Função para atualizar a página
+    function atualizarPagina() {
+        // Mostrar mensagem
+        mostrarMensagem('Atualizando página...');
+        
+        // Efeito visual
+        document.body.style.opacity = '0.7';
+        document.body.style.transition = 'opacity 0.3s';
+        
+        // Recarregar a página
+        setTimeout(() => {
+            location.reload();
+        }, 500);
+    }
+
+    // Indicador visual simplificado
+    function mostrarIndicadorPull(distancia) {
+        let indicador = document.getElementById('pull-indicator');
+        
+        if (!indicador) {
+            indicador = document.createElement('div');
+            indicador.id = 'pull-indicator';
+            indicador.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: #4f46e5;
+                color: white;
+                text-align: center;
+                padding: 10px;
+                font-size: 14px;
+                z-index: 9999;
+                transform: translateY(-100%);
+                transition: transform 0.2s;
+            `;
+            indicador.innerHTML = '↓ Solte para atualizar';
+            document.body.appendChild(indicador);
+        }
+        
+        // Mostrar conforme a distância
+        if (distancia > 50) {
+            indicador.style.transform = 'translateY(0)';
+        }
+    }
+
+    function esconderIndicadorPull() {
+        const indicador = document.getElementById('pull-indicator');
+        if (indicador) {
+            indicador.style.transform = 'translateY(-100%)';
+        }
+    }
+
+    function mostrarMensagem(texto) {
+        const msg = document.createElement('div');
+        msg.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #10b981;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-weight: bold;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        `;
+        msg.textContent = texto;
+        document.body.appendChild(msg);
+        
+        setTimeout(() => msg.remove(), 1500);
+    }
+
+    </script>
+
+    <script>
+// ============================================
+// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+// ============================================
+
+(function() {
+    // Só ativar em telas menores que 768px
+    if (window.innerWidth > 768) {
+        console.log('📐 Desktop detectado - escalonamento desativado');
+        return;
+    }
+    
+    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+    
+    // Função para calcular a escala baseada na largura (apenas mobile)
+    function calcularEscalaMobile() {
+        const width = window.innerWidth;
+        
+        // Largura de referência para mobile (768px)
+        const baseWidth = 768;
+        
+        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
+        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+        
+        // Ajustes específicos para faixas de tamanho
+        if (width <= 320) escala = 0.55;
+        else if (width <= 360) escala = 0.6;
+        else if (width <= 400) escala = 0.65;
+        else if (width <= 500) escala = 0.75;
+        else if (width <= 600) escala = 0.85;
+        else if (width <= 700) escala = 0.95;
+        else escala = 1;
+        
+        return escala;
+    }
+    
+    // Função para aplicar a escala
+    function aplicarEscalaMobile() {
+        // Só aplicar se ainda estiver em mobile
+        if (window.innerWidth > 768) return;
+        
+        const escala = calcularEscalaMobile();
+        
+        // Atualizar variável CSS
+        document.documentElement.style.setProperty('--scale-ratio', escala);
+        document.documentElement.style.setProperty('--current-width', window.innerWidth);
+        
+        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+    }
+    
+    // Aplicar inicial
+    aplicarEscalaMobile();
+    
+    // Aplicar ao redimensionar (com debounce)
+    let timeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            // Verificar se ainda está em mobile
+            if (window.innerWidth <= 768) {
+                aplicarEscalaMobile();
+            } else {
+                // Se passou para desktop, resetar escala
+                document.documentElement.style.setProperty('--scale-ratio', '1');
+                console.log('📐 Modo desktop - escala resetada');
+            }
+        }, 100);
+    });
+    
+    // Também aplicar quando orientação mudar
+    window.addEventListener('orientationchange', function() {
+        setTimeout(() => {
+            if (window.innerWidth <= 768) {
+                aplicarEscalaMobile();
+            }
+        }, 200);
+    });
+    
+    console.log('✅ Sistema de escalonamento mobile ativo!');
+    
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ Service Worker ativo'))
+            .catch(err => console.log('❌ Erro:', err));
+    });
+}
+
+window.addEventListener('online', () => console.log('🌐 Online'));
+window.addEventListener('offline', () => console.log('📴 Offline'));
+</script>
+
+</body>
+</html>

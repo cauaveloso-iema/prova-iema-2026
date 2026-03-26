@@ -579,6 +579,22 @@ const verificarPermissaoSuperAdmin = async (req, res, next) => {
     }
 };
 
+// ============ MIDDLEWARE PARA VERIFICAR PERMISSÕES SETOR PEDAGOGICO ============
+const verificarPermissaoSetorPedagogico = (req, res, next) => {
+    const allowedRoles = ['setor_pedagogico', 'admin', 'super_admin'];
+    
+    if (!allowedRoles.includes(req.userRole)) {
+        return res.status(403).json({
+            success: false,
+            error: 'Acesso negado. Apenas o Setor Pedagógico pode acessar esta área.'
+        });
+    }
+    
+    // Marcar no req que é do setor pedagógico (útil para filtros)
+    req.isSetorPedagogico = true;
+    next();
+};
+
 // ============================================================================
 // CONFIGURAÇÃO DE SESSÃO
 // ============================================================================
@@ -1703,19 +1719,20 @@ app.post('/api/auth/login', async (req, res) => {
           );
           
           // Definir redirecionamento
-          let redirectTo = '';
           if (user.forcePasswordChange) {
-            redirectTo = '/trocar-senha.html';
+              redirectTo = '/trocar-senha.html';
           } else if (user.role === 'super_admin') {
-            redirectTo = '/admin.html';
+              redirectTo = '/admin.html';
           } else if (user.role === 'admin') {
-            redirectTo = '/admin-simples.html';
+              redirectTo = '/admin-simples.html';
           } else if (user.role === 'professor') {
-            redirectTo = '/index.html';
+              redirectTo = '/index.html';
+          } else if (user.role === 'setor_pedagogico') {
+              redirectTo = '/setor-pedagogico.html';  // NOVA PÁGINA
           } else if (user.role === 'aluno') {
-            redirectTo = '/aluno.html';
+              redirectTo = '/aluno.html';
           } else {
-            redirectTo = '/login.html';
+              redirectTo = '/login.html';
           }
           
           console.log(`✅ 2FA verificado via ${motivo} para ${user.email}`);
@@ -1910,17 +1927,19 @@ app.post('/api/auth/login', async (req, res) => {
     
     let redirectTo = '';
     if (user.forcePasswordChange) {
-      redirectTo = '/trocar-senha.html';
+        redirectTo = '/trocar-senha.html';
     } else if (user.role === 'super_admin') {
-      redirectTo = '/admin.html';
+        redirectTo = '/admin.html';
     } else if (user.role === 'admin') {
-      redirectTo = '/admin-simples.html';
+        redirectTo = '/admin-simples.html';
     } else if (user.role === 'professor') {
-      redirectTo = '/index.html';
+        redirectTo = '/index.html';
+    } else if (user.role === 'setor_pedagogico') {
+        redirectTo = '/setor-pedagogico.html';  // NOVA PÁGINA
     } else if (user.role === 'aluno') {
-      redirectTo = '/aluno.html';
+        redirectTo = '/aluno.html';
     } else {
-      redirectTo = '/login.html';
+        redirectTo = '/login.html';
     }
     
     res.json({
@@ -2760,19 +2779,20 @@ app.post('/api/auth/2fa/validate-totp', authenticateToken, async (req, res) => {
         );
 
         // Definir redirecionamento
-        let redirectTo = '';
         if (user.forcePasswordChange) {
-          redirectTo = '/trocar-senha.html';
+            redirectTo = '/trocar-senha.html';
         } else if (user.role === 'super_admin') {
-          redirectTo = '/admin.html'; // Super Admin → admin.html
+            redirectTo = '/admin.html';
         } else if (user.role === 'admin') {
-          redirectTo = '/admin-simples.html'; // Admin normal → admin-simples.html
+            redirectTo = '/admin-simples.html';
         } else if (user.role === 'professor') {
-          redirectTo = '/index.html';
+            redirectTo = '/index.html';
+        } else if (user.role === 'setor_pedagogico') {
+            redirectTo = '/setor-pedagogico.html';  // NOVA PÁGINA
         } else if (user.role === 'aluno') {
-          redirectTo = '/aluno.html';
+            redirectTo = '/aluno.html';
         } else {
-          redirectTo = '/login.html';
+            redirectTo = '/login.html';
         }
 
         res.json({
@@ -18224,6 +18244,455 @@ app.get('/api/perfil/publico/:id', authenticateToken, async (req, res) => {
         });
     }
 });
+
+// ============================================================================
+// ROTAS PARA O SETOR PEDAGÓGICO (AEE, PSICOPEDAGOGO)
+// ============================================================================
+
+// 1. Dashboard do setor pedagógico
+app.get('/api/setor-pedagogico/dashboard', authenticateToken, verificarPermissaoSetorPedagogico, async (req, res) => {
+    try {
+        console.log(`📋 Setor Pedagógico ${req.userId} acessando dashboard`);
+        
+        // Estatísticas gerais
+        const [totalAlunos, totalAlunosComAcessibilidade, totalProfessores, totalTurmas, totalProvas] = await Promise.all([
+            User.countDocuments({ role: 'aluno', ativo: true }),
+            User.countDocuments({ role: 'aluno', precisaAcessibilidade: true, ativo: true }),
+            User.countDocuments({ role: 'professor', ativo: true }),
+            Turma.countDocuments({ ativa: true }),
+            Prova.countDocuments({ publicada: true })
+        ]);
+        
+        // Proporção de alunos com acessibilidade
+        const taxaAcessibilidade = totalAlunos > 0 ? ((totalAlunosComAcessibilidade / totalAlunos) * 100).toFixed(1) : 0;
+        
+        // Distribuição por tipo de condição
+        const distribuicaoCondicoes = await User.aggregate([
+            { $match: { role: 'aluno', precisaAcessibilidade: true, ativo: true } },
+            { $group: { _id: '$condicaoAcessibilidade', count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]);
+        
+        res.json({
+            success: true,
+            dashboard: {
+                totalAlunos,
+                totalAlunosComAcessibilidade,
+                taxaAcessibilidade: parseFloat(taxaAcessibilidade),
+                totalProfessores,
+                totalTurmas,
+                totalProvas,
+                distribuicaoCondicoes: distribuicaoCondicoes.map(c => ({
+                    condicao: c._id || 'não especificada',
+                    label: obterLabelCondicao(c._id),
+                    count: c.count
+                }))
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro no dashboard do setor pedagógico:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 2. Listar alunos com necessidades de acessibilidade (dados para AEE)
+app.get('/api/setor-pedagogico/alunos-acessibilidade', authenticateToken, verificarPermissaoSetorPedagogico, async (req, res) => {
+    try {
+        const { condicao, turma, curso, page = 1, limit = 20 } = req.query;
+        
+        let query = { 
+            role: 'aluno', 
+            precisaAcessibilidade: true,
+            ativo: true 
+        };
+        
+        if (condicao && condicao !== 'todos') {
+            query.condicaoAcessibilidade = condicao;
+        }
+        
+        if (turma) {
+            query.turma = turma;
+        }
+        
+        if (curso) {
+            query.curso = curso;
+        }
+        
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [alunos, total] = await Promise.all([
+            User.find(query)
+                .select('nome email matricula turma curso condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor')
+                .sort({ nome: 1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            User.countDocuments(query)
+        ]);
+        
+        // Buscar turmas para filtro
+        const turmas = await Turma.find({ ativa: true }).select('nome codigo').lean();
+        
+        // Buscar cursos distintos
+        const cursos = await User.distinct('curso', { role: 'aluno', curso: { $ne: null } });
+        
+        const alunosFormatados = alunos.map(aluno => ({
+            id: aluno._id,
+            nome: aluno.nome,
+            email: aluno.email,
+            matricula: aluno.matricula || 'Não informada',
+            turma: aluno.turma,
+            curso: aluno.curso,
+            condicao: {
+                tipo: aluno.condicaoAcessibilidade,
+                label: obterLabelCondicao(aluno.condicaoAcessibilidade),
+                descricao: aluno.outraCondicao || null
+            },
+            dataSolicitacao: aluno.dataSolicitacaoAcessibilidade,
+            status: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
+        }));
+        
+        res.json({
+            success: true,
+            alunos: alunosFormatados,
+            total,
+            paginacao: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / parseInt(limit))
+            },
+            filtros: {
+                condicoes: obterListaCondicoes(),
+                turmas: turmas.map(t => ({ id: t._id, nome: t.nome, codigo: t.codigo })),
+                cursos: cursos.filter(c => c)
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar alunos com acessibilidade:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 3. Detalhes de um aluno específico (para AEE/psicopedagogo)
+app.get('/api/setor-pedagogico/aluno/:id', authenticateToken, verificarPermissaoSetorPedagogico, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const aluno = await User.findOne({ _id: id, role: 'aluno' })
+            .select('nome email matricula turma curso condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor preferenciasNotificacao')
+            .lean();
+        
+        if (!aluno) {
+            return res.status(404).json({
+                success: false,
+                error: 'Aluno não encontrado'
+            });
+        }
+        
+        // Buscar provas realizadas pelo aluno (apenas para ver desempenho)
+        const resultados = await Resultado.find({ userId: id })
+            .populate('provaId', 'titulo tipoProva adaptada')
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .lean();
+        
+        const provasRealizadas = resultados.map(r => ({
+            provaId: r.provaId?._id,
+            provaTitulo: r.provaId?.titulo,
+            tipoProva: r.provaId?.tipoProva,
+            adaptada: r.provaId?.adaptada,
+            nota: r.nota,
+            dataRealizacao: r.createdAt,
+            notaLiberada: r.notaLiberada
+        }));
+        
+        res.json({
+            success: true,
+            aluno: {
+                id: aluno._id,
+                nome: aluno.nome,
+                email: aluno.email,
+                matricula: aluno.matricula,
+                turma: aluno.turma,
+                curso: aluno.curso,
+                acessibilidade: {
+                    precisa: true,
+                    condicao: {
+                        tipo: aluno.condicaoAcessibilidade,
+                        label: obterLabelCondicao(aluno.condicaoAcessibilidade),
+                        detalhes: aluno.outraCondicao
+                    },
+                    dataSolicitacao: aluno.dataSolicitacaoAcessibilidade,
+                    status: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
+                },
+                preferenciasNotificacao: aluno.preferenciasNotificacao,
+                provasRealizadas
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar detalhes do aluno:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 4. Listar provas (com foco em provas adaptadas e impressão)
+app.get('/api/setor-pedagogico/provas', authenticateToken, verificarPermissaoSetorPedagogico, async (req, res) => {
+    try {
+        const { tipo, turma, status, page = 1, limit = 20 } = req.query;
+        
+        let query = { publicada: true };
+        
+        if (tipo === 'adaptada') {
+            query.$or = [
+                { tipoProva: 'adaptada' },
+                { adaptada: true },
+                { alternativas: 3 }
+            ];
+        } else if (tipo === 'normal') {
+            query.tipoProva = { $ne: 'adaptada' };
+            query.adaptada = { $ne: true };
+        }
+        
+        if (turma) {
+            query.turmaId = turma;
+        }
+        
+        if (status === 'ativa') {
+            query.status = 'ativa';
+        } else if (status === 'encerrada') {
+            query.dataLimite = { $lt: new Date() };
+        }
+        
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [provas, total] = await Promise.all([
+            Prova.find(query)
+                .populate('turmaId', 'nome disciplina codigo')
+                .populate('userId', 'nome')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            Prova.countDocuments(query)
+        ]);
+        
+        // Buscar turmas para filtro
+        const turmas = await Turma.find({ ativa: true }).select('nome disciplina').lean();
+        
+        const provasFormatadas = provas.map(prova => {
+            const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
+            
+            return {
+                id: prova._id,
+                titulo: prova.titulo,
+                codigo: prova.codigo,
+                tipo: isAdaptada ? 'adaptada' : (prova.tipoProva || 'normal'),
+                alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
+                quantidadeQuestoes: prova.questoes?.length || 0,
+                turma: prova.turmaId ? {
+                    id: prova.turmaId._id,
+                    nome: prova.turmaId.nome,
+                    disciplina: prova.turmaId.disciplina
+                } : null,
+                professor: prova.userId?.nome || 'Professor',
+                dataCriacao: prova.createdAt,
+                dataLimite: prova.dataLimite,
+                horarioInicio: prova.horarioInicio,
+                horarioTermino: prova.horarioTermino,
+                publicada: prova.publicada,
+                status: prova.status
+            };
+        });
+        
+        res.json({
+            success: true,
+            provas: provasFormatadas,
+            total,
+            paginacao: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / parseInt(limit))
+            },
+            filtros: {
+                turmas: turmas.map(t => ({ id: t._id, nome: t.nome, disciplina: t.disciplina }))
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar provas:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 5. Visualizar prova completa (para impressão)
+app.get('/api/setor-pedagogico/provas/:id/visualizar', authenticateToken, verificarPermissaoSetorPedagogico, async (req, res) => {
+    try {
+        const provaId = req.params.id;
+        
+        const prova = await Prova.findById(provaId)
+            .populate('turmaId', 'nome disciplina codigo')
+            .populate('userId', 'nome email')
+            .lean();
+        
+        if (!prova) {
+            return res.status(404).json({
+                success: false,
+                error: 'Prova não encontrada'
+            });
+        }
+        
+        const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
+        
+        // Formatar questões para impressão
+        const questoes = prova.questoes.map((q, index) => ({
+            numero: index + 1,
+            pergunta: q.pergunta,
+            opcoes: q.opcoes,
+            respostaCorreta: isAdaptada ? null : String.fromCharCode(65 + q.respostaCorreta),
+            explicacao: q.explicacao
+        }));
+        
+        res.json({
+            success: true,
+            prova: {
+                id: prova._id,
+                titulo: prova.titulo,
+                codigo: prova.codigo,
+                conteudo: prova.conteudo,
+                tipo: isAdaptada ? 'adaptada' : (prova.tipoProva || 'normal'),
+                alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
+                quantidadeQuestoes: prova.questoes.length,
+                turma: prova.turmaId ? {
+                    nome: prova.turmaId.nome,
+                    disciplina: prova.turmaId.disciplina,
+                    codigo: prova.turmaId.codigo
+                } : null,
+                professor: prova.userId?.nome || 'Professor',
+                dataCriacao: prova.createdAt,
+                dataLimite: prova.dataLimite,
+                duracaoMinutos: prova.duracaoMinutos,
+                questoes: questoes,
+                // Para impressão em PDF
+                configuracaoImpressao: {
+                    mostrarGabarito: false, // Não mostrar gabarito na impressão para alunos
+                    mostrarRespostas: false,
+                    cabecalho: `Prova ${isAdaptada ? 'Adaptada' : 'Normal'} - ${prova.titulo}`,
+                    rodape: `Código: ${prova.codigo} | Turma: ${prova.turmaId?.nome || 'Não especificada'}`
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao visualizar prova:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 6. Gerar relatório de alunos com acessibilidade (para impressão/PDF)
+app.get('/api/setor-pedagogico/relatorio/acessibilidade', authenticateToken, verificarPermissaoSetorPedagogico, async (req, res) => {
+    try {
+        const { turma, curso, condicao, formato = 'json' } = req.query;
+        
+        let query = { 
+            role: 'aluno', 
+            precisaAcessibilidade: true,
+            ativo: true 
+        };
+        
+        if (condicao && condicao !== 'todos') {
+            query.condicaoAcessibilidade = condicao;
+        }
+        
+        if (turma) {
+            query.turma = turma;
+        }
+        
+        if (curso) {
+            query.curso = curso;
+        }
+        
+        const alunos = await User.find(query)
+            .select('nome email matricula turma curso condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
+            .sort({ turma: 1, nome: 1 })
+            .lean();
+        
+        // Agrupar por turma
+        const porTurma = {};
+        alunos.forEach(aluno => {
+            const turmaNome = aluno.turma || 'Sem turma';
+            if (!porTurma[turmaNome]) {
+                porTurma[turmaNome] = [];
+            }
+            porTurma[turmaNome].push({
+                nome: aluno.nome,
+                matricula: aluno.matricula,
+                condicao: obterLabelCondicao(aluno.condicaoAcessibilidade),
+                detalhes: aluno.outraCondicao,
+                dataSolicitacao: aluno.dataSolicitacaoAcessibilidade
+            });
+        });
+        
+        // Estatísticas por condição
+        const porCondicao = {};
+        alunos.forEach(aluno => {
+            const cond = aluno.condicaoAcessibilidade || 'nao_especificada';
+            const label = obterLabelCondicao(cond);
+            if (!porCondicao[label]) {
+                porCondicao[label] = 0;
+            }
+            porCondicao[label]++;
+        });
+        
+        res.json({
+            success: true,
+            relatorio: {
+                dataGeracao: new Date(),
+                totalAlunos: alunos.length,
+                porCondicao: Object.entries(porCondicao).map(([cond, count]) => ({ condicao: cond, total: count })),
+                porTurma: Object.entries(porTurma).map(([turmaNome, alunosLista]) => ({
+                    turma: turmaNome,
+                    total: alunosLista.length,
+                    alunos: alunosLista
+                }))
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao gerar relatório:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Funções auxiliares para labels
+function obterLabelCondicao(condicao) {
+    const labels = {
+        'visual': 'Deficiência Visual',
+        'auditiva': 'Deficiência Auditiva',
+        'motora': 'Deficiência Motora',
+        'intelectual': 'Deficiência Intelectual',
+        'dislexia': 'Dislexia',
+        'tdah': 'TDAH',
+        'outra': 'Outra Condição',
+        null: 'Não especificada',
+        'nao_especificada': 'Não especificada'
+    };
+    return labels[condicao] || 'Condição Especial';
+}
+
+function obterListaCondicoes() {
+    return [
+        { valor: 'visual', label: 'Deficiência Visual' },
+        { valor: 'auditiva', label: 'Deficiência Auditiva' },
+        { valor: 'motora', label: 'Deficiência Motora' },
+        { valor: 'intelectual', label: 'Deficiência Intelectual' },
+        { valor: 'dislexia', label: 'Dislexia' },
+        { valor: 'tdah', label: 'TDAH' },
+        { valor: 'outra', label: 'Outra Condição' }
+    ];
+}
 
 
 // ============================================================================

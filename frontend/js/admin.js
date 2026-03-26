@@ -3067,6 +3067,29 @@ class AdminPanel {
                     .header-actions { width: 100%; }
                     .btn-header { flex: 1; }
                 }
+                /* Role badge para Setor Pedagógico */
+                .role-badge.setor_pedagogico {
+                    background: linear-gradient(135deg, #a855f7, #7c3aed);
+                    color: white;
+                }
+                .role-badge.setor_pedagogico i {
+                    color: white;
+                    margin-right: 4px;
+                }
+
+                /* Badge de acessibilidade */
+                .badge-acessibilidade {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 20px;
+                    height: 20px;
+                    background: #3b82f6;
+                    color: white;
+                    border-radius: 50%;
+                    font-size: 10px;
+                    margin-left: 5px;
+                }
             </style>
         `;
     }
@@ -3203,8 +3226,10 @@ class AdminPanel {
         }
 
         return usuarios.map(user => {
-            // Role badge
+            // 🔥 DECLARAR roleBadge AQUI (FORA DOS CONDICIONAIS)
             let roleBadge = '';
+            
+            // Determinar o badge baseado no role
             if (user.role === 'aluno') {
                 roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
             } else if (user.role === 'professor') {
@@ -3213,6 +3238,8 @@ class AdminPanel {
                 roleBadge = '<span class="role-badge admin"><i class="fas fa-user-shield"></i> Admin</span>';
             } else if (user.role === 'super_admin') {
                 roleBadge = '<span class="role-badge super_admin"><i class="fas fa-crown"></i> Super Admin</span>';
+            } else if (user.role === 'setor_pedagogico') {
+                roleBadge = '<span class="role-badge setor_pedagogico"><i class="fas fa-chalkboard-user"></i> Setor Pedagógico</span>';
             } else {
                 roleBadge = `<span class="role-badge">${user.role || 'Desconhecido'}</span>`;
             }
@@ -3241,6 +3268,7 @@ class AdminPanel {
                         <strong>${user.nome || 'N/A'}</strong>
                         ${acessibilidadeBadge}
                         ${user.role === 'aluno' && user.turma ? `<div style="font-size: 11px; color: #6b7280;">Turma: ${user.turma}</div>` : ''}
+                        ${user.role === 'setor_pedagogico' && user.atribuicoes ? `<div style="font-size: 11px; color: #6b7280;">Atribuições: ${user.atribuicoes.substring(0, 30)}...</div>` : ''}
                     </td>
                     <td>${user.email || '-'}</td>
                     <td>${cpfFormatado}</td>
@@ -3250,7 +3278,7 @@ class AdminPanel {
                     <td>${statusBadge}</td>
                     <td>${new Date(user.createdAt).toLocaleDateString('pt-BR')}</td>
                     <td class="action-buttons">
-                        <!-- 🔥 BOTÃO VISUALIZAR PERFIL (OLHO) -->
+                        <!-- Botão Visualizar Perfil -->
                         <button class="btn-icon" onclick="admin.visualizarPerfilUsuario('${user._id}')" title="Visualizar Perfil Completo">
                             <i class="fas fa-eye"></i>
                         </button>
@@ -3298,11 +3326,15 @@ class AdminPanel {
             
             const user = data.user;
             
-            // Log para verificar se a foto veio
-            console.log('📸 Foto do usuário:', user.fotoPerfil ? 'EXISTE' : 'NÃO EXISTE');
-            if (user.fotoPerfil) {
-                console.log('   Tamanho da foto:', user.fotoPerfil.length, 'caracteres');
-            }
+            console.log('📸 Dados do usuário recebidos:', {
+                id: user._id,
+                nome: user.nome,
+                role: user.role,
+                fotoPerfil: user.fotoPerfil ? 'EXISTE' : 'NÃO',
+                endereco: user.endereco,
+                cidade: user.cidade,
+                atribuicoes: user.atribuicoes
+            });
             
             // Formatar data de cadastro
             const dataCadastro = user.createdAt ? 
@@ -3365,6 +3397,11 @@ class AdminPanel {
                     roleColor = '#8b5cf6';
                     roleBg = '#ede9fe';
                     break;
+                case 'setor_pedagogico':
+                    roleIcon = '👩‍🏫';
+                    roleColor = '#a855f7';
+                    roleBg = '#f3e8ff';
+                    break;
                 default:
                     roleIcon = '👤';
                     roleColor = '#6b7280';
@@ -3373,14 +3410,14 @@ class AdminPanel {
             
             const modalBody = document.getElementById('modalBody');
             
-            // 🔥 CORREÇÃO: Mostrar a foto se existir, senão mostrar as iniciais
+            // Avatar HTML
             const avatarHtml = user.fotoPerfil ? 
                 `<img src="${user.fotoPerfil}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">` :
                 `<span style="font-size: 48px; font-weight: bold; color: ${roleColor};">${iniciais}</span>`;
             
             modalBody.innerHTML = `
                 <div style="padding: 0; max-height: 85vh; overflow-y: auto;">
-                    <!-- HEADER COM AVATAR (AGORA COM FOTO!) -->
+                    <!-- HEADER COM AVATAR -->
                     <div style="background: linear-gradient(135deg, ${roleColor}, ${roleColor}cc); padding: 30px; color: white; text-align: center; position: sticky; top: 0; z-index: 10;">
                         <div style="
                             width: 100px;
@@ -3402,7 +3439,8 @@ class AdminPanel {
                             <span style="font-size: 18px;">${roleIcon}</span>
                             <span style="font-weight: 600;">${user.role === 'super_admin' ? 'Super Administrador' : 
                                     user.role === 'admin' ? 'Administrador' : 
-                                    user.role === 'professor' ? 'Professor' : 'Aluno'}</span>
+                                    user.role === 'professor' ? 'Professor' : 
+                                    user.role === 'setor_pedagogico' ? 'Setor Pedagógico' : 'Aluno'}</span>
                         </div>
                         <div style="margin-top: 10px;">
                             <span class="status-badge ${user.ativo ? 'active' : 'inactive'}" style="background: rgba(255,255,255,0.2); color: white; border: none;">
@@ -3452,7 +3490,7 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- SEÇÃO 2: ENDEREÇO (se tiver algum dado) -->
+                        <!-- SEÇÃO 2: ENDEREÇO -->
                         ${user.endereco || user.cidade || user.estado ? `
                         <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                             <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
@@ -3495,8 +3533,13 @@ class AdminPanel {
                         <!-- SEÇÃO 3: DADOS ACADÊMICOS/PROFISSIONAIS -->
                         <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                             <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas ${user.role === 'aluno' ? 'fa-graduation-cap' : user.role === 'professor' ? 'fa-chalkboard-teacher' : 'fa-user-tie'}" style="color: ${roleColor};"></i>
-                                ${user.role === 'aluno' ? 'Dados Acadêmicos' : user.role === 'professor' ? 'Dados Profissionais' : 'Dados Administrativos'}
+                                <i class="fas ${user.role === 'aluno' ? 'fa-graduation-cap' : 
+                                        user.role === 'professor' ? 'fa-chalkboard-teacher' : 
+                                        user.role === 'setor_pedagogico' ? 'fa-chalkboard-user' : 'fa-user-tie'}" 
+                                style="color: ${roleColor};"></i>
+                                ${user.role === 'aluno' ? 'Dados Acadêmicos' : 
+                                user.role === 'professor' ? 'Dados Profissionais' : 
+                                user.role === 'setor_pedagogico' ? 'Dados do Setor Pedagógico' : 'Dados Administrativos'}
                             </h3>
                             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
                                 ${user.role === 'aluno' ? `
@@ -3519,13 +3562,7 @@ class AdminPanel {
                                 ` : user.role === 'professor' ? `
                                     <div>
                                         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Eixo</div>
-                                        <div style="font-weight: 600; color: #0f172a;">${user.eixo ? (user.eixo === 'natureza' ? '🌿 Natureza' : 
-                                                user.eixo === 'humanas' ? '📜 Humanas' : 
-                                                user.eixo === 'linguagens' ? '📚 Linguagens' : 
-                                                user.eixo === 'desenvolvimento' ? '💻 Desenvolvimento' : 
-                                                user.eixo === 'gestao' ? '📊 Gestão' : 
-                                                user.eixo === 'turismo' ? '✈️ Turismo' : 
-                                                user.eixo === 'ambiente' ? '🌱 Ambiente' : user.eixo) : '—'}</div>
+                                        <div style="font-weight: 600; color: #0f172a;">${this.getEixoLabel(user.eixo)}</div>
                                     </div>
                                     <div>
                                         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Departamento</div>
@@ -3538,6 +3575,21 @@ class AdminPanel {
                                     <div>
                                         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Matrícula</div>
                                         <div style="font-family: monospace;">${user.matricula || '—'}</div>
+                                    </div>
+                                ` : user.role === 'setor_pedagogico' ? `
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Departamento</div>
+                                        <div style="font-weight: 600; color: #0f172a;">${user.departamento || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Matrícula</div>
+                                        <div style="font-family: monospace;">${user.matricula || '—'}</div>
+                                    </div>
+                                    <div style="grid-column: span 2;">
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Atribuições</div>
+                                        <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; margin-top: 4px;">
+                                            ${user.atribuicoes || '—'}
+                                        </div>
                                     </div>
                                 ` : `
                                     <div>
@@ -3552,7 +3604,7 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- SEÇÃO 4: FOTO DE PERFIL (se houver) -->
+                        <!-- SEÇÃO 4: FOTO DE PERFIL -->
                         ${user.fotoPerfil ? `
                         <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                             <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
@@ -3595,6 +3647,12 @@ class AdminPanel {
                                     <div>
                                         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Condição de Acessibilidade</div>
                                         <div>${user.condicaoAcessibilidade || 'Não especificada'} ${user.outraCondicao ? `- ${user.outraCondicao}` : ''}</div>
+                                    </div>
+                                ` : ''}
+                                ${user.atribuicoes ? `
+                                    <div style="grid-column: span 2;">
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Atribuições Pedagógicas</div>
+                                        <div style="background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.8rem;">${user.atribuicoes}</div>
                                     </div>
                                 ` : ''}
                             </div>
@@ -3699,15 +3757,22 @@ class AdminPanel {
         // Buscar usuário se tiver ID
         let usuario = null;
         if (usuarioId) {
+            // 🔥 CORREÇÃO: Usar this.usuarios para encontrar
             usuario = this.usuarios.find(u => u._id === usuarioId || u.id === usuarioId);
             console.log('👤 Usuário encontrado:', usuario);
+            
+            // Se não encontrar na lista local, buscar da API
+            if (!usuario) {
+                this.buscarUsuarioParaEdicao(usuarioId);
+                return;
+            }
         }
 
         // Extrair valores com segurança
         const nome = usuario?.nome || '';
         const email = usuario?.email || '';
         const role = usuario?.role || 'aluno';
-        const ativo = usuario?.ativo !== false; // default true
+        const ativo = usuario?.ativo !== false;
         const id = usuario?._id || usuario?.id || '';
         const cpf = usuario?.cpf || '';
         const telefone = usuario?.telefone || '';
@@ -3718,6 +3783,9 @@ class AdminPanel {
         const departamento = usuario?.departamento || '';
         const titulacao = usuario?.titulacao || '';
         const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
+        
+        // 🔥 CAMPOS DO SETOR PEDAGÓGICO
+        const atribuicoes = usuario?.atribuicoes || '';
 
         // Escapar valores para evitar problemas com aspas
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -3745,6 +3813,7 @@ class AdminPanel {
                             <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professor</option>
                             <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
                             <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option>
+                            <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>Setor Pedagógico</option>
                         </select>
                     </div>
                     
@@ -3826,6 +3895,28 @@ class AdminPanel {
                     </div>
                 </div>
                 
+                <!-- 🔥 Campos específicos para Setor Pedagógico -->
+                <div id="setorPedagogicoFields" class="role-specific" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-tasks"></i> Atribuições (AEE, Sala de Recursos, etc)</label>
+                        <textarea id="userAtribuicoes" class="form-control" rows="2" placeholder="Ex: Acompanhamento AEE, Sala de Recursos Multifuncionais, Atendimento Psicopedagógico...">${escapeStr(atribuicoes)}</textarea>
+                    </div>
+                    <div class="info-card" style="background: #f3e8ff; margin-top: 10px; padding: 12px; border-radius: 8px;">
+                        <i class="fas fa-info-circle" style="color: #a855f7;"></i>
+                        <span style="margin-left: 8px;">O Setor Pedagógico tem acesso ao dashboard AEE e pode acompanhar alunos com necessidades especiais.</span>
+                    </div>
+                </div>
+                
                 ${!id ? `
                 <div class="form-group">
                     <label><i class="fas fa-key"></i> Senha Temporária</label>
@@ -3851,26 +3942,53 @@ class AdminPanel {
             '<i class="fas fa-edit"></i> Editar Usuário' : 
             '<i class="fas fa-user-plus"></i> Novo Usuário';
         
-        // 🔥 CORREÇÃO: Usar setTimeout para garantir que os elementos existam
+        // Configurar botão salvar
         setTimeout(() => {
-            // Configurar botão salvar
             const modalSaveBtn = document.getElementById('modalSaveBtn');
             if (modalSaveBtn) {
                 modalSaveBtn.onclick = () => this.salvarUsuario(id);
-            } else {
-                console.error('❌ Botão modalSaveBtn não encontrado');
             }
             
             // Configurar toggle dos campos específicos
             const roleSelect = document.getElementById('userRole');
             if (roleSelect) {
                 roleSelect.addEventListener('change', () => this.toggleCamposRole());
-            } else {
-                console.error('❌ Campo userRole não encontrado');
             }
-        }, 100); // Pequeno delay para garantir que o DOM foi atualizado
+        }, 100);
         
         this.openModal();
+    }
+
+    async buscarUsuarioParaEdicao(usuarioId) {
+        try {
+            console.log('🔍 Buscando usuário da API:', usuarioId);
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${this.apiBase}/usuarios/${usuarioId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.user) {
+                // Adicionar à lista local
+                if (!this.usuarios) this.usuarios = [];
+                const index = this.usuarios.findIndex(u => u._id === usuarioId);
+                if (index === -1) {
+                    this.usuarios.push(data.user);
+                } else {
+                    this.usuarios[index] = data.user;
+                }
+                
+                // Abrir modal com os dados
+                this.abrirModalUsuario(usuarioId);
+            } else {
+                this.showToast('❌ Usuário não encontrado', 'error');
+            }
+        } catch (error) {
+            console.error('❌ Erro ao buscar usuário:', error);
+            this.showToast('❌ Erro ao carregar dados do usuário', 'error');
+        }
     }
 
     // ============ TOGGLE CAMPOS POR ROLE ============
@@ -3878,12 +3996,16 @@ class AdminPanel {
         const role = document.getElementById('userRole')?.value;
         const alunoFields = document.getElementById('alunoFields');
         const professorFields = document.getElementById('professorFields');
+        const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
         
         if (alunoFields) {
             alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
         }
         if (professorFields) {
             professorFields.style.display = role === 'professor' ? 'block' : 'none';
+        }
+        if (setorPedagogicoFields) {
+            setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
         }
     }
 
@@ -3965,7 +4087,6 @@ class AdminPanel {
             
             const role = document.getElementById('userRole').value;
             
-            // No método salvarUsuario, dentro do objeto dados:
             const dados = {
                 nome: document.getElementById('userNome').value,
                 email: document.getElementById('userEmail').value,
@@ -3973,7 +4094,7 @@ class AdminPanel {
                 telefone: document.getElementById('userTelefone').value.replace(/\D/g, ''),
                 role: role,
                 matricula: document.getElementById('userMatricula').value || undefined,
-                ativo: document.getElementById('userStatus').value === 'true' // <-- ISSO JÁ DEVE EXISTIR
+                ativo: document.getElementById('userStatus').value === 'true'
             };
 
             // Campos específicos por role
@@ -3985,12 +4106,16 @@ class AdminPanel {
                 dados.eixo = document.getElementById('userEixo').value;
                 dados.departamento = document.getElementById('userDepartamento').value || undefined;
                 dados.titulacao = document.getElementById('userTitulacao').value || undefined;
+            } else if (role === 'setor_pedagogico') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             }
 
             // Se for criação (sem ID), adicionar senha
             if (!id) {
                 dados.password = document.getElementById('userPassword').value;
-                dados.forcePasswordChange = true; // Forçar troca de senha no primeiro login
+                dados.forcePasswordChange = true;
             }
 
             console.log('📤 Dados a serem enviados:', dados);
@@ -4012,8 +4137,8 @@ class AdminPanel {
             if (data.success) {
                 this.showToast(id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!', 'success');
                 this.closeModal();
-                this.loadUsuarios(); // Recarregar a lista
-                this.carregarDadosReais(); // Atualizar dashboard
+                this.loadUsuarios();
+                this.carregarDadosReais();
             } else {
                 throw new Error(data.error || 'Erro ao salvar usuário');
             }
