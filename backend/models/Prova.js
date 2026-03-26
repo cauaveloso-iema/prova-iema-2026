@@ -155,6 +155,14 @@ const ProvaSchema = new mongoose.Schema({
     default: null
   },
   
+  // 🔥 🔥 🔥 NOVO CAMPO ADICIONADO 🔥 🔥 🔥
+  enviadaParaAlunos: {
+    type: Boolean,
+    default: false,
+    description: 'Indica se a prova foi efetivamente enviada para os alunos (considerando configuração do admin)'
+  },
+  // ==========================================
+  
   // ========== 🔴 CAMPOS DE ATRIBUIÇÃO DE ALUNOS (ADICIONADOS) ==========
   alunosAtribuidos: [{
     type: mongoose.Schema.Types.ObjectId,

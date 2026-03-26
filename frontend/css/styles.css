@@ -831,21 +831,253 @@ body {
 }
 
 /* Estilos para impressão */
+/* ===== ESTILOS DE IMPRESSÃO MELHORADOS ===== */
 @media print {
-    .btn-voltar-inicio,
-    .btn-imprimir,
-    .btn-tentar-novamente,
-    .botoes-acao {
+    /* Esconder elementos desnecessários na impressão */
+    .no-print,
+    .sidebar,
+    .content-tabs,
+    .content-header,
+    .modal-header,
+    .modal-close,
+    .btn,
+    button:not(.no-print-btn),
+    .prova-actions,
+    .correcao-actions,
+    .navegacao-container,
+    .menu-questoes-rapido,
+    .btn-finalizar-prova,
+    .btn-finalizar-menu {
         display: none !important;
     }
-    
-    .nota-final {
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 12pt;
+        line-height: 1.4;
+        padding: 0;
+        margin: 0;
+        color: #000;
+        background: #fff;
+    }
+
+    .modal, .modal-content {
+        position: static !important;
+        display: block !important;
+        background: none !important;
+        box-shadow: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        overflow: visible !important;
+    }
+
+    .print-container {
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0.5in;
+    }
+
+    /* Cabeçalho com logo */
+    .print-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #000;
+    }
+
+    .print-header-logo {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+
+    .print-logo {
+        width: 80px;
+        height: auto;
+    }
+
+    .print-logo-right {
+        width: 60px;
+        height: auto;
+    }
+
+    .print-header-text {
+        text-align: center;
+        flex: 1;
+    }
+
+    .print-header-text h1 {
+        font-size: 16pt;
+        font-weight: bold;
+        margin: 0;
+    }
+
+    .print-header-text h2 {
+        font-size: 14pt;
+        margin: 5px 0;
+        font-weight: normal;
+    }
+
+    .print-header-text p {
+        font-size: 10pt;
+        margin: 0;
+        color: #555;
+    }
+
+    .print-subheader {
+        margin-top: 10px;
+        font-size: 10pt;
+        font-weight: bold;
+    }
+
+    /* Campos do caderno */
+    .print-campos {
+        margin: 20px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .campo-linha {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .campo-label {
+        font-weight: bold;
+        min-width: 70px;
+    }
+
+    .campo-underline {
+        border-bottom: 1px dotted #000;
+        flex: 1;
+        min-width: 150px;
+        height: 20px;
+    }
+
+    /* Instruções */
+    .print-instrucoes {
+        margin: 20px 0;
+        padding: 12px;
+        background: #f9f9f9;
+        border-left: 3px solid #4f46e5;
+        font-size: 9pt;
+    }
+
+    .print-instrucoes h4 {
+        margin-bottom: 8px;
+        font-size: 10pt;
+    }
+
+    .print-instrucoes ul {
+        margin-left: 20px;
+    }
+
+    .print-instrucoes li {
+        margin-bottom: 3px;
+    }
+
+    /* Informações da prova */
+    .print-prova-info {
+        margin: 20px 0;
+        padding: 12px;
+        border: 1px solid #ddd;
+        background: #fafafa;
+    }
+
+    .print-prova-info h3 {
+        margin: 0 0 10px 0;
+        font-size: 12pt;
+        text-align: center;
+    }
+
+    .print-info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        font-size: 9pt;
+    }
+
+    .info-item {
+        display: flex;
+        gap: 5px;
+    }
+
+    .info-label {
+        font-weight: bold;
+        min-width: 70px;
+    }
+
+    /* Questões */
+    .questao-print {
+        margin-bottom: 25px;
         page-break-inside: avoid;
     }
-    
-    .detalhe-item {
-        page-break-inside: avoid;
-        border: 1px solid #000;
+
+    .questao-numero {
+        font-weight: bold;
+        margin-bottom: 8px;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 3px;
+    }
+
+    .questao-texto {
+        margin-bottom: 12px;
+        margin-left: 10px;
+        line-height: 1.5;
+    }
+
+    .opcao-linha {
+        margin: 6px 0 6px 20px;
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .opcao-letra {
+        min-width: 25px;
+        font-weight: 500;
+    }
+
+    .opcao-texto {
+        flex: 1;
+    }
+
+    .rascunho-area {
+        margin-top: 10px;
+        border-top: 1px dashed #ccc;
+        padding-top: 5px;
+    }
+
+    .rascunho-area small {
+        font-size: 8pt;
+        color: #999;
+    }
+
+    .rascunho-linhas {
+        min-height: 40px;
+    }
+
+    /* Rodapé */
+    .print-footer {
+        margin-top: 40px;
+        text-align: center;
+        font-size: 8pt;
+        color: #666;
+        border-top: 1px solid #ccc;
+        padding-top: 10px;
     }
 }
 

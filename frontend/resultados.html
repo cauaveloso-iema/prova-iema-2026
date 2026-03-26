@@ -891,6 +891,10 @@
                             <i class="fas fa-ban"></i>
                             <span>0 cancelamentos</span>
                         </div>
+                        <div class="meta-item" style="background: linear-gradient(135deg, #f59e0b, #d97706); cursor: pointer;" onclick="abrirModalNotasManuais()">
+                            <i class="fas fa-print"></i>
+                            <span>Notas Impressas</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2528,6 +2532,42 @@
 })();
 </script>
 
+<!-- ========== MODAL PARA NOTAS MANUAIS (PROVAS IMPRESSAS) ========== -->
+<div class="modal" id="modalNotasManuais">
+    <div class="modal-content" style="max-width: 800px; max-height: 85vh; overflow-y: auto;">
+        <div class="modal-header">
+            <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-print" style="color: var(--warning);"></i>
+                Notas de Provas Impressas
+            </h3>
+            <button class="modal-close" onclick="fecharModal('modalNotasManuais')">&times;</button>
+        </div>
+        
+        <div style="padding: 20px;">
+            <div style="background: #fef3c7; padding: 12px; border-radius: 10px; margin-bottom: 20px;">
+                <i class="fas fa-info-circle"></i>
+                <span>Lançe aqui as notas das provas realizadas no formato IMPRESSO (gabarito escaneado).</span>
+                <br>
+                <small>Estas notas são INDEPENDENTES das notas online e aparecerão separadas para os alunos.</small>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <input type="text" id="buscaAlunosManuais" placeholder="🔍 Buscar aluno..." style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+            </div>
+            
+            <div id="listaAlunosManuais" style="max-height: 500px; overflow-y: auto;">
+                <!-- Lista de alunos será preenchida aqui -->
+            </div>
+            
+            <div style="margin-top: 20px; text-align: center; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                <button onclick="fecharModal('modalNotasManuais')" class="btn-voltar" style="padding: 10px 25px;">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -2539,8 +2579,219 @@ if ('serviceWorker' in navigator) {
 
 window.addEventListener('online', () => console.log('🌐 Online'));
 window.addEventListener('offline', () => console.log('📴 Offline'));
-</script>
 
+// ============ FUNÇÕES PARA NOTAS MANUAIS (PROVAS IMPRESSAS) ============
+
+// Abrir modal com todos os alunos da turma
+function abrirModalNotasManuais() {
+    if (!dadosProva || !dadosProva.resultados) {
+        mostrarAlerta('Erro: Dados da prova não carregados', 'error');
+        return;
+    }
+    
+    const modal = document.getElementById('modalNotasManuais');
+    
+    // Limpar busca
+    document.getElementById('buscaAlunosManuais').value = '';
+    
+    // Carregar lista de alunos
+    carregarListaAlunosManuais(dadosProva.resultados);
+    
+    // Configurar busca
+    document.getElementById('buscaAlunosManuais').oninput = function() {
+        const termo = this.value.toLowerCase();
+        const alunosFiltrados = dadosProva.resultados.filter(aluno =>
+            aluno.alunoNome.toLowerCase().includes(termo) ||
+            (aluno.alunoMatricula && aluno.alunoMatricula.toLowerCase().includes(termo)) ||
+            (aluno.alunoEmail && aluno.alunoEmail.toLowerCase().includes(termo))
+        );
+        carregarListaAlunosManuais(alunosFiltrados);
+    };
+    
+    modal.style.display = 'flex';
+}
+
+// Carregar lista de alunos no modal
+function carregarListaAlunosManuais(alunos) {
+    const container = document.getElementById('listaAlunosManuais');
+    
+    if (!alunos || alunos.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding: 40px;">
+                <i class="fas fa-users-slash"></i>
+                <h3>Nenhum aluno encontrado</h3>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = alunos.map(aluno => {
+        const notaManual = aluno.notaManual !== null && aluno.notaManual !== undefined ? 
+            parseFloat(aluno.notaManual).toFixed(1) : '';
+        
+        return `
+            <div class="aluno-manual-item" style="
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 15px;
+                margin-bottom: 12px;
+                transition: all 0.2s;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div style="flex: 2;">
+                        <h4 style="margin: 0 0 5px 0; color: #1f2937;">${aluno.alunoNome}</h4>
+                        <p style="margin: 0; color: #6b7280; font-size: 0.85rem;">
+                            ${aluno.alunoMatricula || 'Sem matrícula'} • ${aluno.alunoEmail || ''}
+                        </p>
+                        ${aluno.notaAutomatica !== null && aluno.notaAutomatica !== undefined ? `
+                            <p style="margin: 5px 0 0 0; font-size: 0.8rem; color: #10b981;">
+                                <i class="fas fa-laptop-code"></i> Nota Online: ${parseFloat(aluno.notaAutomatica).toFixed(1)}
+                            </p>
+                        ` : ''}
+                    </div>
+                    
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="display: block; font-size: 0.75rem; color: #6b7280; margin-bottom: 4px;">
+                            <i class="fas fa-print"></i> Nota Impressa
+                        </label>
+                        <input type="number" 
+                               id="notaManual_${aluno.alunoId}" 
+                               value="${notaManual}" 
+                               step="0.5" 
+                               min="0" 
+                               max="10"
+                               style="width: 100%; padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem;"
+                               placeholder="0 a 10">
+                    </div>
+                    
+                    <div style="flex-shrink: 0;">
+                        <button class="btn-salvar-manual" 
+                                onclick="salvarNotaManualAluno('${aluno.alunoId}', '${aluno.alunoNome.replace(/'/g, "\\'")}')"
+                                style="
+                                    padding: 8px 20px;
+                                    background: linear-gradient(135deg, var(--warning), #d97706);
+                                    color: white;
+                                    border: none;
+                                    border-radius: 8px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 6px;
+                                ">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Adicionar botão de correção automática no final do modal
+    const modalContent = document.getElementById('modalNotasManuais').querySelector('.modal-content');
+    const existingButton = modalContent.querySelector('.correcao-auto-btn');
+    if (!existingButton) {
+        const autoCorrectionDiv = document.createElement('div');
+        autoCorrectionDiv.className = 'correcao-auto-btn';
+        autoCorrectionDiv.style.cssText = 'margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center;';
+        autoCorrectionDiv.innerHTML = `
+            <button onclick="abrirCorrecaoAutomatica()" style="
+                width: 100%;
+                padding: 12px;
+                background: linear-gradient(135deg, #10b981, #059669);
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                margin-bottom: 10px;
+            ">
+                <i class="fas fa-camera"></i> Correção Automática (Câmera)
+            </button>
+            <p style="font-size: 0.8rem; color: #6b7280;">
+                Escaneie o QR Code da prova ou clique aqui para corrigir com a câmera
+            </p>
+        `;
+        modalContent.appendChild(autoCorrectionDiv);
+    }
+}
+
+// Função para abrir a página de correção automática
+function abrirCorrecaoAutomatica() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const provaId = urlParams.get('provaId');
+    
+    if (!provaId) {
+        mostrarAlerta('Erro: ID da prova não encontrado', 'error');
+        return;
+    }
+    
+    // Redirecionar para a página de correção com o ID da prova
+    window.location.href = `corrigir-prova.html?prova=${provaId}`;
+}
+
+// Salvar nota manual de um aluno específico
+async function salvarNotaManualAluno(alunoId, alunoNome) {
+    try {
+        const input = document.getElementById(`notaManual_${alunoId}`);
+        const novaNota = parseFloat(input.value);
+        
+        if (isNaN(novaNota) || novaNota < 0 || novaNota > 10) {
+            mostrarAlerta('Nota inválida! Digite um valor entre 0 e 10.', 'error');
+            return;
+        }
+        
+        const confirmacao = confirm(`Definir NOTA MANUAL ${novaNota.toFixed(1)} para ${alunoNome}?`);
+        
+        if (!confirmacao) return;
+        
+        const token = localStorage.getItem('auth_token');
+        const urlParams = new URLSearchParams(window.location.search);
+        const provaId = urlParams.get('provaId');
+        
+        mostrarAlerta(`💾 Salvando nota manual para ${alunoNome}...`, 'info');
+        
+        const response = await fetch(`${API_BASE_URL}/professor/provas/${provaId}/nota-manual`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                alunoId: alunoId,
+                nota: novaNota,
+                observacao: `Nota manual lançada em ${new Date().toLocaleDateString('pt-BR')}`
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarAlerta(`✅ Nota manual ${novaNota.toFixed(1)} registrada para ${alunoNome}!`, 'success');
+            // Recarregar lista e modal
+            if (typeof carregarResultados === 'function') {
+                carregarResultados();
+            }
+            if (document.getElementById('modalNotasManuais').style.display === 'flex') {
+                setTimeout(() => {
+                    carregarListaAlunosManuais(dadosProva?.resultados || []);
+                }, 1000);
+            }
+        } else {
+            throw new Error(data.error || 'Erro ao registrar nota');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        mostrarAlerta(`❌ Erro: ${error.message}`, 'error');
+    }
+}
+</script>
     
 </body>
 </html>
