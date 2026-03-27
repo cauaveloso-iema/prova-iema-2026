@@ -8,10 +8,11 @@
     "backup": "node backup-service.js",
     "backup-schedule": "node backup-scheduler.js",
     "dev": "nodemon server.js",
-    "postinstall": "apt-get update && apt-get install -y python3 python3-pip || echo 'Python already installed' && pip3 install --user opencv-python numpy imutils flask flask-cors Pillow"
+    "postinstall": "echo '✅ Dependências instaladas'"
   },
-
-  
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-core": "^4.22.0",
@@ -36,7 +37,6 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^7.8.8",
     "multer": "^2.1.1",
-
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.13",
     "openai": "^4.20.0",

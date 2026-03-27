@@ -1,10 +1,48 @@
 services:
+  # Serviço Node.js Principal
   - type: web
     name: prova-online
-    env: node
-    rootDir: backend
+    runtime: node
+    plan: free
     buildCommand: npm install
     startCommand: node server.js
+    rootDir: backend
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ONESIGNAL_APP_ID
+        sync: false
+      - key: ONESIGNAL_REST_API_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+
+  # Serviço Python OMR (opcional - para detecção automática)
+  - type: web
+    name: prova-omr
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python omr_server.py
+    rootDir: backend
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: PYTHON_VERSION
+        value: 3.11.9
