@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Correção de Prova - Sistema IEMA</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -26,11 +26,24 @@
             padding: 20px;
         }
         
-        .container { max-width: 1000px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; }
         .card { background: white; border-radius: 24px; padding: 25px; margin-bottom: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
         .header { text-align: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #e5e7eb; }
         .header h1 { color: #4f46e5; margin-bottom: 8px; font-size: 1.8rem; }
-        .btn-voltar { background: #f3f4f6; color: #4b5563; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 20px; transition: all 0.3s; }
+        .btn-voltar { 
+            background: #f3f4f6; 
+            color: #4b5563; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 30px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 8px; 
+            margin-bottom: 20px; 
+            transition: all 0.3s; 
+        }
         .btn-voltar:hover { background: #e5e7eb; transform: translateX(-3px); }
         
         .prova-info { background: linear-gradient(135deg, #f8fafc, #f1f5f9); padding: 20px; border-radius: 16px; margin-bottom: 25px; border-left: 4px solid #4f46e5; }
@@ -41,80 +54,152 @@
         
         .selecao-aluno { background: #f8fafc; border-radius: 16px; padding: 15px; margin-bottom: 20px; }
         .selecao-aluno select { width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; margin-top: 8px; cursor: pointer; }
-        .selecao-aluno select:focus { outline: none; border-color: #4f46e5; }
         
         .modo-container { display: flex; gap: 10px; margin-bottom: 15px; justify-content: center; }
         .modo-btn { padding: 8px 20px; border-radius: 30px; border: none; font-weight: 600; cursor: pointer; transition: all 0.3s; }
-        .modo-btn.ativo { background: #4f46e5; color: white; box-shadow: 0 2px 8px rgba(79,70,229,0.3); }
+        .modo-btn.ativo { background: #4f46e5; color: white; }
         .modo-btn.inativo { background: #e5e7eb; color: #6b7280; }
-        .modo-btn.inativo:hover { background: #d1d5db; }
         
         .camera-container { background: #f8fafc; border-radius: 16px; padding: 20px; text-align: center; position: relative; }
-        .camera-preview { position: relative; display: inline-block; border-radius: 12px; overflow: hidden; width: 100%; max-width: 500px; margin: 0 auto; }
-        video, canvas { max-width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; background: #000; width: 100%; }
-        video { 
-            max-height: 450px; 
-            width: 100%;
-            border-radius: 12px;
-            border: 2px solid #e5e7eb;
-            background: #000;
-        }
+        .camera-preview { position: relative; display: inline-block; border-radius: 12px; overflow: hidden; width: 100%; margin: 0 auto; background: #000; }
+        
+        video, canvas { width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; background: #000; display: block; }
+        video { max-height: 70vh; object-fit: contain; }
         
         .guia-enquadramento { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
-        .guia-canto { position: absolute; width: 40px; height: 40px; border: 3px solid #10b981; }
-        .guia-canto-top-left { top: 10px; left: 10px; border-right: none; border-bottom: none; }
-        .guia-canto-top-right { top: 10px; right: 10px; border-left: none; border-bottom: none; }
-        .guia-canto-bottom-left { bottom: 10px; left: 10px; border-right: none; border-top: none; }
-        .guia-canto-bottom-right { bottom: 10px; right: 10px; border-left: none; border-top: none; }
-        .guia-linha-central { position: absolute; top: 50%; left: 10%; right: 10%; height: 2px; background: rgba(16, 185, 129, 0.5); transform: translateY(-50%); }
-        .guia-texto { position: absolute; bottom: 20px; left: 0; right: 0; text-align: center; background: rgba(0,0,0,0.7); color: white; padding: 5px; font-size: 12px; border-radius: 20px; width: 80%; margin: 0 auto; left: 10%; }
-        .qualidade-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 20px; font-size: 10px; z-index: 20; }
+        .guia-canto { position: absolute; width: 60px; height: 60px; border: 4px solid #10b981; border-radius: 12px; }
+        .guia-canto-top-left { top: 15px; left: 15px; border-right: none; border-bottom: none; }
+        .guia-canto-top-right { top: 15px; right: 15px; border-left: none; border-bottom: none; }
+        .guia-canto-bottom-left { bottom: 15px; left: 15px; border-right: none; border-top: none; }
+        .guia-canto-bottom-right { bottom: 15px; right: 15px; border-left: none; border-top: none; }
+        
+        .feedback-proximidade {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 13px;
+            z-index: 20;
+            white-space: nowrap;
+        }
+        .feedback-proximidade.bom { background: #10b981; }
+        .feedback-proximidade.medio { background: #f59e0b; }
+        .feedback-proximidade.ruim { background: #ef4444; }
+        
+        .guia-texto { 
+            position: absolute; 
+            bottom: 20px; 
+            left: 0; 
+            right: 0; 
+            text-align: center; 
+            background: rgba(0,0,0,0.85); 
+            color: white; 
+            padding: 10px; 
+            font-size: 14px; 
+            border-radius: 30px; 
+            width: 90%; 
+            margin: 0 auto; 
+            left: 5%; 
+            z-index: 20;
+        }
+        
+        .qualidade-badge { 
+            position: absolute; 
+            top: 10px; 
+            right: 10px; 
+            background: rgba(0,0,0,0.8); 
+            color: white; 
+            padding: 6px 12px; 
+            border-radius: 20px; 
+            font-size: 12px; 
+            z-index: 20;
+        }
         
         .btn-camera, .btn-capturar { padding: 12px 24px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin: 10px 5px; border: none; transition: all 0.3s; }
         .btn-camera { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; }
-        .btn-camera:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(79,70,229,0.4); }
         .btn-capturar { background: linear-gradient(135deg, #10b981, #059669); color: white; }
-        .btn-capturar:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
         .btn-capturar:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .preview-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+        .preview-content {
+            max-width: 95%;
+            max-height: 95%;
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            text-align: center;
+            overflow-y: auto;
+        }
+        .preview-content img {
+            max-width: 100%;
+            max-height: 50vh;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .preview-buttons { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
         
         .resultado-correcao { background: #f8fafc; border-radius: 16px; padding: 20px; margin-top: 20px; }
         .respostas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin: 15px 0; }
         .resposta-card { text-align: center; padding: 8px; border: 1px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; transition: all 0.2s; }
         .resposta-card.correta { background: #d1fae5; border-color: #10b981; }
         .resposta-card.incorreta { background: #fee2e2; border-color: #ef4444; }
-        .resposta-card:hover { transform: scale(1.02); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .btn-opcao { width: 32px; padding: 4px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: bold; margin: 2px; transition: all 0.2s; }
-        .btn-opcao:hover { background: #e0e7ff; border-color: #4f46e5; transform: scale(1.05); }
+        .btn-opcao { width: 36px; padding: 6px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; margin: 2px; }
+        .btn-opcao:hover { background: #e0e7ff; }
         
         .nota-final { text-align: center; padding: 15px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border-radius: 12px; margin: 15px 0; }
         .nota-valor { font-size: 2rem; font-weight: bold; }
-        .btn-salvar { width: 100%; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 15px; transition: all 0.3s; }
-        .btn-salvar:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
+        .btn-salvar { width: 100%; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 15px; }
+        
         .loading { text-align: center; padding: 30px; }
         .spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .alert { padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: none; animation: slideIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .alert { padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: none; }
         .alert-success { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
         .alert-error { background: #fee2e2; color: #7f1d1d; border-left: 4px solid #ef4444; }
         .alert-info { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
         
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #10b981;
+            width: 0%;
+            transition: width 0.3s;
         }
         
-        @media (max-width: 768px) {
-            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
-            .guia-canto { width: 25px; height: 25px; }
-            .card { padding: 15px; }
-            .btn-camera, .btn-capturar { padding: 8px 16px; font-size: 0.8rem; }
+        @media (orientation: landscape) {
+            .guia-canto { width: 45px; height: 45px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <button class="btn-voltar" onclick="window.history.back()">
+            <button class="btn-voltar" id="btnVoltar">
                 <i class="fas fa-arrow-left"></i> Voltar
             </button>
             
@@ -142,7 +227,7 @@
                 </div>
                 
                 <div class="modo-container">
-                    <button class="modo-btn ativo" id="modoAutomaticoBtn">🤖 Automático</button>
+                    <button class="modo-btn ativo" id="modoAutomaticoBtn">🤖 Automático (IA)</button>
                     <button class="modo-btn inativo" id="modoManualBtn">✏️ Manual</button>
                 </div>
                 
@@ -150,25 +235,26 @@
                     <div class="camera-preview" id="cameraPreview">
                         <video id="video" autoplay playsinline></video>
                         <canvas id="canvas" style="display: none;"></canvas>
-                        <div class="guia-enquadramento" id="guiaEnquadramento">
+                        <div class="guia-enquadramento">
                             <div class="guia-canto guia-canto-top-left"></div>
                             <div class="guia-canto guia-canto-top-right"></div>
                             <div class="guia-canto guia-canto-bottom-left"></div>
                             <div class="guia-canto guia-canto-bottom-right"></div>
-                            <div class="guia-linha-central"></div>
-                            <div class="guia-texto" id="guiaTexto">🔍 Alinhe o cartão e aguarde a captura automática</div>
+                            <div class="feedback-proximidade" id="feedbackProximidade">📏 Aproxime o cartão</div>
+                            <div class="guia-texto" id="guiaTexto">🔍 Alinhe o cartão dentro das guias verdes</div>
                         </div>
                         <div class="qualidade-badge" id="qualidadeBadge" style="display: none;">📷 Aguardando</div>
                     </div>
                     <div>
                         <button class="btn-camera" id="btnIniciarCamera"><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                        <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar Agora</button>
+                        <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar e Reconhecer</button>
                     </div>
                 </div>
                 
                 <div id="processando" class="loading" style="display: none;">
                     <div class="spinner"></div>
-                    <p>📸 Processando imagem e detectando respostas...</p>
+                    <p id="processandoTexto">📸 Processando imagem...</p>
+                    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
                 </div>
                 
                 <div id="resultado" style="display: none;">
@@ -189,27 +275,41 @@
         let provaId = urlParams.get('prova');
         let urlToken = urlParams.get('token');
         
-        // Usar token da URL ou do localStorage
         let authToken = urlToken || localStorage.getItem('auth_token');
         
-        // Se não tiver token, redirecionar para login
         if (!authToken) {
             const redirectUrl = encodeURIComponent(`/corrigir-prova?prova=${provaId || ''}`);
             window.location.href = `/login.html?redirect=${redirectUrl}`;
         }
         
-        // Salvar token no localStorage se veio da URL
         if (urlToken && !localStorage.getItem('auth_token')) {
             localStorage.setItem('auth_token', urlToken);
         }
-        
-        console.log('🔍 Correção da prova ID:', provaId);
-        console.log('🔑 Token presente:', !!authToken);
         
         if (!provaId) {
             alert('❌ ID da prova não encontrado!');
             window.location.href = '/admin.html';
         }
+        
+        // ========== FUNÇÃO DE VOLTAR CORRIGIDA ==========
+        function voltarPagina() {
+            if (document.referrer && document.referrer.includes(window.location.hostname)) {
+                window.history.back();
+            } else {
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const role = userData.role || window.USUARIO_ROLE;
+                
+                if (role === 'professor') {
+                    window.location.href = '/index.html';
+                } else if (role === 'admin' || role === 'super_admin') {
+                    window.location.href = '/admin.html';
+                } else {
+                    window.location.href = '/login.html';
+                }
+            }
+        }
+        
+        document.getElementById('btnVoltar')?.addEventListener('click', voltarPagina);
         
         let dadosProva = null;
         let alunos = [];
@@ -219,10 +319,7 @@
         let notaCalculada = 0;
         let alunoSelecionadoId = null;
         let modoAtual = 'auto';
-        let estabilidadeContador = 0;
-        let ultimaImagem = null;
-        let analiseInterval = null;
-        let capturaAutomaticaAtiva = false;
+        let imagemCapturadaUrl = null;
         
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -232,20 +329,186 @@
         const resultado = document.getElementById('resultado');
         const guiaTexto = document.getElementById('guiaTexto');
         const qualidadeBadge = document.getElementById('qualidadeBadge');
+        const feedbackProximidade = document.getElementById('feedbackProximidade');
         let stream = null;
+        
+        // ========== DETECÇÃO DE MARCAÇÕES POR ANÁLISE DE CÍRCULOS ==========
+        
+        // Configuração do cartão-resposta (ajustar conforme necessário)
+        const CONFIG_CARTAO = {
+            // Posição aproximada da tabela (em % da imagem)
+            // Ajuste estes valores conforme seu cartão
+            startX: 0.12,    // Início da tabela (12% da largura)
+            startY: 0.45,    // Início da tabela (45% da altura)
+            endX: 0.88,      // Fim da tabela (88% da largura)
+            endY: 0.75,      // Fim da tabela (75% da altura)
+            linhas: 5,       // Número de alternativas (A, B, C, D, E)
+            colunas: 10,     // Número de questões
+            raioCirculo: 12, // Raio do círculo em pixels
+            threshold: 0.25  // 25% de preenchimento = marcado
+        };
+        
+        // Função para analisar preenchimento de um círculo
+        function analisarPreenchimentoCirculo(ctx, centroX, centroY, raio) {
+            const xStart = Math.max(0, Math.floor(centroX - raio));
+            const yStart = Math.max(0, Math.floor(centroY - raio));
+            const xEnd = Math.min(ctx.canvas.width, Math.ceil(centroX + raio));
+            const yEnd = Math.min(ctx.canvas.height, Math.ceil(centroY + raio));
+            
+            let totalPixels = 0;
+            let pixelsEscuros = 0;
+            
+            for (let y = yStart; y < yEnd; y++) {
+                for (let x = xStart; x < xEnd; x++) {
+                    const dx = x - centroX;
+                    const dy = y - centroY;
+                    const distancia = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (distancia <= raio) {
+                        totalPixels++;
+                        const pixel = ctx.getImageData(x, y, 1, 1).data;
+                        const brilho = (pixel[0] + pixel[1] + pixel[2]) / 3;
+                        
+                        // Pixel escuro se brilho < 128
+                        if (brilho < 128) {
+                            pixelsEscuros++;
+                        }
+                    }
+                }
+            }
+            
+            return totalPixels > 0 ? pixelsEscuros / totalPixels : 0;
+        }
+        
+        // Função para detectar automaticamente a região do cartão
+        function detectarRegiaoCartao(ctx) {
+            // Tenta encontrar a região com maior contraste (onde estão os círculos)
+            const width = ctx.canvas.width;
+            const height = ctx.canvas.height;
+            
+            // Análise simples: procura por áreas com muitos pixels escuros
+            let melhorX = 0, melhorY = 0, melhorScore = 0;
+            const passo = 20;
+            
+            for (let y = height * 0.3; y < height * 0.8; y += passo) {
+                for (let x = width * 0.1; x < width * 0.9; x += passo) {
+                    let score = 0;
+                    for (let dy = -10; dy <= 10; dy++) {
+                        for (let dx = -10; dx <= 10; dx++) {
+                            const pixel = ctx.getImageData(x + dx, y + dy, 1, 1).data;
+                            const brilho = (pixel[0] + pixel[1] + pixel[2]) / 3;
+                            if (brilho < 100) score++;
+                        }
+                    }
+                    if (score > melhorScore) {
+                        melhorScore = score;
+                        melhorX = x;
+                        melhorY = y;
+                    }
+                }
+            }
+            
+            return { x: melhorX, y: melhorY };
+        }
+        
+        // Função principal de detecção
+        async function detectarRespostasPorMarcacao(imagemBase64) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const tempCanvas = document.createElement('canvas');
+                        const ctx = tempCanvas.getContext('2d');
+                        
+                        // Redimensionar para tamanho padrão para análise
+                        const escala = Math.min(1200 / img.width, 1);
+                        tempCanvas.width = img.width * escala;
+                        tempCanvas.height = img.height * escala;
+                        ctx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+                        
+                        // Aumentar contraste
+                        const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                        const data = imageData.data;
+                        for (let i = 0; i < data.length; i += 4) {
+                            const r = data[i];
+                            const g = data[i+1];
+                            const b = data[i+2];
+                            const brilho = (r + g + b) / 3;
+                            const novoValor = brilho < 128 ? 0 : 255;
+                            data[i] = novoValor;
+                            data[i+1] = novoValor;
+                            data[i+2] = novoValor;
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+                        
+                        const width = tempCanvas.width;
+                        const height = tempCanvas.height;
+                        
+                        // Configuração baseada no tamanho da imagem
+                        const config = {
+                            startX: width * CONFIG_CARTAO.startX,
+                            startY: height * CONFIG_CARTAO.startY,
+                            endX: width * CONFIG_CARTAO.endX,
+                            endY: height * CONFIG_CARTAO.endY,
+                            colunas: CONFIG_CARTAO.colunas,
+                            linhas: CONFIG_CARTAO.linhas,
+                            raioCirculo: CONFIG_CARTAO.raioCirculo * escala,
+                            threshold: CONFIG_CARTAO.threshold
+                        };
+                        
+                        const larguraCelula = (config.endX - config.startX) / config.colunas;
+                        const alturaCelula = (config.endY - config.startY) / config.linhas;
+                        const letras = ['A', 'B', 'C', 'D', 'E'];
+                        const respostas = [];
+                        
+                        console.log('🔍 Analisando cartão...');
+                        console.log(`   Região: (${config.startX.toFixed(0)}, ${config.startY.toFixed(0)}) a (${config.endX.toFixed(0)}, ${config.endY.toFixed(0)})`);
+                        
+                        // Para cada questão
+                        for (let questao = 0; questao < config.colunas; questao++) {
+                            let melhorAlternativa = null;
+                            let maiorPreenchimento = 0;
+                            
+                            // Para cada alternativa
+                            for (let letraIdx = 0; letraIdx < config.linhas; letraIdx++) {
+                                const x = config.startX + (questao * larguraCelula) + (larguraCelula / 2);
+                                const y = config.startY + (letraIdx * alturaCelula) + (alturaCelula / 2);
+                                
+                                // Verificar se está dentro dos limites
+                                if (x > 0 && x < width && y > 0 && y < height) {
+                                    const preenchimento = analisarPreenchimentoCirculo(ctx, x, y, config.raioCirculo);
+                                    
+                                    if (preenchimento > config.threshold && preenchimento > maiorPreenchimento) {
+                                        maiorPreenchimento = preenchimento;
+                                        melhorAlternativa = letras[letraIdx];
+                                    }
+                                }
+                            }
+                            
+                            respostas.push(melhorAlternativa);
+                            console.log(`   Questão ${questao + 1}: ${melhorAlternativa || 'não detectada'} (confiança: ${(maiorPreenchimento * 100).toFixed(0)}%)`);
+                        }
+                        
+                        resolve(respostas);
+                        
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                img.onerror = reject;
+                img.src = imagemBase64;
+            });
+        }
         
         async function fetchWithAuth(url, options = {}) {
             const token = authToken || localStorage.getItem('auth_token');
-            
-            const headers = {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                ...options.headers
-            };
-            
             const response = await fetch(url, {
                 ...options,
-                headers
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
             });
             
             if (response.status === 401) {
@@ -254,7 +517,6 @@
                 window.location.href = `/login.html?redirect=${redirectUrl}`;
                 return null;
             }
-            
             return response;
         }
         
@@ -274,66 +536,217 @@
             if (modo === 'auto') {
                 modoAuto.className = 'modo-btn ativo';
                 modoManual.className = 'modo-btn inativo';
-                guiaTexto.innerHTML = '🤖 Modo Automático: Alinhe o cartão e aguarde a captura automática';
-                iniciarCapturaAutomatica();
+                guiaTexto.innerHTML = '🤖 IA: Alinhe o cartão e aguarde o reconhecimento automático';
             } else {
                 modoAuto.className = 'modo-btn inativo';
                 modoManual.className = 'modo-btn ativo';
-                guiaTexto.innerHTML = '✏️ Modo Manual: Alinhe o cartão e clique em "Capturar Agora"';
-                pararCapturaAutomatica();
+                guiaTexto.innerHTML = '✏️ Manual: Alinhe e clique em "Capturar e Reconhecer"';
             }
         }
         
-        function iniciarCapturaAutomatica() {
-            capturaAutomaticaAtiva = true;
-            estabilidadeContador = 0;
-        }
-        
-        function pararCapturaAutomatica() {
-            capturaAutomaticaAtiva = false;
-            estabilidadeContador = 0;
-        }
-        
-        function analisarEstabilidade() {
-            if (!capturaAutomaticaAtiva || !video.videoWidth) return;
+        function capturarImagem() {
+            if (!alunoSelecionadoId) { 
+                mostrarAlerta('⚠️ Selecione um aluno primeiro!', 'error'); 
+                return false; 
+            }
+            
+            if (!video.videoWidth || !video.videoHeight) {
+                mostrarAlerta('⚠️ Câmera não está pronta.', 'error');
+                return false;
+            }
             
             const context = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            const imagemAtual = canvas.toDataURL();
+            imagemCapturadaUrl = canvas.toDataURL('image/jpeg', 0.9);
             
-            if (ultimaImagem === imagemAtual) {
-                estabilidadeContador++;
-                qualidadeBadge.innerHTML = `📷 Estabilizando... ${estabilidadeContador}/10`;
-                qualidadeBadge.style.display = 'block';
+            const flash = document.createElement('div');
+            flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;opacity:0.8;z-index:9999;pointer-events:none;';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 200);
+            
+            return true;
+        }
+        
+        async function processarImagemEAnalisar() {
+            if (!imagemCapturadaUrl) return;
+            
+            processando.style.display = 'block';
+            resultado.style.display = 'none';
+            document.getElementById('progressFill').style.width = '0%';
+            
+            try {
+                let respostasDetectadasOCR = [];
                 
-                if (estabilidadeContador >= 10) {
-                    estabilidadeContador = 0;
-                    qualidadeBadge.innerHTML = '✅ Cartão detectado! Capturando...';
-                    setTimeout(() => capturarECorrigir(), 500);
+                if (modoAtual === 'auto') {
+                    document.getElementById('processandoTexto').innerHTML = '🔍 Detectando círculos preenchidos...';
+                    for (let i = 0; i <= 100; i += 10) {
+                        document.getElementById('progressFill').style.width = `${i}%`;
+                        await new Promise(r => setTimeout(r, 20));
+                    }
+                    respostasDetectadasOCR = await detectarRespostasPorMarcacao(imagemCapturadaUrl);
+                    document.getElementById('progressFill').style.width = '100%';
+                } else {
+                    criarInterfaceManual();
+                    processando.style.display = 'none';
+                    resultado.style.display = 'block';
+                    return;
                 }
-            } else {
-                estabilidadeContador = 0;
-                ultimaImagem = imagemAtual;
-                qualidadeBadge.innerHTML = '📷 Aguardando estabilização...';
-                qualidadeBadge.style.display = 'block';
+                
+                criarInterfaceComSugestoes(respostasDetectadasOCR);
+                
+                processando.style.display = 'none';
+                resultado.style.display = 'block';
+                
+                const detectadas = respostasDetectadasOCR.filter(r => r !== null).length;
+                mostrarAlerta(`✅ ${detectadas} de ${totalQuestoes} questões detectadas! Confirme as respostas.`, 'success');
+                
+            } catch (error) {
+                console.error('Erro no reconhecimento:', error);
+                mostrarAlerta('⚠️ Erro no reconhecimento automático. Usando modo manual.', 'error');
+                criarInterfaceManual();
+                processando.style.display = 'none';
+                resultado.style.display = 'block';
             }
+        }
+        
+        function criarInterfaceComSugestoes(sugestoes) {
+            const respostas = [];
+            const letras = ['A', 'B', 'C', 'D', 'E'];
+            const respostasGrid = document.getElementById('respostasGrid');
+            respostasGrid.innerHTML = '';
+            
+            for (let i = 0; i < totalQuestoes; i++) {
+                const sugestao = sugestoes[i];
+                const div = document.createElement('div');
+                div.className = 'resposta-card';
+                if (sugestao && sugestao === gabarito[i]?.respostaCorreta) {
+                    div.classList.add('correta');
+                } else if (sugestao) {
+                    div.classList.add('incorreta');
+                }
+                
+                div.innerHTML = `
+                    <div class="resposta-numero" style="font-weight:bold;">Q${i + 1}</div>
+                    <div class="resposta-aluno" id="resposta-aluno-${i}" style="font-size:1.2rem;font-weight:bold;margin:5px 0;">${sugestao || '—'}</div>
+                    ${sugestao ? `<div style="font-size:0.7rem;color:#666;">🤖 Detectado: ${sugestao}</div>` : '<div style="font-size:0.7rem;color:#666;">⚠️ Não detectado</div>'}
+                    <div class="correcao-manual-buttons" style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;margin-top:5px;">
+                        ${letras.map(letra => `<button class="btn-opcao" onclick="definirResposta(${i}, '${letra}')">${letra}</button>`).join('')}
+                        <button class="btn-opcao" onclick="definirResposta(${i}, null)" style="background:#fee2e2;">✗</button>
+                    </div>
+                    <div class="resposta-correta" style="font-size:0.7rem;color:#6b7280;margin-top:4px;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
+                `;
+                respostasGrid.appendChild(div);
+                respostas[i] = sugestao || null;
+            }
+            
+            window.definirResposta = (questao, letra) => {
+                const elementoAluno = document.getElementById(`resposta-aluno-${questao}`);
+                const respostaCard = elementoAluno.closest('.resposta-card');
+                respostas[questao] = letra;
+                elementoAluno.innerHTML = letra || '—';
+                
+                if (letra === gabarito[questao]?.respostaCorreta) {
+                    respostaCard.classList.add('correta');
+                    respostaCard.classList.remove('incorreta');
+                } else if (letra !== null) {
+                    respostaCard.classList.add('incorreta');
+                    respostaCard.classList.remove('correta');
+                } else {
+                    respostaCard.classList.remove('correta', 'incorreta');
+                }
+                
+                const todasPreenchidas = respostas.every(r => r !== null);
+                if (todasPreenchidas) processarRespostas(respostas);
+            };
+        }
+        
+        function criarInterfaceManual() {
+            const respostas = [];
+            const letras = ['A', 'B', 'C', 'D', 'E'];
+            const respostasGrid = document.getElementById('respostasGrid');
+            respostasGrid.innerHTML = '';
+            
+            for (let i = 0; i < totalQuestoes; i++) {
+                const div = document.createElement('div');
+                div.className = 'resposta-card';
+                div.innerHTML = `
+                    <div class="resposta-numero" style="font-weight:bold;">Q${i + 1}</div>
+                    <div class="resposta-aluno" id="resposta-aluno-${i}" style="font-size:1.2rem;font-weight:bold;margin:5px 0;">—</div>
+                    <div class="correcao-manual-buttons" style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;">
+                        ${letras.map(letra => `<button class="btn-opcao" onclick="definirRespostaManual(${i}, '${letra}')">${letra}</button>`).join('')}
+                        <button class="btn-opcao" onclick="definirRespostaManual(${i}, null)" style="background:#fee2e2;">✗</button>
+                    </div>
+                    <div class="resposta-correta" style="font-size:0.7rem;color:#6b7280;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
+                `;
+                respostasGrid.appendChild(div);
+                respostas[i] = null;
+            }
+            
+            window.definirRespostaManual = (questao, letra) => {
+                const elementoAluno = document.getElementById(`resposta-aluno-${questao}`);
+                const respostaCard = elementoAluno.closest('.resposta-card');
+                respostas[questao] = letra;
+                elementoAluno.innerHTML = letra || '—';
+                
+                if (letra === gabarito[questao]?.respostaCorreta) {
+                    respostaCard.classList.add('correta');
+                    respostaCard.classList.remove('incorreta');
+                } else if (letra !== null) {
+                    respostaCard.classList.add('incorreta');
+                    respostaCard.classList.remove('correta');
+                } else {
+                    respostaCard.classList.remove('correta', 'incorreta');
+                }
+                
+                const todasPreenchidas = respostas.every(r => r !== null);
+                if (todasPreenchidas) processarRespostas(respostas);
+            };
+        }
+        
+        function processarRespostas(respostas) {
+            respostasDetectadas = [];
+            let acertos = 0;
+            
+            for (let i = 0; i < totalQuestoes; i++) {
+                const respostaAluno = respostas[i];
+                const respostaCorreta = gabarito[i]?.respostaCorreta;
+                const isCorreta = respostaAluno && respostaAluno === respostaCorreta;
+                if (isCorreta) acertos++;
+                respostasDetectadas.push({ 
+                    numero: i + 1, 
+                    respostaAluno: respostaAluno || '—', 
+                    respostaCorreta: respostaCorreta, 
+                    correta: isCorreta 
+                });
+            }
+            
+            notaCalculada = (acertos / totalQuestoes) * 10;
+            const percentual = ((acertos / totalQuestoes) * 100).toFixed(0);
+            
+            document.getElementById('notaFinal').innerHTML = `
+                <div class="nota-valor">${notaCalculada.toFixed(1)} / 10</div>
+                <div>${acertos} acertos de ${totalQuestoes} questões</div>
+                <div>${percentual}% de aproveitamento</div>
+                <div style="margin-top: 8px;">
+                    ${notaCalculada >= 6 ? '✅ Aluno APROVADO' : '⚠️ Aluno REPROVADO'}
+                </div>
+            `;
+            mostrarAlerta(`✅ Correção concluída! ${acertos} acertos. Nota: ${notaCalculada.toFixed(1)}`, 'success');
+        }
+        
+        async function capturarECorrigir() {
+            const capturado = capturarImagem();
+            if (!capturado) return;
+            await processarImagemEAnalisar();
         }
         
         async function carregarDados() {
             try {
-                if (!provaId) { 
-                    mostrarAlerta('ID da prova não encontrado', 'error'); 
-                    return; 
-                }
-                
-                mostrarAlerta('📡 Carregando dados da prova...', 'info');
-                
                 const response = await fetchWithAuth(`/api/provas/${provaId}/resultados`);
                 if (!response) return;
-                
                 const data = await response.json();
                 
                 if (data.success) {
@@ -343,7 +756,6 @@
                     
                     const provaResponse = await fetchWithAuth(`/api/provas/${provaId}`);
                     if (!provaResponse) return;
-                    
                     const provaData = await provaResponse.json();
                     
                     if (provaData.success && provaData.questoes) {
@@ -372,9 +784,7 @@
                     const selectAluno = document.getElementById('selectAluno');
                     selectAluno.innerHTML = '<option value="">Selecione um aluno...</option>';
                     alunos.forEach(aluno => {
-                        const notaAuto = aluno.notaAutomatica !== null ? ` (Online: ${parseFloat(aluno.notaAutomatica).toFixed(1)})` : '';
-                        const notaManual = aluno.notaManualLiberada ? ` | Manual: ${parseFloat(aluno.notaManual).toFixed(1)}` : '';
-                        selectAluno.innerHTML += `<option value="${aluno.alunoId}">${aluno.alunoNome}${notaAuto}${notaManual}</option>`;
+                        selectAluno.innerHTML += `<option value="${aluno.alunoId}">${aluno.alunoNome}</option>`;
                     });
                     selectAluno.addEventListener('change', (e) => { 
                         alunoSelecionadoId = e.target.value;
@@ -383,163 +793,74 @@
                         notaCalculada = 0;
                     });
                     
-                    mostrarAlerta('✅ Dados carregados com sucesso!', 'success');
-                    
-                } else { 
-                    mostrarAlerta(data.error || 'Erro ao carregar dados', 'error'); 
+                    mostrarAlerta('✅ Dados carregados! Posicione o cartão e capture.', 'success');
                 }
             } catch (error) { 
                 console.error('Erro:', error); 
-                mostrarAlerta('Erro ao carregar dados: ' + error.message, 'error'); 
+                mostrarAlerta('Erro ao carregar dados', 'error'); 
             }
+        }
+        
+        // Análise de proximidade
+        let analiseProximidadeInterval = null;
+        function iniciarAnaliseProximidade() {
+            if (analiseProximidadeInterval) clearInterval(analiseProximidadeInterval);
+            analiseProximidadeInterval = setInterval(() => {
+                if (!video.videoWidth) return;
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                let brightness = 0;
+                for (let i = 0; i < imageData.data.length; i += 4) {
+                    brightness += (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
+                }
+                brightness = brightness / (imageData.data.length / 4);
+                
+                let feedback = '', classe = '', cor = '#10b981';
+                if (brightness > 180) { feedback = '✅ Excelente! Pode capturar'; classe = 'bom'; cor = '#10b981'; }
+                else if (brightness > 120) { feedback = '🟡 Aproxime um pouco mais'; classe = 'medio'; cor = '#f59e0b'; }
+                else { feedback = '🔴 Aproxime o cartão da câmera'; classe = 'ruim'; cor = '#ef4444'; }
+                
+                feedbackProximidade.textContent = feedback;
+                feedbackProximidade.className = `feedback-proximidade ${classe}`;
+                document.querySelectorAll('.guia-canto').forEach(c => c.style.borderColor = cor);
+            }, 500);
         }
         
         async function iniciarCamera() {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: { exact: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } 
+                }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+                
                 video.srcObject = stream;
                 await video.play();
                 btnCapturar.disabled = false;
                 btnIniciar.disabled = true;
-                
-                if (analiseInterval) clearInterval(analiseInterval);
-                analiseInterval = setInterval(analisarEstabilidade, 500);
-                
-                mostrarAlerta('✅ Câmera iniciada! Posicione o cartão dentro das guias.', 'success');
+                iniciarAnaliseProximidade();
+                mostrarAlerta('✅ Câmera iniciada! Posicione o cartão.', 'success');
                 setModo('auto');
             } catch (error) {
-                mostrarAlerta('❌ Não foi possível acessar a câmera. Verifique as permissões.', 'error');
+                mostrarAlerta('❌ Não foi possível acessar a câmera.', 'error');
             }
         }
         
         function pararCamera() {
-            if (analiseInterval) { clearInterval(analiseInterval); analiseInterval = null; }
+            if (analiseProximidadeInterval) clearInterval(analiseProximidadeInterval);
             if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
             video.srcObject = null;
             btnCapturar.disabled = true;
             btnIniciar.disabled = false;
-            qualidadeBadge.style.display = 'none';
-        }
-        
-        function capturarECorrigir() {
-            if (!alunoSelecionadoId) { 
-                mostrarAlerta('⚠️ Selecione um aluno primeiro!', 'error'); 
-                return; 
-            }
-            
-            const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            const flash = document.createElement('div');
-            flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;opacity:0.5;z-index:9999;pointer-events:none;';
-            document.body.appendChild(flash);
-            setTimeout(() => flash.remove(), 200);
-            
-            processando.style.display = 'block';
-            resultado.style.display = 'none';
-            
-            setTimeout(() => {
-                criarInterfaceManual();
-            }, 500);
-        }
-        
-        function criarInterfaceManual() {
-            const respostas = [];
-            const letras = ['A', 'B', 'C', 'D', 'E'];
-            const respostasGrid = document.getElementById('respostasGrid');
-            respostasGrid.innerHTML = '';
-            
-            for (let i = 0; i < totalQuestoes; i++) {
-                const div = document.createElement('div');
-                div.className = 'resposta-card';
-                div.innerHTML = `
-                    <div class="resposta-numero" style="font-weight:bold;">Q${i + 1}</div>
-                    <div class="resposta-aluno" id="resposta-aluno-${i}" style="font-size:1.2rem;font-weight:bold;margin:5px 0;">—</div>
-                    <div class="correcao-manual-buttons" style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;">
-                        ${letras.map(letra => `<button class="btn-opcao" onclick="definirResposta(${i}, '${letra}')">${letra}</button>`).join('')}
-                        <button class="btn-opcao" onclick="definirResposta(${i}, null)" style="background:#fee2e2;">✗</button>
-                    </div>
-                    <div class="resposta-correta" style="font-size:0.7rem;color:#6b7280;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
-                `;
-                respostasGrid.appendChild(div);
-                respostas[i] = null;
-            }
-            
-            window.definirResposta = (questao, letra) => {
-                const elementoAluno = document.getElementById(`resposta-aluno-${questao}`);
-                const respostaCard = elementoAluno.closest('.resposta-card');
-                respostas[questao] = letra;
-                elementoAluno.innerHTML = letra || '—';
-                
-                if (letra === gabarito[questao]?.respostaCorreta) {
-                    respostaCard.classList.add('correta');
-                    respostaCard.classList.remove('incorreta');
-                } else if (letra !== null) {
-                    respostaCard.classList.add('incorreta');
-                    respostaCard.classList.remove('correta');
-                } else {
-                    respostaCard.classList.remove('correta', 'incorreta');
-                }
-                
-                const todasPreenchidas = respostas.every(r => r !== null);
-                if (todasPreenchidas) processarRespostas(respostas);
-            };
-            
-            processando.style.display = 'none';
-            resultado.style.display = 'block';
-            mostrarAlerta('📝 Clique nas alternativas que o aluno marcou no cartão-resposta', 'info');
-        }
-        
-        function processarRespostas(respostas) {
-            respostasDetectadas = [];
-            let acertos = 0;
-            
-            for (let i = 0; i < totalQuestoes; i++) {
-                const respostaAluno = respostas[i];
-                const respostaCorreta = gabarito[i]?.respostaCorreta;
-                const isCorreta = respostaAluno && respostaAluno === respostaCorreta;
-                if (isCorreta) acertos++;
-                respostasDetectadas.push({ 
-                    numero: i + 1, 
-                    respostaAluno: respostaAluno || '—', 
-                    respostaCorreta: respostaCorreta, 
-                    correta: isCorreta 
-                });
-            }
-            
-            notaCalculada = (acertos / totalQuestoes) * 10;
-            const percentual = ((acertos / totalQuestoes) * 100).toFixed(0);
-            
-            document.getElementById('notaFinal').innerHTML = `
-                <div class="nota-valor">${notaCalculada.toFixed(1)} / 10</div>
-                <div>${acertos} acertos de ${totalQuestoes} questões</div>
-                <div>${percentual}% de aproveitamento</div>
-                <div style="margin-top: 8px; font-size: 0.9rem; opacity: 0.9;">
-                    ${notaCalculada >= 6 ? '✅ Aluno APROVADO' : '⚠️ Aluno REPROVADO'}
-                </div>
-            `;
-            mostrarAlerta(`✅ Correção concluída! ${acertos} acertos. Nota: ${notaCalculada.toFixed(1)}`, 'success');
         }
         
         async function salvarNotaManual() {
-            if (!alunoSelecionadoId) { 
-                mostrarAlerta('Selecione um aluno primeiro!', 'error'); 
-                return; 
-            }
-            
-            if (respostasDetectadas.length === 0) {
-                mostrarAlerta('⚠️ Nenhuma resposta foi registrada. Corrija a prova primeiro!', 'error');
-                return;
-            }
+            if (!alunoSelecionadoId) { mostrarAlerta('Selecione um aluno!', 'error'); return; }
+            if (respostasDetectadas.length === 0) { mostrarAlerta('Corrija a prova primeiro!', 'error'); return; }
             
             const aluno = alunos.find(a => a.alunoId === alunoSelecionadoId);
-            if (!aluno) { 
-                mostrarAlerta('Aluno não encontrado', 'error'); 
-                return; 
-            }
-            
+            if (!aluno) { mostrarAlerta('Aluno não encontrado', 'error'); return; }
             if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)} para ${aluno.alunoNome}?`)) return;
             
             try {
@@ -551,21 +872,13 @@
                         observacao: `Corrigido em ${new Date().toLocaleString('pt-BR')}. Respostas: ${respostasDetectadas.map(r => `${r.numero}:${r.respostaAluno}`).join(', ')}`
                     })
                 });
-                
                 if (!response) return;
-                
                 const data = await response.json();
                 if (data.success) {
-                    mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva para ${aluno.alunoNome}!`, 'success');
-                    setTimeout(() => { 
-                        window.location.href = `/resultados.html?provaId=${provaId}`; 
-                    }, 1500);
-                } else { 
-                    throw new Error(data.error || 'Erro ao salvar'); 
-                }
-            } catch (error) { 
-                mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); 
-            }
+                    mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva!`, 'success');
+                    setTimeout(() => window.location.href = `/resultados.html?provaId=${provaId}`, 1500);
+                } else throw new Error(data.error);
+            } catch (error) { mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); }
         }
         
         btnIniciar.addEventListener('click', iniciarCamera);
@@ -573,8 +886,8 @@
         document.getElementById('btnSalvarNota')?.addEventListener('click', salvarNotaManual);
         document.getElementById('modoAutomaticoBtn').onclick = () => setModo('auto');
         document.getElementById('modoManualBtn').onclick = () => setModo('manual');
-        
         window.addEventListener('beforeunload', () => pararCamera());
+        
         carregarDados();
     </script>
 </body>
