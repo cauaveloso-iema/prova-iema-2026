@@ -9829,6 +9829,11 @@ class AdminPanel {
                             <button class="btn-icon edit" onclick="admin.editarProva('${prova.id}')" title="Editar prova">
                                 <i class="fas fa-edit"></i>
                             </button>
+
+                            <!-- 🔥 NOVO BOTÃO: CORRIGIR PROVA (QR CODE) -->
+                            <button class="btn-icon" onclick="admin.corrigirProvaComQRCode('${prova.id}')" title="Corrigir prova (QR Code)">
+                                <i class="fas fa-qrcode"></i>
+                            </button>
                             
                             <!-- 🔥 BOTÃO ADIAR (só para provas ativas) -->
                             ${podeAdiar ? `
@@ -23925,6 +23930,25 @@ class AdminPanel {
             console.error('❌ Erro ao carregar detalhes da prova:', error);
             this.showToast('❌ Erro ao carregar detalhes: ' + error.message, 'error');
         }
+    }
+
+    // ============ CORRIGIR PROVA COM QR CODE ============
+    corrigirProvaComQRCode(provaId) {
+        console.log('📱 Abrindo correção da prova via QR Code:', provaId);
+        
+        // Pega o token atual
+        const token = localStorage.getItem('auth_token');
+        
+        if (!token) {
+            this.showToast('❌ Você precisa estar logado para corrigir provas', 'error');
+            return;
+        }
+        
+        // Abre a página de correção em uma nova aba com o token na URL
+        const url = `/corrigir-prova?prova=${provaId}&token=${encodeURIComponent(token)}`;
+        window.open(url, '_blank');
+        
+        this.showToast('📱 Abrindo página de correção em nova aba...', 'info');
     }
 
     // ============ ORDENAR PROVAS POR COLUNA ============

@@ -6,6 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+    <meta name="mobile-web-app-capable" content="yes">
 
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
@@ -29,7 +30,8 @@
         .card { background: white; border-radius: 24px; padding: 25px; margin-bottom: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
         .header { text-align: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #e5e7eb; }
         .header h1 { color: #4f46e5; margin-bottom: 8px; font-size: 1.8rem; }
-        .btn-voltar { background: #f3f4f6; color: #4b5563; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+        .btn-voltar { background: #f3f4f6; color: #4b5563; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 20px; transition: all 0.3s; }
+        .btn-voltar:hover { background: #e5e7eb; transform: translateX(-3px); }
         
         .prova-info { background: linear-gradient(135deg, #f8fafc, #f1f5f9); padding: 20px; border-radius: 16px; margin-bottom: 25px; border-left: 4px solid #4f46e5; }
         .gabarito-oficial { background: #f8fafc; border-radius: 16px; padding: 15px; margin-bottom: 20px; }
@@ -38,20 +40,20 @@
         .gabarito-item.correta { background: #d1fae5; border-color: #10b981; color: #065f46; }
         
         .selecao-aluno { background: #f8fafc; border-radius: 16px; padding: 15px; margin-bottom: 20px; }
-        .selecao-aluno select { width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; margin-top: 8px; }
+        .selecao-aluno select { width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; margin-top: 8px; cursor: pointer; }
+        .selecao-aluno select:focus { outline: none; border-color: #4f46e5; }
         
-        /* MODO AUTOMÁTICO / MANUAL */
         .modo-container { display: flex; gap: 10px; margin-bottom: 15px; justify-content: center; }
         .modo-btn { padding: 8px 20px; border-radius: 30px; border: none; font-weight: 600; cursor: pointer; transition: all 0.3s; }
         .modo-btn.ativo { background: #4f46e5; color: white; box-shadow: 0 2px 8px rgba(79,70,229,0.3); }
         .modo-btn.inativo { background: #e5e7eb; color: #6b7280; }
+        .modo-btn.inativo:hover { background: #d1d5db; }
         
         .camera-container { background: #f8fafc; border-radius: 16px; padding: 20px; text-align: center; position: relative; }
         .camera-preview { position: relative; display: inline-block; border-radius: 12px; overflow: hidden; width: 100%; max-width: 500px; margin: 0 auto; }
         video, canvas { max-width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; background: #000; width: 100%; }
         video { transform: scaleX(-1); max-height: 450px; }
         
-        /* GUIAS DE ENQUADRAMENTO */
         .guia-enquadramento { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
         .guia-canto { position: absolute; width: 40px; height: 40px; border: 3px solid #10b981; }
         .guia-canto-top-left { top: 10px; left: 10px; border-right: none; border-bottom: none; }
@@ -64,7 +66,9 @@
         
         .btn-camera, .btn-capturar { padding: 12px 24px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin: 10px 5px; border: none; transition: all 0.3s; }
         .btn-camera { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; }
+        .btn-camera:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(79,70,229,0.4); }
         .btn-capturar { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .btn-capturar:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
         .btn-capturar:disabled { opacity: 0.5; cursor: not-allowed; }
         
         .resultado-correcao { background: #f8fafc; border-radius: 16px; padding: 20px; margin-top: 20px; }
@@ -73,29 +77,38 @@
         .resposta-card.correta { background: #d1fae5; border-color: #10b981; }
         .resposta-card.incorreta { background: #fee2e2; border-color: #ef4444; }
         .resposta-card:hover { transform: scale(1.02); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .btn-opcao { width: 32px; padding: 4px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: bold; margin: 2px; }
-        .btn-opcao:hover { background: #e0e7ff; border-color: #4f46e5; }
+        .btn-opcao { width: 32px; padding: 4px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: bold; margin: 2px; transition: all 0.2s; }
+        .btn-opcao:hover { background: #e0e7ff; border-color: #4f46e5; transform: scale(1.05); }
         
         .nota-final { text-align: center; padding: 15px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border-radius: 12px; margin: 15px 0; }
-        .btn-salvar { width: 100%; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 15px; }
+        .nota-valor { font-size: 2rem; font-weight: bold; }
+        .btn-salvar { width: 100%; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 15px; transition: all 0.3s; }
+        .btn-salvar:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
         .loading { text-align: center; padding: 30px; }
         .spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .alert { padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: none; }
+        .alert { padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: none; animation: slideIn 0.3s ease; }
         .alert-success { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
         .alert-error { background: #fee2e2; color: #7f1d1d; border-left: 4px solid #ef4444; }
         .alert-info { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
         
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
         @media (max-width: 768px) {
             .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
             .guia-canto { width: 25px; height: 25px; }
+            .card { padding: 15px; }
+            .btn-camera, .btn-capturar { padding: 8px 16px; font-size: 0.8rem; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <button class="btn-voltar" onclick="window.location.href = `resultados.html?provaId=${new URLSearchParams(window.location.search).get('prova')}`">
+            <button class="btn-voltar" onclick="window.history.back()">
                 <i class="fas fa-arrow-left"></i> Voltar
             </button>
             
@@ -122,10 +135,9 @@
                     </select>
                 </div>
                 
-                <!-- Modos de correção -->
                 <div class="modo-container">
-                    <button class="modo-btn ativo" id="modoAutomaticoBtn" onclick="setModo('auto')">🤖 Automático (Evalbe)</button>
-                    <button class="modo-btn inativo" id="modoManualBtn" onclick="setModo('manual')">✏️ Manual (Clicar)</button>
+                    <button class="modo-btn ativo" id="modoAutomaticoBtn">🤖 Automático</button>
+                    <button class="modo-btn inativo" id="modoManualBtn">✏️ Manual</button>
                 </div>
                 
                 <div class="camera-container">
@@ -158,7 +170,7 @@
                         <h3><i class="fas fa-chart-line"></i> Resultado da Correção</h3>
                         <div id="respostasGrid" class="respostas-grid"></div>
                         <div id="notaFinal" class="nota-final"></div>
-                        <button class="btn-salvar" id="btnSalvarNota"><i class="fas fa-save"></i> Salvar Nota Manual</button>
+                        <button class="btn-salvar" id="btnSalvarNota"><i class="fas fa-save"></i> Salvar Nota</button>
                     </div>
                 </div>
             </div>
@@ -168,7 +180,30 @@
     <script>
         // ========== CONFIGURAÇÃO ==========
         const urlParams = new URLSearchParams(window.location.search);
-        const provaId = urlParams.get('prova');
+        let provaId = urlParams.get('prova');
+        let urlToken = urlParams.get('token');
+        
+        // Usar token da URL ou do localStorage
+        let authToken = urlToken || localStorage.getItem('auth_token');
+        
+        // Se não tiver token, redirecionar para login
+        if (!authToken) {
+            const redirectUrl = encodeURIComponent(`/corrigir-prova?prova=${provaId || ''}`);
+            window.location.href = `/login.html?redirect=${redirectUrl}`;
+        }
+        
+        // Salvar token no localStorage se veio da URL
+        if (urlToken && !localStorage.getItem('auth_token')) {
+            localStorage.setItem('auth_token', urlToken);
+        }
+        
+        console.log('🔍 Correção da prova ID:', provaId);
+        console.log('🔑 Token presente:', !!authToken);
+        
+        if (!provaId) {
+            alert('❌ ID da prova não encontrado!');
+            window.location.href = '/admin.html';
+        }
         
         let dadosProva = null;
         let alunos = [];
@@ -177,7 +212,7 @@
         let respostasDetectadas = [];
         let notaCalculada = 0;
         let alunoSelecionadoId = null;
-        let modoAtual = 'auto'; // 'auto' ou 'manual'
+        let modoAtual = 'auto';
         let estabilidadeContador = 0;
         let ultimaImagem = null;
         let analiseInterval = null;
@@ -193,6 +228,30 @@
         const qualidadeBadge = document.getElementById('qualidadeBadge');
         let stream = null;
         
+        async function fetchWithAuth(url, options = {}) {
+            const token = authToken || localStorage.getItem('auth_token');
+            
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+            
+            if (response.status === 401) {
+                alert('Sua sessão expirou. Faça login novamente.');
+                const redirectUrl = encodeURIComponent(`/corrigir-prova?prova=${provaId}`);
+                window.location.href = `/login.html?redirect=${redirectUrl}`;
+                return null;
+            }
+            
+            return response;
+        }
+        
         function mostrarAlerta(mensagem, tipo = 'info') {
             const alert = document.getElementById('alert');
             alert.className = `alert alert-${tipo}`;
@@ -203,13 +262,17 @@
         
         function setModo(modo) {
             modoAtual = modo;
-            document.getElementById('modoAutomaticoBtn').className = `modo-btn ${modo === 'auto' ? 'ativo' : 'inativo'}`;
-            document.getElementById('modoManualBtn').className = `modo-btn ${modo === 'manual' ? 'ativo' : 'inativo'}`;
+            const modoAuto = document.getElementById('modoAutomaticoBtn');
+            const modoManual = document.getElementById('modoManualBtn');
             
             if (modo === 'auto') {
+                modoAuto.className = 'modo-btn ativo';
+                modoManual.className = 'modo-btn inativo';
                 guiaTexto.innerHTML = '🤖 Modo Automático: Alinhe o cartão e aguarde a captura automática';
                 iniciarCapturaAutomatica();
             } else {
+                modoAuto.className = 'modo-btn inativo';
+                modoManual.className = 'modo-btn ativo';
                 guiaTexto.innerHTML = '✏️ Modo Manual: Alinhe o cartão e clique em "Capturar Agora"';
                 pararCapturaAutomatica();
             }
@@ -238,6 +301,7 @@
             if (ultimaImagem === imagemAtual) {
                 estabilidadeContador++;
                 qualidadeBadge.innerHTML = `📷 Estabilizando... ${estabilidadeContador}/10`;
+                qualidadeBadge.style.display = 'block';
                 
                 if (estabilidadeContador >= 10) {
                     estabilidadeContador = 0;
@@ -248,27 +312,32 @@
                 estabilidadeContador = 0;
                 ultimaImagem = imagemAtual;
                 qualidadeBadge.innerHTML = '📷 Aguardando estabilização...';
+                qualidadeBadge.style.display = 'block';
             }
         }
         
         async function carregarDados() {
             try {
-                const token = localStorage.getItem('auth_token');
-                if (!provaId) { mostrarAlerta('ID da prova não encontrado', 'error'); return; }
+                if (!provaId) { 
+                    mostrarAlerta('ID da prova não encontrado', 'error'); 
+                    return; 
+                }
                 
-                const response = await fetch(`/api/provas/${provaId}/resultados`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                mostrarAlerta('📡 Carregando dados da prova...', 'info');
+                
+                const response = await fetchWithAuth(`/api/provas/${provaId}/resultados`);
+                if (!response) return;
+                
                 const data = await response.json();
                 
                 if (data.success) {
                     dadosProva = data;
                     alunos = data.resultados || [];
-                    totalQuestoes = data.prova.quantidadeQuestoes;
+                    totalQuestoes = data.prova?.quantidadeQuestoes || 0;
                     
-                    const provaResponse = await fetch(`/api/provas/${provaId}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    const provaResponse = await fetchWithAuth(`/api/provas/${provaId}`);
+                    if (!provaResponse) return;
+                    
                     const provaData = await provaResponse.json();
                     
                     if (provaData.success && provaData.questoes) {
@@ -283,7 +352,7 @@
                     document.getElementById('conteudo').style.display = 'block';
                     
                     document.getElementById('provaInfo').innerHTML = `
-                        <h3><i class="fas fa-file-alt"></i> ${data.prova.titulo}</h3>
+                        <h3><i class="fas fa-file-alt"></i> ${data.prova?.titulo || 'Prova'}</h3>
                         <div><span>📊 ${totalQuestoes} questões | 👥 ${alunos.length} alunos</span></div>
                     `;
                     
@@ -298,12 +367,25 @@
                     selectAluno.innerHTML = '<option value="">Selecione um aluno...</option>';
                     alunos.forEach(aluno => {
                         const notaAuto = aluno.notaAutomatica !== null ? ` (Online: ${parseFloat(aluno.notaAutomatica).toFixed(1)})` : '';
-                        selectAluno.innerHTML += `<option value="${aluno.alunoId}">${aluno.alunoNome}${notaAuto}</option>`;
+                        const notaManual = aluno.notaManualLiberada ? ` | Manual: ${parseFloat(aluno.notaManual).toFixed(1)}` : '';
+                        selectAluno.innerHTML += `<option value="${aluno.alunoId}">${aluno.alunoNome}${notaAuto}${notaManual}</option>`;
                     });
-                    selectAluno.addEventListener('change', (e) => { alunoSelecionadoId = e.target.value; });
+                    selectAluno.addEventListener('change', (e) => { 
+                        alunoSelecionadoId = e.target.value;
+                        resultado.style.display = 'none';
+                        respostasDetectadas = [];
+                        notaCalculada = 0;
+                    });
                     
-                } else { mostrarAlerta(data.error || 'Erro ao carregar dados', 'error'); }
-            } catch (error) { console.error('Erro:', error); mostrarAlerta('Erro ao carregar dados', 'error'); }
+                    mostrarAlerta('✅ Dados carregados com sucesso!', 'success');
+                    
+                } else { 
+                    mostrarAlerta(data.error || 'Erro ao carregar dados', 'error'); 
+                }
+            } catch (error) { 
+                console.error('Erro:', error); 
+                mostrarAlerta('Erro ao carregar dados: ' + error.message, 'error'); 
+            }
         }
         
         async function iniciarCamera() {
@@ -330,10 +412,14 @@
             video.srcObject = null;
             btnCapturar.disabled = true;
             btnIniciar.disabled = false;
+            qualidadeBadge.style.display = 'none';
         }
         
         function capturarECorrigir() {
-            if (!alunoSelecionadoId) { mostrarAlerta('⚠️ Selecione um aluno primeiro!', 'error'); return; }
+            if (!alunoSelecionadoId) { 
+                mostrarAlerta('⚠️ Selecione um aluno primeiro!', 'error'); 
+                return; 
+            }
             
             const context = canvas.getContext('2d');
             canvas.width = video.videoWidth;
@@ -369,7 +455,7 @@
                         ${letras.map(letra => `<button class="btn-opcao" onclick="definirResposta(${i}, '${letra}')">${letra}</button>`).join('')}
                         <button class="btn-opcao" onclick="definirResposta(${i}, null)" style="background:#fee2e2;">✗</button>
                     </div>
-                    <div class="resposta-correta" style="font-size:0.7rem;color:#6b7280;">✓ ${gabarito[i]?.respostaCorreta}</div>
+                    <div class="resposta-correta" style="font-size:0.7rem;color:#6b7280;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
                 `;
                 respostasGrid.appendChild(div);
                 respostas[i] = null;
@@ -409,46 +495,78 @@
                 const respostaCorreta = gabarito[i]?.respostaCorreta;
                 const isCorreta = respostaAluno && respostaAluno === respostaCorreta;
                 if (isCorreta) acertos++;
-                respostasDetectadas.push({ numero: i + 1, respostaAluno: respostaAluno || '—', respostaCorreta: respostaCorreta, correta: isCorreta });
+                respostasDetectadas.push({ 
+                    numero: i + 1, 
+                    respostaAluno: respostaAluno || '—', 
+                    respostaCorreta: respostaCorreta, 
+                    correta: isCorreta 
+                });
             }
             
             notaCalculada = (acertos / totalQuestoes) * 10;
+            const percentual = ((acertos / totalQuestoes) * 100).toFixed(0);
+            
             document.getElementById('notaFinal').innerHTML = `
                 <div class="nota-valor">${notaCalculada.toFixed(1)} / 10</div>
                 <div>${acertos} acertos de ${totalQuestoes} questões</div>
-                <div>${((acertos/totalQuestoes)*100).toFixed(0)}% de aproveitamento</div>
+                <div>${percentual}% de aproveitamento</div>
+                <div style="margin-top: 8px; font-size: 0.9rem; opacity: 0.9;">
+                    ${notaCalculada >= 6 ? '✅ Aluno APROVADO' : '⚠️ Aluno REPROVADO'}
+                </div>
             `;
             mostrarAlerta(`✅ Correção concluída! ${acertos} acertos. Nota: ${notaCalculada.toFixed(1)}`, 'success');
         }
         
         async function salvarNotaManual() {
-            if (!alunoSelecionadoId) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); return; }
+            if (!alunoSelecionadoId) { 
+                mostrarAlerta('Selecione um aluno primeiro!', 'error'); 
+                return; 
+            }
+            
+            if (respostasDetectadas.length === 0) {
+                mostrarAlerta('⚠️ Nenhuma resposta foi registrada. Corrija a prova primeiro!', 'error');
+                return;
+            }
+            
             const aluno = alunos.find(a => a.alunoId === alunoSelecionadoId);
-            if (!aluno) { mostrarAlerta('Aluno não encontrado', 'error'); return; }
+            if (!aluno) { 
+                mostrarAlerta('Aluno não encontrado', 'error'); 
+                return; 
+            }
+            
             if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)} para ${aluno.alunoNome}?`)) return;
             
             try {
-                const token = localStorage.getItem('auth_token');
-                const response = await fetch(`/api/professor/provas/${provaId}/nota-manual`, {
+                const response = await fetchWithAuth(`/api/professor/provas/${provaId}/nota-manual`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         alunoId: alunoSelecionadoId,
                         nota: notaCalculada,
                         observacao: `Corrigido em ${new Date().toLocaleString('pt-BR')}. Respostas: ${respostasDetectadas.map(r => `${r.numero}:${r.respostaAluno}`).join(', ')}`
                     })
                 });
+                
+                if (!response) return;
+                
                 const data = await response.json();
                 if (data.success) {
                     mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva para ${aluno.alunoNome}!`, 'success');
-                    setTimeout(() => { window.location.href = `resultados.html?provaId=${provaId}`; }, 1500);
-                } else { throw new Error(data.error || 'Erro ao salvar'); }
-            } catch (error) { mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); }
+                    setTimeout(() => { 
+                        window.location.href = `/resultados.html?provaId=${provaId}`; 
+                    }, 1500);
+                } else { 
+                    throw new Error(data.error || 'Erro ao salvar'); 
+                }
+            } catch (error) { 
+                mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); 
+            }
         }
         
         btnIniciar.addEventListener('click', iniciarCamera);
         btnCapturar.addEventListener('click', () => { setModo('manual'); capturarECorrigir(); });
         document.getElementById('btnSalvarNota')?.addEventListener('click', salvarNotaManual);
+        document.getElementById('modoAutomaticoBtn').onclick = () => setModo('auto');
+        document.getElementById('modoManualBtn').onclick = () => setModo('manual');
         
         window.addEventListener('beforeunload', () => pararCamera());
         carregarDados();

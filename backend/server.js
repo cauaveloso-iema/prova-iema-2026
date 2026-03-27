@@ -8404,11 +8404,17 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
       });
     }
     
-    // Verificar se é o professor da prova ou admin
-    const isProfessor = req.userRole === 'professor' || req.userRole === 'admin';
+    // Verificar se é admin ou super_admin
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+    const isProfessor = req.userRole === 'professor';
     const isProfessorDaProva = prova.userId.toString() === professorId;
-    
-    if (!isProfessor && !isProfessorDaProva && req.userRole !== 'admin') {
+
+    // Se for admin ou super_admin, libera acesso total
+    if (isAdmin) {
+      console.log(`✅ ${req.userRole} acessando resultados da prova ${provaId}`);
+    } 
+    // Se não for admin, verificar permissões normais
+    else if (!isProfessor && !isProfessorDaProva) {
       return res.status(403).json({
         success: false,
         error: 'Você não tem permissão para ver os resultados desta prova'
@@ -18695,6 +18701,190 @@ function obterListaCondicoes() {
         { valor: 'outra', label: 'Outra Condição' }
     ];
 }
+
+// ============ ROTA PROTEGIDA PARA CORREÇÃO DE PROVAS ============
+app.get('/corrigir-prova', async (req, res) => {
+    try {
+        // Verificar se tem token na URL ou no header
+        let token = req.query.token || req.headers.authorization?.split(' ')[1];
+        
+        if (!token) {
+            // Se não tem token, redirecionar para login com returnUrl
+            const returnUrl = encodeURIComponent(`/corrigir-prova?prova=${req.query.prova}`);
+            return res.redirect(`/login.html?redirect=${returnUrl}`);
+        }
+        
+        // Verificar token
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            // Token inválido ou expirado
+            const returnUrl = encodeURIComponent(`/corrigir-prova?prova=${req.query.prova}`);
+            return res.redirect(`/login.html?redirect=${returnUrl}`);
+        }
+        
+        // Buscar usuário
+        const user = await User.findById(decoded.id);
+        if (!user || !user.ativo) {
+            return res.redirect('/login.html');
+        }
+        
+        // Verificar permissões
+        const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+        const isProfessor = user.role === 'professor';
+        
+        if (!isAdmin && !isProfessor) {
+            return res.status(403).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Acesso Negado</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+                        .card { background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+                        .error { color: #dc3545; }
+                        .btn { display: inline-block; padding: 10px 20px; background: #0d6efd; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <h1 class="error">⛔ Acesso Negado</h1>
+                        <p>Apenas professores e administradores podem acessar esta página.</p>
+                        <a href="/login.html" class="btn">Fazer Login</a>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+        
+        // Verificar o ID da prova
+        const provaId = req.query.prova;
+        if (!provaId) {
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Parâmetro Inválido</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+                        .card { background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+                        .error { color: #dc3545; }
+                        .btn { display: inline-block; padding: 10px 20px; background: #0d6efd; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <h1 class="error">⚠️ Parâmetro Inválido</h1>
+                        <p>ID da prova não informado.</p>
+                        <a href="/admin.html" class="btn">Voltar</a>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+        
+        // Buscar a prova para verificar permissão do professor
+        const prova = await Prova.findById(provaId);
+        
+        if (!prova) {
+            return res.status(404).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Prova Não Encontrada</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+                        .card { background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+                        .error { color: #dc3545; }
+                        .btn { display: inline-block; padding: 10px 20px; background: #0d6efd; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <h1 class="error">🔍 Prova Não Encontrada</h1>
+                        <p>A prova que você está tentando corrigir não existe.</p>
+                        <a href="/admin.html" class="btn">Voltar</a>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+        
+        // Se for professor, verificar se é o professor responsável pela prova
+        if (isProfessor && prova.userId.toString() !== user._id.toString()) {
+            return res.status(403).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Acesso Negado</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+                        .card { background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+                        .error { color: #dc3545; }
+                        .btn { display: inline-block; padding: 10px 20px; background: #0d6efd; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <h1 class="error">⛔ Acesso Negado</h1>
+                        <p>Você só pode corrigir provas que você criou.</p>
+                        <a href="/index.html" class="btn">Voltar</a>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+        
+        // Servir o arquivo HTML com os dados injetados
+        const frontendPath = path.join(__dirname, '../frontend/corrigir-prova.html');
+        
+        if (!fs.existsSync(frontendPath)) {
+            console.error('❌ Arquivo corrigir-prova.html não encontrado em:', frontendPath);
+            return res.status(404).send('Página não encontrada');
+        }
+        
+        let html = fs.readFileSync(frontendPath, 'utf8');
+        
+        // Injetar os dados do usuário, da prova e o token
+        html = html.replace('</head>', `
+            <script>
+                // Dados injetados pelo servidor
+                window.PROVA_ID = '${provaId}';
+                window.USUARIO_ID = '${user._id}';
+                window.USUARIO_ROLE = '${user.role}';
+                window.USUARIO_NOME = '${user.nome || ''}';
+                window.AUTH_TOKEN = '${token}';
+            </script>
+        </head>`);
+        
+        res.send(html);
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar página de correção:', error);
+        res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Erro no Servidor</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+                    .card { background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+                    .error { color: #dc3545; }
+                    .btn { display: inline-block; padding: 10px 20px; background: #0d6efd; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h1 class="error">❌ Erro no Servidor</h1>
+                    <p>Ocorreu um erro ao carregar a página de correção.</p>
+                    <a href="/admin.html" class="btn">Voltar</a>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+});
 
 
 // ============================================================================
