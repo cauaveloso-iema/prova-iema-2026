@@ -1,17 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d6efd">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
-    <meta name="mobile-web-app-capable" content="yes">
-
-    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
-    <link rel="shortcut icon" href="/icons/favicon.ico">
-    <link rel="apple-touch-icon" href="/icons/favicon.ico">
-
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Correção de Prova - Sistema IEMA</title>
@@ -26,23 +15,13 @@
             padding: 20px;
         }
         
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 1400px; margin: 0 auto; }
         .card { background: white; border-radius: 24px; padding: 25px; margin-bottom: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
         .header { text-align: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #e5e7eb; }
         .header h1 { color: #4f46e5; margin-bottom: 8px; font-size: 1.8rem; }
+        
         .btn-voltar { 
-            background: #f3f4f6; 
-            color: #4b5563; 
-            border: none; 
-            padding: 10px 20px; 
-            border-radius: 30px; 
-            cursor: pointer; 
-            font-weight: 600; 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 8px; 
-            margin-bottom: 20px; 
-            transition: all 0.3s; 
+            background: #f3f4f6; color: #4b5563; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 20px; transition: all 0.3s; 
         }
         .btn-voltar:hover { background: #e5e7eb; transform: translateX(-3px); }
         
@@ -55,16 +34,11 @@
         .selecao-aluno { background: #f8fafc; border-radius: 16px; padding: 15px; margin-bottom: 20px; }
         .selecao-aluno select { width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; margin-top: 8px; cursor: pointer; }
         
-        .modo-container { display: flex; gap: 10px; margin-bottom: 15px; justify-content: center; }
-        .modo-btn { padding: 8px 20px; border-radius: 30px; border: none; font-weight: 600; cursor: pointer; transition: all 0.3s; }
-        .modo-btn.ativo { background: #4f46e5; color: white; }
-        .modo-btn.inativo { background: #e5e7eb; color: #6b7280; }
-        
         .camera-container { background: #f8fafc; border-radius: 16px; padding: 20px; text-align: center; position: relative; }
         .camera-preview { position: relative; display: inline-block; border-radius: 12px; overflow: hidden; width: 100%; margin: 0 auto; background: #000; }
         
         video, canvas { width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; background: #000; display: block; }
-        video { max-height: 70vh; object-fit: contain; }
+        video { max-height: 60vh; object-fit: contain; }
         
         .guia-enquadramento { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
         .guia-canto { position: absolute; width: 60px; height: 60px; border: 4px solid #10b981; border-radius: 12px; }
@@ -107,23 +81,12 @@
             z-index: 20;
         }
         
-        .qualidade-badge { 
-            position: absolute; 
-            top: 10px; 
-            right: 10px; 
-            background: rgba(0,0,0,0.8); 
-            color: white; 
-            padding: 6px 12px; 
-            border-radius: 20px; 
-            font-size: 12px; 
-            z-index: 20;
-        }
-        
         .btn-camera, .btn-capturar { padding: 12px 24px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin: 10px 5px; border: none; transition: all 0.3s; }
         .btn-camera { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; }
         .btn-capturar { background: linear-gradient(135deg, #10b981, #059669); color: white; }
         .btn-capturar:disabled { opacity: 0.5; cursor: not-allowed; }
         
+        /* Preview e Resultados */
         .preview-container {
             position: fixed;
             top: 0;
@@ -151,14 +114,16 @@
             max-height: 50vh;
             border-radius: 12px;
             margin-bottom: 20px;
+            cursor: crosshair;
         }
-        .preview-buttons { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
+        .preview-buttons { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 15px; }
         
         .resultado-correcao { background: #f8fafc; border-radius: 16px; padding: 20px; margin-top: 20px; }
-        .respostas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin: 15px 0; }
-        .resposta-card { text-align: center; padding: 8px; border: 1px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; transition: all 0.2s; }
+        .respostas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin: 15px 0; }
+        .resposta-card { text-align: center; padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; transition: all 0.2s; }
         .resposta-card.correta { background: #d1fae5; border-color: #10b981; }
         .resposta-card.incorreta { background: #fee2e2; border-color: #ef4444; }
+        .resposta-card:hover { transform: scale(1.02); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .btn-opcao { width: 36px; padding: 6px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; margin: 2px; }
         .btn-opcao:hover { background: #e0e7ff; }
         
@@ -176,20 +141,8 @@
         .alert-error { background: #fee2e2; color: #7f1d1d; border-left: 4px solid #ef4444; }
         .alert-info { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
         
-        .progress-bar {
-            width: 100%;
-            height: 4px;
-            background: #e5e7eb;
-            border-radius: 2px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-        .progress-fill {
-            height: 100%;
-            background: #10b981;
-            width: 0%;
-            transition: width 0.3s;
-        }
+        .progress-bar { width: 100%; height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { height: 100%; background: #10b981; width: 0%; transition: width 0.3s; }
         
         @media (orientation: landscape) {
             .guia-canto { width: 45px; height: 45px; }
@@ -226,11 +179,6 @@
                     </select>
                 </div>
                 
-                <div class="modo-container">
-                    <button class="modo-btn ativo" id="modoAutomaticoBtn">🤖 Automático (IA)</button>
-                    <button class="modo-btn inativo" id="modoManualBtn">✏️ Manual</button>
-                </div>
-                
                 <div class="camera-container">
                     <div class="camera-preview" id="cameraPreview">
                         <video id="video" autoplay playsinline></video>
@@ -243,11 +191,10 @@
                             <div class="feedback-proximidade" id="feedbackProximidade">📏 Aproxime o cartão</div>
                             <div class="guia-texto" id="guiaTexto">🔍 Alinhe o cartão dentro das guias verdes</div>
                         </div>
-                        <div class="qualidade-badge" id="qualidadeBadge" style="display: none;">📷 Aguardando</div>
                     </div>
                     <div>
                         <button class="btn-camera" id="btnIniciarCamera"><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                        <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar e Reconhecer</button>
+                        <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar e Corrigir</button>
                     </div>
                 </div>
                 
@@ -291,24 +238,17 @@
             window.location.href = '/admin.html';
         }
         
-        // ========== FUNÇÃO DE VOLTAR CORRIGIDA ==========
+        // Função de voltar
         function voltarPagina() {
             if (document.referrer && document.referrer.includes(window.location.hostname)) {
                 window.history.back();
             } else {
                 const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
                 const role = userData.role || window.USUARIO_ROLE;
-                
-                if (role === 'professor') {
-                    window.location.href = '/index.html';
-                } else if (role === 'admin' || role === 'super_admin') {
-                    window.location.href = '/admin.html';
-                } else {
-                    window.location.href = '/login.html';
-                }
+                if (role === 'professor') window.location.href = '/index.html';
+                else window.location.href = '/admin.html';
             }
         }
-        
         document.getElementById('btnVoltar')?.addEventListener('click', voltarPagina);
         
         let dadosProva = null;
@@ -318,7 +258,6 @@
         let respostasDetectadas = [];
         let notaCalculada = 0;
         let alunoSelecionadoId = null;
-        let modoAtual = 'auto';
         let imagemCapturadaUrl = null;
         
         const video = document.getElementById('video');
@@ -328,105 +267,44 @@
         const processando = document.getElementById('processando');
         const resultado = document.getElementById('resultado');
         const guiaTexto = document.getElementById('guiaTexto');
-        const qualidadeBadge = document.getElementById('qualidadeBadge');
         const feedbackProximidade = document.getElementById('feedbackProximidade');
         let stream = null;
         
-        // ========== DETECÇÃO DE MARCAÇÕES POR ANÁLISE DE CÍRCULOS ==========
+        // ========== DETECÇÃO DE MARCAÇÕES (ESTILO EVALBE) ==========
         
-        // Configuração do cartão-resposta (ajustar conforme necessário)
-        const CONFIG_CARTAO = {
-            // Posição aproximada da tabela (em % da imagem)
-            // Ajuste estes valores conforme seu cartão
-            startX: 0.12,    // Início da tabela (12% da largura)
-            startY: 0.45,    // Início da tabela (45% da altura)
-            endX: 0.88,      // Fim da tabela (88% da largura)
-            endY: 0.75,      // Fim da tabela (75% da altura)
-            linhas: 5,       // Número de alternativas (A, B, C, D, E)
-            colunas: 10,     // Número de questões
-            raioCirculo: 12, // Raio do círculo em pixels
-            threshold: 0.25  // 25% de preenchimento = marcado
+        // Configuração do cartão (ajuste conforme seu modelo)
+        const CONFIG = {
+            // Posição da tabela no cartão (em % da imagem)
+            tabela: {
+                x: 0.10,      // 10% da largura
+                y: 0.40,      // 40% da altura
+                largura: 0.80, // 80% da largura
+                altura: 0.35   // 35% da altura
+            },
+            linhas: 5,   // A, B, C, D, E
+            colunas: 10, // 10 questões
+            raioCirculo: 12, // raio do círculo em pixels (aprox)
+            threshold: 0.30  // 30% de preenchimento = marcado
         };
         
-        // Função para analisar preenchimento de um círculo
-        function analisarPreenchimentoCirculo(ctx, centroX, centroY, raio) {
-            const xStart = Math.max(0, Math.floor(centroX - raio));
-            const yStart = Math.max(0, Math.floor(centroY - raio));
-            const xEnd = Math.min(ctx.canvas.width, Math.ceil(centroX + raio));
-            const yEnd = Math.min(ctx.canvas.height, Math.ceil(centroY + raio));
-            
-            let totalPixels = 0;
-            let pixelsEscuros = 0;
-            
-            for (let y = yStart; y < yEnd; y++) {
-                for (let x = xStart; x < xEnd; x++) {
-                    const dx = x - centroX;
-                    const dy = y - centroY;
-                    const distancia = Math.sqrt(dx*dx + dy*dy);
-                    
-                    if (distancia <= raio) {
-                        totalPixels++;
-                        const pixel = ctx.getImageData(x, y, 1, 1).data;
-                        const brilho = (pixel[0] + pixel[1] + pixel[2]) / 3;
-                        
-                        // Pixel escuro se brilho < 128
-                        if (brilho < 128) {
-                            pixelsEscuros++;
-                        }
-                    }
-                }
-            }
-            
-            return totalPixels > 0 ? pixelsEscuros / totalPixels : 0;
-        }
-        
-        // Função para detectar automaticamente a região do cartão
-        function detectarRegiaoCartao(ctx) {
-            // Tenta encontrar a região com maior contraste (onde estão os círculos)
-            const width = ctx.canvas.width;
-            const height = ctx.canvas.height;
-            
-            // Análise simples: procura por áreas com muitos pixels escuros
-            let melhorX = 0, melhorY = 0, melhorScore = 0;
-            const passo = 20;
-            
-            for (let y = height * 0.3; y < height * 0.8; y += passo) {
-                for (let x = width * 0.1; x < width * 0.9; x += passo) {
-                    let score = 0;
-                    for (let dy = -10; dy <= 10; dy++) {
-                        for (let dx = -10; dx <= 10; dx++) {
-                            const pixel = ctx.getImageData(x + dx, y + dy, 1, 1).data;
-                            const brilho = (pixel[0] + pixel[1] + pixel[2]) / 3;
-                            if (brilho < 100) score++;
-                        }
-                    }
-                    if (score > melhorScore) {
-                        melhorScore = score;
-                        melhorX = x;
-                        melhorY = y;
-                    }
-                }
-            }
-            
-            return { x: melhorX, y: melhorY };
-        }
-        
-        // Função principal de detecção
-        async function detectarRespostasPorMarcacao(imagemBase64) {
+        // Função para processar imagem e detectar marcações
+        async function detectarMarcacoes(imagemBase64) {
             return new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = () => {
                     try {
+                        // Criar canvas para processamento
                         const tempCanvas = document.createElement('canvas');
                         const ctx = tempCanvas.getContext('2d');
                         
-                        // Redimensionar para tamanho padrão para análise
-                        const escala = Math.min(1200 / img.width, 1);
-                        tempCanvas.width = img.width * escala;
+                        // Redimensionar para tamanho padrão (facilita análise)
+                        const LARGURA_PADRAO = 1200;
+                        const escala = LARGURA_PADRAO / img.width;
+                        tempCanvas.width = LARGURA_PADRAO;
                         tempCanvas.height = img.height * escala;
                         ctx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
                         
-                        // Aumentar contraste
+                        // 1. Aumentar contraste e binarizar
                         const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
                         const data = imageData.data;
                         for (let i = 0; i < data.length; i += 4) {
@@ -434,59 +312,76 @@
                             const g = data[i+1];
                             const b = data[i+2];
                             const brilho = (r + g + b) / 3;
-                            const novoValor = brilho < 128 ? 0 : 255;
-                            data[i] = novoValor;
-                            data[i+1] = novoValor;
-                            data[i+2] = novoValor;
+                            // Binarização: preto se brilho < 128, branco se > 128
+                            const valor = brilho < 128 ? 0 : 255;
+                            data[i] = valor;
+                            data[i+1] = valor;
+                            data[i+2] = valor;
                         }
                         ctx.putImageData(imageData, 0, 0);
                         
                         const width = tempCanvas.width;
                         const height = tempCanvas.height;
                         
-                        // Configuração baseada no tamanho da imagem
-                        const config = {
-                            startX: width * CONFIG_CARTAO.startX,
-                            startY: height * CONFIG_CARTAO.startY,
-                            endX: width * CONFIG_CARTAO.endX,
-                            endY: height * CONFIG_CARTAO.endY,
-                            colunas: CONFIG_CARTAO.colunas,
-                            linhas: CONFIG_CARTAO.linhas,
-                            raioCirculo: CONFIG_CARTAO.raioCirculo * escala,
-                            threshold: CONFIG_CARTAO.threshold
-                        };
+                        // Calcular posições da tabela
+                        const tabelaX = width * CONFIG.tabela.x;
+                        const tabelaY = height * CONFIG.tabela.y;
+                        const tabelaLargura = width * CONFIG.tabela.largura;
+                        const tabelaAltura = height * CONFIG.tabela.altura;
                         
-                        const larguraCelula = (config.endX - config.startX) / config.colunas;
-                        const alturaCelula = (config.endY - config.startY) / config.linhas;
+                        const larguraCelula = tabelaLargura / CONFIG.colunas;
+                        const alturaCelula = tabelaAltura / CONFIG.linhas;
+                        const raio = CONFIG.raioCirculo * escala;
                         const letras = ['A', 'B', 'C', 'D', 'E'];
                         const respostas = [];
                         
                         console.log('🔍 Analisando cartão...');
-                        console.log(`   Região: (${config.startX.toFixed(0)}, ${config.startY.toFixed(0)}) a (${config.endX.toFixed(0)}, ${config.endY.toFixed(0)})`);
+                        console.log(`   Tabela: (${tabelaX.toFixed(0)}, ${tabelaY.toFixed(0)}) a (${(tabelaX + tabelaLargura).toFixed(0)}, ${(tabelaY + tabelaAltura).toFixed(0)})`);
                         
                         // Para cada questão
-                        for (let questao = 0; questao < config.colunas; questao++) {
+                        for (let questao = 0; questao < CONFIG.colunas; questao++) {
                             let melhorAlternativa = null;
                             let maiorPreenchimento = 0;
                             
                             // Para cada alternativa
-                            for (let letraIdx = 0; letraIdx < config.linhas; letraIdx++) {
-                                const x = config.startX + (questao * larguraCelula) + (larguraCelula / 2);
-                                const y = config.startY + (letraIdx * alturaCelula) + (alturaCelula / 2);
+                            for (let linha = 0; linha < CONFIG.linhas; linha++) {
+                                // Centro do círculo
+                                const centroX = tabelaX + (questao * larguraCelula) + (larguraCelula / 2);
+                                const centroY = tabelaY + (linha * alturaCelula) + (alturaCelula / 2);
                                 
-                                // Verificar se está dentro dos limites
-                                if (x > 0 && x < width && y > 0 && y < height) {
-                                    const preenchimento = analisarPreenchimentoCirculo(ctx, x, y, config.raioCirculo);
+                                // Verificar se está dentro da imagem
+                                if (centroX - raio > 0 && centroX + raio < width && centroY - raio > 0 && centroY + raio < height) {
+                                    // Analisar preenchimento do círculo
+                                    let totalPixels = 0;
+                                    let pixelsEscuros = 0;
                                     
-                                    if (preenchimento > config.threshold && preenchimento > maiorPreenchimento) {
+                                    for (let dy = -raio; dy <= raio; dy++) {
+                                        for (let dx = -raio; dx <= raio; dx++) {
+                                            const dist = Math.sqrt(dx*dx + dy*dy);
+                                            if (dist <= raio) {
+                                                totalPixels++;
+                                                const x = Math.floor(centroX + dx);
+                                                const y = Math.floor(centroY + dy);
+                                                const idx = (y * width + x) * 4;
+                                                if (idx >= 0 && idx < data.length) {
+                                                    const pixel = data[idx];
+                                                    if (pixel < 128) pixelsEscuros++;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    const preenchimento = totalPixels > 0 ? pixelsEscuros / totalPixels : 0;
+                                    
+                                    if (preenchimento > CONFIG.threshold && preenchimento > maiorPreenchimento) {
                                         maiorPreenchimento = preenchimento;
-                                        melhorAlternativa = letras[letraIdx];
+                                        melhorAlternativa = letras[linha];
                                     }
                                 }
                             }
                             
                             respostas.push(melhorAlternativa);
-                            console.log(`   Questão ${questao + 1}: ${melhorAlternativa || 'não detectada'} (confiança: ${(maiorPreenchimento * 100).toFixed(0)}%)`);
+                            console.log(`   Q${questao + 1}: ${melhorAlternativa || '—'} (confiança: ${(maiorPreenchimento * 100).toFixed(0)}%)`);
                         }
                         
                         resolve(respostas);
@@ -528,22 +423,6 @@
             setTimeout(() => alert.style.display = 'none', 5000);
         }
         
-        function setModo(modo) {
-            modoAtual = modo;
-            const modoAuto = document.getElementById('modoAutomaticoBtn');
-            const modoManual = document.getElementById('modoManualBtn');
-            
-            if (modo === 'auto') {
-                modoAuto.className = 'modo-btn ativo';
-                modoManual.className = 'modo-btn inativo';
-                guiaTexto.innerHTML = '🤖 IA: Alinhe o cartão e aguarde o reconhecimento automático';
-            } else {
-                modoAuto.className = 'modo-btn inativo';
-                modoManual.className = 'modo-btn ativo';
-                guiaTexto.innerHTML = '✏️ Manual: Alinhe e clique em "Capturar e Reconhecer"';
-            }
-        }
-        
         function capturarImagem() {
             if (!alunoSelecionadoId) { 
                 mostrarAlerta('⚠️ Selecione um aluno primeiro!', 'error'); 
@@ -562,6 +441,7 @@
             
             imagemCapturadaUrl = canvas.toDataURL('image/jpeg', 0.9);
             
+            // Efeito de flash
             const flash = document.createElement('div');
             flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;opacity:0.8;z-index:9999;pointer-events:none;';
             document.body.appendChild(flash);
@@ -578,24 +458,21 @@
             document.getElementById('progressFill').style.width = '0%';
             
             try {
-                let respostasDetectadasOCR = [];
-                
-                if (modoAtual === 'auto') {
-                    document.getElementById('processandoTexto').innerHTML = '🔍 Detectando círculos preenchidos...';
-                    for (let i = 0; i <= 100; i += 10) {
-                        document.getElementById('progressFill').style.width = `${i}%`;
-                        await new Promise(r => setTimeout(r, 20));
-                    }
-                    respostasDetectadasOCR = await detectarRespostasPorMarcacao(imagemCapturadaUrl);
-                    document.getElementById('progressFill').style.width = '100%';
-                } else {
-                    criarInterfaceManual();
-                    processando.style.display = 'none';
-                    resultado.style.display = 'block';
-                    return;
+                document.getElementById('processandoTexto').innerHTML = '🔍 Processando imagem...';
+                for (let i = 0; i <= 30; i += 10) {
+                    document.getElementById('progressFill').style.width = `${i}%`;
+                    await new Promise(r => setTimeout(r, 50));
                 }
                 
-                criarInterfaceComSugestoes(respostasDetectadasOCR);
+                document.getElementById('processandoTexto').innerHTML = '🎯 Detectando marcações...';
+                const respostasDetectadasOCR = await detectarMarcacoes(imagemCapturadaUrl);
+                
+                for (let i = 30; i <= 100; i += 10) {
+                    document.getElementById('progressFill').style.width = `${i}%`;
+                    await new Promise(r => setTimeout(r, 30));
+                }
+                
+                criarInterfaceComRespostas(respostasDetectadasOCR);
                 
                 processando.style.display = 'none';
                 resultado.style.display = 'block';
@@ -604,16 +481,16 @@
                 mostrarAlerta(`✅ ${detectadas} de ${totalQuestoes} questões detectadas! Confirme as respostas.`, 'success');
                 
             } catch (error) {
-                console.error('Erro no reconhecimento:', error);
-                mostrarAlerta('⚠️ Erro no reconhecimento automático. Usando modo manual.', 'error');
+                console.error('Erro:', error);
+                mostrarAlerta('⚠️ Erro na detecção. Usando modo manual.', 'error');
                 criarInterfaceManual();
                 processando.style.display = 'none';
                 resultado.style.display = 'block';
             }
         }
         
-        function criarInterfaceComSugestoes(sugestoes) {
-            const respostas = [];
+        function criarInterfaceComRespostas(sugestoes) {
+            const respostas = [...sugestoes];
             const letras = ['A', 'B', 'C', 'D', 'E'];
             const respostasGrid = document.getElementById('respostasGrid');
             respostasGrid.innerHTML = '';
@@ -629,17 +506,16 @@
                 }
                 
                 div.innerHTML = `
-                    <div class="resposta-numero" style="font-weight:bold;">Q${i + 1}</div>
-                    <div class="resposta-aluno" id="resposta-aluno-${i}" style="font-size:1.2rem;font-weight:bold;margin:5px 0;">${sugestao || '—'}</div>
-                    ${sugestao ? `<div style="font-size:0.7rem;color:#666;">🤖 Detectado: ${sugestao}</div>` : '<div style="font-size:0.7rem;color:#666;">⚠️ Não detectado</div>'}
-                    <div class="correcao-manual-buttons" style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;margin-top:5px;">
+                    <div style="font-weight:bold; margin-bottom:5px;">Q${i + 1}</div>
+                    <div id="resposta-aluno-${i}" style="font-size:1.3rem;font-weight:bold;margin:5px 0;">${sugestao || '—'}</div>
+                    ${sugestao ? `<div style="font-size:0.65rem;color:#666;">🤖 Detectado</div>` : '<div style="font-size:0.65rem;color:#f59e0b;">⚠️ Não detectado</div>'}
+                    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;margin-top:8px;">
                         ${letras.map(letra => `<button class="btn-opcao" onclick="definirResposta(${i}, '${letra}')">${letra}</button>`).join('')}
                         <button class="btn-opcao" onclick="definirResposta(${i}, null)" style="background:#fee2e2;">✗</button>
                     </div>
-                    <div class="resposta-correta" style="font-size:0.7rem;color:#6b7280;margin-top:4px;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
+                    <div style="font-size:0.65rem;color:#6b7280;margin-top:5px;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
                 `;
                 respostasGrid.appendChild(div);
-                respostas[i] = sugestao || null;
             }
             
             window.definirResposta = (questao, letra) => {
@@ -673,13 +549,13 @@
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
                 div.innerHTML = `
-                    <div class="resposta-numero" style="font-weight:bold;">Q${i + 1}</div>
-                    <div class="resposta-aluno" id="resposta-aluno-${i}" style="font-size:1.2rem;font-weight:bold;margin:5px 0;">—</div>
-                    <div class="correcao-manual-buttons" style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;">
+                    <div style="font-weight:bold; margin-bottom:5px;">Q${i + 1}</div>
+                    <div id="resposta-aluno-${i}" style="font-size:1.3rem;font-weight:bold;margin:5px 0;">—</div>
+                    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;">
                         ${letras.map(letra => `<button class="btn-opcao" onclick="definirRespostaManual(${i}, '${letra}')">${letra}</button>`).join('')}
                         <button class="btn-opcao" onclick="definirRespostaManual(${i}, null)" style="background:#fee2e2;">✗</button>
                     </div>
-                    <div class="resposta-correta" style="font-size:0.7rem;color:#6b7280;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
+                    <div style="font-size:0.65rem;color:#6b7280;margin-top:5px;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
                 `;
                 respostasGrid.appendChild(div);
                 respostas[i] = null;
@@ -841,7 +717,6 @@
                 btnIniciar.disabled = true;
                 iniciarAnaliseProximidade();
                 mostrarAlerta('✅ Câmera iniciada! Posicione o cartão.', 'success');
-                setModo('auto');
             } catch (error) {
                 mostrarAlerta('❌ Não foi possível acessar a câmera.', 'error');
             }
@@ -882,10 +757,8 @@
         }
         
         btnIniciar.addEventListener('click', iniciarCamera);
-        btnCapturar.addEventListener('click', () => { setModo('manual'); capturarECorrigir(); });
+        btnCapturar.addEventListener('click', () => { capturarECorrigir(); });
         document.getElementById('btnSalvarNota')?.addEventListener('click', salvarNotaManual);
-        document.getElementById('modoAutomaticoBtn').onclick = () => setModo('auto');
-        document.getElementById('modoManualBtn').onclick = () => setModo('manual');
         window.addEventListener('beforeunload', () => pararCamera());
         
         carregarDados();
