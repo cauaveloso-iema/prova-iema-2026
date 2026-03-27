@@ -1718,21 +1718,22 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: jwtExpiracao }
           );
           
-          // Definir redirecionamento
+          // 🔥 CORREÇÃO: Definir redirecionamento para setor_pedagogico
+          let redirectTo = '';
           if (user.forcePasswordChange) {
-              redirectTo = '/trocar-senha.html';
+            redirectTo = '/trocar-senha.html';
           } else if (user.role === 'super_admin') {
-              redirectTo = '/admin.html';
+            redirectTo = '/admin.html';
           } else if (user.role === 'admin') {
-              redirectTo = '/admin-simples.html';
+            redirectTo = '/admin-simples.html';
           } else if (user.role === 'professor') {
-              redirectTo = '/index.html';
+            redirectTo = '/index.html';
           } else if (user.role === 'setor_pedagogico') {
-              redirectTo = '/setor-pedagogico.html';  // NOVA PÁGINA
+            redirectTo = '/setor-pedagogico.html';
           } else if (user.role === 'aluno') {
-              redirectTo = '/aluno.html';
+            redirectTo = '/aluno.html';
           } else {
-              redirectTo = '/login.html';
+            redirectTo = '/login.html';
           }
           
           console.log(`✅ 2FA verificado via ${motivo} para ${user.email}`);
@@ -1861,7 +1862,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
     const perfisCom2FA = ['super_admin'];
     if (exigir2FA) {
-      perfisCom2FA.push('admin', 'professor');
+      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico');
     }
     
     if (perfisCom2FA.includes(user.role)) {
@@ -1925,21 +1926,22 @@ app.post('/api/auth/login', async (req, res) => {
       maxAge: parseJwtExpiration(jwtExpiracao) * 1000
     });
     
+    // 🔥 CORREÇÃO: Definir redirecionamento para setor_pedagogico
     let redirectTo = '';
     if (user.forcePasswordChange) {
-        redirectTo = '/trocar-senha.html';
+      redirectTo = '/trocar-senha.html';
     } else if (user.role === 'super_admin') {
-        redirectTo = '/admin.html';
+      redirectTo = '/admin.html';
     } else if (user.role === 'admin') {
-        redirectTo = '/admin-simples.html';
+      redirectTo = '/admin-simples.html';
     } else if (user.role === 'professor') {
-        redirectTo = '/index.html';
+      redirectTo = '/index.html';
     } else if (user.role === 'setor_pedagogico') {
-        redirectTo = '/setor-pedagogico.html';  // NOVA PÁGINA
+      redirectTo = '/setor-pedagogico.html';
     } else if (user.role === 'aluno') {
-        redirectTo = '/aluno.html';
+      redirectTo = '/aluno.html';
     } else {
-        redirectTo = '/login.html';
+      redirectTo = '/login.html';
     }
     
     res.json({
