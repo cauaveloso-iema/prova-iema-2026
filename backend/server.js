@@ -18886,6 +18886,182 @@ app.get('/corrigir-prova', async (req, res) => {
     }
 });
 
+// ============================================================================
+// INICIAR SERVIDOR OMR (PYTHON) COMO PROCESSO FILHO
+// ============================================================================
+let pythonProcess = null;
+let omrServerReady = false;
+
+function iniciarServidorOMR() {
+    console.log('='.repeat(60));
+    console.log('🐍 Iniciando servidor OMR Python...');
+    
+    const omrPath = path.join(__dirname, 'omr_server.py');
+    console.log('📁 Caminho:', omrPath);
+    
+    if (!fs.existsSync(omrPath)) {
+        console.error('❌ Arquivo omr_server.py não encontrado em:', omrPath);
+        console.log('💡 Certifique-se de que o arquivo está em backend/omr_server.py');
+        return;
+    }
+    
+    try {
+        const { PythonShell } = require('python-shell');
+        
+        const options = {
+            mode: 'text',
+            pythonOptions: ['-u'],
+            scriptArgs: ['--port', '5001'],
+            pythonPath: 'python'
+        };
+        
+        pythonProcess = new PythonShell(omrPath, options);
+        
+        pythonProcess.on('message', function(message) {
+            const cleanMsg = message.toString().trim();
+            if (cleanMsg) {
+                console.log('   [OMR]', cleanMsg);
+                
+                if (cleanMsg.includes('Running on http://127.0.0.1:5001') || 
+                    cleanMsg.includes('Running on http://localhost:5001') ||
+                    cleanMsg.includes('Pronto para receber requisicoes')) {
+                    omrServerReady = true;
+                    console.log('✅ Servidor OMR Python iniciado e pronto!');
+                }
+            }
+        });
+        
+        pythonProcess.stderr.on('data', function(data) {
+            const errorMsg = data.toString().trim();
+            if (errorMsg) {
+                console.error('   [OMR ERROR]', errorMsg);
+            }
+        });
+        
+        pythonProcess.on('error', function(err) {
+            console.error('❌ Erro no servidor OMR:', err.message);
+            omrServerReady = false;
+        });
+        
+        pythonProcess.on('close', function(code) {
+            console.log(`⚠️ Servidor OMR fechado (código: ${code})`);
+            omrServerReady = false;
+            pythonProcess = null;
+        });
+        
+        console.log('✅ Servidor OMR Python iniciado (aguardando inicialização...)');
+        
+        setTimeout(() => {
+            if (omrServerReady) {
+                console.log('✅ Servidor OMR pronto para uso!');
+            } else {
+                console.log('⚠️ Servidor OMR ainda não respondeu, mas continuará tentando...');
+            }
+        }, 5000);
+        
+    } catch (error) {
+        console.error('❌ Falha ao iniciar servidor OMR:', error.message);
+    }
+}
+
+// Iniciar OMR após o servidor principal estar rodando
+setTimeout(() => {
+    iniciarServidorOMR();
+}, 2000);
+
+// ============================================================================
+// ROTAS DO OMR (DEVEM FICAR ANTES DO FRONTEND ESTÁTICO)
+// ============================================================================
+
+console.log('🔧 REGISTRANDO ROTAS OMR...');
+
+// Função para verificar status do OMR
+app.get('/api/omr/status', (req, res) => {
+    res.json({
+        success: true,
+        running: omrServerReady,
+        port: 5001,
+        pid: pythonProcess ? pythonProcess.childProcess.pid : null
+    });
+});
+
+// Proxy para requisições OMR
+app.post('/api/omr/detect', express.json({ limit: '50mb' }), async (req, res) => {
+    try {
+        if (!omrServerReady) {
+            return res.status(503).json({
+                success: false,
+                error: 'Servidor OMR não está pronto. Aguarde alguns segundos.'
+            });
+        }
+        
+        console.log('📤 Enviando requisição para servidor OMR Python...');
+        
+        // Usar fetch (Node.js 18+) ou node-fetch
+        let fetchModule;
+        try {
+            // Tentar fetch nativo (Node 18+)
+            fetchModule = global.fetch;
+            if (!fetchModule) {
+                // Fallback para node-fetch
+                fetchModule = (await import('node-fetch')).default;
+            }
+        } catch (e) {
+            const nodeFetch = require('node-fetch');
+            fetchModule = nodeFetch;
+        }
+        
+        const response = await fetchModule(`http://localhost:5001/detect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body)
+        });
+        
+        const data = await response.json();
+        console.log('✅ Resposta recebida do OMR');
+        res.json(data);
+        
+    } catch (error) {
+        console.error('❌ Erro no proxy OMR:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Endpoint para testar a comunicação
+app.get('/api/omr/test', async (req, res) => {
+    try {
+        let fetchModule;
+        try {
+            fetchModule = global.fetch;
+            if (!fetchModule) {
+                fetchModule = (await import('node-fetch')).default;
+            }
+        } catch (e) {
+            const nodeFetch = require('node-fetch');
+            fetchModule = nodeFetch;
+        }
+        
+        const response = await fetchModule(`http://localhost:5001/health`);
+        const data = await response.json();
+        res.json({
+            success: true,
+            omr: data,
+            ready: omrServerReady
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            error: error.message,
+            ready: omrServerReady
+        });
+    }
+});
+
+console.log('✅ Rotas OMR registradas com sucesso!');
+
 
 // ============================================================================
 // VERIFICADOR AUTOMÁTICO DE NOTIFICAÇÕES (A CADA 1 MINUTO)
