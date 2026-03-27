@@ -18896,15 +18896,45 @@ function iniciarServidorOMR() {
     console.log('='.repeat(60));
     console.log('🐍 Iniciando servidor OMR Python...');
     
-    const omrPath = path.join(__dirname, 'omr_server.py');
+    // Detectar ambiente
+    const isRender = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production';
+    const isWindows = process.platform === 'win32';
+    
+    // Caminhos possíveis
+    let omrPath = path.join(__dirname, 'backend', 'omr_server.py');
+    if (!fs.existsSync(omrPath)) {
+        omrPath = path.join(__dirname, 'omr_server.py');
+    }
+    
     console.log('📁 Caminho:', omrPath);
+    console.log('🖥️ Ambiente:', isRender ? 'Render' : (isWindows ? 'Windows' : 'Linux'));
     
     if (!fs.existsSync(omrPath)) {
-        console.error('❌ Arquivo omr_server.py não encontrado em:', omrPath);
-        console.log('💡 Certifique-se de que o arquivo está em backend/omr_server.py');
+        console.error('❌ Arquivo omr_server.py não encontrado');
+        console.log('💡 O sistema continuará funcionando sem OMR');
         return;
     }
     
+    // Verificar se Python está disponível
+    const { exec } = require('child_process');
+    exec('python3 --version', (error, stdout) => {
+        if (error) {
+            console.log('⚠️ Python3 não encontrado, tentando python...');
+            exec('python --version', (err, out) => {
+                if (err) {
+                    console.error('❌ Python não encontrado! OMR desativado.');
+                    console.log('💡 Para ativar o OMR, instale Python no Render');
+                    return;
+                }
+                iniciarPython(omrPath, 'python', isRender);
+            });
+        } else {
+            iniciarPython(omrPath, 'python3', isRender);
+        }
+    });
+}
+
+function iniciarPython(omrPath, pythonCmd, isRender) {
     try {
         const { PythonShell } = require('python-shell');
         
@@ -18912,8 +18942,14 @@ function iniciarServidorOMR() {
             mode: 'text',
             pythonOptions: ['-u'],
             scriptArgs: ['--port', '5001'],
-            pythonPath: 'python'
+            pythonPath: pythonCmd,
+            env: {
+                ...process.env,
+                PYTHONIOENCODING: 'utf-8'
+            }
         };
+        
+        console.log(`🐍 Usando Python: ${pythonCmd}`);
         
         pythonProcess = new PythonShell(omrPath, options);
         
@@ -18923,7 +18959,6 @@ function iniciarServidorOMR() {
                 console.log('   [OMR]', cleanMsg);
                 
                 if (cleanMsg.includes('Running on http://127.0.0.1:5001') || 
-                    cleanMsg.includes('Running on http://localhost:5001') ||
                     cleanMsg.includes('Pronto para receber requisicoes')) {
                     omrServerReady = true;
                     console.log('✅ Servidor OMR Python iniciado e pronto!');
@@ -18933,7 +18968,7 @@ function iniciarServidorOMR() {
         
         pythonProcess.stderr.on('data', function(data) {
             const errorMsg = data.toString().trim();
-            if (errorMsg) {
+            if (errorMsg && !errorMsg.includes('WARNING')) {
                 console.error('   [OMR ERROR]', errorMsg);
             }
         });
@@ -18947,6 +18982,12 @@ function iniciarServidorOMR() {
             console.log(`⚠️ Servidor OMR fechado (código: ${code})`);
             omrServerReady = false;
             pythonProcess = null;
+            
+            // Tentar reiniciar apenas se estiver no Render
+            if (isRender && code !== 0) {
+                console.log('🔄 Tentando reiniciar OMR em 10 segundos...');
+                setTimeout(() => iniciarServidorOMR(), 10000);
+            }
         });
         
         console.log('✅ Servidor OMR Python iniciado (aguardando inicialização...)');
@@ -18955,19 +18996,19 @@ function iniciarServidorOMR() {
             if (omrServerReady) {
                 console.log('✅ Servidor OMR pronto para uso!');
             } else {
-                console.log('⚠️ Servidor OMR ainda não respondeu, mas continuará tentando...');
+                console.log('⚠️ Servidor OMR ainda não respondeu');
             }
-        }, 5000);
+        }, 8000);
         
     } catch (error) {
         console.error('❌ Falha ao iniciar servidor OMR:', error.message);
     }
 }
 
-// Iniciar OMR após o servidor principal estar rodando
+// Iniciar OMR após o servidor principal
 setTimeout(() => {
     iniciarServidorOMR();
-}, 2000);
+}, 5000);
 
 // ============================================================================
 // ROTAS DO OMR (DEVEM FICAR ANTES DO FRONTEND ESTÁTICO)
