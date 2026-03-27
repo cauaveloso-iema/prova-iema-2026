@@ -689,6 +689,28 @@
                 mostrarAlerta('❌ Não foi possível acessar a câmera.', 'error');
             }
         }
+
+        // Mostrar imagem de debug com resultados
+        function mostrarResultadoDebug(debugImageBase64) {
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalTitle');
+            
+            modalTitle.innerHTML = '📊 Análise da Correção';
+            modalBody.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <h3>Resultado da Detecção</h3>
+                    <img src="data:image/jpeg;base64,${debugImageBase64}" 
+                        style="max-width: 100%; border-radius: 12px; margin: 15px 0; border: 2px solid #e5e7eb;">
+                    <p style="color: #6b7280; margin-top: 10px;">
+                        🟢 Verde = Acertou | 🔴 Vermelho = Errou | 🔵 Azul = Resposta correta
+                    </p>
+                </div>
+            `;
+            
+            const modalSaveBtn = document.getElementById('modalSaveBtn');
+            modalSaveBtn.style.display = 'none';
+            adminSimples?.openModal();
+        }
         
         function pararCamera() {
             if (analiseProximidadeInterval) clearInterval(analiseProximidadeInterval);
