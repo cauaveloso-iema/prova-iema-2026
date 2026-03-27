@@ -52,7 +52,13 @@
         .camera-container { background: #f8fafc; border-radius: 16px; padding: 20px; text-align: center; position: relative; }
         .camera-preview { position: relative; display: inline-block; border-radius: 12px; overflow: hidden; width: 100%; max-width: 500px; margin: 0 auto; }
         video, canvas { max-width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; background: #000; width: 100%; }
-        video { transform: scaleX(-1); max-height: 450px; }
+        video { 
+            max-height: 450px; 
+            width: 100%;
+            border-radius: 12px;
+            border: 2px solid #e5e7eb;
+            background: #000;
+        }
         
         .guia-enquadramento { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
         .guia-canto { position: absolute; width: 40px; height: 40px; border: 3px solid #10b981; }
