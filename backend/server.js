@@ -11265,7 +11265,7 @@ app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificarPer
     }
 });
 
-// ============ ADMIN RESETAR SENHA ============
+// ============ ADMIN RESETAR SENHA (VERSÃO CORRIGIDA) ============
 app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
@@ -11297,12 +11297,35 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             });
         }
         
-        // VALIDAR POLÍTICA DE SENHAS
+        // 🔥 CORREÇÃO: Importar o modelo Config dinamicamente
+        let ConfigModel;
+        try {
+            // Tentar obter o modelo já existente
+            ConfigModel = mongoose.model('Config');
+        } catch (e) {
+            // Se não existir, criar o modelo
+            const ConfigSchema = new mongoose.Schema({
+                chave: { type: String, required: true, unique: true, trim: true },
+                valor: { type: mongoose.Schema.Types.Mixed, required: true },
+                tipo: { type: String, enum: ['string', 'number', 'boolean', 'object', 'array'], default: 'string' },
+                descricao: { type: String, default: '' },
+                categoria: { type: String, enum: ['geral', 'sistema', 'seguranca', 'provas', 'email', 'backups', 'logs', 'aparencia'], default: 'geral' },
+                publico: { type: Boolean, default: false },
+                editavel: { type: Boolean, default: true },
+                atualizadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                atualizadoEm: { type: Date, default: Date.now }
+            }, { timestamps: true });
+            
+            ConfigModel = mongoose.model('Config', ConfigSchema);
+            console.log('✅ Modelo Config criado dinamicamente na rota de reset');
+        }
+        
+        // Buscar configurações de senha usando o modelo obtido
         const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
-            Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
-            Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
-            Config.findOne({ chave: 'seguranca.senha.exigirNumero' }),
-            Config.findOne({ chave: 'seguranca.senha.exigirEspecial' })
+            ConfigModel.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
+            ConfigModel.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
+            ConfigModel.findOne({ chave: 'seguranca.senha.exigirNumero' }),
+            ConfigModel.findOne({ chave: 'seguranca.senha.exigirEspecial' })
         ]);
 
         const tamanhoMinimo = configSenhaTamanho?.valor || 6;
@@ -11310,6 +11333,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         const exigirNumero = configSenhaNumero?.valor || false;
         const exigirEspecial = configSenhaEspecial?.valor || false;
 
+        // Validar tamanho mínimo
         if (novaSenha.length < tamanhoMinimo) {
             return res.status(400).json({
                 success: false,
@@ -11317,6 +11341,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             });
         }
 
+        // Validar letra maiúscula
         if (exigirMaiuscula && !/[A-Z]/.test(novaSenha)) {
             return res.status(400).json({
                 success: false,
@@ -11324,6 +11349,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             });
         }
 
+        // Validar número
         if (exigirNumero && !/[0-9]/.test(novaSenha)) {
             return res.status(400).json({
                 success: false,
@@ -11331,6 +11357,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             });
         }
 
+        // Validar caractere especial
         if (exigirEspecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(novaSenha)) {
             return res.status(400).json({
                 success: false,
@@ -11357,8 +11384,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
         
         // VERIFICAR CONFIGURAÇÕES DE PUSH
-        const Config = mongoose.model('Config');
-        const configDoc = await Config.findOne({ chave: 'notificacoes' });
+        const configDoc = await ConfigModel.findOne({ chave: 'notificacoes' });
         const pushAtivado = configDoc?.valor?.push === true;
         
         // Criar notificação
