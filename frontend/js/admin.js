@@ -2701,6 +2701,9 @@ class AdminPanel {
                                     <th onclick="admin.ordenarUsuariosPor('status')" class="sortable">
                                         Status <i class="fas fa-sort" id="sort-status"></i>
                                     </th>
+                                    <th onclick="admin.ordenarUsuariosPor('data')" class="sortable">
+                                        Data <i class="fas fa-sort" id="sort-data"></i>
+                                    </th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -3212,7 +3215,7 @@ class AdminPanel {
         `;
     }
 
-    // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (COM BOTÃO VISUALIZAR) ============
+    // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (VERSÃO CORRIGIDA) ============
     gerarLinhasUsuarios(usuarios) {
         if (!usuarios || usuarios.length === 0) {
             return `
@@ -3226,10 +3229,8 @@ class AdminPanel {
         }
 
         return usuarios.map(user => {
-            // 🔥 DECLARAR roleBadge AQUI (FORA DOS CONDICIONAIS)
+            // Badge do perfil
             let roleBadge = '';
-            
-            // Determinar o badge baseado no role
             if (user.role === 'aluno') {
                 roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
             } else if (user.role === 'professor') {
@@ -3255,47 +3256,90 @@ class AdminPanel {
                 : '';
             
             // Formatar CPF
-            const cpfFormatado = user.cpf ? 
-                user.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '-';
+            let cpfFormatado = '-';
+            if (user.cpf) {
+                const cpfLimpo = user.cpf.replace(/\D/g, '');
+                if (cpfLimpo.length === 11) {
+                    cpfFormatado = cpfLimpo.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                } else {
+                    cpfFormatado = user.cpf;
+                }
+            }
             
-            // Formatar telefone
-            const telefoneFormatado = user.telefone ? 
-                user.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
+            // Formatar Telefone
+            let telefoneFormatado = '-';
+            if (user.telefone) {
+                const telefoneLimpo = user.telefone.replace(/\D/g, '');
+                if (telefoneLimpo.length === 11) {
+                    telefoneFormatado = telefoneLimpo.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                } else if (telefoneLimpo.length === 10) {
+                    telefoneFormatado = telefoneLimpo.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+                } else {
+                    telefoneFormatado = user.telefone;
+                }
+            }
+            
+            // Matrícula
+            let matriculaExibir = '-';
+            if (user.matricula) {
+                matriculaExibir = user.matricula;
+            }
+            
+            // Data de cadastro formatada
+            let dataCadastro = '-';
+            if (user.createdAt) {
+                try {
+                    const data = new Date(user.createdAt);
+                    if (!isNaN(data.getTime())) {
+                        dataCadastro = data.toLocaleDateString('pt-BR');
+                    }
+                } catch(e) {
+                    dataCadastro = '-';
+                }
+            }
+            
+            // Informações extras (turma para alunos)
+            let extraInfo = '';
+            if (user.role === 'aluno' && user.turma) {
+                extraInfo = `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">Turma: ${user.turma}</div>`;
+            }
+            if (user.role === 'setor_pedagogico' && user.atribuicoes) {
+                extraInfo = `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">${user.atribuicoes.substring(0, 30)}...</div>`;
+            }
             
             return `
                 <tr data-user-id="${user._id}">
-                    <td>
-                        <strong>${user.nome || 'N/A'}</strong>
-                        ${acessibilidadeBadge}
-                        ${user.role === 'aluno' && user.turma ? `<div style="font-size: 11px; color: #6b7280;">Turma: ${user.turma}</div>` : ''}
-                        ${user.role === 'setor_pedagogico' && user.atribuicoes ? `<div style="font-size: 11px; color: #6b7280;">Atribuições: ${user.atribuicoes.substring(0, 30)}...</div>` : ''}
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                        <strong>${user.nome || 'N/A'}</strong> ${acessibilidadeBadge}
+                        ${extraInfo}
                     </td>
-                    <td>${user.email || '-'}</td>
-                    <td>${cpfFormatado}</td>
-                    <td>${telefoneFormatado}</td>
-                    <td>${user.matricula || '-'}</td>
-                    <td>${roleBadge}</td>
-                    <td>${statusBadge}</td>
-                    <td>${new Date(user.createdAt).toLocaleDateString('pt-BR')}</td>
-                    <td class="action-buttons">
-                        <!-- Botão Visualizar Perfil -->
-                        <button class="btn-icon" onclick="admin.visualizarPerfilUsuario('${user._id}')" title="Visualizar Perfil Completo">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn-icon" onclick="admin.editarUsuario('${user._id}')" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn-icon ${user.ativo ? 'warning' : 'success'}" 
-                                onclick="admin.toggleStatusUsuario('${user._id}', ${user.ativo})" 
-                                title="${user.ativo ? 'Inativar usuário' : 'Ativar usuário'}">
-                            <i class="fas ${user.ativo ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
-                        </button>
-                        <button class="btn-icon" onclick="admin.resetarSenha('${user._id}')" title="Resetar Senha">
-                            <i class="fas fa-key"></i>
-                        </button>
-                        <button class="btn-icon danger" onclick="admin.excluirUsuario('${user._id}')" title="Excluir">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; color: #6c757d;">${user.email || '-'}</td>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${roleBadge}</td>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; font-family: monospace;">${matriculaExibir}</td>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${cpfFormatado}</td>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${telefoneFormatado}</td>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${statusBadge}</td>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; font-weight: 500;">${dataCadastro}</td>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                        <div class="action-buttons" style="display: flex; gap: 5px;">
+                            <button class="btn-icon" onclick="admin.visualizarPerfilUsuario('${user._id}')" title="Visualizar Perfil Completo">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn-icon" onclick="admin.editarUsuario('${user._id}')" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-icon ${user.ativo ? 'warning' : 'success'}" 
+                                    onclick="admin.toggleStatusUsuario('${user._id}', ${user.ativo})" 
+                                    title="${user.ativo ? 'Inativar usuário' : 'Ativar usuário'}">
+                                <i class="fas ${user.ativo ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
+                            </button>
+                            <button class="btn-icon" onclick="admin.resetarSenha('${user._id}')" title="Resetar Senha">
+                                <i class="fas fa-key"></i>
+                            </button>
+                            <button class="btn-icon danger" onclick="admin.excluirUsuario('${user._id}')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
