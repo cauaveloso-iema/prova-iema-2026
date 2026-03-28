@@ -36,15 +36,20 @@ class OMRReader:
         self.num_choices = 5
         self.choices = ['A', 'B', 'C', 'D', 'E']
         
-        # Configurações de detecção (ajustáveis)
-        self.bubble_threshold = 0.25      # 25% de preenchimento = marcado
-        self.contour_min_area = 50        # Área mínima da bolinha
-        self.contour_max_area = 600       # Área máxima da bolinha
+        # 🔥 CONFIGURAÇÕES OTIMIZADAS PARA MÁXIMA PRECISÃO
+        self.bubble_threshold = 0.20      # 20% de preenchimento = marcado (mais sensível)
+        self.contour_min_area = 30        # Área mínima da bolinha (captura bolinhas pequenas)
+        self.contour_max_area = 550       # Área máxima da bolinha (tolerância para bolinhas maiores)
         
-        # Configurações de pré-processamento
-        self.blur_kernel = (3, 3)
-        self.adaptive_block = 11
-        self.adaptive_c = 2
+        # 🔥 CONFIGURAÇÕES DE PRÉ-PROCESSAMENTO (calibradas para EVALBE)
+        self.blur_kernel = (3, 3)         # Kernel do blur (suave)
+        self.adaptive_block = 13          # Tamanho do bloco (ímpar, 13 é ideal)
+        self.adaptive_c = 3               # Constante da binarização (3 para melhor detecção)
+        
+        # 🔥 NOVOS PARÂMETROS PARA MAIOR PRECISÃO
+        self.circularity_min = 0.48       # Circularidade mínima (0.48 aceita bolinhas ligeiramente ovais)
+        self.bubble_filled_threshold = 0.65  # Acima disso é definitivamente marcado
+        self.bubble_empty_threshold = 0.10   # Abaixo disso é definitivamente vazio
         
         # Debug mode
         self.debug = True
@@ -58,19 +63,30 @@ class OMRReader:
         self.COLOR_RED = (0, 0, 255)
         self.COLOR_BLUE = (255, 0, 0)
         self.COLOR_YELLOW = (0, 255, 255)
+        self.COLOR_ORANGE = (0, 165, 255)
     
     def preprocess_image(self, image):
         """Pré-processamento da imagem para melhorar detecção"""
+        # Converter para escala de cinza
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
         if self.debug:
             cv2.imwrite(f"{self.debug_folder}/1_gray.jpg", gray)
         
+        # 🔥 Aplicar CLAHE para melhorar contraste (ajuda em iluminação ruim)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
+        
+        if self.debug:
+            cv2.imwrite(f"{self.debug_folder}/1a_clahe.jpg", gray)
+        
+        # Aplicar blur para reduzir ruído
         blurred = cv2.GaussianBlur(gray, self.blur_kernel, 0)
         
         if self.debug:
             cv2.imwrite(f"{self.debug_folder}/2_blurred.jpg", blurred)
         
+        # 🔥 Binarização adaptativa com parâmetros calibrados
         binary = cv2.adaptiveThreshold(blurred, 255,
                                        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                        cv2.THRESH_BINARY_INV, 
@@ -80,8 +96,9 @@ class OMRReader:
         if self.debug:
             cv2.imwrite(f"{self.debug_folder}/3_binary.jpg", binary)
         
+        # 🔥 Operação morfológica para fechar pequenos buracos
         kernel = np.ones((2, 2), np.uint8)
-        closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
         
         if self.debug:
             cv2.imwrite(f"{self.debug_folder}/4_closed.jpg", closed)
@@ -99,6 +116,7 @@ class OMRReader:
         for c in cnts:
             area = cv2.contourArea(c)
             
+            # Filtrar por área
             if self.contour_min_area < area < self.contour_max_area:
                 (x, y), radius = cv2.minEnclosingCircle(c)
                 center = (int(x), int(y))
@@ -107,7 +125,8 @@ class OMRReader:
                 perimeter = cv2.arcLength(c, True)
                 if perimeter > 0:
                     circularity = 4 * np.pi * area / (perimeter * perimeter)
-                    if circularity > 0.5:
+                    # 🔥 Aceitar bolinhas com circularidade > 0.48 (mais tolerante)
+                    if circularity > self.circularity_min:
                         bubbles.append({
                             'center': center,
                             'radius': radius,
@@ -132,14 +151,28 @@ class OMRReader:
         if len(bubbles) != expected_total:
             print(f"[OMR] Aviso: Esperado {expected_total} bolinhas, encontrado {len(bubbles)}")
             
+            # 🔥 TENTAR AGRUPAR POR LINHAS (ideal para EVALBE)
             if len(bubbles) >= 40:
                 y_positions = [b['center'][1] for b in bubbles]
                 y_unique = sorted(set(y_positions))
                 
-                if len(y_unique) >= 4:
+                # Agrupar Y's próximos
+                y_clusters = []
+                if y_unique:
+                    current_cluster = [y_unique[0]]
+                    for y in y_unique[1:]:
+                        if y - current_cluster[-1] < 25:
+                            current_cluster.append(y)
+                        else:
+                            y_clusters.append(np.mean(current_cluster))
+                            current_cluster = [y]
+                    if current_cluster:
+                        y_clusters.append(np.mean(current_cluster))
+                
+                if len(y_clusters) >= 4:
                     rows = []
-                    for y in y_unique:
-                        row_bubbles = [b for b in bubbles if abs(b['center'][1] - y) < 20]
+                    for y_center in y_clusters:
+                        row_bubbles = [b for b in bubbles if abs(b['center'][1] - y_center) < 20]
                         if len(row_bubbles) >= self.num_choices:
                             rows.append(sorted(row_bubbles, key=lambda b: b['center'][0]))
                     
@@ -156,6 +189,7 @@ class OMRReader:
                         if len(questions) >= self.num_questions:
                             return questions[:self.num_questions]
         
+        # Agrupamento padrão (sequencial)
         questions = []
         for i in range(0, len(bubbles), self.num_choices):
             if i + self.num_choices <= len(bubbles):
@@ -186,6 +220,21 @@ class OMRReader:
         """Gera imagem de debug com resultados visuais"""
         debug_img = original_image.copy()
         
+        # 🔥 Adicionar legenda mais informativa
+        legend_y = 30
+        legend_x = 10
+        cv2.rectangle(debug_img, (legend_x - 5, legend_y - 20), (legend_x + 210, legend_y + 80), (50, 50, 50), -1)
+        cv2.putText(debug_img, "LEGENDA:", (legend_x, legend_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(debug_img, "VERDE = Acertou", (legend_x, legend_y + 20),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_GREEN, 1)
+        cv2.putText(debug_img, "VERMELHO = Errou", (legend_x, legend_y + 35),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_RED, 1)
+        cv2.putText(debug_img, "AZUL = Gabarito", (legend_x, legend_y + 50),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLUE, 1)
+        cv2.putText(debug_img, "AMARELO = Marcada", (legend_x, legend_y + 70),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_YELLOW, 1)
+        
         for q_idx, question_bubbles in enumerate(questions):
             if q_idx >= len(answers):
                 break
@@ -204,7 +253,11 @@ class OMRReader:
                 center = bubble['center']
                 radius = bubble['radius']
                 
-                # Definir cor baseado no resultado
+                # Analisar preenchimento real
+                fill_ratio = self.analyze_bubble(bubble, self.binary_image)
+                is_marked = fill_ratio > self.bubble_threshold
+                
+                # 🔥 Definir cor baseado no resultado (mais informativo)
                 if self.choices[c_idx] == answer:
                     if is_correct:
                         color = self.COLOR_GREEN      # Acertou!
@@ -212,6 +265,8 @@ class OMRReader:
                         color = self.COLOR_RED        # Errou
                 elif gabarito and self.choices[c_idx] == gabarito[q_idx]:
                     color = self.COLOR_BLUE           # Resposta correta (não marcada)
+                elif is_marked:
+                    color = self.COLOR_YELLOW         # Marcada mas não é a escolhida
                 else:
                     color = (100, 100, 100)           # Alternativa não marcada
                 
@@ -222,12 +277,11 @@ class OMRReader:
                            (center[0] - 15, center[1] - 15),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
                 
-                # Mostrar percentual de preenchimento
-                fill_ratio = self.analyze_bubble(bubble, self.binary_image)
+                # 🔥 Mostrar percentual de preenchimento (para debug)
                 fill_text = f"{int(fill_ratio * 100)}%"
                 cv2.putText(debug_img, fill_text,
                            (center[0] - 10, center[1] + radius + 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.35, (180, 180, 180), 1)
             
             # Adicionar número da questão
             if question_bubbles:
@@ -236,18 +290,12 @@ class OMRReader:
                 y = first_bubble['center'][1] - 20
                 cv2.putText(debug_img, f"Q{q_idx + 1}", (x, y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLOR_YELLOW, 2)
-        
-        # Adicionar legenda
-        legend_y = 30
-        legend_x = 10
-        cv2.putText(debug_img, "LEGENDA:", (legend_x, legend_y),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        cv2.putText(debug_img, "VERDE = Acertou", (legend_x, legend_y + 20),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_GREEN, 1)
-        cv2.putText(debug_img, "VERMELHO = Errou", (legend_x, legend_y + 35),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_RED, 1)
-        cv2.putText(debug_img, "AZUL = Gabarito", (legend_x, legend_y + 50),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLUE, 1)
+                
+                # 🔥 Mostrar resposta detectada
+                if answer:
+                    cv2.putText(debug_img, f"Resp: {answer}", 
+                               (first_bubble['center'][0] - 20, first_bubble['center'][1] + radius + 25),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_ORANGE, 1)
         
         return debug_img
     
@@ -266,8 +314,8 @@ class OMRReader:
         
         original = image.copy()
         
-        # Redimensionar
-        scale = min(1200 / image.shape[1], 1)
+        # Redimensionar para tamanho padrão (ajuda na detecção)
+        scale = min(1400 / image.shape[1], 1)
         if scale < 1:
             new_width = int(image.shape[1] * scale)
             new_height = int(image.shape[0] * scale)
@@ -287,7 +335,7 @@ class OMRReader:
         if len(bubbles) == 0:
             return {
                 'success': False,
-                'error': 'Nenhuma bolinha detectada',
+                'error': 'Nenhuma bolinha detectada. Verifique a iluminação e o posicionamento.',
                 'answers': [],
                 'detected_bubbles': 0
             }
@@ -304,6 +352,8 @@ class OMRReader:
                 'answers': [],
                 'detected_bubbles': len(bubbles)
             }
+        
+        print(f"[OMR] Agrupadas em {len(questions)} questões")
         
         # Analisar cada questão
         answers = []
@@ -325,9 +375,11 @@ class OMRReader:
                 debug_info.append({
                     'question': q_idx + 1,
                     'choice': self.choices[c_idx],
-                    'fill_ratio': round(fill_ratio, 3)
+                    'fill_ratio': round(fill_ratio, 3),
+                    'is_marked': fill_ratio > self.bubble_threshold
                 })
                 
+                # 🔥 Usar threshold mais sensível para melhor detecção
                 if fill_ratio > self.bubble_threshold and fill_ratio > best_fill:
                     best_fill = fill_ratio
                     best_choice = self.choices[c_idx]
@@ -339,14 +391,26 @@ class OMRReader:
         cv2.imwrite(f"{self.debug_folder}/6_result.jpg", debug_img)
         
         # Converter para base64 para enviar ao frontend
-        _, buffer = cv2.imencode('.jpg', debug_img)
+        _, buffer = cv2.imencode('.jpg', debug_img, [cv2.IMWRITE_JPEG_QUALITY, 90])
         debug_base64 = base64.b64encode(buffer).decode('utf-8')
         
         detected_count = sum(1 for a in answers if a is not None)
         
+        # 🔥 Calcular nota se tiver gabarito
+        score = 0
+        nota = None
+        if gabarito and len(gabarito) == len(answers):
+            for i, ans in enumerate(answers):
+                if ans and ans == gabarito[i]:
+                    score += 1
+            nota = round(score * 10 / len(answers), 1) if answers else 0
+            print(f"[OMR] Acertos: {score}/{len(answers)} (Nota: {nota})")
+        
         return {
             'success': True,
             'answers': answers,
+            'score': score if gabarito else None,
+            'nota': nota if gabarito else None,
             'debug_info': debug_info,
             'debug_image': debug_base64,
             'statistics': {
@@ -370,7 +434,7 @@ def health():
     return jsonify({
         'status': 'online', 
         'service': 'OMR Reader IEMA', 
-        'version': '2.0.0'
+        'version': '2.1.0'
     })
 
 
@@ -403,6 +467,8 @@ def detect():
         result = omr.detect(image_base64=image_base64, gabarito=gabarito)
         
         print(f"[OMR] Detecção concluída: {result.get('detected_answers', 0)}/{questions} respostas")
+        if result.get('nota') is not None:
+            print(f"[OMR] Nota calculada: {result['nota']}")
         
         return jsonify(result)
         

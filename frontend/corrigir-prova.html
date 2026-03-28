@@ -62,12 +62,17 @@
         video, canvas { width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; background: #000; display: block; }
         video { max-height: 60vh; object-fit: contain; }
         
+        /* Guias de enquadramento */
         .guia-enquadramento { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
-        .guia-canto { position: absolute; width: 60px; height: 60px; border: 4px solid #10b981; border-radius: 12px; }
+        .guia-canto { position: absolute; width: 50px; height: 50px; border: 3px solid #10b981; transition: all 0.2s; }
         .guia-canto-top-left { top: 15px; left: 15px; border-right: none; border-bottom: none; }
         .guia-canto-top-right { top: 15px; right: 15px; border-left: none; border-bottom: none; }
         .guia-canto-bottom-left { bottom: 15px; left: 15px; border-right: none; border-top: none; }
         .guia-canto-bottom-right { bottom: 15px; right: 15px; border-left: none; border-top: none; }
+        
+        .guia-canto.detectado { border-color: #10b981; box-shadow: 0 0 10px #10b981; }
+        .guia-canto.parcial { border-color: #f59e0b; }
+        .guia-canto.nao-detectado { border-color: #ef4444; }
         
         .feedback-proximidade {
             position: absolute;
@@ -76,11 +81,13 @@
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
             color: white;
-            padding: 8px 16px;
+            padding: 10px 20px;
             border-radius: 30px;
-            font-size: 13px;
+            font-size: 14px;
             z-index: 20;
             white-space: nowrap;
+            font-weight: 500;
+            transition: all 0.3s;
         }
         .feedback-proximidade.bom { background: #10b981; }
         .feedback-proximidade.medio { background: #f59e0b; }
@@ -95,12 +102,25 @@
             background: rgba(0,0,0,0.85); 
             color: white; 
             padding: 10px; 
-            font-size: 14px; 
+            font-size: 13px; 
             border-radius: 30px; 
             width: 90%; 
             margin: 0 auto; 
             left: 5%; 
             z-index: 20;
+        }
+        
+        .contador-automatico {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 20;
+            font-family: monospace;
         }
         
         .btn-camera, .btn-capturar { padding: 12px 24px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin: 10px 5px; border: none; transition: all 0.3s; }
@@ -124,7 +144,6 @@
         .loading { text-align: center; padding: 30px; }
         .spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         
         .alert { padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: none; }
         .alert-success { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
@@ -153,7 +172,7 @@
         .omr-status.offline { background: #ef4444; }
         
         @media (orientation: landscape) {
-            .guia-canto { width: 45px; height: 45px; }
+            .guia-canto { width: 40px; height: 40px; }
         }
     </style>
 </head>
@@ -165,8 +184,8 @@
             </button>
             
             <div class="header">
-                <h1><i class="fas fa-camera"></i> Correção de Prova</h1>
-                <p>Posicione o cartão-resposta dentro das guias verdes</p>
+                <h1><i class="fas fa-camera"></i> Correção Automática de Prova</h1>
+                <p>Posicione o cartão-resposta dentro das guias verdes - a captura será automática</p>
             </div>
             
             <div id="alert" class="alert"></div>
@@ -192,17 +211,18 @@
                         <video id="video" autoplay playsinline></video>
                         <canvas id="canvas" style="display: none;"></canvas>
                         <div class="guia-enquadramento">
-                            <div class="guia-canto guia-canto-top-left"></div>
-                            <div class="guia-canto guia-canto-top-right"></div>
-                            <div class="guia-canto guia-canto-bottom-left"></div>
-                            <div class="guia-canto guia-canto-bottom-right"></div>
-                            <div class="feedback-proximidade" id="feedbackProximidade">📏 Aproxime o cartão</div>
+                            <div class="guia-canto guia-canto-top-left" id="cantoTL"></div>
+                            <div class="guia-canto guia-canto-top-right" id="cantoTR"></div>
+                            <div class="guia-canto guia-canto-bottom-left" id="cantoBL"></div>
+                            <div class="guia-canto guia-canto-bottom-right" id="cantoBR"></div>
+                            <div class="feedback-proximidade" id="feedbackProximidade">📏 Aguardando cartão</div>
                             <div class="guia-texto" id="guiaTexto">🔍 Alinhe o cartão dentro das guias verdes</div>
+                            <div class="contador-automatico" id="contadorAuto">⏱️ Aguardando posição</div>
                         </div>
                     </div>
                     <div>
                         <button class="btn-camera" id="btnIniciarCamera"><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                        <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar e Corrigir</button>
+                        <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar Manual</button>
                     </div>
                 </div>
                 
@@ -299,7 +319,6 @@
             return false;
         }
         
-        // Verificar status a cada 10 segundos
         verificarStatusOMR();
         setInterval(verificarStatusOMR, 10000);
         
@@ -307,6 +326,9 @@
         async function enviarParaOMR(imagemBase64) {
             try {
                 console.log('📤 Enviando imagem para servidor OMR...');
+                
+                // Preparar gabarito para envio
+                const gabaritoArray = gabarito.map(g => g.respostaCorreta);
                 
                 const response = await fetch(`${OMR_SERVER_URL}/detect`, {
                     method: 'POST',
@@ -318,7 +340,8 @@
                         image: imagemBase64,
                         questions: totalQuestoes,
                         choices: 5,
-                        threshold: 0.25
+                        gabarito: gabaritoArray,
+                        threshold: 0.18  // Threshold mais sensível
                     })
                 });
                 
@@ -326,7 +349,9 @@
                 
                 if (data.success) {
                     console.log('✅ Respostas detectadas:', data.answers);
-                    console.log('📊 Estatísticas:', data.statistics);
+                    if (data.nota !== null) {
+                        console.log('📊 Nota calculada:', data.nota);
+                    }
                     return data.answers;
                 } else {
                     console.error('❌ Erro na detecção:', data.error);
@@ -358,7 +383,16 @@
         const resultado = document.getElementById('resultado');
         const guiaTexto = document.getElementById('guiaTexto');
         const feedbackProximidade = document.getElementById('feedbackProximidade');
+        const contadorAuto = document.getElementById('contadorAuto');
+        const cantoTL = document.getElementById('cantoTL');
+        const cantoTR = document.getElementById('cantoTR');
+        const cantoBL = document.getElementById('cantoBL');
+        const cantoBR = document.getElementById('cantoBR');
+        
         let stream = null;
+        let analiseFrameInterval = null;
+        let contadorPosicaoOk = 0;
+        let capturandoAutomaticamente = false;
         
         async function fetchWithAuth(url, options = {}) {
             const token = authToken || localStorage.getItem('auth_token');
@@ -388,7 +422,198 @@
             setTimeout(() => alert.style.display = 'none', 5000);
         }
         
-        function capturarImagem() {
+        // ========== DETECÇÃO DAS MARCAS PRETAS NOS CANTOS (CORRIGIDA) ==========
+        function detectarMarcasCantos(ctx, width, height) {
+            // Áreas de busca nos 4 cantos (aumentadas para melhor detecção)
+            const marginX = Math.floor(width * 0.08);
+            const marginY = Math.floor(height * 0.08);
+            const boxSize = Math.min(55, Math.floor(width * 0.12));
+            
+            const areas = {
+                tl: { x: marginX, y: marginY, w: boxSize, h: boxSize },
+                tr: { x: width - marginX - boxSize, y: marginY, w: boxSize, h: boxSize },
+                bl: { x: marginX, y: height - marginY - boxSize, w: boxSize, h: boxSize },
+                br: { x: width - marginX - boxSize, y: height - marginY - boxSize, w: boxSize, h: boxSize }
+            };
+            
+            const resultados = {};
+            let brilhoMedioGlobal = 0;
+            let amostras = 0;
+            
+            for (const [canto, area] of Object.entries(areas)) {
+                try {
+                    if (area.x < 0 || area.y < 0 || area.x + area.w > width || area.y + area.h > height) {
+                        resultados[canto] = false;
+                        continue;
+                    }
+                    
+                    const imageData = ctx.getImageData(area.x, area.y, area.w, area.h);
+                    let pixelsEscuros = 0;
+                    let pixelsClaros = 0;
+                    let somaBrilho = 0;
+                    let totalPixels = area.w * area.h;
+                    
+                    for (let i = 0; i < imageData.data.length; i += 4) {
+                        const r = imageData.data[i];
+                        const g = imageData.data[i+1];
+                        const b = imageData.data[i+2];
+                        const brilho = (r + g + b) / 3;
+                        somaBrilho += brilho;
+                        
+                        // Pixel escuro (preto) - threshold mais rigoroso
+                        if (brilho < 65) {
+                            pixelsEscuros++;
+                        }
+                        // Pixel claro (branco)
+                        if (brilho > 200) {
+                            pixelsClaros++;
+                        }
+                    }
+                    
+                    const brilhoMedioArea = somaBrilho / totalPixels;
+                    brilhoMedioGlobal += brilhoMedioArea;
+                    amostras++;
+                    
+                    const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
+                    const percentualClaro = (pixelsClaros / totalPixels) * 100;
+                    
+                    // Detecta marca preta se houver pixels escuros E não estiver tudo claro
+                    resultados[canto] = percentualEscuro > 10 && percentualClaro < 90;
+                    
+                    if (resultados[canto]) {
+                        console.log(`📍 Canto ${canto} detectado: ${percentualEscuro.toFixed(1)}% escuro, ${percentualClaro.toFixed(1)}% claro`);
+                    }
+                    
+                } catch(e) {
+                    resultados[canto] = false;
+                }
+            }
+            
+            const brilhoMedio = amostras > 0 ? brilhoMedioGlobal / amostras : 100;
+            
+            return { marcas: resultados, brilhoMedio: brilhoMedio };
+        }
+        
+        // ========== ANÁLISE DE POSIÇÃO EM TEMPO REAL (CORRIGIDA) ==========
+        function analisarPosicao() {
+            if (!video.videoWidth || !video.videoHeight) return;
+            
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const { marcas, brilhoMedio } = detectarMarcasCantos(ctx, canvas.width, canvas.height);
+            
+            // Atualizar visual das guias
+            const cantos = {
+                tl: cantoTL,
+                tr: cantoTR,
+                bl: cantoBL,
+                br: cantoBR
+            };
+            
+            let cantosDetectados = 0;
+            for (const [canto, detectado] of Object.entries(marcas)) {
+                if (detectado) {
+                    cantos[canto].classList.add('detectado');
+                    cantos[canto].classList.remove('parcial', 'nao-detectado');
+                    cantosDetectados++;
+                } else {
+                    cantos[canto].classList.remove('detectado');
+                    cantos[canto].classList.add('nao-detectado');
+                }
+            }
+            
+            // 🔥 CORREÇÃO: Verificar iluminação adequada
+            const iluminacaoOk = brilhoMedio > 70 && brilhoMedio < 210;
+            
+            // Determinar qualidade do enquadramento
+            let qualidade = 'ruim';
+            let mensagem = '';
+            let cor = '#ef4444';
+            
+            if (!iluminacaoOk) {
+                if (brilhoMedio <= 70) {
+                    mensagem = '🔴 AMBIENTE MUITO ESCURO! Aumente a iluminação';
+                    cor = '#ef4444';
+                } else if (brilhoMedio >= 210) {
+                    mensagem = '🔴 AMBIENTE MUITO CLARO! Evite luz direta';
+                    cor = '#ef4444';
+                }
+                qualidade = 'ruim';
+                contadorPosicaoOk = 0;
+                contadorAuto.innerHTML = '💡 Verifique a iluminação';
+            } 
+            else if (cantosDetectados === 4) {
+                qualidade = 'bom';
+                mensagem = '✅ Posição perfeita! Capturando automaticamente...';
+                cor = '#10b981';
+                
+                contadorPosicaoOk++;
+                const segundosRestantes = Math.ceil((30 - contadorPosicaoOk) / 10);
+                contadorAuto.innerHTML = `⏱️ Capturando em ${segundosRestantes}s`;
+                
+                if (contadorPosicaoOk >= 30 && !capturandoAutomaticamente) {
+                    contadorAuto.innerHTML = '📸 Capturando...';
+                    capturarAutomaticamente();
+                }
+            } 
+            else if (cantosDetectados >= 2) {
+                qualidade = 'medio';
+                mensagem = `🟡 Ajuste o cartão (${cantosDetectados}/4 cantos detectados)`;
+                cor = '#f59e0b';
+                contadorPosicaoOk = Math.max(0, contadorPosicaoOk - 1);
+                contadorAuto.innerHTML = `⏱️ ${cantosDetectados}/4 cantos alinhados`;
+            } 
+            else {
+                qualidade = 'ruim';
+                mensagem = '🔴 Posicione o cartão com os 4 cantos dentro das guias verdes';
+                cor = '#ef4444';
+                contadorPosicaoOk = 0;
+                contadorAuto.innerHTML = '⏱️ Aguardando posição correta';
+            }
+            
+            // Atualizar feedback visual
+            feedbackProximidade.textContent = mensagem;
+            feedbackProximidade.className = `feedback-proximidade ${qualidade}`;
+            
+            // Atualizar cor das guias
+            document.querySelectorAll('.guia-canto').forEach(c => {
+                c.style.borderColor = cor;
+            });
+        }
+        
+        // ========== CAPTURA AUTOMÁTICA ==========
+        async function capturarAutomaticamente() {
+            if (capturandoAutomaticamente) return;
+            capturandoAutomaticamente = true;
+            
+            mostrarAlerta('📸 Cartão bem posicionado! Capturando automaticamente...', 'success');
+            contadorAuto.innerHTML = '📸 Capturando...';
+            
+            await new Promise(r => setTimeout(r, 300));
+            
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            imagemCapturadaUrl = canvas.toDataURL('image/jpeg', 0.95);
+            
+            const flash = document.createElement('div');
+            flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;opacity:0.8;z-index:9999;pointer-events:none;';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 200);
+            
+            await processarImagemEAnalisar();
+            
+            capturandoAutomaticamente = false;
+            contadorPosicaoOk = 0;
+            contadorAuto.innerHTML = '⏱️ Aguardando próxima captura';
+        }
+        
+        // ========== CAPTURA MANUAL ==========
+        function capturarImagemManual() {
             if (!alunoSelecionadoId) { 
                 mostrarAlerta('⚠️ Selecione um aluno primeiro!', 'error'); 
                 return false; 
@@ -404,9 +629,8 @@
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            imagemCapturadaUrl = canvas.toDataURL('image/jpeg', 0.9);
+            imagemCapturadaUrl = canvas.toDataURL('image/jpeg', 0.95);
             
-            // Efeito de flash
             const flash = document.createElement('div');
             flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;opacity:0.8;z-index:9999;pointer-events:none;';
             document.body.appendChild(flash);
@@ -429,7 +653,6 @@
                     await new Promise(r => setTimeout(r, 50));
                 }
                 
-                // Enviar para o servidor Python OMR via proxy
                 const respostasDetectadasOCR = await enviarParaOMR(imagemCapturadaUrl);
                 
                 for (let i = 30; i <= 100; i += 10) {
@@ -463,11 +686,20 @@
             const respostasGrid = document.getElementById('respostasGrid');
             respostasGrid.innerHTML = '';
             
+            let acertos = 0;
+            for (let i = 0; i < totalQuestoes; i++) {
+                if (respostas[i] && respostas[i] === gabarito[i]?.respostaCorreta) {
+                    acertos++;
+                }
+            }
+            notaCalculada = (acertos / totalQuestoes) * 10;
+            
             for (let i = 0; i < totalQuestoes; i++) {
                 const sugestao = sugestoes[i];
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
-                if (sugestao && sugestao === gabarito[i]?.respostaCorreta) {
+                const isCorreta = sugestao && sugestao === gabarito[i]?.respostaCorreta;
+                if (isCorreta) {
                     div.classList.add('correta');
                 } else if (sugestao) {
                     div.classList.add('incorreta');
@@ -486,24 +718,38 @@
                 respostasGrid.appendChild(div);
             }
             
+            document.getElementById('notaFinal').innerHTML = `
+                <div class="nota-valor">${notaCalculada.toFixed(1)} / 10</div>
+                <div>${acertos} acertos de ${totalQuestoes} questões</div>
+                <div>${((acertos / totalQuestoes) * 100).toFixed(0)}% de aproveitamento</div>
+                <div style="margin-top: 8px;">
+                    ${notaCalculada >= 6 ? '✅ Aluno APROVADO' : '⚠️ Aluno REPROVADO'}
+                </div>
+            `;
+            
             window.definirResposta = (questao, letra) => {
                 const elementoAluno = document.getElementById(`resposta-aluno-${questao}`);
                 const respostaCard = elementoAluno.closest('.resposta-card');
                 respostas[questao] = letra;
                 elementoAluno.innerHTML = letra || '—';
                 
-                if (letra === gabarito[questao]?.respostaCorreta) {
-                    respostaCard.classList.add('correta');
-                    respostaCard.classList.remove('incorreta');
-                } else if (letra !== null) {
-                    respostaCard.classList.add('incorreta');
-                    respostaCard.classList.remove('correta');
-                } else {
-                    respostaCard.classList.remove('correta', 'incorreta');
+                let novosAcertos = 0;
+                for (let i = 0; i < totalQuestoes; i++) {
+                    if (respostas[i] && respostas[i] === gabarito[i]?.respostaCorreta) {
+                        novosAcertos++;
+                    }
                 }
                 
-                const todasPreenchidas = respostas.every(r => r !== null);
-                if (todasPreenchidas) processarRespostas(respostas);
+                const novaNota = (novosAcertos / totalQuestoes) * 10;
+                document.getElementById('notaFinal').innerHTML = `
+                    <div class="nota-valor">${novaNota.toFixed(1)} / 10</div>
+                    <div>${novosAcertos} acertos de ${totalQuestoes} questões</div>
+                    <div>${((novosAcertos / totalQuestoes) * 100).toFixed(0)}% de aproveitamento</div>
+                    <div style="margin-top: 8px;">
+                        ${novaNota >= 6 ? '✅ Aluno APROVADO' : '⚠️ Aluno REPROVADO'}
+                    </div>
+                `;
+                notaCalculada = novaNota;
             };
         }
         
@@ -535,54 +781,28 @@
                 respostas[questao] = letra;
                 elementoAluno.innerHTML = letra || '—';
                 
-                if (letra === gabarito[questao]?.respostaCorreta) {
-                    respostaCard.classList.add('correta');
-                    respostaCard.classList.remove('incorreta');
-                } else if (letra !== null) {
-                    respostaCard.classList.add('incorreta');
-                    respostaCard.classList.remove('correta');
-                } else {
-                    respostaCard.classList.remove('correta', 'incorreta');
+                let acertos = 0;
+                for (let i = 0; i < totalQuestoes; i++) {
+                    if (respostas[i] && respostas[i] === gabarito[i]?.respostaCorreta) {
+                        acertos++;
+                    }
                 }
                 
-                const todasPreenchidas = respostas.every(r => r !== null);
-                if (todasPreenchidas) processarRespostas(respostas);
+                const nota = (acertos / totalQuestoes) * 10;
+                document.getElementById('notaFinal').innerHTML = `
+                    <div class="nota-valor">${nota.toFixed(1)} / 10</div>
+                    <div>${acertos} acertos de ${totalQuestoes} questões</div>
+                    <div>${((acertos / totalQuestoes) * 100).toFixed(0)}% de aproveitamento</div>
+                    <div style="margin-top: 8px;">
+                        ${nota >= 6 ? '✅ Aluno APROVADO' : '⚠️ Aluno REPROVADO'}
+                    </div>
+                `;
+                notaCalculada = nota;
             };
         }
         
-        function processarRespostas(respostas) {
-            respostasDetectadas = [];
-            let acertos = 0;
-            
-            for (let i = 0; i < totalQuestoes; i++) {
-                const respostaAluno = respostas[i];
-                const respostaCorreta = gabarito[i]?.respostaCorreta;
-                const isCorreta = respostaAluno && respostaAluno === respostaCorreta;
-                if (isCorreta) acertos++;
-                respostasDetectadas.push({ 
-                    numero: i + 1, 
-                    respostaAluno: respostaAluno || '—', 
-                    respostaCorreta: respostaCorreta, 
-                    correta: isCorreta 
-                });
-            }
-            
-            notaCalculada = (acertos / totalQuestoes) * 10;
-            const percentual = ((acertos / totalQuestoes) * 100).toFixed(0);
-            
-            document.getElementById('notaFinal').innerHTML = `
-                <div class="nota-valor">${notaCalculada.toFixed(1)} / 10</div>
-                <div>${acertos} acertos de ${totalQuestoes} questões</div>
-                <div>${percentual}% de aproveitamento</div>
-                <div style="margin-top: 8px;">
-                    ${notaCalculada >= 6 ? '✅ Aluno APROVADO' : '⚠️ Aluno REPROVADO'}
-                </div>
-            `;
-            mostrarAlerta(`✅ Correção concluída! ${acertos} acertos. Nota: ${notaCalculada.toFixed(1)}`, 'success');
-        }
-        
-        async function capturarECorrigir() {
-            const capturado = capturarImagem();
+        async function capturarECorrigirManual() {
+            const capturado = capturarImagemManual();
             if (!capturado) return;
             await processarImagemEAnalisar();
         }
@@ -635,9 +855,11 @@
                         resultado.style.display = 'none';
                         respostasDetectadas = [];
                         notaCalculada = 0;
+                        contadorPosicaoOk = 0;
+                        capturandoAutomaticamente = false;
                     });
                     
-                    mostrarAlerta('✅ Dados carregados! Posicione o cartão e capture.', 'success');
+                    mostrarAlerta('✅ Dados carregados! Posicione o cartão - a captura será automática.', 'success');
                 }
             } catch (error) { 
                 console.error('Erro:', error); 
@@ -645,34 +867,7 @@
             }
         }
         
-        // Análise de proximidade
-        let analiseProximidadeInterval = null;
-        function iniciarAnaliseProximidade() {
-            if (analiseProximidadeInterval) clearInterval(analiseProximidadeInterval);
-            analiseProximidadeInterval = setInterval(() => {
-                if (!video.videoWidth) return;
-                const ctx = canvas.getContext('2d');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                let brightness = 0;
-                for (let i = 0; i < imageData.data.length; i += 4) {
-                    brightness += (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
-                }
-                brightness = brightness / (imageData.data.length / 4);
-                
-                let feedback = '', classe = '', cor = '#10b981';
-                if (brightness > 180) { feedback = '✅ Excelente! Pode capturar'; classe = 'bom'; cor = '#10b981'; }
-                else if (brightness > 120) { feedback = '🟡 Aproxime um pouco mais'; classe = 'medio'; cor = '#f59e0b'; }
-                else { feedback = '🔴 Aproxime o cartão da câmera'; classe = 'ruim'; cor = '#ef4444'; }
-                
-                feedbackProximidade.textContent = feedback;
-                feedbackProximidade.className = `feedback-proximidade ${classe}`;
-                document.querySelectorAll('.guia-canto').forEach(c => c.style.borderColor = cor);
-            }, 500);
-        }
-        
+        // ========== INICIAR CÂMERA COM ANÁLISE CONTÍNUA ==========
         async function iniciarCamera() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
@@ -683,41 +878,24 @@
                 await video.play();
                 btnCapturar.disabled = false;
                 btnIniciar.disabled = true;
-                iniciarAnaliseProximidade();
-                mostrarAlerta('✅ Câmera iniciada! Posicione o cartão.', 'success');
+                
+                if (analiseFrameInterval) clearInterval(analiseFrameInterval);
+                analiseFrameInterval = setInterval(() => analisarPosicao(), 200);
+                
+                mostrarAlerta('✅ Câmera iniciada! Posicione o cartão com os 4 cantos dentro das guias.', 'success');
             } catch (error) {
                 mostrarAlerta('❌ Não foi possível acessar a câmera.', 'error');
             }
         }
-
-        // Mostrar imagem de debug com resultados
-        function mostrarResultadoDebug(debugImageBase64) {
-            const modalBody = document.getElementById('modalBody');
-            const modalTitle = document.getElementById('modalTitle');
-            
-            modalTitle.innerHTML = '📊 Análise da Correção';
-            modalBody.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <h3>Resultado da Detecção</h3>
-                    <img src="data:image/jpeg;base64,${debugImageBase64}" 
-                        style="max-width: 100%; border-radius: 12px; margin: 15px 0; border: 2px solid #e5e7eb;">
-                    <p style="color: #6b7280; margin-top: 10px;">
-                        🟢 Verde = Acertou | 🔴 Vermelho = Errou | 🔵 Azul = Resposta correta
-                    </p>
-                </div>
-            `;
-            
-            const modalSaveBtn = document.getElementById('modalSaveBtn');
-            modalSaveBtn.style.display = 'none';
-            adminSimples?.openModal();
-        }
         
         function pararCamera() {
-            if (analiseProximidadeInterval) clearInterval(analiseProximidadeInterval);
+            if (analiseFrameInterval) clearInterval(analiseFrameInterval);
             if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
             video.srcObject = null;
             btnCapturar.disabled = true;
             btnIniciar.disabled = false;
+            contadorPosicaoOk = 0;
+            capturandoAutomaticamente = false;
         }
         
         async function salvarNotaManual() {
@@ -747,7 +925,7 @@
         }
         
         btnIniciar.addEventListener('click', iniciarCamera);
-        btnCapturar.addEventListener('click', () => { capturarECorrigir(); });
+        btnCapturar.addEventListener('click', () => { capturarECorrigirManual(); });
         document.getElementById('btnSalvarNota')?.addEventListener('click', salvarNotaManual);
         window.addEventListener('beforeunload', () => pararCamera());
         

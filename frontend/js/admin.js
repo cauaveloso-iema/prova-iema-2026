@@ -25449,13 +25449,8 @@ class AdminPanel {
             
             // ========== CARTÃO-RESPOSTA ==========
             const gerarCartaoResposta = () => {
-                const grupos = [];
-                for (let i = 0; i < totalQuestoes; i += 5) {
-                    grupos.push(Array.from({ length: Math.min(5, totalQuestoes - i) }, (_, j) => i + j + 1));
-                }
-                
                 const qrCodeArea = qrCodeDataUrl ? `
-                    <div style="text-align: center; margin-top: 12px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
+                    <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
                         <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
                             <img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code">
                             <div style="font-size: 7px; color: #666; text-align: left;">
@@ -25466,44 +25461,52 @@ class AdminPanel {
                     </div>
                 ` : '';
                 
-                const quadradosCantos = opcoesAdaptacao.layoutSimplificado ? '' : `
-                    <div style="position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; background: #000; border: 1px solid #000; z-index: 5;"></div>
-                    <div style="position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; background: #000; border: 1px solid #000; z-index: 5;"></div>
-                    <div style="position: absolute; bottom: -3px; left: -3px; width: 10px; height: 10px; background: #000; border: 1px solid #000; z-index: 5;"></div>
-                    <div style="position: absolute; bottom: -3px; right: -3px; width: 10px; height: 10px; background: #000; border: 1px solid #000; z-index: 5;"></div>
-                `;
-                
                 return `
                     <div style="text-align: center;">
-                        <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 10px; background: #fff; display: inline-block; width: 100%; box-sizing: border-box;">
-                            ${quadradosCantos}
-                            <div class="cartao-header" style="margin-bottom: 10px;">
-                                <h4 style="margin: 0 0 5px 0; font-size: 11pt; font-weight: bold; text-align: center;">📝 CARTÃO-RESPOSTA</h4>
-                                <div class="instrucoes-cartao" style="font-size: 8pt; color: #333; text-align: center; padding: 8px; background: #fef3c7; border-radius: 6px;">
-                                    <p style="margin: 0;"><strong>INSTRUÇÕES PARA PREENCHIMENTO DO CARTÃO-RESPOSTA</strong></p>
-                                    <p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p>
-                                </div>
-                            </div>
-                            <div class="cartao-grid" style="display: flex; flex-direction: column; gap: 6px;">
-                                ${grupos.map(grupo => `
-                                    <div class="cartao-linha" style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
-                                        ${grupo.map(num => `
-                                            <div class="cartao-coluna" style="text-align: center; padding: 4px; border: 1px solid #ccc; background: #fafafa; min-width: 65px;">
-                                                <div class="questao-numero-cartao" style="font-weight: bold; font-size: 8pt; margin-bottom: 4px; padding-bottom: 2px; border-bottom: 1px solid #ddd;">${num}</div>
-                                                <div class="opcoes-cartao" style="display: flex; justify-content: center; gap: 6px;">
-                                                    ${letrasUsadas.map(letra => `
-                                                        <div class="opcao-cartao" style="display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 8pt;">
-                                                            <input type="radio" name="q${num}" value="${letra}" style="width: 12px; height: 12px; margin: 0;">
-                                                            <span style="font-size: 7pt; font-weight: bold;">${letra}</span>
-                                                        </div>
-                                                    `).join('')}
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                `).join('')}
+                        <!-- INSTRUÇÕES ACIMA DO QUADRADO -->
+                        <div class="cartao-header" style="margin-bottom: 8px;">
+                            <h4 style="margin: 0 0 5px 0; font-size: 11pt; font-weight: bold; text-align: center;">📝 CARTÃO-RESPOSTA</h4>
+                            <div class="instrucoes-cartao" style="font-size: 8pt; color: #333; text-align: center; padding: 8px; background: #fef3c7; border-radius: 6px;">
+                                <p style="margin: 0;"><strong>INSTRUÇÕES PARA PREENCHIMENTO DO CARTÃO-RESPOSTA</strong></p>
+                                <p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p>
                             </div>
                         </div>
+                        
+                        <!-- QUADRADO DO GABARITO (APENAS PARA ESCANEAMENTO) -->
+                        <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 10px; background: #fff; display: inline-block; width: 100%; box-sizing: border-box;">
+                            <!-- 🔥 MARCAÇÕES DE ENQUADRAMENTO OMR CORRIGIDAS PARA IMPRESSÃO PRETA -->
+                            <div style="position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
+                            <div style="position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
+                            <div style="position: absolute; bottom: -3px; left: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
+                            <div style="position: absolute; bottom: -3px; right: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
+                            
+                            <!-- TABELA ESTILO EVALBE COMPACTA -->
+                            <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                                <thead>
+                                    <tr style="background: #e8e8e8;">
+                                        <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 9pt; width: 35px;">Q</th>
+                                        ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 9pt; width: 35px;">${letra}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${Array.from({ length: totalQuestoes }, (_, i) => {
+                                        const num = i + 1;
+                                        return `
+                                            <tr>
+                                                <td style="border: 1px solid #000; padding: 4px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
+                                                ${letrasUsadas.map(() => `
+                                                    <td style="border: 1px solid #000; padding: 4px; text-align: center;">
+                                                        <div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div>
+                                                    </td>
+                                                `).join('')}
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- QR CODE ABAIXO DO QUADRADO -->
                         ${qrCodeArea}
                     </div>
                 `;
