@@ -2698,34 +2698,76 @@
                 }
             }
 
-            // ============ GERAR RELATÓRIO DO USUÁRIO ============
+            // ============ GERAR RELATÓRIO DO USUÁRIO (CORRIGIDO) ============
             async gerarRelatorioUsuario(id) {
                 const usuario = this.usuarios.find(u => u._id === id);
-                if (!usuario) return;
+                if (!usuario) {
+                    this.showToast('❌ Usuário não encontrado', 'error');
+                    return;
+                }
                 
                 try {
                     this.showToast('📊 Gerando relatório...', 'info');
                     
                     const token = localStorage.getItem('auth_token');
                     
-                    // Buscar resultados do usuário
-                    const response = await fetch(`/api/admin/usuarios/${id}/resultados`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    
-                    const data = await response.json();
-                    const resultados = data.success ? data.resultados : [];
+                    // Buscar resultados do usuário - com tratamento de erro
+                    let resultados = [];
+                    try {
+                        const response = await fetch(`/api/admin/usuarios/${id}/resultados`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        
+                        // Verificar se a resposta é JSON
+                        const contentType = response.headers.get('content-type');
+                        if (contentType && contentType.includes('application/json')) {
+                            const data = await response.json();
+                            if (data.success && data.resultados) {
+                                resultados = data.resultados;
+                            }
+                        } else {
+                            console.warn('Resposta não é JSON, tentando fallback');
+                            // Fallback: buscar resultados das provas
+                            const provasResponse = await fetch('/api/admin/provas?limit=100', {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const provasData = await provasResponse.json();
+                            
+                            if (provasData.success && provasData.provas) {
+                                // Buscar resultados para cada prova
+                                for (const prova of provasData.provas) {
+                                    try {
+                                        const resultadoResponse = await fetch(`/api/provas/${prova.id}/resultados`, {
+                                            headers: { 'Authorization': `Bearer ${token}` }
+                                        });
+                                        const resultadoData = await resultadoResponse.json();
+                                        if (resultadoData.success && resultadoData.resultados) {
+                                            const resultadosAluno = resultadoData.resultados.filter(r => r.alunoId === id);
+                                            resultados.push(...resultadosAluno);
+                                        }
+                                    } catch (e) {
+                                        console.warn(`Erro ao buscar resultados da prova ${prova.id}:`, e);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Erro ao buscar resultados:', error);
+                        // Continuar com array vazio
+                    }
                     
                     // Calcular estatísticas
                     const totalProvas = resultados.length;
                     const aprovacoes = resultados.filter(r => r.nota && r.nota >= 7).length;
                     const reprovacoes = resultados.filter(r => r.nota && r.nota < 7).length;
                     const pendentes = resultados.filter(r => !r.nota && !r.cancelada).length;
-                    const media = resultados.filter(r => r.nota).reduce((acc, r) => acc + r.nota, 0) / (resultados.filter(r => r.nota).length || 1);
+                    const media = resultados.filter(r => r.nota).length > 0 
+                        ? (resultados.filter(r => r.nota).reduce((acc, r) => acc + r.nota, 0) / resultados.filter(r => r.nota).length).toFixed(2)
+                        : '0.00';
                     
                     const html = `
-                        <div style="padding: 20px;">
-                            <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="padding: 20px; min-width: 500px;">
+                            <div style="text-align: center; margin-bottom: 25px;">
                                 <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
                                     <span style="font-size: 32px; color: white; font-weight: bold;">
                                         ${usuario.nome?.charAt(0).toUpperCase() || 'U'}
@@ -2733,10 +2775,13 @@
                                 </div>
                                 <h2 style="margin: 0; color: #1f2937;">${usuario.nome || 'Usuário'}</h2>
                                 <p style="color: #6b7280; margin: 5px 0;">${usuario.email || ''}</p>
-                                <p style="color: #6b7280; font-size: 13px;">Matrícula: ${usuario.matricula || 'Não cadastrada'} • ${usuario.role === 'aluno' ? 'Aluno' : usuario.role === 'professor' ? 'Professor' : usuario.role === 'setor_pedagogico' ? 'Setor Pedagógico' : 'Admin'}</p>
+                                <p style="color: #6b7280; font-size: 13px;">
+                                    Matrícula: ${usuario.matricula || 'Não cadastrada'} • 
+                                    Perfil: ${usuario.role === 'aluno' ? 'Aluno' : usuario.role === 'professor' ? 'Professor' : usuario.role === 'setor_pedagogico' ? 'Setor Pedagógico' : 'Admin'}
+                                </p>
                             </div>
                             
-                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px;">
                                 <div style="background: #e3f2fd; padding: 15px; border-radius: 12px; text-align: center;">
                                     <div style="font-size: 28px; font-weight: bold; color: #1976d2;">${totalProvas}</div>
                                     <div style="font-size: 12px; color: #666;">Provas Realizadas</div>
@@ -2755,51 +2800,90 @@
                                 </div>
                             </div>
                             
-                            <div style="background: #f8fafc; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                            <div style="background: #f8fafc; padding: 15px; border-radius: 12px; margin-bottom: 25px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span><strong>Média Geral:</strong></span>
-                                    <span style="font-size: 24px; font-weight: bold; color: ${media >= 7 ? '#10b981' : '#ef4444'};">${media.toFixed(2)}</span>
+                                    <span style="font-size: 24px; font-weight: bold; color: ${parseFloat(media) >= 7 ? '#10b981' : '#ef4444'};">${media}</span>
+                                </div>
+                                <div style="margin-top: 10px; background: #e5e7eb; border-radius: 10px; height: 8px; overflow: hidden;">
+                                    <div style="width: ${(parseFloat(media) / 10) * 100}%; height: 100%; background: ${parseFloat(media) >= 7 ? '#10b981' : '#ef4444'}; border-radius: 10px;"></div>
                                 </div>
                             </div>
                             
                             ${resultados.length > 0 ? `
-                                <h4 style="margin: 20px 0 10px;">📋 Últimas Provas</h4>
-                                <div style="max-height: 300px; overflow-y: auto;">
+                                <h4 style="margin: 20px 0 12px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-list"></i> Últimas Provas
+                                    <span style="font-size: 12px; color: #6c757d;">(${resultados.length} registros)</span>
+                                </h4>
+                                <div style="max-height: 350px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px;">
                                     <table style="width: 100%; border-collapse: collapse;">
-                                        <thead style="background: #f1f5f9;">
+                                        <thead style="position: sticky; top: 0; background: #f8f9fa;">
                                             <tr>
-                                                <th style="padding: 8px; text-align: left;">Prova</th>
-                                                <th style="padding: 8px; text-align: center;">Data</th>
-                                                <th style="padding: 8px; text-align: center;">Nota</th>
-                                                <th style="padding: 8px; text-align: center;">Status</th>
+                                                <th style="padding: 12px; text-align: left;">Prova</th>
+                                                <th style="padding: 12px; text-align: center;">Data</th>
+                                                <th style="padding: 12px; text-align: center;">Nota</th>
+                                                <th style="padding: 12px; text-align: center;">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            ${resultados.slice(0, 10).map(r => `
-                                                <tr style="border-bottom: 1px solid #e5e7eb;">
-                                                    <td style="padding: 8px;">${r.provaTitulo || 'N/A'}</td>
-                                                    <td style="padding: 8px; text-align: center;">${new Date(r.dataRealizacao).toLocaleDateString('pt-BR')}</td>
-                                                    <td style="padding: 8px; text-align: center; font-weight: bold; color: ${r.nota >= 7 ? '#10b981' : '#ef4444'};">${r.nota ? r.nota.toFixed(2) : '-'}</td>
-                                                    <td style="padding: 8px; text-align: center;">
-                                                        <span style="background: ${r.nota >= 7 ? '#d1fae5' : r.nota ? '#fee2e2' : '#fef3c7'}; color: ${r.nota >= 7 ? '#065f46' : r.nota ? '#991b1b' : '#92400e'}; padding: 2px 8px; border-radius: 20px; font-size: 11px;">
-                                                            ${r.nota >= 7 ? 'Aprovado' : r.nota ? 'Reprovado' : 'Pendente'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            `).join('')}
+                                            ${resultados.slice(0, 15).map(r => {
+                                                const nota = r.nota ? r.nota.toFixed(2) : '-';
+                                                const statusClass = r.nota >= 7 ? '#10b981' : (r.nota ? '#ef4444' : '#f59e0b');
+                                                const statusBg = r.nota >= 7 ? '#d1fae5' : (r.nota ? '#fee2e2' : '#fef3c7');
+                                                const statusText = r.nota >= 7 ? 'Aprovado' : (r.nota ? 'Reprovado' : 'Pendente');
+                                                
+                                                return `
+                                                    <tr style="border-bottom: 1px solid #e5e7eb;">
+                                                        <td style="padding: 12px;">${r.provaTitulo || 'N/A'}</td>
+                                                        <td style="padding: 12px; text-align: center;">${r.dataRealizacao ? new Date(r.dataRealizacao).toLocaleDateString('pt-BR') : '-'}</td>
+                                                        <td style="padding: 12px; text-align: center; font-weight: bold; color: ${statusClass};">${nota}</td>
+                                                        <td style="padding: 12px; text-align: center;">
+                                                            <span style="background: ${statusBg}; color: ${statusClass}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                                                                ${statusText}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                `;
+                                            }).join('')}
                                         </tbody>
                                     </table>
-                                    ${resultados.length > 10 ? `<p style="text-align: center; margin-top: 10px; color: #6b7280;">... e mais ${resultados.length - 10} resultados</p>` : ''}
+                                    ${resultados.length > 15 ? `<p style="text-align: center; padding: 12px; color: #6c757d;">... e mais ${resultados.length - 15} resultados</p>` : ''}
                                 </div>
-                            ` : '<p style="text-align: center; color: #6b7280;">Nenhuma prova realizada ainda.</p>'}
+                            ` : `
+                                <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px;">
+                                    <i class="fas fa-chart-line" style="font-size: 48px; color: #dee2e6; margin-bottom: 10px;"></i>
+                                    <p style="color: #6c757d;">Nenhuma prova realizada ainda.</p>
+                                </div>
+                            `}
                         </div>
                     `;
                     
                     this.abrirModal(`📊 Relatório - ${usuario.nome}`, html, false);
                     
                 } catch (error) {
-                    console.error('❌ Erro:', error);
-                    this.showToast('❌ ' + error.message, 'error');
+                    console.error('❌ Erro ao gerar relatório:', error);
+                    this.showToast('❌ Erro ao carregar relatório. Tente novamente.', 'error');
+                    
+                    // Fallback: mostrar relatório básico com dados do usuário
+                    const fallbackHtml = `
+                        <div style="padding: 20px; text-align: center;">
+                            <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                                <span style="font-size: 32px; color: white; font-weight: bold;">
+                                    ${usuario.nome?.charAt(0).toUpperCase() || 'U'}
+                                </span>
+                            </div>
+                            <h2 style="margin: 0;">${usuario.nome || 'Usuário'}</h2>
+                            <p style="color: #6b7280;">${usuario.email || ''}</p>
+                            <p style="color: #6b7280;">Matrícula: ${usuario.matricula || 'Não cadastrada'}</p>
+                            <p style="color: #6b7280;">Perfil: ${usuario.role === 'aluno' ? 'Aluno' : usuario.role === 'professor' ? 'Professor' : 'Admin'}</p>
+                            <div style="margin-top: 20px; padding: 15px; background: #fef3c7; border-radius: 8px;">
+                                <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i>
+                                Não foi possível carregar os resultados das provas no momento.
+                            </div>
+                        </div>
+                    `;
+                    
+                    this.abrirModal(`📊 Relatório - ${usuario.nome}`, fallbackHtml, false);
                 }
             }
 
