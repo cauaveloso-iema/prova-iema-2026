@@ -2439,6 +2439,7 @@
                                     <option value="aluno">Alunos</option>
                                     <option value="professor">Professores</option>
                                     <option value="admin">Admins</option>
+                                    <option value="setor_pedagogico">Setor Pedagógico</option>
                                 </select>
                             </div>
                             <div class="filter-actions">
@@ -2502,49 +2503,46 @@
                 }
             }
 
-            // ============ GERAR LINHAS USUÁRIOS (COM FILTRO) ============
+            // ============ GERAR LINHAS USUÁRIOS (COM AÇÕES COMPLETAS) ============
             gerarLinhasUsuarios(usuarios) {
                 // 🔥 FILTRO: Admin normal não vê super_admins
                 const usuariosFiltrados = usuarios.filter(u => u.role !== 'super_admin');
                 
-                console.log('Usuários após filtrar super_admin:', usuariosFiltrados.length);
-                
                 if (!usuariosFiltrados || usuariosFiltrados.length === 0) {
-                    return '<tr><td colspan="6" class="empty-state">Nenhum usuário encontrado</td></tr>';
+                    return '<tr><td colspan="8" class="empty-state">Nenhum usuário encontrado</td></tr>';
                 }
 
                 return usuariosFiltrados.map(u => {
-                    // Formatar CPF e Telefone se existirem
+                    // Formatar CPF se existir
                     const cpfFormatado = u.cpf ? u.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '-';
+                    // Formatar telefone se existir
                     const telefoneFormatado = u.telefone ? u.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
                     
-                    // 🔥 CORREÇÃO: Badge com suporte ao Setor Pedagógico
+                    // Badge com suporte a todos os perfis
                     let roleBadge = '';
-                    let roleIcon = '';
                     
                     if (u.role === 'aluno') {
                         roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
-                        roleIcon = '👨‍🎓';
                     } else if (u.role === 'professor') {
                         roleBadge = '<span class="role-badge professor"><i class="fas fa-chalkboard-teacher"></i> Professor</span>';
-                        roleIcon = '👨‍🏫';
                     } else if (u.role === 'admin') {
                         roleBadge = '<span class="role-badge admin"><i class="fas fa-user-shield"></i> Admin</span>';
-                        roleIcon = '👑';
+                    } else if (u.role === 'super_admin') {
+                        roleBadge = '<span class="role-badge" style="background: #ffd966; color: #856404;"><i class="fas fa-crown"></i> Super Admin</span>';
                     } else if (u.role === 'setor_pedagogico') {
                         roleBadge = '<span class="role-badge setor_pedagogico"><i class="fas fa-chalkboard-user"></i> Setor Pedagógico</span>';
-                        roleIcon = '👩‍🏫';
                     } else {
                         roleBadge = `<span class="role-badge">${u.role || 'aluno'}</span>`;
-                        roleIcon = '👤';
                     }
                     
                     return `
                         <tr>
-                            <td><strong>${u.nome || 'N/A'}</strong></td>
-                            <td>${u.email || '-'}</td>
+                            <td><strong>${this.escapeHtml(u.nome) || 'N/A'}</strong></td>
+                            <td>${this.escapeHtml(u.email) || '-'}</td>
                             <td>${roleBadge}</td>
-                            <td>${u.matricula || '-'}</td>
+                            <td>${this.escapeHtml(u.matricula) || '-'}</td>
+                            <td>${cpfFormatado}</td>
+                            <td>${telefoneFormatado}</td>
                             <td>
                                 <span class="status-badge ${u.ativo ? 'active' : 'inactive'}">
                                     ${u.ativo ? 'Ativo' : 'Inativo'}
@@ -2558,11 +2556,251 @@
                                     <button class="btn-icon" onclick="adminSimples.resetarSenha('${u._id}')" title="Resetar senha">
                                         <i class="fas fa-key"></i>
                                     </button>
+                                    <button class="btn-icon" onclick="adminSimples.gerarRelatorioUsuario('${u._id}')" title="Gerar relatório">
+                                        <i class="fas fa-chart-line"></i>
+                                    </button>
+                                    <button class="btn-icon ${u.ativo ? 'warning' : 'success'}" 
+                                            onclick="adminSimples.inativarAtivarUsuario('${u._id}')" 
+                                            title="${u.ativo ? 'Inativar usuário' : 'Ativar usuário'}">
+                                        <i class="fas ${u.ativo ? 'fa-ban' : 'fa-check-circle'}"></i>
+                                    </button>
+                                    <button class="btn-icon delete" onclick="adminSimples.excluirUsuario('${u._id}')" title="Excluir permanentemente">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </div>
                             </td>
                         </tr>
                     `;
                 }).join('');
+            }
+
+            // ============ INATIVAR/ATIVAR USUÁRIO ============
+            async inativarAtivarUsuario(id) {
+                const usuario = this.usuarios.find(u => u._id === id);
+                if (!usuario) {
+                    this.showToast('❌ Usuário não encontrado', 'error');
+                    return;
+                }
+                
+                if (usuario.role === 'super_admin') {
+                    this.showToast('❌ Não é possível inativar Super Admins', 'error');
+                    return;
+                }
+                
+                const novoStatus = !usuario.ativo;
+                const acao = novoStatus ? 'ativar' : 'inativar';
+                const acaoTexto = novoStatus ? 'ativado' : 'inativado';
+                
+                const confirmar = await this.confirmar(
+                    `${novoStatus ? '✅ Ativar' : '⚠️ Inativar'} Usuário`,
+                    `Tem certeza que deseja ${acao} o usuário <strong>${usuario.nome}</strong>?<br><br>
+                    ${!novoStatus ? '<span style="color: #dc3545;">Usuários inativados não poderão acessar o sistema.</span>' : ''}`,
+                    `Sim, ${acao}`,
+                    'Cancelar'
+                );
+                
+                if (!confirmar) return;
+                
+                try {
+                    this.showToast(`🔄 ${acao === 'ativar' ? 'Ativando' : 'Inativando'} usuário...`, 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/admin/usuarios/${id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ ativo: novoStatus })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast(`✅ Usuário ${acaoTexto} com sucesso!`, 'success');
+                        
+                        // Atualizar o usuário na lista local
+                        usuario.ativo = novoStatus;
+                        
+                        // Recarregar a tabela
+                        this.atualizarTabelaUsuarios();
+                        
+                        // Atualizar contadores se necessário
+                        if (typeof this.atualizarDashboard === 'function') {
+                            this.carregarDashboard();
+                        }
+                    } else {
+                        throw new Error(data.error || 'Erro ao alterar status');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ EXCLUIR USUÁRIO ============
+            async excluirUsuario(id) {
+                const usuario = this.usuarios.find(u => u._id === id);
+                if (!usuario) {
+                    this.showToast('❌ Usuário não encontrado', 'error');
+                    return;
+                }
+                
+                if (usuario.role === 'super_admin') {
+                    this.showToast('❌ Não é possível excluir Super Admins', 'error');
+                    return;
+                }
+                
+                const confirmar = await this.confirmar(
+                    '🗑️ Excluir Usuário',
+                    `Tem certeza que deseja EXCLUIR PERMANENTEMENTE o usuário <strong>${usuario.nome}</strong>?<br><br>
+                    <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!<br>
+                    Todos os dados associados a este usuário serão removidos.</span>`,
+                    'Sim, excluir permanentemente',
+                    'Cancelar'
+                );
+                
+                if (!confirmar) return;
+                
+                try {
+                    this.showToast('🗑️ Excluindo usuário...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/admin/usuarios/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast('✅ Usuário excluído com sucesso!', 'success');
+                        
+                        // Remover da lista local
+                        this.usuarios = this.usuarios.filter(u => u._id !== id);
+                        this.usuariosFiltrados = this.usuariosFiltrados.filter(u => u._id !== id);
+                        
+                        // Recarregar a tabela
+                        this.atualizarTabelaUsuarios();
+                        
+                        // Atualizar contadores
+                        if (typeof this.carregarDashboard === 'function') {
+                            this.carregarDashboard();
+                        }
+                    } else {
+                        throw new Error(data.error || 'Erro ao excluir usuário');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ GERAR RELATÓRIO DO USUÁRIO ============
+            async gerarRelatorioUsuario(id) {
+                const usuario = this.usuarios.find(u => u._id === id);
+                if (!usuario) return;
+                
+                try {
+                    this.showToast('📊 Gerando relatório...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    
+                    // Buscar resultados do usuário
+                    const response = await fetch(`/api/admin/usuarios/${id}/resultados`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    const resultados = data.success ? data.resultados : [];
+                    
+                    // Calcular estatísticas
+                    const totalProvas = resultados.length;
+                    const aprovacoes = resultados.filter(r => r.nota && r.nota >= 7).length;
+                    const reprovacoes = resultados.filter(r => r.nota && r.nota < 7).length;
+                    const pendentes = resultados.filter(r => !r.nota && !r.cancelada).length;
+                    const media = resultados.filter(r => r.nota).reduce((acc, r) => acc + r.nota, 0) / (resultados.filter(r => r.nota).length || 1);
+                    
+                    const html = `
+                        <div style="padding: 20px;">
+                            <div style="text-align: center; margin-bottom: 20px;">
+                                <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                                    <span style="font-size: 32px; color: white; font-weight: bold;">
+                                        ${usuario.nome?.charAt(0).toUpperCase() || 'U'}
+                                    </span>
+                                </div>
+                                <h2 style="margin: 0; color: #1f2937;">${usuario.nome || 'Usuário'}</h2>
+                                <p style="color: #6b7280; margin: 5px 0;">${usuario.email || ''}</p>
+                                <p style="color: #6b7280; font-size: 13px;">Matrícula: ${usuario.matricula || 'Não cadastrada'} • ${usuario.role === 'aluno' ? 'Aluno' : usuario.role === 'professor' ? 'Professor' : usuario.role === 'setor_pedagogico' ? 'Setor Pedagógico' : 'Admin'}</p>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+                                <div style="background: #e3f2fd; padding: 15px; border-radius: 12px; text-align: center;">
+                                    <div style="font-size: 28px; font-weight: bold; color: #1976d2;">${totalProvas}</div>
+                                    <div style="font-size: 12px; color: #666;">Provas Realizadas</div>
+                                </div>
+                                <div style="background: #e8f5e9; padding: 15px; border-radius: 12px; text-align: center;">
+                                    <div style="font-size: 28px; font-weight: bold; color: #388e3c;">${aprovacoes}</div>
+                                    <div style="font-size: 12px; color: #666;">Aprovações</div>
+                                </div>
+                                <div style="background: #ffebee; padding: 15px; border-radius: 12px; text-align: center;">
+                                    <div style="font-size: 28px; font-weight: bold; color: #c62828;">${reprovacoes}</div>
+                                    <div style="font-size: 12px; color: #666;">Reprovações</div>
+                                </div>
+                                <div style="background: #fff3e0; padding: 15px; border-radius: 12px; text-align: center;">
+                                    <div style="font-size: 28px; font-weight: bold; color: #f57c00;">${pendentes}</div>
+                                    <div style="font-size: 12px; color: #666;">Pendentes</div>
+                                </div>
+                            </div>
+                            
+                            <div style="background: #f8fafc; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span><strong>Média Geral:</strong></span>
+                                    <span style="font-size: 24px; font-weight: bold; color: ${media >= 7 ? '#10b981' : '#ef4444'};">${media.toFixed(2)}</span>
+                                </div>
+                            </div>
+                            
+                            ${resultados.length > 0 ? `
+                                <h4 style="margin: 20px 0 10px;">📋 Últimas Provas</h4>
+                                <div style="max-height: 300px; overflow-y: auto;">
+                                    <table style="width: 100%; border-collapse: collapse;">
+                                        <thead style="background: #f1f5f9;">
+                                            <tr>
+                                                <th style="padding: 8px; text-align: left;">Prova</th>
+                                                <th style="padding: 8px; text-align: center;">Data</th>
+                                                <th style="padding: 8px; text-align: center;">Nota</th>
+                                                <th style="padding: 8px; text-align: center;">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${resultados.slice(0, 10).map(r => `
+                                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                                    <td style="padding: 8px;">${r.provaTitulo || 'N/A'}</td>
+                                                    <td style="padding: 8px; text-align: center;">${new Date(r.dataRealizacao).toLocaleDateString('pt-BR')}</td>
+                                                    <td style="padding: 8px; text-align: center; font-weight: bold; color: ${r.nota >= 7 ? '#10b981' : '#ef4444'};">${r.nota ? r.nota.toFixed(2) : '-'}</td>
+                                                    <td style="padding: 8px; text-align: center;">
+                                                        <span style="background: ${r.nota >= 7 ? '#d1fae5' : r.nota ? '#fee2e2' : '#fef3c7'}; color: ${r.nota >= 7 ? '#065f46' : r.nota ? '#991b1b' : '#92400e'}; padding: 2px 8px; border-radius: 20px; font-size: 11px;">
+                                                            ${r.nota >= 7 ? 'Aprovado' : r.nota ? 'Reprovado' : 'Pendente'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                    ${resultados.length > 10 ? `<p style="text-align: center; margin-top: 10px; color: #6b7280;">... e mais ${resultados.length - 10} resultados</p>` : ''}
+                                </div>
+                            ` : '<p style="text-align: center; color: #6b7280;">Nenhuma prova realizada ainda.</p>'}
+                        </div>
+                    `;
+                    
+                    this.abrirModal(`📊 Relatório - ${usuario.nome}`, html, false);
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
             }
 
             atualizarTabelaUsuarios() {
@@ -2683,6 +2921,17 @@
                         this.showToast('❌ ' + error.message, 'error');
                     }
                 }
+            }
+
+            // ============ ESCAPAR HTML PARA EVITAR INJEÇÃO ============
+            escapeHtml(text) {
+                if (!text) return '';
+                return String(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
             }
 
             // ============ ABRIR MODAL USUÁRIO (CORRIGIDO) ============
@@ -3008,36 +3257,60 @@
                 }
             }
 
+            // ============ GERAR LINHAS DA TABELA DE TURMAS (COM AÇÕES COMPLETAS) ============
             gerarLinhasTurmas(turmas) {
                 if (!turmas || turmas.length === 0) {
-                    return '<tr><td colspan="8" class="empty-state">Nenhuma turma encontrada</td></tr>';
+                    return '发展<td colspan="9" class="empty-state">Nenhuma turma encontrada</td></tr>';
                 }
 
-                return turmas.map(t => `
-                    <tr>
-                        <td><strong>${t.nome || 'N/A'}</strong></td>
-                        <td>${t.disciplina || '-'}</td>
-                        <td>${t.eixo || '-'}</td>
-                        <td><code>${t.codigo || '-'}</code></td>
-                        <td>${t.totalAlunos || 0}</td>
-                        <td>${t.totalProvas || 0}</td>
-                        <td>
-                            <span class="status-badge ${t.ativa ? 'active' : 'inactive'}">
-                                ${t.ativa ? 'Ativa' : 'Inativa'}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="action-buttons">
-                                <button class="btn-icon edit" onclick="adminSimples.editarTurma('${t.id}')" title="Editar">
-                                    <i class="fas fa-edit"></i>
+                return turmas.map(t => {
+                    // Obter o ID correto
+                    const id = t.id || t._id;
+                    
+                    return `
+                        <tr>
+                            <td><strong>${t.nome || 'N/A'}</strong>${t.codigo ? `<br><small style="color: #6c757d;">Cód: ${t.codigo}</small>` : ''}</td>
+                            <td>${t.disciplina || '-'}</td>
+                            <td>${t.eixo || '-'}</td>
+                            <td><code>${t.codigo || '-'}</code></td>
+                            <td style="text-align: center;">
+                                <button class="btn-icon" onclick="adminSimples.verAlunosTurma('${id}')" title="Ver alunos" style="background: #3498db; color: white; width: 28px; height: 28px; border-radius: 4px;">
+                                    <i class="fas fa-users"></i>
                                 </button>
-                                <button class="btn-icon" onclick="adminSimples.verDetalhesTurma('${t.id}')" title="Ver">
-                                    <i class="fas fa-eye"></i>
+                                <span style="margin-left: 5px; font-weight: 600;">${t.totalAlunos || 0}</span>
+                            </td>
+                            <td style="text-align: center;">
+                                <button class="btn-icon" onclick="adminSimples.verProvasTurma('${id}')" title="Ver provas" style="background: #9b59b6; color: white; width: 28px; height: 28px; border-radius: 4px;">
+                                    <i class="fas fa-file-alt"></i>
                                 </button>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
+                                <span style="margin-left: 5px; font-weight: 600;">${t.totalProvas || 0}</span>
+                            </td>
+                            <td>
+                                <span class="status-badge ${t.ativa ? 'active' : 'inactive'}">
+                                    ${t.ativa ? 'Ativa' : 'Inativa'}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                    <button class="btn-icon edit" onclick="adminSimples.editarTurma('${id}')" title="Editar turma">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn-icon" onclick="adminSimples.verDetalhesTurma('${id}')" title="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn-icon ${t.ativa ? 'warning' : 'success'}" 
+                                            onclick="adminSimples.inativarAtivarTurma('${id}')" 
+                                            title="${t.ativa ? 'Inativar turma' : 'Ativar turma'}">
+                                        <i class="fas ${t.ativa ? 'fa-ban' : 'fa-check-circle'}"></i>
+                                    </button>
+                                    <button class="btn-icon delete" onclick="adminSimples.excluirTurma('${id}')" title="Excluir turma">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
             }
 
             atualizarTabelaTurmas() {
@@ -3089,6 +3362,718 @@
                 
                 // Abrir modal com os dados da turma
                 this.abrirModalTurma(turma);
+            }
+
+            // ============ INATIVAR/ATIVAR TURMA ============
+            async inativarAtivarTurma(id) {
+                const turma = this.turmas.find(t => t.id === id || t._id === id);
+                if (!turma) {
+                    this.showToast('❌ Turma não encontrada', 'error');
+                    return;
+                }
+                
+                const novoStatus = !turma.ativa;
+                const acao = novoStatus ? 'ativar' : 'inativar';
+                const acaoTexto = novoStatus ? 'ativada' : 'inativada';
+                
+                const confirmar = await this.confirmar(
+                    `${novoStatus ? '✅ Ativar' : '⚠️ Inativar'} Turma`,
+                    `Tem certeza que deseja ${acao} a turma <strong>${turma.nome}</strong>?<br><br>
+                    ${!novoStatus ? '<span style="color: #dc3545;">Turmas inativadas não aparecerão em novas provas e alunos não poderão ser matriculados.</span>' : ''}`,
+                    `Sim, ${acao}`,
+                    'Cancelar'
+                );
+                
+                if (!confirmar) return;
+                
+                try {
+                    this.showToast(`🔄 ${acao === 'ativar' ? 'Ativando' : 'Inativando'} turma...`, 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/admin/turmas/${id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ ativa: novoStatus })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast(`✅ Turma ${acaoTexto} com sucesso!`, 'success');
+                        
+                        // Atualizar a turma na lista local
+                        turma.ativa = novoStatus;
+                        
+                        // Atualizar também na lista filtrada
+                        const turmaFiltrada = this.turmasFiltradas.find(t => (t.id === id || t._id === id));
+                        if (turmaFiltrada) turmaFiltrada.ativa = novoStatus;
+                        
+                        // Recarregar a tabela
+                        this.atualizarTabelaTurmas();
+                        
+                        // Atualizar contadores se necessário
+                        if (typeof this.carregarDashboard === 'function') {
+                            this.carregarDashboard();
+                        }
+                    } else {
+                        throw new Error(data.error || 'Erro ao alterar status');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ EXCLUIR TURMA ============
+            async excluirTurma(id) {
+                const turma = this.turmas.find(t => t.id === id || t._id === id);
+                if (!turma) {
+                    this.showToast('❌ Turma não encontrada', 'error');
+                    return;
+                }
+                
+                // Verificar se a turma tem provas associadas
+                const temProvas = turma.totalProvas > 0;
+                const temAlunos = turma.totalAlunos > 0;
+                
+                let mensagemAdicional = '';
+                if (temProvas) {
+                    mensagemAdicional += `<br><span style="color: #dc3545;">⚠️ Esta turma possui ${turma.totalProvas} prova(s) associada(s). Ao excluir a turma, todas as provas também serão removidas!</span>`;
+                }
+                if (temAlunos) {
+                    mensagemAdicional += `<br><span style="color: #dc3545;">⚠️ Esta turma possui ${turma.totalAlunos} aluno(s) matriculado(s). A exclusão removerá a vinculação desses alunos com a turma!</span>`;
+                }
+                
+                const confirmar = await this.confirmar(
+                    '🗑️ Excluir Turma',
+                    `Tem certeza que deseja EXCLUIR PERMANENTEMENTE a turma <strong>${turma.nome}</strong>?<br><br>
+                    <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span>
+                    ${mensagemAdicional}`,
+                    'Sim, excluir permanentemente',
+                    'Cancelar'
+                );
+                
+                if (!confirmar) return;
+                
+                try {
+                    this.showToast('🗑️ Excluindo turma...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/admin/turmas/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast('✅ Turma excluída com sucesso!', 'success');
+                        
+                        // Remover da lista local
+                        this.turmas = this.turmas.filter(t => t.id !== id && t._id !== id);
+                        this.turmasFiltradas = this.turmasFiltradas.filter(t => t.id !== id && t._id !== id);
+                        
+                        // Recarregar a tabela
+                        this.atualizarTabelaTurmas();
+                        
+                        // Atualizar contadores no dashboard
+                        if (typeof this.carregarDashboard === 'function') {
+                            this.carregarDashboard();
+                        }
+                    } else {
+                        throw new Error(data.error || 'Erro ao excluir turma');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ VER ALUNOS DA TURMA (COM ADICIONAR ALUNO E MODAL MAIOR) ============
+            async verAlunosTurma(id) {
+                const turma = this.turmas.find(t => t.id === id || t._id === id);
+                if (!turma) return;
+                
+                try {
+                    this.showToast('👥 Carregando alunos...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/turmas/${id}/alunos`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    // Extrair alunos corretamente
+                    let alunos = [];
+                    if (data.success && data.alunos) {
+                        alunos = data.alunos;
+                    } else if (Array.isArray(data)) {
+                        alunos = data;
+                    } else if (data.alunos && Array.isArray(data.alunos)) {
+                        alunos = data.alunos;
+                    } else if (turma.alunos && Array.isArray(turma.alunos)) {
+                        alunos = turma.alunos;
+                    }
+                    
+                    // Garantir que cada aluno tenha o campo 'ativo'
+                    alunos = alunos.map(aluno => {
+                        if (aluno.status !== undefined) {
+                            aluno.ativo = aluno.status === 'ativo' || aluno.status === true;
+                        }
+                        if (aluno.ativo === undefined) {
+                            aluno.ativo = true;
+                        }
+                        return aluno;
+                    });
+                    
+                    // Buscar lista de todos os alunos disponíveis para adicionar
+                    const todosAlunosResponse = await fetch('/api/admin/usuarios?role=aluno&limit=500', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const todosAlunosData = await todosAlunosResponse.json();
+                    const todosAlunos = todosAlunosData.success ? todosAlunosData.usuarios : [];
+                    
+                    // Filtrar alunos que já estão na turma
+                    const alunosIdsNaTurma = new Set(alunos.map(a => a._id || a.id));
+                    const alunosDisponiveis = todosAlunos.filter(aluno => 
+                        !alunosIdsNaTurma.has(aluno._id) && 
+                        (!aluno.turmaId || aluno.turmaId !== id) &&
+                        aluno.ativo !== false
+                    );
+                    
+                    // Ordenar alunos disponíveis por nome
+                    alunosDisponiveis.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+                    
+                    let alunosHtml = `
+                        <div style="padding: 25px; min-width: 800px; max-width: 1000px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px;">
+                                <div>
+                                    <h2 style="margin: 0 0 5px; display: flex; align-items: center; gap: 12px;">
+                                        <i class="fas fa-users" style="color: #3498db; font-size: 28px;"></i> 
+                                        ${turma.nome}
+                                    </h2>
+                                    <div style="color: #6c757d; font-size: 13px;">
+                                        <i class="fas fa-tag"></i> Código: ${turma.codigo || 'N/A'} | 
+                                        <i class="fas fa-book"></i> Disciplina: ${turma.disciplina || 'N/A'} | 
+                                        <i class="fas fa-layer-group"></i> Eixo: ${turma.eixo || 'N/A'}
+                                    </div>
+                                </div>
+                                ${alunosDisponiveis.length > 0 ? `
+                                <button class="btn-primary" onclick="adminSimples.abrirModalAdicionarAlunoTurma('${id}', '${turma.nome}')" style="background: #10b981; padding: 10px 20px; font-size: 14px; border-radius: 8px;">
+                                    <i class="fas fa-plus"></i> Adicionar Aluno
+                                </button>
+                                ` : ''}
+                            </div>
+                            
+                            <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center;">
+                                <div style="background: #e3f2fd; padding: 8px 16px; border-radius: 20px;">
+                                    <i class="fas fa-user-graduate" style="color: #1976d2;"></i> 
+                                    <strong>${alunos.length}</strong> alunos matriculados
+                                </div>
+                                <div style="background: #e8f5e9; padding: 8px 16px; border-radius: 20px;">
+                                    <i class="fas fa-check-circle" style="color: #388e3c;"></i> 
+                                    <strong>${alunos.filter(a => a.ativo).length}</strong> ativos
+                                </div>
+                                <div style="background: #ffebee; padding: 8px 16px; border-radius: 20px;">
+                                    <i class="fas fa-ban" style="color: #c62828;"></i> 
+                                    <strong>${alunos.filter(a => !a.ativo).length}</strong> inativos
+                                </div>
+                            </div>
+                            
+                            <div class="table-responsive" style="border-radius: 12px; overflow: auto; border: 1px solid #e5e7eb; max-height: 500px;">
+                                <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+                                    <thead style="position: sticky; top: 0; z-index: 10;">
+                                        <tr style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+                                            <th style="padding: 14px 16px; text-align: left; font-size: 14px;">Nome</th>
+                                            <th style="padding: 14px 16px; text-align: left; font-size: 14px;">Email</th>
+                                            <th style="padding: 14px 16px; text-align: center; font-size: 14px;">Matrícula</th>
+                                            <th style="padding: 14px 16px; text-align: center; font-size: 14px;">Status</th>
+                                            <th style="padding: 14px 16px; text-align: center; font-size: 14px;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    
+                    if (alunos.length === 0) {
+                        alunosHtml += `
+                            <tr>
+                                <td colspan="5" style="padding: 60px; text-align: center;">
+                                    <i class="fas fa-user-graduate" style="font-size: 64px; color: #dee2e6; margin-bottom: 15px; display: block;"></i>
+                                    <h3 style="color: #6c757d; margin-bottom: 10px;">Nenhum aluno matriculado</h3>
+                                    <p style="color: #6c757d;">Clique em "Adicionar Aluno" para matricular estudantes nesta turma.</p>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        alunos.forEach(aluno => {
+                            const estaAtivo = aluno.ativo === true || aluno.ativo === 'true' || aluno.status === 'ativo';
+                            const statusBg = estaAtivo ? '#d1fae5' : '#fee2e2';
+                            const statusColor = estaAtivo ? '#10b981' : '#ef4444';
+                            const statusText = estaAtivo ? 'Ativo' : 'Inativo';
+                            const statusIcon = estaAtivo ? '✅' : '❌';
+                            
+                            alunosHtml += `
+                                <tr style="border-bottom: 1px solid #e5e7eb; transition: background 0.2s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+                                    <td style="padding: 14px 16px;">
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+                                                ${aluno.nome?.charAt(0).toUpperCase() || '?'}
+                                            </div>
+                                            <strong style="font-size: 14px;">${this.escapeHtml(aluno.nome) || 'N/A'}</strong>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 14px 16px; color: #6b7280; font-size: 13px;">${this.escapeHtml(aluno.email) || '-'}</td>
+                                    <td style="padding: 14px 16px; text-align: center; font-family: monospace; font-size: 13px;">${aluno.matricula || '-'}</td>
+                                    <td style="padding: 14px 16px; text-align: center;">
+                                        <span style="display: inline-block; padding: 5px 14px; border-radius: 30px; font-size: 12px; font-weight: 600; background: ${statusBg}; color: ${statusColor};">
+                                            ${statusIcon} ${statusText}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 14px 16px; text-align: center;">
+                                        <button class="btn-icon" onclick="adminSimples.removerAlunoTurma('${id}', '${aluno._id || aluno.id}', '${aluno.nome}')" 
+                                                title="Remover aluno da turma" 
+                                                style="background: #ef4444; color: white; width: 34px; height: 34px; border-radius: 6px;">
+                                            <i class="fas fa-user-minus"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    
+                    alunosHtml += `
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            ${alunosDisponiveis.length > 0 && alunos.length > 0 ? `
+                            <div style="margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 12px; text-align: center;">
+                                <i class="fas fa-info-circle" style="color: #667eea;"></i> 
+                                <strong>${alunosDisponiveis.length}</strong> aluno(s) disponível(is) para adicionar.
+                                <button onclick="adminSimples.abrirModalAdicionarAlunoTurma('${id}', '${turma.nome}')" 
+                                        style="background: none; border: none; color: #10b981; cursor: pointer; font-weight: 600; margin-left: 5px; text-decoration: underline;">
+                                    Clique aqui para adicionar
+                                </button>
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                    
+                    // 🔥 ABRIR MODAL COM TAMANHO MAIOR
+                    this.abrirModalMaior(`👥 Gerenciar Alunos - ${turma.nome}`, alunosHtml, false);
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ ABRIR MODAL MAIOR ============
+            abrirModalMaior(titulo, conteudo, salvar = false) {
+                console.log('📂 Abrindo modal maior:', { titulo, salvar });
+                
+                const modal = document.getElementById('modal');
+                const modalContent = modal.querySelector('.modal-content');
+                const modalTitle = document.getElementById('modalTitle');
+                const modalBody = document.getElementById('modalBody');
+                const modalSaveBtn = document.getElementById('modalSaveBtn');
+                
+                if (!modal || !modalContent || !modalTitle || !modalBody) {
+                    console.error('❌ Elementos do modal não encontrados');
+                    return;
+                }
+                
+                // Guardar estilo original para restaurar depois
+                const originalStyle = modalContent.style.cssText;
+                
+                // Aplicar estilo maior
+                modalContent.style.cssText = `
+                    width: 90%;
+                    max-width: 1100px;
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+                    max-height: 90vh;
+                    overflow-y: auto;
+                `;
+                
+                // Definir título e conteúdo
+                modalTitle.innerHTML = titulo || 'Título';
+                modalBody.innerHTML = conteudo || '<p style="padding: 20px; text-align: center;">Nenhum conteúdo disponível</p>';
+                
+                // Mostrar/esconder botão salvar
+                if (modalSaveBtn) {
+                    modalSaveBtn.style.display = salvar ? 'inline-block' : 'none';
+                    modalSaveBtn.onclick = null;
+                }
+                
+                // Abrir modal
+                modal.style.display = 'flex';
+                
+                // Restaurar estilo quando fechar
+                const closeHandler = () => {
+                    modalContent.style.cssText = originalStyle;
+                    modal.removeEventListener('click', closeHandler);
+                };
+                
+                // Adicionar listener para quando o modal for fechado
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.attributeName === 'style' && modal.style.display === 'none') {
+                            modalContent.style.cssText = originalStyle;
+                            observer.disconnect();
+                        }
+                    });
+                });
+                observer.observe(modal, { attributes: true });
+            }
+
+            // ============ ABRIR MODAL PARA ADICIONAR ALUNO NA TURMA ============
+            async abrirModalAdicionarAlunoTurma(turmaId, turmaNome) {
+                try {
+                    this.showToast('🔍 Buscando alunos disponíveis...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    
+                    // Buscar turma atual
+                    const turmaResponse = await fetch(`/api/turmas/${turmaId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const turmaData = await turmaResponse.json();
+                    const turma = turmaData.success ? turmaData.turma : null;
+                    
+                    if (!turma) {
+                        this.showToast('❌ Turma não encontrada', 'error');
+                        return;
+                    }
+                    
+                    // Buscar todos os alunos
+                    const alunosResponse = await fetch('/api/admin/usuarios?role=aluno&limit=500', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const alunosData = await alunosResponse.json();
+                    const todosAlunos = alunosData.success ? alunosData.usuarios : [];
+                    
+                    // Extrair IDs dos alunos já na turma
+                    const alunosNaTurmaIds = new Set();
+                    if (turma.alunos && Array.isArray(turma.alunos)) {
+                        turma.alunos.forEach(a => {
+                            alunosNaTurmaIds.add(a._id || a.id || a);
+                        });
+                    }
+                    
+                    // Filtrar alunos disponíveis (não estão na turma)
+                    const alunosDisponiveis = todosAlunos.filter(aluno => 
+                        !alunosNaTurmaIds.has(aluno._id) && 
+                        aluno.ativo !== false
+                    );
+                    
+                    // Ordenar por nome
+                    alunosDisponiveis.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+                    
+                    if (alunosDisponiveis.length === 0) {
+                        this.showToast('ℹ️ Nenhum aluno disponível para adicionar', 'info');
+                        return;
+                    }
+                    
+                    // Gerar HTML do modal
+                    const html = `
+                        <div style="padding: 20px;">
+                            <h3 style="margin: 0 0 15px; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-user-plus" style="color: #10b981;"></i>
+                                Adicionar Aluno à Turma: ${turma.nome}
+                            </h3>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <div class="filter-group">
+                                    <label><i class="fas fa-search"></i> Buscar aluno</label>
+                                    <input type="text" id="buscaAlunoTurma" placeholder="Digite nome ou email..." 
+                                        class="form-control" onkeyup="adminSimples.filtrarAlunosDisponiveis()"
+                                        style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                                </div>
+                            </div>
+                            
+                            <div id="listaAlunosDisponiveis" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px;">
+                                ${this.gerarListaAlunosDisponiveis(alunosDisponiveis)}
+                            </div>
+                            
+                            <div style="margin-top: 20px; padding: 12px; background: #f8fafc; border-radius: 8px; text-align: center; color: #6b7280;">
+                                <i class="fas fa-info-circle"></i> 
+                                <strong>${alunosDisponiveis.length}</strong> aluno(s) disponível(is) para adicionar.
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Armazenar dados para uso posterior
+                    this.alunosDisponiveisCache = alunosDisponiveis;
+                    this.turmaAtualId = turmaId;
+                    this.turmaAtualNome = turma.nome;
+                    
+                    this.abrirModal(`➕ Adicionar Aluno - ${turma.nome}`, html, false);
+                    
+                    // Adicionar estilo para os botões
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .aluno-item-card {
+                            transition: all 0.2s ease;
+                        }
+                        .aluno-item-card:hover {
+                            transform: translateX(5px);
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        }
+                    `;
+                    document.head.appendChild(style);
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ GERAR LISTA DE ALUNOS DISPONÍVEIS ============
+            gerarListaAlunosDisponiveis(alunos) {
+                if (!alunos || alunos.length === 0) {
+                    return `
+                        <div style="text-align: center; padding: 40px; color: #6c757d;">
+                            <i class="fas fa-user-graduate" style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
+                            Nenhum aluno disponível para adicionar
+                        </div>
+                    `;
+                }
+                
+                return alunos.map(aluno => `
+                    <div class="aluno-item-card" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 12px 16px;
+                        border-bottom: 1px solid #e5e7eb;
+                        background: white;
+                        transition: all 0.2s;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                            <div style="
+                                width: 40px;
+                                height: 40px;
+                                background: linear-gradient(135deg, #667eea, #764ba2);
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-weight: bold;
+                            ">
+                                ${aluno.nome?.charAt(0).toUpperCase() || '?'}
+                            </div>
+                            <div>
+                                <div style="font-weight: 600;">${this.escapeHtml(aluno.nome) || 'N/A'}</div>
+                                <div style="font-size: 12px; color: #6c757d;">${aluno.email || '-'} • Matrícula: ${aluno.matricula || '-'}</div>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="adminSimples.adicionarAlunoNaTurma('${this.turmaAtualId}', '${aluno._id}', '${aluno.nome}')" 
+                                style="background: #10b981; padding: 6px 16px; border-radius: 6px;">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            // ============ FILTRAR ALUNOS DISPONÍVEIS ============
+            filtrarAlunosDisponiveis() {
+                const termo = document.getElementById('buscaAlunoTurma')?.value.toLowerCase() || '';
+                const container = document.getElementById('listaAlunosDisponiveis');
+                
+                if (!container || !this.alunosDisponiveisCache) return;
+                
+                const alunosFiltrados = this.alunosDisponiveisCache.filter(aluno => 
+                    (aluno.nome && aluno.nome.toLowerCase().includes(termo)) ||
+                    (aluno.email && aluno.email.toLowerCase().includes(termo)) ||
+                    (aluno.matricula && aluno.matricula.toLowerCase().includes(termo))
+                );
+                
+                container.innerHTML = this.gerarListaAlunosDisponiveis(alunosFiltrados);
+            }
+
+            // ============ ADICIONAR ALUNO NA TURMA ============
+            async adicionarAlunoNaTurma(turmaId, alunoId, alunoNome) {
+                const confirmar = await this.confirmar(
+                    '➕ Adicionar Aluno',
+                    `Deseja adicionar o aluno <strong>${alunoNome}</strong> à turma?`
+                );
+                
+                if (!confirmar) return;
+                
+                try {
+                    this.showToast('🔄 Adicionando aluno...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/turmas/${turmaId}/alunos/${alunoId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast(`✅ Aluno ${alunoNome} adicionado com sucesso!`, 'success');
+                        this.fecharModal();
+                        // Recarregar a lista de alunos da turma
+                        await this.verAlunosTurma(turmaId);
+                    } else {
+                        throw new Error(data.error || 'Erro ao adicionar aluno');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ REMOVER ALUNO DA TURMA ============
+            async removerAlunoTurma(turmaId, alunoId, alunoNome) {
+                const confirmar = await this.confirmar(
+                    '➖ Remover Aluno',
+                    `Deseja remover o aluno <strong>${alunoNome}</strong> da turma?<br><br>
+                    <span style="color: #f59e0b;">⚠️ O aluno perderá acesso às provas desta turma.</span>`,
+                    'Sim, remover',
+                    'Cancelar'
+                );
+                
+                if (!confirmar) return;
+                
+                try {
+                    this.showToast('🔄 Removendo aluno...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/turmas/${turmaId}/alunos/${alunoId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast(`✅ Aluno ${alunoNome} removido da turma!`, 'success');
+                        // Recarregar a lista de alunos da turma
+                        await this.verAlunosTurma(turmaId);
+                    } else {
+                        throw new Error(data.error || 'Erro ao remover aluno');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============ VER PROVAS DA TURMA ============
+            async verProvasTurma(id) {
+                const turma = this.turmas.find(t => t.id === id || t._id === id);
+                if (!turma) return;
+                
+                try {
+                    this.showToast('📚 Carregando provas...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/turmas/${id}/provas`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    const provas = data.success ? data.provas : [];
+                    
+                    if (provas.length === 0) {
+                        this.showToast('ℹ️ Nenhuma prova cadastrada para esta turma', 'info');
+                        return;
+                    }
+                    
+                    let provasHtml = `
+                        <div style="padding: 20px; max-height: 60vh; overflow-y: auto;">
+                            <h3 style="margin: 0 0 15px; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-file-alt" style="color: #3498db;"></i> 
+                                Provas da Turma: ${turma.nome}
+                                <span style="font-size: 14px; color: #6c757d;">(${provas.length} provas)</span>
+                            </h3>
+                            <div class="table-responsive">
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="background: #f8f9fa;">
+                                            <th style="padding: 10px; text-align: left;">Título</th>
+                                            <th style="padding: 10px; text-align: left;">Professor</th>
+                                            <th style="padding: 10px; text-align: center;">Data Limite</th>
+                                            <th style="padding: 10px; text-align: center;">Status</th>
+                                            <th style="padding: 10px; text-align: center;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    
+                    provas.forEach(prova => {
+                        const agora = new Date();
+                        const dataLimite = prova.dataLimite ? new Date(prova.dataLimite) : null;
+                        
+                        let statusClass = '';
+                        let statusText = '';
+                        
+                        if (prova.cancelada) {
+                            statusClass = 'inactive';
+                            statusText = 'Cancelada';
+                        } else if (!prova.publicada) {
+                            statusClass = 'pending';
+                            statusText = 'Rascunho';
+                        } else if (dataLimite && dataLimite < agora) {
+                            statusClass = 'inactive';
+                            statusText = 'Expirada';
+                        } else {
+                            statusClass = 'active';
+                            statusText = 'Ativa';
+                        }
+                        
+                        provasHtml += `
+                            <tr style="border-bottom: 1px solid #e9ecef;">
+                                <td style="padding: 10px;"><strong>${prova.titulo || 'N/A'}</strong></td>
+                                <td style="padding: 10px;">${prova.professor?.nome || prova.professor || '-'}</td>
+                                <td style="padding: 10px; text-align: center;">${dataLimite ? dataLimite.toLocaleDateString('pt-BR') : 'Sem data'}</td>
+                                <td style="padding: 10px; text-align: center;">
+                                    <span class="status-badge ${statusClass}">${statusText}</span>
+                                </td>
+                                <td style="padding: 10px; text-align: center;">
+                                    <button class="btn-icon" onclick="adminSimples.verDetalhesProva('${prova.id}')" title="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    provasHtml += `
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div style="margin-top: 15px; text-align: center; color: #6c757d; font-size: 12px;">
+                                <i class="fas fa-info-circle"></i> Total de provas: ${provas.length}
+                            </div>
+                        </div>
+                    `;
+                    
+                    this.abrirModal(`📚 Provas da Turma: ${turma.nome}`, provasHtml, false);
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
             }
 
             verDetalhesTurma(id) {

@@ -2507,7 +2507,7 @@ class AdminPanel {
         }
     }
 
-    // ============ RENDERIZAR USUÁRIOS (VERSÃO PROFISSIONAL) ============
+    // ============ RENDERIZAR USUÁRIOS (VERSÃO PROFISSIONAL CORRIGIDA) ============
     renderUsuariosProfissional({ role, search, page, limit, usuarios, pagination, total, estatisticas }) {
         return `
             <div class="usuarios-container">
@@ -2630,13 +2630,14 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- Perfil -->
+                        <!-- Perfil (com Setor Pedagógico) -->
                         <div class="filter-group">
                             <label><i class="fas fa-user-tag"></i> Perfil</label>
                             <select id="filterRole" class="filter-select">
                                 <option value="todos" ${role === 'todos' ? 'selected' : ''}>Todos</option>
                                 <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>👨‍🎓 Alunos</option>
                                 <option value="professor" ${role === 'professor' ? 'selected' : ''}>👨‍🏫 Professores</option>
+                                <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>👩‍🏫 Setor Pedagógico</option>
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admins</option>
                                 <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 Super Admins</option>
                             </select>
@@ -2987,6 +2988,8 @@ class AdminPanel {
                 .role-badge.admin { background: #3b82f6; color: white; }
                 .role-badge.professor { background: #f59e0b; color: white; }
                 .role-badge.aluno { background: #10b981; color: white; }
+                .role-badge.setor_pedagogico { background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; }
+                .role-badge.setor_pedagogico i { color: white; margin-right: 4px; }
                 
                 /* Status badges */
                 .status-badge {
@@ -3069,29 +3072,6 @@ class AdminPanel {
                     .usuarios-header { flex-direction: column; align-items: flex-start; }
                     .header-actions { width: 100%; }
                     .btn-header { flex: 1; }
-                }
-                /* Role badge para Setor Pedagógico */
-                .role-badge.setor_pedagogico {
-                    background: linear-gradient(135deg, #a855f7, #7c3aed);
-                    color: white;
-                }
-                .role-badge.setor_pedagogico i {
-                    color: white;
-                    margin-right: 4px;
-                }
-
-                /* Badge de acessibilidade */
-                .badge-acessibilidade {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    width: 20px;
-                    height: 20px;
-                    background: #3b82f6;
-                    color: white;
-                    border-radius: 50%;
-                    font-size: 10px;
-                    margin-left: 5px;
                 }
             </style>
         `;
