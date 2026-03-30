@@ -2,7 +2,6 @@
 """
 OMR Reader Server - Leitor de Cartão-Resposta IEMA
 Formato: 10 questões x 5 alternativas (A-E)
-Grade: questões na vertical, alternativas na horizontal
 """
 
 import sys
@@ -17,7 +16,6 @@ from PIL import Image
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# Configurar encoding para UTF-8 no Windows
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
@@ -28,28 +26,23 @@ CORS(app)
 print("=" * 60)
 print("[OMR] OMR Reader Server - Leitor de Cartão-Resposta IEMA")
 print("[OMR] Formato: 10 questões x 5 alternativas (A-E)")
-print("[OMR] Grade: questões na vertical, alternativas na horizontal")
 print("=" * 60)
 
 class OMRReader:
     def __init__(self):
-        # Configuração padrão (10 questões, 5 alternativas)
         self.num_questions = 10
         self.num_choices = 5
         self.choices = ['A', 'B', 'C', 'D', 'E']
         
-        # 🔥 PARÂMETROS OTIMIZADOS PARA DETECTAR CÍRCULOS
-        self.bubble_threshold = 0.12      # 12% de preenchimento = marcado
-        self.contour_min_area = 18        # Área mínima do círculo (mais sensível)
-        self.contour_max_area = 800       # Área máxima do círculo
-        self.circularity_min = 0.40       # Circularidade mínima (mais tolerante)
+        self.bubble_threshold = 0.12
+        self.contour_min_area = 18
+        self.contour_max_area = 800
+        self.circularity_min = 0.40
         
-        # Configurações de pré-processamento
         self.blur_kernel = (3, 3)
         self.adaptive_block = 11
         self.adaptive_c = 2
         
-        # Debug mode
         self.debug = True
         self.debug_folder = "debug_omr"
         
@@ -57,13 +50,11 @@ class OMRReader:
             os.makedirs(self.debug_folder)
     
     def preprocess_image(self, image):
-        """Pré-processamento da imagem para melhorar detecção"""
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
         if self.debug:
             cv2.imwrite(f"{self.debug_folder}/1_gray.jpg", gray)
         
-        # Aplicar CLAHE para melhorar contraste
         clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
         gray = clahe.apply(gray)
         
@@ -93,7 +84,6 @@ class OMRReader:
         return closed
     
     def detect_bubbles(self, binary_image, original_image):
-        """Detecta todas as bolinhas no cartão"""
         cnts = cv2.findContours(binary_image.copy(), cv2.RETR_EXTERNAL,
                                 cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
@@ -130,19 +120,15 @@ class OMRReader:
         return bubbles
     
     def group_by_question(self, bubbles):
-        """Agrupa bolinhas por questão (5 bolinhas por questão)"""
         expected_total = self.num_questions * self.num_choices
         
         if len(bubbles) != expected_total:
             print(f"[OMR] Aviso: Esperado {expected_total} bolinhas, encontrado {len(bubbles)}")
             
-            # Tentar agrupar por linhas (questões)
             if len(bubbles) >= 40:
-                # Agrupar por posição Y (linhas)
                 y_positions = [b['center'][1] for b in bubbles]
                 y_unique = sorted(set(y_positions))
                 
-                # Formar clusters de Y (cada cluster é uma questão)
                 y_clusters = []
                 current = [y_unique[0]]
                 for y in y_unique[1:]:
@@ -157,7 +143,6 @@ class OMRReader:
                 print(f"[OMR] Linhas de questões detectadas: {len(y_clusters)}")
                 
                 if len(y_clusters) >= self.num_questions:
-                    # Para cada linha, pegar as 5 bolinhas mais à esquerda
                     questions = []
                     for y_center in y_clusters[:self.num_questions]:
                         row_bubbles = [b for b in bubbles if abs(b['center'][1] - y_center) < 25]
@@ -168,7 +153,6 @@ class OMRReader:
                     if len(questions) >= self.num_questions:
                         return questions[:self.num_questions]
         
-        # Agrupamento padrão (sequencial)
         questions = []
         for i in range(0, len(bubbles), self.num_choices):
             if i + self.num_choices <= len(bubbles):
@@ -179,7 +163,6 @@ class OMRReader:
         return questions
     
     def analyze_bubble(self, bubble, binary_image):
-        """Analisa o preenchimento de uma bolinha"""
         center = bubble['center']
         radius = bubble['radius']
         
@@ -196,7 +179,6 @@ class OMRReader:
         return fill_ratio
     
     def detect(self, image_base64=None):
-        """Função principal de detecção"""
         if not image_base64:
             return {'error': 'Nenhuma imagem fornecida', 'answers': []}
         
@@ -209,7 +191,6 @@ class OMRReader:
         
         original = image.copy()
         
-        # 🔥 NÃO REDIMENSIONAR TANTO - manter qualidade para detectar círculos
         max_width = 1400
         if image.shape[1] > max_width:
             scale = max_width / image.shape[1]
@@ -300,6 +281,7 @@ class OMRReader:
             'success': True,
             'answers': answers,
             'debug_info': debug_info,
+            'detected_answers': detected_count,
             'statistics': {
                 'total_questions': len(questions),
                 'detected_answers': detected_count,
@@ -393,18 +375,8 @@ def config():
             omr.choices = ['A', 'B', 'C', 'D', 'E'][:omr.num_choices]
         if 'bubble_threshold' in data:
             omr.bubble_threshold = float(data['bubble_threshold'])
-        if 'contour_min_area' in data:
-            omr.contour_min_area = int(data['contour_min_area'])
-        if 'contour_max_area' in data:
-            omr.contour_max_area = int(data['contour_max_area'])
         
-        return jsonify({'success': True, 'config': {
-            'num_questions': omr.num_questions,
-            'num_choices': omr.num_choices,
-            'bubble_threshold': omr.bubble_threshold,
-            'contour_min_area': omr.contour_min_area,
-            'contour_max_area': omr.contour_max_area
-        }})
+        return jsonify({'success': True})
 
 
 if __name__ == '__main__':

@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Correção de Prova - Modo Simplificado</title>
+    <title>Correção de Prova - EVALBEE OMR</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
             padding: 15px;
         }
-        .container { max-width: 800px; margin: 0 auto; }
+        .container { max-width: 950px; margin: 0 auto; }
         .card {
             background: white;
             border-radius: 24px;
@@ -22,29 +22,23 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         .header { text-align: center; margin-bottom: 20px; }
-        .header h1 { color: #4f46e5; font-size: 1.5rem; }
-        
-        .btn-voltar {
-            background: #f3f4f6;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 30px;
-            cursor: pointer;
-            margin-bottom: 15px;
-        }
+        .header h1 { color: #1e3c72; font-size: 1.5rem; }
         
         .camera-container {
             background: #000;
             border-radius: 16px;
             overflow: hidden;
             position: relative;
-            margin: 15px 0;
+            margin: 15px auto;
+            width: 100%;
+            max-width: 800px;
+            aspect-ratio: 16.5 / 7.7;
         }
         
         video {
             width: 100%;
-            height: auto;
-            display: block;
+            height: 100%;
+            object-fit: cover;
         }
         
         .overlay {
@@ -56,261 +50,348 @@
             pointer-events: none;
         }
         
-        .canto {
+        .marcador-canto {
             position: absolute;
-            width: 40px;
-            height: 40px;
-            border: 3px solid #10b981;
+            width: 35px;
+            height: 35px;
+            border: 3px solid #ff4444;
             transition: all 0.2s;
+            background: rgba(255,68,68,0.2);
+            border-radius: 4px;
         }
-        .canto.top-left { top: 10px; left: 10px; border-right: none; border-bottom: none; }
-        .canto.top-right { top: 10px; right: 10px; border-left: none; border-bottom: none; }
-        .canto.bottom-left { bottom: 10px; left: 10px; border-right: none; border-top: none; }
-        .canto.bottom-right { bottom: 10px; right: 10px; border-left: none; border-top: none; }
-        .canto.detectado { border-color: #10b981; box-shadow: 0 0 10px #10b981; }
-        .canto.nao-detectado { border-color: #ef4444; }
+        .marcador-canto.detectado {
+            border-color: #00ff00;
+            background: rgba(0,255,0,0.5);
+            box-shadow: 0 0 15px #00ff00;
+        }
+        .marcador-canto.top-left { top: 8px; left: 8px; }
+        .marcador-canto.top-right { top: 8px; right: 8px; }
+        .marcador-canto.bottom-left { bottom: 8px; left: 8px; }
+        .marcador-canto.bottom-right { bottom: 8px; right: 8px; }
+        
+        .retangulo-guia {
+            position: absolute;
+            border: 3px solid #00ff00;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,255,0,0.5);
+            background: rgba(0,255,0,0.1);
+        }
         
         .feedback {
             position: absolute;
-            bottom: 20px;
+            bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.85);
             color: white;
             padding: 8px 16px;
-            border-radius: 30px;
+            border-radius: 20px;
             font-size: 12px;
+            font-weight: bold;
             white-space: nowrap;
             z-index: 20;
         }
         
-        .btn-camera, .btn-capturar {
-            padding: 12px 20px;
+        .btn {
+            padding: 10px 20px;
             border-radius: 30px;
             font-weight: 600;
             cursor: pointer;
-            margin: 10px 5px;
             border: none;
+            font-size: 13px;
+            transition: transform 0.2s;
         }
-        .btn-camera { background: #4f46e5; color: white; }
-        .btn-capturar { background: #10b981; color: white; }
+        .btn:hover { transform: scale(1.02); }
+        .btn-primary { background: #1e3c72; color: white; }
+        .btn-success { background: #10b981; color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         
         .respostas-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
             gap: 10px;
             margin: 15px 0;
+            max-height: 350px;
+            overflow-y: auto;
         }
         .resposta-card {
             text-align: center;
             padding: 10px;
-            border: 1px solid #e5e7eb;
+            border: 2px solid #e5e7eb;
             border-radius: 10px;
             background: white;
         }
+        .resposta-card.correta { border-color: #10b981; background: #f0fdf4; }
+        .resposta-card.incorreta { border-color: #ef4444; background: #fef2f2; }
         .btn-opcao {
             width: 32px;
             padding: 4px;
             background: #f3f4f6;
             border: 1px solid #ddd;
-            border-radius: 5px;
+            border-radius: 6px;
             cursor: pointer;
             margin: 2px;
+            font-weight: bold;
+            font-size: 12px;
         }
         .nota-final {
             text-align: center;
             padding: 15px;
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
             color: white;
-            border-radius: 12px;
+            border-radius: 14px;
+            margin-top: 12px;
         }
-        .btn-salvar {
-            width: 100%;
-            padding: 12px;
-            background: #10b981;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 15px;
-        }
-        .loading { text-align: center; padding: 30px; }
+        .nota-final h2 { font-size: 2rem; margin-bottom: 8px; }
+        .loading { text-align: center; padding: 40px; }
         .spinner {
             width: 40px;
             height: 40px;
             border: 4px solid #e5e7eb;
-            border-top-color: #4f46e5;
+            border-top-color: #1e3c72;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto;
+            margin: 0 auto 15px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        select, input {
+        select {
             width: 100%;
             padding: 10px;
             border: 2px solid #e5e7eb;
             border-radius: 10px;
-            margin-top: 8px;
+            font-size: 13px;
+            margin: 10px 0;
         }
         
         .info-bar {
             position: fixed;
             bottom: 10px;
             right: 10px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.8);
             color: #0f0;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 9px;
             font-family: monospace;
             z-index: 1000;
         }
         
-        .log-panel {
-            position: fixed;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.85);
-            color: #0f0;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 9px;
+        .gabarito-display {
+            background: #f8fafc;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
             font-family: monospace;
-            max-width: 300px;
-            max-height: 150px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none;
+            font-size: 11px;
+            overflow-x: auto;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 12px 0;
+        }
+        
+        .dimensao-card {
+            background: #fef3c7;
+            padding: 5px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 6px;
+            font-size: 10px;
+            font-family: monospace;
+        }
+        
+        .controle-sensibilidade {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 12px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .controle-sensibilidade label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #1e3c72;
+        }
+        
+        .controle-sensibilidade input {
+            width: 150px;
+            padding: 5px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        
+        .controle-sensibilidade span {
+            background: #1e3c72;
+            color: white;
+            padding: 3px 12px;
+            border-radius: 15px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .dica {
+            background: #e8f0fe;
+            padding: 6px;
+            border-radius: 8px;
+            font-size: 10px;
+            text-align: center;
+            margin-top: 6px;
+            color: #1e3c72;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <button class="btn-voltar" onclick="window.history.back()">
-                <i class="fas fa-arrow-left"></i> Voltar
-            </button>
-            
             <div class="header">
-                <h1><i class="fas fa-camera"></i> Correção de Prova</h1>
-                <p>Posicione o cartão com os 4 cantos pretos visíveis</p>
+                <h1><i class="fas fa-camera"></i> Correção de Prova - EVALBEE</h1>
+                <p>Posicione o cartão com os <strong style="color:#ff4444;">4 QUADRADOS PRETOS</strong> nos cantos</p>
+                <div class="dimensao-card">
+                    <i class="fas fa-ruler"></i> Tamanho do cartão: 16,5cm × 7,7cm
+                </div>
+                <div class="dica">
+                    <i class="fas fa-info-circle"></i> Os quadrados pretos são os marcadores de posição (10x10px) nos 4 cantos
+                </div>
             </div>
             
             <div id="loading" class="loading">
                 <div class="spinner"></div>
-                <p>Carregando prova...</p>
+                <p>Carregando dados da prova...</p>
             </div>
             
             <div id="conteudo" style="display: none;">
-                <div id="provaInfo" style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:15px"></div>
-                <div id="gabaritoInfo" style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:15px"></div>
+                <div id="provaInfo" style="background:#f8fafc;padding:12px;border-radius:12px;margin-bottom:12px;font-size:13px"></div>
+                <div id="gabaritoInfo" class="gabarito-display"></div>
                 
                 <select id="selectAluno">
                     <option value="">Selecione o aluno</option>
                 </select>
                 
+                <div class="controle-sensibilidade">
+                    <label><i class="fas fa-adjust"></i> Sensibilidade de Detecção:</label>
+                    <input type="range" id="sensibilidadeSlider" min="5" max="25" value="10" step="1">
+                    <span id="sensibilidadeValue">10%</span>
+                    <small style="font-size: 9px; color: #666;">(Quanto menor, mais sensível para detectar os quadrados pretos)</small>
+                </div>
+                
                 <div class="camera-container" id="cameraContainer">
-                    <video id="video" autoplay playsinline></video>
+                    <video id="video" autoplay playsinline muted></video>
                     <canvas id="canvas" style="display: none;"></canvas>
-                    <div class="overlay">
-                        <div class="canto top-left" id="cantoTL"></div>
-                        <div class="canto top-right" id="cantoTR"></div>
-                        <div class="canto bottom-left" id="cantoBL"></div>
-                        <div class="canto bottom-right" id="cantoBR"></div>
-                        <div class="feedback" id="feedback">📏 Aguardando cartão</div>
+                    <div class="overlay" id="overlay">
+                        <div class="marcador-canto top-left" id="marcadorTL"></div>
+                        <div class="marcador-canto top-right" id="marcadorTR"></div>
+                        <div class="marcador-canto bottom-left" id="marcadorBL"></div>
+                        <div class="marcador-canto bottom-right" id="marcadorBR"></div>
+                        <div class="feedback" id="feedback">📏 Alinhe os 4 quadrados pretos nos cantos</div>
                     </div>
                 </div>
                 
-                <div style="text-align: center; margin: 10px 0;">
-                    <button class="btn-camera" id="btnIniciar"><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                    <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar</button>
+                <div class="button-group">
+                    <button class="btn btn-primary" id="btnIniciar"><i class="fas fa-camera"></i> Iniciar Câmera</button>
+                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir Prova</button>
                 </div>
                 
-                <div id="processando" style="display: none; text-align: center; padding: 20px;">
+                <div id="processando" style="display: none; text-align: center; padding: 15px;">
                     <div class="spinner"></div>
-                    <p id="processandoMsg">Processando...</p>
+                    <p id="processandoMsg" style="font-size:12px">Processando imagem...</p>
                 </div>
                 
                 <div id="resultado" style="display: none;">
+                    <h3 style="font-size:16px; margin:10px 0"><i class="fas fa-check-circle"></i> Resultado da Correção</h3>
                     <div id="respostasGrid" class="respostas-grid"></div>
                     <div id="notaFinal" class="nota-final"></div>
-                    <button class="btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar Nota</button>
+                    <button class="btn btn-success" id="btnSalvar" style="width:100%; margin-top:12px;"><i class="fas fa-save"></i> Salvar Nota</button>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="info-bar" id="infoBar">🔍 Aguardando</div>
-    <div class="log-panel" id="logPanel">
-        <strong>📋 LOG:</strong><br>
-        <div id="logContent"></div>
-    </div>
+    <div class="info-bar" id="infoBar">🔍 Aguardando | Sensibilidade: 10%</div>
     
     <script>
         // ============================================
-        // FUNÇÃO DE LOG
+        // VARIÁVEIS GLOBAIS
         // ============================================
-        function addLog(msg) {
-            console.log(msg);
-            const logDiv = document.getElementById('logContent');
-            if (logDiv) {
-                const time = new Date().toLocaleTimeString();
-                logDiv.innerHTML = `<div>[${time}] ${msg}</div>` + logDiv.innerHTML;
-                if (logDiv.children.length > 20) {
-                    logDiv.removeChild(logDiv.lastChild);
-                }
-            }
-        }
+        let gabarito = [];
+        let totalQuestoes = 10;
+        let alunos = [];
+        let alunoSelecionadoId = null;
+        let respostasAtuais = [];
+        let notaCalculada = 0;
+        let authToken = null;
+        let sensibilidade = 10;
         
-        // Mostrar painel de log em caso de erro
-        function mostrarLogPanel() {
-            const panel = document.getElementById('logPanel');
-            if (panel) panel.style.display = 'block';
-        }
+        const CARD_WIDTH_CM = 16.5;
+        const CARD_HEIGHT_CM = 7.7;
         
-        // ============================================
-        // CONFIGURAÇÃO SIMPLIFICADA
-        // ============================================
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        let stream = null;
+        let analiseInterval = null;
+        let capturando = false;
+        let retanguloAtual = null;
+        
         const urlParams = new URLSearchParams(window.location.search);
         const provaId = urlParams.get('prova');
         const urlToken = urlParams.get('token');
-        let authToken = urlToken || localStorage.getItem('auth_token');
         
-        addLog(`🔑 Token: ${authToken ? 'Presente' : 'Ausente'}`);
-        addLog(`📝 Prova ID: ${provaId || 'Não informado'}`);
+        // ============================================
+        // CONTROLE DE SENSIBILIDADE
+        // ============================================
+        const sensibilidadeSlider = document.getElementById('sensibilidadeSlider');
+        const sensibilidadeValue = document.getElementById('sensibilidadeValue');
         
-        if (!authToken) {
-            window.location.href = `/login.html?redirect=${encodeURIComponent(window.location.href)}`;
-        }
+        sensibilidadeSlider.addEventListener('input', (e) => {
+            sensibilidade = parseInt(e.target.value);
+            sensibilidadeValue.innerHTML = sensibilidade + '%';
+            document.getElementById('infoBar').innerHTML = `🔍 Aguardando | Sensibilidade: ${sensibilidade}%`;
+        });
         
-        if (urlToken && !localStorage.getItem('auth_token')) {
-            localStorage.setItem('auth_token', urlToken);
-            addLog('✅ Token salvo no localStorage');
+        function mostrarAlerta(msg, tipo) {
+            const cores = {
+                success: '#10b981',
+                error: '#ef4444',
+                info: '#3b82f6'
+            };
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo] || '#10b981'};color:white;padding:12px;border-radius:12px;text-align:center;z-index:10000;font-weight:bold;font-size:13px`;
+            alertDiv.innerHTML = msg;
+            document.body.appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 4000);
         }
         
         // ============================================
-        // DETECTOR SIMPLES DOS 4 CANTOS PRETOS
+        // DETECTOR DOS 4 QUADRADOS PRETOS (EVALBEE)
         // ============================================
-        class DetectorSimples {
+        class DetectorQuadrados {
             constructor() {
-                this.cantos = { tl: false, tr: false, bl: false, br: false };
                 this.estavel = 0;
+                this.ultimoRetangulo = null;
             }
             
             detectar(ctx, width, height) {
-                const margem = Math.min(width, height) * 0.08;
-                const tamanho = Math.min(50, width * 0.1);
+                // Áreas de busca nos cantos
+                const margem = Math.min(width, height) * 0.05;
+                const tamanhoBusca = Math.min(70, width * 0.1);
                 
                 const areas = {
-                    tl: { x: margem, y: margem, w: tamanho, h: tamanho },
-                    tr: { x: width - margem - tamanho, y: margem, w: tamanho, h: tamanho },
-                    bl: { x: margem, y: height - margem - tamanho, w: tamanho, h: tamanho },
-                    br: { x: width - margem - tamanho, y: height - margem - tamanho, w: tamanho, h: tamanho }
+                    tl: { x: margem, y: margem, w: tamanhoBusca, h: tamanhoBusca },
+                    tr: { x: width - margem - tamanhoBusca, y: margem, w: tamanhoBusca, h: tamanhoBusca },
+                    bl: { x: margem, y: height - margem - tamanhoBusca, w: tamanhoBusca, h: tamanhoBusca },
+                    br: { x: width - margem - tamanhoBusca, y: height - margem - tamanhoBusca, w: tamanhoBusca, h: tamanhoBusca }
                 };
                 
                 const resultados = {};
+                const posicoes = {};
                 let brilhoMedio = 0;
                 let amostras = 0;
                 
@@ -320,11 +401,30 @@
                         let pixelsEscuros = 0;
                         let totalPixels = area.w * area.h;
                         let somaBrilho = 0;
+                        let brilhoMinimo = 255;
+                        let xMin = area.x + area.w/2;
+                        let yMin = area.y + area.h/2;
                         
-                        for (let i = 0; i < imgData.data.length; i += 4) {
-                            const brilho = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
-                            somaBrilho += brilho;
-                            if (brilho < 70) pixelsEscuros++;
+                        // Analisar cada pixel
+                        for (let y = area.y; y < area.y + area.h && y < imgData.height; y++) {
+                            for (let x = area.x; x < area.x + area.w && x < imgData.width; x++) {
+                                const idx = (y * imgData.width + x) * 4;
+                                const r = imgData.data[idx];
+                                const g = imgData.data[idx+1];
+                                const b = imgData.data[idx+2];
+                                const brilhoPixel = (r + g + b) / 3;
+                                somaBrilho += brilhoPixel;
+                                
+                                // Pixel escuro (brilho < 70)
+                                if (brilhoPixel < 70) {
+                                    pixelsEscuros++;
+                                    if (brilhoPixel < brilhoMinimo) {
+                                        brilhoMinimo = brilhoPixel;
+                                        xMin = x;
+                                        yMin = y;
+                                    }
+                                }
+                            }
                         }
                         
                         const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
@@ -332,7 +432,13 @@
                         brilhoMedio += brilhoArea;
                         amostras++;
                         
-                        resultados[canto] = percentualEscuro > 8;
+                        // Detecta se a porcentagem de pixels escuros é maior que a sensibilidade
+                        const detectado = percentualEscuro > sensibilidade;
+                        resultados[canto] = detectado;
+                        
+                        if (detectado) {
+                            posicoes[canto] = { x: xMin, y: yMin };
+                        }
                         
                     } catch(e) {
                         resultados[canto] = false;
@@ -341,76 +447,106 @@
                 
                 brilhoMedio = amostras > 0 ? brilhoMedio / amostras : 100;
                 const todosDetectados = resultados.tl && resultados.tr && resultados.bl && resultados.br;
+                const iluminacaoOk = brilhoMedio > 30 && brilhoMedio < 240;
                 
-                if (todosDetectados) {
+                let retangulo = null;
+                if (todosDetectados && posicoes.tl && posicoes.tr && posicoes.bl && posicoes.br) {
+                    // Calcular o retângulo expandido
+                    const x1 = Math.min(posicoes.tl.x, posicoes.bl.x) - 20;
+                    const y1 = Math.min(posicoes.tl.y, posicoes.tr.y) - 20;
+                    const x2 = Math.max(posicoes.tr.x, posicoes.br.x) + 20;
+                    const y2 = Math.max(posicoes.bl.y, posicoes.br.y) + 20;
+                    
+                    retangulo = {
+                        x: Math.max(0, x1),
+                        y: Math.max(0, y1),
+                        width: Math.min(width - x1, x2 - x1),
+                        height: Math.min(height - y1, y2 - y1)
+                    };
+                }
+                
+                if (todosDetectados && iluminacaoOk && retangulo && retangulo.width > 50 && retangulo.height > 50) {
                     this.estavel++;
+                    this.ultimoRetangulo = retangulo;
                 } else {
                     this.estavel = Math.max(0, this.estavel - 1);
                 }
                 
                 return {
-                    sucesso: todosDetectados,
-                    cantos: resultados,
+                    sucesso: todosDetectados && iluminacaoOk,
+                    quadrados: resultados,
+                    posicoes: posicoes,
+                    retangulo: this.ultimoRetangulo,
                     estabilidade: this.estavel,
-                    iluminacaoOk: brilhoMedio > 50 && brilhoMedio < 220,
+                    iluminacaoOk: iluminacaoOk,
                     brilho: Math.round(brilhoMedio)
                 };
             }
             
             reset() {
                 this.estavel = 0;
-                this.cantos = { tl: false, tr: false, bl: false, br: false };
+                this.ultimoRetangulo = null;
             }
         }
         
-        // ============================================
-        // VARIÁVEIS
-        // ============================================
-        let detector = new DetectorSimples();
-        let gabarito = [];
-        let totalQuestoes = 0;
-        let alunos = [];
-        let alunoSelecionadoId = null;
-        let respostasAtuais = [];
-        let notaCalculada = 0;
+        let detector = new DetectorQuadrados();
         
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        let stream = null;
-        let analiseInterval = null;
-        let capturando = false;
+        function addLog(msg) {
+            console.log(`[${new Date().toLocaleTimeString()}] ${msg}`);
+        }
         
-        // ============================================
-        // FUNÇÕES AUXILIARES
-        // ============================================
-        async function fetchAuth(url, options = {}) {
-            addLog(`🌐 Fetch: ${url}`);
+        async function fazerRequisicao(url, options = {}) {
+            if (!authToken) {
+                throw new Error('Token de autenticação não fornecido');
+            }
+            
             try {
-                const res = await fetch(url, {
+                const response = await fetch(url, {
                     ...options,
-                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json', ...options.headers }
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`,
+                        ...options.headers 
+                    }
                 });
-                if (res.status === 401) {
-                    addLog('❌ Sessão expirada (401)');
-                    alert('Sessão expirada');
-                    window.location.href = '/login.html';
-                    return null;
+                
+                if (response.status === 401) {
+                    throw new Error('Token expirado');
                 }
-                addLog(`✅ Resposta ${res.status}`);
-                return res;
+                
+                return response;
             } catch (err) {
-                addLog(`❌ Erro fetch: ${err.message}`);
+                addLog(`Erro fetch: ${err.message}`);
                 throw err;
             }
         }
         
-        function mostrarAlerta(msg, tipo) {
-            addLog(`📢 ${tipo}: ${msg}`);
-            const alertDiv = document.createElement('div');
-            alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${tipo === 'success' ? '#10b981' : '#ef4444'};color:white;padding:12px;border-radius:12px;text-align:center;z-index:10000;`;
-            alertDiv.innerHTML = msg;
-            document.body.appendChild(alertDiv);
-            setTimeout(() => alertDiv.remove(), 3000);
+        function desenharRetangulo(retangulo, overlayWidth, overlayHeight, canvasWidth, canvasHeight) {
+            if (!retangulo) return;
+            
+            const scaleX = overlayWidth / canvasWidth;
+            const scaleY = overlayHeight / canvasHeight;
+            
+            let rectGuide = document.getElementById('rectGuide');
+            if (!rectGuide) {
+                rectGuide = document.createElement('div');
+                rectGuide.id = 'rectGuide';
+                rectGuide.className = 'retangulo-guia';
+                document.getElementById('overlay').appendChild(rectGuide);
+            }
+            
+            rectGuide.style.left = (retangulo.x * scaleX) + 'px';
+            rectGuide.style.top = (retangulo.y * scaleY) + 'px';
+            rectGuide.style.width = (retangulo.width * scaleX) + 'px';
+            rectGuide.style.height = (retangulo.height * scaleY) + 'px';
+            rectGuide.style.display = 'block';
+        }
+        
+        function esconderRetangulo() {
+            const rectGuide = document.getElementById('rectGuide');
+            if (rectGuide) {
+                rectGuide.style.display = 'none';
+            }
         }
         
         // ============================================
@@ -426,47 +562,55 @@
             
             const resultado = detector.detectar(ctx, canvas.width, canvas.height);
             
-            const cantosEl = {
-                tl: document.getElementById('cantoTL'),
-                tr: document.getElementById('cantoTR'),
-                bl: document.getElementById('cantoBL'),
-                br: document.getElementById('cantoBR')
+            const marcadores = {
+                tl: document.getElementById('marcadorTL'),
+                tr: document.getElementById('marcadorTR'),
+                bl: document.getElementById('marcadorBL'),
+                br: document.getElementById('marcadorBR')
             };
             
-            for (const [canto, detectado] of Object.entries(resultado.cantos)) {
+            for (const [canto, detectado] of Object.entries(resultado.quadrados)) {
                 if (detectado) {
-                    cantosEl[canto].classList.add('detectado');
-                    cantosEl[canto].classList.remove('nao-detectado');
+                    marcadores[canto].classList.add('detectado');
                 } else {
-                    cantosEl[canto].classList.remove('detectado');
-                    cantosEl[canto].classList.add('nao-detectado');
+                    marcadores[canto].classList.remove('detectado');
                 }
+            }
+            
+            if (resultado.retangulo && resultado.sucesso) {
+                const overlay = document.getElementById('overlay');
+                desenharRetangulo(resultado.retangulo, overlay.offsetWidth, overlay.offsetHeight, canvas.width, canvas.height);
+                retanguloAtual = resultado.retangulo;
+            } else {
+                esconderRetangulo();
+                retanguloAtual = null;
             }
             
             const feedback = document.getElementById('feedback');
             const infoBar = document.getElementById('infoBar');
             
-            if (!resultado.iluminacaoOk) {
-                feedback.textContent = resultado.brilho < 50 ? '💡 MUITO ESCURO! Aumente a luz' : '☀️ MUITO CLARO! Evite reflexos';
-                feedback.style.background = '#ef4444';
-                infoBar.innerHTML = `💡 Iluminação: ${resultado.brilho} | Cantos: 0/4`;
-            }
-            else if (resultado.sucesso) {
-                const segundos = Math.ceil((20 - resultado.estabilidade) / 5);
-                feedback.textContent = `✅ TODOS OS 4 CANTOS DETECTADOS! ${segundos > 0 ? `Estabilizando ${segundos}s` : 'Capturando...'}`;
+            if (resultado.sucesso) {
+                const segundos = Math.ceil((8 - resultado.estabilidade) / 2);
+                feedback.innerHTML = `✅ 4 QUADRADOS DETECTADOS! ${segundos > 0 ? `Estabilizando ${segundos}s` : 'Pronto!'}`;
                 feedback.style.background = '#10b981';
-                infoBar.innerHTML = `✅ 4/4 cantos | Estável: ${resultado.estabilidade}/20`;
+                infoBar.innerHTML = `✅ Cartão detectado | Estável: ${resultado.estabilidade}/8 | Sens: ${sensibilidade}%`;
                 
-                if (resultado.estabilidade >= 20 && !capturando) {
-                    addLog('🎯 Estabilização completa! Iniciando captura...');
+                if (resultado.estabilidade >= 8 && !capturando && alunoSelecionadoId) {
+                    addLog('Estabilização completa! Capturando...');
                     capturarImagem();
                 }
             }
             else {
-                const detectados = Object.values(resultado.cantos).filter(Boolean).length;
-                feedback.textContent = `🔍 ${detectados}/4 cantos detectados - Ajuste o cartão`;
+                const detectados = Object.values(resultado.quadrados).filter(Boolean).length;
+                let mensagem = `🔍 ${detectados}/4 quadrados`;
+                if (detectados === 0) {
+                    mensagem += ' - APROXIME O CARTÃO';
+                } else {
+                    mensagem += ' - Ajuste o alinhamento';
+                }
+                feedback.innerHTML = mensagem;
                 feedback.style.background = '#f59e0b';
-                infoBar.innerHTML = `🎯 Cantos: ${detectados}/4 | Ilum: ${resultado.brilho}`;
+                infoBar.innerHTML = `🎯 Quadrados: ${detectados}/4 | Sens: ${sensibilidade}% | Ajuste o cartão`;
             }
         }
         
@@ -474,31 +618,25 @@
         // CAPTURAR E PROCESSAR
         // ============================================
         async function capturarImagem() {
-            if (capturando) {
-                addLog('⚠️ Captura já em andamento');
-                return;
-            }
+            if (capturando) return;
             if (!alunoSelecionadoId) {
-                addLog('❌ Nenhum aluno selecionado');
                 mostrarAlerta('Selecione um aluno primeiro!', 'error');
                 return;
             }
             
             capturando = true;
-            addLog('📸 Iniciando captura de imagem...');
-            mostrarAlerta('📸 Capturando imagem...', 'success');
+            addLog('Capturando imagem...');
             
             const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            const imgData = canvas.toDataURL('image/jpeg', 0.85);
-            addLog(`📸 Imagem capturada: ${Math.round(imgData.length / 1024)} KB | ${canvas.width}x${canvas.height}`);
+            const imgData = canvas.toDataURL('image/jpeg', 0.9);
             
             document.getElementById('processando').style.display = 'block';
             document.getElementById('resultado').style.display = 'none';
-            document.getElementById('processandoMsg').innerHTML = '📤 Enviando para servidor OMR...';
+            document.getElementById('processandoMsg').innerHTML = '📤 Enviando para correção OMR...';
             
             try {
                 const dadosEnvio = {
@@ -506,52 +644,38 @@
                     questions: totalQuestoes,
                     choices: 5,
                     gabarito: gabarito.map(g => g.respostaCorreta),
-                    threshold: 0.12
+                    threshold: 0.15,
+                    card_width_cm: CARD_WIDTH_CM,
+                    card_height_cm: CARD_HEIGHT_CM,
+                    retangulo: retanguloAtual
                 };
-                addLog(`📤 Enviando para OMR: ${totalQuestoes} questões, gabarito: ${gabarito.map(g => g.respostaCorreta).join(',')}`);
                 
-                const response = await fetchAuth('/api/omr/detect', {
+                const response = await fazerRequisicao('/api/omr/detect', {
                     method: 'POST',
                     body: JSON.stringify(dadosEnvio)
                 });
                 
-                if (!response) {
-                    throw new Error('Falha na requisição');
-                }
+                if (!response) throw new Error('Falha na comunicação');
                 
-                const text = await response.text();
-                addLog(`📥 Resposta bruta (primeiros 200 chars): ${text.substring(0, 200)}`);
-                
-                let data;
-                try {
-                    data = JSON.parse(text);
-                } catch(e) {
-                    addLog(`❌ Erro ao parsear JSON: ${e.message}`);
-                    throw new Error(`Resposta não é JSON válido: ${text.substring(0, 100)}`);
-                }
-                
-                addLog(`📥 Resposta OMR: success=${data.success}, answers=${data.answers ? data.answers.length : 0}`);
+                const data = await response.json();
                 
                 document.getElementById('processando').style.display = 'none';
                 
-                if (data.success && data.answers && data.answers.length > 0) {
-                    addLog(`✅ Respostas detectadas: ${JSON.stringify(data.answers)}`);
+                if (data.success && data.answers) {
                     criarInterfaceRespostas(data.answers);
                     document.getElementById('resultado').style.display = 'block';
                     const detectadas = data.answers.filter(a => a).length;
                     mostrarAlerta(`✅ ${detectadas} de ${totalQuestoes} questões detectadas!`, 'success');
                 } else {
-                    addLog(`❌ Falha na detecção: ${data.error || 'Erro desconhecido'}`);
                     throw new Error(data.error || 'Falha na detecção');
                 }
                 
             } catch (error) {
-                addLog(`❌ Erro capturarImagem: ${error.message}`);
-                mostrarLogPanel();
+                addLog(`Erro: ${error.message}`);
                 document.getElementById('processando').style.display = 'none';
                 criarInterfaceManual();
                 document.getElementById('resultado').style.display = 'block';
-                mostrarAlerta(`⚠️ Erro: ${error.message.substring(0, 100)}. Usando modo manual.`, 'error');
+                mostrarAlerta(`⚠️ Usando modo manual.`, 'error');
             }
             
             detector.reset();
@@ -562,31 +686,42 @@
         // INTERFACE DE RESPOSTAS
         // ============================================
         function criarInterfaceRespostas(sugestoes) {
-            addLog('🎨 Criando interface com respostas');
             respostasAtuais = [...sugestoes];
             const letras = ['A', 'B', 'C', 'D', 'E'];
             const grid = document.getElementById('respostasGrid');
             grid.innerHTML = '';
             
             for (let i = 0; i < totalQuestoes; i++) {
+                const respostaAluno = sugestoes[i] || '—';
+                const respostaGabarito = gabarito[i]?.respostaCorreta || '?';
+                const isCorreta = respostaAluno !== '—' && respostaAluno === respostaGabarito;
+                
                 const div = document.createElement('div');
-                div.className = 'resposta-card';
+                div.className = `resposta-card ${isCorreta ? 'correta' : (respostaAluno !== '—' ? 'incorreta' : '')}`;
                 div.innerHTML = `
                     <strong>Q${i+1}</strong>
-                    <div id="resp-${i}" style="font-size:1.5rem;font-weight:bold;margin:5px 0">${sugestoes[i] || '—'}</div>
+                    <div style="font-size:1.5rem;font-weight:bold;margin:5px 0">${respostaAluno}</div>
                     <div>
-                        ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
-                        <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
+                        ${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}
+                        <button class="btn-opcao" data-q="${i}" data-opcao="">✗</button>
                     </div>
-                    <small>✓ ${gabarito[i]?.respostaCorreta || '?'}</small>
+                    <small style="font-size:10px">Gabarito: ${respostaGabarito}</small>
                 `;
                 grid.appendChild(div);
             }
+            
+            document.querySelectorAll('.btn-opcao').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const q = parseInt(btn.dataset.q);
+                    const opcao = btn.dataset.opcao || null;
+                    setResposta(q, opcao);
+                });
+            });
+            
             atualizarNota();
         }
         
         function criarInterfaceManual() {
-            addLog('🎨 Criando interface manual');
             respostasAtuais = new Array(totalQuestoes).fill(null);
             const letras = ['A', 'B', 'C', 'D', 'E'];
             const grid = document.getElementById('respostasGrid');
@@ -602,19 +737,28 @@
                         ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
                         <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
                     </div>
-                    <small>✓ ${gabarito[i]?.respostaCorreta || '?'}</small>
+                    <small>Gabarito: ${gabarito[i]?.respostaCorreta || '?'}</small>
                 `;
                 grid.appendChild(div);
             }
             atualizarNota();
         }
         
-        window.setResposta = function(questao, letra) {
+        function setResposta(questao, letra) {
             const el = document.getElementById(`resp-${questao}`);
-            respostasAtuais[questao] = letra;
-            el.innerHTML = letra || '—';
+            if (el) {
+                respostasAtuais[questao] = letra;
+                el.innerHTML = letra || '—';
+            } else {
+                respostasAtuais[questao] = letra;
+                const cards = document.querySelectorAll('.resposta-card');
+                if (cards[questao]) {
+                    const respostaDiv = cards[questao].querySelector('div[style*="font-size"]');
+                    if (respostaDiv) respostaDiv.innerHTML = letra || '—';
+                }
+            }
             atualizarNota();
-        };
+        }
         
         function atualizarNota() {
             let acertos = 0;
@@ -626,15 +770,12 @@
             notaCalculada = (acertos / totalQuestoes) * 10;
             
             document.getElementById('notaFinal').innerHTML = `
-                <div style="font-size:2rem;font-weight:bold">${notaCalculada.toFixed(1)} / 10</div>
-                <div>${acertos} acertos de ${totalQuestoes} questões</div>
-                <div>${notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO'}</div>
+                <h2>${notaCalculada.toFixed(1)} / 10,0</h2>
+                <p>${acertos} acertos de ${totalQuestoes} questões</p>
+                <p style="margin-top:5px">${notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO'}</p>
             `;
         }
         
-        // ============================================
-        // SALVAR NOTA
-        // ============================================
         async function salvarNota() {
             if (!alunoSelecionadoId) {
                 mostrarAlerta('Selecione um aluno!', 'error');
@@ -644,23 +785,20 @@
             if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)}?`)) return;
             
             try {
-                addLog(`💾 Salvando nota ${notaCalculada.toFixed(1)} para aluno ${alunoSelecionadoId}`);
-                const response = await fetchAuth(`/api/professor/provas/${provaId}/nota-manual`, {
+                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, {
                     method: 'POST',
                     body: JSON.stringify({
                         alunoId: alunoSelecionadoId,
                         nota: notaCalculada,
-                        observacao: `Corrigido em ${new Date().toLocaleString()}`
+                        observacao: `Corrigido OMR EVALBEE em ${new Date().toLocaleString()}`
                     })
                 });
                 
                 if (response && (await response.json()).success) {
-                    addLog('✅ Nota salva com sucesso!');
                     mostrarAlerta('✅ Nota salva!', 'success');
                     setTimeout(() => window.location.reload(), 1500);
                 }
             } catch (error) {
-                addLog(`❌ Erro ao salvar: ${error.message}`);
                 mostrarAlerta('❌ Erro ao salvar', 'error');
             }
         }
@@ -669,28 +807,42 @@
         // CARREGAR DADOS DA PROVA
         // ============================================
         async function carregarDados() {
-            addLog('📂 Carregando dados da prova...');
+            if (!provaId) {
+                document.getElementById('loading').innerHTML = '<p style="color:red;">❌ ID da prova não informado</p>';
+                return;
+            }
+            
+            if (urlToken) {
+                authToken = urlToken;
+                localStorage.setItem('auth_token', urlToken);
+            } else {
+                authToken = localStorage.getItem('auth_token');
+            }
+            
+            if (!authToken) {
+                document.getElementById('loading').innerHTML = '<p style="color:red;">❌ Token não informado</p><p style="font-size:12px">Use: ?token=SEU_TOKEN</p>';
+                return;
+            }
+            
             try {
-                const res = await fetchAuth(`/api/provas/${provaId}/resultados`);
-                if (!res) return;
+                const res = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
+                if (!res) throw new Error('Erro');
+                
                 const data = await res.json();
-                addLog(`📦 Dados recebidos: success=${data.success}`);
                 
                 if (data.success) {
                     alunos = data.resultados || [];
-                    totalQuestoes = data.prova?.quantidadeQuestoes || 0;
-                    addLog(`📊 Total de questões: ${totalQuestoes}, Alunos: ${alunos.length}`);
+                    totalQuestoes = data.prova?.quantidadeQuestoes || 10;
                     
-                    const provaRes = await fetchAuth(`/api/provas/${provaId}`);
+                    const provaRes = await fazerRequisicao(`/api/provas/${provaId}`);
                     if (provaRes) {
                         const provaData = await provaRes.json();
                         if (provaData.success && provaData.questoes) {
                             const letras = ['A', 'B', 'C', 'D', 'E'];
                             gabarito = provaData.questoes.map((q, i) => ({
                                 numero: i + 1,
-                                respostaCorreta: letras[q.respostaCorreta]
+                                respostaCorreta: letras[q.respostaCorreta] || q.respostaCorreta
                             }));
-                            addLog(`📋 Gabarito carregado: ${gabarito.map(g => g.respostaCorreta).join(',')}`);
                         }
                     }
                     
@@ -698,12 +850,13 @@
                     document.getElementById('conteudo').style.display = 'block';
                     
                     document.getElementById('provaInfo').innerHTML = `
-                        <strong>📄 ${data.prova?.titulo || 'Prova'}</strong><br>
-                        ${totalQuestoes} questões | ${alunos.length} alunos
+                        <strong>📄 ${data.prova?.titulo || 'Prova EVALBEE'}</strong><br>
+                        ${totalQuestoes} questões | ${alunos.length} alunos<br>
+                        <small><i class="fas fa-ruler"></i> Cartão: ${CARD_WIDTH_CM}cm × ${CARD_HEIGHT_CM}cm | 4 quadrados pretos nos cantos</small>
                     `;
                     
                     document.getElementById('gabaritoInfo').innerHTML = `
-                        <strong>📋 Gabarito:</strong><br>
+                        <strong>📋 GABARITO OFICIAL:</strong><br>
                         ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}
                     `;
                     
@@ -714,18 +867,15 @@
                     });
                     select.addEventListener('change', e => {
                         alunoSelecionadoId = e.target.value;
-                        addLog(`👤 Aluno selecionado: ${alunoSelecionadoId}`);
                         document.getElementById('resultado').style.display = 'none';
                         detector.reset();
+                        esconderRetangulo();
                     });
                     
-                    addLog('✅ Dados carregados com sucesso!');
-                    mostrarAlerta('✅ Dados carregados! Posicione o cartão', 'success');
+                    mostrarAlerta(`✅ Dados carregados! Posicione o cartão com os 4 quadrados pretos nos cantos.`, 'success');
                 }
             } catch (error) {
-                addLog(`❌ Erro carregarDados: ${error.message}`);
-                console.error(error);
-                document.getElementById('loading').innerHTML = '<p>❌ Erro ao carregar</p>';
+                document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`;
             }
         }
         
@@ -733,31 +883,32 @@
         // CÂMERA
         // ============================================
         async function iniciarCamera() {
-            addLog('📷 Iniciando câmera...');
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: "environment" } }
+                    video: { 
+                        facingMode: { exact: "environment" },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
                 }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 
                 video.srcObject = stream;
                 await video.play();
-                addLog(`✅ Câmera iniciada: ${video.videoWidth}x${video.videoHeight}`);
                 
                 document.getElementById('btnIniciar').disabled = true;
                 document.getElementById('btnCapturar').disabled = false;
                 
                 if (analiseInterval) clearInterval(analiseInterval);
-                analiseInterval = setInterval(analisarFrame, 200);
-                addLog('🔄 Análise de posição iniciada');
+                analiseInterval = setInterval(analisarFrame, 150);
+                
+                mostrarAlerta('📷 Câmera iniciada! Posicione o cartão com os 4 quadrados pretos nos cantos.', 'info');
                 
             } catch (error) {
-                addLog(`❌ Erro ao acessar câmera: ${error.message}`);
                 mostrarAlerta('❌ Erro ao acessar câmera', 'error');
             }
         }
         
         function pararCamera() {
-            addLog('🛑 Parando câmera...');
             if (analiseInterval) clearInterval(analiseInterval);
             if (stream) stream.getTracks().forEach(t => t.stop());
         }
@@ -767,9 +918,8 @@
         // ============================================
         document.getElementById('btnIniciar').addEventListener('click', iniciarCamera);
         document.getElementById('btnCapturar').addEventListener('click', () => {
-            addLog('🖱️ Captura manual solicitada');
             if (!alunoSelecionadoId) {
-                mostrarAlerta('Selecione um aluno primeiro!', 'error');
+                mostrarAlerta('Selecione um aluno!', 'error');
                 return;
             }
             capturarImagem();
