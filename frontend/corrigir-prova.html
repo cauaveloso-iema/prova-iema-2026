@@ -1,1082 +1,622 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d6efd">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Correção de Provas">
-    <meta name="mobile-web-app-capable" content="yes">
-    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
-    <link rel="shortcut icon" href="/icons/favicon.ico">
-    <link rel="apple-touch-icon" href="/icons/favicon.ico">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>Correção de Prova - Sistema IEMA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Correção de Prova - Modo Simplificado</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            padding: 15px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card {
+            background: white;
+            border-radius: 24px;
             padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { color: #4f46e5; font-size: 1.5rem; }
+        
+        .btn-voltar {
+            background: #f3f4f6;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            margin-bottom: 15px;
         }
         
-        .container { max-width: 1400px; margin: 0 auto; }
-        .card { background: white; border-radius: 24px; padding: 25px; margin-bottom: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
-        .header { text-align: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #e5e7eb; }
-        .header h1 { color: #4f46e5; margin-bottom: 8px; font-size: 1.8rem; }
-        
-        .btn-voltar { 
-            background: #f3f4f6; 
-            color: #4b5563; 
-            border: none; 
-            padding: 10px 20px; 
-            border-radius: 30px; 
-            cursor: pointer; 
-            font-weight: 600; 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 8px; 
-            margin-bottom: 20px; 
-            transition: all 0.3s; 
+        .camera-container {
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            margin: 15px 0;
         }
-        .btn-voltar:hover { background: #e5e7eb; transform: translateX(-3px); }
         
-        .prova-info { background: linear-gradient(135deg, #f8fafc, #f1f5f9); padding: 20px; border-radius: 16px; margin-bottom: 25px; border-left: 4px solid #4f46e5; }
-        .gabarito-oficial { background: #f8fafc; border-radius: 16px; padding: 15px; margin-bottom: 20px; }
-        .gabarito-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-        .gabarito-item { background: white; padding: 6px 12px; border-radius: 20px; border: 1px solid #e5e7eb; font-weight: 500; }
-        .gabarito-item.correta { background: #d1fae5; border-color: #10b981; color: #065f46; }
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
         
-        .selecao-aluno { background: #f8fafc; border-radius: 16px; padding: 15px; margin-bottom: 20px; }
-        .selecao-aluno select { width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; margin-top: 8px; cursor: pointer; }
-        
-        .camera-container { background: #f8fafc; border-radius: 16px; padding: 20px; text-align: center; position: relative; }
-        .camera-preview { position: relative; display: inline-block; border-radius: 12px; overflow: hidden; width: 100%; margin: 0 auto; background: #000; }
-        
-        video, canvas { width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; background: #000; display: block; }
-        video { max-height: 60vh; object-fit: contain; }
-        
-        /* Guias de enquadramento */
-        .guia-enquadramento { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
-        .guia-canto { position: absolute; width: 50px; height: 50px; border: 3px solid #10b981; transition: all 0.2s; }
-        .guia-canto-top-left { top: 15px; left: 15px; border-right: none; border-bottom: none; }
-        .guia-canto-top-right { top: 15px; right: 15px; border-left: none; border-bottom: none; }
-        .guia-canto-bottom-left { bottom: 15px; left: 15px; border-right: none; border-top: none; }
-        .guia-canto-bottom-right { bottom: 15px; right: 15px; border-left: none; border-top: none; }
-        .guia-canto.detectado { border-color: #10b981; box-shadow: 0 0 10px #10b981; }
-        .guia-canto.parcial { border-color: #f59e0b; }
-        .guia-canto.nao-detectado { border-color: #ef4444; }
-        
-        .feedback-proximidade {
+        .overlay {
             position: absolute;
-            bottom: 80px;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+        
+        .canto {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #10b981;
+            transition: all 0.2s;
+        }
+        .canto.top-left { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+        .canto.top-right { top: 10px; right: 10px; border-left: none; border-bottom: none; }
+        .canto.bottom-left { bottom: 10px; left: 10px; border-right: none; border-top: none; }
+        .canto.bottom-right { bottom: 10px; right: 10px; border-left: none; border-top: none; }
+        .canto.detectado { border-color: #10b981; box-shadow: 0 0 10px #10b981; }
+        .canto.nao-detectado { border-color: #ef4444; }
+        
+        .feedback {
+            position: absolute;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.85);
+            background: rgba(0,0,0,0.8);
             color: white;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 30px;
-            font-size: 14px;
-            z-index: 20;
-            white-space: nowrap;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
-        .feedback-proximidade.bom { background: #10b981; }
-        .feedback-proximidade.medio { background: #f59e0b; }
-        .feedback-proximidade.ruim { background: #ef4444; }
-        
-        .guia-texto { 
-            position: absolute; 
-            bottom: 20px; 
-            left: 0; 
-            right: 0; 
-            text-align: center; 
-            background: rgba(0,0,0,0.85); 
-            color: white; 
-            padding: 10px; 
-            font-size: 13px; 
-            border-radius: 30px; 
-            width: 90%; 
-            margin: 0 auto; 
-            left: 5%; 
-            z-index: 20;
-        }
-        
-        .contador-automatico {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
             font-size: 12px;
+            white-space: nowrap;
             z-index: 20;
-            font-family: monospace;
         }
         
-        .btn-camera, .btn-capturar { padding: 12px 24px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin: 10px 5px; border: none; transition: all 0.3s; }
-        .btn-camera { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; }
-        .btn-capturar { background: linear-gradient(135deg, #10b981, #059669); color: white; }
-        .btn-capturar:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-camera, .btn-capturar {
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px;
+            border: none;
+        }
+        .btn-camera { background: #4f46e5; color: white; }
+        .btn-capturar { background: #10b981; color: white; }
         
-        .resultado-correcao { background: #f8fafc; border-radius: 16px; padding: 20px; margin-top: 20px; }
-        .respostas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin: 15px 0; }
-        .resposta-card { text-align: center; padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; transition: all 0.2s; }
-        .resposta-card.correta { background: #d1fae5; border-color: #10b981; }
-        .resposta-card.incorreta { background: #fee2e2; border-color: #ef4444; }
-        .resposta-card:hover { transform: scale(1.02); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .btn-opcao { width: 36px; padding: 6px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; margin: 2px; }
-        .btn-opcao:hover { background: #e0e7ff; }
-        
-        .nota-final { text-align: center; padding: 15px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border-radius: 12px; margin: 15px 0; }
-        .nota-valor { font-size: 2rem; font-weight: bold; }
-        .btn-salvar { width: 100%; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 15px; }
-        
+        .respostas-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .resposta-card {
+            text-align: center;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: white;
+        }
+        .btn-opcao {
+            width: 32px;
+            padding: 4px;
+            background: #f3f4f6;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 2px;
+        }
+        .nota-final {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            border-radius: 12px;
+        }
+        .btn-salvar {
+            width: 100%;
+            padding: 12px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 15px;
+        }
         .loading { text-align: center; padding: 30px; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        .alert { padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: none; }
-        .alert-success { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
-        .alert-error { background: #fee2e2; color: #7f1d1d; border-left: 4px solid #ef4444; }
-        .alert-info { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+        select, input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            margin-top: 8px;
+        }
         
-        .progress-bar { width: 100%; height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; margin: 10px 0; }
-        .progress-fill { height: 100%; background: #10b981; width: 0%; transition: width 0.3s; }
-        
-        .info-painel {
+        .info-bar {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #0f0;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-family: monospace;
+            z-index: 1000;
+        }
+        
+        .log-panel {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
             background: rgba(0,0,0,0.85);
             color: #0f0;
-            padding: 12px 18px;
-            border-radius: 12px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 9px;
             font-family: monospace;
-            font-size: 11px;
+            max-width: 300px;
+            max-height: 150px;
+            overflow-y: auto;
             z-index: 1000;
-            border-left: 3px solid #0f0;
-            max-width: 280px;
-        }
-        
-        @media (orientation: landscape) {
-            .guia-canto { width: 40px; height: 40px; }
-            .feedback-proximidade { font-size: 12px; padding: 6px 15px; }
-        }
-        
-        @media (max-width: 768px) {
-            .info-painel { display: none; }
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <button class="btn-voltar" id="btnVoltar">
+            <button class="btn-voltar" onclick="window.history.back()">
                 <i class="fas fa-arrow-left"></i> Voltar
             </button>
             
             <div class="header">
-                <h1><i class="fas fa-camera"></i> Correção Automática de Prova</h1>
-                <p>Posicione o cartão-resposta (16,5cm x 7,5cm) dentro das guias - captura automática</p>
+                <h1><i class="fas fa-camera"></i> Correção de Prova</h1>
+                <p>Posicione o cartão com os 4 cantos pretos visíveis</p>
             </div>
-            
-            <div id="alert" class="alert"></div>
             
             <div id="loading" class="loading">
                 <div class="spinner"></div>
-                <p>Carregando dados da prova...</p>
+                <p>Carregando prova...</p>
             </div>
             
             <div id="conteudo" style="display: none;">
-                <div class="prova-info" id="provaInfo"></div>
-                <div class="gabarito-oficial" id="gabaritoOficial"></div>
+                <div id="provaInfo" style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:15px"></div>
+                <div id="gabaritoInfo" style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:15px"></div>
                 
-                <div class="selecao-aluno">
-                    <label><i class="fas fa-user-graduate"></i> Selecione o Aluno:</label>
-                    <select id="selectAluno">
-                        <option value="">Carregando alunos...</option>
-                    </select>
-                </div>
+                <select id="selectAluno">
+                    <option value="">Selecione o aluno</option>
+                </select>
                 
-                <div class="camera-container">
-                    <div class="camera-preview" id="cameraPreview">
-                        <video id="video" autoplay playsinline></video>
-                        <canvas id="canvas" style="display: none;"></canvas>
-                        <div class="guia-enquadramento">
-                            <div class="guia-canto guia-canto-top-left" id="cantoTL"></div>
-                            <div class="guia-canto guia-canto-top-right" id="cantoTR"></div>
-                            <div class="guia-canto guia-canto-bottom-left" id="cantoBL"></div>
-                            <div class="guia-canto guia-canto-bottom-right" id="cantoBR"></div>
-                            <div class="feedback-proximidade" id="feedbackProximidade">📏 Aguardando cartão</div>
-                            <div class="guia-texto" id="guiaTexto">🔍 Alinhe o cartão (16,5cm x 7,5cm) dentro das guias</div>
-                            <div class="contador-automatico" id="contadorAuto">⏱️ Aguardando posição</div>
-                        </div>
-                    </div>
-                    <div>
-                        <button class="btn-camera" id="btnIniciarCamera"><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                        <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar Manual</button>
+                <div class="camera-container" id="cameraContainer">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                    <div class="overlay">
+                        <div class="canto top-left" id="cantoTL"></div>
+                        <div class="canto top-right" id="cantoTR"></div>
+                        <div class="canto bottom-left" id="cantoBL"></div>
+                        <div class="canto bottom-right" id="cantoBR"></div>
+                        <div class="feedback" id="feedback">📏 Aguardando cartão</div>
                     </div>
                 </div>
                 
-                <div id="processando" class="loading" style="display: none;">
+                <div style="text-align: center; margin: 10px 0;">
+                    <button class="btn-camera" id="btnIniciar"><i class="fas fa-camera"></i> Iniciar Câmera</button>
+                    <button class="btn-capturar" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Capturar</button>
+                </div>
+                
+                <div id="processando" style="display: none; text-align: center; padding: 20px;">
                     <div class="spinner"></div>
-                    <p id="processandoTexto">📸 Processando imagem...</p>
-                    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                    <p id="processandoMsg">Processando...</p>
                 </div>
                 
                 <div id="resultado" style="display: none;">
-                    <div class="resultado-correcao">
-                        <h3><i class="fas fa-chart-line"></i> Resultado da Correção</h3>
-                        <div id="respostasGrid" class="respostas-grid"></div>
-                        <div id="notaFinal" class="nota-final"></div>
-                        <button class="btn-salvar" id="btnSalvarNota"><i class="fas fa-save"></i> Salvar Nota</button>
-                    </div>
+                    <div id="respostasGrid" class="respostas-grid"></div>
+                    <div id="notaFinal" class="nota-final"></div>
+                    <button class="btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar Nota</button>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="info-painel" id="infoPainel">
-        <div>🔍 DETECTOR A4 (16,5x7,5cm)</div>
-        <div id="infoStatus">⏳ Aguardando...</div>
-        <div id="infoProporcao">📐 Proporção: ---</div>
-        <div id="infoCantos">📍 Cantos: 0/4</div>
-        <div id="infoQualidade">🎯 Qualidade: ---</div>
+    <div class="info-bar" id="infoBar">🔍 Aguardando</div>
+    <div class="log-panel" id="logPanel">
+        <strong>📋 LOG:</strong><br>
+        <div id="logContent"></div>
     </div>
     
     <script>
         // ============================================
-        // CONFIGURAÇÕES INICIAIS
+        // FUNÇÃO DE LOG
+        // ============================================
+        function addLog(msg) {
+            console.log(msg);
+            const logDiv = document.getElementById('logContent');
+            if (logDiv) {
+                const time = new Date().toLocaleTimeString();
+                logDiv.innerHTML = `<div>[${time}] ${msg}</div>` + logDiv.innerHTML;
+                if (logDiv.children.length > 20) {
+                    logDiv.removeChild(logDiv.lastChild);
+                }
+            }
+        }
+        
+        // Mostrar painel de log em caso de erro
+        function mostrarLogPanel() {
+            const panel = document.getElementById('logPanel');
+            if (panel) panel.style.display = 'block';
+        }
+        
+        // ============================================
+        // CONFIGURAÇÃO SIMPLIFICADA
         // ============================================
         const urlParams = new URLSearchParams(window.location.search);
-        let provaId = urlParams.get('prova');
-        let urlToken = urlParams.get('token');
-        
+        const provaId = urlParams.get('prova');
+        const urlToken = urlParams.get('token');
         let authToken = urlToken || localStorage.getItem('auth_token');
         
+        addLog(`🔑 Token: ${authToken ? 'Presente' : 'Ausente'}`);
+        addLog(`📝 Prova ID: ${provaId || 'Não informado'}`);
+        
         if (!authToken) {
-            const redirectUrl = encodeURIComponent(`/corrigir-prova?prova=${provaId || ''}`);
-            window.location.href = `/login.html?redirect=${redirectUrl}`;
+            window.location.href = `/login.html?redirect=${encodeURIComponent(window.location.href)}`;
         }
         
         if (urlToken && !localStorage.getItem('auth_token')) {
             localStorage.setItem('auth_token', urlToken);
+            addLog('✅ Token salvo no localStorage');
         }
         
-        if (!provaId) {
-            alert('❌ ID da prova não encontrado!');
-            window.location.href = '/admin.html';
-        }
-        
-        // Configurações do detector
-        const DETECTOR_CONFIG = {
-            // Dimensões reais do cartão (16,5cm x 7,5cm)
-            LARGURA_REAL_CM: 16.5,
-            ALTURA_REAL_CM: 7.5,
-            PROPORCAO_ESPERADA: 16.5 / 7.5, // 2.2
-            
-            // Tolerâncias
-            TOLERANCIA_PROPORCAO: 0.25,      // Aceita entre 1.95 e 2.45
-            TOLERANCIA_ANGULO: 0.15,         // Radianos (≈8.6 graus)
-            
-            // Detecção de pontos pretos
-            THRESHOLD_ESCURO: 70,
-            PERCENTUAL_MIN_ESCURO: 8,
-            AMOSTRAGEM_STEP: 6,
-            RAIO_ANALISE: 10,
-            
-            // Clusterização
-            DISTANCIA_MAX_CLUSTER: 0.06,
-            MIN_PONTOS_POR_CLUSTER: 3,
-            
-            // Captura automática
-            ESTABILIDADE_NECESSARIA: 20,
-            TEMPO_ESTABILIDADE_MS: 2000,
-            
-            DEBUG: true
-        };
-        
         // ============================================
-        // DETECTOR PROFISSIONAL DE CARTÃO A4
+        // DETECTOR SIMPLES DOS 4 CANTOS PRETOS
         // ============================================
-        class DetectorCartaoA4 {
-            constructor(config = DETECTOR_CONFIG) {
-                this.config = config;
-                this.reset();
+        class DetectorSimples {
+            constructor() {
+                this.cantos = { tl: false, tr: false, bl: false, br: false };
+                this.estavel = 0;
+            }
+            
+            detectar(ctx, width, height) {
+                const margem = Math.min(width, height) * 0.08;
+                const tamanho = Math.min(50, width * 0.1);
+                
+                const areas = {
+                    tl: { x: margem, y: margem, w: tamanho, h: tamanho },
+                    tr: { x: width - margem - tamanho, y: margem, w: tamanho, h: tamanho },
+                    bl: { x: margem, y: height - margem - tamanho, w: tamanho, h: tamanho },
+                    br: { x: width - margem - tamanho, y: height - margem - tamanho, w: tamanho, h: tamanho }
+                };
+                
+                const resultados = {};
+                let brilhoMedio = 0;
+                let amostras = 0;
+                
+                for (const [canto, area] of Object.entries(areas)) {
+                    try {
+                        const imgData = ctx.getImageData(area.x, area.y, area.w, area.h);
+                        let pixelsEscuros = 0;
+                        let totalPixels = area.w * area.h;
+                        let somaBrilho = 0;
+                        
+                        for (let i = 0; i < imgData.data.length; i += 4) {
+                            const brilho = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+                            somaBrilho += brilho;
+                            if (brilho < 70) pixelsEscuros++;
+                        }
+                        
+                        const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
+                        const brilhoArea = somaBrilho / totalPixels;
+                        brilhoMedio += brilhoArea;
+                        amostras++;
+                        
+                        resultados[canto] = percentualEscuro > 8;
+                        
+                    } catch(e) {
+                        resultados[canto] = false;
+                    }
+                }
+                
+                brilhoMedio = amostras > 0 ? brilhoMedio / amostras : 100;
+                const todosDetectados = resultados.tl && resultados.tr && resultados.bl && resultados.br;
+                
+                if (todosDetectados) {
+                    this.estavel++;
+                } else {
+                    this.estavel = Math.max(0, this.estavel - 1);
+                }
+                
+                return {
+                    sucesso: todosDetectados,
+                    cantos: resultados,
+                    estabilidade: this.estavel,
+                    iluminacaoOk: brilhoMedio > 50 && brilhoMedio < 220,
+                    brilho: Math.round(brilhoMedio)
+                };
             }
             
             reset() {
-                this.pontosDetectados = [];
-                this.clusters = [];
-                this.cartao = null;
-                this.orientacao = 'desconhecida';
-                this.distancia = 'media';
-                this.estabilidade = 0;
-                this.ultimoCartao = null;
-            }
-            
-            analisar(ctx, width, height) {
-                const inicio = performance.now();
-                
-                // 1. Buscar pontos pretos na imagem
-                const pontos = this.buscarPontosPretos(ctx, width, height);
-                this.pontosDetectados = pontos;
-                
-                if (pontos.length < 20) {
-                    return this.criarResultado(false, 'Poucos pontos pretos detectados', pontos);
-                }
-                
-                // 2. Formar clusters
-                const clusters = this.agruparPontos(pontos, width, height);
-                this.clusters = clusters;
-                
-                if (clusters.length < 4) {
-                    return this.criarResultado(false, `Apenas ${clusters.length} clusters encontrados`, pontos, clusters);
-                }
-                
-                // 3. Detectar orientação da câmera
-                this.orientacao = this.detectarOrientacao();
-                
-                // 4. Encontrar candidatos a cantos
-                const candidatos = this.encontrarCandidatosCantos(clusters, width, height);
-                
-                if (!candidatos || candidatos.length < 4) {
-                    return this.criarResultado(false, `${candidatos?.length || 0}/4 cantos candidatos`, pontos, clusters);
-                }
-                
-                // 5. Encontrar cartão pela proporção correta
-                const cartao = this.encontrarCartaoPorProporcao(candidatos, width, height);
-                
-                if (!cartao) {
-                    this.estabilidade = 0;
-                    return this.criarResultado(false, 'Proporção incorreta (esperado 2.2:1)', pontos, clusters);
-                }
-                
-                this.cartao = cartao;
-                
-                // 6. Detectar distância
-                this.distancia = this.detectarDistancia(cartao, width, height);
-                
-                // 7. Validar qualidade
-                const validacao = this.validarCartao(cartao, width, height);
-                
-                // 8. Verificar estabilidade
-                if (this.ultimoCartao) {
-                    const deslocamento = Math.abs(this.ultimoCartao.tl.x - cartao.tl.x) +
-                                         Math.abs(this.ultimoCartao.tl.y - cartao.tl.y);
-                    if (deslocamento < 10) {
-                        this.estabilidade++;
-                    } else {
-                        this.estabilidade = Math.max(0, this.estabilidade - 2);
-                    }
-                } else {
-                    this.estabilidade = 1;
-                }
-                
-                this.ultimoCartao = cartao;
-                
-                const tempo = performance.now() - inicio;
-                
-                return this.criarResultado(true, 'Cartão detectado!', pontos, clusters, cartao, validacao, tempo);
-            }
-            
-            buscarPontosPretos(ctx, width, height) {
-                const pontos = [];
-                const step = this.config.AMOSTRAGEM_STEP;
-                const raio = this.config.RAIO_ANALISE;
-                
-                for (let y = step; y < height - step; y += step) {
-                    for (let x = step; x < width - step; x += step) {
-                        const x1 = Math.max(0, x - raio);
-                        const y1 = Math.max(0, y - raio);
-                        const x2 = Math.min(width, x + raio);
-                        const y2 = Math.min(height, y + raio);
-                        
-                        try {
-                            const areaImg = ctx.getImageData(x1, y1, x2 - x1, y2 - y1);
-                            let pixelsEscuros = 0;
-                            let totalPixels = areaImg.width * areaImg.height;
-                            
-                            for (let i = 0; i < areaImg.data.length; i += 4) {
-                                const brilho = (areaImg.data[i] + areaImg.data[i+1] + areaImg.data[i+2]) / 3;
-                                if (brilho < this.config.THRESHOLD_ESCURO) {
-                                    pixelsEscuros++;
-                                }
-                            }
-                            
-                            const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
-                            
-                            if (percentualEscuro > this.config.PERCENTUAL_MIN_ESCURO) {
-                                pontos.push({ x, y, percentual: percentualEscuro });
-                            }
-                        } catch(e) {}
-                    }
-                }
-                
-                return pontos;
-            }
-            
-            agruparPontos(pontos, width, height) {
-                const distanciaMax = Math.min(width, height) * this.config.DISTANCIA_MAX_CLUSTER;
-                const clusters = [];
-                
-                for (const ponto of pontos) {
-                    let encontrou = false;
-                    
-                    for (const cluster of clusters) {
-                        const dist = Math.hypot(ponto.x - cluster.centroX, ponto.y - cluster.centroY);
-                        if (dist < distanciaMax) {
-                            cluster.pontos.push(ponto);
-                            const n = cluster.pontos.length;
-                            cluster.centroX = (cluster.centroX * (n - 1) + ponto.x) / n;
-                            cluster.centroY = (cluster.centroY * (n - 1) + ponto.y) / n;
-                            encontrou = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!encontrou) {
-                        clusters.push({
-                            pontos: [ponto],
-                            centroX: ponto.x,
-                            centroY: ponto.y
-                        });
-                    }
-                }
-                
-                // Filtrar clusters com poucos pontos
-                const clustersFiltrados = clusters.filter(c => c.pontos.length >= this.config.MIN_PONTOS_POR_CLUSTER);
-                
-                // Ordenar por tamanho
-                clustersFiltrados.sort((a, b) => b.pontos.length - a.pontos.length);
-                
-                return clustersFiltrados;
-            }
-            
-            detectarOrientacao() {
-                return window.matchMedia("(orientation: portrait)").matches ? 'vertical' : 'horizontal';
-            }
-            
-            encontrarCandidatosCantos(clusters, width, height) {
-                const candidatos = {
-                    tl: { dist: Infinity, cluster: null },
-                    tr: { dist: Infinity, cluster: null },
-                    bl: { dist: Infinity, cluster: null },
-                    br: { dist: Infinity, cluster: null }
-                };
-                
-                for (const cluster of clusters.slice(0, 12)) {
-                    const x = cluster.centroX;
-                    const y = cluster.centroY;
-                    
-                    const distTL = Math.hypot(x - 0, y - 0);
-                    const distTR = Math.hypot(x - width, y - 0);
-                    const distBL = Math.hypot(x - 0, y - height);
-                    const distBR = Math.hypot(x - width, y - height);
-                    
-                    if (distTL < candidatos.tl.dist) {
-                        candidatos.tl = { dist: distTL, cluster, x, y };
-                    }
-                    if (distTR < candidatos.tr.dist) {
-                        candidatos.tr = { dist: distTR, cluster, x, y };
-                    }
-                    if (distBL < candidatos.bl.dist) {
-                        candidatos.bl = { dist: distBL, cluster, x, y };
-                    }
-                    if (distBR < candidatos.br.dist) {
-                        candidatos.br = { dist: distBR, cluster, x, y };
-                    }
-                }
-                
-                const resultado = [];
-                if (candidatos.tl.cluster) resultado.push({ canto: 'tl', ...candidatos.tl });
-                if (candidatos.tr.cluster) resultado.push({ canto: 'tr', ...candidatos.tr });
-                if (candidatos.bl.cluster) resultado.push({ canto: 'bl', ...candidatos.bl });
-                if (candidatos.br.cluster) resultado.push({ canto: 'br', ...candidatos.br });
-                
-                return resultado.length >= 4 ? resultado : null;
-            }
-            
-            encontrarCartaoPorProporcao(candidatos, width, height) {
-                const tl = candidatos.find(c => c.canto === 'tl');
-                const tr = candidatos.find(c => c.canto === 'tr');
-                const bl = candidatos.find(c => c.canto === 'bl');
-                const br = candidatos.find(c => c.canto === 'br');
-                
-                if (!tl || !tr || !bl || !br) return null;
-                
-                const largura = Math.abs(tr.x - tl.x);
-                const altura = Math.abs(bl.y - tl.y);
-                const proporcao = largura / altura;
-                
-                // Verificar proporção esperada (2.2:1)
-                const proporcaoOk = Math.abs(proporcao - this.config.PROPORCAO_ESPERADA) < this.config.TOLERANCIA_PROPORCAO;
-                
-                if (!proporcaoOk) {
-                    if (this.config.DEBUG) {
-                        console.log(`📐 Proporção detectada: ${proporcao.toFixed(2)} (esperado: ${this.config.PROPORCAO_ESPERADA})`);
-                    }
-                    return null;
-                }
-                
-                // Verificar alinhamento dos cantos
-                const anguloSuperior = Math.atan2(tr.y - tl.y, tr.x - tl.x);
-                const anguloInferior = Math.atan2(br.y - bl.y, br.x - bl.x);
-                const anguloEsquerdo = Math.atan2(bl.y - tl.y, bl.x - tl.x);
-                
-                const angulosOk = Math.abs(anguloSuperior) < this.config.TOLERANCIA_ANGULO &&
-                                  Math.abs(anguloInferior) < this.config.TOLERANCIA_ANGULO &&
-                                  Math.abs(anguloEsquerdo - Math.PI/2) < this.config.TOLERANCIA_ANGULO;
-                
-                if (!angulosOk && this.config.DEBUG) {
-                    console.log(`⚠️ Cantos não alinhados: sup=${anguloSuperior.toFixed(2)}, inf=${anguloInferior.toFixed(2)}, esq=${anguloEsquerdo.toFixed(2)}`);
-                }
-                
-                return {
-                    tl: { x: tl.x, y: tl.y, cluster: tl.cluster },
-                    tr: { x: tr.x, y: tr.y, cluster: tr.cluster },
-                    bl: { x: bl.x, y: bl.y, cluster: bl.cluster },
-                    br: { x: br.x, y: br.y, cluster: br.cluster },
-                    largura: largura,
-                    altura: altura,
-                    proporcao: proporcao,
-                    angulosOk: angulosOk
-                };
-            }
-            
-            detectarDistancia(cartao, width, height) {
-                const areaRelativa = (cartao.largura * cartao.altura) / (width * height);
-                
-                if (areaRelativa < 0.15) return 'longe';
-                if (areaRelativa > 0.5) return 'perto';
-                return 'media';
-            }
-            
-            validarCartao(cartao, width, height) {
-                const dentroTela = cartao.tl.x > 5 && cartao.tl.y > 5 && 
-                                   cartao.br.x < width - 5 && cartao.br.y < height - 5;
-                
-                const proporcaoOk = Math.abs(cartao.proporcao - this.config.PROPORCAO_ESPERADA) < this.config.TOLERANCIA_PROPORCAO;
-                const angulosOk = cartao.angulosOk;
-                
-                let qualidade = 'RUIM';
-                if (dentroTela && proporcaoOk && angulosOk) {
-                    const areaRelativa = (cartao.largura * cartao.altura) / (width * height);
-                    if (areaRelativa > 0.35 && areaRelativa < 0.65) qualidade = 'EXCELENTE';
-                    else if (areaRelativa > 0.2) qualidade = 'BOM';
-                    else qualidade = 'REGULAR';
-                } else if (dentroTela && proporcaoOk) {
-                    qualidade = 'REGULAR';
-                }
-                
-                return {
-                    largura: Math.round(cartao.largura),
-                    altura: Math.round(cartao.altura),
-                    proporcao: cartao.proporcao.toFixed(2),
-                    areaRelativa: ((cartao.largura * cartao.altura) / (width * height) * 100).toFixed(1),
-                    dentroTela: dentroTela,
-                    proporcaoOk: proporcaoOk,
-                    angulosOk: angulosOk,
-                    qualidade: qualidade
-                };
-            }
-            
-            criarResultado(sucesso, mensagem, pontos, clusters = [], cartao = null, validacao = null, tempo = 0) {
-                return {
-                    sucesso,
-                    mensagem,
-                    pontosCount: pontos.length,
-                    clustersCount: clusters.length,
-                    cartao: cartao,
-                    validacao: validacao,
-                    orientacao: this.orientacao,
-                    distancia: this.distancia,
-                    estabilidade: this.estabilidade,
-                    tempo: tempo
-                };
+                this.estavel = 0;
+                this.cantos = { tl: false, tr: false, bl: false, br: false };
             }
         }
         
         // ============================================
-        // VARIÁVEIS GLOBAIS
+        // VARIÁVEIS
         // ============================================
-        let detector = new DetectorCartaoA4();
-        let dadosProva = null;
-        let alunos = [];
+        let detector = new DetectorSimples();
         let gabarito = [];
         let totalQuestoes = 0;
-        let respostasDetectadas = [];
-        let notaCalculada = 0;
+        let alunos = [];
         let alunoSelecionadoId = null;
-        let imagemCapturadaUrl = null;
+        let respostasAtuais = [];
+        let notaCalculada = 0;
         
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
-        const btnIniciar = document.getElementById('btnIniciarCamera');
-        const btnCapturar = document.getElementById('btnCapturar');
-        const processando = document.getElementById('processando');
-        const resultado = document.getElementById('resultado');
-        const guiaTexto = document.getElementById('guiaTexto');
-        const feedbackProximidade = document.getElementById('feedbackProximidade');
-        const contadorAuto = document.getElementById('contadorAuto');
-        const infoPainel = document.getElementById('infoPainel');
-        const infoStatus = document.getElementById('infoStatus');
-        const infoProporcao = document.getElementById('infoProporcao');
-        const infoCantos = document.getElementById('infoCantos');
-        const infoQualidade = document.getElementById('infoQualidade');
-        
-        const cantoTL = document.getElementById('cantoTL');
-        const cantoTR = document.getElementById('cantoTR');
-        const cantoBL = document.getElementById('cantoBL');
-        const cantoBR = document.getElementById('cantoBR');
-        
         let stream = null;
-        let analiseFrameInterval = null;
-        let capturandoAutomaticamente = false;
-        let ultimaCaptura = 0;
-        const MIN_INTERVALO_CAPTURA = 3000;
+        let analiseInterval = null;
+        let capturando = false;
         
         // ============================================
         // FUNÇÕES AUXILIARES
         // ============================================
-        function voltarPagina() {
-            if (document.referrer && document.referrer.includes(window.location.hostname)) {
-                window.history.back();
-            } else {
-                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-                const role = userData.role;
-                if (role === 'professor') window.location.href = '/index.html';
-                else window.location.href = '/admin.html';
-            }
-        }
-        
-        document.getElementById('btnVoltar')?.addEventListener('click', voltarPagina);
-        
-        function mostrarAlerta(mensagem, tipo = 'info') {
-            const alert = document.getElementById('alert');
-            alert.className = `alert alert-${tipo}`;
-            alert.innerHTML = `<i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i> ${mensagem}`;
-            alert.style.display = 'block';
-            setTimeout(() => alert.style.display = 'none', 5000);
-        }
-        
-        async function fetchWithAuth(url, options = {}) {
-            const token = authToken || localStorage.getItem('auth_token');
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
-            });
-            
-            if (response.status === 401) {
-                alert('Sua sessão expirou. Faça login novamente.');
-                const redirectUrl = encodeURIComponent(`/corrigir-prova?prova=${provaId}`);
-                window.location.href = `/login.html?redirect=${redirectUrl}`;
-                return null;
-            }
-            return response;
-        }
-        
-        // ============================================
-        // DESENHO DOS ELEMENTOS NA TELA
-        // ============================================
-        function desenharElementos(ctx, width, height, resultado) {
-            if (!resultado) return;
-            
-            // Desenhar pontos pretos
-            if (resultado.pontosCount > 0 && detector.pontosDetectados) {
-                ctx.fillStyle = '#ff6b6b';
-                for (const ponto of detector.pontosDetectados) {
-                    ctx.beginPath();
-                    ctx.arc(ponto.x, ponto.y, 2, 0, 2 * Math.PI);
-                    ctx.fill();
-                }
-            }
-            
-            // Desenhar clusters
-            if (detector.clusters && detector.clusters.length > 0) {
-                detector.clusters.forEach((cluster, idx) => {
-                    let cor = '#ffa500';
-                    if (resultado.cartao) {
-                        if (resultado.cartao.tl && resultado.cartao.tl.cluster === cluster) cor = '#10b981';
-                        else if (resultado.cartao.tr && resultado.cartao.tr.cluster === cluster) cor = '#f59e0b';
-                        else if (resultado.cartao.bl && resultado.cartao.bl.cluster === cluster) cor = '#3b82f6';
-                        else if (resultado.cartao.br && resultado.cartao.br.cluster === cluster) cor = '#ef4444';
-                    }
-                    
-                    ctx.beginPath();
-                    ctx.arc(cluster.centroX, cluster.centroY, 6, 0, 2 * Math.PI);
-                    ctx.fillStyle = cor;
-                    ctx.fill();
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1.5;
-                    ctx.stroke();
+        async function fetchAuth(url, options = {}) {
+            addLog(`🌐 Fetch: ${url}`);
+            try {
+                const res = await fetch(url, {
+                    ...options,
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json', ...options.headers }
                 });
-            }
-            
-            // Desenhar cartão
-            if (resultado.cartao) {
-                const c = resultado.cartao;
-                
-                // Retângulo do cartão
-                ctx.beginPath();
-                ctx.moveTo(c.tl.x, c.tl.y);
-                ctx.lineTo(c.tr.x, c.tr.y);
-                ctx.lineTo(c.br.x, c.br.y);
-                ctx.lineTo(c.bl.x, c.bl.y);
-                ctx.closePath();
-                ctx.strokeStyle = resultado.sucesso ? '#10b981' : '#f59e0b';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-                
-                // Cantos em L
-                const tamanhoL = 35;
-                const cantos = [
-                    { x: c.tl.x, y: c.tl.y, cor: '#10b981', nome: 'TL' },
-                    { x: c.tr.x, y: c.tr.y, cor: '#f59e0b', nome: 'TR' },
-                    { x: c.bl.x, y: c.bl.y, cor: '#3b82f6', nome: 'BL' },
-                    { x: c.br.x, y: c.br.y, cor: '#ef4444', nome: 'BR' }
-                ];
-                
-                for (const canto of cantos) {
-                    ctx.beginPath();
-                    ctx.moveTo(canto.x, canto.y);
-                    ctx.lineTo(canto.x + tamanhoL, canto.y);
-                    ctx.moveTo(canto.x, canto.y);
-                    ctx.lineTo(canto.x, canto.y + tamanhoL);
-                    ctx.strokeStyle = canto.cor;
-                    ctx.lineWidth = 2.5;
-                    ctx.stroke();
+                if (res.status === 401) {
+                    addLog('❌ Sessão expirada (401)');
+                    alert('Sessão expirada');
+                    window.location.href = '/login.html';
+                    return null;
                 }
+                addLog(`✅ Resposta ${res.status}`);
+                return res;
+            } catch (err) {
+                addLog(`❌ Erro fetch: ${err.message}`);
+                throw err;
             }
         }
         
+        function mostrarAlerta(msg, tipo) {
+            addLog(`📢 ${tipo}: ${msg}`);
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${tipo === 'success' ? '#10b981' : '#ef4444'};color:white;padding:12px;border-radius:12px;text-align:center;z-index:10000;`;
+            alertDiv.innerHTML = msg;
+            document.body.appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 3000);
+        }
+        
         // ============================================
-        // ANÁLISE DE POSIÇÃO EM TEMPO REAL
+        // ANÁLISE EM TEMPO REAL
         // ============================================
-        function analisarPosicao() {
+        function analisarFrame() {
             if (!video.videoWidth || !video.videoHeight) return;
-            
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            const resultado = detector.analisar(ctx, canvas.width, canvas.height);
-            
-            // Desenhar elementos visuais
-            desenharElementos(ctx, canvas.width, canvas.height, resultado);
-            
-            // Atualizar guias visuais
-            const guias = { tl: cantoTL, tr: cantoTR, bl: cantoBL, br: cantoBR };
-            let cantosDetectados = 0;
-            
-            if (resultado.cartao) {
-                const c = resultado.cartao;
-                if (c.tl) { guias.tl.classList.add('detectado'); cantosDetectados++; }
-                if (c.tr) { guias.tr.classList.add('detectado'); cantosDetectados++; }
-                if (c.bl) { guias.bl.classList.add('detectado'); cantosDetectados++; }
-                if (c.br) { guias.br.classList.add('detectado'); cantosDetectados++; }
-            } else {
-                Object.values(guias).forEach(g => g.classList.remove('detectado'));
-            }
-            
-            // Atualizar painel de informações
-            if (infoStatus) {
-                infoStatus.innerHTML = resultado.sucesso ? '✅ ' + resultado.mensagem : '⏳ ' + resultado.mensagem;
-                infoStatus.style.color = resultado.sucesso ? '#0f0' : '#ff0';
-            }
-            
-            if (infoProporcao && resultado.cartao) {
-                infoProporcao.innerHTML = `📐 Proporção: ${resultado.cartao.proporcao.toFixed(2)}:1 (esperado 2.2:1)`;
-            }
-            
-            if (infoCantos) {
-                infoCantos.innerHTML = `📍 Cantos: ${cantosDetectados}/4`;
-            }
-            
-            if (infoQualidade && resultado.validacao) {
-                const qual = resultado.validacao.qualidade;
-                const cor = qual === 'EXCELENTE' ? '#0f0' : qual === 'BOM' ? '#ff0' : '#f00';
-                infoQualidade.innerHTML = `🎯 Qualidade: <span style="color:${cor}">${qual}</span>`;
-            }
-            
-            // Feedback de orientação e distância
-            let mensagem = '';
-            let qualidade = 'ruim';
-            let cor = '#ef4444';
-            
-            if (!resultado.sucesso) {
-                if (resultado.mensagem.includes('proporção')) {
-                    mensagem = `🔄 Vire o cartão para HORIZONTAL (16,5cm x 7,5cm)`;
-                    qualidade = 'medio';
-                    cor = '#f59e0b';
-                } else if (resultado.mensagem.includes('poucos pontos')) {
-                    mensagem = `🔍 Aproxime o cartão para melhor visibilidade dos cantos pretos`;
-                    qualidade = 'ruim';
-                    cor = '#ef4444';
-                } else {
-                    mensagem = `📏 Posicione o cartão com os 4 cantos pretos visíveis`;
-                    qualidade = 'ruim';
-                    cor = '#ef4444';
-                }
-            } 
-            else if (resultado.validacao && resultado.validacao.qualidade === 'EXCELENTE') {
-                mensagem = `✅ POSIÇÃO PERFEITA! Capturando em ${Math.max(0, Math.ceil((DETECTOR_CONFIG.ESTABILIDADE_NECESSARIA - resultado.estabilidade) / 5))}s`;
-                qualidade = 'bom';
-                cor = '#10b981';
-                
-                if (resultado.estabilidade >= DETECTOR_CONFIG.ESTABILIDADE_NECESSARIA && !capturandoAutomaticamente) {
-                    capturarAutomaticamente();
-                }
-            }
-            else if (resultado.validacao && resultado.validacao.qualidade === 'BOM') {
-                mensagem = `🟡 Ajuste o enquadramento - ${Math.ceil((DETECTOR_CONFIG.ESTABILIDADE_NECESSARIA - resultado.estabilidade) / 5)}s para captura`;
-                qualidade = 'medio';
-                cor = '#f59e0b';
-            }
-            else {
-                mensagem = `🔍 Ajuste a distância - ${resultado.distancia === 'perto' ? 'afaste um pouco' : resultado.distancia === 'longe' ? 'aproxime mais' : 'centralize o cartão'}`;
-                qualidade = 'ruim';
-                cor = '#ef4444';
-            }
-            
-            feedbackProximidade.textContent = mensagem;
-            feedbackProximidade.className = `feedback-proximidade ${qualidade}`;
-            
-            // Atualizar contador
-            if (resultado.sucesso && resultado.validacao && resultado.validacao.qualidade === 'EXCELENTE') {
-                const segundos = Math.ceil((DETECTOR_CONFIG.ESTABILIDADE_NECESSARIA - resultado.estabilidade) / 5);
-                contadorAuto.innerHTML = `⏱️ ${segundos > 0 ? `Estabilizando... ${segundos}s` : 'Capturando...'}`;
-            } else {
-                contadorAuto.innerHTML = `⏱️ ${resultado.estabilidade}/${DETECTOR_CONFIG.ESTABILIDADE_NECESSARIA}`;
-            }
-            
-            // Atualizar texto de guia
-            if (detector.orientacao === 'vertical') {
-                guiaTexto.innerHTML = '🔄 VIRE O CELULAR PARA HORIZONTAL (paisagem)';
-            } else if (resultado.sucesso && resultado.validacao && resultado.validacao.qualidade === 'EXCELENTE') {
-                guiaTexto.innerHTML = '✅ POSIÇÃO PERFEITA! Aguardando estabilização...';
-            } else if (resultado.sucesso) {
-                guiaTexto.innerHTML = `📐 Cartão detectado! ${resultado.distancia === 'perto' ? 'Afaste um pouco' : resultado.distancia === 'longe' ? 'Aproxime mais' : 'Ajuste centralização'}`;
-            } else {
-                guiaTexto.innerHTML = '🔍 Alinhe os 4 CANTOS PRETOS do cartão (16,5cm x 7,5cm)';
-            }
-            
-            // Atualizar cores das guias
-            document.querySelectorAll('.guia-canto').forEach(g => {
-                g.style.borderColor = cor;
-            });
-        }
-        
-        // ============================================
-        // CAPTURA AUTOMÁTICA
-        // ============================================
-        async function capturarAutomaticamente() {
-            const agora = Date.now();
-            if (capturandoAutomaticamente) return;
-            if (agora - ultimaCaptura < MIN_INTERVALO_CAPTURA) return;
-            
-            capturandoAutomaticamente = true;
-            ultimaCaptura = agora;
-            
-            mostrarAlerta('📸 Cartão bem posicionado! Capturando automaticamente...', 'success');
-            contadorAuto.innerHTML = '📸 Capturando...';
-            guiaTexto.innerHTML = '📸 Capturando imagem...';
-            
-            await new Promise(r => setTimeout(r, 200));
             
             const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            imagemCapturadaUrl = canvas.toDataURL('image/jpeg', 0.92);
             
-            // Efeito de flash
-            const flash = document.createElement('div');
-            flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;opacity:0.8;z-index:9999;pointer-events:none;';
-            document.body.appendChild(flash);
-            setTimeout(() => flash.remove(), 200);
+            const resultado = detector.detectar(ctx, canvas.width, canvas.height);
             
-            await processarImagemEAnalisar();
+            const cantosEl = {
+                tl: document.getElementById('cantoTL'),
+                tr: document.getElementById('cantoTR'),
+                bl: document.getElementById('cantoBL'),
+                br: document.getElementById('cantoBR')
+            };
             
-            capturandoAutomaticamente = false;
-            detector.estabilidade = 0;
-            contadorAuto.innerHTML = '⏱️ Pronto para próxima captura';
-            guiaTexto.innerHTML = '✅ Captura realizada! Aguardando próximo cartão';
+            for (const [canto, detectado] of Object.entries(resultado.cantos)) {
+                if (detectado) {
+                    cantosEl[canto].classList.add('detectado');
+                    cantosEl[canto].classList.remove('nao-detectado');
+                } else {
+                    cantosEl[canto].classList.remove('detectado');
+                    cantosEl[canto].classList.add('nao-detectado');
+                }
+            }
             
-            setTimeout(() => {
-                guiaTexto.innerHTML = '🔍 Posicione o próximo cartão';
-            }, 2000);
+            const feedback = document.getElementById('feedback');
+            const infoBar = document.getElementById('infoBar');
+            
+            if (!resultado.iluminacaoOk) {
+                feedback.textContent = resultado.brilho < 50 ? '💡 MUITO ESCURO! Aumente a luz' : '☀️ MUITO CLARO! Evite reflexos';
+                feedback.style.background = '#ef4444';
+                infoBar.innerHTML = `💡 Iluminação: ${resultado.brilho} | Cantos: 0/4`;
+            }
+            else if (resultado.sucesso) {
+                const segundos = Math.ceil((20 - resultado.estabilidade) / 5);
+                feedback.textContent = `✅ TODOS OS 4 CANTOS DETECTADOS! ${segundos > 0 ? `Estabilizando ${segundos}s` : 'Capturando...'}`;
+                feedback.style.background = '#10b981';
+                infoBar.innerHTML = `✅ 4/4 cantos | Estável: ${resultado.estabilidade}/20`;
+                
+                if (resultado.estabilidade >= 20 && !capturando) {
+                    addLog('🎯 Estabilização completa! Iniciando captura...');
+                    capturarImagem();
+                }
+            }
+            else {
+                const detectados = Object.values(resultado.cantos).filter(Boolean).length;
+                feedback.textContent = `🔍 ${detectados}/4 cantos detectados - Ajuste o cartão`;
+                feedback.style.background = '#f59e0b';
+                infoBar.innerHTML = `🎯 Cantos: ${detectados}/4 | Ilum: ${resultado.brilho}`;
+            }
         }
         
         // ============================================
-        // PROCESSAMENTO DA IMAGEM
+        // CAPTURAR E PROCESSAR
         // ============================================
-        async function processarImagemEAnalisar() {
-            if (!imagemCapturadaUrl) return;
+        async function capturarImagem() {
+            if (capturando) {
+                addLog('⚠️ Captura já em andamento');
+                return;
+            }
+            if (!alunoSelecionadoId) {
+                addLog('❌ Nenhum aluno selecionado');
+                mostrarAlerta('Selecione um aluno primeiro!', 'error');
+                return;
+            }
             
-            processando.style.display = 'block';
-            resultado.style.display = 'none';
-            document.getElementById('progressFill').style.width = '0%';
+            capturando = true;
+            addLog('📸 Iniciando captura de imagem...');
+            mostrarAlerta('📸 Capturando imagem...', 'success');
+            
+            const ctx = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imgData = canvas.toDataURL('image/jpeg', 0.85);
+            addLog(`📸 Imagem capturada: ${Math.round(imgData.length / 1024)} KB | ${canvas.width}x${canvas.height}`);
+            
+            document.getElementById('processando').style.display = 'block';
+            document.getElementById('resultado').style.display = 'none';
+            document.getElementById('processandoMsg').innerHTML = '📤 Enviando para servidor OMR...';
             
             try {
-                document.getElementById('processandoTexto').innerHTML = '📤 Enviando para servidor OMR...';
-                
-                for (let i = 0; i <= 30; i += 10) {
-                    document.getElementById('progressFill').style.width = `${i}%`;
-                    await new Promise(r => setTimeout(r, 50));
-                }
-                
-                // Preparar dados para envio
                 const dadosEnvio = {
-                    image: imagemCapturadaUrl,
+                    image: imgData,
                     questions: totalQuestoes,
                     choices: 5,
                     gabarito: gabarito.map(g => g.respostaCorreta),
-                    threshold: 0.18
+                    threshold: 0.12
                 };
+                addLog(`📤 Enviando para OMR: ${totalQuestoes} questões, gabarito: ${gabarito.map(g => g.respostaCorreta).join(',')}`);
                 
-                const response = await fetch('/api/omr/detect', {
+                const response = await fetchAuth('/api/omr/detect', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    },
                     body: JSON.stringify(dadosEnvio)
                 });
                 
-                for (let i = 30; i <= 100; i += 10) {
-                    document.getElementById('progressFill').style.width = `${i}%`;
-                    await new Promise(r => setTimeout(r, 30));
+                if (!response) {
+                    throw new Error('Falha na requisição');
                 }
                 
-                if (!response.ok) {
-                    throw new Error(`Servidor respondeu com status ${response.status}`);
+                const text = await response.text();
+                addLog(`📥 Resposta bruta (primeiros 200 chars): ${text.substring(0, 200)}`);
+                
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch(e) {
+                    addLog(`❌ Erro ao parsear JSON: ${e.message}`);
+                    throw new Error(`Resposta não é JSON válido: ${text.substring(0, 100)}`);
                 }
                 
-                const data = await response.json();
+                addLog(`📥 Resposta OMR: success=${data.success}, answers=${data.answers ? data.answers.length : 0}`);
                 
-                if (data.success && data.answers) {
-                    const respostas = data.answers;
-                    criarInterfaceComRespostas(respostas);
-                    processando.style.display = 'none';
-                    resultado.style.display = 'block';
-                    
-                    const detectadas = respostas.filter(r => r !== null).length;
-                    mostrarAlerta(`✅ ${detectadas} de ${totalQuestoes} questões detectadas! Confirme as respostas.`, 'success');
+                document.getElementById('processando').style.display = 'none';
+                
+                if (data.success && data.answers && data.answers.length > 0) {
+                    addLog(`✅ Respostas detectadas: ${JSON.stringify(data.answers)}`);
+                    criarInterfaceRespostas(data.answers);
+                    document.getElementById('resultado').style.display = 'block';
+                    const detectadas = data.answers.filter(a => a).length;
+                    mostrarAlerta(`✅ ${detectadas} de ${totalQuestoes} questões detectadas!`, 'success');
                 } else {
+                    addLog(`❌ Falha na detecção: ${data.error || 'Erro desconhecido'}`);
                     throw new Error(data.error || 'Falha na detecção');
                 }
                 
             } catch (error) {
-                console.error('❌ Erro:', error);
-                mostrarAlerta(`⚠️ Erro na detecção: ${error.message}. Usando modo manual.`, 'error');
+                addLog(`❌ Erro capturarImagem: ${error.message}`);
+                mostrarLogPanel();
+                document.getElementById('processando').style.display = 'none';
                 criarInterfaceManual();
-                processando.style.display = 'none';
-                resultado.style.display = 'block';
+                document.getElementById('resultado').style.display = 'block';
+                mostrarAlerta(`⚠️ Erro: ${error.message.substring(0, 100)}. Usando modo manual.`, 'error');
             }
+            
+            detector.reset();
+            capturando = false;
         }
         
         // ============================================
         // INTERFACE DE RESPOSTAS
         // ============================================
-        let respostasAtuais = [];
-        
-        function criarInterfaceComRespostas(sugestoes) {
+        function criarInterfaceRespostas(sugestoes) {
+            addLog('🎨 Criando interface com respostas');
             respostasAtuais = [...sugestoes];
             const letras = ['A', 'B', 'C', 'D', 'E'];
-            const respostasGrid = document.getElementById('respostasGrid');
-            respostasGrid.innerHTML = '';
-            
-            let acertos = 0;
-            for (let i = 0; i < totalQuestoes; i++) {
-                if (respostasAtuais[i] && respostasAtuais[i] === gabarito[i]?.respostaCorreta) {
-                    acertos++;
-                }
-            }
-            notaCalculada = (acertos / totalQuestoes) * 10;
+            const grid = document.getElementById('respostasGrid');
+            grid.innerHTML = '';
             
             for (let i = 0; i < totalQuestoes; i++) {
-                const sugestao = sugestoes[i];
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
-                const isCorreta = sugestao && sugestao === gabarito[i]?.respostaCorreta;
-                if (isCorreta) div.classList.add('correta');
-                else if (sugestao) div.classList.add('incorreta');
-                
                 div.innerHTML = `
-                    <div style="font-weight:bold; margin-bottom:5px;">Q${i + 1}</div>
-                    <div id="resposta-aluno-${i}" style="font-size:1.3rem;font-weight:bold;margin:5px 0;">${sugestao || '—'}</div>
-                    ${sugestao ? `<div style="font-size:0.65rem;color:#10b981;">🤖 Detectado: ${sugestao}</div>` : '<div style="font-size:0.65rem;color:#f59e0b;">⚠️ Não detectado</div>'}
-                    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;margin-top:8px;">
-                        ${letras.map(letra => `<button class="btn-opcao" onclick="definirResposta(${i}, '${letra}')">${letra}</button>`).join('')}
-                        <button class="btn-opcao" onclick="definirResposta(${i}, null)" style="background:#fee2e2;">✗</button>
+                    <strong>Q${i+1}</strong>
+                    <div id="resp-${i}" style="font-size:1.5rem;font-weight:bold;margin:5px 0">${sugestoes[i] || '—'}</div>
+                    <div>
+                        ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
+                        <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
                     </div>
-                    <div style="font-size:0.65rem;color:#6b7280;margin-top:5px;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
+                    <small>✓ ${gabarito[i]?.respostaCorreta || '?'}</small>
                 `;
-                respostasGrid.appendChild(div);
+                grid.appendChild(div);
             }
-            
-            atualizarNotaFinal();
+            atualizarNota();
         }
         
         function criarInterfaceManual() {
+            addLog('🎨 Criando interface manual');
             respostasAtuais = new Array(totalQuestoes).fill(null);
             const letras = ['A', 'B', 'C', 'D', 'E'];
-            const respostasGrid = document.getElementById('respostasGrid');
-            respostasGrid.innerHTML = '';
+            const grid = document.getElementById('respostasGrid');
+            grid.innerHTML = '';
             
             for (let i = 0; i < totalQuestoes; i++) {
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
                 div.innerHTML = `
-                    <div style="font-weight:bold; margin-bottom:5px;">Q${i + 1}</div>
-                    <div id="resposta-aluno-${i}" style="font-size:1.3rem;font-weight:bold;margin:5px 0;">—</div>
-                    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:3px;">
-                        ${letras.map(letra => `<button class="btn-opcao" onclick="definirResposta(${i}, '${letra}')">${letra}</button>`).join('')}
-                        <button class="btn-opcao" onclick="definirResposta(${i}, null)" style="background:#fee2e2;">✗</button>
+                    <strong>Q${i+1}</strong>
+                    <div id="resp-${i}" style="font-size:1.5rem;font-weight:bold;margin:5px 0">—</div>
+                    <div>
+                        ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
+                        <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
                     </div>
-                    <div style="font-size:0.65rem;color:#6b7280;margin-top:5px;">✓ ${gabarito[i]?.respostaCorreta || '?'}</div>
+                    <small>✓ ${gabarito[i]?.respostaCorreta || '?'}</small>
                 `;
-                respostasGrid.appendChild(div);
+                grid.appendChild(div);
             }
-            
-            atualizarNotaFinal();
+            atualizarNota();
         }
         
-        window.definirResposta = function(questao, letra) {
-            const elementoAluno = document.getElementById(`resposta-aluno-${questao}`);
+        window.setResposta = function(questao, letra) {
+            const el = document.getElementById(`resp-${questao}`);
             respostasAtuais[questao] = letra;
-            elementoAluno.innerHTML = letra || '—';
-            
-            const respostaCard = elementoAluno.closest('.resposta-card');
-            const isCorreta = letra && letra === gabarito[questao]?.respostaCorreta;
-            
-            if (isCorreta) {
-                respostaCard.classList.add('correta');
-                respostaCard.classList.remove('incorreta');
-            } else if (letra) {
-                respostaCard.classList.add('incorreta');
-                respostaCard.classList.remove('correta');
-            } else {
-                respostaCard.classList.remove('correta', 'incorreta');
-            }
-            
-            atualizarNotaFinal();
+            el.innerHTML = letra || '—';
+            atualizarNota();
         };
         
-        function atualizarNotaFinal() {
+        function atualizarNota() {
             let acertos = 0;
             for (let i = 0; i < totalQuestoes; i++) {
                 if (respostasAtuais[i] && respostasAtuais[i] === gabarito[i]?.respostaCorreta) {
@@ -1086,172 +626,156 @@
             notaCalculada = (acertos / totalQuestoes) * 10;
             
             document.getElementById('notaFinal').innerHTML = `
-                <div class="nota-valor">${notaCalculada.toFixed(1)} / 10</div>
+                <div style="font-size:2rem;font-weight:bold">${notaCalculada.toFixed(1)} / 10</div>
                 <div>${acertos} acertos de ${totalQuestoes} questões</div>
-                <div>${((acertos / totalQuestoes) * 100).toFixed(0)}% de aproveitamento</div>
-                <div style="margin-top: 8px;">
-                    ${notaCalculada >= 6 ? '✅ Aluno APROVADO' : '⚠️ Aluno REPROVADO'}
-                </div>
+                <div>${notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO'}</div>
             `;
-        }
-        
-        // ============================================
-        // CARREGAR DADOS DA PROVA
-        // ============================================
-        async function carregarDados() {
-            try {
-                const response = await fetchWithAuth(`/api/provas/${provaId}/resultados`);
-                if (!response) return;
-                const data = await response.json();
-                
-                if (data.success) {
-                    dadosProva = data;
-                    alunos = data.resultados || [];
-                    totalQuestoes = data.prova?.quantidadeQuestoes || 0;
-                    
-                    const provaResponse = await fetchWithAuth(`/api/provas/${provaId}`);
-                    if (!provaResponse) return;
-                    const provaData = await provaResponse.json();
-                    
-                    if (provaData.success && provaData.questoes) {
-                        const letras = ['A', 'B', 'C', 'D', 'E'];
-                        gabarito = provaData.questoes.map((q, idx) => ({
-                            numero: idx + 1,
-                            respostaCorreta: letras[q.respostaCorreta]
-                        }));
-                    }
-                    
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('conteudo').style.display = 'block';
-                    
-                    document.getElementById('provaInfo').innerHTML = `
-                        <h3><i class="fas fa-file-alt"></i> ${data.prova?.titulo || 'Prova'}</h3>
-                        <div><span>📊 ${totalQuestoes} questões | 👥 ${alunos.length} alunos</span></div>
-                    `;
-                    
-                    document.getElementById('gabaritoOficial').innerHTML = `
-                        <h4><i class="fas fa-check-circle"></i> Gabarito Oficial</h4>
-                        <div class="gabarito-grid">
-                            ${gabarito.map(g => `<div class="gabarito-item correta">${g.numero}: ${g.respostaCorreta}</div>`).join('')}
-                        </div>
-                    `;
-                    
-                    const selectAluno = document.getElementById('selectAluno');
-                    selectAluno.innerHTML = '<option value="">Selecione um aluno...</option>';
-                    alunos.forEach(aluno => {
-                        selectAluno.innerHTML += `<option value="${aluno.alunoId}">${aluno.alunoNome}</option>`;
-                    });
-                    selectAluno.addEventListener('change', (e) => { 
-                        alunoSelecionadoId = e.target.value;
-                        resultado.style.display = 'none';
-                        detector.reset();
-                    });
-                    
-                    mostrarAlerta('✅ Dados carregados! Posicione o cartão na horizontal (16,5cm x 7,5cm)', 'success');
-                }
-            } catch (error) { 
-                console.error('Erro:', error); 
-                mostrarAlerta('Erro ao carregar dados', 'error'); 
-            }
         }
         
         // ============================================
         // SALVAR NOTA
         // ============================================
         async function salvarNota() {
-            if (!alunoSelecionadoId) { 
-                mostrarAlerta('Selecione um aluno!', 'error'); 
-                return; 
+            if (!alunoSelecionadoId) {
+                mostrarAlerta('Selecione um aluno!', 'error');
+                return;
             }
             
-            if (respostasAtuais.length === 0 || respostasAtuais.every(r => r === null)) { 
-                mostrarAlerta('Corrija a prova primeiro!', 'error'); 
-                return; 
-            }
-            
-            const aluno = alunos.find(a => a.alunoId === alunoSelecionadoId);
-            if (!aluno) { 
-                mostrarAlerta('Aluno não encontrado', 'error'); 
-                return; 
-            }
-            
-            if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)} para ${aluno.alunoNome}?`)) return;
+            if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)}?`)) return;
             
             try {
-                const response = await fetchWithAuth(`/api/professor/provas/${provaId}/nota-manual`, {
+                addLog(`💾 Salvando nota ${notaCalculada.toFixed(1)} para aluno ${alunoSelecionadoId}`);
+                const response = await fetchAuth(`/api/professor/provas/${provaId}/nota-manual`, {
                     method: 'POST',
                     body: JSON.stringify({
                         alunoId: alunoSelecionadoId,
                         nota: notaCalculada,
-                        observacao: `Corrigido em ${new Date().toLocaleString('pt-BR')}. Respostas: ${respostasAtuais.map((r, i) => `${i+1}:${r || '-'}`).join(', ')}`
+                        observacao: `Corrigido em ${new Date().toLocaleString()}`
                     })
                 });
                 
-                if (!response) return;
-                const data = await response.json();
-                
-                if (data.success) {
-                    mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva!`, 'success');
-                    setTimeout(() => window.location.href = `/resultados.html?provaId=${provaId}`, 1500);
-                } else {
-                    throw new Error(data.error);
+                if (response && (await response.json()).success) {
+                    addLog('✅ Nota salva com sucesso!');
+                    mostrarAlerta('✅ Nota salva!', 'success');
+                    setTimeout(() => window.location.reload(), 1500);
                 }
-            } catch (error) { 
-                mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); 
+            } catch (error) {
+                addLog(`❌ Erro ao salvar: ${error.message}`);
+                mostrarAlerta('❌ Erro ao salvar', 'error');
             }
         }
         
         // ============================================
-        // INICIAR CÂMERA
+        // CARREGAR DADOS DA PROVA
+        // ============================================
+        async function carregarDados() {
+            addLog('📂 Carregando dados da prova...');
+            try {
+                const res = await fetchAuth(`/api/provas/${provaId}/resultados`);
+                if (!res) return;
+                const data = await res.json();
+                addLog(`📦 Dados recebidos: success=${data.success}`);
+                
+                if (data.success) {
+                    alunos = data.resultados || [];
+                    totalQuestoes = data.prova?.quantidadeQuestoes || 0;
+                    addLog(`📊 Total de questões: ${totalQuestoes}, Alunos: ${alunos.length}`);
+                    
+                    const provaRes = await fetchAuth(`/api/provas/${provaId}`);
+                    if (provaRes) {
+                        const provaData = await provaRes.json();
+                        if (provaData.success && provaData.questoes) {
+                            const letras = ['A', 'B', 'C', 'D', 'E'];
+                            gabarito = provaData.questoes.map((q, i) => ({
+                                numero: i + 1,
+                                respostaCorreta: letras[q.respostaCorreta]
+                            }));
+                            addLog(`📋 Gabarito carregado: ${gabarito.map(g => g.respostaCorreta).join(',')}`);
+                        }
+                    }
+                    
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('conteudo').style.display = 'block';
+                    
+                    document.getElementById('provaInfo').innerHTML = `
+                        <strong>📄 ${data.prova?.titulo || 'Prova'}</strong><br>
+                        ${totalQuestoes} questões | ${alunos.length} alunos
+                    `;
+                    
+                    document.getElementById('gabaritoInfo').innerHTML = `
+                        <strong>📋 Gabarito:</strong><br>
+                        ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}
+                    `;
+                    
+                    const select = document.getElementById('selectAluno');
+                    select.innerHTML = '<option value="">Selecione o aluno...</option>';
+                    alunos.forEach(a => {
+                        select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome}</option>`;
+                    });
+                    select.addEventListener('change', e => {
+                        alunoSelecionadoId = e.target.value;
+                        addLog(`👤 Aluno selecionado: ${alunoSelecionadoId}`);
+                        document.getElementById('resultado').style.display = 'none';
+                        detector.reset();
+                    });
+                    
+                    addLog('✅ Dados carregados com sucesso!');
+                    mostrarAlerta('✅ Dados carregados! Posicione o cartão', 'success');
+                }
+            } catch (error) {
+                addLog(`❌ Erro carregarDados: ${error.message}`);
+                console.error(error);
+                document.getElementById('loading').innerHTML = '<p>❌ Erro ao carregar</p>';
+            }
+        }
+        
+        // ============================================
+        // CÂMERA
         // ============================================
         async function iniciarCamera() {
+            addLog('📷 Iniciando câmera...');
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: { exact: "environment" }, 
-                        width: { ideal: 1920 }, 
-                        height: { ideal: 1080 } 
-                    } 
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } }
                 }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 
                 video.srcObject = stream;
                 await video.play();
-                btnCapturar.disabled = false;
-                btnIniciar.disabled = true;
+                addLog(`✅ Câmera iniciada: ${video.videoWidth}x${video.videoHeight}`);
                 
-                if (analiseFrameInterval) clearInterval(analiseFrameInterval);
-                analiseFrameInterval = setInterval(() => analisarPosicao(), 150);
+                document.getElementById('btnIniciar').disabled = true;
+                document.getElementById('btnCapturar').disabled = false;
                 
-                mostrarAlerta('✅ Câmera iniciada! Posicione o cartão na horizontal (16,5cm x 7,5cm)', 'success');
+                if (analiseInterval) clearInterval(analiseInterval);
+                analiseInterval = setInterval(analisarFrame, 200);
+                addLog('🔄 Análise de posição iniciada');
+                
             } catch (error) {
-                mostrarAlerta('❌ Não foi possível acessar a câmera.', 'error');
+                addLog(`❌ Erro ao acessar câmera: ${error.message}`);
+                mostrarAlerta('❌ Erro ao acessar câmera', 'error');
             }
         }
         
         function pararCamera() {
-            if (analiseFrameInterval) clearInterval(analiseFrameInterval);
-            if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
-            video.srcObject = null;
-            btnCapturar.disabled = true;
-            btnIniciar.disabled = false;
-            detector.reset();
+            addLog('🛑 Parando câmera...');
+            if (analiseInterval) clearInterval(analiseInterval);
+            if (stream) stream.getTracks().forEach(t => t.stop());
         }
         
         // ============================================
         // EVENTOS
         // ============================================
-        btnIniciar.addEventListener('click', iniciarCamera);
-        btnCapturar.addEventListener('click', () => {
-            if (!alunoSelecionadoId) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); return; }
-            const ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            imagemCapturadaUrl = canvas.toDataURL('image/jpeg', 0.92);
-            processarImagemEAnalisar();
+        document.getElementById('btnIniciar').addEventListener('click', iniciarCamera);
+        document.getElementById('btnCapturar').addEventListener('click', () => {
+            addLog('🖱️ Captura manual solicitada');
+            if (!alunoSelecionadoId) {
+                mostrarAlerta('Selecione um aluno primeiro!', 'error');
+                return;
+            }
+            capturarImagem();
         });
-        document.getElementById('btnSalvarNota')?.addEventListener('click', salvarNota);
-        window.addEventListener('beforeunload', () => pararCamera());
+        document.getElementById('btnSalvar').addEventListener('click', salvarNota);
+        window.addEventListener('beforeunload', pararCamera);
         
         carregarDados();
     </script>
