@@ -1,63 +1,50 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- PWA Meta Tags -->
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d6efd">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
-
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
-    <link rel="shortcut icon" href="/icons/favicon.ico">
-
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>Correção de Prova - Sistema de Provas</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Correção de Prova - EVALBEE OMR</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
-            padding: 12px;
+            padding: 15px;
         }
-        .container { max-width: 800px; margin: 0 auto; }
+        .container { max-width: 950px; margin: 0 auto; }
         .card {
             background: white;
             border-radius: 24px;
-            padding: 16px;
-            margin-bottom: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
-        .header { text-align: center; margin-bottom: 16px; }
+        .header { text-align: center; margin-bottom: 20px; }
         .header h1 { 
             color: #1e3c72; 
-            font-size: 1.3rem;
+            font-size: 1.5rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            flex-wrap: wrap;
+            gap: 10px;
         }
         .header h1 i { color: #10b981; }
-        .header p { font-size: 12px; margin-top: 5px; }
         
         .modo-selector {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             justify-content: center;
-            margin: 12px 0;
+            margin: 15px 0;
             background: #f1f5f9;
-            padding: 6px;
+            padding: 8px;
             border-radius: 40px;
         }
         .modo-btn {
             flex: 1;
-            padding: 8px 12px;
+            padding: 10px 20px;
             border: none;
             border-radius: 30px;
             font-weight: 600;
@@ -65,21 +52,19 @@
             transition: all 0.2s;
             background: transparent;
             color: #64748b;
-            font-size: 13px;
         }
         .modo-btn.active {
             background: #1e3c72;
             color: white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
-        .modo-btn i { margin-right: 6px; }
+        .modo-btn i { margin-right: 8px; }
         
-        /* QR Code Scanner */
         .qr-scanner-container {
             background: #000;
             border-radius: 16px;
             overflow: hidden;
-            margin: 12px 0;
+            margin: 15px 0;
             position: relative;
             min-height: 280px;
         }
@@ -95,7 +80,6 @@
         #qr-reader video {
             width: 100%;
             height: auto;
-            transition: transform 0.3s ease;
         }
         .qr-overlay {
             position: absolute;
@@ -115,9 +99,11 @@
             border-radius: 16px;
             overflow: hidden;
             position: relative;
-            margin: 12px auto;
+            margin: 15px auto;
             width: 100%;
+            max-width: 800px;
             aspect-ratio: 4 / 3;
+            display: none;
         }
         
         video {
@@ -125,7 +111,6 @@
             height: 100%;
             object-fit: cover;
             transform: scaleX(1);
-            transition: transform 0.2s ease;
         }
         
         .overlay {
@@ -170,14 +155,14 @@
         
         .feedback {
             position: absolute;
-            bottom: 12px;
+            bottom: 15px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
             color: white;
-            padding: 6px 12px;
+            padding: 10px 20px;
             border-radius: 30px;
-            font-size: 11px;
+            font-size: 13px;
             font-weight: bold;
             white-space: nowrap;
             z-index: 20;
@@ -186,38 +171,32 @@
         }
         
         .btn {
-            padding: 10px 20px;
+            padding: 12px 24px;
             border-radius: 30px;
             font-weight: 600;
             cursor: pointer;
             border: none;
-            font-size: 13px;
+            font-size: 14px;
             transition: all 0.2s;
         }
         .btn:hover { transform: scale(1.02); opacity: 0.95; }
         .btn-primary { background: #1e3c72; color: white; }
         .btn-success { background: #10b981; color: white; }
         .btn-secondary { background: #6b7280; color: white; }
-        .btn-warning { background: #f59e0b; color: white; }
-        .btn-outline {
-            background: transparent;
-            border: 2px solid #1e3c72;
-            color: #1e3c72;
-        }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         
         .respostas-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-            gap: 10px;
-            margin: 15px 0;
-            max-height: 350px;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+            max-height: 400px;
             overflow-y: auto;
             padding: 5px;
         }
         .resposta-card {
             text-align: center;
-            padding: 10px 6px;
+            padding: 12px 8px;
             border: 2px solid #e5e7eb;
             border-radius: 12px;
             background: white;
@@ -232,25 +211,25 @@
             background: linear-gradient(135deg, #fef2f2, #fee2e2);
         }
         .resposta-card .questao-num {
-            font-size: 10px;
+            font-size: 12px;
             color: #6b7280;
-            margin-bottom: 4px;
+            margin-bottom: 5px;
         }
         .resposta-card .resposta-valor {
-            font-size: 1.4rem;
+            font-size: 1.8rem;
             font-weight: bold;
-            margin: 6px 0;
+            margin: 8px 0;
         }
         .btn-opcao {
-            width: 32px;
-            padding: 5px;
+            width: 36px;
+            padding: 6px;
             background: #f3f4f6;
             border: 1px solid #ddd;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             margin: 2px;
             font-weight: bold;
-            font-size: 11px;
+            font-size: 12px;
             transition: all 0.1s;
         }
         .btn-opcao:hover {
@@ -259,139 +238,151 @@
         }
         .nota-final {
             text-align: center;
-            padding: 15px;
+            padding: 20px;
             background: linear-gradient(135deg, #1e3c72, #2a5298);
             color: white;
             border-radius: 16px;
-            margin-top: 15px;
+            margin-top: 20px;
         }
-        .nota-final h2 { font-size: 2rem; margin-bottom: 5px; }
+        .nota-final h2 { font-size: 2.5rem; margin-bottom: 8px; }
         .nota-final .aprovado { color: #10b981; }
         .nota-final .reprovado { color: #f97316; }
-        .loading { text-align: center; padding: 30px; }
+        .loading { text-align: center; padding: 40px; }
         .spinner {
-            width: 35px;
-            height: 35px;
-            border: 3px solid #e5e7eb;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
             border-top-color: #1e3c72;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 12px;
+            margin: 0 auto 15px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
         select {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             border: 2px solid #e5e7eb;
             border-radius: 12px;
-            font-size: 13px;
-            margin: 12px 0;
+            font-size: 14px;
+            margin: 15px 0;
             background: white;
             cursor: pointer;
         }
         
         .info-bar {
             position: fixed;
-            bottom: 12px;
-            right: 12px;
-            left: 12px;
-            background: rgba(0,0,0,0.85);
+            bottom: 15px;
+            right: 15px;
+            background: rgba(0,0,0,0.8);
             color: #10b981;
             padding: 8px 12px;
-            border-radius: 30px;
+            border-radius: 20px;
             font-size: 11px;
             font-family: monospace;
             z-index: 1000;
             backdrop-filter: blur(4px);
-            text-align: center;
         }
         
         .gabarito-display {
             background: #f8fafc;
-            padding: 10px;
+            padding: 12px;
             border-radius: 12px;
             margin: 10px 0;
             font-family: monospace;
-            font-size: 10px;
+            font-size: 12px;
             overflow-x: auto;
             text-align: center;
             border: 1px solid #e5e7eb;
-            white-space: nowrap;
         }
         
         .button-group {
             display: flex;
-            gap: 12px;
+            gap: 15px;
             justify-content: center;
-            margin: 15px 0 10px;
-            flex-wrap: wrap;
+            margin: 20px 0 10px;
         }
         
         .dica {
             background: linear-gradient(135deg, #e8f0fe, #d9e6f5);
-            padding: 8px 12px;
+            padding: 10px 15px;
             border-radius: 12px;
-            font-size: 11px;
+            font-size: 12px;
             text-align: center;
-            margin-top: 10px;
+            margin-top: 12px;
             color: #1e3c72;
         }
         
         .status-encaixe {
             position: absolute;
-            top: 8px;
+            top: 15px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.8);
-            padding: 4px 12px;
+            padding: 6px 16px;
             border-radius: 30px;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: bold;
             font-family: monospace;
             z-index: 20;
-            letter-spacing: 2px;
+            letter-spacing: 4px;
             backdrop-filter: blur(4px);
         }
         
         .prova-info {
             background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-            padding: 12px;
+            padding: 15px;
             border-radius: 16px;
-            margin-bottom: 12px;
+            margin-bottom: 15px;
             text-align: center;
             border: 1px solid #e5e7eb;
         }
         
         .prova-info h3 {
             color: #1e3c72;
-            margin-bottom: 5px;
-            font-size: 1rem;
-        }
-        
-        .prova-info p {
-            font-size: 12px;
+            margin-bottom: 8px;
         }
         
         .btn-salvar {
             background: linear-gradient(135deg, #10b981, #059669);
             width: 100%;
-            margin-top: 12px;
-            padding: 12px;
-            font-size: 14px;
+            margin-top: 15px;
+            padding: 14px;
+            font-size: 16px;
+        }
+        
+        .aluno-selector {
+            margin: 15px 0;
         }
         
         .aluno-selector label {
             font-weight: 600;
             color: #374151;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             display: block;
-            font-size: 13px;
+        }
+        
+        .auto-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #ffaa00;
+            z-index: 25;
+            white-space: nowrap;
+            font-family: monospace;
+            backdrop-filter: blur(4px);
+            pointer-events: none;
         }
         
         .qr-selecionado {
             background: linear-gradient(135deg, #10b981, #059669);
-            padding: 8px 12px;
+            padding: 12px 16px;
             border-radius: 12px;
             margin: 10px 0;
             color: white;
@@ -406,164 +397,28 @@
             background: rgba(255,255,255,0.2);
             border: none;
             color: white;
-            padding: 5px 12px;
+            padding: 6px 14px;
             border-radius: 20px;
             cursor: pointer;
-            font-size: 11px;
-        }
-        
-        .auto-status {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9);
-            padding: 6px 16px;
-            border-radius: 40px;
             font-size: 12px;
-            font-weight: bold;
-            color: #ffaa00;
-            z-index: 25;
-            white-space: nowrap;
-            font-family: monospace;
-            backdrop-filter: blur(4px);
-            pointer-events: none;
         }
         
-        .zoom-controls {
-            position: absolute;
-            bottom: 70px;
-            right: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            z-index: 30;
+        .respostas-grid::-webkit-scrollbar {
+            width: 8px;
         }
-        .zoom-btn {
-            width: 44px;
-            height: 44px;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            color: white;
-            font-size: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
+        .respostas-grid::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
         }
-        .zoom-btn:hover {
-            background: rgba(0,0,0,0.9);
-            transform: scale(1.05);
-        }
-        
-        .qr-zoom-controls {
-            position: absolute;
-            bottom: 70px;
-            right: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            z-index: 35;
-        }
-        .qr-zoom-btn {
-            width: 44px;
-            height: 44px;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            color: white;
-            font-size: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-        .qr-zoom-btn:hover {
-            background: rgba(0,0,0,0.9);
-            transform: scale(1.05);
-        }
-        
-        .step-indicator {
-            display: flex;
-            justify-content: space-between;
-            margin: 15px 0;
-            padding: 0 10px;
-        }
-        .step {
-            text-align: center;
-            flex: 1;
-            position: relative;
-        }
-        .step-number {
-            width: 28px;
-            height: 28px;
-            background: #e5e7eb;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 5px;
-            font-weight: bold;
-            font-size: 12px;
-            color: #6b7280;
-        }
-        .step.active .step-number {
+        .respostas-grid::-webkit-scrollbar-thumb {
             background: #1e3c72;
-            color: white;
-        }
-        .step.completed .step-number {
-            background: #10b981;
-            color: white;
-        }
-        .step-label {
-            font-size: 9px;
-            color: #6b7280;
-        }
-        .step.active .step-label {
-            color: #1e3c72;
-            font-weight: bold;
-        }
-        .step.completed .step-label {
-            color: #10b981;
-        }
-        .step:not(:last-child)::after {
-            content: '';
-            position: absolute;
-            top: 13px;
-            right: -50%;
-            width: 100%;
-            height: 2px;
-            background: #e5e7eb;
-        }
-        .step.completed:not(:last-child)::after {
-            background: #10b981;
-        }
-        
-        @media (orientation: landscape) {
-            body { padding: 8px; }
-            .card { padding: 12px; }
-            .header h1 { font-size: 1.1rem; }
-            .step-indicator { margin: 8px 0; }
-            .step-number { width: 24px; height: 24px; font-size: 10px; }
-            .step-label { font-size: 8px; }
-            .camera-container { max-height: 50vh; aspect-ratio: 16 / 9; }
-            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); max-height: 200px; }
-            .nota-final h2 { font-size: 1.5rem; }
-            .qr-scanner-container { min-height: 200px; }
+            border-radius: 10px;
         }
         
         @media (max-width: 480px) {
-            body { padding: 8px; }
-            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
-            .btn-opcao { width: 28px; font-size: 10px; }
-            .resposta-card .resposta-valor { font-size: 1.2rem; }
-            .gabarito-display { font-size: 9px; white-space: normal; word-break: break-all; }
-            .zoom-btn, .qr-zoom-btn { width: 38px; height: 38px; font-size: 18px; }
+            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); }
+            .btn-opcao { width: 32px; font-size: 11px; }
+            .resposta-card .resposta-valor { font-size: 1.4rem; }
         }
     </style>
 </head>
@@ -572,30 +427,11 @@
         <div class="card">
             <div class="header">
                 <h1><i class="fas fa-robot"></i> Correção Inteligente</h1>
-                <p style="color:#ff4444;"><i class="fas fa-arrows-alt"></i> <strong>Alinhe os 4 quadrados vermelhos com os pretos do cartão</strong></p>
-            </div>
-            
-            <div class="step-indicator" id="stepIndicator">
-                <div class="step active" id="step1">
-                    <div class="step-number">1</div>
-                    <div class="step-label">Aluno</div>
-                </div>
-                <div class="step" id="step2">
-                    <div class="step-number">2</div>
-                    <div class="step-label">Alinhar</div>
-                </div>
-                <div class="step" id="step3">
-                    <div class="step-number">3</div>
-                    <div class="step-label">Corrigir</div>
-                </div>
-                <div class="step" id="step4">
-                    <div class="step-number">4</div>
-                    <div class="step-label">Salvar</div>
-                </div>
+                <p><strong style="color:#ff4444;">🔴 Alinhe os 4 quadrados vermelhos com os quadrados pretos do cartão</strong></p>
             </div>
             
             <div class="modo-selector">
-                <button class="modo-btn active" id="modoAutomaticoBtn">
+                <button class="modo-btn active" id="modoQRCodeBtn">
                     <i class="fas fa-qrcode"></i> QR Code
                 </button>
                 <button class="modo-btn" id="modoManualBtn">
@@ -605,12 +441,12 @@
             
             <div class="dica" id="dicaModo">
                 <i class="fas fa-qrcode"></i> 
-                <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno
+                <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno ou use o link direto.
             </div>
             
             <div id="loading" class="loading">
                 <div class="spinner"></div>
-                <p>Carregando dados...</p>
+                <p>Carregando dados da prova...</p>
             </div>
             
             <div id="conteudo" style="display: none;">
@@ -618,15 +454,10 @@
                 <div id="gabaritoInfo" class="gabarito-display"></div>
                 
                 <div id="qrScannerArea" style="display: block;">
-                    <div class="qr-scanner-container" id="qrScannerContainer">
+                    <div class="qr-scanner-container">
                         <div id="qr-reader" style="width: 100%;"></div>
                         <div class="qr-overlay">
                             <i class="fas fa-qrcode"></i> Posicione o QR Code do aluno
-                        </div>
-                        <div class="qr-zoom-controls" id="qrZoomControls">
-                            <button class="qr-zoom-btn" id="qrZoomInBtn" title="Aumentar Zoom">+</button>
-                            <button class="qr-zoom-btn" id="qrZoomOutBtn" title="Diminuir Zoom">-</button>
-                            <button class="qr-zoom-btn" id="qrZoomResetBtn" title="Resetar Zoom">↺</button>
                         </div>
                     </div>
                 </div>
@@ -651,7 +482,7 @@
                     </button>
                 </div>
                 
-                <div class="camera-container" id="cameraContainer" style="display: none;">
+                <div class="camera-container" id="cameraContainer">
                     <video id="video" autoplay playsinline muted></video>
                     <canvas id="canvas" style="display: none;"></canvas>
                     <div class="overlay" id="overlay">
@@ -663,40 +494,78 @@
                         <div class="status-encaixe" id="statusEncaixe">⬜ ⬜ ⬜ ⬜</div>
                         <div id="autoStatus" class="auto-status" style="display: none;"></div>
                     </div>
-                    <div class="zoom-controls">
-                        <button class="zoom-btn" id="zoomInBtn" title="Aumentar Zoom">+</button>
-                        <button class="zoom-btn" id="zoomOutBtn" title="Diminuir Zoom">-</button>
-                        <button class="zoom-btn" id="zoomResetBtn" title="Resetar Zoom">↺</button>
-                    </div>
                 </div>
                 
                 <div class="button-group">
                     <button class="btn btn-primary" id="btnIniciarCamera" disabled><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir</button>
+                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir Agora</button>
                 </div>
                 
-                <div id="processando" style="display: none; text-align: center; padding: 15px;">
+                <div id="processando" style="display: none; text-align: center; padding: 20px;">
                     <div class="spinner"></div>
-                    <p style="font-size:12px;">Processando imagem com IA...</p>
+                    <p style="font-size:14px; color:#1e3c72; margin-top:10px;">Processando imagem com IA...</p>
                 </div>
                 
                 <div id="resultado" style="display: none;">
-                    <h3 style="font-size:16px; margin:12px 0 8px; color:#1e3c72; text-align:center;">
-                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado
+                    <h3 style="font-size:18px; margin:15px 0 10px; color:#1e3c72; text-align:center;">
+                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado da Correção
                     </h3>
                     <div id="respostasGrid" class="respostas-grid"></div>
                     <div id="notaFinal" class="nota-final"></div>
-                    <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar e Próximo</button>
+                    <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar Nota</button>
                 </div>
             </div>
         </div>
     </div>
     
     <div class="info-bar" id="infoBar">
-        <i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção
+        <i class="fas fa-circle" style="color:#10b981; font-size:8px;"></i> Aguardando seleção do aluno
     </div>
     
     <script>
+        // ============================================
+        // CORREÇÃO DE URL - REDIRECIONAMENTO INTELIGENTE
+        // ============================================
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const provaId = urlParams.get('prova');
+        const urlToken = urlParams.get('token');
+        const urlAlunoId = urlParams.get('aluno');
+        
+        // VERIFICAÇÃO: Se a URL está sem .html e tem token, redirecionar para versão correta
+        const caminhoAtual = window.location.pathname;
+        const estaSemHtml = !caminhoAtual.includes('.html') && (caminhoAtual.endsWith('corrigir-prova') || caminhoAtual === '/corrigir-prova');
+        
+        if (estaSemHtml && urlToken && !urlAlunoId) {
+            console.log('🔄 Detectada URL sem .html e com token. Redirecionando para versão correta...');
+            
+            // Função para redirecionar
+            function redirecionarParaVersaoCorreta(alunoId = null) {
+                let novaUrl = `/corrigir-prova.html?prova=${provaId}`;
+                if (alunoId) {
+                    novaUrl += `&aluno=${alunoId}`;
+                }
+                // Preservar o token se não conseguir encontrar aluno
+                if (!alunoId && urlToken) {
+                    novaUrl += `&token=${encodeURIComponent(urlToken)}`;
+                }
+                console.log('🔀 Redirecionando para:', novaUrl);
+                window.location.href = novaUrl;
+            }
+            
+            // Tenta extrair aluno do token (se o token contiver um ID válido)
+            const matchId = urlToken.match(/[a-f0-9]{24}/);
+            if (matchId) {
+                console.log('🎯 Aluno ID encontrado no token:', matchId[0]);
+                redirecionarParaVersaoCorreta(matchId[0]);
+            } else {
+                // Se não encontrar, redireciona sem aluno (usuário vai escanear QR Code)
+                redirecionarParaVersaoCorreta();
+            }
+            // Interrompe a execução do resto do código
+            throw new Error('Redirecionando...');
+        }
+        
         // ============================================
         // CONFIGURAÇÕES
         // ============================================
@@ -705,11 +574,6 @@
         let alunoSelecionado = null;
         let autoCorrectionTimer = null;
         let autoCorrectionCountdown = 0;
-        let currentZoom = 1.0;
-        let currentQRZoom = 1.0;
-        const MIN_ZOOM = 1.0;
-        const MAX_ZOOM = 3.0;
-        const ZOOM_STEP = 0.2;
         
         let sensibilidade = 12;
         const BRILHO_MAX_PRETO = 110;
@@ -717,14 +581,16 @@
         let margemBusca = 0.12;
         let tamanhoGuia = 0.14;
         
-        const OMR_SERVER_URL = '/api/omr';  // Usando proxy do servidor
+        const OMR_SERVER_URL = 'http://localhost:5001';
         
         let gabarito = [];
         let totalQuestoes = 10;
         let alunos = [];
+        let alunosMap = new Map();
         let respostasAtuais = [];
         let notaCalculada = 0;
         let authToken = null;
+        let provaInfo = null;
         
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -737,15 +603,8 @@
         
         let qrScanner = null;
         let scannerIniciado = false;
-        let qrVideoElement = null;
         
-        const urlParams = new URLSearchParams(window.location.search);
-        const provaId = urlParams.get('prova');
-        const urlToken = urlParams.get('token');
-        const urlAlunoId = urlParams.get('aluno');  // Se veio com aluno direto na URL
-        
-        // Elementos
-        const modoQRBtn = document.getElementById('modoAutomaticoBtn');
+        const modoQRBtn = document.getElementById('modoQRCodeBtn');
         const modoManualBtn = document.getElementById('modoManualBtn');
         const dicaModo = document.getElementById('dicaModo');
         const btnCapturar = document.getElementById('btnCapturar');
@@ -755,159 +614,189 @@
         const qrSelecionadoDiv = document.getElementById('qrSelecionado');
         const cameraContainer = document.getElementById('cameraContainer');
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
-        const steps = document.querySelectorAll('.step');
         
-        function atualizarStep(stepAtivo) {
-            steps.forEach((step, idx) => {
-                step.classList.remove('active', 'completed');
-                if (idx < stepAtivo - 1) {
-                    step.classList.add('completed');
-                } else if (idx === stepAtivo - 1) {
-                    step.classList.add('active');
+        // ============================================
+        // CARREGAR ALUNOS (VERSÃO CORRIGIDA)
+        // ============================================
+        
+        async function carregarAlunosDaTurma(turmaId) {
+            try {
+                console.log('🔍 Buscando alunos da turma:', turmaId);
+                const response = await fazerRequisicao(`/api/turmas/${turmaId}`);
+                const data = await response.json();
+                
+                if (data.success && data.turma && data.turma.alunos) {
+                    alunos = data.turma.alunos.map(a => ({
+                        alunoId: a.id,
+                        id: a.id,
+                        alunoNome: a.nome,
+                        nome: a.nome,
+                        alunoMatricula: a.matricula || '',
+                        matricula: a.matricula || ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados da turma`);
+                    return true;
                 }
-            });
-        }
-        
-        // Controles de Zoom
-        function aplicarZoom() {
-            if (!video) return;
-            video.style.transform = `scale(${currentZoom})`;
-            video.style.transformOrigin = 'center center';
-        }
-        
-        function zoomIn() {
-            if (currentZoom + ZOOM_STEP <= MAX_ZOOM) {
-                currentZoom += ZOOM_STEP;
-                aplicarZoom();
+                return false;
+            } catch (error) {
+                console.error('Erro ao buscar alunos da turma:', error);
+                return false;
             }
         }
         
-        function zoomOut() {
-            if (currentZoom - ZOOM_STEP >= MIN_ZOOM) {
-                currentZoom -= ZOOM_STEP;
-                aplicarZoom();
-            }
-        }
-        
-        function resetZoom() {
-            currentZoom = 1.0;
-            aplicarZoom();
-        }
-        
-        function aplicarQRZoom() {
-            if (!qrVideoElement) return;
-            qrVideoElement.style.transform = `scale(${currentQRZoom})`;
-            qrVideoElement.style.transformOrigin = 'center center';
-        }
-        
-        function qrZoomIn() {
-            if (currentQRZoom + ZOOM_STEP <= MAX_ZOOM) {
-                currentQRZoom += ZOOM_STEP;
-                aplicarQRZoom();
-            }
-        }
-        
-        function qrZoomOut() {
-            if (currentQRZoom - ZOOM_STEP >= MIN_ZOOM) {
-                currentQRZoom -= ZOOM_STEP;
-                aplicarQRZoom();
-            }
-        }
-        
-        function qrResetZoom() {
-            currentQRZoom = 1.0;
-            aplicarQRZoom();
-        }
-        
-        document.getElementById('zoomInBtn').addEventListener('click', zoomIn);
-        document.getElementById('zoomOutBtn').addEventListener('click', zoomOut);
-        document.getElementById('zoomResetBtn').addEventListener('click', resetZoom);
-        
-        document.getElementById('qrZoomInBtn').addEventListener('click', qrZoomIn);
-        document.getElementById('qrZoomOutBtn').addEventListener('click', qrZoomOut);
-        document.getElementById('qrZoomResetBtn').addEventListener('click', qrResetZoom);
-        
-        function capturarVideoElementoQR() {
-            setTimeout(() => {
-                const qrVideo = document.querySelector('#qr-reader video');
-                if (qrVideo && !qrVideoElement) {
-                    qrVideoElement = qrVideo;
-                    qrVideoElement.style.transition = 'transform 0.2s ease';
-                    aplicarQRZoom();
-                    console.log('📷 Elemento de vídeo do QR Code capturado');
+        async function carregarAlunosDosResultados() {
+            try {
+                console.log('🔍 Buscando alunos dos resultados da prova...');
+                const response = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
+                const data = await response.json();
+                
+                if (data.success && data.resultados && data.resultados.length > 0) {
+                    alunos = data.resultados.map(r => ({
+                        alunoId: r.alunoId || r.userId,
+                        id: r.alunoId || r.userId,
+                        alunoNome: r.alunoNome || r.nome,
+                        nome: r.alunoNome || r.nome,
+                        alunoMatricula: r.alunoMatricula || r.matricula || '',
+                        matricula: r.alunoMatricula || r.matricula || ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados dos resultados`);
+                    return true;
                 }
-            }, 1000);
+                return false;
+            } catch (error) {
+                console.error('Erro ao buscar resultados:', error);
+                return false;
+            }
+        }
+        
+        async function carregarAlunosDaProva(provaData) {
+            try {
+                if (provaData.prova && provaData.prova.alunosAtribuidos && provaData.prova.alunosAtribuidos.length > 0) {
+                    console.log('🔍 Buscando alunos dos alunosAtribuidos da prova...');
+                    
+                    const alunosIds = provaData.prova.alunosAtribuidos.map(a => a.$oid || a);
+                    
+                    alunos = alunosIds.map(id => ({
+                        alunoId: id,
+                        id: id,
+                        alunoNome: `Aluno ${id.slice(-6)}`,
+                        nome: `Aluno ${id.slice(-6)}`,
+                        alunoMatricula: '',
+                        matricula: ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados dos alunosAtribuidos`);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erro ao carregar alunos da prova:', error);
+                return false;
+            }
         }
         
         // ============================================
-        // FUNÇÃO PRINCIPAL: PROCESSAR QR CODE
+        // PROCESSAR QR CODE
         // ============================================
+        
         async function processarQRCode(qrData) {
             try {
                 console.log('🔍 QR Code escaneado:', qrData);
                 
-                let alunoData;
+                let alunoId = null;
+                
                 try {
-                    alunoData = JSON.parse(qrData);
+                    const alunoData = JSON.parse(qrData);
+                    alunoId = alunoData.id || alunoData.alunoId || alunoData;
                 } catch (e) {
-                    // Se não for JSON, tenta extrair ID da URL
                     if (qrData.includes('aluno=')) {
                         const match = qrData.match(/aluno=([a-f0-9]+)/);
                         if (match) {
-                            alunoData = { id: match[1] };
+                            alunoId = match[1];
                         } else {
-                            alunoData = { id: qrData };
+                            alunoId = qrData;
                         }
                     } else {
-                        alunoData = { id: qrData };
+                        alunoId = qrData;
                     }
                 }
                 
-                const alunoId = alunoData.id || alunoData.alunoId || alunoData;
+                console.log('🎯 ID extraído:', alunoId);
                 
-                // Buscar aluno na lista carregada
-                const alunoEncontrado = alunos.find(a => 
-                    a.alunoId === alunoId || 
-                    a.id === alunoId ||
-                    a._id === alunoId
-                );
+                const alunoEncontrado = alunosMap.get(alunoId);
                 
                 if (!alunoEncontrado) {
-                    mostrarAlerta('❌ Aluno não encontrado!', 'error');
+                    console.log('❌ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
+                    mostrarAlerta('❌ Aluno não encontrado na turma desta prova!', 'error');
                     return;
                 }
                 
                 alunoSelecionado = {
-                    id: alunoEncontrado.alunoId || alunoEncontrado.id || alunoEncontrado._id,
-                    nome: alunoEncontrado.alunoNome || alunoEncontrado.nome,
-                    matricula: alunoEncontrado.alunoMatricula || alunoEncontrado.matricula
+                    id: alunoEncontrado.alunoId,
+                    nome: alunoEncontrado.alunoNome,
+                    matricula: alunoEncontrado.alunoMatricula
                 };
                 
-                // Parar o scanner QR
                 if (qrScanner && scannerIniciado) {
                     try {
                         await qrScanner.stop();
                         scannerIniciado = false;
-                    } catch(e) { console.log('Erro ao parar scanner:', e); }
+                    } catch(e) {}
                 }
                 
-                // Mostrar aluno selecionado
                 document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
                 document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
                 qrSelecionadoDiv.style.display = 'flex';
                 qrScannerArea.style.display = 'none';
                 
-                // Habilitar botão da câmera
                 btnIniciarCamera.disabled = false;
-                
-                // Atualizar passo
-                atualizarStep(2);
                 mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                 
             } catch (error) {
-                console.error('Erro no processamento do QR:', error);
+                console.error('Erro:', error);
                 mostrarAlerta('❌ QR Code inválido', 'error');
+            }
+        }
+        
+        async function iniciarQRScanner() {
+            if (scannerIniciado) return;
+            if (!modoQRCode) return;
+            
+            try {
+                const html5QrCode = new Html5Qrcode("qr-reader");
+                qrScanner = html5QrCode;
+                
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => processarQRCode(decodedText),
+                    (errorMessage) => console.debug('QR Scan:', errorMessage)
+                );
+                scannerIniciado = true;
+            } catch (err) {
+                console.error('Erro ao iniciar scanner:', err);
+                mostrarAlerta('Erro ao iniciar câmera para QR Code', 'error');
             }
         }
         
@@ -919,33 +808,32 @@
             document.getElementById('resultado').style.display = 'none';
             btnIniciarCamera.disabled = true;
             btnCapturar.disabled = true;
-            atualizarStep(1);
             
-            // Reiniciar scanner QR
+            pararCamera();
             iniciarQRScanner();
             
-            resetZoom();
-            qrResetZoom();
-            document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção`;
+            document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção do aluno`;
         }
         
-        // Alternar modo
+        // ============================================
+        // ALTERNAR MODO
+        // ============================================
+        
         async function setModo(qrCode) {
             modoQRCode = qrCode;
             
             if (modoQRCode) {
                 modoQRBtn.classList.add('active');
                 modoManualBtn.classList.remove('active');
-                dicaModo.innerHTML = '<i class="fas fa-qrcode"></i> <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno.';
+                dicaModo.innerHTML = '<i class="fas fa-qrcode"></i> <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno ou use o link direto.';
                 qrScannerArea.style.display = 'block';
                 manualSelectArea.style.display = 'none';
                 qrSelecionadoDiv.style.display = 'none';
                 
-                // Desligar câmera do cartão se estiver ligada
                 pararCamera();
                 cameraContainer.style.display = 'none';
+                btnIniciarCamera.disabled = true;
                 
-                // Iniciar scanner QR
                 iniciarQRScanner();
             } else {
                 modoManualBtn.classList.add('active');
@@ -953,70 +841,23 @@
                 dicaModo.innerHTML = '<i class="fas fa-hand-pointer"></i> <strong>Modo Manual:</strong> Selecione o aluno na lista.';
                 qrScannerArea.style.display = 'none';
                 manualSelectArea.style.display = 'block';
+                qrSelecionadoDiv.style.display = 'none';
                 
-                // Parar scanner QR
                 if (qrScanner && scannerIniciado) {
                     try {
                         await qrScanner.stop();
                         scannerIniciado = false;
-                    } catch(e) { console.log('Erro ao parar scanner:', e); }
+                    } catch(e) {}
                 }
                 
-                // Desligar câmera do cartão se estiver ligada
                 pararCamera();
                 cameraContainer.style.display = 'none';
+                btnIniciarCamera.disabled = true;
             }
             
             alunoSelecionado = null;
-            btnIniciarCamera.disabled = true;
             btnCapturar.disabled = true;
             document.getElementById('resultado').style.display = 'none';
-            atualizarStep(1);
-            resetZoom();
-            qrResetZoom();
-        }
-        
-        // Iniciar QR Code Scanner
-        async function iniciarQRScanner() {
-            if (scannerIniciado) return;
-            if (!modoQRCode) return;
-            
-            try {
-                const html5QrCode = new Html5Qrcode("qr-reader");
-                qrScanner = html5QrCode;
-                
-                const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-                
-                await html5QrCode.start(
-                    { facingMode: "environment" },
-                    config,
-                    (decodedText) => {
-                        processarQRCode(decodedText);
-                    },
-                    (errorMessage) => {
-                        // Ignorar erros de leitura
-                        console.debug('QR Scan:', errorMessage);
-                    }
-                );
-                scannerIniciado = true;
-                
-                // Capturar elemento de vídeo para zoom
-                capturarVideoElementoQR();
-                
-                const videoInterval = setInterval(() => {
-                    const qrVideo = document.querySelector('#qr-reader video');
-                    if (qrVideo && !qrVideoElement) {
-                        qrVideoElement = qrVideo;
-                        qrVideoElement.style.transition = 'transform 0.2s ease';
-                        aplicarQRZoom();
-                        clearInterval(videoInterval);
-                    }
-                }, 500);
-                
-            } catch (err) {
-                console.error('Erro ao iniciar scanner:', err);
-                mostrarAlerta('Erro ao iniciar câmera para QR Code', 'error');
-            }
         }
         
         // ============================================
@@ -1152,16 +993,15 @@
         
         function iniciarCorrecaoAutomatica() {
             if (autoCorrectionTimer) return;
-            if (!modoQRCode) return;
             
             autoCorrectionCountdown = 2;
             autoStatusDiv.style.display = 'block';
-            autoStatusDiv.innerHTML = `📸 Em ${autoCorrectionCountdown}...`;
+            autoStatusDiv.innerHTML = `📸 Corrigindo em ${autoCorrectionCountdown}...`;
             
             autoCorrectionTimer = setInterval(() => {
                 autoCorrectionCountdown--;
                 if (autoCorrectionCountdown > 0) {
-                    autoStatusDiv.innerHTML = `📸 Em ${autoCorrectionCountdown}...`;
+                    autoStatusDiv.innerHTML = `📸 Corrigindo em ${autoCorrectionCountdown}...`;
                 } else {
                     clearInterval(autoCorrectionTimer);
                     autoCorrectionTimer = null;
@@ -1216,18 +1056,16 @@
                     feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados!`;
                     feedback.style.background = '#10b981';
                     
-                    if (modoQRCode && !autoCorrectionTimer && !capturando) {
+                    if (!autoCorrectionTimer && !capturando) {
                         iniciarCorrecaoAutomatica();
-                    } else if (!modoQRCode) {
-                        btnCapturar.disabled = false;
                     }
                 } else {
-                    feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados! Aguardando...`;
+                    feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados! Aguardando estabilização...`;
                     feedback.style.background = '#f59e0b';
                     cancelarCorrecaoAutomatica();
                     btnCapturar.disabled = true;
                 }
-                infoBar.innerHTML = `<i class="fas fa-check-circle"></i> Alinhado: ${encaixadosCount}/4`;
+                infoBar.innerHTML = `<i class="fas fa-check-circle"></i> Alinhados: ${encaixadosCount}/4`;
             } else {
                 desenharRetanguloCartao(null);
                 retanguloAtual = null;
@@ -1235,7 +1073,7 @@
                 ultimoRetangulo = null;
                 cancelarCorrecaoAutomatica();
                 
-                feedback.innerHTML = `🎯 Alinhe: ${encaixadosCount}/4 | Aproxime`;
+                feedback.innerHTML = `🎯 Alinhe: ${encaixadosCount}/4 | Aproxime a câmera`;
                 feedback.style.background = '#f59e0b';
                 infoBar.innerHTML = `<i class="fas fa-camera"></i> Alinhamento: ${encaixadosCount}/4`;
                 btnCapturar.disabled = true;
@@ -1254,7 +1092,6 @@
             }
             
             capturando = true;
-            atualizarStep(3);
             
             const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
@@ -1303,8 +1140,7 @@
                 if (data.success && data.answers) {
                     criarInterfaceRespostas(data.answers);
                     document.getElementById('resultado').style.display = 'block';
-                    atualizarStep(4);
-                    mostrarAlerta(`✅ Correção concluída!`, 'success');
+                    mostrarAlerta(`✅ Correção concluída! ${data.answers.filter(a=>a).length} questões detectadas.`, 'success');
                 } else {
                     throw new Error(data.error || 'Falha na detecção');
                 }
@@ -1312,7 +1148,6 @@
                 document.getElementById('processando').style.display = 'none';
                 criarInterfaceManual();
                 document.getElementById('resultado').style.display = 'block';
-                atualizarStep(4);
                 mostrarAlerta(`⚠️ Modo manual: ${error.message}`, 'warning');
             }
             capturando = false;
@@ -1332,13 +1167,13 @@
                 const div = document.createElement('div');
                 div.className = `resposta-card ${isCorreta ? 'correta' : (respostaAluno !== '—' ? 'incorreta' : '')}`;
                 div.innerHTML = `
-                    <div class="questao-num">Q${i+1}</div>
+                    <div class="questao-num">Questão ${i+1}</div>
                     <div class="resposta-valor">${respostaAluno}</div>
                     <div>
                         ${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}
                         <button class="btn-opcao" data-q="${i}" data-opcao="">✗</button>
                     </div>
-                    <small>Gabarito: ${respostaGabarito}</small>
+                    <small style="color:#6b7280;">Gabarito: ${respostaGabarito}</small>
                 `;
                 grid.appendChild(div);
             }
@@ -1363,13 +1198,13 @@
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
                 div.innerHTML = `
-                    <div class="questao-num">Q${i+1}</div>
+                    <div class="questao-num">Questão ${i+1}</div>
                     <div class="resposta-valor" id="resp-${i}">—</div>
                     <div>
-                        ${letras.map(l => `<button class="btn-opcao" onclick="window.setResposta(${i}, '${l}')">${l}</button>`).join('')}
-                        <button class="btn-opcao" onclick="window.setResposta(${i}, null)">✗</button>
+                        ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
+                        <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
                     </div>
-                    <small>Gabarito: ${gabarito[i]?.respostaCorreta || '?'}</small>
+                    <small style="color:#6b7280;">Gabarito: ${gabarito[i]?.respostaCorreta || '?'}</small>
                 `;
                 grid.appendChild(div);
             }
@@ -1398,8 +1233,8 @@
             const status = notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO';
             const statusClass = notaCalculada >= 6 ? 'aprovado' : 'reprovado';
             document.getElementById('notaFinal').innerHTML = `
-                <h2>${notaCalculada.toFixed(1)} / 10</h2>
-                <p>${acertos} acertos de ${totalQuestoes}</p>
+                <h2>${notaCalculada.toFixed(1)} / 10,0</h2>
+                <p>${acertos} acertos de ${totalQuestoes} questões</p>
                 <p class="${statusClass}">${status}</p>
             `;
         }
@@ -1414,28 +1249,28 @@
                     body: JSON.stringify({ 
                         alunoId: alunoSelecionado.id, 
                         nota: notaCalculada, 
-                        observacao: `Corrigido em ${new Date().toLocaleString()}`
+                        observacao: `Corrigido automaticamente em ${new Date().toLocaleString()}`
                     })
                 });
                 const data = await response.json();
                 if (data.success) {
                     mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva!`, 'success');
-                    
-                    alunoSelecionado = null;
-                    qrSelecionadoDiv.style.display = 'none';
-                    qrScannerArea.style.display = 'block';
-                    cameraContainer.style.display = 'none';
-                    document.getElementById('resultado').style.display = 'none';
-                    btnIniciarCamera.disabled = true;
-                    btnCapturar.disabled = true;
-                    atualizarStep(1);
-                    
-                    // Reiniciar scanner
-                    iniciarQRScanner();
-                    
-                    resetZoom();
-                    qrResetZoom();
-                    document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção`;
+                    setTimeout(() => {
+                        alunoSelecionado = null;
+                        qrSelecionadoDiv.style.display = 'none';
+                        if (modoQRCode) {
+                            qrScannerArea.style.display = 'block';
+                            iniciarQRScanner();
+                        } else {
+                            manualSelectArea.style.display = 'block';
+                            document.getElementById('selectAluno').value = '';
+                        }
+                        cameraContainer.style.display = 'none';
+                        document.getElementById('resultado').style.display = 'none';
+                        btnIniciarCamera.disabled = true;
+                        btnCapturar.disabled = true;
+                        document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção do aluno`;
+                    }, 1500);
                 } else {
                     throw new Error(data.error || 'Erro ao salvar');
                 }
@@ -1447,10 +1282,10 @@
         function mostrarAlerta(msg, tipo) {
             const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' };
             const alertDiv = document.createElement('div');
-            alertDiv.style.cssText = `position:fixed;bottom:70px;left:12px;right:12px;background:${cores[tipo]};color:white;padding:12px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`;
+            alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:14px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`;
             alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`;
             document.body.appendChild(alertDiv);
-            setTimeout(() => alertDiv.remove(), 2500);
+            setTimeout(() => alertDiv.remove(), 3000);
         }
         
         async function fazerRequisicao(url, options = {}) {
@@ -1479,27 +1314,14 @@
             }
             
             try {
-                // Buscar resultados (alunos que já fizeram a prova)
-                const res = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
-                const data = await res.json();
+                const provaRes = await fazerRequisicao(`/api/provas/${provaId}`);
+                const provaData = await provaRes.json();
                 
-                if (data.success) {
-                    // Extrair alunos do array resultados
-                    alunos = (data.resultados || []).map(r => ({
-                        alunoId: r.alunoId || r.userId,
-                        id: r.alunoId || r.userId,
-                        alunoNome: r.alunoNome || r.nome,
-                        nome: r.alunoNome || r.nome,
-                        alunoMatricula: r.alunoMatricula || r.matricula,
-                        matricula: r.alunoMatricula || r.matricula
-                    }));
+                if (provaData.success && provaData.prova) {
+                    provaInfo = provaData.prova;
+                    totalQuestoes = provaInfo.quantidadeQuestoes || 10;
                     
-                    totalQuestoes = data.prova?.quantidadeQuestoes || 10;
-                    
-                    // Buscar gabarito da prova
-                    const provaRes = await fazerRequisicao(`/api/provas/${provaId}`);
-                    const provaData = await provaRes.json();
-                    if (provaData.success && provaData.questoes) {
+                    if (provaData.questoes) {
                         const letras = ['A', 'B', 'C', 'D', 'E'];
                         gabarito = provaData.questoes.map((q, i) => ({ 
                             numero: i+1, 
@@ -1507,14 +1329,30 @@
                         }));
                     }
                     
+                    let alunosCarregados = false;
+                    
+                    if (provaInfo.turmaId) {
+                        const turmaId = provaInfo.turmaId.$oid || provaInfo.turmaId;
+                        alunosCarregados = await carregarAlunosDaTurma(turmaId);
+                    }
+                    
+                    if (!alunosCarregados || alunos.length === 0) {
+                        console.log('⚠️ Fallback: carregando alunos dos resultados...');
+                        alunosCarregados = await carregarAlunosDosResultados();
+                    }
+                    
+                    if (!alunosCarregados || alunos.length === 0) {
+                        console.log('⚠️ Fallback 2: carregando alunos dos alunosAtribuidos...');
+                        alunosCarregados = await carregarAlunosDaProva(provaData);
+                    }
+                    
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('conteudo').style.display = 'block';
-                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${data.prova?.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos</p>`;
-                    document.getElementById('gabaritoInfo').innerHTML = `<strong>Gabarito:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
+                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${provaInfo.titulo || 'Prova Impressa'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos</p>`;
+                    document.getElementById('gabaritoInfo').innerHTML = `<strong><i class="fas fa-key"></i> Gabarito:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
                     
-                    // Popular select manual
                     const select = document.getElementById('selectAluno');
-                    select.innerHTML = '<option value="">— Selecione —</option>';
+                    select.innerHTML = '<option value="">— Selecione um aluno —</option>';
                     alunos.forEach(a => { 
                         select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; 
                     });
@@ -1527,54 +1365,53 @@
                                     nome: aluno.alunoNome,
                                     matricula: aluno.alunoMatricula
                                 };
+                                qrSelecionadoDiv.style.display = 'flex';
+                                document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
+                                document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
+                                manualSelectArea.style.display = 'none';
                                 btnIniciarCamera.disabled = false;
-                                atualizarStep(2);
                                 mostrarAlerta(`✅ Aluno: ${aluno.alunoNome}`, 'success');
                                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`;
                             }
                         } else {
                             alunoSelecionado = null;
+                            qrSelecionadoDiv.style.display = 'none';
+                            manualSelectArea.style.display = 'block';
                             btnIniciarCamera.disabled = true;
-                            atualizarStep(1);
                         }
+                        document.getElementById('resultado').style.display = 'none';
                     });
                     
-                    mostrarAlerta('✅ Dados carregados!', 'success');
+                    mostrarAlerta(`✅ ${alunos.length} alunos carregados! Alinhe o cartão para começar.`, 'success');
                     
-                    // 🔥 SE VEIO ALUNO NA URL, PROCESSAR AUTOMATICAMENTE
                     if (urlAlunoId) {
-                        console.log('🎯 Aluno recebido via URL:', urlAlunoId);
-                        const alunoPorUrl = alunos.find(a => a.alunoId === urlAlunoId);
+                        console.log('🎯 Aluno na URL:', urlAlunoId);
+                        const alunoPorUrl = alunosMap.get(urlAlunoId);
                         if (alunoPorUrl) {
                             alunoSelecionado = {
                                 id: alunoPorUrl.alunoId,
                                 nome: alunoPorUrl.alunoNome,
                                 matricula: alunoPorUrl.alunoMatricula
                             };
-                            
-                            // Parar scanner se estiver ativo
                             if (qrScanner && scannerIniciado) {
-                                try {
-                                    await qrScanner.stop();
-                                    scannerIniciado = false;
-                                } catch(e) {}
+                                try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {}
                             }
-                            
                             qrScannerArea.style.display = 'none';
                             qrSelecionadoDiv.style.display = 'flex';
                             document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
                             document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
                             btnIniciarCamera.disabled = false;
-                            atualizarStep(2);
                             mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                             document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
+                        } else {
+                            console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
+                            mostrarAlerta(`⚠️ Aluno não encontrado nesta prova`, 'warning');
                         }
                     }
                     
-                    // Iniciar scanner QR
                     iniciarQRScanner();
                 } else {
-                    throw new Error(data.error || 'Erro ao carregar dados');
+                    throw new Error('Erro ao carregar dados da prova');
                 }
             } catch (error) {
                 document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`;
@@ -1589,7 +1426,6 @@
             }
             
             try {
-                // Parar scanner QR se estiver ativo
                 if (qrScanner && scannerIniciado) {
                     try {
                         await qrScanner.stop();
@@ -1604,7 +1440,6 @@
                 btnIniciarCamera.disabled = true;
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Câmera Ativa';
                 cameraContainer.style.display = 'block';
-                resetZoom();
                 if (analiseInterval) clearInterval(analiseInterval);
                 analiseInterval = setInterval(analisarFrame, 100);
                 mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
@@ -1629,50 +1464,16 @@
             cancelarCorrecaoAutomatica();
         }
         
-        // Event Listeners
         modoQRBtn.addEventListener('click', () => setModo(true));
         modoManualBtn.addEventListener('click', () => setModo(false));
         document.getElementById('btnIniciarCamera').addEventListener('click', iniciarCamera);
-        document.getElementById('btnCapturar').addEventListener('click', () => {
-            if (!modoQRCode) capturarImagem();
-        });
+        document.getElementById('btnCapturar').addEventListener('click', () => capturarImagem());
         document.getElementById('btnSalvar').addEventListener('click', salvarNota);
         document.getElementById('btnLimparQR').addEventListener('click', limparQRSelecionado);
         window.addEventListener('beforeunload', pararCamera);
         
-        // Expor função global
         window.setResposta = setResposta;
-        
-        // Iniciar carregamento
         carregarDados();
-    </script>
-    
-    <script>
-        // Sistema de escalonamento proporcional mobile
-        (function() {
-            if (window.innerWidth > 768) return;
-            
-            function calcularEscalaMobile() {
-                const width = window.innerWidth;
-                if (width <= 320) return 0.55;
-                if (width <= 360) return 0.6;
-                if (width <= 400) return 0.65;
-                if (width <= 500) return 0.75;
-                if (width <= 600) return 0.85;
-                if (width <= 700) return 0.95;
-                return 1;
-            }
-            
-            function aplicarEscalaMobile() {
-                if (window.innerWidth > 768) return;
-                const escala = calcularEscalaMobile();
-                document.documentElement.style.setProperty('--scale-ratio', escala);
-                console.log(`📐 Mobile: escala ${escala.toFixed(2)}`);
-            }
-            
-            aplicarEscalaMobile();
-            window.addEventListener('resize', () => setTimeout(aplicarEscalaMobile, 100));
-        })();
     </script>
 </body>
 </html>
