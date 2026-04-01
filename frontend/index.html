@@ -8309,7 +8309,518 @@ window.addEventListener('scroll', function() {
             }
         };
 
-        // ============ MODAL: PERGUNTAR SE DESEJA ADAPTAR ============
+        // ============ GERAR HTML DA PROVA (RETORNA O HTML, NÃO IMPRIME) ============
+        function gerarHTMLProva(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, qrCodeAlunoUrl) {
+            // ========== DEFINIR VARIÁVEIS ==========
+            const provaTitulo = prova.titulo || 'Prova sem título';
+            const logoIema = '/uploads/logo-iema.png';
+            
+            const dataAtual = new Date();
+            const dataFormatada = dataAtual.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+            
+            const totalQuestoes = questoes.length;
+            const turmaNome = prova.turma?.nome || 'Turma não especificada';
+            const disciplina = prova.turma?.disciplina || 'Disciplina não especificada';
+            const professorNome = prova.professor?.nome || 'Professor';
+            const periodo = prova.periodo ? `${prova.periodo}º Período` : '1º Período';
+            
+            const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
+            const letrasUsadas = isAdaptada ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D', 'E'];
+            
+            // Texto informativo sobre as adaptações (se houver)
+            let adaptacoesTexto = '';
+            const temAdaptacoes = opcoesAdaptacao.fonteAmpliada || opcoesAdaptacao.negrito || 
+                                opcoesAdaptacao.altoContraste || opcoesAdaptacao.layoutSimplificado;
+            
+            if (temAdaptacoes) {
+                const adaptacoesSelecionadas = [];
+                if (opcoesAdaptacao.fonteAmpliada) adaptacoesSelecionadas.push('Fonte Ampliada');
+                if (opcoesAdaptacao.negrito) adaptacoesSelecionadas.push('Texto em Negrito');
+                if (opcoesAdaptacao.altoContraste) adaptacoesSelecionadas.push('Alto Contraste');
+                if (opcoesAdaptacao.layoutSimplificado) adaptacoesSelecionadas.push('Layout Simplificado');
+                
+                adaptacoesTexto = `
+                    <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 8px 12px; margin: 10px 0; border-radius: 8px;">
+                        <p style="margin: 0; font-size: 0.85rem; color: #92400e;">
+                            <i class="fas fa-universal-access"></i> <strong>Prova Adaptada</strong> - Esta impressão inclui as seguintes adaptações: ${adaptacoesSelecionadas.join(', ')}.
+                        </p>
+                    </div>
+                `;
+            }
+            
+            // Montar HTML das questões
+            let questoesHTML = '';
+            
+            questoes.forEach((questao, index) => {
+                const opcoes = questao.opcoes || [];
+                
+                const opcoesFormatadas = opcoes.map((opcao, optIndex) => {
+                    const letra = letrasUsadas[optIndex];
+                    let opcaoLimpa = opcao || 'Opção não disponível';
+                    if (opcaoLimpa.startsWith(`${letra})`) || opcaoLimpa.startsWith(`${letra}.`)) {
+                        opcaoLimpa = opcaoLimpa.substring(2).trim();
+                    }
+                    return { letra, texto: opcaoLimpa };
+                });
+                
+                questoesHTML += `
+                    <div class="questao-print">
+                        <div class="questao-numero">
+                            Questão ${index + 1} ${isAdaptada ? '(Prova Adaptada - 3 alternativas)' : ''}
+                        </div>
+                        <div class="questao-texto">
+                            <strong>${questao.pergunta || 'Pergunta não disponível'}</strong>
+                        </div>
+                        <div class="opcoes-print">
+                            ${opcoesFormatadas.map(op => `
+                                <div class="opcao-linha">
+                                    <span class="opcao-letra">${op.letra})</span>
+                                    <span class="opcao-texto">${op.texto}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="rascunho-area">
+                            <small>Espaço para rascunho</small>
+                            <div class="rascunho-linhas"></div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // ========== CARTÃO-RESPOSTA ==========
+            const gerarCartaoResposta = () => {
+                // QR Code da prova
+                const qrCodeArea = qrCodeDataUrl ? `
+                    <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                            <img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code">
+                            <div style="font-size: 7px; color: #666; text-align: left;">
+                                <strong>📱 Correção Automática</strong><br>
+                                Escaneie este QR Code
+                            </div>
+                        </div>
+                    </div>
+                ` : '';
+                
+                // QR Code do aluno
+                const qrCodeAlunoArea = qrCodeAlunoUrl ? `
+                    <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                            <img src="${qrCodeAlunoUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code do Aluno">
+                            <div style="font-size: 7px; color: #666; text-align: left;">
+                                <strong>👤 Identificação do Aluno</strong><br>
+                                ${window.alunoSelecionadoNome || 'Aluno'}
+                            </div>
+                        </div>
+                    </div>
+                ` : '';
+                
+                return `
+                    <div style="text-align: center;">
+                        <div class="cartao-header" style="margin-bottom: 8px;">
+                            <h4 style="margin: 0 0 5px 0; font-size: 11pt; font-weight: bold; text-align: center;">📝 CARTÃO-RESPOSTA</h4>
+                            <div class="instrucoes-cartao" style="font-size: 8pt; color: #333; text-align: center; padding: 8px; background: #fef3c7; border-radius: 6px;">
+                                <p style="margin: 0;"><strong>INSTRUÇÕES PARA PREENCHIMENTO DO CARTÃO-RESPOSTA</strong></p>
+                                <p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p>
+                            </div>
+                        </div>
+                        
+                        <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
+                            <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            
+                            <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                                <thead>
+                                    <tr style="background: #e8e8e8;">
+                                        <th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>
+                                        ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${Array.from({ length: totalQuestoes }, (_, i) => {
+                                        const num = i + 1;
+                                        return `
+                                            <tr>
+                                                <td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
+                                                ${letrasUsadas.map(() => `
+                                                    <td style="border: 1px solid #000; padding: 5px 3px; text-align: center;">
+                                                        <div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div>
+                                                    </td>
+                                                `).join('')}
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: center; align-items: center; gap: 30px; margin-top: 10px; flex-wrap: wrap;">
+                            ${qrCodeArea}
+                            ${qrCodeAlunoArea}
+                        </div>
+                    </div>
+                `;
+            };
+            
+            // ========== CSS ==========
+            let cssAdaptacoes = '';
+
+            // AMPLIAÇÃO DINÂMICA (personalizada) - ADICIONAR ESTE BLOCO PRIMEIRO
+            if (opcoesAdaptacao.fontePersonalizada && opcoesAdaptacao.tamanhoFonte) {
+                const tamanho = opcoesAdaptacao.tamanhoFonte;
+                cssAdaptacoes += `
+                    body { font-size: ${tamanho}pt !important; }
+                    .questao-texto { font-size: ${tamanho}pt !important; }
+                    .opcao-linha { font-size: ${tamanho - 2}pt !important; }
+                    .instrucoes-cartao { font-size: ${tamanho - 5}pt !important; }
+                    .rascunho-area small { font-size: ${tamanho - 5}pt !important; }
+                    .questao-numero { font-size: ${tamanho - 2}pt !important; }
+                    .print-header h1 { font-size: ${tamanho + 4}pt !important; }
+                    .print-prova-info h3 { font-size: ${tamanho + 2}pt !important; }
+                    .campos-box .campo-label, .student-item .label { font-size: ${tamanho - 2}pt !important; }
+                    .instrucoes-box li, .instrucoes-box h4, .info-linha, .info-item { font-size: ${tamanho - 4}pt !important; }
+                    .cartao-resposta th, .cartao-resposta td { font-size: ${tamanho - 4}pt !important; }
+                    .instrucoes-cartao p { font-size: ${tamanho - 4}pt !important; }
+                    .print-footer { font-size: ${tamanho - 4.5}pt !important; }
+                `;
+            } 
+            // Manter a fonte ampliada fixa como fallback (para compatibilidade)
+            else if (opcoesAdaptacao.fonteAmpliada && !opcoesAdaptacao.fontePersonalizada) {
+                cssAdaptacoes += `
+                    body { font-size: 16pt !important; }
+                    .questao-texto { font-size: 16pt !important; }
+                    .opcao-linha { font-size: 14pt !important; }
+                    .instrucoes-cartao { font-size: 11pt !important; }
+                    .rascunho-area small { font-size: 10pt !important; }
+                    .questao-numero { font-size: 14pt !important; }
+                    .print-header h1 { font-size: 18pt !important; }
+                    .print-prova-info h3 { font-size: 16pt !important; }
+                    .campos-box .campo-label, .student-item .label { font-size: 12pt !important; }
+                    .instrucoes-box li, .instrucoes-box h4, .info-linha, .info-item { font-size: 11pt !important; }
+                `;
+            }
+            
+            if (opcoesAdaptacao.negrito) {
+                cssAdaptacoes += `
+                    body, .questao-texto, .opcao-linha, .instrucoes-cartao, .questao-numero, 
+                    .cartao-header h4, .print-header h1, .print-prova-info h3, .label, .campo-label,
+                    .instrucoes-box h4, .info-label, .info-linha, .instrucoes-box li, .print-footer {
+                        font-weight: bold !important;
+                    }
+                `;
+            }
+            
+            if (opcoesAdaptacao.altoContraste) {
+                cssAdaptacoes += `
+                    body { background: #000000 !important; color: #ffffff !important; }
+                    .print-header, .campos-box, .instrucoes-box, .print-prova-info, 
+                    .cartao-resposta, .questao-print, .rascunho-area, .info-linha {
+                        background: #000000 !important;
+                        color: #ffffff !important;
+                        border-color: #ffffff !important;
+                    }
+                `;
+            }
+            
+            if (opcoesAdaptacao.layoutSimplificado) {
+                cssAdaptacoes += `
+                    .print-logo, .logo-iema { display: none !important; }
+                    .campos-box { border: 1px solid #000 !important; }
+                    .instrucoes-box { border: 1px solid #000 !important; background: #fefefe !important; }
+                    .print-header { border-bottom: 1px solid #000 !important; }
+                `;
+            }
+            
+            // ========== HTML COMPLETO ==========
+            return `
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Prova - ${provaTitulo}</title>
+                    <style>
+                        @media print {
+                            body { margin: 0; padding: 0; }
+                            .questao-print { page-break-inside: avoid; }
+                            .cartao-resposta { page-break-inside: avoid; }
+                            .questoes-container { page-break-before: always; margin-top: 0; }
+                        }
+                        
+                        body {
+                            font-family: 'Times New Roman', Times, serif;
+                            font-size: 12pt;
+                            line-height: 1.3;
+                            margin: 0;
+                            padding: 0.4in;
+                            background: white;
+                            color: black;
+                        }
+                        
+                        .print-header {
+                            text-align: center;
+                            margin-bottom: 6px;
+                            padding-bottom: 6px;
+                            border-bottom: 2px solid #000;
+                        }
+                        
+                        .print-logo {
+                            max-width: 999px;
+                            width: 100%;
+                            height: auto;
+                            display: block;
+                            margin: 0 auto 3px auto;
+                        }
+                        
+                        .print-header h1 {
+                            font-size: 14pt;
+                            font-weight: bold;
+                            margin: 0 0 5px 0;
+                        }
+                        
+                        .student-row {
+                            display: flex;
+                            justify-content: space-between;
+                            margin: 4px 0;
+                            gap: 15px;
+                        }
+                        
+                        .student-item {
+                            flex: 1;
+                            display: flex;
+                            align-items: baseline;
+                            gap: 6px;
+                        }
+                        
+                        .label {
+                            font-weight: bold;
+                            min-width: 65px;
+                            font-size: 10pt;
+                        }
+                        
+                        .underline {
+                            border-bottom: 1px dotted #000;
+                            flex: 1;
+                            height: 16px;
+                        }
+                        
+                        .campos-box {
+                            margin: 6px 0;
+                            border: 2px solid #000;
+                            padding: 5px 12px;
+                            display: flex;
+                            justify-content: space-between;
+                            gap: 20px;
+                        }
+                        
+                        .campo-item {
+                            flex: 1;
+                            display: flex;
+                            align-items: baseline;
+                            gap: 6px;
+                        }
+                        
+                        .campo-label {
+                            font-weight: bold;
+                            min-width: 35px;
+                            font-size: 10pt;
+                        }
+                        
+                        .campo-underline {
+                            border-bottom: 1px dotted #000;
+                            flex: 1;
+                            height: 16px;
+                        }
+                        
+                        .instrucoes-box {
+                            margin: 6px 0;
+                            border: 1px solid #ccc;
+                            padding: 8px 12px;
+                            background: #fefefe;
+                            border-radius: 4px;
+                        }
+                        
+                        .instrucoes-box h4 {
+                            margin: 0 0 5px 0;
+                            font-size: 10pt;
+                            font-weight: bold;
+                            color: #4f46e5;
+                            text-align: center;
+                        }
+                        
+                        .instrucoes-box ul {
+                            margin: 0;
+                            padding-left: 20px;
+                        }
+                        
+                        .instrucoes-box li {
+                            margin-bottom: 3px;
+                            font-size: 8.5pt;
+                            line-height: 1.3;
+                        }
+                        
+                        .print-prova-info {
+                            margin: 8px 0;
+                            padding: 5px 8px;
+                            border: 1px solid #ddd;
+                            background: #fafafa;
+                        }
+                        
+                        .print-prova-info h3 {
+                            margin: 0 0 3px 0;
+                            font-size: 11pt;
+                            text-align: center;
+                            font-weight: bold;
+                        }
+                        
+                        .info-linha {
+                            display: flex;
+                            justify-content: space-between;
+                            flex-wrap: wrap;
+                            gap: 8px;
+                            font-size: 8pt;
+                            border-top: 1px solid #eee;
+                            padding-top: 4px;
+                            margin-top: 4px;
+                        }
+                        
+                        .questao-print {
+                            margin-bottom: 20px;
+                        }
+                        
+                        .questao-numero {
+                            font-weight: bold;
+                            margin-bottom: 6px;
+                            border-bottom: 1px solid #ccc;
+                            padding-bottom: 3px;
+                            font-size: 10pt;
+                        }
+                        
+                        .questao-texto {
+                            margin-bottom: 10px;
+                            margin-left: 8px;
+                            line-height: 1.4;
+                            font-size: 11pt;
+                        }
+                        
+                        .opcao-linha {
+                            margin: 6px 0 6px 18px;
+                            display: flex;
+                            font-size: 10pt;
+                        }
+                        
+                        .opcao-letra {
+                            min-width: 22px;
+                            font-weight: 500;
+                        }
+                        
+                        .rascunho-area {
+                            margin-top: 8px;
+                            border-top: 1px dashed #ccc;
+                            padding-top: 5px;
+                        }
+                        
+                        .rascunho-area small {
+                            font-size: 7pt;
+                        }
+                        
+                        .rascunho-linhas {
+                            min-height: 35px;
+                            background: repeating-linear-gradient(transparent, transparent 16px, #eee 16px, #eee 18px);
+                        }
+                        
+                        .print-footer {
+                            margin-top: 25px;
+                            text-align: center;
+                            font-size: 7.5pt;
+                            color: #666;
+                            border-top: 1px solid #ccc;
+                            padding-top: 8px;
+                        }
+                        
+                        ${cssAdaptacoes}
+                    </style>
+                </head>
+                <body>
+                    <div class="print-header">
+                        <img src="${logoIema}" class="print-logo" alt="IEMA" onerror="this.style.display='none'">
+                        <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
+                        
+                        <div class="student-row">
+                            <div class="student-item">
+                                <span class="label">ESTUDANTE:</span>
+                                <span class="underline"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="student-row">
+                            <div class="student-item">
+                                <span class="label">CURSO:</span>
+                                <span class="underline"></span>
+                            </div>
+                            <div class="student-item">
+                                <span class="label">TURMA:</span>
+                                <span class="underline"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="campos-box">
+                        <div class="campo-item"><span class="campo-label">Nota:</span><span class="campo-underline"></span></div>
+                        <div class="campo-item"><span class="campo-label">Ass.:</span><span class="campo-underline"></span></div>
+                        <div class="campo-item"><span class="campo-label">Data:</span><span class="campo-underline"></span></div>
+                    </div>
+                    
+                    <div class="instrucoes-box">
+                        <h4>📋 INSTRUÇÕES GERAIS</h4>
+                        <ul>
+                            <li>Escreva seu nome de registro legível e não esqueça de assinar a lista de frequência.</li>
+                            <li>Todas as anotações e cálculos devem ser feitos no caderno de prova.</li>
+                            <li>Os celulares <strong>deverão ser desligados</strong> durante todo o período de realização da prova.</li>
+                            <li>Cada questão contém apenas uma alternativa correta.</li>
+                            <li>Leia e siga as instruções de preenchimento do cartão-resposta (GABARITO) abaixo.</li>
+                        </ul>
+                    </div>
+                    
+                    ${adaptacoesTexto}
+                    
+                    <div class="print-prova-info">
+                        <h3>${provaTitulo}</h3>
+                        <div class="info-linha">
+                            <span class="info-item">Período: ${periodo}</span>
+                            <span class="info-item">Turma: ${turmaNome}</span>
+                            <span class="info-item">Disciplina: ${disciplina}</span>
+                            <span class="info-item">Professor: ${professorNome}</span>
+                            <span class="info-item">Questões: ${totalQuestoes}</span>
+                        </div>
+                    </div>
+                    
+                    ${gerarCartaoResposta()}
+                    
+                    <div class="questoes-container">
+                        ${questoesHTML}
+                    </div>
+                    
+                    <div class="print-footer">
+                        <p>Sistema de Provas IEMA - ${dataFormatada}</p>
+                        <p>📱 Escaneie o QR Code para correção automática</p>
+                        <p style="font-size: 6pt;">Aluno: ${window.alunoSelecionadoNome || '_________________'} | Turma: ${turmaNome} | Código: ${prova.codigo || 'N/A'}</p>
+                    </div>
+                    
+                    <!-- 🔥 FORÇA QUEBRA DE PÁGINA APÓS CADA PROVA (para garantir separação) -->
+                    <div style="page-break-after: always;"></div>
+                </body>
+                </html>
+            `;
+        }
+
+        // ============ MODAL: PERGUNTAR SE DESEJA ADAPTAR (COM OPÇÕES DE IMPRESSÃO POR ALUNO) ============
         function mostrarModalPerguntaAdaptacao() {
             // Criar modal se não existir
             let modal = document.getElementById('modalPerguntaAdaptacao');
@@ -8321,7 +8832,7 @@ window.addEventListener('scroll', function() {
             }
 
             modal.innerHTML = `
-                <div class="modal-content" style="max-width: 450px; border-radius: 24px; padding: 0;">
+                <div class="modal-content" style="max-width: 500px; border-radius: 24px; padding: 0;">
                     <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0;">
                         <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
                             <i class="fas fa-print"></i> Imprimir Prova
@@ -8330,9 +8841,37 @@ window.addEventListener('scroll', function() {
                     </div>
                     
                     <div style="padding: 25px;">
-                        <p style="color: #4b5563; margin-bottom: 20px; text-align: center; font-size: 1.1rem;">
+                        <p style="color: #4b5563; margin-bottom: 20px; text-align: center; font-size: 1rem;">
                             Deseja adaptar esta prova para acessibilidade?
                         </p>
+                        
+                        <!-- 🔥 NOVO: SELEÇÃO DE ALUNOS PARA IMPRESSÃO -->
+                        <div style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 16px;">
+                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 12px;">
+                                <input type="radio" name="tipoImpressao" value="individual" checked onchange="toggleOpcaoAlunos()">
+                                <span><strong>👤 Imprimir para um aluno específico</strong></span>
+                            </label>
+                            
+                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                <input type="radio" name="tipoImpressao" value="todos" onchange="toggleOpcaoAlunos()">
+                                <span><strong>👥 Imprimir para todos os alunos da turma</strong></span>
+                            </label>
+                            
+                            <!-- Select de alunos (aparece apenas quando individual está selecionado) -->
+                            <div id="selectAlunosContainer" style="margin-top: 15px;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #374151;">
+                                    <i class="fas fa-user-graduate"></i> Selecione o aluno:
+                                </label>
+                                <select id="selectAlunoImpressao" class="form-control" style="width: 100%;">
+                                    <option value="">Carregando alunos...</option>
+                                </select>
+                            </div>
+                            
+                            <div style="margin-top: 12px; padding: 10px; background: #e0f2fe; border-radius: 8px; font-size: 0.85rem; color: #0369a1;">
+                                <i class="fas fa-info-circle"></i>
+                                <span id="infoImpressao">Ao selecionar "Imprimir para todos", será gerado um documento único com todos os alunos, cada um com seu QR Code individual.</span>
+                            </div>
+                        </div>
                         
                         <div style="display: flex; gap: 15px; margin-top: 20px;">
                             <button onclick="fecharModal('modalPerguntaAdaptacao'); gerarImpressaoNormal()" style="
@@ -8374,9 +8913,154 @@ window.addEventListener('scroll', function() {
             `;
 
             mostrarModal('modalPerguntaAdaptacao');
+            
+            // Carregar lista de alunos da turma
+            carregarAlunosParaImpressao();
         }
 
-        // ============ MODAL DE OPÇÕES DE ADAPTAÇÃO ============
+        // ============ CARREGAR ALUNOS DA TURMA PARA IMPRESSÃO (SEM DUPLICATAS) ============
+        let alunosDaTurma = [];
+
+        async function carregarAlunosParaImpressao() {
+            try {
+                const { prova } = window.provaParaImpressao || {};
+                
+                console.log('🔍 Verificando dados da prova:', prova);
+                
+                if (!prova) {
+                    console.log('⚠️ Nenhuma prova encontrada');
+                    const select = document.getElementById('selectAlunoImpressao');
+                    if (select) {
+                        select.innerHTML = '<option value="">Nenhuma prova carregada</option>';
+                        select.disabled = true;
+                    }
+                    return;
+                }
+                
+                // Tentar obter turmaId de diferentes formas
+                let turmaId = prova.turmaId || prova.turma?.id || prova.turma;
+                
+                if (!turmaId) {
+                    console.log('⚠️ Nenhuma turma associada à prova');
+                    const select = document.getElementById('selectAlunoImpressao');
+                    if (select) {
+                        select.innerHTML = '<option value="">Nenhuma turma associada</option>';
+                        select.disabled = true;
+                    }
+                    return;
+                }
+                
+                console.log('📚 Carregando turma ID:', turmaId);
+                
+                const tokenLocal = localStorage.getItem('auth_token');
+                
+                // Usar a rota /api/turmas/:id (que funciona para professores)
+                const response = await fetch(`/api/turmas/${turmaId}`, {
+                    headers: { 'Authorization': `Bearer ${tokenLocal}` }
+                });
+                
+                console.log('📡 Resposta da API (GET /api/turmas/:id):', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`Erro ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('📦 Dados da turma recebidos:', data);
+                
+                // 🔥 EXTRAIR ALUNOS E REMOVER DUPLICATAS
+                let alunosRaw = [];
+                
+                if (data.success && data.turma && data.turma.alunos) {
+                    alunosRaw = data.turma.alunos;
+                } else if (data.turma && data.turma.alunos) {
+                    alunosRaw = data.turma.alunos;
+                } else if (data.alunos) {
+                    alunosRaw = data.alunos;
+                }
+                
+                console.log(`📊 Alunos brutos encontrados: ${alunosRaw.length}`);
+                
+                // 🔥 REMOVER DUPLICATAS POR ID
+                const alunosUnicos = new Map();
+                
+                for (const aluno of alunosRaw) {
+                    // Extrair ID de diferentes formatos
+                    const alunoId = aluno._id || aluno.id || aluno.alunoId;
+                    
+                    if (alunoId && !alunosUnicos.has(alunoId.toString())) {
+                        alunosUnicos.set(alunoId.toString(), {
+                            id: alunoId,
+                            nome: aluno.nome || aluno.alunoNome || 'Aluno',
+                            email: aluno.email || aluno.alunoEmail || '',
+                            matricula: aluno.matricula || ''
+                        });
+                    }
+                }
+                
+                alunosDaTurma = Array.from(alunosUnicos.values());
+                
+                console.log(`✅ Alunos únicos após remoção de duplicatas: ${alunosDaTurma.length}`);
+                
+                if (alunosDaTurma.length === 0) {
+                    const select = document.getElementById('selectAlunoImpressao');
+                    if (select) {
+                        select.innerHTML = '<option value="">Nenhum aluno encontrado nesta turma</option>';
+                        select.disabled = true;
+                    }
+                    return;
+                }
+                
+                const select = document.getElementById('selectAlunoImpressao');
+                if (select) {
+                    select.innerHTML = '<option value="">Selecione um aluno...</option>' + 
+                        alunosDaTurma.map(aluno => `
+                            <option value="${aluno.id}">
+                                ${aluno.nome} ${aluno.matricula ? `(${aluno.matricula})` : ''}
+                            </option>
+                        `).join('');
+                    select.disabled = false;
+                    console.log(`✅ Select preenchido com ${alunosDaTurma.length} alunos únicos`);
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar alunos:', error);
+                const select = document.getElementById('selectAlunoImpressao');
+                if (select) {
+                    select.innerHTML = '<option value="">Erro ao carregar alunos. Tente novamente.</option>';
+                    select.disabled = true;
+                }
+            }
+        }
+
+        // ============ ALTERNAR ENTRE IMPRESSÃO INDIVIDUAL E TODOS ============
+        function toggleOpcaoAlunos() {
+            const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
+            const selectContainer = document.getElementById('selectAlunosContainer');
+            const infoSpan = document.getElementById('infoImpressao');
+            
+            if (tipoImpressao === 'individual') {
+                // Mostrar o select de alunos
+                if (selectContainer) {
+                    selectContainer.style.display = 'block';
+                }
+                if (infoSpan) {
+                    infoSpan.innerHTML = 'Será gerada uma prova com QR Code específico para o aluno selecionado.';
+                }
+            } else {
+                // Esconder o select de alunos
+                if (selectContainer) {
+                    selectContainer.style.display = 'none';
+                }
+                if (infoSpan) {
+                    infoSpan.innerHTML = 'Será gerado um documento único com todos os alunos da turma. Cada aluno terá seu próprio QR Code e haverá quebra de página entre eles.';
+                }
+            }
+            
+            console.log(`🔄 Tipo de impressão alterado para: ${tipoImpressao === 'individual' ? 'Individual' : 'Todos os alunos'}`);
+        }
+
+        // ============ MODAL DE OPÇÕES DE ADAPTAÇÃO (COM SCROLL CORRIGIDO) ============
         function mostrarModalOpcoesAdaptacao() {
             // Criar modal se não existir
             let modal = document.getElementById('modalOpcoesAdaptacao');
@@ -8387,30 +9071,101 @@ window.addEventListener('scroll', function() {
                 document.body.appendChild(modal);
             }
 
+            const { prova } = window.provaParaImpressao || {};
+            const isAdaptada = prova?.tipoProva === 'adaptada' || prova?.adaptada === true;
+
+            // CORREÇÃO: Garantir que o modal tem altura máxima e scroll
+            modal.style.cssText = `
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                align-items: center;
+                justify-content: center;
+                z-index: 10001;
+            `;
+
             modal.innerHTML = `
-                <div class="modal-content" style="max-width: 550px; border-radius: 24px; padding: 0;">
-                    <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0;">
+                <div class="modal-content" style="
+                    max-width: 550px;
+                    width: 90%;
+                    background: white;
+                    border-radius: 24px;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+                ">
+                    <div class="modal-header" style="
+                        position: sticky;
+                        top: 0;
+                        background: linear-gradient(135deg, #10b981, #059669);
+                        color: white;
+                        padding: 20px 25px;
+                        border-radius: 24px 24px 0 0;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        z-index: 10;
+                    ">
                         <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
                             <i class="fas fa-universal-access"></i> Opções de Adaptação
                         </h3>
-                        <button class="modal-close" onclick="fecharModal('modalOpcoesAdaptacao')" style="color: white;">&times;</button>
+                        <button class="modal-close" onclick="fecharModal('modalOpcoesAdaptacao')" style="
+                            background: none;
+                            border: none;
+                            color: white;
+                            font-size: 28px;
+                            cursor: pointer;
+                            line-height: 1;
+                        ">&times;</button>
                     </div>
                     
-                    <div style="padding: 25px;">
+                    <div style="padding: 25px; overflow-y: auto; flex: 1;">
+                        ${isAdaptada ? `
+                        <div style="background: #dbeafe; padding: 10px; margin-bottom: 15px; border-radius: 8px;">
+                            <i class="fas fa-info-circle"></i> Prova originalmente adaptada - 3 alternativas
+                        </div>
+                        ` : ''}
+                        
                         <p style="color: #4b5563; margin-bottom: 20px;">
                             Selecione as adaptações desejadas para a impressão:
                         </p>
                         
                         <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <!-- Fonte Ampliada -->
+                            <!-- FONTE DINÂMICA - CONTROLE DESLIZANTE -->
                             <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
-                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                    <input type="checkbox" id="optFonteAmpliada" style="width: 20px; height: 20px;">
+                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 10px;">
+                                    <input type="checkbox" id="optFonteDinamica" style="width: 20px; height: 20px;">
                                     <div>
-                                        <strong style="font-size: 1rem;">📏 Fonte Ampliada</strong>
-                                        <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aumentar o tamanho da fonte para melhor legibilidade</p>
+                                        <strong style="font-size: 1rem;">🔍 Fonte Dinâmica</strong>
+                                        <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Amplie o tamanho da fonte conforme sua necessidade</p>
                                     </div>
                                 </label>
+                                
+                                <div id="sliderContainer" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="font-size: 12px;">Normal (12pt)</span>
+                                        <span style="font-size: 12px; font-weight: bold;" id="tamanhoFonteAtual">12pt</span>
+                                        <span style="font-size: 12px;">Máximo (48pt)</span>
+                                    </div>
+                                    <input type="range" id="fonteSlider" min="12" max="48" step="1" value="12" style="width: 100%; margin: 10px 0;">
+                                    <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 10px;">
+                                        <button type="button" onclick="ajustarFonteRapido(12)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Normal</button>
+                                        <button type="button" onclick="ajustarFonteRapido(18)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Médio</button>
+                                        <button type="button" onclick="ajustarFonteRapido(24)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Grande</button>
+                                        <button type="button" onclick="ajustarFonteRapido(36)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Muito Grande</button>
+                                        <button type="button" onclick="ajustarFonteRapido(48)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Máximo</button>
+                                    </div>
+                                    <div style="margin-top: 10px; padding: 8px; background: #f1f5f9; border-radius: 8px; text-align: center; font-size: 12px; color: #475569;">
+                                        <i class="fas fa-mouse-pointer"></i> <strong>Pré-visualização:</strong>
+                                        <span id="previewFonte" style="font-size: 12px; display: inline-block; margin-left: 8px;">Texto exemplo</span>
+                                    </div>
+                                </div>
                             </div>
                             
                             <!-- Negrito -->
@@ -8454,7 +9209,7 @@ window.addEventListener('scroll', function() {
                             </p>
                         </div>
                         
-                        <div style="display: flex; gap: 12px; margin-top: 25px;">
+                        <div style="display: flex; gap: 12px; margin-top: 25px; margin-bottom: 10px;">
                             <button onclick="fecharModal('modalOpcoesAdaptacao'); gerarImpressaoAdaptada()" style="
                                 flex: 1;
                                 padding: 14px;
@@ -8490,686 +9245,133 @@ window.addEventListener('scroll', function() {
             `;
 
             mostrarModal('modalOpcoesAdaptacao');
+            
+            // Adicionar event listeners para o slider de fonte
+            setTimeout(() => {
+                const fonteDinamicaCheckbox = document.getElementById('optFonteDinamica');
+                const sliderContainer = document.getElementById('sliderContainer');
+                const fonteSlider = document.getElementById('fonteSlider');
+                const tamanhoAtual = document.getElementById('tamanhoFonteAtual');
+                const previewFonte = document.getElementById('previewFonte');
+                
+                if (fonteDinamicaCheckbox) {
+                    fonteDinamicaCheckbox.addEventListener('change', function() {
+                        if (sliderContainer) {
+                            sliderContainer.style.display = this.checked ? 'block' : 'none';
+                        }
+                    });
+                }
+                
+                if (fonteSlider) {
+                    fonteSlider.addEventListener('input', function() {
+                        const tamanho = this.value;
+                        if (tamanhoAtual) tamanhoAtual.textContent = tamanho + 'pt';
+                        if (previewFonte) previewFonte.style.fontSize = tamanho + 'pt';
+                        if (previewFonte) previewFonte.style.fontWeight = 'bold';
+                    });
+                    
+                    // Inicializar preview
+                    fonteSlider.dispatchEvent(new Event('input'));
+                }
+            }, 100);
+        }
+
+        // ============ FUNÇÃO PARA AJUSTAR FONTE RAPIDAMENTE ============
+        function ajustarFonteRapido(tamanho) {
+            const slider = document.getElementById('fonteSlider');
+            const tamanhoAtual = document.getElementById('tamanhoFonteAtual');
+            const previewFonte = document.getElementById('previewFonte');
+            
+            if (slider) {
+                slider.value = tamanho;
+                if (tamanhoAtual) tamanhoAtual.textContent = tamanho + 'pt';
+                if (previewFonte) previewFonte.style.fontSize = tamanho + 'pt';
+                
+                // Marcar o checkbox se ainda não estiver marcado
+                const checkbox = document.getElementById('optFonteDinamica');
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    const sliderContainer = document.getElementById('sliderContainer');
+                    if (sliderContainer) sliderContainer.style.display = 'block';
+                }
+            }
         }
 
         // ============ IMPRESSÃO NORMAL (SEM ADAPTAÇÃO) ============
         async function gerarImpressaoNormal() {
-            const { prova, questoes, qrCodeDataUrl, API_BASE_URL, token } = window.provaParaImpressao || {};
+            const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
             if (!prova) {
                 console.error('❌ Dados da prova não encontrados');
                 mostrarAlerta('alertMinhasProvas', '❌ Erro: dados da prova não encontrados', 'error');
                 return;
             }
             
-            console.log('🖨️ Gerando impressão normal (sem adaptações)...');
-            await gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {});
-        }
-
-        // ============ IMPRESSÃO ADAPTADA (COM OPÇÕES SELECIONADAS) ============
-        async function gerarImpressaoAdaptada() {
-            const { prova, questoes, qrCodeDataUrl, API_BASE_URL, token } = window.provaParaImpressao || {};
-            if (!prova) {
-                console.error('❌ Dados da prova não encontrados');
-                mostrarAlerta('alertMinhasProvas', '❌ Erro: dados da prova não encontrados', 'error');
-                return;
-            }
-
-            // Coletar as opções selecionadas
-            const opcoes = {
-                fonteAmpliada: document.getElementById('optFonteAmpliada')?.checked || false,
-                negrito: document.getElementById('optNegrito')?.checked || false,
-                altoContraste: document.getElementById('optAltoContraste')?.checked || false,
-                layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false
-            };
+            const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
+            let qrCodeAlunoUrl = null;
             
-            console.log('🎨 Opções de adaptação selecionadas:', opcoes);
-            
-            // Verificar se pelo menos uma opção foi selecionada
-            const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado;
-            
-            if (nenhumaOpcao) {
-                const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
-                if (confirmar) {
-                    await gerarImpressaoNormal();
-                } else {
-                    mostrarModalOpcoesAdaptacao();
+            // 🔥 SE FOR IMPRESSÃO PARA TODOS OS ALUNOS
+            if (tipoImpressao === 'todos') {
+                if (alunosDaTurma.length === 0) {
+                    mostrarAlerta('alertMinhasProvas', '⚠️ Nenhum aluno encontrado nesta turma', 'info');
+                    return;
                 }
+                
+                await gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, {}, alunosDaTurma);
                 return;
             }
             
-            // Gerar a impressão com as adaptações
-            await gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes);
+            // 🔥 IMPRESSÃO INDIVIDUAL (um aluno específico)
+            const alunoSelecionadoId = document.getElementById('selectAlunoImpressao')?.value;
+            
+            if (!alunoSelecionadoId) {
+                mostrarAlerta('alertMinhasProvas', '⚠️ Selecione um aluno para gerar o QR Code individual', 'info');
+                return;
+            }
+            
+            // Buscar nome do aluno
+            const selectAluno = document.getElementById('selectAlunoImpressao');
+            const alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim() || 'Aluno';
+            
+            // Gerar QR Code do aluno
+            try {
+                const tokenLocal = localStorage.getItem('auth_token');
+                const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoSelecionadoId}`;
+                
+                console.log('📱 Gerando QR Code para aluno:', alunoNome);
+                
+                const response = await fetch('/api/qrcode/gerar', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${tokenLocal}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: urlCorrecao })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.qrCode) {
+                    qrCodeAlunoUrl = data.qrCode;
+                    window.alunoSelecionadoNome = alunoNome;
+                    console.log('✅ QR Code do aluno gerado com sucesso!');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao gerar QR Code do aluno:', error);
+            }
+            
+            // Chamar a função de impressão com o QR Code do aluno
+            await gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl);
         }
 
-        // ============ FUNÇÃO PRINCIPAL DE GERAÇÃO DE HTML (MANTÉM O MESMO LAYOUT) ============
-        async function gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}) {
+        // ============ GERAR IMPRESSÃO (ABRE A JANELA DE IMPRESSÃO) ============
+        async function gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}, qrCodeAlunoUrl = null) {
             mostrarAlerta('alertMinhasProvas', '🖨️ Preparando impressão...', 'info');
             
             try {
-                // ========== DEFINIR VARIÁVEIS ==========
-                const provaTitulo = prova.titulo || 'Prova sem título';
-                const logoIema = '/uploads/logo-iema.png';
+                // Reutilizar a função que gera o HTML
+                const printHTML = gerarHTMLProva(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, qrCodeAlunoUrl);
                 
-                const dataAtual = new Date();
-                const dataFormatada = dataAtual.toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                });
-                
-                const totalQuestoes = questoes.length;
-                const turmaNome = prova.turma?.nome || 'Turma não especificada';
-                const disciplina = prova.turma?.disciplina || 'Disciplina não especificada';
-                const professorNome = prova.professor?.nome || 'Professor';
-                const periodo = prova.periodo ? `${prova.periodo}º Período` : '1º Período';
-                
-                const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
-                const letrasUsadas = isAdaptada ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D', 'E'];
-                
-                // Texto informativo sobre as adaptações (se houver)
-                let adaptacoesTexto = '';
-                const temAdaptacoes = opcoesAdaptacao.fonteAmpliada || opcoesAdaptacao.negrito || 
-                                    opcoesAdaptacao.altoContraste || opcoesAdaptacao.layoutSimplificado;
-                
-                if (temAdaptacoes) {
-                    const adaptacoesSelecionadas = [];
-                    if (opcoesAdaptacao.fonteAmpliada) adaptacoesSelecionadas.push('Fonte Ampliada');
-                    if (opcoesAdaptacao.negrito) adaptacoesSelecionadas.push('Texto em Negrito');
-                    if (opcoesAdaptacao.altoContraste) adaptacoesSelecionadas.push('Alto Contraste');
-                    if (opcoesAdaptacao.layoutSimplificado) adaptacoesSelecionadas.push('Layout Simplificado');
-                    
-                    adaptacoesTexto = `
-                        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 8px 12px; margin: 10px 0; border-radius: 8px;">
-                            <p style="margin: 0; font-size: 0.85rem; color: #92400e;">
-                                <i class="fas fa-universal-access"></i> <strong>Prova Adaptada</strong> - Esta impressão inclui as seguintes adaptações: ${adaptacoesSelecionadas.join(', ')}.
-                            </p>
-                        </div>
-                    `;
-                }
-                
-                // Montar HTML das questões
-                let questoesHTML = '';
-                
-                questoes.forEach((questao, index) => {
-                    const opcoes = questao.opcoes || [];
-                    
-                    const opcoesFormatadas = opcoes.map((opcao, optIndex) => {
-                        const letra = letrasUsadas[optIndex];
-                        let opcaoLimpa = opcao || 'Opção não disponível';
-                        if (opcaoLimpa.startsWith(`${letra})`) || opcaoLimpa.startsWith(`${letra}.`)) {
-                            opcaoLimpa = opcaoLimpa.substring(2).trim();
-                        }
-                        return { letra, texto: opcaoLimpa };
-                    });
-                    
-                    questoesHTML += `
-                        <div class="questao-print">
-                            <div class="questao-numero">
-                                Questão ${index + 1} ${isAdaptada ? '(Prova Adaptada - 3 alternativas)' : ''}
-                            </div>
-                            <div class="questao-texto">
-                                <strong>${questao.pergunta || 'Pergunta não disponível'}</strong>
-                            </div>
-                            <div class="opcoes-print">
-                                ${opcoesFormatadas.map(op => `
-                                    <div class="opcao-linha">
-                                        <span class="opcao-letra">${op.letra})</span>
-                                        <span class="opcao-texto">${op.texto}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <div class="rascunho-area">
-                                <small>Espaço para rascunho</small>
-                                <div class="rascunho-linhas"></div>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                // ========== CARTÃO-RESPOSTA CORRIGIDO (ATUAL) ==========
-                const gerarCartaoResposta = () => {
-                    const qrCodeArea = qrCodeDataUrl ? `
-                        <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
-                            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                                <img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code">
-                                <div style="font-size: 7px; color: #666; text-align: left;">
-                                    <strong>📱 Correção Automática</strong><br>
-                                    Escaneie este QR Code
-                                </div>
-                            </div>
-                        </div>
-                    ` : '';
-                    
-                    return `
-                        <div style="text-align: center;">
-                            <!-- INSTRUÇÕES ACIMA DO QUADRADO -->
-                            <div class="cartao-header" style="margin-bottom: 8px;">
-                                <h4 style="margin: 0 0 5px 0; font-size: 11pt; font-weight: bold; text-align: center;">📝 CARTÃO-RESPOSTA</h4>
-                                <div class="instrucoes-cartao" style="font-size: 8pt; color: #333; text-align: center; padding: 8px; background: #fef3c7; border-radius: 6px;">
-                                    <p style="margin: 0;"><strong>INSTRUÇÕES PARA PREENCHIMENTO DO CARTÃO-RESPOSTA</strong></p>
-                                    <p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p>
-                                </div>
-                            </div>
-                            
-                            <!-- QUADRADO DO GABARITO COM MARCADORES DENTRO DA ÁREA VISÍVEL -->
-                            <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
-                                <!-- 🔥 MARCADORES OMR - AGORA DENTRO DA ÁREA (com padding positivo) -->
-                                <!-- Canto Superior Esquerdo -->
-                                <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                                <!-- Canto Superior Direito -->
-                                <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                                <!-- Canto Inferior Esquerdo -->
-                                <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                                <!-- Canto Inferior Direito -->
-                                <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                                
-                                <!-- TABELA DO GABARITO -->
-                                <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
-                                    <thead>
-                                        <tr style="background: #e8e8e8;">
-                                            <th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>
-                                            ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${Array.from({ length: totalQuestoes }, (_, i) => {
-                                            const num = i + 1;
-                                            return `
-                                                <tr>
-                                                    <td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
-                                                    ${letrasUsadas.map(() => `
-                                                        <td style="border: 1px solid #000; padding: 5px 3px; text-align: center;">
-                                                            <div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div>
-                                                        </td>
-                                                    `).join('')}
-                                                </tr>
-                                            `;
-                                        }).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                            
-                            <!-- QR CODE ABAIXO DO QUADRADO -->
-                            ${qrCodeArea}
-                        </div>
-                    `;
-                };
-                
-                // ========== CSS ADICIONAL PARA ADAPTAÇÕES ==========
-                let cssAdaptacoes = '';
-                
-                if (opcoesAdaptacao.fonteAmpliada) {
-                    cssAdaptacoes += `
-                        body { font-size: 16pt !important; }
-                        .questao-texto { font-size: 16pt !important; }
-                        .opcao-linha { font-size: 14pt !important; }
-                        .instrucoes-cartao { font-size: 11pt !important; }
-                        .rascunho-area small { font-size: 10pt !important; }
-                        .questao-numero { font-size: 14pt !important; }
-                        .print-header h1 { font-size: 18pt !important; }
-                        .print-prova-info h3 { font-size: 16pt !important; }
-                        .campos-box .campo-label, .student-item .label { font-size: 12pt !important; }
-                        .instrucoes-box li, .instrucoes-box h4, .info-linha, .info-item { font-size: 11pt !important; }
-                    `;
-                }
-                
-                if (opcoesAdaptacao.negrito) {
-                    cssAdaptacoes += `
-                        body, .questao-texto, .opcao-linha, .instrucoes-cartao, .questao-numero, 
-                        .cartao-header h4, .print-header h1, .print-prova-info h3, .label, .campo-label,
-                        .instrucoes-box h4, .info-label, .info-linha, .instrucoes-box li, .print-footer {
-                            font-weight: bold !important;
-                        }
-                    `;
-                }
-                
-                if (opcoesAdaptacao.altoContraste) {
-                    cssAdaptacoes += `
-                        body { 
-                            background: #000000 !important; 
-                            color: #ffffff !important; 
-                        }
-                        .print-header, .campos-box, .instrucoes-box, .print-prova-info, 
-                        .cartao-resposta, .questao-print, .rascunho-area, .info-linha {
-                            background: #000000 !important;
-                            color: #ffffff !important;
-                            border-color: #ffffff !important;
-                        }
-                        .underline, .campo-underline { 
-                            border-bottom-color: #ffffff !important; 
-                        }
-                        .opcao-linha, .opcao-texto, .opcao-letra, .questao-texto, .questao-numero,
-                        .info-linha, .info-item, .instrucoes-box li, .instrucoes-box h4, .print-footer {
-                            color: #ffffff !important;
-                        }
-                        .rascunho-linhas { 
-                            background: repeating-linear-gradient(transparent, transparent 16px, #ffffff 16px, #ffffff 18px) !important; 
-                        }
-                        .instrucoes-cartao { 
-                            background: #333333 !important; 
-                            color: #ffffff !important; 
-                        }
-                        .cartao-coluna, .cartao-coluna * { 
-                            background: #333333 !important; 
-                            border-color: #ffffff !important; 
-                            color: #ffffff !important; 
-                        }
-                        .cartao-resposta { border-color: #ffffff !important; }
-                        input[type="radio"] { 
-                            filter: invert(1); 
-                        }
-                        .print-header { border-bottom-color: #ffffff !important; }
-                        .campos-box { border-color: #ffffff !important; }
-                    `;
-                }
-                
-                if (opcoesAdaptacao.layoutSimplificado) {
-                    cssAdaptacoes += `
-                        .print-logo, .logo-iema { display: none !important; }
-                        .campos-box { border: 1px solid #000 !important; }
-                        .instrucoes-box { border: 1px solid #000 !important; background: #fefefe !important; }
-                        .print-header { border-bottom: 1px solid #000 !important; }
-                        .cartao-resposta .quadrados-cantos { display: none !important; }
-                    `;
-                }
-                
-                // Criar HTML completo (MESMO LAYOUT ORIGINAL)
-                const printHTML = `
-                    <!DOCTYPE html>
-                    <html lang="pt-BR">
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>Prova - ${provaTitulo}</title>
-                        <style>
-                            @media print {
-                                body { margin: 0; padding: 0; }
-                                .questao-print { page-break-inside: avoid; }
-                                .cartao-resposta { page-break-inside: avoid; }
-                                .questoes-container {
-                                    page-break-before: always;
-                                    margin-top: 0;
-                                }
-                            }
-                            
-                            body {
-                                font-family: 'Times New Roman', Times, serif;
-                                font-size: 12pt;
-                                line-height: 1.3;
-                                margin: 0;
-                                padding: 0.4in;
-                                background: white;
-                                color: black;
-                                position: relative;
-                            }
-                            
-                            .print-header {
-                                text-align: center;
-                                margin-bottom: 6px;
-                                padding-bottom: 6px;
-                                border-bottom: 2px solid #000;
-                            }
-                            
-                            .print-logo {
-                                max-width: 999px;
-                                width: 100%;
-                                height: auto;
-                                display: block;
-                                margin: 0 auto 3px auto;
-                            }
-                            
-                            .print-header h1 {
-                                font-size: 14pt;
-                                font-weight: bold;
-                                margin: 0 0 5px 0;
-                            }
-                            
-                            .student-row {
-                                display: flex;
-                                justify-content: space-between;
-                                margin: 4px 0;
-                                gap: 15px;
-                            }
-                            
-                            .student-item {
-                                flex: 1;
-                                display: flex;
-                                align-items: baseline;
-                                gap: 6px;
-                            }
-                            
-                            .label {
-                                font-weight: bold;
-                                min-width: 65px;
-                                font-size: 10pt;
-                            }
-                            
-                            .underline {
-                                border-bottom: 1px dotted #000;
-                                flex: 1;
-                                height: 16px;
-                            }
-                            
-                            .campos-box {
-                                margin: 6px 0;
-                                border: 2px solid #000;
-                                padding: 5px 12px;
-                                display: flex;
-                                justify-content: space-between;
-                                gap: 20px;
-                            }
-                            
-                            .campo-item {
-                                flex: 1;
-                                display: flex;
-                                align-items: baseline;
-                                gap: 6px;
-                            }
-                            
-                            .campo-label {
-                                font-weight: bold;
-                                min-width: 35px;
-                                font-size: 10pt;
-                            }
-                            
-                            .campo-underline {
-                                border-bottom: 1px dotted #000;
-                                flex: 1;
-                                height: 16px;
-                            }
-                            
-                            /* INSTRUÇÕES GERAIS */
-                            .instrucoes-box {
-                                margin: 6px 0;
-                                border: 1px solid #ccc;
-                                padding: 8px 12px;
-                                background: #fefefe;
-                                border-radius: 4px;
-                            }
-                            
-                            .instrucoes-box h4 {
-                                margin: 0 0 5px 0;
-                                font-size: 10pt;
-                                font-weight: bold;
-                                color: #4f46e5;
-                                text-align: center;
-                            }
-                            
-                            .instrucoes-box ul {
-                                margin: 0;
-                                padding-left: 20px;
-                            }
-                            
-                            .instrucoes-box li {
-                                margin-bottom: 3px;
-                                font-size: 8.5pt;
-                                line-height: 1.3;
-                            }
-                            
-                            .print-prova-info {
-                                margin: 8px 0;
-                                padding: 5px 8px;
-                                border: 1px solid #ddd;
-                                background: #fafafa;
-                            }
-                            
-                            .print-prova-info h3 {
-                                margin: 0 0 3px 0;
-                                font-size: 11pt;
-                                text-align: center;
-                                font-weight: bold;
-                            }
-                            
-                            .info-linha {
-                                display: flex;
-                                justify-content: space-between;
-                                flex-wrap: wrap;
-                                gap: 8px;
-                                font-size: 8pt;
-                                border-top: 1px solid #eee;
-                                padding-top: 4px;
-                                margin-top: 4px;
-                            }
-                            
-                            .info-item {
-                                display: inline-flex;
-                                gap: 4px;
-                            }
-                            
-                            /* CARTÃO-RESPOSTA */
-                            .cartao-resposta {
-                                margin: 10px 0;
-                                border: 2px solid #000;
-                                padding: 12px;
-                                background: #fff;
-                                position: relative;
-                                display: inline-block;
-                                width: 100%;
-                                box-sizing: border-box;
-                            }
-                            
-                            .cartao-header {
-                                margin-bottom: 10px;
-                            }
-                            
-                            .cartao-header h4 {
-                                margin: 0 0 5px 0;
-                                font-size: 11pt;
-                                font-weight: bold;
-                                text-align: center;
-                            }
-                            
-                            .instrucoes-cartao {
-                                font-size: 8pt;
-                                color: #333;
-                                text-align: center;
-                                padding: 8px;
-                                background: #fef3c7;
-                                border-radius: 6px;
-                            }
-                            
-                            .instrucoes-cartao p {
-                                margin: 0;
-                            }
-                            
-                            .cartao-grid {
-                                display: flex;
-                                flex-direction: column;
-                                gap: 6px;
-                            }
-                            
-                            .cartao-linha {
-                                display: flex;
-                                justify-content: center;
-                                gap: 8px;
-                                flex-wrap: wrap;
-                            }
-                            
-                            .cartao-coluna {
-                                text-align: center;
-                                padding: 4px;
-                                border: 1px solid #ccc;
-                                background: #fafafa;
-                                min-width: 65px;
-                            }
-                            
-                            .questao-numero-cartao {
-                                font-weight: bold;
-                                font-size: 8pt;
-                                margin-bottom: 4px;
-                                padding-bottom: 2px;
-                                border-bottom: 1px solid #ddd;
-                            }
-                            
-                            .opcoes-cartao {
-                                display: flex;
-                                justify-content: center;
-                                gap: 6px;
-                            }
-                            
-                            .opcao-cartao {
-                                display: flex;
-                                flex-direction: column;
-                                align-items: center;
-                                gap: 2px;
-                                font-size: 8pt;
-                            }
-                            
-                            .opcao-cartao input {
-                                width: 12px;
-                                height: 12px;
-                                margin: 0;
-                            }
-                            
-                            .opcao-cartao span {
-                                font-size: 7pt;
-                                font-weight: bold;
-                            }
-                            
-                            /* QUESTÕES */
-                            .questoes-container {
-                                page-break-before: always;
-                                margin-top: 0;
-                            }
-                            
-                            .questao-print {
-                                margin-bottom: 20px;
-                            }
-                            
-                            .questao-numero {
-                                font-weight: bold;
-                                margin-bottom: 6px;
-                                border-bottom: 1px solid #ccc;
-                                padding-bottom: 3px;
-                                font-size: 10pt;
-                            }
-                            
-                            .questao-texto {
-                                margin-bottom: 10px;
-                                margin-left: 8px;
-                                line-height: 1.4;
-                                font-size: 11pt;
-                            }
-                            
-                            .questao-texto strong {
-                                font-weight: bold;
-                            }
-                            
-                            .opcao-linha {
-                                margin: 6px 0 6px 18px;
-                                display: flex;
-                                font-size: 10pt;
-                            }
-                            
-                            .opcao-letra {
-                                min-width: 22px;
-                                font-weight: 500;
-                            }
-                            
-                            .rascunho-area {
-                                margin-top: 8px;
-                                border-top: 1px dashed #ccc;
-                                padding-top: 5px;
-                            }
-                            
-                            .rascunho-area small {
-                                font-size: 7pt;
-                            }
-                            
-                            .rascunho-linhas {
-                                min-height: 35px;
-                                background: repeating-linear-gradient(transparent, transparent 16px, #eee 16px, #eee 18px);
-                            }
-                            
-                            .print-footer {
-                                margin-top: 25px;
-                                text-align: center;
-                                font-size: 7.5pt;
-                                color: #666;
-                                border-top: 1px solid #ccc;
-                                padding-top: 8px;
-                            }
-                            
-                            /* CSS DE ADAPTAÇÕES */
-                            ${cssAdaptacoes}
-                        </style>
-                    </head>
-                    <body>
-                        <!-- PRIMEIRA PÁGINA -->
-                        <div class="print-header">
-                            <img src="${logoIema}" class="print-logo" alt="IEMA" onerror="this.style.display='none'">
-                            <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
-                            
-                            <div class="student-row">
-                                <div class="student-item">
-                                    <span class="label">ESTUDANTE:</span>
-                                    <span class="underline"></span>
-                                </div>
-                            </div>
-                            
-                            <div class="student-row">
-                                <div class="student-item">
-                                    <span class="label">CURSO:</span>
-                                    <span class="underline"></span>
-                                </div>
-                                <div class="student-item">
-                                    <span class="label">TURMA:</span>
-                                    <span class="underline"></span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="campos-box">
-                            <div class="campo-item"><span class="campo-label">Nota:</span><span class="campo-underline"></span></div>
-                            <div class="campo-item"><span class="campo-label">Ass.:</span><span class="campo-underline"></span></div>
-                            <div class="campo-item"><span class="campo-label">Data:</span><span class="campo-underline">${dataFormatada}</span></div>
-                        </div>
-                        
-                        <!-- INSTRUÇÕES GERAIS COMPLETAS -->
-                        <div class="instrucoes-box">
-                            <h4>📋 INSTRUÇÕES GERAIS</h4>
-                            <ul>
-                                <li>Escreva seu nome de registro legível e não esqueça de assinar a lista de frequência.</li>
-                                <li>Todas as anotações e cálculos devem ser feitos no caderno de prova.</li>
-                                <li>O estudante que cometer quaisquer atos no intuito de fraudar a avaliação terá sua prova recolhida e ficará sujeito a penalidades do Regimento Interno da Rede, podendo obter nota zero.</li>
-                                <li>Os celulares <strong>deverão ser desligados</strong> durante todo o período de realização da prova.</li>
-                                <li>O estudante só poderá se retirar da sala após o término de dois horários destinados para a aplicação da prova.</li>
-                                <li>O estudante poderá ausentar-se para ir ao banheiro, um por vez, após 30 min do início da prova.</li>
-                                <li>Cada questão contém apenas uma alternativa correta.</li>
-                                <li>Leia e siga as instruções de preenchimento do cartão-resposta (GABARITO) abaixo.</li>
-                            </ul>
-                        </div>
-                        
-                        ${adaptacoesTexto}
-                        
-                        <div class="print-prova-info">
-                            <h3>${provaTitulo}</h3>
-                            <div class="info-linha">
-                                <span class="info-item"><span class="info-label">Período:</span> ${periodo}</span>
-                                <span class="info-item"><span class="info-label">Turma:</span> ${turmaNome}</span>
-                                <span class="info-item"><span class="info-label">Disciplina:</span> ${disciplina}</span>
-                                <span class="info-item"><span class="info-label">Professor:</span> ${professorNome}</span>
-                                <span class="info-item"><span class="info-label">Questões:</span> ${totalQuestoes}</span>
-                            </div>
-                        </div>
-                        
-                        <!-- CARTÃO-RESPOSTA COM INSTRUÇÕES COMPLETAS -->
-                        ${gerarCartaoResposta()}
-                        
-                        <!-- SEGUNDA PÁGINA - QUESTÕES EM NEGRITO -->
-                        <div class="questoes-container">
-                            ${questoesHTML}
-                        </div>
-                        
-                        <div class="print-footer">
-                            <p>Sistema de Provas IEMA - ${dataFormatada}</p>
-                            <p>📱 Escaneie o QR Code abaixo do cartão-resposta para correção automática</p>
-                        </div>
-                    </body>
-                    </html>
-                `;
-                
-                // ========== ABRIR JANELA DE IMPRESSÃO ==========
+                // Abrir janela de impressão
                 const printWindow = window.open('', '_blank');
                 printWindow.document.write(printHTML);
                 printWindow.document.close();
@@ -9186,6 +9388,201 @@ window.addEventListener('scroll', function() {
             } catch (error) {
                 console.error('❌ Erro:', error);
                 mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // ============ GERAR IMPRESSÃO PARA TODOS OS ALUNOS ============
+        async function gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, alunos) {
+            mostrarAlerta('alertMinhasProvas', `🖨️ Gerando prova para ${alunos.length} aluno(s)...`, 'info');
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Gerar QR Codes para todos os alunos em paralelo
+                mostrarAlerta('alertMinhasProvas', `📱 Gerando QR Codes para ${alunos.length} aluno(s)...`, 'info');
+                
+                const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
+                    const alunoId = aluno.id || aluno._id;
+                    const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
+                    
+                    const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                    
+                    let qrCodeAlunoUrl = '';
+                    try {
+                        const qrResponse = await fetch('/api/qrcode/gerar', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ url: urlCorrecao })
+                        });
+                        
+                        const qrData = await qrResponse.json();
+                        if (qrData.success && qrData.qrCode) {
+                            qrCodeAlunoUrl = qrData.qrCode;
+                        }
+                    } catch (qrError) {
+                        console.error(`❌ Erro ao gerar QR Code para ${alunoNome}:`, qrError);
+                    }
+                    
+                    return { 
+                        ...aluno, 
+                        qrCodeDataUrl: qrCodeAlunoUrl,
+                        id: alunoId,
+                        nome: alunoNome
+                    };
+                }));
+                
+                // 🔥 CALCULAR O NÚMERO DE PÁGINAS DA PROVA (para saber se precisa de ajuste)
+                // Como a prova tem 5 páginas (número ímpar), a primeira página do próximo aluno
+                // vai cair na frente/verso corretamente
+                
+                // Gerar HTML completo com todos os alunos
+                let htmlCompleto = '';
+                
+                for (let i = 0; i < alunosComQRCode.length; i++) {
+                    const aluno = alunosComQRCode[i];
+                    
+                    console.log(`📄 Gerando prova para: ${aluno.nome} (${i + 1}/${alunosComQRCode.length})`);
+                    
+                    // Salvar nome do aluno para exibir no QR Code
+                    window.alunoSelecionadoNome = aluno.nome;
+                    
+                    // Reutilizar a mesma função que gera o HTML
+                    const htmlAluno = gerarHTMLProva(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, aluno.qrCodeDataUrl);
+                    
+                    htmlCompleto += htmlAluno;
+                    
+                    // 🔥 QUEBRA DE PÁGINA APÓS CADA ALUNO (exceto o último)
+                    if (i < alunosComQRCode.length - 1) {
+                        // Como a prova tem 5 páginas (ímpar), a próxima prova começa em uma nova folha
+                        // Isso é perfeito para impressão frente e verso
+                        htmlCompleto += `
+                            <div style="page-break-before: always; break-before: page;"></div>
+                        `;
+                    }
+                }
+                
+                // Abrir uma única janela com todos os alunos
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(htmlCompleto);
+                printWindow.document.close();
+                
+                printWindow.onload = function() {
+                    // Aguardar um pouco para garantir que o CSS foi aplicado
+                    setTimeout(() => {
+                        printWindow.print();
+                        printWindow.onafterprint = function() {
+                            printWindow.close();
+                        };
+                    }, 500);
+                };
+                
+                mostrarAlerta('alertMinhasProvas', `✅ Impressão preparada para ${alunosComQRCode.length} aluno(s)!`, 'success');
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        async function gerarImpressaoAdaptada() {
+            const { prova, questoes, qrCodeDataUrl, API_BASE_URL, token } = window.provaParaImpressao || {};
+            if (!prova) {
+                console.error('❌ Dados da prova não encontrados');
+                mostrarAlerta('alertMinhasProvas', '❌ Erro: dados da prova não encontrados', 'error');
+                return;
+            }
+
+            // Coletar as opções selecionadas
+            const fonteDinamicaHabilitada = document.getElementById('optFonteDinamica')?.checked || false;
+            const tamanhoFonte = fonteDinamicaHabilitada ? (document.getElementById('fonteSlider')?.value || 12) : 12;
+            
+            const opcoes = {
+                fonteAmpliada: fonteDinamicaHabilitada ? tamanhoFonte : false,
+                fontePersonalizada: fonteDinamicaHabilitada ? tamanhoFonte : false,
+                negrito: document.getElementById('optNegrito')?.checked || false,
+                altoContraste: document.getElementById('optAltoContraste')?.checked || false,
+                layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false,
+                tamanhoFonte: parseInt(tamanhoFonte)
+            };
+            
+            console.log('🎨 Opções de adaptação selecionadas:', opcoes);
+            
+            // Verificar tipo de impressão (individual ou todos)
+            const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value || 'individual';
+            const alunoSelecionadoId = document.getElementById('selectAlunoImpressao')?.value;
+            
+            // Verificar se pelo menos uma opção foi selecionada
+            const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado;
+            
+            if (nenhumaOpcao) {
+                const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
+                if (confirmar) {
+                    await gerarImpressaoNormal();
+                } else {
+                    mostrarModalOpcoesAdaptacao();
+                }
+                return;
+            }
+            
+            // GERAR QR CODE DO ALUNO SE FOR IMPRESSÃO INDIVIDUAL
+            let qrCodeAlunoUrl = null;
+            let alunoNome = null;
+            
+            if (tipoImpressao === 'individual') {
+                if (!alunoSelecionadoId) {
+                    mostrarAlerta('alertMinhasProvas', '⚠️ Selecione um aluno para imprimir a prova individual', 'info');
+                    mostrarModalPerguntaAdaptacao();
+                    return;
+                }
+                
+                // Buscar nome do aluno
+                const selectAluno = document.getElementById('selectAlunoImpressao');
+                alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim() || 'Aluno';
+                
+                // Gerar QR Code do aluno
+                try {
+                    const tokenLocal = localStorage.getItem('auth_token');
+                    const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoSelecionadoId}`;
+                    
+                    console.log('📱 Gerando QR Code para aluno:', alunoNome);
+                    
+                    const response = await fetch('/api/qrcode/gerar', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${tokenLocal}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url: urlCorrecao })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.qrCode) {
+                        qrCodeAlunoUrl = data.qrCode;
+                        console.log('✅ QR Code do aluno gerado com sucesso!');
+                        window.alunoSelecionadoNome = alunoNome;
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao gerar QR Code do aluno:', error);
+                }
+                
+                const alunoSelecionado = alunosDaTurma.find(a => (a.id || a._id) === alunoSelecionadoId);
+                if (alunoSelecionado) {
+                    await gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl);
+                } else {
+                    mostrarAlerta('alertMinhasProvas', '❌ Aluno não encontrado', 'error');
+                }
+            } else {
+                // Impressão para todos os alunos
+                if (alunosDaTurma.length === 0) {
+                    mostrarAlerta('alertMinhasProvas', '⚠️ Nenhum aluno encontrado nesta turma', 'info');
+                    return;
+                }
+                
+                await gerarHTMLImpressaoTodosAlunos(prova, questoes, opcoes, alunosDaTurma);
             }
         }
 

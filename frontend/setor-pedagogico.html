@@ -1526,7 +1526,8 @@
                 }
             }
             
-            // ============ IMPRESSÃO COM ADAPTAÇÃO ============
+            // ============ IMPRESSÃO COM ADAPTAÇÃO (VERSÃO COMPLETA COM FONTE DINÂMICA) ============
+
             async imprimirProva(provaId, titulo) {
                 console.log('🖨️ Preparando impressão da prova:', provaId);
                 
@@ -1541,6 +1542,8 @@
                     else if (IS_RENDER) API_BASE_URL = window.location.origin + '/api';
                     else API_BASE_URL = '/api';
                     
+                    this.showToast('📄 Preparando prova para impressão...', 'info');
+                    
                     const response = await fetch(`${API_BASE_URL}/provas/${provaId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
@@ -1552,6 +1555,120 @@
                     
                     const prova = data.prova;
                     const questoes = data.questoes || [];
+                    
+                    // 🔥 CORREÇÃO: Extrair turmaId de diferentes formatos
+                    let turmaId = null;
+                    
+                    // Tentativa 1: Se tem turmaId direto
+                    if (prova.turmaId) {
+                        turmaId = prova.turmaId;
+                    }
+                    // Tentativa 2: Se tem turma como objeto com id
+                    else if (prova.turma && prova.turma.id) {
+                        turmaId = prova.turma.id;
+                    }
+                    // Tentativa 3: Se tem turma como objeto com _id
+                    else if (prova.turma && prova.turma._id) {
+                        turmaId = prova.turma._id;
+                    }
+                    // Tentativa 4: Se tem turma como string
+                    else if (prova.turma && typeof prova.turma === 'string') {
+                        turmaId = prova.turma;
+                    }
+                    
+                    console.log('📚 turmaId extraído:', turmaId);
+                    console.log('📚 turma original:', prova.turma);
+                    
+                    // 🔥 BUSCAR ALUNOS DA TURMA
+                    window.alunosDaTurma = [];
+                    
+                    if (turmaId) {
+                        console.log('📚 Buscando alunos da turma ID:', turmaId);
+                        
+                        try {
+                            let alunosRaw = [];
+                            
+                            // Tentativa 1: Rota /api/turmas/:id/alunos
+                            try {
+                                console.log('📡 Tentando rota: /api/turmas/' + turmaId + '/alunos');
+                                const alunosRes = await fetch(`${API_BASE_URL}/turmas/${turmaId}/alunos`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                const alunosData = await alunosRes.json();
+                                console.log('📡 Resposta rota /alunos:', alunosData);
+                                
+                                if (alunosData.success && alunosData.alunos) {
+                                    alunosRaw = alunosData.alunos;
+                                    console.log(`✅ ${alunosRaw.length} alunos encontrados via /alunos`);
+                                } else if (alunosData.alunos) {
+                                    alunosRaw = alunosData.alunos;
+                                    console.log(`✅ ${alunosRaw.length} alunos encontrados via /alunos`);
+                                }
+                            } catch (e) {
+                                console.log('⚠️ Rota /alunos falhou:', e.message);
+                            }
+                            
+                            // Tentativa 2: Rota /api/turmas/:id
+                            if (alunosRaw.length === 0) {
+                                try {
+                                    console.log('📡 Tentando rota: /api/turmas/' + turmaId);
+                                    const turmaRes = await fetch(`${API_BASE_URL}/turmas/${turmaId}`, {
+                                        headers: { 'Authorization': `Bearer ${token}` }
+                                    });
+                                    const turmaData = await turmaRes.json();
+                                    console.log('📡 Resposta da turma:', turmaData);
+                                    
+                                    // Extrair alunos de diferentes formatos
+                                    if (turmaData.success && turmaData.turma && turmaData.turma.alunos) {
+                                        alunosRaw = turmaData.turma.alunos;
+                                    } else if (turmaData.turma && turmaData.turma.alunos) {
+                                        alunosRaw = turmaData.turma.alunos;
+                                    } else if (turmaData.alunos) {
+                                        alunosRaw = turmaData.alunos;
+                                    }
+                                    console.log(`✅ ${alunosRaw.length} alunos encontrados via rota principal`);
+                                } catch (e) {
+                                    console.log('⚠️ Rota principal falhou:', e.message);
+                                }
+                            }
+                            
+                            // Tentativa 3: Usar os dados que já vieram na prova
+                            if (alunosRaw.length === 0 && prova.turma && prova.turma.alunos) {
+                                alunosRaw = prova.turma.alunos;
+                                console.log(`✅ ${alunosRaw.length} alunos encontrados via prova.turma.alunos`);
+                            }
+                            
+                            // Processar alunos
+                            if (alunosRaw.length > 0) {
+                                const alunosUnicos = new Map();
+                                for (const aluno of alunosRaw) {
+                                    const alunoId = aluno._id || aluno.id || aluno.alunoId;
+                                    const alunoNome = aluno.nome || aluno.alunoNome || aluno.name || 'Aluno';
+                                    
+                                    if (alunoId && !alunosUnicos.has(alunoId.toString())) {
+                                        alunosUnicos.set(alunoId.toString(), {
+                                            id: alunoId,
+                                            _id: alunoId,
+                                            nome: alunoNome,
+                                            email: aluno.email || aluno.alunoEmail || '',
+                                            matricula: aluno.matricula || ''
+                                        });
+                                    }
+                                }
+                                window.alunosDaTurma = Array.from(alunosUnicos.values());
+                                console.log(`✅ ${window.alunosDaTurma.length} alunos carregados com sucesso!`);
+                                console.log('👥 Alunos:', window.alunosDaTurma);
+                            } else {
+                                console.log('⚠️ Nenhum aluno encontrado na turma');
+                            }
+                            
+                        } catch (error) {
+                            console.error('❌ Erro ao carregar turma:', error);
+                            window.alunosDaTurma = [];
+                        }
+                    } else {
+                        console.log('⚠️ Prova não possui turma associada');
+                    }
                     
                     let qrCodeDataUrl = '';
                     try {
@@ -1573,95 +1690,185 @@
                     this.showToast(`❌ Erro: ${error.message}`, 'error');
                 }
             }
-            
+
             mostrarModalPerguntaAdaptacao() {
-                let modal = document.getElementById('modalPerguntaAdaptacao');
-                if (!modal) {
-                    modal = document.createElement('div');
-                    modal.className = 'modal';
-                    modal.id = 'modalPerguntaAdaptacao';
-                    modal.style.display = 'none';
-                    modal.style.position = 'fixed';
-                    modal.style.top = '0';
-                    modal.style.left = '0';
-                    modal.style.width = '100%';
-                    modal.style.height = '100%';
-                    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-                    modal.style.zIndex = '10000';
-                    modal.style.alignItems = 'center';
-                    modal.style.justifyContent = 'center';
-                    document.body.appendChild(modal);
+                if (!window.provaParaImpressao || !window.provaParaImpressao.prova) {
+                    this.showToast('❌ Dados da prova não encontrados.', 'error');
+                    return;
+                }
+                
+                this.closeAllModals();
+                
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.id = 'modalPerguntaAdaptacao';
+                modal.style.display = 'flex';
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100%';
+                modal.style.height = '100%';
+                modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                modal.style.zIndex = '10001';
+                modal.style.alignItems = 'center';
+                modal.style.justifyContent = 'center';
+                
+                // 🔥 USAR window.alunosDaTurma QUE FOI PREENCHIDO
+                const alunos = window.alunosDaTurma || [];
+                const temAlunos = alunos.length > 0;
+                
+                console.log(`📋 Modal: ${alunos.length} alunos disponíveis para seleção`);
+                
+                let selectOptions = '<option value="">Selecione um aluno...</option>';
+                if (temAlunos) {
+                    selectOptions += alunos.map(aluno => `
+                        <option value="${aluno.id || aluno._id}">
+                            ${aluno.nome || aluno.alunoNome || 'Aluno'} ${aluno.matricula ? `(${aluno.matricula})` : ''}
+                        </option>
+                    `).join('');
+                } else {
+                    selectOptions = '<option value="" disabled>Nenhum aluno encontrado nesta turma</option>';
                 }
                 
                 modal.innerHTML = `
-                    <div class="modal-content" style="max-width: 450px; border-radius: 24px; padding: 0; margin: auto;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0;">
+                    <div class="modal-content" style="max-width: 500px; width: 90%; background: white; border-radius: 24px; padding: 0; margin: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;">
                             <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-print"></i> Imprimir Prova</h3>
-                            <button class="modal-close" onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao')" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer;">&times;</button>
+                            <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao')" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1;">&times;</button>
                         </div>
                         <div style="padding: 25px;">
-                            <p style="color: #4b5563; margin-bottom: 20px; text-align: center; font-size: 1.1rem;">Deseja adaptar esta prova para acessibilidade?</p>
-                            <div style="display: flex; gap: 15px; margin-top: 20px;">
-                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao'); setorPedagogico.gerarImpressaoNormal()" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-times"></i> Não, imprimir normal</button>
-                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao'); setorPedagogico.mostrarModalOpcoesAdaptacao()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-universal-access"></i> Sim, adaptar</button>
+                            <p style="color: #4b5563; margin-bottom: 20px; text-align: center; font-size: 1rem;">Deseja adaptar esta prova para acessibilidade?</p>
+                            
+                            <div style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 16px;">
+                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 12px;">
+                                    <input type="radio" name="tipoImpressao" value="individual" ${temAlunos ? 'checked' : 'disabled'} onchange="setorPedagogico.toggleOpcaoAlunos()">
+                                    <span><strong>👤 Imprimir para um aluno específico</strong></span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                    <input type="radio" name="tipoImpressao" value="todos" ${temAlunos ? '' : 'checked disabled'} onchange="setorPedagogico.toggleOpcaoAlunos()">
+                                    <span><strong>👥 Imprimir para todos os alunos da turma</strong></span>
+                                </label>
+                                <div id="selectAlunosContainer" style="margin-top: 15px; ${temAlunos ? 'display: block;' : 'display: none;'}">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500;"><i class="fas fa-user-graduate"></i> Selecione o aluno:</label>
+                                    <select id="selectAlunoImpressao" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">${selectOptions}</select>
+                                </div>
+                                <div style="margin-top: 12px; padding: 10px; background: #e0f2fe; border-radius: 8px; font-size: 0.85rem;">
+                                    <i class="fas fa-info-circle"></i> <span id="infoImpressao">${temAlunos ? `Selecione um aluno ou imprima para todos (${alunos.length} alunos).` : 'Nenhum aluno encontrado nesta turma.'}</span>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 15px;">
+                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao'); setorPedagogico.gerarImpressaoNormal()" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;"><i class="fas fa-times"></i> Não, imprimir normal</button>
+                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao'); setorPedagogico.mostrarModalOpcoesAdaptacao()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;"><i class="fas fa-universal-access"></i> Sim, adaptar</button>
                             </div>
                         </div>
                     </div>
                 `;
-                modal.style.display = 'flex';
+                document.body.appendChild(modal);
             }
-            
+
+            toggleOpcaoAlunos() {
+                const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
+                const selectContainer = document.getElementById('selectAlunosContainer');
+                const infoSpan = document.getElementById('infoImpressao');
+                const alunos = window.alunosDaTurma || [];
+                
+                if (tipoImpressao === 'individual') {
+                    if (selectContainer) selectContainer.style.display = 'block';
+                    if (infoSpan) infoSpan.innerHTML = `Será gerada uma prova com QR Code específico para o aluno selecionado. (${alunos.length} alunos disponíveis)`;
+                } else {
+                    if (selectContainer) selectContainer.style.display = 'none';
+                    if (infoSpan) infoSpan.innerHTML = `Será gerado um documento único com todos os ${alunos.length} alunos da turma.`;
+                }
+            }
+
             mostrarModalOpcoesAdaptacao() {
-                let modal = document.getElementById('modalOpcoesAdaptacao');
-                if (!modal) {
-                    modal = document.createElement('div');
-                    modal.className = 'modal';
-                    modal.id = 'modalOpcoesAdaptacao';
-                    modal.style.display = 'none';
-                    modal.style.position = 'fixed';
-                    modal.style.top = '0';
-                    modal.style.left = '0';
-                    modal.style.width = '100%';
-                    modal.style.height = '100%';
-                    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-                    modal.style.zIndex = '10001';
-                    modal.style.alignItems = 'center';
-                    modal.style.justifyContent = 'center';
-                    document.body.appendChild(modal);
+                if (!window.provaParaImpressao || !window.provaParaImpressao.prova) {
+                    this.showToast('❌ Dados da prova não encontrados.', 'error');
+                    return;
                 }
                 
-                const { prova } = window.provaParaImpressao || {};
-                const isOriginalmenteAdaptada = prova?.tipoProva === 'adaptada' || prova?.adaptada === true;
-                const avisoAdaptadaOriginal = isOriginalmenteAdaptada ? `<div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 10px 12px; margin-bottom: 15px; border-radius: 8px;"><p style="margin: 0; font-size: 0.85rem; color: #1e40af;"><i class="fas fa-info-circle"></i> <strong>Prova originalmente adaptada</strong> - Esta prova já possui 3 alternativas por questão.</p></div>` : '';
+                const modalPergunta = document.getElementById('modalPerguntaAdaptacao');
+                if (modalPergunta) modalPergunta.style.display = 'none';
+                
+                let modalOpcoes = document.getElementById('modalOpcoesAdaptacao');
+                if (modalOpcoes) modalOpcoes.remove();
+                
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.id = 'modalOpcoesAdaptacao';
+                modal.style.display = 'flex';
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100%';
+                modal.style.height = '100%';
+                modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                modal.style.zIndex = '10002';
+                modal.style.alignItems = 'center';
+                modal.style.justifyContent = 'center';
+                
+                const { prova } = window.provaParaImpressao;
+                const isAdaptada = prova?.tipoProva === 'adaptada' || prova?.adaptada === true;
                 
                 modal.innerHTML = `
-                    <div class="modal-content" style="max-width: 550px; border-radius: 24px; padding: 0; margin: auto;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0;">
+                    <div class="modal-content" style="max-width: 550px; width: 90%; background: white; border-radius: 24px; padding: 0; margin: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;">
                             <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-universal-access"></i> Opções de Adaptação</h3>
-                            <button class="modal-close" onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao')" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer;">&times;</button>
+                            <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao')" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer;">&times;</button>
                         </div>
-                        <div style="padding: 25px;">
+                        <div style="padding: 25px; overflow-y: auto; flex: 1;">
                             <p style="color: #4b5563; margin-bottom: 20px;">Selecione as adaptações desejadas para a impressão:</p>
-                            ${avisoAdaptadaOriginal}
+                            ${isAdaptada ? `<div style="background: #dbeafe; padding: 10px; margin-bottom: 15px; border-radius: 8px;"><i class="fas fa-info-circle"></i> Prova originalmente adaptada - 3 alternativas</div>` : ''}
+                            
                             <div style="display: flex; flex-direction: column; gap: 15px;">
+                                <!-- FONTE DINÂMICA - CONTROLE DESLIZANTE (MESMO DO ADMIN) -->
                                 <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
-                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                        <input type="checkbox" id="optFonteAmpliada" style="width: 20px; height: 20px;">
-                                        <div><strong style="font-size: 1rem;">📏 Fonte Ampliada</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aumentar o tamanho da fonte para melhor legibilidade</p></div>
+                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 10px;">
+                                        <input type="checkbox" id="optFonteDinamica" style="width: 20px; height: 20px;">
+                                        <div>
+                                            <strong style="font-size: 1rem;">🔍 Fonte Dinâmica</strong>
+                                            <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Amplie o tamanho da fonte conforme sua necessidade</p>
+                                        </div>
                                     </label>
+                                    <div id="sliderContainer" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                            <span style="font-size: 12px;">Normal (12pt)</span>
+                                            <span style="font-size: 12px; font-weight: bold;" id="tamanhoFonteAtual">12pt</span>
+                                            <span style="font-size: 12px;">Máximo (48pt)</span>
+                                        </div>
+                                        <input type="range" id="fonteSlider" min="12" max="48" step="1" value="12" style="width: 100%; margin: 10px 0;">
+                                        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                                            <button type="button" onclick="setorPedagogico.ajustarFonteRapido(12)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Normal</button>
+                                            <button type="button" onclick="setorPedagogico.ajustarFonteRapido(18)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Médio</button>
+                                            <button type="button" onclick="setorPedagogico.ajustarFonteRapido(24)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Grande</button>
+                                            <button type="button" onclick="setorPedagogico.ajustarFonteRapido(36)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Muito Grande</button>
+                                            <button type="button" onclick="setorPedagogico.ajustarFonteRapido(48)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Máximo</button>
+                                        </div>
+                                        <div style="margin-top: 10px; padding: 8px; background: #f1f5f9; border-radius: 8px; text-align: center; font-size: 12px; color: #475569;">
+                                            <i class="fas fa-mouse-pointer"></i> <strong>Pré-visualização:</strong>
+                                            <span id="previewFonte" style="font-size: 12px; display: inline-block; margin-left: 8px;">Texto exemplo</span>
+                                        </div>
+                                    </div>
                                 </div>
+                                
+                                <!-- Negrito -->
                                 <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
                                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                         <input type="checkbox" id="optNegrito" style="width: 20px; height: 20px;">
                                         <div><strong style="font-size: 1rem;">🔤 Texto em Negrito</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aplicar negrito em todo o texto da prova</p></div>
                                     </label>
                                 </div>
+                                
+                                <!-- Alto Contraste -->
                                 <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
                                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                         <input type="checkbox" id="optAltoContraste" style="width: 20px; height: 20px;">
                                         <div><strong style="font-size: 1rem;">🎨 Alto Contraste</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Fundo escuro com texto claro para melhor visualização</p></div>
                                     </label>
                                 </div>
+                                
+                                <!-- Layout Simplificado -->
                                 <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
                                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                         <input type="checkbox" id="optLayoutSimplificado" style="width: 20px; height: 20px;">
@@ -1669,183 +1876,316 @@
                                     </label>
                                 </div>
                             </div>
+                            
                             <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-radius: 12px;">
-                                <p style="margin: 0; font-size: 0.85rem; color: #92400e;"><i class="fas fa-lightbulb"></i> <strong>Dica:</strong> Você pode combinar várias opções conforme a necessidade do aluno.</p>
+                                <p style="margin: 0; font-size: 0.85rem;"><i class="fas fa-lightbulb"></i> <strong>Dica:</strong> Você pode combinar várias opções conforme a necessidade do aluno.</p>
                             </div>
-                            <div style="display: flex; gap: 12px; margin-top: 25px;">
-                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao'); setorPedagogico.gerarImpressaoAdaptada()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-print"></i> Imprimir com Adaptações</button>
+                            
+                            <div style="display: flex; gap: 12px; margin-top: 25px; margin-bottom: 10px;">
+                                <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao'); setorPedagogico.gerarImpressaoComOpcoes()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;"><i class="fas fa-print"></i> Imprimir com Adaptações</button>
                                 <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao')" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">Cancelar</button>
                             </div>
                         </div>
                     </div>
                 `;
-                modal.style.display = 'flex';
+                document.body.appendChild(modal);
+                
+                setTimeout(() => {
+                    const fonteDinamicaCheckbox = document.getElementById('optFonteDinamica');
+                    const sliderContainer = document.getElementById('sliderContainer');
+                    const fonteSlider = document.getElementById('fonteSlider');
+                    const tamanhoAtual = document.getElementById('tamanhoFonteAtual');
+                    const previewFonte = document.getElementById('previewFonte');
+                    
+                    if (fonteDinamicaCheckbox) {
+                        fonteDinamicaCheckbox.addEventListener('change', function() {
+                            if (sliderContainer) sliderContainer.style.display = this.checked ? 'block' : 'none';
+                        });
+                    }
+                    if (fonteSlider) {
+                        fonteSlider.addEventListener('input', function() {
+                            const tamanho = this.value;
+                            if (tamanhoAtual) tamanhoAtual.textContent = tamanho + 'pt';
+                            if (previewFonte) previewFonte.style.fontSize = tamanho + 'pt';
+                            if (previewFonte) previewFonte.style.fontWeight = 'bold';
+                        });
+                        fonteSlider.dispatchEvent(new Event('input'));
+                    }
+                }, 100);
             }
-            
+
+            ajustarFonteRapido(tamanho) {
+                const slider = document.getElementById('fonteSlider');
+                const tamanhoAtual = document.getElementById('tamanhoFonteAtual');
+                const previewFonte = document.getElementById('previewFonte');
+                
+                if (slider) {
+                    slider.value = tamanho;
+                    if (tamanhoAtual) tamanhoAtual.textContent = tamanho + 'pt';
+                    if (previewFonte) previewFonte.style.fontSize = tamanho + 'pt';
+                    const checkbox = document.getElementById('optFonteDinamica');
+                    if (checkbox && !checkbox.checked) {
+                        checkbox.checked = true;
+                        const sliderContainer = document.getElementById('sliderContainer');
+                        if (sliderContainer) sliderContainer.style.display = 'block';
+                    }
+                }
+            }
+
             fecharModalAdaptacao(modalId) {
                 const modal = document.getElementById(modalId);
                 if (modal) modal.style.display = 'none';
             }
-            
+
             async gerarImpressaoNormal() {
                 const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
                 if (!prova) { this.showToast('❌ Erro: dados da prova não encontrados', 'error'); return; }
-                await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {});
+                
+                const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
+                const selectAluno = document.getElementById('selectAlunoImpressao');
+                const alunoId = selectAluno?.value;
+                const alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim();
+                
+                this.fecharModalAdaptacao('modalPerguntaAdaptacao');
+                
+                if (tipoImpressao === 'todos') {
+                    const alunos = window.alunosDaTurma || [];
+                    if (alunos.length === 0) { this.showToast('⚠️ Nenhum aluno encontrado', 'info'); return; }
+                    await this.gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, {}, alunos);
+                    return;
+                }
+                
+                if (!alunoId) { this.showToast('⚠️ Selecione um aluno', 'info'); this.mostrarModalPerguntaAdaptacao(); return; }
+                
+                let qrCodeAlunoUrl = null;
+                try {
+                    const response = await fetch('/api/qrcode/gerar', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}` })
+                    });
+                    const data = await response.json();
+                    if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
+                } catch (error) { console.error('Erro ao gerar QR Code:', error); }
+                
+                await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl, alunoNome);
             }
-            
-            async gerarImpressaoAdaptada() {
+
+            async gerarImpressaoComOpcoes() {
                 const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
                 if (!prova) { this.showToast('❌ Erro: dados da prova não encontrados', 'error'); return; }
                 
+                const fonteDinamicaHabilitada = document.getElementById('optFonteDinamica')?.checked || false;
+                const tamanhoFonte = fonteDinamicaHabilitada ? (document.getElementById('fonteSlider')?.value || 12) : 12;
+                
                 const opcoes = {
-                    fonteAmpliada: document.getElementById('optFonteAmpliada')?.checked || false,
+                    fonteAmpliada: fonteDinamicaHabilitada ? tamanhoFonte : false,
+                    fontePersonalizada: fonteDinamicaHabilitada ? tamanhoFonte : false,
                     negrito: document.getElementById('optNegrito')?.checked || false,
                     altoContraste: document.getElementById('optAltoContraste')?.checked || false,
-                    layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false
+                    layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false,
+                    tamanhoFonte: parseInt(tamanhoFonte)
                 };
                 
-                const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado;
+                const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado;
                 if (nenhumaOpcao) {
-                    const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
-                    if (confirmar) await this.gerarImpressaoNormal();
-                    else this.mostrarModalOpcoesAdaptacao();
+                    if (confirm('Nenhuma opção selecionada. Imprimir normalmente?')) {
+                        this.fecharModalAdaptacao('modalOpcoesAdaptacao');
+                        await this.gerarImpressaoNormal();
+                    }
                     return;
                 }
-                await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes);
-            }
-            
-            async gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}) {
-                this.showToast('🖨️ Preparando impressão...', 'info');
                 
+                const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
+                const selectAluno = document.getElementById('selectAlunoImpressao');
+                const alunoId = selectAluno?.value;
+                const alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim();
+                
+                this.fecharModalAdaptacao('modalOpcoesAdaptacao');
+                this.fecharModalAdaptacao('modalPerguntaAdaptacao');
+                
+                if (tipoImpressao === 'todos') {
+                    const alunos = window.alunosDaTurma || [];
+                    if (alunos.length === 0) { this.showToast('⚠️ Nenhum aluno encontrado', 'info'); return; }
+                    await this.gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoes, alunos);
+                    return;
+                }
+                
+                if (!alunoId) { this.showToast('⚠️ Selecione um aluno', 'info'); this.mostrarModalPerguntaAdaptacao(); return; }
+                
+                let qrCodeAlunoUrl = null;
                 try {
-                    const provaTitulo = prova.titulo || 'Prova sem título';
-                    const logoIema = '/uploads/logo-iema.png';
-                    const dataAtual = new Date();
-                    const dataFormatada = dataAtual.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                    const totalQuestoes = questoes.length;
-                    const turmaNome = prova.turma?.nome || 'Turma não especificada';
-                    const disciplina = prova.turma?.disciplina || 'Disciplina não especificada';
-                    const professorNome = prova.professor?.nome || 'Professor';
-                    const periodo = prova.periodo ? `${prova.periodo}º Período` : '1º Período';
-                    const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
-                    const letrasUsadas = isAdaptada ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D', 'E'];
+                    const response = await fetch('/api/qrcode/gerar', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}` })
+                    });
+                    const data = await response.json();
+                    if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
+                } catch (error) { console.error('Erro ao gerar QR Code:', error); }
+                
+                await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl, alunoNome);
+            }
+
+            async gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, alunos) {
+                this.showToast(`🖨️ Gerando prova para ${alunos.length} aluno(s)...`, 'info');
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
+                        const alunoId = aluno._id || aluno.id;
+                        const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
+                        const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                        let qrCodeAlunoUrl = '';
+                        try {
+                            const qrResponse = await fetch('/api/qrcode/gerar', {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ url: urlCorrecao })
+                            });
+                            const qrData = await qrResponse.json();
+                            if (qrData.success && qrData.qrCode) qrCodeAlunoUrl = qrData.qrCode;
+                        } catch (error) { console.error(`Erro ao gerar QR Code para ${alunoNome}:`, error); }
+                        return { ...aluno, qrCodeDataUrl: qrCodeAlunoUrl, id: alunoId, nome: alunoNome };
+                    }));
                     
-                    let adaptacoesTexto = '';
-                    const temAdaptacoes = opcoesAdaptacao.fonteAmpliada || opcoesAdaptacao.negrito || opcoesAdaptacao.altoContraste || opcoesAdaptacao.layoutSimplificado;
-                    if (temAdaptacoes) {
-                        const adaptacoesSelecionadas = [];
-                        if (opcoesAdaptacao.fonteAmpliada) adaptacoesSelecionadas.push('Fonte Ampliada');
-                        if (opcoesAdaptacao.negrito) adaptacoesSelecionadas.push('Texto em Negrito');
-                        if (opcoesAdaptacao.altoContraste) adaptacoesSelecionadas.push('Alto Contraste');
-                        if (opcoesAdaptacao.layoutSimplificado) adaptacoesSelecionadas.push('Layout Simplificado');
-                        adaptacoesTexto = `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 8px 12px; margin: 10px 0; border-radius: 8px;"><p style="margin: 0; font-size: 0.85rem; color: #92400e;"><i class="fas fa-universal-access"></i> <strong>Prova Adaptada</strong> - Esta impressão inclui as seguintes adaptações: ${adaptacoesSelecionadas.join(', ')}.</p></div>`;
+                    let htmlCompleto = '';
+                    for (let i = 0; i < alunosComQRCode.length; i++) {
+                        const aluno = alunosComQRCode[i];
+                        const htmlAluno = this.gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, aluno.qrCodeDataUrl, aluno.nome);
+                        htmlCompleto += htmlAluno;
+                        if (i < alunosComQRCode.length - 1) htmlCompleto += `<div style="page-break-before: always;"></div>`;
                     }
                     
-                    let questoesHTML = '';
-                    questoes.forEach((questao, index) => {
-                        const opcoes = questao.opcoes || [];
-                        const opcoesFormatadas = opcoes.map((opcao, optIndex) => {
-                            const letra = letrasUsadas[optIndex];
-                            let opcaoLimpa = opcao || 'Opção não disponível';
-                            if (opcaoLimpa.startsWith(`${letra})`) || opcaoLimpa.startsWith(`${letra}.`)) opcaoLimpa = opcaoLimpa.substring(2).trim();
-                            return { letra, texto: opcaoLimpa };
-                        });
-                        questoesHTML += `
-                            <div class="questao-print">
-                                <div class="questao-numero">Questão ${index + 1} ${isAdaptada ? '(Prova Adaptada - 3 alternativas)' : ''}</div>
-                                <div class="questao-texto"><strong>${questao.pergunta || 'Pergunta não disponível'}</strong></div>
-                                <div class="opcoes-print">${opcoesFormatadas.map(op => `<div class="opcao-linha"><span class="opcao-letra">${op.letra})</span><span class="opcao-texto">${op.texto}</span></div>`).join('')}</div>
-                                <div class="rascunho-area"><small>Espaço para rascunho</small><div class="rascunho-linhas"></div></div>
-                            </div>
-                        `;
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(htmlCompleto);
+                    printWindow.document.close();
+                    printWindow.onload = () => { printWindow.print(); printWindow.onafterprint = () => printWindow.close(); };
+                    this.showToast(`✅ Impressão preparada para ${alunosComQRCode.length} aluno(s)!`, 'success');
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast(`❌ Erro: ${error.message}`, 'error');
+                }
+            }
+
+            gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}, qrCodeAlunoUrl = null, alunoNome = null) {
+                const provaTitulo = prova.titulo || 'Prova sem título';
+                const logoIema = '/uploads/logo-iema.png';
+                const dataAtual = new Date();
+                const dataFormatada = dataAtual.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const totalQuestoes = questoes.length;
+                const turmaNome = prova.turma?.nome || 'Turma não especificada';
+                const disciplina = prova.turma?.disciplina || 'Disciplina não especificada';
+                const professorNome = prova.professor?.nome || 'Professor';
+                const periodo = prova.periodo ? `${prova.periodo}º Período` : '1º Período';
+                const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
+                const letrasUsadas = isAdaptada ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D', 'E'];
+                
+                let adaptacoesTexto = '';
+                const temAdaptacoes = opcoesAdaptacao.fonteAmpliada || opcoesAdaptacao.negrito || opcoesAdaptacao.altoContraste || opcoesAdaptacao.layoutSimplificado || opcoesAdaptacao.fontePersonalizada;
+                if (temAdaptacoes) {
+                    const adaptacoesSelecionadas = [];
+                    if (opcoesAdaptacao.fontePersonalizada && opcoesAdaptacao.tamanhoFonte) adaptacoesSelecionadas.push(`Fonte Dinâmica (${opcoesAdaptacao.tamanhoFonte}pt)`);
+                    else if (opcoesAdaptacao.fonteAmpliada) adaptacoesSelecionadas.push('Fonte Ampliada');
+                    if (opcoesAdaptacao.negrito) adaptacoesSelecionadas.push('Texto em Negrito');
+                    if (opcoesAdaptacao.altoContraste) adaptacoesSelecionadas.push('Alto Contraste');
+                    if (opcoesAdaptacao.layoutSimplificado) adaptacoesSelecionadas.push('Layout Simplificado');
+                    adaptacoesTexto = `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 8px 12px; margin: 10px 0; border-radius: 8px;"><p style="margin: 0; font-size: 0.85rem; color: #92400e;"><i class="fas fa-universal-access"></i> <strong>Prova Adaptada</strong> - Esta impressão inclui as seguintes adaptações: ${adaptacoesSelecionadas.join(', ')}.</p></div>`;
+                }
+                
+                let questoesHTML = '';
+                questoes.forEach((questao, index) => {
+                    const opcoes = questao.opcoes || [];
+                    const opcoesFormatadas = opcoes.map((opcao, optIndex) => {
+                        const letra = letrasUsadas[optIndex];
+                        let opcaoLimpa = opcao || 'Opção não disponível';
+                        if (opcaoLimpa.startsWith(`${letra})`) || opcaoLimpa.startsWith(`${letra}.`)) opcaoLimpa = opcaoLimpa.substring(2).trim();
+                        return { letra, texto: opcaoLimpa };
                     });
-                    
-                    // ========== CARTÃO-RESPOSTA CORRIGIDO (ATUAL) ==========
-                    const gerarCartaoResposta = () => {
-                        const qrCodeArea = qrCodeDataUrl ? `
-                            <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                                    <img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code">
-                                    <div style="font-size: 7px; color: #666; text-align: left;">
-                                        <strong>📱 Correção Automática</strong><br>
-                                        Escaneie este QR Code
-                                    </div>
+                    questoesHTML += `
+                        <div class="questao-print">
+                            <div class="questao-numero">Questão ${index + 1} ${isAdaptada ? '(Prova Adaptada - 3 alternativas)' : ''}</div>
+                            <div class="questao-texto"><strong>${questao.pergunta || 'Pergunta não disponível'}</strong></div>
+                            <div class="opcoes-print">${opcoesFormatadas.map(op => `<div class="opcao-linha"><span class="opcao-letra">${op.letra})</span><span class="opcao-texto">${op.texto}</span></div>`).join('')}</div>
+                            <div class="rascunho-area"><small>Espaço para rascunho</small><div class="rascunho-linhas"></div></div>
+                        </div>
+                    `;
+                });
+                
+                const gerarCartaoResposta = () => {
+                    const qrCodeArea = qrCodeDataUrl ? `
+                        <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                                <img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code">
+                                <div style="font-size: 7px; color: #666; text-align: left;"><strong>📱 Correção Automática</strong><br>Escaneie este QR Code</div>
+                            </div>
+                        </div>
+                    ` : '';
+                    const qrCodeAlunoArea = qrCodeAlunoUrl ? `
+                        <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                                <img src="${qrCodeAlunoUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code do Aluno">
+                                <div style="font-size: 7px; color: #666; text-align: left;"><strong>👤 Identificação do Aluno</strong><br>${alunoNome || 'Aluno'}</div>
+                            </div>
+                        </div>
+                    ` : '';
+                    return `
+                        <div style="text-align: center;">
+                            <div class="cartao-header" style="margin-bottom: 8px;">
+                                <h4 style="margin: 0 0 5px 0; font-size: 11pt; font-weight: bold; text-align: center;">📝 CARTÃO-RESPOSTA</h4>
+                                <div class="instrucoes-cartao" style="font-size: 8pt; color: #333; text-align: center; padding: 8px; background: #fef3c7; border-radius: 6px;">
+                                    <p style="margin: 0;"><strong>INSTRUÇÕES PARA PREENCHIMENTO DO CARTÃO-RESPOSTA</strong></p>
+                                    <p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p>
                                 </div>
                             </div>
-                        ` : '';
-                        
-                        return `
-                            <div style="text-align: center;">
-                                <!-- INSTRUÇÕES ACIMA DO QUADRADO -->
-                                <div class="cartao-header" style="margin-bottom: 8px;">
-                                    <h4 style="margin: 0 0 5px 0; font-size: 11pt; font-weight: bold; text-align: center;">📝 CARTÃO-RESPOSTA</h4>
-                                    <div class="instrucoes-cartao" style="font-size: 8pt; color: #333; text-align: center; padding: 8px; background: #fef3c7; border-radius: 6px;">
-                                        <p style="margin: 0;"><strong>INSTRUÇÕES PARA PREENCHIMENTO DO CARTÃO-RESPOSTA</strong></p>
-                                        <p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p>
-                                    </div>
-                                </div>
-                                
-                                <!-- QUADRADO DO GABARITO COM MARCADORES DENTRO DA ÁREA VISÍVEL -->
-                                <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
-                                    <!-- 🔥 MARCADORES OMR - AGORA DENTRO DA ÁREA (com padding positivo) -->
-                                    <!-- Canto Superior Esquerdo -->
-                                    <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                                    <!-- Canto Superior Direito -->
-                                    <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                                    <!-- Canto Inferior Esquerdo -->
-                                    <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                                    <!-- Canto Inferior Direito -->
-                                    <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                                    
-                                    <!-- TABELA DO GABARITO -->
-                                    <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
-                                        <thead>
-                                            <tr style="background: #e8e8e8;">
-                                                <th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>
-                                                ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            ${Array.from({ length: totalQuestoes }, (_, i) => {
-                                                const num = i + 1;
-                                                return `
-                                                    <tr>
-                                                        <td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
-                                                        ${letrasUsadas.map(() => `
-                                                            <td style="border: 1px solid #000; padding: 5px 3px; text-align: center;">
-                                                                <div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div>
-                                                            </td>
-                                                        `).join('')}
-                                                    </tr>
-                                                `;
-                                            }).join('')}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                
-                                <!-- QR CODE ABAIXO DO QUADRADO -->
-                                ${qrCodeArea}
+                            <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
+                                <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                                    <thead><tr style="background: #e8e8e8;"><th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}</tr></thead>
+                                    <tbody>${Array.from({ length: totalQuestoes }, (_, i) => `<tr><td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${i + 1}</td>${letrasUsadas.map(() => `<td style="border: 1px solid #000; padding: 5px 3px; text-align: center;"><div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div></td>`).join('')}</tr>`).join('')}</tbody>
+                                }</table>
                             </div>
-                        `;
-                    };
-                    
-                    let cssAdaptacoes = '';
-                    if (opcoesAdaptacao.fonteAmpliada) cssAdaptacoes += `body { font-size: 16pt !important; }.questao-texto { font-size: 16pt !important; }.opcao-linha { font-size: 14pt !important; }`;
-                    if (opcoesAdaptacao.negrito) cssAdaptacoes += `body, .questao-texto, .opcao-linha, .instrucoes-cartao, .questao-numero, .cartao-header h4, .print-header h1, .print-prova-info h3, .label, .campo-label, .instrucoes-box h4, .info-label, .info-linha, .instrucoes-box li, .print-footer { font-weight: bold !important; }`;
-                    if (opcoesAdaptacao.altoContraste) cssAdaptacoes += `body { background: #000000 !important; color: #ffffff !important; }.print-header, .campos-box, .instrucoes-box, .print-prova-info, .cartao-resposta, .questao-print, .rascunho-area, .info-linha { background: #000000 !important; color: #ffffff !important; border-color: #ffffff !important; }`;
-                    if (opcoesAdaptacao.layoutSimplificado) cssAdaptacoes += `.print-logo, .logo-iema { display: none !important; }`;
-                    
-                    const printHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Prova - ${provaTitulo}</title><style>@media print{body{margin:0;padding:0}.questao-print{page-break-inside:avoid}.cartao-resposta{page-break-inside:avoid}.questoes-container{page-break-before:always;margin-top:0}}body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.3;margin:0;padding:0.4in;background:white;color:black;position:relative}.print-header{text-align:center;margin-bottom:6px;padding-bottom:6px;border-bottom:2px solid #000}.print-logo{max-width:999px;width:100%;height:auto;display:block;margin:0 auto 3px auto}.print-header h1{font-size:14pt;font-weight:bold;margin:0 0 5px 0}.student-row{display:flex;justify-content:space-between;margin:4px 0;gap:15px}.student-item{flex:1;display:flex;align-items:baseline;gap:6px}.label{font-weight:bold;min-width:65px;font-size:10pt}.underline{border-bottom:1px dotted #000;flex:1;height:16px}.campos-box{margin:6px 0;border:2px solid #000;padding:5px 12px;display:flex;justify-content:space-between;gap:20px}.campo-item{flex:1;display:flex;align-items:baseline;gap:6px}.campo-label{font-weight:bold;min-width:35px;font-size:10pt}.campo-underline{border-bottom:1px dotted #000;flex:1;height:16px}.instrucoes-box{margin:6px 0;border:1px solid #ccc;padding:8px 12px;background:#fefefe;border-radius:4px}.instrucoes-box h4{margin:0 0 5px 0;font-size:10pt;font-weight:bold;color:#4f46e5;text-align:center}.instrucoes-box ul{margin:0;padding-left:20px}.instrucoes-box li{margin-bottom:3px;font-size:8.5pt;line-height:1.3}.print-prova-info{margin:8px 0;padding:5px 8px;border:1px solid #ddd;background:#fafafa}.print-prova-info h3{margin:0 0 3px 0;font-size:11pt;text-align:center;font-weight:bold}.info-linha{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:8pt;border-top:1px solid #eee;padding-top:4px;margin-top:4px}.info-item{display:inline-flex;gap:4px}.cartao-resposta{margin:10px 0;border:2px solid #000;padding:12px;background:#fff;position:relative;display:inline-block;width:100%;box-sizing:border-box}.cartao-header{margin-bottom:10px}.cartao-header h4{margin:0 0 5px 0;font-size:11pt;font-weight:bold;text-align:center}.instrucoes-cartao{font-size:8pt;color:#333;text-align:center;padding:8px;background:#fef3c7;border-radius:6px}.instrucoes-cartao p{margin:0}.cartao-grid{display:flex;flex-direction:column;gap:6px}.cartao-linha{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.cartao-coluna{text-align:center;padding:4px;border:1px solid #ccc;background:#fafafa;min-width:65px}.questao-numero-cartao{font-weight:bold;font-size:8pt;margin-bottom:4px;padding-bottom:2px;border-bottom:1px solid #ddd}.opcoes-cartao{display:flex;justify-content:center;gap:6px}.opcao-cartao{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:8pt}.opcao-cartao input{width:12px;height:12px;margin:0}.opcao-cartao span{font-size:7pt;font-weight:bold}.questoes-container{page-break-before:always;margin-top:0}.questao-print{margin-bottom:20px}.questao-numero{font-weight:bold;margin-bottom:6px;border-bottom:1px solid #ccc;padding-bottom:3px;font-size:10pt}.questao-texto{margin-bottom:10px;margin-left:8px;line-height:1.4;font-size:11pt}.opcao-linha{margin:6px 0 6px 18px;display:flex;font-size:10pt}.opcao-letra{min-width:22px;font-weight:500}.rascunho-area{margin-top:8px;border-top:1px dashed #ccc;padding-top:5px}.rascunho-area small{font-size:7pt}.rascunho-linhas{min-height:35px;background:repeating-linear-gradient(transparent,transparent 16px,#eee 16px,#eee 18px)}.print-footer{margin-top:25px;text-align:center;font-size:7.5pt;color:#666;border-top:1px solid #ccc;padding-top:8px}${cssAdaptacoes}</style></head><body><div class="print-header"><img src="${logoIema}" class="print-logo" alt="IEMA" onerror="this.style.display='none'"><h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1><div class="student-row"><div class="student-item"><span class="label">ESTUDANTE:</span><span class="underline"></span></div></div><div class="student-row"><div class="student-item"><span class="label">CURSO:</span><span class="underline"></span></div><div class="student-item"><span class="label">TURMA:</span><span class="underline"></span></div></div></div><div class="campos-box"><div class="campo-item"><span class="campo-label">Nota:</span><span class="campo-underline"></span></div><div class="campo-item"><span class="campo-label">Ass.:</span><span class="campo-underline"></span></div><div class="campo-item"><span class="campo-label">Data:</span><span class="campo-underline">${dataFormatada}</span></div></div><div class="instrucoes-box"><h4>📋 INSTRUÇÕES GERAIS</h4><ul><li>Escreva seu nome de registro legível e não esqueça de assinar a lista de frequência.</li><li>Todas as anotações e cálculos devem ser feitos no caderno de prova.</li><li>O estudante que cometer quaisquer atos no intuito de fraudar a avaliação terá sua prova recolhida e ficará sujeito a penalidades do Regimento Interno da Rede, podendo obter nota zero.</li><li>Os celulares <strong>deverão ser desligados</strong> durante todo o período de realização da prova.</li><li>O estudante só poderá se retirar da sala após o término de dois horários destinados para a aplicação da prova.</li><li>O estudante poderá ausentar-se para ir ao banheiro, um por vez, após 30 min do início da prova.</li><li>Cada questão contém apenas uma alternativa correta.</li><li>Leia e siga as instruções de preenchimento do cartão-resposta (GABARITO) abaixo.</li></ul></div>${adaptacoesTexto}<div class="print-prova-info"><h3>${provaTitulo}</h3><div class="info-linha"><span class="info-item"><span class="info-label">Período:</span> ${periodo}</span><span class="info-item"><span class="info-label">Turma:</span> ${turmaNome}</span><span class="info-item"><span class="info-label">Disciplina:</span> ${disciplina}</span><span class="info-item"><span class="info-label">Professor:</span> ${professorNome}</span><span class="info-item"><span class="info-label">Questões:</span> ${totalQuestoes}</span></div></div>${gerarCartaoResposta()}<div class="questoes-container">${questoesHTML}</div><div class="print-footer"><p>Sistema de Provas - ${dataFormatada}</p><p>📱 Escaneie o QR Code abaixo do cartão-resposta para correção automática</p></div></body></html>`;
-                    
+                            <div style="display: flex; justify-content: center; align-items: center; gap: 30px; margin-top: 10px; flex-wrap: wrap;">${qrCodeArea}${qrCodeAlunoArea}</div>
+                        </div>
+                    `;
+                };
+                
+                let cssAdaptacoes = '';
+                if (opcoesAdaptacao.fontePersonalizada && opcoesAdaptacao.tamanhoFonte) {
+                    const t = opcoesAdaptacao.tamanhoFonte;
+                    cssAdaptacoes += `body{font-size:${t}pt!important}.questao-texto{font-size:${t}pt!important}.opcao-linha{font-size:${t-2}pt!important}.instrucoes-cartao{font-size:${t-5}pt!important}.rascunho-area small{font-size:${t-5}pt!important}.questao-numero{font-size:${t-2}pt!important}.print-header h1{font-size:${t+4}pt!important}.print-prova-info h3{font-size:${t+2}pt!important}.campos-box .campo-label,.student-item .label{font-size:${t-2}pt!important}.instrucoes-box li,.instrucoes-box h4,.info-linha,.info-item{font-size:${t-4}pt!important}.cartao-resposta th,.cartao-resposta td{font-size:${t-4}pt!important}.instrucoes-cartao p{font-size:${t-4}pt!important}.print-footer{font-size:${t-4.5}pt!important}`;
+                } else if (opcoesAdaptacao.fonteAmpliada) {
+                    cssAdaptacoes += `body{font-size:16pt!important}.questao-texto{font-size:16pt!important}.opcao-linha{font-size:14pt!important}.instrucoes-cartao{font-size:11pt!important}.rascunho-area small{font-size:10pt!important}.questao-numero{font-size:14pt!important}.print-header h1{font-size:18pt!important}.print-prova-info h3{font-size:16pt!important}.campos-box .campo-label,.student-item .label{font-size:12pt!important}.instrucoes-box li,.instrucoes-box h4,.info-linha,.info-item{font-size:11pt!important}`;
+                }
+                if (opcoesAdaptacao.negrito) cssAdaptacoes += `body,.questao-texto,.opcao-linha,.instrucoes-cartao,.questao-numero,.cartao-header h4,.print-header h1,.print-prova-info h3,.label,.campo-label,.instrucoes-box h4,.info-label,.info-linha,.instrucoes-box li,.print-footer{font-weight:bold!important}`;
+                if (opcoesAdaptacao.altoContraste) cssAdaptacoes += `body{background:#000!important;color:#fff!important}.print-header,.campos-box,.instrucoes-box,.print-prova-info,.cartao-resposta,.questao-print,.rascunho-area,.info-linha{background:#000!important;color:#fff!important;border-color:#fff!important}.underline,.campo-underline{border-bottom-color:#fff!important}.rascunho-linhas{background:repeating-linear-gradient(transparent,transparent 16px,#fff 16px,#fff 18px)!important}`;
+                if (opcoesAdaptacao.layoutSimplificado) cssAdaptacoes += `.print-logo,.logo-iema{display:none!important}.campos-box{border:1px solid #000!important}.instrucoes-box{border:1px solid #000!important;background:#fefefe!important}.print-header{border-bottom:1px solid #000!important}`;
+                
+                return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Prova - ${provaTitulo}</title><style>@media print{body{margin:0;padding:0}.questao-print{page-break-inside:avoid}.cartao-resposta{page-break-inside:avoid}.questoes-container{page-break-before:always;margin-top:0}}body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.3;margin:0;padding:0.4in;background:white;color:black;position:relative}.print-header{text-align:center;margin-bottom:6px;padding-bottom:6px;border-bottom:2px solid #000}.print-logo{max-width:999px;width:100%;height:auto;display:block;margin:0 auto 3px auto}.print-header h1{font-size:14pt;font-weight:bold;margin:0 0 5px 0}.student-row{display:flex;justify-content:space-between;margin:4px 0;gap:15px}.student-item{flex:1;display:flex;align-items:baseline;gap:6px}.label{font-weight:bold;min-width:65px;font-size:10pt}.underline{border-bottom:1px dotted #000;flex:1;height:16px}.campos-box{margin:6px 0;border:2px solid #000;padding:5px 12px;display:flex;justify-content:space-between;gap:20px}.campo-item{flex:1;display:flex;align-items:baseline;gap:6px}.campo-label{font-weight:bold;min-width:35px;font-size:10pt}.campo-underline{border-bottom:1px dotted #000;flex:1;height:16px}.instrucoes-box{margin:6px 0;border:1px solid #ccc;padding:8px 12px;background:#fefefe;border-radius:4px}.instrucoes-box h4{margin:0 0 5px 0;font-size:10pt;font-weight:bold;color:#4f46e5;text-align:center}.instrucoes-box ul{margin:0;padding-left:20px}.instrucoes-box li{margin-bottom:3px;font-size:8.5pt;line-height:1.3}.print-prova-info{margin:8px 0;padding:5px 8px;border:1px solid #ddd;background:#fafafa}.print-prova-info h3{margin:0 0 3px 0;font-size:11pt;text-align:center;font-weight:bold}.info-linha{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:8pt;border-top:1px solid #eee;padding-top:4px;margin-top:4px}.info-item{display:inline-flex;gap:4px}.questoes-container{page-break-before:always;margin-top:0}.questao-print{margin-bottom:20px}.questao-numero{font-weight:bold;margin-bottom:6px;border-bottom:1px solid #ccc;padding-bottom:3px;font-size:10pt}.questao-texto{margin-bottom:10px;margin-left:8px;line-height:1.4;font-size:11pt}.opcao-linha{margin:6px 0 6px 18px;display:flex;font-size:10pt}.opcao-letra{min-width:22px;font-weight:500}.rascunho-area{margin-top:8px;border-top:1px dashed #ccc;padding-top:5px}.rascunho-area small{font-size:7pt}.rascunho-linhas{min-height:35px;background:repeating-linear-gradient(transparent,transparent 16px,#eee 16px,#eee 18px)}.print-footer{margin-top:25px;text-align:center;font-size:7.5pt;color:#666;border-top:1px solid #ccc;padding-top:8px}${cssAdaptacoes}</style></head><body><div class="print-header"><img src="${logoIema}" class="print-logo" alt="IEMA" onerror="this.style.display='none'"><h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1><div class="student-row"><div class="student-item"><span class="label">ESTUDANTE:</span><span class="underline"></span></div></div><div class="student-row"><div class="student-item"><span class="label">CURSO:</span><span class="underline"></span></div><div class="student-item"><span class="label">TURMA:</span><span class="underline"></span></div></div></div><div class="campos-box"><div class="campo-item"><span class="campo-label">Nota:</span><span class="campo-underline"></span></div><div class="campo-item"><span class="campo-label">Ass.:</span><span class="campo-underline"></span></div><div class="campo-item"><span class="campo-label">Data:</span><span class="campo-underline"></span></div></div><div class="instrucoes-box"><h4>📋 INSTRUÇÕES GERAIS</h4><ul><li>Escreva seu nome de registro legível e não esqueça de assinar a lista de frequência.</li><li>Todas as anotações e cálculos devem ser feitos no caderno de prova.</li><li>Os celulares <strong>deverão ser desligados</strong> durante todo o período de realização da prova.</li><li>Cada questão contém apenas uma alternativa correta.</li><li>Leia e siga as instruções de preenchimento do cartão-resposta (GABARITO) abaixo.</li></ul></div>${adaptacoesTexto}<div class="print-prova-info"><h3>${provaTitulo}</h3><div class="info-linha"><span class="info-item">Período: ${periodo}</span><span class="info-item">Turma: ${turmaNome}</span><span class="info-item">Disciplina: ${disciplina}</span><span class="info-item">Professor: ${professorNome}</span><span class="info-item">Questões: ${totalQuestoes}</span></div></div>${gerarCartaoResposta()}<div class="questoes-container">${questoesHTML}</div><div class="print-footer"><p>Sistema de Provas IEMA - ${dataFormatada}</p><p>📱 Escaneie o QR Code para correção automática</p><p style="font-size: 6pt;">Aluno: ${alunoNome || '_________________'} | Turma: ${turmaNome} | Código: ${prova.codigo || 'N/A'}</p></div><div style="page-break-after: always;"></div></body></html>`;
+            }
+
+            async gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}, qrCodeAlunoUrl = null, alunoNome = null) {
+                try {
+                    const printHTML = this.gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, qrCodeAlunoUrl, alunoNome);
                     const printWindow = window.open('', '_blank');
                     printWindow.document.write(printHTML);
                     printWindow.document.close();
-                    printWindow.onload = function() { printWindow.print(); printWindow.onafterprint = function() { printWindow.close(); }; };
+                    printWindow.onload = () => { printWindow.print(); printWindow.onafterprint = () => printWindow.close(); };
                     this.showToast('✅ Impressão preparada!', 'success');
                 } catch (error) {
                     console.error('❌ Erro:', error);
                     this.showToast(`❌ Erro: ${error.message}`, 'error');
                 }
+            }
+
+            closeAllModals() {
+                const modals = ['modal', 'confirmModal', 'modalPerguntaAdaptacao', 'modalOpcoesAdaptacao'];
+                modals.forEach(id => {
+                    const modal = document.getElementById(id);
+                    if (modal) modal.style.display = 'none';
+                });
             }
             
             // ============ SISTEMA DE NOTIFICAÇÕES ============
