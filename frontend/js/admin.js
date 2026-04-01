@@ -14423,7 +14423,7 @@ class AdminPanel {
         // MÓDULO DE RESULTADOS - ADMIN (VERSÃO CORRIGIDA)
         // ============================================================================
 
-        // ============ LOAD RESULTADOS (VERSÃO CORRIGIDA) ============
+        // ============ LOAD RESULTADOS (VERSÃO CORRIGIDA COM NOTAS MANUAIS) ============
         async loadResultados() {
             const contentArea = document.getElementById('contentArea');
             
@@ -14442,73 +14442,124 @@ class AdminPanel {
             try {
                 const token = localStorage.getItem('auth_token');
                 
-                // Buscar TODOS os resultados
+                // 🔥 BUSCAR RESULTADOS DA COLEÇÃO PROVAREALIZADA (QUE TEM NOTAS MANUAIS)
                 const response = await fetch('/api/admin/todos-resultados', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
                 const data = await response.json();
                 
-                console.log('📊 Todos os resultados:', data);
+                console.log('📊 Todos os resultados (incluindo notas manuais):', data);
 
                 if (!data.success) {
                     throw new Error(data.error || 'Erro ao carregar resultados');
                 }
 
-                if (data.resultados.length === 0) {
+                if (!data.resultados || data.resultados.length === 0) {
                     contentArea.innerHTML = this.renderSemResultados();
                     return;
                 }
 
-                // Usar os resultados e estatísticas diretamente da API
-                const resultados = data.resultados;
-                const estatisticas = data.estatisticas || {
+                // 🔥 PROCESSAR RESULTADOS CORRETAMENTE
+                const resultados = data.resultados.map(r => ({
+                    id: r.id || r._id,
+                    alunoId: r.alunoId,
+                    alunoNome: r.alunoNome || 'Aluno',
+                    alunoEmail: r.alunoEmail || '',
+                    alunoMatricula: r.alunoMatricula || '',
+                    alunoTurma: r.alunoTurma || '',
+                    provaId: r.provaId,
+                    provaTitulo: r.provaTitulo || 'Prova',
+                    dataRealizacao: r.dataRealizacao || r.createdAt,
+                    // 🔥 NOTA AUTOMÁTICA (online)
+                    notaAutomatica: r.notaAutomatica !== undefined ? r.notaAutomatica : r.nota,
+                    notaAutomaticaLiberada: r.notaAutomaticaLiberada !== undefined ? r.notaAutomaticaLiberada : r.notaLiberada,
+                    // 🔥 NOTA MANUAL (impressa)
+                    notaManual: r.notaManual,
+                    notaManualLiberada: r.notaManualLiberada,
+                    notaManualObservacao: r.notaManualObservacao,
+                    notaManualData: r.notaManualData,
+                    notaManualAtribuidaPor: r.notaManualAtribuidaPor,
+                    // 🔥 NOTA FINAL (manual tem prioridade)
+                    nota: r.notaManual !== null && r.notaManual !== undefined ? r.notaManual : r.nota,
+                    notaLiberada: r.notaManualLiberada || r.notaLiberada,
+                    tipoNota: r.tipoNota || (r.notaManual !== null ? 'manual' : 'automatica'),
+                    acertos: r.acertos || 0,
+                    total: r.total || 0,
+                    tempoGasto: r.tempoGasto || 0,
+                    status: r.status || (r.nota !== null ? (r.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente'),
+                    cancelada: r.cancelada || false,
+                    motivoCancelamento: r.motivoCancelamento,
+                    resultadoDetalhado: r.resultadoDetalhado || [],
+                    observacoes: r.observacoes || '',
+                    createdAt: r.createdAt
+                }));
+
+                console.log('📊 Resultados processados:', {
                     total: resultados.length,
-                    comNota: resultados.filter(r => r.nota !== null && r.nota !== undefined).length,
-                    semNota: resultados.filter(r => r.nota === null || r.nota === undefined).length,
-                    aprovados: resultados.filter(r => r.nota && r.nota >= 7).length,
-                    reprovados: resultados.filter(r => r.nota && r.nota < 7).length,
-                    pendentes: resultados.filter(r => !r.nota).length,
+                    comNotaManual: resultados.filter(r => r.tipoNota === 'manual').length,
+                    comNotaAutomatica: resultados.filter(r => r.tipoNota === 'automatica').length
+                });
+
+                // Calcular estatísticas
+                const aprovados = resultados.filter(r => r.nota && r.nota >= 7 && !r.cancelada).length;
+                const reprovados = resultados.filter(r => r.nota && r.nota < 7 && !r.cancelada).length;
+                const pendentes = resultados.filter(r => r.nota === null || r.nota === undefined).length;
+                const cancelados = resultados.filter(r => r.cancelada).length;
+                const notasValidas = resultados.filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada).map(r => r.nota);
+                const mediaGeral = notasValidas.length > 0 ? (notasValidas.reduce((a,b) => a+b,0) / notasValidas.length).toFixed(2) : '0.00';
+                const taxaAprovacao = notasValidas.length > 0 ? ((aprovados / notasValidas.length) * 100).toFixed(1) : '0.0';
+                
+                // Total de alunos e provas únicos
+                const totalAlunos = new Set(resultados.map(r => r.alunoId)).size;
+                const totalProvas = new Set(resultados.map(r => r.provaId)).size;
+
+                const estatisticas = {
                     totalResultados: resultados.length,
-                    totalAlunos: new Set(resultados.map(r => r.alunoId)).size,
-                    totalProvas: new Set(resultados.map(r => r.provaId)).size,
-                    mediaGeral: (resultados.filter(r => r.nota).reduce((acc, r) => acc + r.nota, 0) / (resultados.filter(r => r.nota).length || 1)).toFixed(2),
-                    taxaAprovacao: ((resultados.filter(r => r.nota && r.nota >= 7).length / (resultados.filter(r => r.nota).length || 1)) * 100).toFixed(1)
+                    totalAlunos,
+                    totalProvas,
+                    aprovados,
+                    reprovados,
+                    pendentes,
+                    cancelados,
+                    mediaGeral,
+                    taxaAprovacao,
+                    notasManuais: resultados.filter(r => r.tipoNota === 'manual').length,
+                    notasAutomaticas: resultados.filter(r => r.tipoNota === 'automatica').length
                 };
 
-                // Preparar dados para gráficos
-                const dadosGraficos = this.prepararDadosGraficos(resultados);
-                
-                // Renderizar a página com os resultados
-                contentArea.innerHTML = this.renderResultadosCompleto(resultados, estatisticas);
-
-                // 🔥 ARMAZENAR OS DADOS NO OBJETO
+                // Armazenar dados
                 this.resultadosCompletos = resultados;
                 this.resultadosFiltrados = resultados;
                 this.paginaAtual = 1;
                 this.itensPorPagina = 15;
 
-                // 🔥 RENDERIZAR A TABELA COM A FUNÇÃO CORRIGIDA
+                // Preparar dados para gráficos
+                const dadosGraficos = this.prepararDadosGraficos(resultados);
+
+                // Renderizar a página
+                contentArea.innerHTML = this.renderResultadosCompleto(resultados, estatisticas);
+
+                // Renderizar tabela e gráficos
                 setTimeout(() => {
                     const tbody = document.getElementById('tabelaResultadosBody');
                     if (tbody) {
                         tbody.innerHTML = this.gerarLinhasResultados(resultados);
-                        console.log('✅ Tabela renderizada com função corrigida');
+                        console.log('✅ Tabela de resultados renderizada com notas manuais');
                     }
                     
                     this.inicializarGraficosResultados(dadosGraficos);
                     this.configurarEventosResultados();
                     this.atualizarContadoresCards();
-                    
-                    // 🔥 GARANTIR QUE A TABELA ESTÁ CORRETA
                     this.atualizarTabelaPaginada();
                 }, 100);
 
             } catch (error) {
                 console.error('❌ Erro ao carregar resultados:', error);
-                contentArea.innerHTML = this.renderErro(error);
+                contentArea.innerHTML = this.renderErro(error.message);
             }
         }
+
         processarResultadosReais(dashboardData, provasData, alunosData, resultadosAPI) {
             const resultados = [];
             const alunosMap = new Map();
@@ -15339,6 +15390,61 @@ class AdminPanel {
                             align-items: flex-start;
                         }
                     }
+                    
+                    /* No seu CSS, adicione estes estilos */
+                    .badge-manual {
+                        background: #f59e0b;
+                        color: white;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-size: 10px;
+                        margin-left: 5px;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 3px;
+                    }
+
+                    .badge-automatica {
+                        background: #10b981;
+                        color: white;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-size: 10px;
+                        margin-left: 5px;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 3px;
+                    }
+
+                    .status-cancelado {
+                        background: #fee2e2;
+                        color: #991b1b;
+                    }
+
+                    .status-pendente {
+                        background: #fff3cd;
+                        color: #856404;
+                    }
+
+                    .status-aprovado {
+                        background: #d4edda;
+                        color: #155724;
+                    }
+
+                    .status-reprovado {
+                        background: #f8d7da;
+                        color: #721c24;
+                    }
+
+                    .nota-alta {
+                        color: #28a745;
+                        font-weight: bold;
+                    }
+
+                    .nota-baixa {
+                        color: #dc3545;
+                        font-weight: bold;
+                    }
                 </style>
             `;
         }
@@ -15753,7 +15859,7 @@ class AdminPanel {
             }
         }
 
-        // ============ GERAR LINHAS DA TABELA DE RESULTADOS (COM BOTÃO DE LIBERAR NOTA) ============
+        // ============ GERAR LINHAS DA TABELA DE RESULTADOS (COM NOTAS MANUAIS) ============
         gerarLinhasResultados(resultados) {
             if (!resultados || resultados.length === 0) {
                 return `
@@ -15767,8 +15873,11 @@ class AdminPanel {
             }
 
             return resultados.map(r => {
-                // 🔥 CORREÇÃO: Só é cancelado se cancelada === true
                 const isCancelada = r.cancelada === true;
+                
+                // 🔥 DETERMINAR NOTA A SER EXIBIDA (manual tem prioridade)
+                const notaExibida = r.tipoNota === 'manual' ? r.notaManual : r.notaAutomatica;
+                const notaLiberada = r.tipoNota === 'manual' ? r.notaManualLiberada : r.notaLiberada;
                 
                 // Determinar status
                 let statusClass = '';
@@ -15780,15 +15889,13 @@ class AdminPanel {
                     statusText = 'Cancelada';
                     statusIcon = '🚫 ';
                 } 
-                // Se não tem nota OU nota não foi liberada → AGUARDANDO CORREÇÃO
-                else if (r.nota === null || r.nota === undefined || r.notaLiberada === false) {
+                else if (notaExibida === null || notaExibida === undefined || !notaLiberada) {
                     statusClass = 'status-pendente';
                     statusText = 'Aguardando Correção';
                     statusIcon = '⏳ ';
                 } 
-                // Tem nota e foi liberada
                 else {
-                    if (r.nota >= 7) {
+                    if (notaExibida >= 7) {
                         statusClass = 'status-aprovado';
                         statusText = 'Aprovado';
                         statusIcon = '✅ ';
@@ -15799,19 +15906,26 @@ class AdminPanel {
                     }
                 }
                 
-                // Só mostrar nota se foi liberada
-                const notaExibida = (r.notaLiberada === true && r.nota !== null && r.nota !== undefined) ? r.nota.toFixed(2) : '-';
-                
-                // Determinar classe da nota (apenas para estilo)
-                let notaClass = '';
-                if (r.nota !== null && r.nota !== undefined && !isCancelada && r.notaLiberada === true) {
-                    if (r.nota >= 7) notaClass = 'nota-alta';
-                    else if (r.nota > 0) notaClass = 'nota-baixa';
-                    else if (r.nota === 0) notaClass = 'nota-zero';
+                // 🔥 BADGE DE TIPO DE NOTA
+                let tipoNotaBadge = '';
+                if (r.tipoNota === 'manual') {
+                    tipoNotaBadge = '<span class="badge-manual" style="background: #f59e0b; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 5px;"><i class="fas fa-print"></i> Manual</span>';
+                } else if (r.tipoNota === 'automatica' && r.notaAutomatica !== null) {
+                    tipoNotaBadge = '<span class="badge-automatica" style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 5px;"><i class="fas fa-laptop-code"></i> Online</span>';
                 }
                 
-                // Verificar se precisa mostrar botão de liberar nota
-                const precisaLiberar = !isCancelada && r.nota !== null && r.nota !== undefined && r.notaLiberada === false;
+                // Só mostrar nota se foi liberada
+                const notaExibir = (notaLiberada && notaExibida !== null) ? notaExibida.toFixed(2) : '-';
+                
+                // Classe da nota
+                let notaClass = '';
+                if (notaLiberada && notaExibida !== null && !isCancelada) {
+                    if (notaExibida >= 7) notaClass = 'nota-alta';
+                    else if (notaExibida > 0) notaClass = 'nota-baixa';
+                }
+                
+                // Verificar se precisa liberar nota
+                const precisaLiberar = !isCancelada && notaExibida !== null && !notaLiberada;
                 
                 // Formatar data
                 const data = r.dataRealizacao ? 
@@ -15828,22 +15942,23 @@ class AdminPanel {
                             <div style="font-size: 11px; color: #6c757d;">${r.alunoMatricula || ''}</div>
                         </td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; color: #6c757d;">${r.alunoEmail || '-'}</td>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.provaTitulo || 'N/A'}</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                            ${r.provaTitulo || 'N/A'}
+                            ${tipoNotaBadge}
+                        </td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.alunoTurma || '-'}</td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${data}</td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;" class="${notaClass}">
-                            ${notaExibida}
+                            <strong>${notaExibir}</strong>
+                            ${r.tipoNota === 'manual' ? '<span style="font-size: 10px; color: #f59e0b;"> (Manual)</span>' : ''}
                         </td>
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                             ${r.acertos || 0}/${r.total || 0} 
                             <span style="color: #6c757d; font-size: 11px;">(${percentual}%)</span>
                         </td>
-                        
-                        <!-- 🔥 LINHA CORRIGIDA DO TEMPO (APENAS MINUTOS) -->
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                             ${this.formatarTempoResultado(r.tempoGasto, r.cancelada, r.status)}
                         </td>
-                        
                         <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                             <span class="status-badge ${statusClass}" style="
                                 display: inline-block;
@@ -25471,7 +25586,7 @@ class AdminPanel {
                 `;
             });
             
-            // ========== CARTÃO-RESPOSTA ==========
+            // ========== CARTÃO-RESPOSTA CORRIGIDO (ATUAL) ==========
             const gerarCartaoResposta = () => {
                 const qrCodeArea = qrCodeDataUrl ? `
                     <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
@@ -25496,20 +25611,24 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- QUADRADO DO GABARITO (APENAS PARA ESCANEAMENTO) -->
-                        <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 10px; background: #fff; display: inline-block; width: 100%; box-sizing: border-box;">
-                            <!-- 🔥 MARCAÇÕES DE ENQUADRAMENTO OMR CORRIGIDAS PARA IMPRESSÃO PRETA -->
-                            <div style="position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                            <div style="position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                            <div style="position: absolute; bottom: -3px; left: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                            <div style="position: absolute; bottom: -3px; right: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
+                        <!-- QUADRADO DO GABARITO COM MARCADORES DENTRO DA ÁREA VISÍVEL -->
+                        <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
+                            <!-- 🔥 MARCADORES OMR - AGORA DENTRO DA ÁREA (com padding positivo) -->
+                            <!-- Canto Superior Esquerdo -->
+                            <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <!-- Canto Superior Direito -->
+                            <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <!-- Canto Inferior Esquerdo -->
+                            <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <!-- Canto Inferior Direito -->
+                            <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
                             
-                            <!-- TABELA ESTILO EVALBE COMPACTA -->
+                            <!-- TABELA DO GABARITO -->
                             <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
                                 <thead>
                                     <tr style="background: #e8e8e8;">
-                                        <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 9pt; width: 35px;">Q</th>
-                                        ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 9pt; width: 35px;">${letra}</th>`).join('')}
+                                        <th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>
+                                        ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -25517,9 +25636,9 @@ class AdminPanel {
                                         const num = i + 1;
                                         return `
                                             <tr>
-                                                <td style="border: 1px solid #000; padding: 4px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
+                                                <td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
                                                 ${letrasUsadas.map(() => `
-                                                    <td style="border: 1px solid #000; padding: 4px; text-align: center;">
+                                                    <td style="border: 1px solid #000; padding: 5px 3px; text-align: center;">
                                                         <div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div>
                                                     </td>
                                                 `).join('')}

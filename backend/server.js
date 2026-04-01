@@ -738,73 +738,56 @@ try {
   Resultado = mongoose.model('Resultado', ResultadoSchema);
 }
 
-// Modelo ProvaRealizada
-// Modelo ProvaRealizada
-let ProvaRealizada;
-try {
-  ProvaRealizada = mongoose.model('ProvaRealizada');
-} catch {
-  const ProvaRealizadaSchema = new mongoose.Schema({
-    provaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Prova', required: true },
-    alunoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    respostas: { type: [String], default: [] },
-    
-    // ========== NOTA AUTOMÁTICA (prova online) ==========
-    nota: { type: Number, default: null },
-    tempoGasto: { type: Number, default: 0 },
-    dataRealizacao: { type: Date, default: Date.now },
-    status: { type: String, enum: ['pendente', 'em_andamento', 'finalizada', 'corrigida', 'cancelada'], default: 'pendente' },
-    notaLiberada: { type: Boolean, default: false },
-    resultadoDetalhado: { type: [Object], default: [] },
-    
-    // ========== NOTA MANUAL (prova impressa) ==========
-    notaManual: { 
-      type: Number, 
-      default: null,
-      min: 0,
-      max: 10
-    },
-    notaManualLiberada: { 
-      type: Boolean, 
-      default: false 
-    },
-    notaManualObservacao: { 
-      type: String, 
-      default: null 
-    },
-    notaManualData: { 
-      type: Date, 
-      default: null 
-    },
-    notaManualAtribuidaPor: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'User' 
-    },
-    resultadoDetalhadoManual: { 
-      type: [Object], 
-      default: [] 
-    },
-    
-    // ========== TIPO DE NOTA ==========
-    tipoNota: { 
-      type: String, 
-      enum: ['automatica', 'manual', 'ambas'],
-      default: 'automatica' 
-    },
-    
-    // ========== CAMPOS DE CANCELAMENTO ==========
-    cancelada: { type: Boolean, default: false },
-    motivoCancelamento: { type: String, default: null },
-    flagViolacao: { type: Boolean, default: false },
-    estatisticasCancelamento: { type: Object, default: null },
-    motivoCancelamentoTipo: { type: String, enum: ['violacao', 'prazo_expirado', 'outro', null], default: null },
-    sincronizadoEm: { type: Date, default: null }
-    
-  }, { timestamps: true });
-
-  ProvaRealizadaSchema.index({ provaId: 1, alunoId: 1 }, { unique: true });
-  ProvaRealizada = mongoose.model('ProvaRealizada', ProvaRealizadaSchema);
+// ============ MODELO PROVA REALIZADA - VERSÃO DEFINITIVA ============
+// Remover o modelo existente se já estiver definido
+if (mongoose.models.ProvaRealizada) {
+  delete mongoose.models.ProvaRealizada;
 }
+
+const ProvaRealizadaSchema = new mongoose.Schema({
+  provaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Prova', required: true },
+  alunoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  respostas: { type: [String], default: [] },
+  
+  // NOTA AUTOMÁTICA
+  nota: { type: Number, default: null },
+  tempoGasto: { type: Number, default: 0 },
+  dataRealizacao: { type: Date, default: Date.now },
+  status: { 
+    type: String, 
+    enum: ['pendente', 'em_andamento', 'finalizada', 'corrigida', 'cancelada'], 
+    default: 'pendente' 
+  },
+  notaLiberada: { type: Boolean, default: false },
+  resultadoDetalhado: { type: [Object], default: [] },
+  
+  // NOTA MANUAL - CAMPOS OBRIGATÓRIOS
+  notaManual: { type: Number, default: null },
+  notaManualLiberada: { type: Boolean, default: false },
+  notaManualObservacao: { type: String, default: null },
+  notaManualData: { type: Date, default: null },
+  notaManualAtribuidaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  resultadoDetalhadoManual: { type: [Object], default: [] },
+  
+  // TIPO DE NOTA
+  tipoNota: { type: String, enum: ['automatica', 'manual', 'ambas'], default: 'automatica' },
+  
+  // CANCELAMENTO
+  cancelada: { type: Boolean, default: false },
+  motivoCancelamento: { type: String, default: null },
+  flagViolacao: { type: Boolean, default: false },
+  estatisticasCancelamento: { type: Object, default: null },
+  motivoCancelamentoTipo: { type: String, enum: ['violacao', 'prazo_expirado', 'outro', null], default: null },
+  sincronizadoEm: { type: Date, default: null }
+  
+}, { timestamps: true });
+
+// Índices
+ProvaRealizadaSchema.index({ provaId: 1, alunoId: 1 }, { unique: true });
+ProvaRealizadaSchema.index({ notaManual: 1 });
+ProvaRealizadaSchema.index({ tipoNota: 1 });
+
+const ProvaRealizada = mongoose.model('ProvaRealizada', ProvaRealizadaSchema);
 
 // ============================================
 // MODELO PARA ARMAZENAR FACE ID (ATUALIZADO)
@@ -6977,16 +6960,15 @@ app.get('/api/professor/provas/:provaId/cancelamento-detailed', authenticateToke
 });
 
 // ============ ROTA PARA ATRIBUIR NOTA MANUAL (PROVA IMPRESSA) ============
-// Esta rota adiciona NOTA MANUAL como um campo separado, sem substituir a nota automática
 app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async (req, res) => {
     try {
         const { provaId } = req.params;
         const { alunoId, nota, observacao } = req.body;
         const professorId = req.userId;
         
-        console.log(`📝 Professor ${professorId} atribuindo NOTA MANUAL (separada) para prova ${provaId}, aluno ${alunoId}, nota: ${nota}`);
+        console.log(`📝 Professor ${professorId} atribuindo NOTA MANUAL para prova ${provaId}, aluno ${alunoId}, nota: ${nota}`);
         
-        // Verificar permissão
+        // ========== 1. VALIDAÇÕES INICIAIS ==========
         const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
         if (!isAdmin && req.userRole !== 'professor') {
             return res.status(403).json({
@@ -6995,108 +6977,115 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
             });
         }
         
-        // Buscar prova
-        const prova = await Prova.findById(provaId);
-        if (!prova) {
-            return res.status(404).json({ success: false, error: 'Prova não encontrada' });
-        }
-        
-        // Verificar se é o professor da prova
-        if (prova.userId.toString() !== professorId && !isAdmin) {
-            return res.status(403).json({ success: false, error: 'Você não é o professor desta prova' });
-        }
-        
-        // Validar nota
         const notaNumber = parseFloat(nota);
         if (isNaN(notaNumber) || notaNumber < 0 || notaNumber > 10) {
-            return res.status(400).json({ success: false, error: 'Nota inválida. Deve ser entre 0 e 10' });
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Nota inválida. Deve ser entre 0 e 10' 
+            });
         }
         
-        // Buscar aluno
+        const prova = await Prova.findById(provaId);
+        if (!prova) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Prova não encontrada' 
+            });
+        }
+        
+        if (prova.userId.toString() !== professorId && !isAdmin) {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Você não é o professor desta prova' 
+            });
+        }
+        
         const aluno = await User.findById(alunoId);
         if (!aluno) {
-            return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Aluno não encontrado' 
+            });
         }
         
-        // Verificar se o aluno está na turma
-        const turma = await Turma.findById(prova.turmaId);
-        if (!turma || !turma.alunos.includes(alunoId)) {
-            return res.status(400).json({ success: false, error: 'Aluno não está matriculado nesta turma' });
+        // ========== 2. VERIFICAÇÃO DE TURMA COM ADIÇÃO AUTOMÁTICA ==========
+        let turma = null;
+        let alunoNaTurma = false;
+        
+        if (prova.turmaId) {
+            turma = await Turma.findById(prova.turmaId);
+            
+            if (turma) {
+                console.log(`🔍 Verificando turma: ${turma.nome}`);
+                
+                // Verificar se o aluno está na turma
+                if (turma.alunos) {
+                    alunoNaTurma = turma.alunos.some(a => a.toString() === alunoId);
+                }
+                
+                console.log(`   Aluno ${aluno.nome} está na turma? ${alunoNaTurma ? 'SIM ✅' : 'NÃO ❌'}`);
+                
+                // 🔥 SE NÃO ESTIVER NA TURMA, ADICIONAR AUTOMATICAMENTE
+                if (!alunoNaTurma) {
+                    console.log(`➕ Adicionando aluno ${aluno.nome} (${alunoId}) à turma ${turma.nome}...`);
+                    
+                    turma.alunos = turma.alunos || [];
+                    turma.alunos.push(alunoId);
+                    await turma.save();
+                    
+                    alunoNaTurma = true;
+                    console.log(`✅ Aluno adicionado à turma com sucesso!`);
+                    console.log(`   Agora a turma tem ${turma.alunos.length} alunos`);
+                }
+            } else {
+                console.log(`⚠️ Turma não encontrada para a prova`);
+            }
         }
         
-        // Calcular acertos baseado na nota
+        // ========== 3. CALCULAR ACERTOS ==========
         const totalQuestoes = prova.questoes.length;
         const acertos = Math.round((notaNumber / 10) * totalQuestoes);
         const porcentagem = ((notaNumber / 10) * 100).toFixed(1);
         
-        // Criar resultado detalhado para a nota manual
+        // ========== 4. CRIAR RESULTADO DETALHADO ==========
         const resultadoDetalhadoManual = [];
         for (let i = 0; i < totalQuestoes; i++) {
             resultadoDetalhadoManual.push({
                 questaoNumero: i + 1,
                 pergunta: prova.questoes[i]?.pergunta || 'Questão não disponível',
                 respostaAluno: `Prova Impressa - Correção Manual`,
-                respostaCorreta: 'Não disponível',
+                respostaCorreta: prova.questoes[i]?.respostaCorreta !== undefined 
+                    ? ['A', 'B', 'C', 'D', 'E'][prova.questoes[i].respostaCorreta] 
+                    : 'Não disponível',
                 correto: false,
-                explicacao: `Nota ${notaNumber} atribuída manualmente (prova impressa). Observação: ${observacao || 'Nenhuma'}`,
+                explicacao: `Nota ${notaNumber} atribuída manualmente. Observação: ${observacao || 'Nenhuma'}`,
                 tipo: 'manual'
             });
         }
         
-        // BUSCAR OU CRIAR Resultado (sem substituir a nota automática)
-        let resultado = await Resultado.findOne({ provaId, userId: alunoId });
-        
-        if (resultado) {
-            // Já existe resultado - adicionar campo de nota manual
-            resultado.notaManual = notaNumber;
-            resultado.notaManualLiberada = true;
-            resultado.notaManualObservacao = observacao || `Nota manual atribuída em ${new Date().toLocaleDateString('pt-BR')}`;
-            resultado.notaManualData = new Date();
-            resultado.notaManualAtribuidaPor = professorId;
-            resultado.resultadoDetalhadoManual = resultadoDetalhadoManual;
-            resultado.tipoNota = 'ambas'; // Agora tem nota automática e manual
-            await resultado.save();
-            console.log(`✅ Nota manual ADICIONADA ao resultado existente: ${notaNumber}`);
-        } else {
-            // Criar novo resultado APENAS com nota manual
-            const novoResultado = new Resultado({
-                userId: alunoId,
-                provaId: provaId,
-                alunoNome: aluno.nome,
-                respostas: [],
-                nota: null, // Nota automática não existe
-                notaManual: notaNumber,
-                notaManualLiberada: true,
-                notaManualObservacao: observacao || `Nota manual atribuída em ${new Date().toLocaleDateString('pt-BR')}`,
-                notaManualData: new Date(),
-                notaManualAtribuidaPor: professorId,
-                acertos: 0,
-                total: totalQuestoes,
-                porcentagem: porcentagem,
-                resultadoDetalhado: [],
-                resultadoDetalhadoManual: resultadoDetalhadoManual,
-                notaLiberada: false, // Nota automática não liberada
-                tipoNota: 'manual',
-                dataCriacao: new Date()
-            });
-            await novoResultado.save();
-            resultado = novoResultado;
-            console.log(`✅ NOVO resultado criado APENAS com nota manual: ${notaNumber}`);
-        }
-        
-        // Também atualizar/criar ProvaRealizada com nota manual separada
+        // ========== 5. BUSCAR OU CRIAR ProvaRealizada ==========
         let provaRealizada = await ProvaRealizada.findOne({ provaId, alunoId });
         
+        const dataAgora = new Date();
+        
         if (provaRealizada) {
+            console.log(`📝 ProvaRealizada existente encontrada para aluno ${aluno.nome}`);
+            
+            // Atualizar com nota manual
             provaRealizada.notaManual = notaNumber;
             provaRealizada.notaManualLiberada = true;
-            provaRealizada.notaManualObservacao = observacao || `Nota manual atribuída`;
-            provaRealizada.notaManualData = new Date();
+            provaRealizada.notaManualObservacao = observacao || `Nota manual atribuída em ${dataAgora.toLocaleDateString('pt-BR')}`;
+            provaRealizada.notaManualData = dataAgora;
             provaRealizada.notaManualAtribuidaPor = professorId;
             provaRealizada.resultadoDetalhadoManual = resultadoDetalhadoManual;
-            provaRealizada.tipoNota = 'ambas';
+            provaRealizada.status = 'corrigida';
+            provaRealizada.tipoNota = provaRealizada.nota !== null && provaRealizada.nota !== undefined ? 'ambas' : 'manual';
+            
             await provaRealizada.save();
+            console.log(`✅ ProvaRealizada atualizada com nota manual: ${notaNumber}`);
         } else {
+            console.log(`📝 Criando nova ProvaRealizada para aluno ${aluno.nome}`);
+            
             const novaProvaRealizada = new ProvaRealizada({
                 provaId: provaId,
                 alunoId: alunoId,
@@ -7104,65 +7093,78 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
                 nota: null,
                 notaManual: notaNumber,
                 notaManualLiberada: true,
-                notaManualObservacao: observacao || `Nota manual atribuída`,
-                notaManualData: new Date(),
+                notaManualObservacao: observacao || `Nota manual atribuída em ${dataAgora.toLocaleDateString('pt-BR')}`,
+                notaManualData: dataAgora,
                 notaManualAtribuidaPor: professorId,
+                resultadoDetalhadoManual: resultadoDetalhadoManual,
                 tempoGasto: 0,
-                dataRealizacao: new Date(),
-                status: 'corrigida_manual',
+                dataRealizacao: dataAgora,
+                status: 'corrigida',
                 notaLiberada: false,
                 resultadoDetalhado: [],
-                resultadoDetalhadoManual: resultadoDetalhadoManual,
                 tipoNota: 'manual',
                 origem: 'manual_impressa'
             });
-            await novaProvaRealizada.save();
+            
+            provaRealizada = await novaProvaRealizada.save();
+            console.log(`✅ Nova ProvaRealizada criada com nota manual: ${notaNumber}`);
         }
         
-        // Atualizar estatísticas da prova (considerando AMBAS as notas)
-        const todosAlunosTurma = turma.alunos || [];
+        // ========== 6. VERIFICAR SE SALVOU ==========
+        const verificar = await ProvaRealizada.findOne({ provaId, alunoId });
+        console.log(`🔍 VERIFICAÇÃO FINAL:`);
+        console.log(`   - ProvaRealizada.notaManual: ${verificar?.notaManual}`);
+        console.log(`   - ProvaRealizada.notaManualLiberada: ${verificar?.notaManualLiberada}`);
+        console.log(`   - ProvaRealizada.tipoNota: ${verificar?.tipoNota}`);
+        console.log(`   - ProvaRealizada.status: ${verificar?.status}`);
+        
+        // ========== 7. ATUALIZAR ESTATÍSTICAS DA PROVA ==========
+        const todasProvasRealizadas = await ProvaRealizada.find({ provaId });
+        
         let somaNotasAutomaticas = 0;
         let somaNotasManuais = 0;
         let totalNotasAutomaticas = 0;
         let totalNotasManuais = 0;
         
-        for (const alunoIdTurma of todosAlunosTurma) {
-            const res = await Resultado.findOne({ provaId, userId: alunoIdTurma });
-            
-            if (res) {
-                if (res.nota !== null && res.nota !== undefined) {
-                    somaNotasAutomaticas += res.nota;
-                    totalNotasAutomaticas++;
-                }
-                if (res.notaManual !== null && res.notaManual !== undefined) {
-                    somaNotasManuais += res.notaManual;
-                    totalNotasManuais++;
-                }
+        todasProvasRealizadas.forEach(pr => {
+            if (pr.nota !== null && pr.nota !== undefined && !isNaN(pr.nota)) {
+                somaNotasAutomaticas += pr.nota;
+                totalNotasAutomaticas++;
             }
-        }
+            if (pr.notaManual !== null && pr.notaManual !== undefined && !isNaN(pr.notaManual)) {
+                somaNotasManuais += pr.notaManual;
+                totalNotasManuais++;
+            }
+        });
         
-        // Média considerando ambas as notas (pode ser personalizada)
         prova.mediaNotasAutomaticas = totalNotasAutomaticas > 0 ? somaNotasAutomaticas / totalNotasAutomaticas : 0;
         prova.mediaNotasManuais = totalNotasManuais > 0 ? somaNotasManuais / totalNotasManuais : 0;
-        prova.mediaGeral = (prova.mediaNotasAutomaticas + prova.mediaNotasManuais) / 2;
+        
+        let totalNotas = 0;
+        let countNotas = 0;
+        
+        if (totalNotasAutomaticas > 0) {
+            totalNotas += somaNotasAutomaticas;
+            countNotas += totalNotasAutomaticas;
+        }
+        if (totalNotasManuais > 0) {
+            totalNotas += somaNotasManuais;
+            countNotas += totalNotasManuais;
+        }
+        
+        prova.mediaGeral = countNotas > 0 ? totalNotas / countNotas : 0;
         await prova.save();
         
-        console.log(`📊 Estatísticas atualizadas:
-            - Média automática: ${prova.mediaNotasAutomaticas.toFixed(2)}
-            - Média manual: ${prova.mediaNotasManuais.toFixed(2)}
-            - Média geral: ${prova.mediaGeral.toFixed(2)}`);
+        console.log(`📊 Estatísticas atualizadas:`);
+        console.log(`   - Média automática: ${prova.mediaNotasAutomaticas.toFixed(2)} (${totalNotasAutomaticas} alunos)`);
+        console.log(`   - Média manual: ${prova.mediaNotasManuais.toFixed(2)} (${totalNotasManuais} alunos)`);
+        console.log(`   - Média geral: ${prova.mediaGeral.toFixed(2)} (${countNotas} notas)`);
         
-        // ===== NOTIFICAR ALUNO SOBRE NOTA MANUAL =====
+        // ========== 8. NOTIFICAR ALUNO ==========
         try {
-            const Config = mongoose.model('Config');
-            const configDoc = await Config.findOne({ chave: 'notificacoes' });
-            const pushAtivado = configDoc?.valor?.push === true;
-            
-            const professor = await User.findById(professorId).select('nome');
-            
             const notificacao = new Notificacao({
                 usuarioId: alunoId,
-                tipo: 'resultado_manual_liberado',
+                tipo: 'sistema',
                 titulo: '📝 Nota da Prova Impressa Liberada!',
                 mensagem: `Sua nota da prova impressa "${prova.titulo}" foi registrada: ${notaNumber.toFixed(1)}`,
                 icone: '📝',
@@ -7173,49 +7175,39 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
                     provaId: prova._id,
                     provaTitulo: prova.titulo,
                     nota: notaNumber,
-                    tipo: 'manual',
-                    professor: professor?.nome || 'Professor'
+                    tipo: 'manual'
                 }
             });
             
             await notificacao.save();
+            console.log(`✅ Notificação salva para aluno ${aluno.nome}`);
             
-            if (pushAtivado) {
-                const OneSignalService = require('./services/onesignal-service');
-                const oneSignal = new OneSignalService();
-                
-                await oneSignal.enviarPush(
-                    alunoId,
-                    '📝 Nota da Prova Impressa',
-                    `Sua nota em "${prova.titulo}" (prova impressa) foi registrada: ${notaNumber.toFixed(1)}`,
-                    {
-                        tipo: 'nota_manual',
-                        provaId: prova._id,
-                        nota: notaNumber
-                    }
-                );
-            }
-            
-            console.log(`✅ Aluno ${aluno.nome} notificado sobre nota manual`);
         } catch (notifError) {
             console.error('⚠️ Erro ao notificar aluno:', notifError.message);
         }
         
+        // ========== 9. RETORNAR RESPOSTA ==========
         res.json({
             success: true,
-            message: `Nota manual ${notaNumber.toFixed(1)} registrada para ${aluno.nome}! (Nota automática mantida)`,
+            message: `Nota manual ${notaNumber.toFixed(1)} registrada para ${aluno.nome}!`,
             notaManual: notaNumber,
-            notaAutomatica: resultado.nota,
-            tipo: 'manual',
-            resultado: {
-                id: resultado._id,
-                notaAutomatica: resultado.nota,
-                notaManual: resultado.notaManual
-            }
+            provaRealizada: {
+                id: provaRealizada._id,
+                notaAutomatica: provaRealizada.nota,
+                notaManual: provaRealizada.notaManual,
+                tipoNota: provaRealizada.tipoNota
+            },
+            alunoAdicionado: !alunoNaTurma ? true : false,
+            turma: turma ? {
+                id: turma._id,
+                nome: turma.nome,
+                totalAlunos: turma.alunos.length
+            } : null
         });
         
     } catch (error) {
         console.error('❌ Erro ao atribuir nota manual:', error);
+        console.error('Stack trace:', error.stack);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao atribuir nota manual: ' + error.message
@@ -7642,11 +7634,8 @@ app.get('/api/provas/dados', async (req, res) => {
 
 // ============ ROTAS DE RESULTADOS ============
 
-// ============ ROTA DE RESULTADOS DO PROFESSOR - VERSÃO ULTRA ROBUSTA ============
+// ============ ROTA DE RESULTADOS DO PROFESSOR - COM NOTAS MANUAIS ============
 app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
-  // Garantir que sempre retornamos JSON, mesmo em caso de erro
-  res.setHeader('Content-Type', 'application/json');
-  
   try {
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
     if (!isAdmin && req.userRole !== 'professor') {
@@ -7657,12 +7646,12 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     }
 
     const professorId = req.userId;
-    console.log(`📊 Professor ${professorId} buscando resultados`);
+    console.log(`📊 Professor ${professorId} buscando resultados (incluindo notas manuais)`);
 
     // Buscar provas do professor
     const provas = await Prova.find({ userId: professorId })
       .populate('turmaId', 'nome disciplina')
-      .lean(); // .lean() para melhor performance
+      .lean();
 
     if (!provas || provas.length === 0) {
       return res.json({
@@ -7685,112 +7674,86 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     const alunosProcessados = new Set();
 
     for (const prova of provas) {
-      // Buscar resultados - com tratamento de erro para cada query
-      let resultadosProva = [];
-      try {
-        resultadosProva = await Resultado.find({ provaId: prova._id })
-          .populate('userId', 'nome email matricula')
-          .lean() || [];
-      } catch (e) {
-        console.warn(`⚠️ Erro ao buscar resultados da prova ${prova._id}:`, e.message);
-      }
+      // 🔥 BUSCAR PROVAS REALIZADAS (inclui notas automáticas e manuais)
+      const provasRealizadas = await ProvaRealizada.find({ provaId: prova._id })
+        .populate('alunoId', 'nome email matricula')
+        .lean();
 
-      let provasRealizadas = [];
-      try {
-        provasRealizadas = await ProvaRealizada.find({ provaId: prova._id })
-          .populate('alunoId', 'nome email matricula')
-          .lean() || [];
-      } catch (e) {
-        console.warn(`⚠️ Erro ao buscar provas realizadas da prova ${prova._id}:`, e.message);
-      }
+      console.log(`   Prova "${prova.titulo}": ${provasRealizadas.length} registros`);
 
-      // Processar resultados com segurança
-      resultadosProva.forEach(r => {
-        if (!r.userId) {
-          console.warn(`⚠️ Resultado ${r._id} sem referência de usuário`);
-          return;
-        }
-
-        alunosProcessados.add(r.userId._id?.toString() || r.userId.toString());
-
-        resultadosCompletos.push({
-          provaId: prova._id,
-          provaTitulo: prova.titulo || 'Sem título',
-          provaConteudo: prova.conteudo || '',
-          provaDataLimite: prova.dataLimite,
-          periodo: prova.periodo || '1',
-          periodo: prova.periodo || '1', 
-          turmaId: prova.turmaId?._id,
-          turmaNome: prova.turmaId?.nome || 'Turma não especificada',
-          turmaDisciplina: prova.turmaId?.disciplina || '',
-          alunoId: r.userId._id || r.userId,
-          alunoNome: r.userId.nome || 'Aluno não identificado',
-          alunoEmail: r.userId.email || '',
-          alunoMatricula: r.userId.matricula || '',
-          nota: r.nota,
-          acertos: r.acertos || 0,
-          total: r.total || 0,
-          porcentagem: r.porcentagem || '0.0',
-          tempoGasto: r.tempoGasto || 0,
-          dataEntrega: r.createdAt,
-          notaLiberada: r.notaLiberada || false,
-          tipo: 'resultado'
-        });
-
-        if (r.nota !== undefined && r.nota !== null && !isNaN(r.nota)) {
-          totalAlunos++;
-          somaNotas += r.nota;
-          contadorNotas++;
-        }
-      });
-
-      // Processar provas realizadas com segurança
-      provasRealizadas.forEach(pr => {
+      for (const pr of provasRealizadas) {
         if (!pr.alunoId) {
           console.warn(`⚠️ ProvaRealizada ${pr._id} sem referência de aluno`);
-          return;
+          continue;
         }
 
-        const alunoId = pr.alunoId._id?.toString() || pr.alunoId.toString();
+        const alunoId = pr.alunoId._id.toString();
         
-        // Verificar duplicata
-        const jaExiste = resultadosCompletos.some(r => 
-          r.alunoId?.toString() === alunoId && 
-          r.provaId?.toString() === prova._id.toString()
-        );
-
-        if (!jaExiste) {
-          alunosProcessados.add(alunoId);
-
+        // 🔥 PEGAR A NOTA QUE ESTÁ DISPONÍVEL (manual tem prioridade)
+        const notaFinal = pr.notaManual !== null ? pr.notaManual : pr.nota;
+        const notaLiberada = pr.notaManualLiberada || pr.notaLiberada;
+        const tipoNota = pr.tipoNota || (pr.notaManual !== null ? 'manual' : 'automatica');
+        
+        // Evitar duplicatas
+        if (!alunosProcessados.has(`${prova._id}-${alunoId}`)) {
+          alunosProcessados.add(`${prova._id}-${alunoId}`);
+          
+          // Calcular taxa de acerto
+          const totalQuestoes = prova.questoes?.length || 0;
+          const acertos = notaFinal !== null ? Math.round((notaFinal / 10) * totalQuestoes) : 0;
+          const porcentagem = notaFinal !== null ? ((acertos / totalQuestoes) * 100).toFixed(1) : '0.0';
+          
           resultadosCompletos.push({
+            // Dados da prova
             provaId: prova._id,
             provaTitulo: prova.titulo || 'Sem título',
             provaConteudo: prova.conteudo || '',
             provaDataLimite: prova.dataLimite,
+            periodo: prova.periodo || '1',
+            
+            // Dados da turma
             turmaId: prova.turmaId?._id,
             turmaNome: prova.turmaId?.nome || 'Turma não especificada',
             turmaDisciplina: prova.turmaId?.disciplina || '',
+            
+            // Dados do aluno
             alunoId: alunoId,
             alunoNome: pr.alunoId.nome || 'Aluno não identificado',
             alunoEmail: pr.alunoId.email || '',
             alunoMatricula: pr.alunoId.matricula || '',
-            nota: pr.nota,
+            
+            // 🔥 NOTAS (automática e manual)
+            nota: notaFinal,
+            notaAutomatica: pr.nota,
+            notaManual: pr.notaManual,
+            tipoNota: tipoNota,
+            
+            // Dados de desempenho
+            acertos: acertos,
+            total: totalQuestoes,
+            porcentagem: porcentagem,
             tempoGasto: pr.tempoGasto || 0,
             dataEntrega: pr.dataRealizacao,
-            notaLiberada: pr.notaLiberada || false,
-            tipo: 'prova_realizada'
+            notaLiberada: notaLiberada,
+            
+            // Status
+            status: pr.status || (notaFinal !== null ? 'corrigida' : 'pendente'),
+            cancelada: pr.cancelada || false,
+            
+            origem: 'prova_realizada',
+            id: pr._id
           });
-
-          if (pr.nota !== undefined && pr.nota !== null && !isNaN(pr.nota)) {
+          
+          if (notaFinal !== null && !isNaN(notaFinal)) {
             totalAlunos++;
-            somaNotas += pr.nota;
+            somaNotas += notaFinal;
             contadorNotas++;
           }
         }
-      });
+      }
     }
 
-    // Calcular estatísticas com segurança
+    // Calcular estatísticas
     const totalAlunosUnicos = alunosProcessados.size;
     const mediaGeral = contadorNotas > 0 ? (somaNotas / contadorNotas).toFixed(1) : '0.0';
     const taxaConclusao = totalAlunosUnicos > 0 
@@ -7802,6 +7765,8 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
       totalAlunos: totalAlunosUnicos,
       mediaGeral: mediaGeral,
       taxaConclusao: taxaConclusao,
+      totalNotasManuais: resultadosCompletos.filter(r => r.tipoNota === 'manual').length,
+      totalNotasAutomaticas: resultadosCompletos.filter(r => r.tipoNota === 'automatica').length,
       provas: provas.map(prova => ({
         id: prova._id,
         titulo: prova.titulo || 'Sem título',
@@ -7812,19 +7777,21 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     };
 
     console.log(`✅ Resultados carregados: ${resultadosCompletos.length} registros`);
+    console.log(`   - Notas automáticas: ${estatisticas.totalNotasAutomaticas}`);
+    console.log(`   - Notas manuais: ${estatisticas.totalNotasManuais}`);
+    console.log(`   - Média geral: ${estatisticas.mediaGeral}`);
 
     return res.json({
       success: true,
       resultados: resultadosCompletos,
       estatisticas: estatisticas,
-      mensagem: `Encontrados ${resultadosCompletos.length} resultados em ${provas.length} provas`
+      mensagem: `Encontrados ${resultadosCompletos.length} resultados (${estatisticas.totalNotasManuais} manuais, ${estatisticas.totalNotasAutomaticas} automáticas)`
     });
 
   } catch (error) {
     console.error('❌ Erro crítico ao buscar resultados:', error);
     console.error('Stack:', error.stack);
     
-    // SEMPRE retornar JSON, mesmo em erro
     return res.status(500).json({
       success: false,
       error: 'Erro interno ao buscar resultados: ' + error.message,
@@ -12802,19 +12769,19 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
     }
 });
 
-// ============ ROTA PARA ADMIN LISTAR TODOS OS RESULTADOS (CORRIGIDA) ============
+// ============ ROTA PARA ADMIN LISTAR TODOS OS RESULTADOS (CORRIGIDA - COM NOTAS MANUAIS) ============
 app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (req, res) => {
   try {
-    console.log('📊 Admin buscando todos os resultados');
+    console.log('📊 Admin buscando todos os resultados (incluindo notas manuais)');
     
-    // Buscar resultados do modelo Resultado
+    // ========== 1. BUSCAR RESULTADOS DO MODELO Resultado (NOTAS AUTOMÁTICAS) ==========
     const resultados = await Resultado.find()
       .populate('userId', 'nome email matricula turma')
       .populate('provaId', 'titulo')
       .sort({ createdAt: -1 })
       .lean();
     
-    // Buscar provas realizadas
+    // ========== 2. BUSCAR PROVAS REALIZADAS (NOTAS MANUAIS) ==========
     const provasRealizadas = await ProvaRealizada.find()
       .populate('alunoId', 'nome email matricula turma')
       .populate('provaId', 'titulo')
@@ -12823,17 +12790,14 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
     
     const resultadosMap = new Map();
     
-    // Processar resultados do modelo Resultado
+    // ========== 3. PROCESSAR RESULTADOS AUTOMÁTICOS ==========
     resultados.forEach(r => {
       const dataStr = r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '';
       const key = `${r.userId?._id || r.userId}-${r.provaId?._id || r.provaId}-${dataStr}`;
       
-      // 🔥 CORREÇÃO: Só é cancelado se tiver motivo de cancelamento EXPLÍCITO
       const isCancelada = r.cancelada === true || 
                          r.status === 'cancelada' ||
                          (r.motivoCancelamento && r.motivoCancelamento.length > 0);
-      
-      // 🔥 IMPORTANTE: Nota 0 NÃO é cancelamento!
       
       resultadosMap.set(key, {
         id: r._id,
@@ -12845,22 +12809,34 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
         provaId: r.provaId?._id,
         provaTitulo: r.provaId?.titulo || 'Prova',
         dataRealizacao: r.createdAt,
+        // 🔥 NOTA AUTOMÁTICA
+        notaAutomatica: r.nota !== undefined ? parseFloat(r.nota) : null,
+        notaAutomaticaLiberada: r.notaLiberada || false,
+        // 🔥 NOTA MANUAL (não tem)
+        notaManual: null,
+        notaManualLiberada: false,
+        notaManualObservacao: null,
+        notaManualData: null,
+        notaManualAtribuidaPor: null,
+        resultadoDetalhadoManual: [],
+        // 🔥 NOTA FINAL (usa a automática)
         nota: r.nota !== undefined ? parseFloat(r.nota) : null,
         acertos: r.acertos || 0,
         total: r.total || 0,
         tempoGasto: r.tempoGasto || 0,
         status: r.status || (r.nota ? (r.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente'),
         notaLiberada: r.notaLiberada || false,
-        cancelada: isCancelada,  // 🔥 SÓ TRUE SE REALMENTE CANCELADA
+        cancelada: isCancelada,
         motivoCancelamento: r.motivoCancelamento,
         flagViolacao: r.flagViolacao || false,
+        tipoNota: 'automatica',  // 🔥 TIPO DE NOTA
         origem: 'resultado',
         resultadoDetalhado: r.resultadoDetalhado || [],
         observacoes: r.observacoes || ''
       });
     });
     
-    // Processar provas realizadas
+    // ========== 4. PROCESSAR PROVAS REALIZADAS (NOTAS MANUAIS) ==========
     provasRealizadas.forEach(pr => {
       const dataStr = pr.dataRealizacao ? new Date(pr.dataRealizacao).toISOString().split('T')[0] : '';
       const key = `${pr.alunoId?._id || pr.alunoId}-${pr.provaId?._id || pr.provaId}-${dataStr}`;
@@ -12868,6 +12844,38 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
       const isCancelada = pr.cancelada === true || 
                          pr.status === 'cancelada' ||
                          (pr.motivoCancelamento && pr.motivoCancelamento.length > 0);
+      
+      // 🔥 VERIFICAR SE TEM NOTA MANUAL
+      const temNotaManual = pr.notaManual !== null && pr.notaManual !== undefined;
+      const temNotaAutomatica = pr.nota !== null && pr.nota !== undefined;
+      
+      // 🔥 NOTA FINAL: prioridade para MANUAL
+      let notaFinal = null;
+      let notaLiberada = false;
+      let tipoNota = 'automatica';
+      let notaAutomatica = null;
+      let notaManual = null;
+      
+      if (temNotaManual) {
+        notaFinal = pr.notaManual;
+        notaLiberada = true;  // 🔥 Nota manual já está liberada!
+        tipoNota = 'manual';
+        notaManual = pr.notaManual;
+        notaAutomatica = pr.nota;
+      } else if (temNotaAutomatica) {
+        notaFinal = pr.nota;
+        notaLiberada = pr.notaLiberada || false;
+        tipoNota = 'automatica';
+        notaAutomatica = pr.nota;
+      }
+      
+      // 🔥 DETERMINAR STATUS
+      let status = 'pendente';
+      if (isCancelada) {
+        status = 'cancelada';
+      } else if (notaFinal !== null) {
+        status = notaFinal >= 7 ? 'aprovado' : 'reprovado';
+      }
       
       if (!resultadosMap.has(key)) {
         resultadosMap.set(key, {
@@ -12880,23 +12888,80 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
           provaId: pr.provaId?._id,
           provaTitulo: pr.provaId?.titulo || 'Prova',
           dataRealizacao: pr.dataRealizacao,
-          nota: pr.nota !== undefined ? parseFloat(pr.nota) : null,
+          // 🔥 NOTA AUTOMÁTICA
+          notaAutomatica: notaAutomatica,
+          notaAutomaticaLiberada: pr.notaLiberada || false,
+          // 🔥 NOTA MANUAL
+          notaManual: notaManual,
+          notaManualLiberada: temNotaManual ? true : false,
+          notaManualObservacao: pr.notaManualObservacao,
+          notaManualData: pr.notaManualData,
+          notaManualAtribuidaPor: pr.notaManualAtribuidaPor,
+          resultadoDetalhadoManual: pr.resultadoDetalhadoManual || [],
+          // 🔥 NOTA FINAL
+          nota: notaFinal,
           acertos: pr.acertos || 0,
           total: pr.total || 0,
           tempoGasto: pr.tempoGasto || 0,
-          status: pr.status || (pr.nota ? (pr.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente'),
-          notaLiberada: pr.notaLiberada || false,
-          cancelada: isCancelada,  // 🔥 SÓ TRUE SE REALMENTE CANCELADA
+          status: status,
+          notaLiberada: notaLiberada,
+          cancelada: isCancelada,
           motivoCancelamento: pr.motivoCancelamento,
           flagViolacao: pr.flagViolacao || false,
+          tipoNota: tipoNota,  // 🔥 TIPO DE NOTA (manual ou automatica)
           origem: 'provaRealizada',
           resultadoDetalhado: pr.resultadoDetalhado || [],
           observacoes: pr.observacoes || ''
         });
+      } else {
+        // Se já existe um resultado para este aluno/prova, atualizar com nota manual se disponível
+        const existing = resultadosMap.get(key);
+        if (temNotaManual && existing.tipoNota !== 'manual') {
+          existing.notaManual = notaManual;
+          existing.notaManualLiberada = true;
+          existing.tipoNota = 'manual';
+          existing.nota = notaFinal;
+          existing.notaLiberada = true;
+          existing.status = notaFinal >= 7 ? 'aprovado' : 'reprovado';
+          existing.notaManualObservacao = pr.notaManualObservacao;
+          existing.notaManualData = pr.notaManualData;
+          existing.notaManualAtribuidaPor = pr.notaManualAtribuidaPor;
+          existing.resultadoDetalhadoManual = pr.resultadoDetalhadoManual || [];
+          resultadosMap.set(key, existing);
+        }
       }
     });
     
     const todosResultados = Array.from(resultadosMap.values());
+    
+    // ========== 5. CALCULAR ESTATÍSTICAS COM NOTAS MANUAIS ==========
+    const aprovados = todosResultados.filter(r => r.status === 'aprovado' && !r.cancelada).length;
+    const reprovados = todosResultados.filter(r => r.status === 'reprovado' && !r.cancelada).length;
+    const pendentes = todosResultados.filter(r => r.status === 'pendente' && !r.cancelada).length;
+    const cancelados = todosResultados.filter(r => r.cancelada).length;
+    const notasManuais = todosResultados.filter(r => r.tipoNota === 'manual').length;
+    const notasAutomaticas = todosResultados.filter(r => r.tipoNota === 'automatica' && r.nota !== null).length;
+    
+    const notasValidas = todosResultados
+      .filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada)
+      .map(r => r.nota);
+    
+    const mediaGeral = notasValidas.length > 0 
+      ? (notasValidas.reduce((a,b) => a+b, 0) / notasValidas.length).toFixed(2)
+      : '0.00';
+    
+    const taxaAprovacao = notasValidas.length > 0 
+      ? ((aprovados / notasValidas.length) * 100).toFixed(1)
+      : '0.0';
+    
+    console.log(`✅ Resultados processados:`);
+    console.log(`   - Total: ${todosResultados.length}`);
+    console.log(`   - Manuais: ${notasManuais}`);
+    console.log(`   - Automáticas: ${notasAutomaticas}`);
+    console.log(`   - Aprovados: ${aprovados}`);
+    console.log(`   - Reprovados: ${reprovados}`);
+    console.log(`   - Pendentes: ${pendentes}`);
+    console.log(`   - Cancelados: ${cancelados}`);
     
     res.json({
       success: true,
@@ -12906,10 +12971,14 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
         total: todosResultados.length,
         comNota: todosResultados.filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada).length,
         semNota: todosResultados.filter(r => r.nota === null || r.nota === undefined).length,
-        aprovados: todosResultados.filter(r => r.nota && r.nota >= 7 && !r.cancelada).length,
-        reprovados: todosResultados.filter(r => r.nota && r.nota < 7 && !r.cancelada).length,
-        cancelados: todosResultados.filter(r => r.cancelada).length,
-        pendentes: todosResultados.filter(r => r.nota === null || r.nota === undefined).length
+        aprovados: aprovados,
+        reprovados: reprovados,
+        cancelados: cancelados,
+        pendentes: pendentes,
+        notasManuais: notasManuais,
+        notasAutomaticas: notasAutomaticas,
+        mediaGeral: mediaGeral,
+        taxaAprovacao: taxaAprovacao
       }
     });
     

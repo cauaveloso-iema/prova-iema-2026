@@ -3678,6 +3678,31 @@ window.addEventListener('scroll', function() {
                 </div>
                 <!-- Alertas para resultados -->
                 <div id="alertResultados" class="alert" style="display: none; margin-bottom: 25px;"></div>
+
+                <!-- 🔥 ADICIONE ESTE BOTÃO DE EXPORTAÇÃO AQUI -->
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+                    <button onclick="exportarNotasAlunosExcel()" 
+                            style="
+                                background: linear-gradient(135deg, #10b981, #059669);
+                                color: white;
+                                border: none;
+                                border-radius: 12px;
+                                padding: 12px 24px;
+                                font-weight: 600;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.3s;
+                                box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(16,185,129,0.4)'"
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(16,185,129,0.3)'">
+                        <i class="fas fa-file-excel"></i>
+                        Exportar Notas (Excel)
+                    </button>
+                </div>
                 
                 <!-- Filtros (mesmo estilo) -->
                 <div style="
@@ -8601,7 +8626,7 @@ window.addEventListener('scroll', function() {
                     `;
                 });
                 
-                // ========== CARTÃO-RESPOSTA ESTILO EVALBE (COM QUADRADO APENAS PARA O GABARITO) ==========
+                // ========== CARTÃO-RESPOSTA CORRIGIDO (ATUAL) ==========
                 const gerarCartaoResposta = () => {
                     const qrCodeArea = qrCodeDataUrl ? `
                         <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
@@ -8626,20 +8651,24 @@ window.addEventListener('scroll', function() {
                                 </div>
                             </div>
                             
-                            <!-- QUADRADO DO GABARITO (APENAS PARA ESCANEAMENTO) -->
-                            <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 10px; background: #fff; display: inline-block; width: 100%; box-sizing: border-box;">
-                                <!-- 🔥 MARCAÇÕES DE ENQUADRAMENTO OMR CORRIGIDAS PARA IMPRESSÃO PRETA -->
-                                <div style="position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                                <div style="position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                                <div style="position: absolute; bottom: -3px; left: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                                <div style="position: absolute; bottom: -3px; right: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
+                            <!-- QUADRADO DO GABARITO COM MARCADORES DENTRO DA ÁREA VISÍVEL -->
+                            <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
+                                <!-- 🔥 MARCADORES OMR - AGORA DENTRO DA ÁREA (com padding positivo) -->
+                                <!-- Canto Superior Esquerdo -->
+                                <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                <!-- Canto Superior Direito -->
+                                <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                <!-- Canto Inferior Esquerdo -->
+                                <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                <!-- Canto Inferior Direito -->
+                                <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
                                 
-                                <!-- TABELA ESTILO EVALBE COMPACTA -->
+                                <!-- TABELA DO GABARITO -->
                                 <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
                                     <thead>
                                         <tr style="background: #e8e8e8;">
-                                            <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 9pt; width: 35px;">Q</th>
-                                            ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 9pt; width: 35px;">${letra}</th>`).join('')}
+                                            <th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>
+                                            ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -8647,9 +8676,9 @@ window.addEventListener('scroll', function() {
                                             const num = i + 1;
                                             return `
                                                 <tr>
-                                                    <td style="border: 1px solid #000; padding: 4px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
+                                                    <td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
                                                     ${letrasUsadas.map(() => `
-                                                        <td style="border: 1px solid #000; padding: 4px; text-align: center;">
+                                                        <td style="border: 1px solid #000; padding: 5px 3px; text-align: center;">
                                                             <div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div>
                                                         </td>
                                                     `).join('')}
@@ -15125,6 +15154,344 @@ window.addEventListener('scroll', function() {
 
         function handleKeyDown(e) {
             // Usada apenas para diagnóstico
+        }
+
+        // ============ EXPORTAR NOTAS DOS ALUNOS (RESULTADOS) - COM FILTROS CORRETOS ============
+        async function exportarNotasAlunosExcel() {
+            try {
+                console.log('%c📊 EXPORTANDO NOTAS DOS ALUNOS (RESULTADOS)', 'font-size: 14px; font-weight: bold; color: #10b981;');
+                
+                // ========== 1. OBTER FILTROS ATIVOS DA ABA RESULTADOS ==========
+                // 🔥 CORREÇÃO: Pegar o valor do select de turma (não é ID, é o nome da turma)
+                const filtroTurmaSelect = document.getElementById('filtroTurma');
+                const filtroTurma = filtroTurmaSelect?.value || '';
+                let turmaNome = 'Todas as turmas';
+                let turmaId = null;
+                
+                // Verificar se é um ID do MongoDB (24 caracteres hex) ou nome da turma
+                if (filtroTurma && filtroTurma.match(/^[0-9a-fA-F]{24}$/)) {
+                    // É um ID, buscar o nome da turma
+                    turmaId = filtroTurma;
+                    turmaNome = filtroTurmaSelect?.options[filtroTurmaSelect.selectedIndex]?.text.replace('🏫', '').trim() || 'Turma selecionada';
+                } else if (filtroTurma) {
+                    // É o nome da turma diretamente
+                    turmaNome = filtroTurma;
+                    turmaId = null;
+                }
+                
+                console.log(`📍 Turma selecionada: "${turmaNome}" (ID: ${turmaId || 'N/A'})`);
+                
+                // Filtro de disciplina
+                const filtroDisciplinaSelect = document.getElementById('filtroDisciplina');
+                const filtroDisciplina = filtroDisciplinaSelect?.value || '';
+                let disciplinaNome = 'Todas as disciplinas';
+                
+                if (filtroDisciplina && filtroDisciplina !== '') {
+                    disciplinaNome = filtroDisciplinaSelect?.options[filtroDisciplinaSelect.selectedIndex]?.text.replace('📚', '').trim() || 'Disciplina selecionada';
+                }
+                
+                // 🔥 FILTRO DE PERÍODO LETIVO (ADICIONADO)
+                const filtroPeriodoSelect = document.getElementById('filtroPeriodoResultados');
+                const filtroPeriodo = filtroPeriodoSelect?.value || '';
+                let periodoTexto = 'Todos os períodos';
+                
+                if (filtroPeriodo && filtroPeriodo !== '') {
+                    const periodoNum = parseInt(filtroPeriodo);
+                    periodoTexto = `${periodoNum}º Período`;
+                }
+                
+                console.log('📋 FILTROS APLICADOS:', {
+                    turma: turmaNome,
+                    turmaId: turmaId,
+                    disciplina: disciplinaNome,
+                    periodo: periodoTexto
+                });
+                
+                // ========== 2. OBTER TOKEN ==========
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    throw new Error('Token de autenticação não encontrado. Faça login novamente.');
+                }
+                
+                mostrarAlerta('alertResultados', '🔍 Buscando dados dos alunos...', 'info');
+                
+                // ========== 3. BUSCAR RESULTADOS DA API ==========
+                const response = await fetch('/api/professor/resultados', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao carregar dados');
+                }
+                
+                // ========== 4. PROCESSAR E FILTRAR RESULTADOS ==========
+                let resultados = data.resultados || [];
+                
+                console.log(`📊 ${resultados.length} resultados obtidos da API`);
+                
+                if (resultados.length === 0) {
+                    mostrarAlerta('alertResultados', '⚠️ Nenhum resultado encontrado', 'info');
+                    return;
+                }
+                
+                // 🔥 APLICAR FILTROS - VERSÃO CORRIGIDA
+                let resultadosFiltrados = [...resultados];
+                
+                // 1. FILTRO POR TURMA (por nome ou ID)
+                if (turmaId) {
+                    // Filtrar por ID da turma
+                    resultadosFiltrados = resultadosFiltrados.filter(r => 
+                        r.turmaId === turmaId ||
+                        r.turmaId?.toString() === turmaId
+                    );
+                    console.log(`📌 Após filtro por turma ID: ${resultadosFiltrados.length} registros`);
+                } else if (turmaNome !== 'Todas as turmas' && turmaNome !== '') {
+                    // Filtrar por nome da turma
+                    resultadosFiltrados = resultadosFiltrados.filter(r => 
+                        r.turmaNome === turmaNome ||
+                        r.turma?.nome === turmaNome ||
+                        r.turma === turmaNome
+                    );
+                    console.log(`📌 Após filtro por turma nome: ${resultadosFiltrados.length} registros`);
+                }
+                
+                // 2. FILTRO POR DISCIPLINA
+                if (disciplinaNome !== 'Todas as disciplinas' && disciplinaNome !== '') {
+                    resultadosFiltrados = resultadosFiltrados.filter(r => 
+                        r.turmaDisciplina === disciplinaNome ||
+                        r.disciplina === disciplinaNome ||
+                        r.turma?.disciplina === disciplinaNome
+                    );
+                    console.log(`📌 Após filtro de disciplina: ${resultadosFiltrados.length} registros`);
+                }
+                
+                // 3. FILTRO POR PERÍODO
+                if (filtroPeriodo && filtroPeriodo !== '') {
+                    resultadosFiltrados = resultadosFiltrados.filter(r => 
+                        r.periodo?.toString() === filtroPeriodo ||
+                        r.provaPeriodo?.toString() === filtroPeriodo
+                    );
+                    console.log(`📌 Após filtro de período: ${resultadosFiltrados.length} registros`);
+                }
+                
+                // Se não houver resultados após os filtros
+                if (resultadosFiltrados.length === 0) {
+                    mostrarAlerta('alertResultados', `⚠️ Nenhum resultado encontrado para ${turmaNome}`, 'info');
+                    return;
+                }
+                
+                // ========== 5. AGRUPAR POR ALUNO ==========
+                const alunosMap = new Map();
+                
+                resultadosFiltrados.forEach(item => {
+                    const alunoId = item.alunoId;
+                    if (!alunoId) return;
+                    
+                    if (!alunosMap.has(alunoId)) {
+                        alunosMap.set(alunoId, {
+                            id: alunoId,
+                            nome: item.alunoNome || 'Aluno',
+                            matricula: item.alunoMatricula || 'N/A',
+                            email: item.alunoEmail || 'N/A',
+                            turma: item.turmaNome || turmaNome,
+                            disciplina: item.turmaDisciplina || disciplinaNome,
+                            provas: [],
+                            somaNotas: 0,
+                            quantidadeNotas: 0
+                        });
+                    }
+                    
+                    const aluno = alunosMap.get(alunoId);
+                    
+                    // 🔥 DETERMINAR NOTA CORRETA (manual tem prioridade)
+                    let notaFinal = null;
+                    if (item.tipoNota === 'manual' && item.notaManual !== null) {
+                        notaFinal = item.notaManual;
+                    } else if (item.nota !== null && item.nota !== undefined) {
+                        notaFinal = item.nota;
+                    }
+                    
+                    aluno.provas.push({
+                        provaTitulo: item.provaTitulo || 'Prova',
+                        periodo: item.periodo || item.provaPeriodo || '1',
+                        data: item.dataRealizacao ? new Date(item.dataRealizacao).toLocaleDateString('pt-BR') : 'N/A',
+                        nota: notaFinal !== null ? notaFinal.toFixed(1) : 'N/A',
+                        tipoNota: item.tipoNota || (item.notaManual !== null ? 'manual' : 'automatica'),
+                        status: item.status || (notaFinal !== null ? (notaFinal >= 7 ? 'Aprovado' : 'Reprovado') : 'Pendente')
+                    });
+                    
+                    if (notaFinal !== null) {
+                        aluno.somaNotas += notaFinal;
+                        aluno.quantidadeNotas++;
+                    }
+                });
+                
+                // Calcular média de cada aluno
+                const alunosArray = Array.from(alunosMap.values()).map(aluno => {
+                    const media = aluno.quantidadeNotas > 0 ? 
+                        (aluno.somaNotas / aluno.quantidadeNotas).toFixed(1) : 'N/A';
+                    
+                    let statusGeral = 'N/A';
+                    if (media !== 'N/A') {
+                        const mediaNum = parseFloat(media);
+                        statusGeral = mediaNum >= 7 ? 'Aprovado' : 
+                                    (mediaNum >= 5 ? 'Recuperação' : 'Reprovado');
+                    }
+                    
+                    return {
+                        nome: aluno.nome,
+                        matricula: aluno.matricula,
+                        email: aluno.email,
+                        turma: aluno.turma,
+                        disciplina: aluno.disciplina,
+                        totalProvas: aluno.provas.length,
+                        media: media,
+                        statusGeral: statusGeral,
+                        provas: aluno.provas
+                    };
+                });
+                
+                // ========== 6. CRIAR DADOS PARA O EXCEL ==========
+                
+                // Aba 1: Resumo por Aluno
+                const dadosResumo = alunosArray.map((aluno, index) => ({
+                    '#': index + 1,
+                    'Aluno': aluno.nome,
+                    'Matrícula': aluno.matricula,
+                    'Email': aluno.email,
+                    'Turma': aluno.turma,
+                    'Disciplina': aluno.disciplina,
+                    'Total Provas': aluno.totalProvas,
+                    'Média': aluno.media,
+                    'Status': aluno.statusGeral
+                }));
+                
+                // Aba 2: Detalhamento (todas as provas)
+                const dadosDetalhados = [];
+                alunosArray.forEach(aluno => {
+                    aluno.provas.forEach(prova => {
+                        dadosDetalhados.push({
+                            'Aluno': aluno.nome,
+                            'Matrícula': aluno.matricula,
+                            'Turma': aluno.turma,
+                            'Disciplina': aluno.disciplina,
+                            'Prova': prova.provaTitulo,
+                            'Período': prova.periodo + 'º',
+                            'Data': prova.data,
+                            'Nota': prova.nota,
+                            'Tipo Nota': prova.tipoNota === 'manual' ? 'Manual (Impressa)' : 'Automática (Online)',
+                            'Status': prova.status
+                        });
+                    });
+                });
+                
+                // Aba 3: Estatísticas
+                const totalAlunos = alunosArray.length;
+                const totalProvas = resultadosFiltrados.length;
+                const notasValidas = resultadosFiltrados.filter(r => {
+                    const nota = r.tipoNota === 'manual' ? r.notaManual : r.nota;
+                    return nota !== null && nota !== undefined;
+                });
+                const mediaGeral = notasValidas.length > 0 ? 
+                    (notasValidas.reduce((acc, r) => {
+                        const nota = r.tipoNota === 'manual' ? r.notaManual : r.nota;
+                        return acc + nota;
+                    }, 0) / notasValidas.length).toFixed(1) : 'N/A';
+                
+                const notasManuais = resultadosFiltrados.filter(r => r.tipoNota === 'manual').length;
+                const notasAutomaticas = resultadosFiltrados.filter(r => r.tipoNota === 'automatica' && r.nota !== null).length;
+                
+                const aprovados = alunosArray.filter(a => a.media !== 'N/A' && parseFloat(a.media) >= 7).length;
+                const recuperacao = alunosArray.filter(a => a.media !== 'N/A' && parseFloat(a.media) >= 5 && parseFloat(a.media) < 7).length;
+                const reprovados = alunosArray.filter(a => a.media !== 'N/A' && parseFloat(a.media) < 5).length;
+                
+                const estatisticas = [
+                    ['📊 ESTATÍSTICAS GERAIS'],
+                    ['Descrição', 'Valor'],
+                    ['Turma', turmaNome],
+                    ['Disciplina', disciplinaNome],
+                    ['Período', periodoTexto],
+                    ['Total de Alunos', totalAlunos],
+                    ['Total de Provas', totalProvas],
+                    ['Total de Resultados', resultadosFiltrados.length],
+                    ['Notas Manuais (Impressas)', notasManuais],
+                    ['Notas Automáticas (Online)', notasAutomaticas],
+                    ['Média Geral', mediaGeral],
+                    [''],
+                    ['📈 DISTRIBUIÇÃO DE DESEMPENHO'],
+                    ['Situação', 'Quantidade', 'Percentual'],
+                    ['Aprovados (≥ 7.0)', aprovados, totalAlunos > 0 ? ((aprovados/totalAlunos)*100).toFixed(1) + '%' : '0%'],
+                    ['Recuperação (5.0 - 6.9)', recuperacao, totalAlunos > 0 ? ((recuperacao/totalAlunos)*100).toFixed(1) + '%' : '0%'],
+                    ['Reprovados (< 5.0)', reprovados, totalAlunos > 0 ? ((reprovados/totalAlunos)*100).toFixed(1) + '%' : '0%']
+                ];
+                
+                // ========== 7. CRIAR EXCEL ==========
+                if (typeof XLSX === 'undefined') {
+                    mostrarAlerta('alertResultados', '⚠️ Carregando biblioteca do Excel...', 'info');
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                    script.onload = () => {
+                        mostrarAlerta('alertResultados', '✅ Biblioteca carregada! Clique novamente.', 'success');
+                    };
+                    document.head.appendChild(script);
+                    return;
+                }
+                
+                const wb = XLSX.utils.book_new();
+                
+                const wsResumo = XLSX.utils.json_to_sheet(dadosResumo);
+                const wsDetalhes = XLSX.utils.json_to_sheet(dadosDetalhados);
+                const wsEstatisticas = XLSX.utils.aoa_to_sheet(estatisticas);
+                
+                // Ajustar larguras
+                wsResumo['!cols'] = [
+                    { wch: 5 },   // #
+                    { wch: 30 },  // Aluno
+                    { wch: 15 },  // Matrícula
+                    { wch: 30 },  // Email
+                    { wch: 25 },  // Turma
+                    { wch: 20 },  // Disciplina
+                    { wch: 12 },  // Total Provas
+                    { wch: 8 },   // Média
+                    { wch: 15 }   // Status
+                ];
+                
+                wsDetalhes['!cols'] = [
+                    { wch: 30 },  // Aluno
+                    { wch: 15 },  // Matrícula
+                    { wch: 25 },  // Turma
+                    { wch: 20 },  // Disciplina
+                    { wch: 40 },  // Prova
+                    { wch: 10 },  // Período
+                    { wch: 15 },  // Data
+                    { wch: 8 },   // Nota
+                    { wch: 18 },  // Tipo Nota
+                    { wch: 15 }   // Status
+                ];
+                
+                XLSX.utils.book_append_sheet(wb, wsEstatisticas, 'Estatísticas');
+                XLSX.utils.book_append_sheet(wb, wsResumo, `Resumo - ${turmaNome}`);
+                XLSX.utils.book_append_sheet(wb, wsDetalhes, `Detalhamento - ${turmaNome}`);
+                
+                const dataAtual = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+                const nomeArquivo = `notas-${turmaNome.replace(/\s+/g, '-').toLowerCase()}-${periodoTexto.replace(/\s/g, '-')}-${dataAtual}.xlsx`;
+                
+                XLSX.writeFile(wb, nomeArquivo);
+                
+                mostrarAlerta('alertResultados', 
+                    `✅ Relatório gerado com sucesso!\n📊 ${totalAlunos} alunos • ${totalProvas} notas\n📁 Turma: ${turmaNome}\n📁 ${nomeArquivo}`, 
+                    'success');
+                
+            } catch (error) {
+                console.error('❌ Erro na exportação:', error);
+                mostrarAlerta('alertResultados', `❌ Erro ao exportar: ${error.message}`, 'error');
+            }
         }
 
     </script>

@@ -7271,7 +7271,7 @@
                         `;
                     });
                     
-                    // ========== CARTÃO-RESPOSTA ==========
+                    // ========== CARTÃO-RESPOSTA CORRIGIDO (ATUAL) ==========
                     const gerarCartaoResposta = () => {
                         const qrCodeArea = qrCodeDataUrl ? `
                             <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
@@ -7296,20 +7296,24 @@
                                     </div>
                                 </div>
                                 
-                                <!-- QUADRADO DO GABARITO (APENAS PARA ESCANEAMENTO) -->
-                                <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 10px; background: #fff; display: inline-block; width: 100%; box-sizing: border-box;">
-                                    <!-- 🔥 MARCAÇÕES DE ENQUADRAMENTO OMR CORRIGIDAS PARA IMPRESSÃO PRETA -->
-                                    <div style="position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                                    <div style="position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                                    <div style="position: absolute; bottom: -3px; left: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                                    <div style="position: absolute; bottom: -3px; right: -3px; width: 10px; height: 10px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
+                                <!-- QUADRADO DO GABARITO COM MARCADORES DENTRO DA ÁREA VISÍVEL -->
+                                <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
+                                    <!-- 🔥 MARCADORES OMR - AGORA DENTRO DA ÁREA (com padding positivo) -->
+                                    <!-- Canto Superior Esquerdo -->
+                                    <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                    <!-- Canto Superior Direito -->
+                                    <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                    <!-- Canto Inferior Esquerdo -->
+                                    <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                                    <!-- Canto Inferior Direito -->
+                                    <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
                                     
-                                    <!-- TABELA ESTILO EVALBE COMPACTA -->
+                                    <!-- TABELA DO GABARITO -->
                                     <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
                                         <thead>
                                             <tr style="background: #e8e8e8;">
-                                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 9pt; width: 35px;">Q</th>
-                                                ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 9pt; width: 35px;">${letra}</th>`).join('')}
+                                                <th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>
+                                                ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -7317,9 +7321,9 @@
                                                 const num = i + 1;
                                                 return `
                                                     <tr>
-                                                        <td style="border: 1px solid #000; padding: 4px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
+                                                        <td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
                                                         ${letrasUsadas.map(() => `
-                                                            <td style="border: 1px solid #000; padding: 4px; text-align: center;">
+                                                            <td style="border: 1px solid #000; padding: 5px 3px; text-align: center;">
                                                                 <div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div>
                                                             </td>
                                                         `).join('')}
@@ -9080,7 +9084,6 @@
             }
 
             // ============ RESULTADOS ============
-            // ============ CARREGAR RESULTADOS ============
             async carregarResultados() {
                 const contentArea = document.getElementById('contentArea');
                 
@@ -9099,49 +9102,102 @@
                 try {
                     const token = localStorage.getItem('auth_token');
                     
-                    // Buscar TODOS os resultados
+                    // BUSCAR RESULTADOS DA COLEÇÃO PROVAREALIZADA (QUE TEM NOTAS MANUAIS)
                     const response = await fetch('/api/admin/todos-resultados', {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
 
                     const data = await response.json();
                     
-                    console.log('📊 Todos os resultados:', data);
+                    console.log('📊 Todos os resultados (incluindo notas manuais):', data);
 
                     if (!data.success) {
                         throw new Error(data.error || 'Erro ao carregar resultados');
                     }
 
-                    if (data.resultados.length === 0) {
+                    if (!data.resultados || data.resultados.length === 0) {
                         contentArea.innerHTML = this.renderSemResultados();
                         return;
                     }
 
-                    // Usar os resultados e estatísticas diretamente da API
-                    const resultados = data.resultados;
-                    const estatisticas = data.estatisticas || {
+                    // PROCESSAR RESULTADOS CORRETAMENTE
+                    const resultados = data.resultados.map(r => ({
+                        id: r.id || r._id,
+                        alunoId: r.alunoId,
+                        alunoNome: r.alunoNome || 'Aluno',
+                        alunoEmail: r.alunoEmail || '',
+                        alunoMatricula: r.alunoMatricula || '',
+                        alunoTurma: r.alunoTurma || '',
+                        provaId: r.provaId,
+                        provaTitulo: r.provaTitulo || 'Prova',
+                        dataRealizacao: r.dataRealizacao || r.createdAt,
+                        // NOTA AUTOMÁTICA (online)
+                        notaAutomatica: r.notaAutomatica !== undefined ? r.notaAutomatica : r.nota,
+                        notaAutomaticaLiberada: r.notaAutomaticaLiberada !== undefined ? r.notaAutomaticaLiberada : r.notaLiberada,
+                        // NOTA MANUAL (impressa)
+                        notaManual: r.notaManual,
+                        notaManualLiberada: r.notaManualLiberada,
+                        notaManualObservacao: r.notaManualObservacao,
+                        notaManualData: r.notaManualData,
+                        notaManualAtribuidaPor: r.notaManualAtribuidaPor,
+                        // NOTA FINAL (manual tem prioridade)
+                        nota: r.notaManual !== null && r.notaManual !== undefined ? r.notaManual : r.nota,
+                        notaLiberada: r.notaManualLiberada || r.notaLiberada,
+                        tipoNota: r.tipoNota || (r.notaManual !== null ? 'manual' : 'automatica'),
+                        acertos: r.acertos || 0,
+                        total: r.total || 0,
+                        tempoGasto: r.tempoGasto || 0,
+                        status: r.status || (r.nota !== null ? (r.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente'),
+                        cancelada: r.cancelada || false,
+                        motivoCancelamento: r.motivoCancelamento,
+                        resultadoDetalhado: r.resultadoDetalhado || [],
+                        observacoes: r.observacoes || '',
+                        createdAt: r.createdAt
+                    }));
+
+                    console.log('📊 Resultados processados:', {
                         total: resultados.length,
-                        comNota: resultados.filter(r => r.nota !== null && r.nota !== undefined).length,
-                        semNota: resultados.filter(r => r.nota === null || r.nota === undefined).length,
-                        aprovados: resultados.filter(r => r.nota && r.nota >= 7).length,
-                        reprovados: resultados.filter(r => r.nota && r.nota < 7).length,
-                        cancelados: resultados.filter(r => r.cancelada === true).length,
-                        pendentes: resultados.filter(r => !r.nota).length,
-                        totalAlunos: new Set(resultados.map(r => r.alunoId)).size,
-                        totalProvas: new Set(resultados.map(r => r.provaId)).size,
-                        mediaGeral: (resultados.filter(r => r.nota).reduce((acc, r) => acc + r.nota, 0) / (resultados.filter(r => r.nota).length || 1)).toFixed(2),
-                        taxaAprovacao: ((resultados.filter(r => r.nota && r.nota >= 7).length / (resultados.filter(r => r.nota).length || 1)) * 100).toFixed(1)
+                        comNotaManual: resultados.filter(r => r.tipoNota === 'manual').length,
+                        comNotaAutomatica: resultados.filter(r => r.tipoNota === 'automatica').length
+                    });
+
+                    // Calcular estatísticas
+                    const aprovados = resultados.filter(r => r.nota && r.nota >= 7 && !r.cancelada).length;
+                    const reprovados = resultados.filter(r => r.nota && r.nota < 7 && !r.cancelada).length;
+                    const pendentes = resultados.filter(r => r.nota === null || r.nota === undefined).length;
+                    const cancelados = resultados.filter(r => r.cancelada).length;
+                    const notasValidas = resultados.filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada).map(r => r.nota);
+                    const mediaGeral = notasValidas.length > 0 ? (notasValidas.reduce((a,b) => a+b,0) / notasValidas.length).toFixed(2) : '0.00';
+                    const taxaAprovacao = notasValidas.length > 0 ? ((aprovados / notasValidas.length) * 100).toFixed(1) : '0.0';
+                    
+                    // Total de alunos e provas únicos
+                    const totalAlunos = new Set(resultados.map(r => r.alunoId)).size;
+                    const totalProvas = new Set(resultados.map(r => r.provaId)).size;
+
+                    const estatisticas = {
+                        totalResultados: resultados.length,
+                        totalAlunos,
+                        totalProvas,
+                        aprovados,
+                        reprovados,
+                        pendentes,
+                        cancelados,
+                        mediaGeral,
+                        taxaAprovacao,
+                        notasManuais: resultados.filter(r => r.tipoNota === 'manual').length,
+                        notasAutomaticas: resultados.filter(r => r.tipoNota === 'automatica').length
                     };
 
-                    // ARMAZENAR OS DADOS NO OBJETO
+                    // Armazenar dados
                     this.resultadosCompletos = resultados;
                     this.resultadosFiltrados = resultados;
                     this.paginaAtualResultados = 1;
+                    this.itensPorPaginaResultados = 15;
 
-                    // Renderizar a página com os resultados
+                    // Renderizar a página
                     contentArea.innerHTML = this.renderResultadosCompleto(resultados, estatisticas);
 
-                    // Renderizar a tabela
+                    // Renderizar tabela
                     setTimeout(() => {
                         this.atualizarTabelaResultadosPaginada();
                         this.configurarEventosResultados();
@@ -9210,10 +9266,10 @@
                                 </div>
                                 <div class="stat-content">
                                     <h3>Total de Resultados</h3>
-                                    <div class="stat-number">${estatisticas.total}</div>
+                                    <div class="stat-number">${estatisticas.totalResultados}</div>
                                     <div class="stat-details">
-                                        <span><i class="fas fa-users"></i> ${estatisticas.totalAlunos || 0} alunos</span>
-                                        <span><i class="fas fa-tasks"></i> ${estatisticas.totalProvas || 0} provas</span>
+                                        <span><i class="fas fa-users"></i> ${estatisticas.totalAlunos} alunos</span>
+                                        <span><i class="fas fa-tasks"></i> ${estatisticas.totalProvas} provas</span>
                                     </div>
                                 </div>
                             </div>
@@ -9224,9 +9280,9 @@
                                 </div>
                                 <div class="stat-content">
                                     <h3>Aprovados</h3>
-                                    <div class="stat-number">${estatisticas.aprovados || 0}</div>
+                                    <div class="stat-number">${estatisticas.aprovados}</div>
                                     <div class="stat-details">
-                                        <span><i class="fas fa-percent"></i> ${estatisticas.taxaAprovacao || 0}%</span>
+                                        <span><i class="fas fa-percent"></i> ${estatisticas.taxaAprovacao}%</span>
                                     </div>
                                 </div>
                             </div>
@@ -9237,9 +9293,9 @@
                                 </div>
                                 <div class="stat-content">
                                     <h3>Reprovados</h3>
-                                    <div class="stat-number">${estatisticas.reprovados || 0}</div>
+                                    <div class="stat-number">${estatisticas.reprovados}</div>
                                     <div class="stat-details">
-                                        <span><i class="fas fa-chart-line"></i> Média: ${estatisticas.mediaGeral || 0}</span>
+                                        <span><i class="fas fa-chart-line"></i> Média: ${estatisticas.mediaGeral}</span>
                                     </div>
                                 </div>
                             </div>
@@ -9250,7 +9306,7 @@
                                 </div>
                                 <div class="stat-content">
                                     <h3>Pendentes</h3>
-                                    <div class="stat-number">${estatisticas.pendentes || 0}</div>
+                                    <div class="stat-number">${estatisticas.pendentes}</div>
                                     <div class="stat-details">
                                         <span><i class="fas fa-hourglass-half"></i> aguardando correção</span>
                                     </div>
@@ -9263,7 +9319,7 @@
                                 </div>
                                 <div class="stat-content">
                                     <h3>Canceladas</h3>
-                                    <div class="stat-number">${estatisticas.cancelados || 0}</div>
+                                    <div class="stat-number">${estatisticas.cancelados}</div>
                                 </div>
                             </div>
                         </div>
@@ -9435,6 +9491,29 @@
                         .status-reprovado { background: #f8d7da; color: #721c24; }
                         .status-pendente { background: #fff3cd; color: #856404; }
                         .status-cancelado { background: #fee2e2; color: #dc2626; }
+                        
+                        .badge-manual {
+                            background: #f59e0b;
+                            color: white;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            margin-left: 5px;
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 3px;
+                        }
+                        .badge-automatica {
+                            background: #10b981;
+                            color: white;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            margin-left: 5px;
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 3px;
+                        }
                         
                         .nota-alta { color: #28a745; font-weight: 600; }
                         .nota-baixa { color: #dc3545; font-weight: 600; }
@@ -10331,6 +10410,10 @@
                 return resultados.map(r => {
                     const isCancelada = r.cancelada === true;
                     
+                    // DETERMINAR NOTA A SER EXIBIDA (manual tem prioridade)
+                    const notaExibida = r.tipoNota === 'manual' ? r.notaManual : r.notaAutomatica;
+                    const notaLiberada = r.tipoNota === 'manual' ? r.notaManualLiberada : r.notaLiberada;
+                    
                     // Determinar status
                     let statusClass = '';
                     let statusText = '';
@@ -10341,13 +10424,13 @@
                         statusText = 'Cancelada';
                         statusIcon = '🚫 ';
                     } 
-                    else if (r.nota === null || r.nota === undefined || r.notaLiberada === false) {
+                    else if (notaExibida === null || notaExibida === undefined || !notaLiberada) {
                         statusClass = 'status-pendente';
                         statusText = 'Aguardando Correção';
                         statusIcon = '⏳ ';
                     } 
                     else {
-                        if (r.nota >= 7) {
+                        if (notaExibida >= 7) {
                             statusClass = 'status-aprovado';
                             statusText = 'Aprovado';
                             statusIcon = '✅ ';
@@ -10358,18 +10441,26 @@
                         }
                     }
                     
-                    // Só mostrar nota se foi liberada
-                    const notaExibida = (r.notaLiberada === true && r.nota !== null && r.nota !== undefined) ? r.nota.toFixed(2) : '-';
-                    
-                    // Determinar classe da nota
-                    let notaClass = '';
-                    if (r.nota !== null && r.nota !== undefined && !isCancelada && r.notaLiberada === true) {
-                        if (r.nota >= 7) notaClass = 'nota-alta';
-                        else if (r.nota > 0) notaClass = 'nota-baixa';
+                    // BADGE DE TIPO DE NOTA
+                    let tipoNotaBadge = '';
+                    if (r.tipoNota === 'manual') {
+                        tipoNotaBadge = '<span class="badge-manual"><i class="fas fa-print"></i> Manual</span>';
+                    } else if (r.tipoNota === 'automatica' && r.notaAutomatica !== null) {
+                        tipoNotaBadge = '<span class="badge-automatica"><i class="fas fa-laptop-code"></i> Online</span>';
                     }
                     
-                    // Verificar se precisa mostrar botão de liberar nota
-                    const precisaLiberar = !isCancelada && r.nota !== null && r.nota !== undefined && r.notaLiberada === false;
+                    // Só mostrar nota se foi liberada
+                    const notaExibir = (notaLiberada && notaExibida !== null) ? notaExibida.toFixed(2) : '-';
+                    
+                    // Classe da nota
+                    let notaClass = '';
+                    if (notaLiberada && notaExibida !== null && !isCancelada) {
+                        if (notaExibida >= 7) notaClass = 'nota-alta';
+                        else if (notaExibida > 0) notaClass = 'nota-baixa';
+                    }
+                    
+                    // Verificar se precisa liberar nota
+                    const precisaLiberar = !isCancelada && notaExibida !== null && !notaLiberada;
                     
                     // Formatar data
                     const data = r.dataRealizacao ? 
@@ -10381,18 +10472,28 @@
                     
                     return `
                         <tr>
-                            <td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                                 <strong>${r.alunoNome || 'N/A'}</strong>
                                 <div style="font-size: 11px; color: #6c757d;">${r.alunoMatricula || ''}</div>
                             </td>
-                            <td style="color: #6c757d;">${r.alunoEmail || '-'}</td>
-                            <td>${r.provaTitulo || 'N/A'}</td>
-                            <td>${r.alunoTurma || '-'}</td>
-                            <td>${data}</td>
-                            <td class="${notaClass}">${notaExibida}</td>
-                            <td>${r.acertos || 0}/${r.total || 0} <span style="color: #6c757d;">(${percentual}%)</span></td>
-                            <td>${this.formatarTempoResultado(r.tempoGasto, isCancelada)}</td>
-                            <td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; color: #6c757d;">${r.alunoEmail || '-'}</td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                                ${r.provaTitulo || 'N/A'}
+                                ${tipoNotaBadge}
+                            </td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${r.alunoTurma || '-'}</td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${data}</td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;" class="${notaClass}">
+                                <strong>${notaExibir}</strong>
+                            </td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                                ${r.acertos || 0}/${r.total || 0} 
+                                <span style="color: #6c757d; font-size: 11px;">(${percentual}%)</span>
+                            </td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
+                                ${this.formatarTempoResultado(r.tempoGasto, isCancelada)}
+                            </td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                                 <span class="status-badge ${statusClass}" style="
                                     display: inline-block;
                                     padding: 4px 10px;
@@ -10409,40 +10510,35 @@
                                     ${statusIcon}${statusText}
                                 </span>
                             </td>
-                            <td>
+                            <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                                 <div class="action-buttons" style="display: flex; gap: 5px;">
-                                    <!-- Ver detalhes -->
                                     <button class="btn-icon" onclick="adminSimples.verResultadoDetalhado('${r.id}')" title="Ver detalhes">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     
-                                    <!-- Editar -->
                                     <button class="btn-icon edit" onclick="adminSimples.editarResultado('${r.id}')" title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     
-                                    <!-- Liberar nota (só para pendentes) -->
                                     ${precisaLiberar ? `
-                                        <button class="btn-icon" style="color: #10b981;" onclick="adminSimples.liberarNota('${r.id}')" title="Liberar nota">
+                                        <button class="btn-icon" style="background: #10b981; color: white;" 
+                                                onclick="adminSimples.liberarNota('${r.id}')" 
+                                                title="Liberar nota para o aluno">
                                             <i class="fas fa-lock-open"></i>
                                         </button>
                                     ` : ''}
                                     
-                                    <!-- Enviar notificação/lembrete -->
-                                    ${!isCancelada ? `
-                                        <button class="btn-icon" style="color: #3b82f6;" onclick="adminSimples.enviarNotificacao('${r.id}')" title="Enviar notificação">
-                                            <i class="fas fa-bell"></i>
-                                        </button>
-                                    ` : ''}
-                                    
-                                    <!-- Ver detalhes do cancelamento (só para cancelados) -->
                                     ${isCancelada ? `
-                                        <button class="btn-icon" style="color: #f59e0b;" onclick="adminSimples.verDetalhesCancelamento('${r.id}')" title="Ver detalhes do cancelamento">
+                                        <button class="btn-icon warning" onclick="adminSimples.verDetalhesCancelamento('${r.id}')" 
+                                                title="Ver detalhes do cancelamento" style="color: #f59e0b;">
                                             <i class="fas fa-info-circle"></i>
                                         </button>
-                                    ` : ''}
+                                    ` : `
+                                        <button class="btn-icon" onclick="adminSimples.enviarNotificacao('${r.id}')" title="Enviar lembrete">
+                                            <i class="fas fa-bell"></i>
+                                        </button>
+                                    `}
                                     
-                                    <!-- Excluir -->
                                     <button class="btn-icon delete" onclick="adminSimples.excluirResultado('${r.id}')" title="Excluir">
                                         <i class="fas fa-trash"></i>
                                     </button>

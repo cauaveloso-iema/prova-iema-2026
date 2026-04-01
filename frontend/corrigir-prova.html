@@ -22,7 +22,42 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         .header { text-align: center; margin-bottom: 20px; }
-        .header h1 { color: #1e3c72; font-size: 1.5rem; }
+        .header h1 { 
+            color: #1e3c72; 
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .header h1 i { color: #10b981; }
+        
+        .modo-selector {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin: 15px 0;
+            background: #f1f5f9;
+            padding: 8px;
+            border-radius: 40px;
+        }
+        .modo-btn {
+            flex: 1;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            color: #64748b;
+        }
+        .modo-btn.active {
+            background: #1e3c72;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .modo-btn i { margin-right: 8px; }
         
         .camera-container {
             background: #000;
@@ -32,13 +67,14 @@
             margin: 15px auto;
             width: 100%;
             max-width: 800px;
-            aspect-ratio: 16.5 / 7.7;
+            aspect-ratio: 4 / 3;
         }
         
         video {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transform: scaleX(1);
         }
         
         .overlay {
@@ -50,26 +86,30 @@
             pointer-events: none;
         }
         
-        .marcador-canto {
+        .guia-quadrado {
             position: absolute;
             width: 35px;
             height: 35px;
             border: 3px solid #ff4444;
             transition: all 0.2s;
             background: rgba(255,68,68,0.2);
-            border-radius: 4px;
+            border-radius: 6px;
+            box-sizing: border-box;
+            z-index: 10;
         }
-        .marcador-canto.detectado {
+        .guia-quadrado.encaixado {
             border-color: #00ff00;
-            background: rgba(0,255,0,0.5);
+            background: rgba(0,255,0,0.4);
             box-shadow: 0 0 15px #00ff00;
+            animation: pulse 0.2s ease-out;
         }
-        .marcador-canto.top-left { top: 8px; left: 8px; }
-        .marcador-canto.top-right { top: 8px; right: 8px; }
-        .marcador-canto.bottom-left { bottom: 8px; left: 8px; }
-        .marcador-canto.bottom-right { bottom: 8px; right: 8px; }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
         
-        .retangulo-guia {
+        .retangulo-enquadramento {
             position: absolute;
             border: 3px solid #00ff00;
             border-radius: 8px;
@@ -79,70 +119,98 @@
         
         .feedback {
             position: absolute;
-            bottom: 10px;
+            bottom: 15px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
             color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 13px;
             font-weight: bold;
             white-space: nowrap;
             z-index: 20;
+            font-family: monospace;
+            backdrop-filter: blur(4px);
         }
         
         .btn {
-            padding: 10px 20px;
+            padding: 12px 24px;
             border-radius: 30px;
             font-weight: 600;
             cursor: pointer;
             border: none;
-            font-size: 13px;
-            transition: transform 0.2s;
+            font-size: 14px;
+            transition: all 0.2s;
         }
-        .btn:hover { transform: scale(1.02); }
+        .btn:hover { transform: scale(1.02); opacity: 0.95; }
         .btn-primary { background: #1e3c72; color: white; }
         .btn-success { background: #10b981; color: white; }
+        .btn-secondary { background: #6b7280; color: white; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         
         .respostas-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
-            gap: 10px;
-            margin: 15px 0;
-            max-height: 350px;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+            max-height: 400px;
             overflow-y: auto;
+            padding: 5px;
         }
         .resposta-card {
             text-align: center;
-            padding: 10px;
+            padding: 12px 8px;
             border: 2px solid #e5e7eb;
-            border-radius: 10px;
+            border-radius: 12px;
             background: white;
+            transition: all 0.2s;
         }
-        .resposta-card.correta { border-color: #10b981; background: #f0fdf4; }
-        .resposta-card.incorreta { border-color: #ef4444; background: #fef2f2; }
+        .resposta-card.correta { 
+            border-color: #10b981; 
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+        }
+        .resposta-card.incorreta { 
+            border-color: #ef4444; 
+            background: linear-gradient(135deg, #fef2f2, #fee2e2);
+        }
+        .resposta-card .questao-num {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+        .resposta-card .resposta-valor {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin: 8px 0;
+        }
         .btn-opcao {
-            width: 32px;
-            padding: 4px;
+            width: 36px;
+            padding: 6px;
             background: #f3f4f6;
             border: 1px solid #ddd;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             margin: 2px;
             font-weight: bold;
             font-size: 12px;
+            transition: all 0.1s;
+        }
+        .btn-opcao:hover {
+            background: #e5e7eb;
+            transform: scale(1.05);
         }
         .nota-final {
             text-align: center;
-            padding: 15px;
+            padding: 20px;
             background: linear-gradient(135deg, #1e3c72, #2a5298);
             color: white;
-            border-radius: 14px;
-            margin-top: 12px;
+            border-radius: 16px;
+            margin-top: 20px;
         }
-        .nota-final h2 { font-size: 2rem; margin-bottom: 8px; }
+        .nota-final h2 { font-size: 2.5rem; margin-bottom: 8px; }
+        .nota-final .aprovado { color: #10b981; }
+        .nota-final .reprovado { color: #f97316; }
         .loading { text-align: center; padding: 40px; }
         .spinner {
             width: 40px;
@@ -157,95 +225,136 @@
         
         select {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             border: 2px solid #e5e7eb;
-            border-radius: 10px;
-            font-size: 13px;
-            margin: 10px 0;
+            border-radius: 12px;
+            font-size: 14px;
+            margin: 15px 0;
+            background: white;
+            cursor: pointer;
         }
         
         .info-bar {
             position: fixed;
-            bottom: 10px;
-            right: 10px;
+            bottom: 15px;
+            right: 15px;
             background: rgba(0,0,0,0.8);
-            color: #0f0;
-            padding: 4px 8px;
-            border-radius: 8px;
-            font-size: 9px;
+            color: #10b981;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 11px;
             font-family: monospace;
             z-index: 1000;
+            backdrop-filter: blur(4px);
         }
         
         .gabarito-display {
             background: #f8fafc;
-            padding: 10px;
-            border-radius: 10px;
+            padding: 12px;
+            border-radius: 12px;
             margin: 10px 0;
             font-family: monospace;
-            font-size: 11px;
+            font-size: 12px;
             overflow-x: auto;
+            text-align: center;
+            border: 1px solid #e5e7eb;
         }
         
         .button-group {
             display: flex;
-            gap: 10px;
+            gap: 15px;
             justify-content: center;
-            margin: 12px 0;
-        }
-        
-        .dimensao-card {
-            background: #fef3c7;
-            padding: 5px 12px;
-            border-radius: 20px;
-            display: inline-block;
-            margin-top: 6px;
-            font-size: 10px;
-            font-family: monospace;
-        }
-        
-        .controle-sensibilidade {
-            background: #f0f0f0;
-            padding: 10px;
-            border-radius: 12px;
-            margin: 10px 0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .controle-sensibilidade label {
-            font-size: 11px;
-            font-weight: bold;
-            color: #1e3c72;
-        }
-        
-        .controle-sensibilidade input {
-            width: 150px;
-            padding: 5px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-        }
-        
-        .controle-sensibilidade span {
-            background: #1e3c72;
-            color: white;
-            padding: 3px 12px;
-            border-radius: 15px;
-            font-size: 11px;
-            font-weight: bold;
+            margin: 20px 0 10px;
         }
         
         .dica {
-            background: #e8f0fe;
-            padding: 6px;
-            border-radius: 8px;
-            font-size: 10px;
+            background: linear-gradient(135deg, #e8f0fe, #d9e6f5);
+            padding: 10px 15px;
+            border-radius: 12px;
+            font-size: 12px;
             text-align: center;
-            margin-top: 6px;
+            margin-top: 12px;
             color: #1e3c72;
+        }
+        
+        .status-encaixe {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: bold;
+            font-family: monospace;
+            z-index: 20;
+            letter-spacing: 4px;
+            backdrop-filter: blur(4px);
+        }
+        
+        .prova-info {
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+            padding: 15px;
+            border-radius: 16px;
+            margin-bottom: 15px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .prova-info h3 {
+            color: #1e3c72;
+            margin-bottom: 8px;
+        }
+        
+        .btn-salvar {
+            background: linear-gradient(135deg, #10b981, #059669);
+            width: 100%;
+            margin-top: 15px;
+            padding: 14px;
+            font-size: 16px;
+        }
+        
+        .aluno-selector {
+            margin: 15px 0;
+        }
+        
+        .aluno-selector label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .auto-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #ffaa00;
+            z-index: 25;
+            white-space: nowrap;
+            font-family: monospace;
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+        }
+        
+        /* Scrollbar personalizada */
+        .respostas-grid::-webkit-scrollbar {
+            width: 8px;
+        }
+        .respostas-grid::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .respostas-grid::-webkit-scrollbar-thumb {
+            background: #1e3c72;
+            border-radius: 10px;
         }
     </style>
 </head>
@@ -253,14 +362,23 @@
     <div class="container">
         <div class="card">
             <div class="header">
-                <h1><i class="fas fa-camera"></i> Correção de Prova - EVALBEE</h1>
-                <p>Posicione o cartão com os <strong style="color:#ff4444;">4 QUADRADOS PRETOS</strong> nos cantos</p>
-                <div class="dimensao-card">
-                    <i class="fas fa-ruler"></i> Tamanho do cartão: 16,5cm × 7,7cm
-                </div>
-                <div class="dica">
-                    <i class="fas fa-info-circle"></i> Os quadrados pretos são os marcadores de posição (10x10px) nos 4 cantos
-                </div>
+                <h1><i class="fas fa-robot"></i> Correção Inteligente</h1>
+                <p><strong style="color:#ff4444;">🔴 Alinhe os 4 quadrados vermelhos com os quadrados pretos do cartão</strong></p>
+            </div>
+            
+            <!-- Seletor de Modo -->
+            <div class="modo-selector">
+                <button class="modo-btn active" id="modoAutomaticoBtn">
+                    <i class="fas fa-magic"></i> Automático
+                </button>
+                <button class="modo-btn" id="modoManualBtn">
+                    <i class="fas fa-hand-pointer"></i> Manual
+                </button>
+            </div>
+            
+            <div class="dica" id="dicaModo">
+                <i class="fas fa-infinity"></i> 
+                <strong>Modo Automático:</strong> Quando os 4 quadrados ficarem verdes, a prova será corrigida automaticamente após 2 segundos de estabilização.
             </div>
             
             <div id="loading" class="loading">
@@ -269,58 +387,79 @@
             </div>
             
             <div id="conteudo" style="display: none;">
-                <div id="provaInfo" style="background:#f8fafc;padding:12px;border-radius:12px;margin-bottom:12px;font-size:13px"></div>
+                <div id="provaInfo" class="prova-info"></div>
                 <div id="gabaritoInfo" class="gabarito-display"></div>
                 
-                <select id="selectAluno">
-                    <option value="">Selecione o aluno</option>
-                </select>
-                
-                <div class="controle-sensibilidade">
-                    <label><i class="fas fa-adjust"></i> Sensibilidade de Detecção:</label>
-                    <input type="range" id="sensibilidadeSlider" min="5" max="25" value="10" step="1">
-                    <span id="sensibilidadeValue">10%</span>
-                    <small style="font-size: 9px; color: #666;">(Quanto menor, mais sensível para detectar os quadrados pretos)</small>
+                <div class="aluno-selector">
+                    <label><i class="fas fa-user-graduate"></i> Selecione o aluno:</label>
+                    <select id="selectAluno">
+                        <option value="">— Selecione um aluno —</option>
+                    </select>
                 </div>
                 
                 <div class="camera-container" id="cameraContainer">
                     <video id="video" autoplay playsinline muted></video>
                     <canvas id="canvas" style="display: none;"></canvas>
                     <div class="overlay" id="overlay">
-                        <div class="marcador-canto top-left" id="marcadorTL"></div>
-                        <div class="marcador-canto top-right" id="marcadorTR"></div>
-                        <div class="marcador-canto bottom-left" id="marcadorBL"></div>
-                        <div class="marcador-canto bottom-right" id="marcadorBR"></div>
-                        <div class="feedback" id="feedback">📏 Alinhe os 4 quadrados pretos nos cantos</div>
+                        <div class="guia-quadrado" id="guiaTL"></div>
+                        <div class="guia-quadrado" id="guiaTR"></div>
+                        <div class="guia-quadrado" id="guiaBL"></div>
+                        <div class="guia-quadrado" id="guiaBR"></div>
+                        <div class="feedback" id="feedback">🎯 Alinhe os 4 quadrados</div>
+                        <div class="status-encaixe" id="statusEncaixe">⬜ ⬜ ⬜ ⬜</div>
+                        <div id="autoStatus" class="auto-status" style="display: none;"></div>
                     </div>
                 </div>
                 
                 <div class="button-group">
                     <button class="btn btn-primary" id="btnIniciar"><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir Prova</button>
+                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir Agora</button>
                 </div>
                 
-                <div id="processando" style="display: none; text-align: center; padding: 15px;">
+                <div id="processando" style="display: none; text-align: center; padding: 20px;">
                     <div class="spinner"></div>
-                    <p id="processandoMsg" style="font-size:12px">Processando imagem...</p>
+                    <p style="font-size:14px; color:#1e3c72; margin-top:10px;">Processando imagem com IA...</p>
                 </div>
                 
                 <div id="resultado" style="display: none;">
-                    <h3 style="font-size:16px; margin:10px 0"><i class="fas fa-check-circle"></i> Resultado da Correção</h3>
+                    <h3 style="font-size:18px; margin:15px 0 10px; color:#1e3c72; text-align:center;">
+                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado da Correção
+                    </h3>
                     <div id="respostasGrid" class="respostas-grid"></div>
                     <div id="notaFinal" class="nota-final"></div>
-                    <button class="btn btn-success" id="btnSalvar" style="width:100%; margin-top:12px;"><i class="fas fa-save"></i> Salvar Nota</button>
+                    <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar Nota</button>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="info-bar" id="infoBar">🔍 Aguardando | Sensibilidade: 10%</div>
+    <div class="info-bar" id="infoBar">
+        <i class="fas fa-circle" style="color:#10b981; font-size:8px;"></i> Aguardando alinhamento
+    </div>
     
     <script>
         // ============================================
-        // VARIÁVEIS GLOBAIS
+        // CONFIGURAÇÕES
         // ============================================
+        
+        let modoAutomatico = true;  // true = automático, false = manual
+        let autoCorrectionTimer = null;
+        let autoCorrectionCountdown = 0;
+        let isAutoCorrectionReady = false;
+        
+        let sensibilidade = 12;
+        const BRILHO_MAX_PRETO = 110;
+        
+        let margemBusca = 0.12;
+        let tamanhoGuia = 0.14;
+        
+        const MARGEM_MIN = 0.05;
+        const MARGEM_MAX = 0.25;
+        const TAMANHO_MIN = 0.08;
+        const TAMANHO_MAX = 0.22;
+        
+        const OMR_SERVER_URL = 'http://localhost:5001';
+        
         let gabarito = [];
         let totalQuestoes = 10;
         let alunos = [];
@@ -328,230 +467,219 @@
         let respostasAtuais = [];
         let notaCalculada = 0;
         let authToken = null;
-        let sensibilidade = 10;
-        
-        const CARD_WIDTH_CM = 16.5;
-        const CARD_HEIGHT_CM = 7.7;
         
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         let stream = null;
         let analiseInterval = null;
         let capturando = false;
+        let quadradosEncaixados = [false, false, false, false];
         let retanguloAtual = null;
+        let estabilidade = 0;
         
         const urlParams = new URLSearchParams(window.location.search);
         const provaId = urlParams.get('prova');
         const urlToken = urlParams.get('token');
         
-        // ============================================
-        // CONTROLE DE SENSIBILIDADE
-        // ============================================
-        const sensibilidadeSlider = document.getElementById('sensibilidadeSlider');
-        const sensibilidadeValue = document.getElementById('sensibilidadeValue');
+        // Elementos do modo
+        const modoAutomaticoBtn = document.getElementById('modoAutomaticoBtn');
+        const modoManualBtn = document.getElementById('modoManualBtn');
+        const dicaModo = document.getElementById('dicaModo');
+        const btnCapturar = document.getElementById('btnCapturar');
+        const autoStatusDiv = document.getElementById('autoStatus');
         
-        sensibilidadeSlider.addEventListener('input', (e) => {
-            sensibilidade = parseInt(e.target.value);
-            sensibilidadeValue.innerHTML = sensibilidade + '%';
-            document.getElementById('infoBar').innerHTML = `🔍 Aguardando | Sensibilidade: ${sensibilidade}%`;
-        });
-        
-        function mostrarAlerta(msg, tipo) {
-            const cores = {
-                success: '#10b981',
-                error: '#ef4444',
-                info: '#3b82f6'
-            };
-            const alertDiv = document.createElement('div');
-            alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo] || '#10b981'};color:white;padding:12px;border-radius:12px;text-align:center;z-index:10000;font-weight:bold;font-size:13px`;
-            alertDiv.innerHTML = msg;
-            document.body.appendChild(alertDiv);
-            setTimeout(() => alertDiv.remove(), 4000);
+        // Alternar modo
+        function setModo(automatico) {
+            modoAutomatico = automatico;
+            
+            if (modoAutomatico) {
+                modoAutomaticoBtn.classList.add('active');
+                modoManualBtn.classList.remove('active');
+                dicaModo.innerHTML = '<i class="fas fa-infinity"></i> <strong>Modo Automático:</strong> Quando os 4 quadrados ficarem verdes, a prova será corrigida automaticamente após 2 segundos de estabilização.';
+                btnCapturar.style.opacity = '0.5';
+                btnCapturar.title = 'Modo Automático ativado - a correção é automática';
+                if (autoStatusDiv) autoStatusDiv.style.display = 'none';
+                // Cancelar qualquer timer pendente
+                if (autoCorrectionTimer) {
+                    clearTimeout(autoCorrectionTimer);
+                    autoCorrectionTimer = null;
+                }
+            } else {
+                modoManualBtn.classList.add('active');
+                modoAutomaticoBtn.classList.remove('active');
+                dicaModo.innerHTML = '<i class="fas fa-hand-pointer"></i> <strong>Modo Manual:</strong> Alinhe os quadrados e clique em "Corrigir Agora" quando estiver pronto.';
+                btnCapturar.style.opacity = '1';
+                btnCapturar.title = '';
+                if (autoStatusDiv) autoStatusDiv.style.display = 'none';
+                if (autoCorrectionTimer) {
+                    clearTimeout(autoCorrectionTimer);
+                    autoCorrectionTimer = null;
+                }
+            }
         }
         
-        // ============================================
-        // DETECTOR DOS 4 QUADRADOS PRETOS (EVALBEE)
-        // ============================================
-        class DetectorQuadrados {
-            constructor() {
-                this.estavel = 0;
-                this.ultimoRetangulo = null;
-            }
+        modoAutomaticoBtn.addEventListener('click', () => setModo(true));
+        modoManualBtn.addEventListener('click', () => setModo(false));
+        
+        function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
+            const margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
+            const tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
             
-            detectar(ctx, width, height) {
-                // Áreas de busca nos cantos
-                const margem = Math.min(width, height) * 0.05;
-                const tamanhoBusca = Math.min(70, width * 0.1);
-                
-                const areas = {
-                    tl: { x: margem, y: margem, w: tamanhoBusca, h: tamanhoBusca },
-                    tr: { x: width - margem - tamanhoBusca, y: margem, w: tamanhoBusca, h: tamanhoBusca },
-                    bl: { x: margem, y: height - margem - tamanhoBusca, w: tamanhoBusca, h: tamanhoBusca },
-                    br: { x: width - margem - tamanhoBusca, y: height - margem - tamanhoBusca, w: tamanhoBusca, h: tamanhoBusca }
-                };
-                
-                const resultados = {};
-                const posicoes = {};
-                let brilhoMedio = 0;
-                let amostras = 0;
-                
-                for (const [canto, area] of Object.entries(areas)) {
-                    try {
-                        const imgData = ctx.getImageData(area.x, area.y, area.w, area.h);
-                        let pixelsEscuros = 0;
-                        let totalPixels = area.w * area.h;
-                        let somaBrilho = 0;
-                        let brilhoMinimo = 255;
-                        let xMin = area.x + area.w/2;
-                        let yMin = area.y + area.h/2;
-                        
-                        // Analisar cada pixel
-                        for (let y = area.y; y < area.y + area.h && y < imgData.height; y++) {
-                            for (let x = area.x; x < area.x + area.w && x < imgData.width; x++) {
-                                const idx = (y * imgData.width + x) * 4;
-                                const r = imgData.data[idx];
-                                const g = imgData.data[idx+1];
-                                const b = imgData.data[idx+2];
-                                const brilhoPixel = (r + g + b) / 3;
-                                somaBrilho += brilhoPixel;
-                                
-                                // Pixel escuro (brilho < 70)
-                                if (brilhoPixel < 70) {
-                                    pixelsEscuros++;
-                                    if (brilhoPixel < brilhoMinimo) {
-                                        brilhoMinimo = brilhoPixel;
-                                        xMin = x;
-                                        yMin = y;
-                                    }
-                                }
+            const guias = [
+                { id: 'guiaTL', left: margemPx, top: margemPx },
+                { id: 'guiaTR', left: containerWidth - margemPx - tamanhoPx, top: margemPx },
+                { id: 'guiaBL', left: margemPx, top: containerHeight - margemPx - tamanhoPx },
+                { id: 'guiaBR', left: containerWidth - margemPx - tamanhoPx, top: containerHeight - margemPx - tamanhoPx }
+            ];
+            
+            for (const guia of guias) {
+                const el = document.getElementById(guia.id);
+                if (el) {
+                    el.style.left = guia.left + 'px';
+                    el.style.top = guia.top + 'px';
+                    el.style.width = tamanhoPx + 'px';
+                    el.style.height = tamanhoPx + 'px';
+                }
+            }
+        }
+        
+        function detectarQuadradosPretos(ctx, width, height) {
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+            
+            const margemPx = Math.min(width, height) * margemBusca;
+            const tamanhoPx = Math.min(width, height) * tamanhoGuia;
+            
+            const areas = [
+                { nome: 'TL', x: margemPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTL'), posicao: 0 },
+                { nome: 'TR', x: width - margemPx - tamanhoPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTR'), posicao: 1 },
+                { nome: 'BL', x: margemPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBL'), posicao: 2 },
+                { nome: 'BR', x: width - margemPx - tamanhoPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBR'), posicao: 3 }
+            ];
+            
+            let todosDetectados = true;
+            let percentuais = [];
+            
+            for (const area of areas) {
+                try {
+                    let pixelsEscuros = 0;
+                    let totalPixels = area.w * area.h;
+                    
+                    for (let y = 0; y < area.h; y++) {
+                        for (let x = 0; x < area.w; x++) {
+                            const px = Math.floor(area.x + x);
+                            const py = Math.floor(area.y + y);
+                            if (px >= 0 && px < width && py >= 0 && py < height) {
+                                const idx = (py * width + px) * 4;
+                                const brilho = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+                                if (brilho < BRILHO_MAX_PRETO) pixelsEscuros++;
                             }
                         }
-                        
-                        const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
-                        const brilhoArea = somaBrilho / totalPixels;
-                        brilhoMedio += brilhoArea;
-                        amostras++;
-                        
-                        // Detecta se a porcentagem de pixels escuros é maior que a sensibilidade
-                        const detectado = percentualEscuro > sensibilidade;
-                        resultados[canto] = detectado;
-                        
-                        if (detectado) {
-                            posicoes[canto] = { x: xMin, y: yMin };
-                        }
-                        
-                    } catch(e) {
-                        resultados[canto] = false;
                     }
-                }
-                
-                brilhoMedio = amostras > 0 ? brilhoMedio / amostras : 100;
-                const todosDetectados = resultados.tl && resultados.tr && resultados.bl && resultados.br;
-                const iluminacaoOk = brilhoMedio > 30 && brilhoMedio < 240;
-                
-                let retangulo = null;
-                if (todosDetectados && posicoes.tl && posicoes.tr && posicoes.bl && posicoes.br) {
-                    // Calcular o retângulo expandido
-                    const x1 = Math.min(posicoes.tl.x, posicoes.bl.x) - 20;
-                    const y1 = Math.min(posicoes.tl.y, posicoes.tr.y) - 20;
-                    const x2 = Math.max(posicoes.tr.x, posicoes.br.x) + 20;
-                    const y2 = Math.max(posicoes.bl.y, posicoes.br.y) + 20;
                     
-                    retangulo = {
-                        x: Math.max(0, x1),
-                        y: Math.max(0, y1),
-                        width: Math.min(width - x1, x2 - x1),
-                        height: Math.min(height - y1, y2 - y1)
-                    };
+                    const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
+                    percentuais.push(percentualEscuro);
+                    const detectado = percentualEscuro > sensibilidade;
+                    
+                    if (!detectado) todosDetectados = false;
+                    
+                    if (detectado) {
+                        if (!area.elemento.classList.contains('encaixado')) area.elemento.classList.add('encaixado');
+                        quadradosEncaixados[area.posicao] = true;
+                    } else {
+                        area.elemento.classList.remove('encaixado');
+                        quadradosEncaixados[area.posicao] = false;
+                    }
+                } catch(e) {
+                    todosDetectados = false;
+                    area.elemento?.classList.remove('encaixado');
+                    quadradosEncaixados[area.posicao] = false;
                 }
-                
-                if (todosDetectados && iluminacaoOk && retangulo && retangulo.width > 50 && retangulo.height > 50) {
-                    this.estavel++;
-                    this.ultimoRetangulo = retangulo;
-                } else {
-                    this.estavel = Math.max(0, this.estavel - 1);
-                }
-                
-                return {
-                    sucesso: todosDetectados && iluminacaoOk,
-                    quadrados: resultados,
-                    posicoes: posicoes,
-                    retangulo: this.ultimoRetangulo,
-                    estabilidade: this.estavel,
-                    iluminacaoOk: iluminacaoOk,
-                    brilho: Math.round(brilhoMedio)
+            }
+            
+            const statusEl = document.getElementById('statusEncaixe');
+            const icons = quadradosEncaixados.map(e => e ? '⬛' : '⬜').join(' ');
+            statusEl.innerHTML = icons;
+            
+            if (quadradosEncaixados.every(e => e === true)) {
+                statusEl.style.background = 'rgba(0,255,0,0.9)';
+                statusEl.style.color = '#000';
+            } else {
+                statusEl.style.background = 'rgba(0,0,0,0.8)';
+                statusEl.style.color = '#fff';
+            }
+            
+            const todosEncaixados = quadradosEncaixados.every(e => e === true);
+            let retangulo = null;
+            if (todosEncaixados) {
+                retangulo = {
+                    x: margemPx,
+                    y: margemPx,
+                    width: width - (margemPx * 2),
+                    height: height - (margemPx * 2)
                 };
             }
             
-            reset() {
-                this.estavel = 0;
-                this.ultimoRetangulo = null;
-            }
+            return { sucesso: todosEncaixados, retangulo: retangulo, encaixados: [...quadradosEncaixados], percentuais: percentuais };
         }
         
-        let detector = new DetectorQuadrados();
-        
-        function addLog(msg) {
-            console.log(`[${new Date().toLocaleTimeString()}] ${msg}`);
-        }
-        
-        async function fazerRequisicao(url, options = {}) {
-            if (!authToken) {
-                throw new Error('Token de autenticação não fornecido');
+        function desenharRetanguloCartao(retangulo, overlayWidth, overlayHeight, canvasWidth, canvasHeight) {
+            const rectGuide = document.getElementById('rectGuide');
+            if (!retangulo) {
+                if (rectGuide) rectGuide.style.display = 'none';
+                return;
             }
-            
-            try {
-                const response = await fetch(url, {
-                    ...options,
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`,
-                        ...options.headers 
-                    }
-                });
-                
-                if (response.status === 401) {
-                    throw new Error('Token expirado');
-                }
-                
-                return response;
-            } catch (err) {
-                addLog(`Erro fetch: ${err.message}`);
-                throw err;
-            }
-        }
-        
-        function desenharRetangulo(retangulo, overlayWidth, overlayHeight, canvasWidth, canvasHeight) {
-            if (!retangulo) return;
             
             const scaleX = overlayWidth / canvasWidth;
             const scaleY = overlayHeight / canvasHeight;
             
-            let rectGuide = document.getElementById('rectGuide');
-            if (!rectGuide) {
-                rectGuide = document.createElement('div');
-                rectGuide.id = 'rectGuide';
-                rectGuide.className = 'retangulo-guia';
-                document.getElementById('overlay').appendChild(rectGuide);
+            let guide = rectGuide;
+            if (!guide) {
+                guide = document.createElement('div');
+                guide.id = 'rectGuide';
+                guide.className = 'retangulo-enquadramento';
+                document.getElementById('overlay').appendChild(guide);
             }
             
-            rectGuide.style.left = (retangulo.x * scaleX) + 'px';
-            rectGuide.style.top = (retangulo.y * scaleY) + 'px';
-            rectGuide.style.width = (retangulo.width * scaleX) + 'px';
-            rectGuide.style.height = (retangulo.height * scaleY) + 'px';
-            rectGuide.style.display = 'block';
+            guide.style.left = (retangulo.x * scaleX) + 'px';
+            guide.style.top = (retangulo.y * scaleY) + 'px';
+            guide.style.width = (retangulo.width * scaleX) + 'px';
+            guide.style.height = (retangulo.height * scaleY) + 'px';
+            guide.style.display = 'block';
         }
         
-        function esconderRetangulo() {
-            const rectGuide = document.getElementById('rectGuide');
-            if (rectGuide) {
-                rectGuide.style.display = 'none';
+        let ultimoRetangulo = null;
+        
+        function iniciarCorrecaoAutomatica() {
+            if (!modoAutomatico) return;
+            if (autoCorrectionTimer) return;
+            
+            autoCorrectionCountdown = 2;
+            autoStatusDiv.style.display = 'block';
+            autoStatusDiv.innerHTML = `📸 Corrigindo em ${autoCorrectionCountdown}...`;
+            
+            autoCorrectionTimer = setInterval(() => {
+                autoCorrectionCountdown--;
+                if (autoCorrectionCountdown > 0) {
+                    autoStatusDiv.innerHTML = `📸 Corrigindo em ${autoCorrectionCountdown}...`;
+                } else {
+                    clearInterval(autoCorrectionTimer);
+                    autoCorrectionTimer = null;
+                    autoStatusDiv.style.display = 'none';
+                    capturarImagem();
+                }
+            }, 1000);
+        }
+        
+        function cancelarCorrecaoAutomatica() {
+            if (autoCorrectionTimer) {
+                clearInterval(autoCorrectionTimer);
+                autoCorrectionTimer = null;
             }
+            autoStatusDiv.style.display = 'none';
+            isAutoCorrectionReady = false;
         }
         
-        // ============================================
-        // ANÁLISE EM TEMPO REAL
-        // ============================================
         function analisarFrame() {
             if (!video.videoWidth || !video.videoHeight) return;
             
@@ -560,83 +688,101 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            const resultado = detector.detectar(ctx, canvas.width, canvas.height);
+            const container = document.getElementById('cameraContainer');
+            const containerRect = container.getBoundingClientRect();
+            atualizarPosicaoGuias(containerRect.width, containerRect.height, canvas.width, canvas.height);
             
-            const marcadores = {
-                tl: document.getElementById('marcadorTL'),
-                tr: document.getElementById('marcadorTR'),
-                bl: document.getElementById('marcadorBL'),
-                br: document.getElementById('marcadorBR')
-            };
-            
-            for (const [canto, detectado] of Object.entries(resultado.quadrados)) {
-                if (detectado) {
-                    marcadores[canto].classList.add('detectado');
-                } else {
-                    marcadores[canto].classList.remove('detectado');
-                }
-            }
-            
-            if (resultado.retangulo && resultado.sucesso) {
-                const overlay = document.getElementById('overlay');
-                desenharRetangulo(resultado.retangulo, overlay.offsetWidth, overlay.offsetHeight, canvas.width, canvas.height);
-                retanguloAtual = resultado.retangulo;
-            } else {
-                esconderRetangulo();
-                retanguloAtual = null;
-            }
+            const resultado = detectarQuadradosPretos(ctx, canvas.width, canvas.height);
             
             const feedback = document.getElementById('feedback');
             const infoBar = document.getElementById('infoBar');
+            const encaixadosCount = resultado.encaixados.filter(e => e).length;
             
-            if (resultado.sucesso) {
-                const segundos = Math.ceil((8 - resultado.estabilidade) / 2);
-                feedback.innerHTML = `✅ 4 QUADRADOS DETECTADOS! ${segundos > 0 ? `Estabilizando ${segundos}s` : 'Pronto!'}`;
-                feedback.style.background = '#10b981';
-                infoBar.innerHTML = `✅ Cartão detectado | Estável: ${resultado.estabilidade}/8 | Sens: ${sensibilidade}%`;
-                
-                if (resultado.estabilidade >= 8 && !capturando && alunoSelecionadoId) {
-                    addLog('Estabilização completa! Capturando...');
-                    capturarImagem();
-                }
-            }
-            else {
-                const detectados = Object.values(resultado.quadrados).filter(Boolean).length;
-                let mensagem = `🔍 ${detectados}/4 quadrados`;
-                if (detectados === 0) {
-                    mensagem += ' - APROXIME O CARTÃO';
+            if (resultado.sucesso && resultado.retangulo) {
+                if (ultimoRetangulo && 
+                    Math.abs(ultimoRetangulo.x - resultado.retangulo.x) < 20 &&
+                    Math.abs(ultimoRetangulo.y - resultado.retangulo.y) < 20) {
+                    estabilidade++;
                 } else {
-                    mensagem += ' - Ajuste o alinhamento';
+                    estabilidade = Math.max(0, estabilidade - 1);
+                    if (modoAutomatico) cancelarCorrecaoAutomatica();
                 }
-                feedback.innerHTML = mensagem;
+                ultimoRetangulo = resultado.retangulo;
+                retanguloAtual = resultado.retangulo;
+                
+                const containerRect = document.getElementById('cameraContainer').getBoundingClientRect();
+                desenharRetanguloCartao(resultado.retangulo, containerRect.width, containerRect.height, canvas.width, canvas.height);
+                
+                if (estabilidade >= 8) {
+                    feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados!`;
+                    feedback.style.background = '#10b981';
+                    
+                    if (modoAutomatico && !autoCorrectionTimer && !capturando) {
+                        iniciarCorrecaoAutomatica();
+                    } else if (!modoAutomatico) {
+                        btnCapturar.disabled = false;
+                    }
+                } else {
+                    feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados! Aguardando estabilização...`;
+                    feedback.style.background = '#f59e0b';
+                    if (modoAutomatico) cancelarCorrecaoAutomatica();
+                    btnCapturar.disabled = true;
+                }
+                infoBar.innerHTML = `<i class="fas fa-check-circle"></i> Alinhados: ${encaixadosCount}/4`;
+            } else {
+                desenharRetanguloCartao(null);
+                retanguloAtual = null;
+                estabilidade = Math.max(0, estabilidade - 2);
+                ultimoRetangulo = null;
+                
+                if (modoAutomatico) cancelarCorrecaoAutomatica();
+                
+                feedback.innerHTML = `🎯 Alinhe: ${encaixadosCount}/4 | Aproxime a câmera`;
                 feedback.style.background = '#f59e0b';
-                infoBar.innerHTML = `🎯 Quadrados: ${detectados}/4 | Sens: ${sensibilidade}% | Ajuste o cartão`;
+                infoBar.innerHTML = `<i class="fas fa-camera"></i> Alinhamento: ${encaixadosCount}/4`;
+                btnCapturar.disabled = true;
             }
         }
         
-        // ============================================
-        // CAPTURAR E PROCESSAR
-        // ============================================
         async function capturarImagem() {
             if (capturando) return;
             if (!alunoSelecionadoId) {
                 mostrarAlerta('Selecione um aluno primeiro!', 'error');
                 return;
             }
+            if (!retanguloAtual || estabilidade < 8) {
+                mostrarAlerta('Aguarde o cartão estabilizar!', 'warning');
+                return;
+            }
             
             capturando = true;
-            addLog('Capturando imagem...');
             
             const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+            const expandir = 35;
+            const cartaoX = Math.max(0, retanguloAtual.x - expandir);
+            const cartaoY = Math.max(0, retanguloAtual.y - expandir);
+            const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width + (expandir * 2));
+            const cartaoH = Math.min(canvas.height - cartaoY, retanguloAtual.height + (expandir * 2));
+            
+            if (cartaoW <= 0 || cartaoH <= 0) {
+                mostrarAlerta('Erro ao recortar imagem. Tente aproximar mais o cartão.', 'error');
+                capturando = false;
+                return;
+            }
+            
+            const imagemCartao = ctx.getImageData(cartaoX, cartaoY, cartaoW, cartaoH);
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cartaoW;
+            tempCanvas.height = cartaoH;
+            tempCanvas.getContext('2d').putImageData(imagemCartao, 0, 0);
+            const imgData = tempCanvas.toDataURL('image/jpeg', 0.95);
             
             document.getElementById('processando').style.display = 'block';
             document.getElementById('resultado').style.display = 'none';
-            document.getElementById('processandoMsg').innerHTML = '📤 Enviando para correção OMR...';
             
             try {
                 const dadosEnvio = {
@@ -644,47 +790,33 @@
                     questions: totalQuestoes,
                     choices: 5,
                     gabarito: gabarito.map(g => g.respostaCorreta),
-                    threshold: 0.15,
-                    card_width_cm: CARD_WIDTH_CM,
-                    card_height_cm: CARD_HEIGHT_CM,
-                    retangulo: retanguloAtual
                 };
                 
-                const response = await fazerRequisicao('/api/omr/detect', {
+                const omrResponse = await fetch(`${OMR_SERVER_URL}/detect`, {
                     method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(dadosEnvio)
                 });
                 
-                if (!response) throw new Error('Falha na comunicação');
-                
-                const data = await response.json();
-                
+                const data = await omrResponse.json();
                 document.getElementById('processando').style.display = 'none';
                 
                 if (data.success && data.answers) {
                     criarInterfaceRespostas(data.answers);
                     document.getElementById('resultado').style.display = 'block';
-                    const detectadas = data.answers.filter(a => a).length;
-                    mostrarAlerta(`✅ ${detectadas} de ${totalQuestoes} questões detectadas!`, 'success');
+                    mostrarAlerta(`✅ Correção concluída! ${data.answers.filter(a=>a).length} questões detectadas.`, 'success');
                 } else {
                     throw new Error(data.error || 'Falha na detecção');
                 }
-                
             } catch (error) {
-                addLog(`Erro: ${error.message}`);
                 document.getElementById('processando').style.display = 'none';
                 criarInterfaceManual();
                 document.getElementById('resultado').style.display = 'block';
-                mostrarAlerta(`⚠️ Usando modo manual.`, 'error');
+                mostrarAlerta(`⚠️ Modo manual: ${error.message}`, 'warning');
             }
-            
-            detector.reset();
             capturando = false;
         }
         
-        // ============================================
-        // INTERFACE DE RESPOSTAS
-        // ============================================
         function criarInterfaceRespostas(sugestoes) {
             respostasAtuais = [...sugestoes];
             const letras = ['A', 'B', 'C', 'D', 'E'];
@@ -699,13 +831,13 @@
                 const div = document.createElement('div');
                 div.className = `resposta-card ${isCorreta ? 'correta' : (respostaAluno !== '—' ? 'incorreta' : '')}`;
                 div.innerHTML = `
-                    <strong>Q${i+1}</strong>
-                    <div style="font-size:1.5rem;font-weight:bold;margin:5px 0">${respostaAluno}</div>
+                    <div class="questao-num">Questão ${i+1}</div>
+                    <div class="resposta-valor">${respostaAluno}</div>
                     <div>
                         ${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}
                         <button class="btn-opcao" data-q="${i}" data-opcao="">✗</button>
                     </div>
-                    <small style="font-size:10px">Gabarito: ${respostaGabarito}</small>
+                    <small style="color:#6b7280;">Gabarito: ${respostaGabarito}</small>
                 `;
                 grid.appendChild(div);
             }
@@ -717,7 +849,6 @@
                     setResposta(q, opcao);
                 });
             });
-            
             atualizarNota();
         }
         
@@ -731,13 +862,13 @@
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
                 div.innerHTML = `
-                    <strong>Q${i+1}</strong>
-                    <div id="resp-${i}" style="font-size:1.5rem;font-weight:bold;margin:5px 0">—</div>
+                    <div class="questao-num">Questão ${i+1}</div>
+                    <div class="resposta-valor" id="resp-${i}">—</div>
                     <div>
                         ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
                         <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
                     </div>
-                    <small>Gabarito: ${gabarito[i]?.respostaCorreta || '?'}</small>
+                    <small style="color:#6b7280;">Gabarito: ${gabarito[i]?.respostaCorreta || '?'}</small>
                 `;
                 grid.appendChild(div);
             }
@@ -745,17 +876,14 @@
         }
         
         function setResposta(questao, letra) {
-            const el = document.getElementById(`resp-${questao}`);
-            if (el) {
-                respostasAtuais[questao] = letra;
-                el.innerHTML = letra || '—';
-            } else {
-                respostasAtuais[questao] = letra;
-                const cards = document.querySelectorAll('.resposta-card');
-                if (cards[questao]) {
-                    const respostaDiv = cards[questao].querySelector('div[style*="font-size"]');
-                    if (respostaDiv) respostaDiv.innerHTML = letra || '—';
-                }
+            respostasAtuais[questao] = letra;
+            const cards = document.querySelectorAll('.resposta-card');
+            if (cards[questao]) {
+                const respostaDiv = cards[questao].querySelector('.resposta-valor');
+                if (respostaDiv) respostaDiv.innerHTML = letra || '—';
+                const respostaGabarito = gabarito[questao]?.respostaCorreta;
+                const isCorreta = letra && letra === respostaGabarito;
+                cards[questao].className = `resposta-card ${isCorreta ? 'correta' : (letra ? 'incorreta' : '')}`;
             }
             atualizarNota();
         }
@@ -763,146 +891,100 @@
         function atualizarNota() {
             let acertos = 0;
             for (let i = 0; i < totalQuestoes; i++) {
-                if (respostasAtuais[i] && respostasAtuais[i] === gabarito[i]?.respostaCorreta) {
-                    acertos++;
-                }
+                if (respostasAtuais[i] && respostasAtuais[i] === gabarito[i]?.respostaCorreta) acertos++;
             }
             notaCalculada = (acertos / totalQuestoes) * 10;
-            
+            const status = notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO';
+            const statusClass = notaCalculada >= 6 ? 'aprovado' : 'reprovado';
             document.getElementById('notaFinal').innerHTML = `
                 <h2>${notaCalculada.toFixed(1)} / 10,0</h2>
                 <p>${acertos} acertos de ${totalQuestoes} questões</p>
-                <p style="margin-top:5px">${notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO'}</p>
+                <p class="${statusClass}">${status}</p>
             `;
         }
         
         async function salvarNota() {
-            if (!alunoSelecionadoId) {
-                mostrarAlerta('Selecione um aluno!', 'error');
-                return;
-            }
-            
-            if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)}?`)) return;
-            
+            if (!alunoSelecionadoId) { mostrarAlerta('Selecione um aluno!', 'error'); return; }
+            if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)} para o aluno?`)) return;
             try {
                 const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, {
                     method: 'POST',
-                    body: JSON.stringify({
-                        alunoId: alunoSelecionadoId,
-                        nota: notaCalculada,
-                        observacao: `Corrigido OMR EVALBEE em ${new Date().toLocaleString()}`
-                    })
+                    body: JSON.stringify({ alunoId: alunoSelecionadoId, nota: notaCalculada, observacao: `Corrigido automaticamente em ${new Date().toLocaleString()}` })
                 });
-                
-                if (response && (await response.json()).success) {
-                    mostrarAlerta('✅ Nota salva!', 'success');
+                if ((await response.json()).success) {
+                    mostrarAlerta('✅ Nota salva com sucesso!', 'success');
                     setTimeout(() => window.location.reload(), 1500);
                 }
             } catch (error) {
-                mostrarAlerta('❌ Erro ao salvar', 'error');
+                mostrarAlerta('❌ Erro ao salvar nota', 'error');
             }
         }
         
-        // ============================================
-        // CARREGAR DADOS DA PROVA
-        // ============================================
+        function mostrarAlerta(msg, tipo) {
+            const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' };
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:14px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`;
+            alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`;
+            document.body.appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 3000);
+        }
+        
+        async function fazerRequisicao(url, options = {}) {
+            if (!authToken) throw new Error('Token não fornecido');
+            const response = await fetch(url, {
+                ...options,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`,
+                    ...options.headers 
+                }
+            });
+            if (response.status === 401) throw new Error('Token expirado');
+            return response;
+        }
+        
         async function carregarDados() {
-            if (!provaId) {
-                document.getElementById('loading').innerHTML = '<p style="color:red;">❌ ID da prova não informado</p>';
-                return;
-            }
-            
-            if (urlToken) {
-                authToken = urlToken;
-                localStorage.setItem('auth_token', urlToken);
-            } else {
-                authToken = localStorage.getItem('auth_token');
-            }
-            
-            if (!authToken) {
-                document.getElementById('loading').innerHTML = '<p style="color:red;">❌ Token não informado</p><p style="font-size:12px">Use: ?token=SEU_TOKEN</p>';
-                return;
-            }
+            if (!provaId) { document.getElementById('loading').innerHTML = '<p style="color:red;">❌ ID da prova não informado</p>'; return; }
+            authToken = urlToken || localStorage.getItem('auth_token');
+            if (!authToken) { document.getElementById('loading').innerHTML = '<p style="color:red;">❌ Token não informado</p>'; return; }
             
             try {
                 const res = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
-                if (!res) throw new Error('Erro');
-                
                 const data = await res.json();
-                
                 if (data.success) {
                     alunos = data.resultados || [];
                     totalQuestoes = data.prova?.quantidadeQuestoes || 10;
-                    
                     const provaRes = await fazerRequisicao(`/api/provas/${provaId}`);
-                    if (provaRes) {
-                        const provaData = await provaRes.json();
-                        if (provaData.success && provaData.questoes) {
-                            const letras = ['A', 'B', 'C', 'D', 'E'];
-                            gabarito = provaData.questoes.map((q, i) => ({
-                                numero: i + 1,
-                                respostaCorreta: letras[q.respostaCorreta] || q.respostaCorreta
-                            }));
-                        }
+                    const provaData = await provaRes.json();
+                    if (provaData.success && provaData.questoes) {
+                        const letras = ['A', 'B', 'C', 'D', 'E'];
+                        gabarito = provaData.questoes.map((q, i) => ({ numero: i+1, respostaCorreta: letras[q.respostaCorreta] }));
                     }
-                    
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('conteudo').style.display = 'block';
-                    
-                    document.getElementById('provaInfo').innerHTML = `
-                        <strong>📄 ${data.prova?.titulo || 'Prova EVALBEE'}</strong><br>
-                        ${totalQuestoes} questões | ${alunos.length} alunos<br>
-                        <small><i class="fas fa-ruler"></i> Cartão: ${CARD_WIDTH_CM}cm × ${CARD_HEIGHT_CM}cm | 4 quadrados pretos nos cantos</small>
-                    `;
-                    
-                    document.getElementById('gabaritoInfo').innerHTML = `
-                        <strong>📋 GABARITO OFICIAL:</strong><br>
-                        ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}
-                    `;
-                    
+                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${data.prova?.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos cadastrados</p>`;
+                    document.getElementById('gabaritoInfo').innerHTML = `<strong><i class="fas fa-key"></i> Gabarito:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
                     const select = document.getElementById('selectAluno');
-                    select.innerHTML = '<option value="">Selecione o aluno...</option>';
-                    alunos.forEach(a => {
-                        select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome}</option>`;
-                    });
-                    select.addEventListener('change', e => {
-                        alunoSelecionadoId = e.target.value;
-                        document.getElementById('resultado').style.display = 'none';
-                        detector.reset();
-                        esconderRetangulo();
-                    });
-                    
-                    mostrarAlerta(`✅ Dados carregados! Posicione o cartão com os 4 quadrados pretos nos cantos.`, 'success');
+                    select.innerHTML = '<option value="">— Selecione um aluno —</option>';
+                    alunos.forEach(a => { select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome}</option>`; });
+                    select.addEventListener('change', e => { alunoSelecionadoId = e.target.value; document.getElementById('resultado').style.display = 'none'; });
+                    mostrarAlerta('✅ Dados carregados! Alinhe o cartão para começar.', 'success');
                 }
             } catch (error) {
                 document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`;
             }
         }
         
-        // ============================================
-        // CÂMERA
-        // ============================================
         async function iniciarCamera() {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        facingMode: { exact: "environment" },
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
-                
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
+                    .catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 video.srcObject = stream;
                 await video.play();
-                
                 document.getElementById('btnIniciar').disabled = true;
-                document.getElementById('btnCapturar').disabled = false;
-                
                 if (analiseInterval) clearInterval(analiseInterval);
-                analiseInterval = setInterval(analisarFrame, 150);
-                
-                mostrarAlerta('📷 Câmera iniciada! Posicione o cartão com os 4 quadrados pretos nos cantos.', 'info');
-                
+                analiseInterval = setInterval(analisarFrame, 100);
+                mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
             } catch (error) {
                 mostrarAlerta('❌ Erro ao acessar câmera', 'error');
             }
@@ -911,23 +993,22 @@
         function pararCamera() {
             if (analiseInterval) clearInterval(analiseInterval);
             if (stream) stream.getTracks().forEach(t => t.stop());
+            if (autoCorrectionTimer) {
+                clearInterval(autoCorrectionTimer);
+                autoCorrectionTimer = null;
+            }
         }
         
-        // ============================================
-        // EVENTOS
-        // ============================================
         document.getElementById('btnIniciar').addEventListener('click', iniciarCamera);
         document.getElementById('btnCapturar').addEventListener('click', () => {
-            if (!alunoSelecionadoId) {
-                mostrarAlerta('Selecione um aluno!', 'error');
-                return;
-            }
-            capturarImagem();
+            if (!modoAutomatico) capturarImagem();
         });
         document.getElementById('btnSalvar').addEventListener('click', salvarNota);
         window.addEventListener('beforeunload', pararCamera);
         
         carregarDados();
+        
+        window.setResposta = setResposta;
     </script>
 </body>
 </html>
