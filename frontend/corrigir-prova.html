@@ -1,50 +1,66 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+
+        <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+
+    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Correção de Prova - EVALBEE OMR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>Correção de Prova - Sistema de Provas</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', sans-serif;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
-            padding: 15px;
+            padding: 12px;
         }
-        .container { max-width: 950px; margin: 0 auto; }
+        .container { max-width: 800px; margin: 0 auto; }
         .card {
             background: white;
             border-radius: 24px;
-            padding: 20px;
-            margin-bottom: 15px;
+            padding: 16px;
+            margin-bottom: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
-        .header { text-align: center; margin-bottom: 20px; }
+        .header { text-align: center; margin-bottom: 16px; }
         .header h1 { 
             color: #1e3c72; 
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
+            flex-wrap: wrap;
         }
         .header h1 i { color: #10b981; }
+        .header p { font-size: 12px; margin-top: 5px; }
         
         .modo-selector {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             justify-content: center;
-            margin: 15px 0;
+            margin: 12px 0;
             background: #f1f5f9;
-            padding: 8px;
+            padding: 6px;
             border-radius: 40px;
         }
         .modo-btn {
             flex: 1;
-            padding: 10px 20px;
+            padding: 8px 12px;
             border: none;
             border-radius: 30px;
             font-weight: 600;
@@ -52,22 +68,23 @@
             transition: all 0.2s;
             background: transparent;
             color: #64748b;
+            font-size: 13px;
         }
         .modo-btn.active {
             background: #1e3c72;
             color: white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
-        .modo-btn i { margin-right: 8px; }
+        .modo-btn i { margin-right: 6px; }
         
         /* QR Code Scanner */
         .qr-scanner-container {
             background: #000;
             border-radius: 16px;
             overflow: hidden;
-            margin: 15px 0;
+            margin: 12px 0;
             position: relative;
-            min-height: 300px;
+            min-height: 280px;
         }
         #qr-reader {
             width: 100%;
@@ -75,17 +92,25 @@
         }
         #qr-reader__scan_region {
             background: #000;
+            min-height: 280px;
+            position: relative;
+        }
+        #qr-reader video {
+            width: 100%;
+            height: auto;
+            transition: transform 0.3s ease;
         }
         .qr-overlay {
             position: absolute;
-            bottom: 15px;
+            bottom: 10px;
             left: 0;
             right: 0;
             text-align: center;
             background: rgba(0,0,0,0.7);
             color: white;
-            padding: 8px;
-            font-size: 12px;
+            padding: 6px;
+            font-size: 11px;
+            z-index: 5;
         }
         
         .camera-container {
@@ -93,9 +118,8 @@
             border-radius: 16px;
             overflow: hidden;
             position: relative;
-            margin: 15px auto;
+            margin: 12px auto;
             width: 100%;
-            max-width: 800px;
             aspect-ratio: 4 / 3;
         }
         
@@ -104,6 +128,7 @@
             height: 100%;
             object-fit: cover;
             transform: scaleX(1);
+            transition: transform 0.2s ease;
         }
         
         .overlay {
@@ -148,14 +173,14 @@
         
         .feedback {
             position: absolute;
-            bottom: 15px;
+            bottom: 12px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
             color: white;
-            padding: 10px 20px;
+            padding: 6px 12px;
             border-radius: 30px;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: bold;
             white-space: nowrap;
             z-index: 20;
@@ -164,12 +189,12 @@
         }
         
         .btn {
-            padding: 12px 24px;
+            padding: 10px 20px;
             border-radius: 30px;
             font-weight: 600;
             cursor: pointer;
             border: none;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.2s;
         }
         .btn:hover { transform: scale(1.02); opacity: 0.95; }
@@ -177,20 +202,25 @@
         .btn-success { background: #10b981; color: white; }
         .btn-secondary { background: #6b7280; color: white; }
         .btn-warning { background: #f59e0b; color: white; }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #1e3c72;
+            color: #1e3c72;
+        }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         
         .respostas-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 12px;
-            margin: 20px 0;
-            max-height: 400px;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+            max-height: 350px;
             overflow-y: auto;
             padding: 5px;
         }
         .resposta-card {
             text-align: center;
-            padding: 12px 8px;
+            padding: 10px 6px;
             border: 2px solid #e5e7eb;
             border-radius: 12px;
             background: white;
@@ -205,25 +235,25 @@
             background: linear-gradient(135deg, #fef2f2, #fee2e2);
         }
         .resposta-card .questao-num {
-            font-size: 12px;
+            font-size: 10px;
             color: #6b7280;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         .resposta-card .resposta-valor {
-            font-size: 1.8rem;
+            font-size: 1.4rem;
             font-weight: bold;
-            margin: 8px 0;
+            margin: 6px 0;
         }
         .btn-opcao {
-            width: 36px;
-            padding: 6px;
+            width: 32px;
+            padding: 5px;
             background: #f3f4f6;
             border: 1px solid #ddd;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
             margin: 2px;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 11px;
             transition: all 0.1s;
         }
         .btn-opcao:hover {
@@ -232,140 +262,147 @@
         }
         .nota-final {
             text-align: center;
-            padding: 20px;
+            padding: 15px;
             background: linear-gradient(135deg, #1e3c72, #2a5298);
             color: white;
             border-radius: 16px;
-            margin-top: 20px;
+            margin-top: 15px;
         }
-        .nota-final h2 { font-size: 2.5rem; margin-bottom: 8px; }
+        .nota-final h2 { font-size: 2rem; margin-bottom: 5px; }
         .nota-final .aprovado { color: #10b981; }
         .nota-final .reprovado { color: #f97316; }
-        .loading { text-align: center; padding: 40px; }
+        .loading { text-align: center; padding: 30px; }
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e5e7eb;
+            width: 35px;
+            height: 35px;
+            border: 3px solid #e5e7eb;
             border-top-color: #1e3c72;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
+            margin: 0 auto 12px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
         select {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             border: 2px solid #e5e7eb;
             border-radius: 12px;
-            font-size: 14px;
-            margin: 15px 0;
+            font-size: 13px;
+            margin: 12px 0;
             background: white;
             cursor: pointer;
         }
         
         .info-bar {
             position: fixed;
-            bottom: 15px;
-            right: 15px;
-            background: rgba(0,0,0,0.8);
+            bottom: 12px;
+            right: 12px;
+            left: 12px;
+            background: rgba(0,0,0,0.85);
             color: #10b981;
             padding: 8px 12px;
-            border-radius: 20px;
+            border-radius: 30px;
             font-size: 11px;
             font-family: monospace;
             z-index: 1000;
             backdrop-filter: blur(4px);
+            text-align: center;
         }
         
         .gabarito-display {
             background: #f8fafc;
-            padding: 12px;
+            padding: 10px;
             border-radius: 12px;
             margin: 10px 0;
             font-family: monospace;
-            font-size: 12px;
+            font-size: 10px;
             overflow-x: auto;
             text-align: center;
             border: 1px solid #e5e7eb;
+            white-space: nowrap;
         }
         
         .button-group {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             justify-content: center;
-            margin: 20px 0 10px;
+            margin: 15px 0 10px;
             flex-wrap: wrap;
         }
         
         .dica {
             background: linear-gradient(135deg, #e8f0fe, #d9e6f5);
-            padding: 10px 15px;
+            padding: 8px 12px;
             border-radius: 12px;
-            font-size: 12px;
+            font-size: 11px;
             text-align: center;
-            margin-top: 12px;
+            margin-top: 10px;
             color: #1e3c72;
         }
         
         .status-encaixe {
             position: absolute;
-            top: 15px;
+            top: 8px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.8);
-            padding: 6px 16px;
+            padding: 4px 12px;
             border-radius: 30px;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             font-family: monospace;
             z-index: 20;
-            letter-spacing: 4px;
+            letter-spacing: 2px;
             backdrop-filter: blur(4px);
         }
         
         .prova-info {
             background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-            padding: 15px;
+            padding: 12px;
             border-radius: 16px;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             text-align: center;
             border: 1px solid #e5e7eb;
         }
         
         .prova-info h3 {
             color: #1e3c72;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
+            font-size: 1rem;
+        }
+        
+        .prova-info p {
+            font-size: 12px;
         }
         
         .btn-salvar {
             background: linear-gradient(135deg, #10b981, #059669);
             width: 100%;
-            margin-top: 15px;
-            padding: 14px;
-            font-size: 16px;
-        }
-        
-        .aluno-selector {
-            margin: 15px 0;
+            margin-top: 12px;
+            padding: 12px;
+            font-size: 14px;
         }
         
         .aluno-selector label {
             font-weight: 600;
             color: #374151;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             display: block;
+            font-size: 13px;
         }
         
         .qr-selecionado {
             background: linear-gradient(135deg, #10b981, #059669);
-            padding: 10px 15px;
+            padding: 8px 12px;
             border-radius: 12px;
             margin: 10px 0;
             color: white;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         
         .btn-limpar-qr {
@@ -375,7 +412,7 @@
             padding: 5px 12px;
             border-radius: 20px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
         }
         
         .auto-status {
@@ -384,9 +421,9 @@
             left: 50%;
             transform: translate(-50%, -50%);
             background: rgba(0,0,0,0.9);
-            padding: 8px 20px;
+            padding: 6px 16px;
             border-radius: 40px;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             color: #ffaa00;
             z-index: 25;
@@ -396,29 +433,74 @@
             pointer-events: none;
         }
         
-        .respostas-grid::-webkit-scrollbar {
-            width: 8px;
+        /* Controles de Zoom - Versão Unificada */
+        .zoom-controls {
+            position: absolute;
+            bottom: 70px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 30;
         }
-        .respostas-grid::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
+        .zoom-btn {
+            width: 44px;
+            height: 44px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
         }
-        .respostas-grid::-webkit-scrollbar-thumb {
-            background: #1e3c72;
-            border-radius: 10px;
+        .zoom-btn:hover {
+            background: rgba(0,0,0,0.9);
+            transform: scale(1.05);
+        }
+        .zoom-btn:active {
+            transform: scale(0.95);
         }
         
-        .qr-status {
-            font-size: 12px;
-            margin-top: 8px;
-            color: #6b7280;
+        /* Controles de Zoom para QR Code Scanner */
+        .qr-zoom-controls {
+            position: absolute;
+            bottom: 70px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 35;
+        }
+        .qr-zoom-btn {
+            width: 44px;
+            height: 44px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .qr-zoom-btn:hover {
+            background: rgba(0,0,0,0.9);
+            transform: scale(1.05);
         }
         
         .step-indicator {
             display: flex;
             justify-content: space-between;
-            margin: 20px 0;
-            padding: 0 20px;
+            margin: 15px 0;
+            padding: 0 10px;
         }
         .step {
             text-align: center;
@@ -426,15 +508,16 @@
             position: relative;
         }
         .step-number {
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             background: #e5e7eb;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 8px;
+            margin: 0 auto 5px;
             font-weight: bold;
+            font-size: 12px;
             color: #6b7280;
         }
         .step.active .step-number {
@@ -446,7 +529,7 @@
             color: white;
         }
         .step-label {
-            font-size: 11px;
+            font-size: 9px;
             color: #6b7280;
         }
         .step.active .step-label {
@@ -459,7 +542,7 @@
         .step:not(:last-child)::after {
             content: '';
             position: absolute;
-            top: 15px;
+            top: 13px;
             right: -50%;
             width: 100%;
             height: 2px;
@@ -468,6 +551,29 @@
         .step.completed:not(:last-child)::after {
             background: #10b981;
         }
+        
+        /* Responsividade para orientação horizontal */
+        @media (orientation: landscape) {
+            body { padding: 8px; }
+            .card { padding: 12px; }
+            .header h1 { font-size: 1.1rem; }
+            .step-indicator { margin: 8px 0; }
+            .step-number { width: 24px; height: 24px; font-size: 10px; }
+            .step-label { font-size: 8px; }
+            .camera-container { max-height: 50vh; aspect-ratio: 16 / 9; }
+            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); max-height: 200px; }
+            .nota-final h2 { font-size: 1.5rem; }
+            .qr-scanner-container { min-height: 200px; }
+        }
+        
+        @media (max-width: 480px) {
+            body { padding: 8px; }
+            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+            .btn-opcao { width: 28px; font-size: 10px; }
+            .resposta-card .resposta-valor { font-size: 1.2rem; }
+            .gabarito-display { font-size: 9px; white-space: normal; word-break: break-all; }
+            .zoom-btn, .qr-zoom-btn { width: 38px; height: 38px; font-size: 18px; }
+        }
     </style>
 </head>
 <body>
@@ -475,18 +581,18 @@
         <div class="card">
             <div class="header">
                 <h1><i class="fas fa-robot"></i> Correção Inteligente</h1>
-                <p><strong style="color:#ff4444;">🔴 Alinhe os 4 quadrados vermelhos com os quadrados pretos do cartão</strong></p>
+                <p style="color:#ff4444;"><i class="fas fa-arrows-alt"></i> <strong>Alinhe os 4 quadrados vermelhos com os pretos do cartão</strong></p>
             </div>
             
             <!-- Indicador de Passos -->
             <div class="step-indicator" id="stepIndicator">
                 <div class="step active" id="step1">
                     <div class="step-number">1</div>
-                    <div class="step-label">Selecionar Aluno</div>
+                    <div class="step-label">Aluno</div>
                 </div>
                 <div class="step" id="step2">
                     <div class="step-number">2</div>
-                    <div class="step-label">Alinhar Cartão</div>
+                    <div class="step-label">Alinhar</div>
                 </div>
                 <div class="step" id="step3">
                     <div class="step-number">3</div>
@@ -510,12 +616,12 @@
             
             <div class="dica" id="dicaModo">
                 <i class="fas fa-qrcode"></i> 
-                <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno para identificação automática.
+                <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno
             </div>
             
             <div id="loading" class="loading">
                 <div class="spinner"></div>
-                <p>Carregando dados da prova...</p>
+                <p>Carregando dados...</p>
             </div>
             
             <div id="conteudo" style="display: none;">
@@ -527,7 +633,13 @@
                     <div class="qr-scanner-container" id="qrScannerContainer">
                         <div id="qr-reader" style="width: 100%;"></div>
                         <div class="qr-overlay">
-                            <i class="fas fa-qrcode"></i> Posicione o QR Code do aluno no centro da tela
+                            <i class="fas fa-qrcode"></i> Posicione o QR Code do aluno
+                        </div>
+                        <!-- Controles de Zoom para QR Code -->
+                        <div class="qr-zoom-controls" id="qrZoomControls">
+                            <button class="qr-zoom-btn" id="qrZoomInBtn" title="Aumentar Zoom">+</button>
+                            <button class="qr-zoom-btn" id="qrZoomOutBtn" title="Diminuir Zoom">-</button>
+                            <button class="qr-zoom-btn" id="qrZoomResetBtn" title="Resetar Zoom">↺</button>
                         </div>
                     </div>
                 </div>
@@ -547,7 +659,7 @@
                     <div>
                         <i class="fas fa-check-circle"></i>
                         <strong id="qrAlunoNome">Aluno</strong>
-                        <span id="qrAlunoMatricula" style="font-size: 12px; opacity: 0.8;"></span>
+                        <span id="qrAlunoMatricula" style="font-size: 11px;"></span>
                     </div>
                     <button class="btn-limpar-qr" id="btnLimparQR">
                         <i class="fas fa-times"></i> Trocar
@@ -566,32 +678,39 @@
                         <div class="status-encaixe" id="statusEncaixe">⬜ ⬜ ⬜ ⬜</div>
                         <div id="autoStatus" class="auto-status" style="display: none;"></div>
                     </div>
+                    
+                    <!-- Controles de Zoom -->
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" id="zoomInBtn" title="Aumentar Zoom">+</button>
+                        <button class="zoom-btn" id="zoomOutBtn" title="Diminuir Zoom">-</button>
+                        <button class="zoom-btn" id="zoomResetBtn" title="Resetar Zoom">↺</button>
+                    </div>
                 </div>
                 
                 <div class="button-group">
                     <button class="btn btn-primary" id="btnIniciarCamera" disabled><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir Agora</button>
+                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir</button>
                 </div>
                 
-                <div id="processando" style="display: none; text-align: center; padding: 20px;">
+                <div id="processando" style="display: none; text-align: center; padding: 15px;">
                     <div class="spinner"></div>
-                    <p style="font-size:14px; color:#1e3c72; margin-top:10px;">Processando imagem com IA...</p>
+                    <p style="font-size:12px;">Processando imagem com IA...</p>
                 </div>
                 
                 <div id="resultado" style="display: none;">
-                    <h3 style="font-size:18px; margin:15px 0 10px; color:#1e3c72; text-align:center;">
-                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado da Correção
+                    <h3 style="font-size:16px; margin:12px 0 8px; color:#1e3c72; text-align:center;">
+                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado
                     </h3>
                     <div id="respostasGrid" class="respostas-grid"></div>
                     <div id="notaFinal" class="nota-final"></div>
-                    <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar Nota e Próximo</button>
+                    <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar e Próximo</button>
                 </div>
             </div>
         </div>
     </div>
     
     <div class="info-bar" id="infoBar">
-        <i class="fas fa-circle" style="color:#10b981; font-size:8px;"></i> Aguardando seleção do aluno
+        <i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção
     </div>
     
     <script>
@@ -599,22 +718,21 @@
         // CONFIGURAÇÕES
         // ============================================
         
-        let modoQRCode = true;  // true = QR Code, false = manual
-        let alunoSelecionado = null;  // { id, nome, matricula }
+        let modoQRCode = true;
+        let alunoSelecionado = null;
         let autoCorrectionTimer = null;
         let autoCorrectionCountdown = 0;
-        let isAutoCorrectionReady = false;
+        let currentZoom = 1.0;
+        let currentQRZoom = 1.0;
+        const MIN_ZOOM = 1.0;
+        const MAX_ZOOM = 3.0;
+        const ZOOM_STEP = 0.2;
         
         let sensibilidade = 12;
         const BRILHO_MAX_PRETO = 110;
         
         let margemBusca = 0.12;
         let tamanhoGuia = 0.14;
-        
-        const MARGEM_MIN = 0.05;
-        const MARGEM_MAX = 0.25;
-        const TAMANHO_MIN = 0.08;
-        const TAMANHO_MAX = 0.22;
         
         const OMR_SERVER_URL = 'http://localhost:5001';
         
@@ -636,6 +754,7 @@
         
         let qrScanner = null;
         let scannerIniciado = false;
+        let qrVideoElement = null;
         
         const urlParams = new URLSearchParams(window.location.search);
         const provaId = urlParams.get('prova');
@@ -652,7 +771,6 @@
         const qrSelecionadoDiv = document.getElementById('qrSelecionado');
         const cameraContainer = document.getElementById('cameraContainer');
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
-        const stepIndicator = document.getElementById('stepIndicator');
         const steps = document.querySelectorAll('.step');
         
         function atualizarStep(stepAtivo) {
@@ -666,6 +784,79 @@
             });
         }
         
+        // Controles de Zoom para Câmera do Cartão
+        function aplicarZoom() {
+            if (!video) return;
+            video.style.transform = `scale(${currentZoom})`;
+            video.style.transformOrigin = 'center center';
+        }
+        
+        function zoomIn() {
+            if (currentZoom + ZOOM_STEP <= MAX_ZOOM) {
+                currentZoom += ZOOM_STEP;
+                aplicarZoom();
+            }
+        }
+        
+        function zoomOut() {
+            if (currentZoom - ZOOM_STEP >= MIN_ZOOM) {
+                currentZoom -= ZOOM_STEP;
+                aplicarZoom();
+            }
+        }
+        
+        function resetZoom() {
+            currentZoom = 1.0;
+            aplicarZoom();
+        }
+        
+        // Controles de Zoom para QR Code Scanner
+        function aplicarQRZoom() {
+            if (!qrVideoElement) return;
+            qrVideoElement.style.transform = `scale(${currentQRZoom})`;
+            qrVideoElement.style.transformOrigin = 'center center';
+        }
+        
+        function qrZoomIn() {
+            if (currentQRZoom + ZOOM_STEP <= MAX_ZOOM) {
+                currentQRZoom += ZOOM_STEP;
+                aplicarQRZoom();
+            }
+        }
+        
+        function qrZoomOut() {
+            if (currentQRZoom - ZOOM_STEP >= MIN_ZOOM) {
+                currentQRZoom -= ZOOM_STEP;
+                aplicarQRZoom();
+            }
+        }
+        
+        function qrResetZoom() {
+            currentQRZoom = 1.0;
+            aplicarQRZoom();
+        }
+        
+        document.getElementById('zoomInBtn').addEventListener('click', zoomIn);
+        document.getElementById('zoomOutBtn').addEventListener('click', zoomOut);
+        document.getElementById('zoomResetBtn').addEventListener('click', resetZoom);
+        
+        document.getElementById('qrZoomInBtn').addEventListener('click', qrZoomIn);
+        document.getElementById('qrZoomOutBtn').addEventListener('click', qrZoomOut);
+        document.getElementById('qrZoomResetBtn').addEventListener('click', qrResetZoom);
+        
+        // Capturar elemento de vídeo do QR Code scanner
+        function capturarVideoElementoQR() {
+            setTimeout(() => {
+                const qrVideo = document.querySelector('#qr-reader video');
+                if (qrVideo && !qrVideoElement) {
+                    qrVideoElement = qrVideo;
+                    qrVideoElement.style.transition = 'transform 0.2s ease';
+                    aplicarQRZoom();
+                    console.log('📷 Elemento de vídeo do QR Code capturado para zoom');
+                }
+            }, 1000);
+        }
+        
         // Alternar modo
         function setModo(qrCode) {
             modoQRCode = qrCode;
@@ -673,7 +864,7 @@
             if (modoQRCode) {
                 modoQRBtn.classList.add('active');
                 modoManualBtn.classList.remove('active');
-                dicaModo.innerHTML = '<i class="fas fa-qrcode"></i> <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno para identificação automática.';
+                dicaModo.innerHTML = '<i class="fas fa-qrcode"></i> <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno.';
                 qrScannerArea.style.display = 'block';
                 manualSelectArea.style.display = 'none';
                 qrSelecionadoDiv.style.display = 'none';
@@ -681,7 +872,7 @@
             } else {
                 modoManualBtn.classList.add('active');
                 modoQRBtn.classList.remove('active');
-                dicaModo.innerHTML = '<i class="fas fa-hand-pointer"></i> <strong>Modo Manual:</strong> Selecione o aluno na lista abaixo.';
+                dicaModo.innerHTML = '<i class="fas fa-hand-pointer"></i> <strong>Modo Manual:</strong> Selecione o aluno na lista.';
                 qrScannerArea.style.display = 'none';
                 manualSelectArea.style.display = 'block';
                 if (qrScanner) {
@@ -695,6 +886,8 @@
             btnCapturar.disabled = true;
             document.getElementById('resultado').style.display = 'none';
             atualizarStep(1);
+            resetZoom();
+            qrResetZoom();
         }
         
         // Iniciar QR Code Scanner
@@ -710,37 +903,48 @@
                 await html5QrCode.start(
                     { facingMode: "environment" },
                     config,
-                    (decodedText, decodedResult) => {
+                    (decodedText) => {
                         processarQRCode(decodedText);
                     },
                     (errorMessage) => {
-                        // Ignorar erros de leitura
+                        // Ignorar erros
                         console.debug('QR Scan:', errorMessage);
                     }
                 );
                 scannerIniciado = true;
-                console.log('📷 QR Scanner iniciado');
+                
+                // Capturar elemento de vídeo para zoom
+                capturarVideoElementoQR();
+                
+                // Continuar tentando capturar o vídeo periodicamente
+                const videoInterval = setInterval(() => {
+                    const qrVideo = document.querySelector('#qr-reader video');
+                    if (qrVideo && !qrVideoElement) {
+                        qrVideoElement = qrVideo;
+                        qrVideoElement.style.transition = 'transform 0.2s ease';
+                        aplicarQRZoom();
+                        clearInterval(videoInterval);
+                        console.log('📷 Elemento de vídeo do QR Code capturado');
+                    }
+                }, 500);
+                
             } catch (err) {
                 console.error('Erro ao iniciar scanner:', err);
-                mostrarAlerta('Erro ao iniciar câmera para QR Code. Verifique as permissões.', 'error');
+                mostrarAlerta('Erro ao iniciar câmera para QR Code', 'error');
             }
         }
         
-        // Processar QR Code lido
+        // Processar QR Code
         async function processarQRCode(qrData) {
             try {
-                // Tentar parsear JSON do QR Code
                 let alunoData;
                 try {
                     alunoData = JSON.parse(qrData);
                 } catch (e) {
-                    // Se não for JSON, pode ser apenas o ID do aluno
                     alunoData = { id: qrData };
                 }
                 
                 const alunoId = alunoData.id || alunoData.alunoId || alunoData;
-                
-                // Buscar aluno na lista
                 const alunoEncontrado = alunos.find(a => a.alunoId === alunoId || a.id === alunoId);
                 
                 if (!alunoEncontrado) {
@@ -754,31 +958,27 @@
                     matricula: alunoEncontrado.alunoMatricula || alunoEncontrado.matricula
                 };
                 
-                // Parar scanner
                 if (qrScanner) {
                     await qrScanner.stop();
                     scannerIniciado = false;
                 }
                 
-                // Mostrar aluno selecionado
                 document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
                 document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
                 qrSelecionadoDiv.style.display = 'flex';
                 qrScannerArea.style.display = 'none';
                 
-                // Habilitar próxima etapa
                 btnIniciarCamera.disabled = false;
                 atualizarStep(2);
-                mostrarAlerta(`✅ Aluno identificado: ${alunoSelecionado.nome}`, 'success');
-                document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> Aluno: ${alunoSelecionado.nome}`;
+                mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
+                document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                 
             } catch (error) {
-                console.error('Erro ao processar QR Code:', error);
+                console.error('Erro:', error);
                 mostrarAlerta('❌ QR Code inválido', 'error');
             }
         }
         
-        // Limpar QR Code selecionado
         function limparQRSelecionado() {
             alunoSelecionado = null;
             qrSelecionadoDiv.style.display = 'none';
@@ -788,10 +988,11 @@
             document.getElementById('resultado').style.display = 'none';
             atualizarStep(1);
             iniciarQRScanner();
-            document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção do aluno`;
+            resetZoom();
+            qrResetZoom();
+            document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção`;
         }
         
-        // Atualizar posição das guias
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
             const margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
             const tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
@@ -814,7 +1015,6 @@
             }
         }
         
-        // Detectar quadrados pretos
         function detectarQuadradosPretos(ctx, width, height) {
             const imgData = ctx.getImageData(0, 0, width, height);
             const data = imgData.data;
@@ -830,7 +1030,6 @@
             ];
             
             let todosDetectados = true;
-            let percentuais = [];
             
             for (const area of areas) {
                 try {
@@ -850,7 +1049,6 @@
                     }
                     
                     const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
-                    percentuais.push(percentualEscuro);
                     const detectado = percentualEscuro > sensibilidade;
                     
                     if (!detectado) todosDetectados = false;
@@ -892,7 +1090,7 @@
                 };
             }
             
-            return { sucesso: todosEncaixados, retangulo: retangulo, encaixados: [...quadradosEncaixados], percentuais: percentuais };
+            return { sucesso: todosEncaixados, retangulo: retangulo, encaixados: [...quadradosEncaixados] };
         }
         
         function desenharRetanguloCartao(retangulo, overlayWidth, overlayHeight, canvasWidth, canvasHeight) {
@@ -928,12 +1126,12 @@
             
             autoCorrectionCountdown = 2;
             autoStatusDiv.style.display = 'block';
-            autoStatusDiv.innerHTML = `📸 Corrigindo em ${autoCorrectionCountdown}...`;
+            autoStatusDiv.innerHTML = `📸 Em ${autoCorrectionCountdown}...`;
             
             autoCorrectionTimer = setInterval(() => {
                 autoCorrectionCountdown--;
                 if (autoCorrectionCountdown > 0) {
-                    autoStatusDiv.innerHTML = `📸 Corrigindo em ${autoCorrectionCountdown}...`;
+                    autoStatusDiv.innerHTML = `📸 Em ${autoCorrectionCountdown}...`;
                 } else {
                     clearInterval(autoCorrectionTimer);
                     autoCorrectionTimer = null;
@@ -949,7 +1147,6 @@
                 autoCorrectionTimer = null;
             }
             autoStatusDiv.style.display = 'none';
-            isAutoCorrectionReady = false;
         }
         
         function analisarFrame() {
@@ -995,21 +1192,20 @@
                         btnCapturar.disabled = false;
                     }
                 } else {
-                    feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados! Aguardando estabilização...`;
+                    feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados! Aguardando...`;
                     feedback.style.background = '#f59e0b';
                     cancelarCorrecaoAutomatica();
                     btnCapturar.disabled = true;
                 }
-                infoBar.innerHTML = `<i class="fas fa-check-circle"></i> Alinhados: ${encaixadosCount}/4 | Aluno: ${alunoSelecionado?.nome || '?'}`;
+                infoBar.innerHTML = `<i class="fas fa-check-circle"></i> Alinhado: ${encaixadosCount}/4`;
             } else {
                 desenharRetanguloCartao(null);
                 retanguloAtual = null;
                 estabilidade = Math.max(0, estabilidade - 2);
                 ultimoRetangulo = null;
-                
                 cancelarCorrecaoAutomatica();
                 
-                feedback.innerHTML = `🎯 Alinhe: ${encaixadosCount}/4 | Aproxime a câmera`;
+                feedback.innerHTML = `🎯 Alinhe: ${encaixadosCount}/4 | Aproxime`;
                 feedback.style.background = '#f59e0b';
                 infoBar.innerHTML = `<i class="fas fa-camera"></i> Alinhamento: ${encaixadosCount}/4`;
                 btnCapturar.disabled = true;
@@ -1042,7 +1238,7 @@
             const cartaoH = Math.min(canvas.height - cartaoY, retanguloAtual.height + (expandir * 2));
             
             if (cartaoW <= 0 || cartaoH <= 0) {
-                mostrarAlerta('Erro ao recortar imagem. Tente aproximar mais o cartão.', 'error');
+                mostrarAlerta('Erro ao recortar. Tente aproximar mais.', 'error');
                 capturando = false;
                 return;
             }
@@ -1078,7 +1274,7 @@
                     criarInterfaceRespostas(data.answers);
                     document.getElementById('resultado').style.display = 'block';
                     atualizarStep(4);
-                    mostrarAlerta(`✅ Correção concluída! ${data.answers.filter(a=>a).length} questões detectadas.`, 'success');
+                    mostrarAlerta(`✅ Correção concluída!`, 'success');
                 } else {
                     throw new Error(data.error || 'Falha na detecção');
                 }
@@ -1106,13 +1302,13 @@
                 const div = document.createElement('div');
                 div.className = `resposta-card ${isCorreta ? 'correta' : (respostaAluno !== '—' ? 'incorreta' : '')}`;
                 div.innerHTML = `
-                    <div class="questao-num">Questão ${i+1}</div>
+                    <div class="questao-num">Q${i+1}</div>
                     <div class="resposta-valor">${respostaAluno}</div>
                     <div>
                         ${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}
                         <button class="btn-opcao" data-q="${i}" data-opcao="">✗</button>
                     </div>
-                    <small style="color:#6b7280;">Gabarito: ${respostaGabarito}</small>
+                    <small>Gabarito: ${respostaGabarito}</small>
                 `;
                 grid.appendChild(div);
             }
@@ -1137,13 +1333,13 @@
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
                 div.innerHTML = `
-                    <div class="questao-num">Questão ${i+1}</div>
+                    <div class="questao-num">Q${i+1}</div>
                     <div class="resposta-valor" id="resp-${i}">—</div>
                     <div>
                         ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
                         <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
                     </div>
-                    <small style="color:#6b7280;">Gabarito: ${gabarito[i]?.respostaCorreta || '?'}</small>
+                    <small>Gabarito: ${gabarito[i]?.respostaCorreta || '?'}</small>
                 `;
                 grid.appendChild(div);
             }
@@ -1172,8 +1368,8 @@
             const status = notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO';
             const statusClass = notaCalculada >= 6 ? 'aprovado' : 'reprovado';
             document.getElementById('notaFinal').innerHTML = `
-                <h2>${notaCalculada.toFixed(1)} / 10,0</h2>
-                <p>${acertos} acertos de ${totalQuestoes} questões</p>
+                <h2>${notaCalculada.toFixed(1)} / 10</h2>
+                <p>${acertos} acertos de ${totalQuestoes}</p>
                 <p class="${statusClass}">${status}</p>
             `;
         }
@@ -1188,14 +1384,13 @@
                     body: JSON.stringify({ 
                         alunoId: alunoSelecionado.id, 
                         nota: notaCalculada, 
-                        observacao: `Corrigido automaticamente em ${new Date().toLocaleString()}`
+                        observacao: `Corrigido em ${new Date().toLocaleString()}`
                     })
                 });
                 const data = await response.json();
                 if (data.success) {
-                    mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva para ${alunoSelecionado.nome}!`, 'success');
+                    mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva!`, 'success');
                     
-                    // Reset para o próximo aluno
                     alunoSelecionado = null;
                     qrSelecionadoDiv.style.display = 'none';
                     qrScannerArea.style.display = 'block';
@@ -1205,22 +1400,24 @@
                     btnCapturar.disabled = true;
                     atualizarStep(1);
                     iniciarQRScanner();
-                    document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção do aluno`;
+                    resetZoom();
+                    qrResetZoom();
+                    document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção`;
                 } else {
                     throw new Error(data.error || 'Erro ao salvar');
                 }
             } catch (error) {
-                mostrarAlerta(`❌ Erro ao salvar: ${error.message}`, 'error');
+                mostrarAlerta(`❌ Erro: ${error.message}`, 'error');
             }
         }
         
         function mostrarAlerta(msg, tipo) {
             const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' };
             const alertDiv = document.createElement('div');
-            alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:14px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`;
+            alertDiv.style.cssText = `position:fixed;bottom:70px;left:12px;right:12px;background:${cores[tipo]};color:white;padding:12px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`;
             alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`;
             document.body.appendChild(alertDiv);
-            setTimeout(() => alertDiv.remove(), 3000);
+            setTimeout(() => alertDiv.remove(), 2500);
         }
         
         async function fazerRequisicao(url, options = {}) {
@@ -1262,12 +1459,11 @@
                     }
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('conteudo').style.display = 'block';
-                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${data.prova?.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos cadastrados</p>`;
-                    document.getElementById('gabaritoInfo').innerHTML = `<strong><i class="fas fa-key"></i> Gabarito:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
+                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${data.prova?.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos</p>`;
+                    document.getElementById('gabaritoInfo').innerHTML = `<strong>Gabarito:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
                     
-                    // Preencher select manual
                     const select = document.getElementById('selectAluno');
-                    select.innerHTML = '<option value="">— Selecione um aluno —</option>';
+                    select.innerHTML = '<option value="">— Selecione —</option>';
                     alunos.forEach(a => { 
                         select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; 
                     });
@@ -1282,8 +1478,8 @@
                                 };
                                 btnIniciarCamera.disabled = false;
                                 atualizarStep(2);
-                                mostrarAlerta(`✅ Aluno selecionado: ${aluno.alunoNome}`, 'success');
-                                document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> Aluno: ${aluno.alunoNome}`;
+                                mostrarAlerta(`✅ Aluno: ${aluno.alunoNome}`, 'success');
+                                document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`;
                             }
                         } else {
                             alunoSelecionado = null;
@@ -1292,7 +1488,7 @@
                         }
                     });
                     
-                    mostrarAlerta('✅ Dados carregados! Selecione um aluno para começar.', 'success');
+                    mostrarAlerta('✅ Dados carregados!', 'success');
                     iniciarQRScanner();
                 }
             } catch (error) {
@@ -1314,6 +1510,7 @@
                 btnIniciarCamera.disabled = true;
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Câmera Ativa';
                 cameraContainer.style.display = 'block';
+                resetZoom();
                 if (analiseInterval) clearInterval(analiseInterval);
                 analiseInterval = setInterval(analisarFrame, 100);
                 mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
@@ -1325,10 +1522,7 @@
         function pararCamera() {
             if (analiseInterval) clearInterval(analiseInterval);
             if (stream) stream.getTracks().forEach(t => t.stop());
-            if (autoCorrectionTimer) {
-                clearInterval(autoCorrectionTimer);
-                autoCorrectionTimer = null;
-            }
+            if (autoCorrectionTimer) clearInterval(autoCorrectionTimer);
         }
         
         // Event Listeners
@@ -1345,6 +1539,69 @@
         carregarDados();
         
         window.setResposta = setResposta;
+    </script>
+
+        <script>
+        // ============================================
+        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+        // ============================================
+        (function() {
+            if (window.innerWidth > 768) {
+                console.log('📐 Desktop detectado - escalonamento desativado');
+                return;
+            }
+            
+            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+            
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                const baseWidth = 768;
+                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+                
+                if (width <= 320) escala = 0.55;
+                else if (width <= 360) escala = 0.6;
+                else if (width <= 400) escala = 0.65;
+                else if (width <= 500) escala = 0.75;
+                else if (width <= 600) escala = 0.85;
+                else if (width <= 700) escala = 0.95;
+                else escala = 1;
+                
+                return escala;
+            }
+            
+            function aplicarEscalaMobile() {
+                if (window.innerWidth > 768) return;
+                const escala = calcularEscalaMobile();
+                document.documentElement.style.setProperty('--scale-ratio', escala);
+                document.documentElement.style.setProperty('--current-width', window.innerWidth);
+                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+            }
+            
+            aplicarEscalaMobile();
+            
+            let timeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    } else {
+                        document.documentElement.style.setProperty('--scale-ratio', '1');
+                        console.log('📐 Modo desktop - escala resetada');
+                    }
+                }, 100);
+            });
+            
+            window.addEventListener('orientationchange', function() {
+                setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    }
+                }, 200);
+            });
+            
+            console.log('✅ Sistema de escalonamento mobile ativo!');
+        })();
     </script>
 </body>
 </html>

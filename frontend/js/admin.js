@@ -25454,10 +25454,13 @@ class AdminPanel {
         }
     }
 
-    // ============ IMPRESSÃO NORMAL ============
+    // ============ IMPRESSÃO NORMAL (SEM ADAPTAÇÃO) ============
     async gerarImpressaoNormal() {
+        console.log('🖨️ Gerando impressão normal (sem adaptações)...');
+        
         const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
         if (!prova) {
+            console.error('❌ Dados da prova não encontrados');
             this.showToast('❌ Erro: dados da prova não encontrados', 'error');
             return;
         }
@@ -25485,6 +25488,27 @@ class AdminPanel {
             return;
         }
         
+        // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+        const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1';
+        const IS_RENDER = window.location.hostname.includes('render.com') || 
+                        window.location.hostname.includes('sistema-avaliativo');
+        
+        let BASE_URL;
+        if (IS_LOCALHOST) {
+            BASE_URL = 'http://localhost:3000';
+            console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
+        } else if (IS_RENDER) {
+            BASE_URL = window.location.origin;
+            console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
+        } else {
+            BASE_URL = window.location.origin;
+            console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+        }
+        
+        const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+        console.log('🔗 URL de correção gerada:', urlCorrecao);
+        
         let qrCodeAlunoUrl = null;
         try {
             const response = await fetch('/api/qrcode/gerar', {
@@ -25493,12 +25517,15 @@ class AdminPanel {
                     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ url: `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}` })
+                body: JSON.stringify({ url: urlCorrecao })
             });
             const data = await response.json();
-            if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
+            if (data.success && data.qrCode) {
+                qrCodeAlunoUrl = data.qrCode;
+                console.log('✅ QR Code do aluno gerado com sucesso!');
+            }
         } catch (error) {
-            console.error('Erro ao gerar QR Code:', error);
+            console.error('❌ Erro ao gerar QR Code do aluno:', error);
         }
         
         await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl, alunoNome);
@@ -25506,13 +25533,15 @@ class AdminPanel {
 
     // ============ IMPRESSÃO COM OPÇÕES ============
     async gerarImpressaoComOpcoes() {
+        console.log('🎨 Gerando impressão com as opções selecionadas...');
+        
         const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
         if (!prova) {
+            console.error('❌ Dados da prova não encontrados');
             this.showToast('❌ Erro: dados da prova não encontrados', 'error');
             return;
         }
         
-        // Capturar opções de adaptação
         const fonteDinamicaHabilitada = document.getElementById('optFonteDinamica')?.checked || false;
         const tamanhoFonte = fonteDinamicaHabilitada ? (document.getElementById('fonteSlider')?.value || 12) : 12;
         
@@ -25527,11 +25556,11 @@ class AdminPanel {
         
         console.log('🎨 Opções selecionadas:', opcoes);
         
-        // Verificar se pelo menos uma opção foi selecionada
         const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado;
         
         if (nenhumaOpcao) {
-            if (confirm('Nenhuma opção selecionada. Imprimir normalmente?')) {
+            const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
+            if (confirmar) {
                 this.fecharModalOpcoesAdaptacao();
                 await this.gerarImpressaoNormal();
             }
@@ -25562,6 +25591,27 @@ class AdminPanel {
             return;
         }
         
+        // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+        const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1';
+        const IS_RENDER = window.location.hostname.includes('render.com') || 
+                        window.location.hostname.includes('sistema-avaliativo');
+        
+        let BASE_URL;
+        if (IS_LOCALHOST) {
+            BASE_URL = 'http://localhost:3000';
+            console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
+        } else if (IS_RENDER) {
+            BASE_URL = window.location.origin;
+            console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
+        } else {
+            BASE_URL = window.location.origin;
+            console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+        }
+        
+        const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+        console.log('🔗 URL de correção gerada:', urlCorrecao);
+        
         let qrCodeAlunoUrl = null;
         try {
             const response = await fetch('/api/qrcode/gerar', {
@@ -25570,12 +25620,15 @@ class AdminPanel {
                     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ url: `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}` })
+                body: JSON.stringify({ url: urlCorrecao })
             });
             const data = await response.json();
-            if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
+            if (data.success && data.qrCode) {
+                qrCodeAlunoUrl = data.qrCode;
+                console.log('✅ QR Code do aluno gerado com sucesso!');
+            }
         } catch (error) {
-            console.error('Erro ao gerar QR Code:', error);
+            console.error('❌ Erro ao gerar QR Code do aluno:', error);
         }
         
         await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl, alunoNome);
@@ -25588,10 +25641,32 @@ class AdminPanel {
         try {
             const token = localStorage.getItem('auth_token');
             
+            // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+            const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1';
+            const IS_RENDER = window.location.hostname.includes('render.com') || 
+                            window.location.hostname.includes('sistema-avaliativo');
+            
+            let BASE_URL;
+            if (IS_LOCALHOST) {
+                BASE_URL = 'http://localhost:3000';
+                console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Codes com localhost');
+            } else if (IS_RENDER) {
+                BASE_URL = window.location.origin;
+                console.log('🚀 Modo: PRODUÇÃO (Render) - QR Codes com domínio do Render');
+            } else {
+                BASE_URL = window.location.origin;
+                console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+            }
+            
+            this.showToast(`📱 Gerando QR Codes para ${alunos.length} aluno(s)...`, 'info');
+            
             const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
                 const alunoId = aluno.id || aluno._id;
                 const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
-                const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                
+                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                console.log(`🔗 Gerando QR Code para ${alunoNome}: ${urlCorrecao}`);
                 
                 let qrCodeAlunoUrl = '';
                 try {
@@ -25603,31 +25678,66 @@ class AdminPanel {
                         },
                         body: JSON.stringify({ url: urlCorrecao })
                     });
+                    
                     const qrData = await qrResponse.json();
-                    if (qrData.success && qrData.qrCode) qrCodeAlunoUrl = qrData.qrCode;
-                } catch (error) {
-                    console.error(`Erro ao gerar QR Code para ${alunoNome}:`, error);
+                    if (qrData.success && qrData.qrCode) {
+                        qrCodeAlunoUrl = qrData.qrCode;
+                    }
+                } catch (qrError) {
+                    console.error(`❌ Erro ao gerar QR Code para ${alunoNome}:`, qrError);
                 }
                 
-                return { ...aluno, qrCodeDataUrl: qrCodeAlunoUrl, id: alunoId, nome: alunoNome };
+                return { 
+                    ...aluno, 
+                    qrCodeDataUrl: qrCodeAlunoUrl,
+                    id: alunoId,
+                    nome: alunoNome
+                };
             }));
             
+            // Gerar HTML completo com todos os alunos
             let htmlCompleto = '';
+            
             for (let i = 0; i < alunosComQRCode.length; i++) {
                 const aluno = alunosComQRCode[i];
+                
+                console.log(`📄 Gerando prova para: ${aluno.nome} (${i + 1}/${alunosComQRCode.length})`);
+                
+                // Salvar nome do aluno para exibir no QR Code
+                window.alunoSelecionadoNome = aluno.nome;
+                
+                // Reutilizar a mesma função que gera o HTML
                 const htmlAluno = this.gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, aluno.qrCodeDataUrl, aluno.nome);
+                
                 htmlCompleto += htmlAluno;
+                
+                // Quebra de página após cada aluno (exceto o último)
                 if (i < alunosComQRCode.length - 1) {
-                    htmlCompleto += `<div style="page-break-before: always;"></div>`;
+                    htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
                 }
             }
             
+            // Abrir janela de impressão
             const printWindow = window.open('', '_blank');
+            
+            if (!printWindow) {
+                throw new Error('Pop-up bloqueado! Permita pop-ups para este site.');
+            }
+            
             printWindow.document.write(htmlCompleto);
             printWindow.document.close();
-            printWindow.onload = () => { printWindow.print(); printWindow.onafterprint = () => printWindow.close(); };
+            
+            printWindow.onload = function() {
+                setTimeout(() => {
+                    printWindow.print();
+                    printWindow.onafterprint = function() {
+                        printWindow.close();
+                    };
+                }, 500);
+            };
             
             this.showToast(`✅ Impressão preparada para ${alunosComQRCode.length} aluno(s)!`, 'success');
+            
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast(`❌ Erro: ${error.message}`, 'error');
@@ -25709,11 +25819,26 @@ class AdminPanel {
         });
         
         const gerarCartaoResposta = () => {
+            // 🔥 DETECTAR AMBIENTE PARA OS LINKS
+            const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1';
+            const IS_RENDER = window.location.hostname.includes('render.com') || 
+                            window.location.hostname.includes('sistema-avaliativo');
+            
+            let API_BASE_URL;
+            if (IS_LOCALHOST) {
+                API_BASE_URL = 'http://localhost:3000';
+            } else if (IS_RENDER) {
+                API_BASE_URL = window.location.origin;
+            } else {
+                API_BASE_URL = window.location.origin;
+            }
+            
             const qrCodeArea = qrCodeDataUrl ? `
-                <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                        <img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code">
-                        <div style="font-size: 7px; color: #666; text-align: left;">
+                <div style="text-align: center; margin-top: 10px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; display: inline-block; width: auto;">
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                        <img src="${qrCodeDataUrl}" style="width: 85px; height: auto; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="QR Code">
+                        <div style="font-size: 9px; color: #666; text-align: center;">
                             <strong>📱 Correção Automática</strong><br>
                             Escaneie este QR Code
                         </div>
@@ -25722,10 +25847,10 @@ class AdminPanel {
             ` : '';
             
             const qrCodeAlunoArea = qrCodeAlunoUrl ? `
-                <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                        <img src="${qrCodeAlunoUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code do Aluno">
-                        <div style="font-size: 7px; color: #666; text-align: left;">
+                <div style="text-align: center; margin-top: 10px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; display: inline-block; width: auto;">
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                        <img src="${qrCodeAlunoUrl}" style="width: 85px; height: auto; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="QR Code do Aluno">
+                        <div style="font-size: 9px; color: #666; text-align: center;">
                             <strong>👤 Identificação do Aluno</strong><br>
                             ${alunoNome || 'Aluno'}
                         </div>
@@ -25742,42 +25867,17 @@ class AdminPanel {
                             <p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p>
                         </div>
                     </div>
-                    
                     <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
-                        <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                        <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                        <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                        <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                        
+                        <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                        <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                        <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                        <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
                         <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
-                            <thead>
-                                <tr style="background: #e8e8e8;">
-                                    <th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>
-                                    ${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${Array.from({ length: totalQuestoes }, (_, i) => {
-                                    const num = i + 1;
-                                    return `
-                                        <tr>
-                                            <td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${num}</td>
-                                            ${letrasUsadas.map(() => `
-                                                <td style="border: 1px solid #000; padding: 5px 3px; text-align: center;">
-                                                    <div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div>
-                                                </td>
-                                            `).join('')}
-                                        </tr>
-                                    `;
-                                }).join('')}
-                            </tbody>
+                            <thead><tr style="background: #e8e8e8;"><th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')} </thead>
+                            <tbody>${Array.from({ length: totalQuestoes }, (_, i) => `   <tr><td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${i + 1}</td>${letrasUsadas.map(() => `<td style="border: 1px solid #000; padding: 5px 3px; text-align: center;"><div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div></td>`).join('')}</tr>`).join('')}</tbody>
                         </table>
                     </div>
-                    
-                    <div style="display: flex; justify-content: center; align-items: center; gap: 30px; margin-top: 10px; flex-wrap: wrap;">
-                        ${qrCodeArea}
-                        ${qrCodeAlunoArea}
-                    </div>
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 40px; margin-top: 15px; flex-wrap: wrap;">${qrCodeArea}${qrCodeAlunoArea}</div>
                 </div>
             `;
         };

@@ -1957,15 +1957,37 @@
                 
                 if (!alunoId) { this.showToast('⚠️ Selecione um aluno', 'info'); this.mostrarModalPerguntaAdaptacao(); return; }
                 
+                // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                    window.location.hostname === '127.0.0.1';
+                const IS_RENDER = window.location.hostname.includes('render.com') || 
+                                window.location.hostname.includes('sistema-avaliativo');
+                
+                let BASE_URL;
+                if (IS_LOCALHOST) {
+                    BASE_URL = 'http://localhost:3000';
+                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
+                } else if (IS_RENDER) {
+                    BASE_URL = window.location.origin;
+                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
+                } else {
+                    BASE_URL = window.location.origin;
+                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+                }
+                
+                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                console.log('🔗 URL de correção gerada:', urlCorrecao);
+                
                 let qrCodeAlunoUrl = null;
                 try {
                     const response = await fetch('/api/qrcode/gerar', {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}` })
+                        body: JSON.stringify({ url: urlCorrecao })
                     });
                     const data = await response.json();
                     if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
+                    console.log('✅ QR Code do aluno gerado com sucesso!');
                 } catch (error) { console.error('Erro ao gerar QR Code:', error); }
                 
                 await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl, alunoNome);
@@ -2013,15 +2035,37 @@
                 
                 if (!alunoId) { this.showToast('⚠️ Selecione um aluno', 'info'); this.mostrarModalPerguntaAdaptacao(); return; }
                 
+                // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                    window.location.hostname === '127.0.0.1';
+                const IS_RENDER = window.location.hostname.includes('render.com') || 
+                                window.location.hostname.includes('sistema-avaliativo');
+                
+                let BASE_URL;
+                if (IS_LOCALHOST) {
+                    BASE_URL = 'http://localhost:3000';
+                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
+                } else if (IS_RENDER) {
+                    BASE_URL = window.location.origin;
+                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
+                } else {
+                    BASE_URL = window.location.origin;
+                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+                }
+                
+                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                console.log('🔗 URL de correção gerada:', urlCorrecao);
+                
                 let qrCodeAlunoUrl = null;
                 try {
                     const response = await fetch('/api/qrcode/gerar', {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}` })
+                        body: JSON.stringify({ url: urlCorrecao })
                     });
                     const data = await response.json();
                     if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
+                    console.log('✅ QR Code do aluno gerado com sucesso!');
                 } catch (error) { console.error('Erro ao gerar QR Code:', error); }
                 
                 await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl, alunoNome);
@@ -2031,10 +2075,31 @@
                 this.showToast(`🖨️ Gerando prova para ${alunos.length} aluno(s)...`, 'info');
                 try {
                     const token = localStorage.getItem('auth_token');
+                    
+                    // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+                    const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                        window.location.hostname === '127.0.0.1';
+                    const IS_RENDER = window.location.hostname.includes('render.com') || 
+                                    window.location.hostname.includes('sistema-avaliativo');
+                    
+                    let BASE_URL;
+                    if (IS_LOCALHOST) {
+                        BASE_URL = 'http://localhost:3000';
+                        console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Codes com localhost');
+                    } else if (IS_RENDER) {
+                        BASE_URL = window.location.origin;
+                        console.log('🚀 Modo: PRODUÇÃO (Render) - QR Codes com domínio do Render');
+                    } else {
+                        BASE_URL = window.location.origin;
+                        console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+                    }
+                    
                     const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
                         const alunoId = aluno._id || aluno.id;
                         const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
-                        const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                        const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                        console.log(`🔗 Gerando QR Code para ${alunoNome}: ${urlCorrecao}`);
+                        
                         let qrCodeAlunoUrl = '';
                         try {
                             const qrResponse = await fetch('/api/qrcode/gerar', {
@@ -2112,22 +2177,56 @@
                 });
                 
                 const gerarCartaoResposta = () => {
+                    // 🔥 DETECTAR AMBIENTE PARA OS LINKS
+                    const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                        window.location.hostname === '127.0.0.1';
+                    const IS_RENDER = window.location.hostname.includes('render.com') || 
+                                    window.location.hostname.includes('sistema-avaliativo');
+                    
+                    let API_BASE_URL;
+                    if (IS_LOCALHOST) {
+                        API_BASE_URL = 'http://localhost:3000';
+                        console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - Links com localhost');
+                    } else if (IS_RENDER) {
+                        API_BASE_URL = window.location.origin;
+                        console.log('🚀 Modo: PRODUÇÃO (Render) - Links com domínio do Render');
+                    } else {
+                        API_BASE_URL = window.location.origin;
+                        console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+                    }
+                    
+                    // QR Code da prova (link para correção)
+                    const correcaoUrl = `${API_BASE_URL}/corrigir-prova.html?prova=${prova.id}`;
+                    console.log('🔗 URL de correção gerada:', correcaoUrl);
+                    
                     const qrCodeArea = qrCodeDataUrl ? `
-                        <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
-                            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                                <img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code">
-                                <div style="font-size: 7px; color: #666; text-align: left;"><strong>📱 Correção Automática</strong><br>Escaneie este QR Code</div>
+                        <div style="text-align: center; margin-top: 10px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; display: inline-block; width: auto;">
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                                <img src="${qrCodeDataUrl}" style="width: 85px; height: auto; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="QR Code">
+                                <div style="font-size: 9px; color: #666; text-align: center;">
+                                    <strong>📱 Correção Automática</strong><br>
+                                    Escaneie este QR Code
+                                </div>
                             </div>
                         </div>
                     ` : '';
-                    const qrCodeAlunoArea = qrCodeAlunoUrl ? `
-                        <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
-                            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                                <img src="${qrCodeAlunoUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code do Aluno">
-                                <div style="font-size: 7px; color: #666; text-align: left;"><strong>👤 Identificação do Aluno</strong><br>${alunoNome || 'Aluno'}</div>
+                    
+                    // QR Code do aluno (link com ID do aluno)
+                    let qrCodeAlunoArea = '';
+                    if (qrCodeAlunoUrl) {
+                        qrCodeAlunoArea = `
+                            <div style="text-align: center; margin-top: 10px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; display: inline-block; width: auto;">
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                                    <img src="${qrCodeAlunoUrl}" style="width: 85px; height: auto; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="QR Code do Aluno">
+                                    <div style="font-size: 9px; color: #666; text-align: center;">
+                                        <strong>👤 Identificação do Aluno</strong><br>
+                                        ${alunoNome || 'Aluno'}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    ` : '';
+                        `;
+                    }
+                    
                     return `
                         <div style="text-align: center;">
                             <div class="cartao-header" style="margin-bottom: 8px;">
@@ -2143,11 +2242,11 @@
                                 <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
                                 <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
                                 <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
-                                    <thead><tr style="background: #e8e8e8;"><th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')}</tr></thead>
-                                    <tbody>${Array.from({ length: totalQuestoes }, (_, i) => `<tr><td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${i + 1}</td>${letrasUsadas.map(() => `<td style="border: 1px solid #000; padding: 5px 3px; text-align: center;"><div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div></td>`).join('')}</tr>`).join('')}</tbody>
-                                }</table>
+                                    <thead><tr style="background: #e8e8e8;"><th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')} </thead>
+                                    <tbody>${Array.from({ length: totalQuestoes }, (_, i) => ` <tr><td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${i + 1}</td>${letrasUsadas.map(() => `<td style="border: 1px solid #000; padding: 5px 3px; text-align: center;"><div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div></td>`).join('')}</tr>`).join('')}</tbody>
+                                </table>
                             </div>
-                            <div style="display: flex; justify-content: center; align-items: center; gap: 30px; margin-top: 10px; flex-wrap: wrap;">${qrCodeArea}${qrCodeAlunoArea}</div>
+                            <div style="display: flex; justify-content: center; align-items: center; gap: 40px; margin-top: 15px; flex-wrap: wrap;">${qrCodeArea}${qrCodeAlunoArea}</div>
                         </div>
                     `;
                 };

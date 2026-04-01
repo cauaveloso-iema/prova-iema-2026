@@ -8391,14 +8391,29 @@ window.addEventListener('scroll', function() {
                 `;
             });
             
-            // ========== CARTÃO-RESPOSTA ==========
+            // ========== CARTÃO-RESPOSTA COM QR CODES MAIORES E LAYOUT VERTICAL ==========
             const gerarCartaoResposta = () => {
-                // QR Code da prova
+                // 🔥 DETECTAR AMBIENTE PARA OS LINKS
+                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                    window.location.hostname === '127.0.0.1';
+                const IS_RENDER = window.location.hostname.includes('render.com') || 
+                                window.location.hostname.includes('sistema-avaliativo');
+                
+                let API_BASE_URL;
+                if (IS_LOCALHOST) {
+                    API_BASE_URL = 'http://localhost:3000';
+                } else if (IS_RENDER) {
+                    API_BASE_URL = window.location.origin;
+                } else {
+                    API_BASE_URL = window.location.origin;
+                }
+                
+                // QR Code da prova (link para correção)
                 const qrCodeArea = qrCodeDataUrl ? `
-                    <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                            <img src="${qrCodeDataUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code">
-                            <div style="font-size: 7px; color: #666; text-align: left;">
+                    <div style="text-align: center; margin-top: 10px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; display: inline-block; width: auto;">
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                            <img src="${qrCodeDataUrl}" style="width: 85px; height: auto; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="QR Code">
+                            <div style="font-size: 9px; color: #666; text-align: center;">
                                 <strong>📱 Correção Automática</strong><br>
                                 Escaneie este QR Code
                             </div>
@@ -8408,10 +8423,10 @@ window.addEventListener('scroll', function() {
                 
                 // QR Code do aluno
                 const qrCodeAlunoArea = qrCodeAlunoUrl ? `
-                    <div style="text-align: center; margin-top: 10px; padding: 6px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: inline-block; width: auto;">
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                            <img src="${qrCodeAlunoUrl}" style="width: 55px; height: auto; border: 1px solid #ccc; border-radius: 4px;" alt="QR Code do Aluno">
-                            <div style="font-size: 7px; color: #666; text-align: left;">
+                    <div style="text-align: center; margin-top: 10px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; display: inline-block; width: auto;">
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                            <img src="${qrCodeAlunoUrl}" style="width: 85px; height: auto; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="QR Code do Aluno">
+                            <div style="font-size: 9px; color: #666; text-align: center;">
                                 <strong>👤 Identificação do Aluno</strong><br>
                                 ${window.alunoSelecionadoNome || 'Aluno'}
                             </div>
@@ -8430,10 +8445,10 @@ window.addEventListener('scroll', function() {
                         </div>
                         
                         <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
-                            <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                            <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                            <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                            <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; background-color: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
+                            <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
                             
                             <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
                                 <thead>
@@ -8460,7 +8475,7 @@ window.addEventListener('scroll', function() {
                             </table>
                         </div>
                         
-                        <div style="display: flex; justify-content: center; align-items: center; gap: 30px; margin-top: 10px; flex-wrap: wrap;">
+                        <div style="display: flex; justify-content: center; align-items: center; gap: 40px; margin-top: 15px; flex-wrap: wrap;">
                             ${qrCodeArea}
                             ${qrCodeAlunoArea}
                         </div>
@@ -9332,12 +9347,30 @@ window.addEventListener('scroll', function() {
             const selectAluno = document.getElementById('selectAlunoImpressao');
             const alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim() || 'Aluno';
             
+            // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+            const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1';
+            const IS_RENDER = window.location.hostname.includes('render.com') || 
+                            window.location.hostname.includes('sistema-avaliativo');
+            
+            let BASE_URL;
+            if (IS_LOCALHOST) {
+                BASE_URL = 'http://localhost:3000';
+                console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
+            } else if (IS_RENDER) {
+                BASE_URL = window.location.origin;
+                console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
+            } else {
+                BASE_URL = window.location.origin;
+                console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+            }
+            
+            const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoSelecionadoId}`;
+            console.log('🔗 URL de correção gerada:', urlCorrecao);
+            
             // Gerar QR Code do aluno
             try {
                 const tokenLocal = localStorage.getItem('auth_token');
-                const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoSelecionadoId}`;
-                
-                console.log('📱 Gerando QR Code para aluno:', alunoNome);
                 
                 const response = await fetch('/api/qrcode/gerar', {
                     method: 'POST',
@@ -9542,12 +9575,30 @@ window.addEventListener('scroll', function() {
                 const selectAluno = document.getElementById('selectAlunoImpressao');
                 alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim() || 'Aluno';
                 
+                // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                    window.location.hostname === '127.0.0.1';
+                const IS_RENDER = window.location.hostname.includes('render.com') || 
+                                window.location.hostname.includes('sistema-avaliativo');
+                
+                let BASE_URL;
+                if (IS_LOCALHOST) {
+                    BASE_URL = 'http://localhost:3000';
+                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
+                } else if (IS_RENDER) {
+                    BASE_URL = window.location.origin;
+                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
+                } else {
+                    BASE_URL = window.location.origin;
+                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+                }
+                
+                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoSelecionadoId}`;
+                console.log('🔗 URL de correção gerada:', urlCorrecao);
+                
                 // Gerar QR Code do aluno
                 try {
                     const tokenLocal = localStorage.getItem('auth_token');
-                    const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoSelecionadoId}`;
-                    
-                    console.log('📱 Gerando QR Code para aluno:', alunoNome);
                     
                     const response = await fetch('/api/qrcode/gerar', {
                         method: 'POST',
