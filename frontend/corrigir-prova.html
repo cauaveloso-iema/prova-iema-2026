@@ -17,9 +17,6 @@
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
             padding: 15px;
-            /* Otimizações para mobile */
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
         }
         .container { max-width: 950px; margin: 0 auto; }
         .card {
@@ -59,9 +56,6 @@
             transition: all 0.2s;
             background: transparent;
             color: #64748b;
-            /* Mobile touch */
-            touch-action: manipulation;
-            min-height: 44px;
         }
         .modo-btn.active {
             background: #1e3c72;
@@ -218,9 +212,6 @@
             border: none;
             font-size: 14px;
             transition: all 0.2s;
-            /* Mobile touch */
-            touch-action: manipulation;
-            min-height: 44px;
         }
         .btn:hover { transform: scale(1.02); opacity: 0.95; }
         .btn-primary { background: #1e3c72; color: white; }
@@ -236,7 +227,6 @@
             max-height: 400px;
             overflow-y: auto;
             padding: 5px;
-            -webkit-overflow-scrolling: touch;
         }
         .resposta-card {
             text-align: center;
@@ -275,9 +265,6 @@
             font-weight: bold;
             font-size: 12px;
             transition: all 0.1s;
-            /* Mobile touch */
-            touch-action: manipulation;
-            min-height: 40px;
         }
         .btn-opcao:hover {
             background: #e5e7eb;
@@ -315,9 +302,6 @@
             margin: 15px 0;
             background: white;
             cursor: pointer;
-            /* Mobile touch */
-            touch-action: manipulation;
-            min-height: 44px;
         }
         
         .info-bar {
@@ -344,7 +328,6 @@
             overflow-x: auto;
             text-align: center;
             border: 1px solid #e5e7eb;
-            -webkit-overflow-scrolling: touch;
         }
         
         .button-group {
@@ -352,7 +335,6 @@
             gap: 15px;
             justify-content: center;
             margin: 20px 0 10px;
-            flex-wrap: wrap;
         }
         
         .dica {
@@ -453,15 +435,6 @@
             border-radius: 20px;
             cursor: pointer;
             font-size: 12px;
-            touch-action: manipulation;
-            min-height: 36px;
-        }
-        
-        /* Botão para voltar ao scanner QR */
-        .btn-voltar-qr {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            margin-top: 10px;
-            width: 100%;
         }
         
         .respostas-grid::-webkit-scrollbar {
@@ -476,48 +449,35 @@
             border-radius: 10px;
         }
         
-        .qr-status {
-            position: absolute;
+        /* Indicador de modo */
+        .modo-indicador {
+            position: fixed;
             top: 10px;
             right: 10px;
             background: rgba(0,0,0,0.7);
-            color: #ff0;
-            padding: 4px 8px;
-            border-radius: 5px;
-            font-size: 10px;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
             font-family: monospace;
-            z-index: 15;
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+        }
+        .modo-indicador.desktop {
+            background: rgba(30,60,114,0.9);
+            border-left: 3px solid #10b981;
+        }
+        .modo-indicador.mobile {
+            background: rgba(16,185,129,0.9);
+            border-left: 3px solid #fff;
         }
         
-        /* Otimizações específicas para mobile */
-        @media (max-width: 768px) {
-            body { padding: 10px; }
-            .card { padding: 15px; }
-            .header h1 { font-size: 1.2rem; }
-            .btn { padding: 10px 16px; font-size: 13px; }
+        @media (max-width: 480px) {
             .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); }
-            .btn-opcao { width: 32px; font-size: 11px; min-height: 36px; }
+            .btn-opcao { width: 32px; font-size: 11px; }
             .resposta-card .resposta-valor { font-size: 1.4rem; }
-            .guia-quadrado { width: 25px; height: 25px; border-width: 2px; }
-            .feedback { font-size: 11px; padding: 8px 12px; white-space: normal; text-align: center; }
-            .status-encaixe { font-size: 12px; padding: 4px 12px; }
-            .qr-status { font-size: 8px; padding: 2px 6px; }
-            .info-bar { font-size: 9px; padding: 4px 8px; bottom: 5px; right: 5px; }
-        }
-        
-        /* Mobile landscape (paisagem) */
-        @media (max-width: 768px) and (orientation: landscape) {
-            .camera-container { max-width: 90%; aspect-ratio: 16/9; }
-            .qr-scanner-container { min-height: 200px; }
-            .guia-quadrado { width: 20px; height: 20px; }
-        }
-        
-        /* Ajustes para telas muito pequenas */
-        @media (max-width: 380px) {
-            .modo-btn { padding: 8px 12px; font-size: 12px; }
-            .btn { padding: 8px 12px; font-size: 12px; }
-            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); }
-            .btn-opcao { width: 28px; font-size: 10px; min-height: 32px; }
+            .modo-indicador { font-size: 9px; padding: 2px 8px; top: 5px; right: 5px; }
         }
     </style>
 </head>
@@ -566,7 +526,6 @@
                         <div class="qr-overlay">
                             <i class="fas fa-qrcode"></i> Posicione o QR Code do aluno
                         </div>
-                        <div id="qrStatus" class="qr-status">Iniciando scanner...</div>
                     </div>
                 </div>
                 
@@ -621,9 +580,6 @@
                     <div id="respostasGrid" class="respostas-grid"></div>
                     <div id="notaFinal" class="nota-final"></div>
                     <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar Nota</button>
-                    <button class="btn btn-secondary btn-voltar-qr" id="btnVoltarQR" style="display: none;">
-                        <i class="fas fa-arrow-left"></i> Voltar para escanear outro aluno
-                    </button>
                 </div>
             </div>
         </div>
@@ -633,7 +589,25 @@
         <i class="fas fa-circle" style="color:#10b981; font-size:8px;"></i> Aguardando seleção do aluno
     </div>
     
+    <!-- Indicador de modo -->
+    <div id="modoIndicador" class="modo-indicador">🔍 CARREGANDO...</div>
+    
     <script>
+        // ============================================
+        // DETECÇÃO DE DISPOSITIVO E INDICADOR
+        // ============================================
+        
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const modoIndicador = document.getElementById('modoIndicador');
+        
+        if (isMobile) {
+            modoIndicador.className = 'modo-indicador mobile';
+            modoIndicador.innerHTML = '📱 MODO MOBILE';
+        } else {
+            modoIndicador.className = 'modo-indicador desktop';
+            modoIndicador.innerHTML = '💻 MODO DESKTOP';
+        }
+        
         // ============================================
         // CORREÇÃO DE URL - REDIRECIONAMENTO INTELIGENTE
         // ============================================
@@ -724,24 +698,13 @@
         const qrSelecionadoDiv = document.getElementById('qrSelecionado');
         const cameraContainer = document.getElementById('cameraContainer');
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
-        const qrStatus = document.getElementById('qrStatus');
-        const btnVoltarQR = document.getElementById('btnVoltarQR');
         
         // ============================================
-        // DETECÇÃO DE DISPOSITIVO MÓVEL
-        // ============================================
-        
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        
-        console.log(`📱 Dispositivo detectado: ${isMobile ? 'MOBILE' : 'DESKTOP'}${isIOS ? ' (iOS)' : ''}`);
-        
-        // ============================================
-        // FUNÇÃO PARA VOLTAR AO SCANNER QR (CORREÇÃO 3)
+        // FUNÇÃO PARA VOLTAR AO SCANNER QR (AUTOMÁTICO)
         // ============================================
         
         function voltarParaScannerQR() {
-            console.log('🔄 Voltando para scanner QR...');
+            console.log('🔄 Voltando para scanner QR automaticamente...');
             
             alunoSelecionado = null;
             qrSelecionadoDiv.style.display = 'none';
@@ -760,7 +723,107 @@
         }
         
         // ============================================
-        // SCANNER COM MÚLTIPLOS FALLBACKS (4 BIBLIOTECAS) - OTIMIZADO PARA MOBILE
+        // CARREGAR ALUNOS (VERSÃO CORRIGIDA)
+        // ============================================
+        
+        async function carregarAlunosDaTurma(turmaId) {
+            try {
+                console.log('🔍 Buscando alunos da turma:', turmaId);
+                const response = await fazerRequisicao(`/api/turmas/${turmaId}`);
+                const data = await response.json();
+                
+                if (data.success && data.turma && data.turma.alunos) {
+                    alunos = data.turma.alunos.map(a => ({
+                        alunoId: a.id,
+                        id: a.id,
+                        alunoNome: a.nome,
+                        nome: a.nome,
+                        alunoMatricula: a.matricula || '',
+                        matricula: a.matricula || ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados da turma`);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erro ao buscar alunos da turma:', error);
+                return false;
+            }
+        }
+        
+        async function carregarAlunosDosResultados() {
+            try {
+                console.log('🔍 Buscando alunos dos resultados da prova...');
+                const response = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
+                const data = await response.json();
+                
+                if (data.success && data.resultados && data.resultados.length > 0) {
+                    alunos = data.resultados.map(r => ({
+                        alunoId: r.alunoId || r.userId,
+                        id: r.alunoId || r.userId,
+                        alunoNome: r.alunoNome || r.nome,
+                        nome: r.alunoNome || r.nome,
+                        alunoMatricula: r.alunoMatricula || r.matricula || '',
+                        matricula: r.alunoMatricula || r.matricula || ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados dos resultados`);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erro ao buscar resultados:', error);
+                return false;
+            }
+        }
+        
+        async function carregarAlunosDaProva(provaData) {
+            try {
+                if (provaData.prova && provaData.prova.alunosAtribuidos && provaData.prova.alunosAtribuidos.length > 0) {
+                    console.log('🔍 Buscando alunos dos alunosAtribuidos da prova...');
+                    
+                    const alunosIds = provaData.prova.alunosAtribuidos.map(a => a.$oid || a);
+                    
+                    alunos = alunosIds.map(id => ({
+                        alunoId: id,
+                        id: id,
+                        alunoNome: `Aluno ${id.slice(-6)}`,
+                        nome: `Aluno ${id.slice(-6)}`,
+                        alunoMatricula: '',
+                        matricula: ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados dos alunosAtribuidos`);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erro ao carregar alunos da prova:', error);
+                return false;
+            }
+        }
+        
+        // ============================================
+        // SCANNER COM MÚLTIPLOS FALLBACKS (4 BIBLIOTECAS)
         // ============================================
         
         async function iniciarQRScanner() {
@@ -769,16 +832,13 @@
             
             scannerAtual = 0;
             
-            // Para dispositivos móveis, tentar primeiro bibliotecas mais leves
             if (isMobile) {
-                // Reordenar scanners para mobile: jsQR primeiro (mais leve), depois html5-qrcode
                 const mobileScanners = [
                     { nome: 'jsQR', func: iniciarScannerJsQR },
                     { nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode },
                     { nome: 'ZXing', func: iniciarScannerZXing },
                     { nome: 'Quagga', func: iniciarScannerQuagga }
                 ];
-                
                 await tentarProximoScannerMobile(mobileScanners);
             } else {
                 await tentarProximoScanner();
@@ -789,19 +849,17 @@
             if (!modoQRCode) return;
             
             if (scannerAtual >= scanners.length) {
-                atualizarStatusScanner('❌ Todos os scanners falharam. Use modo MANUAL.', '#f00');
                 mostrarAlerta('⚠️ Scanner QR não disponível. Use o modo MANUAL.', 'warning');
                 return;
             }
             
             const scanner = scanners[scannerAtual];
-            atualizarStatusScanner(`🔄 Tentando ${scanner.nome}...`, '#ff0');
             console.log(`🔄 Tentando scanner: ${scanner.nome}`);
             
             try {
                 await scanner.func();
                 scannerIniciado = true;
-                atualizarStatusScanner(`✅ Scanner ativo (${scanner.nome})`, '#0f0');
+                console.log(`✅ Scanner ativo (${scanner.nome})`);
             } catch (err) {
                 console.warn(`⚠️ ${scanner.nome} falhou:`, err.message);
                 scannerAtual++;
@@ -820,19 +878,17 @@
             ];
             
             if (scannerAtual >= scanners.length) {
-                atualizarStatusScanner('❌ Todos os scanners falharam. Use modo MANUAL.', '#f00');
                 mostrarAlerta('⚠️ Scanner QR não disponível. Use o modo MANUAL.', 'warning');
                 return;
             }
             
             const scanner = scanners[scannerAtual];
-            atualizarStatusScanner(`🔄 Tentando ${scanner.nome}...`, '#ff0');
             console.log(`🔄 Tentando scanner: ${scanner.nome}`);
             
             try {
                 await scanner.func();
                 scannerIniciado = true;
-                atualizarStatusScanner(`✅ Scanner ativo (${scanner.nome})`, '#0f0');
+                console.log(`✅ Scanner ativo (${scanner.nome})`);
             } catch (err) {
                 console.warn(`⚠️ ${scanner.nome} falhou:`, err.message);
                 scannerAtual++;
@@ -864,30 +920,18 @@
                         reject(new Error('Timeout ao iniciar html5-qrcode'));
                     }, 15000);
                     
-                    // Configurações otimizadas para mobile (APENAS EM MOBILE)
-                    const mobileConfig = isMobile ? {
-                        fps: 20,
-                        qrbox: { width: 250, height: 250 },
-                        aspectRatio: 1.0,
-                        videoConstraints: {
-                            facingMode: "environment",
-                            width: { ideal: 1024 },
-                            height: { ideal: 768 }
-                        }
-                    } : {
-                        fps: 15,
-                        qrbox: { width: 280, height: 280 },
-                        aspectRatio: 1.0,
-                        videoConstraints: {
-                            facingMode: "environment",
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        }
-                    };
-                    
                     await html5QrCode.start(
                         { facingMode: "environment" },
-                        mobileConfig,
+                        { 
+                            fps: 15, 
+                            qrbox: { width: 280, height: 280 },
+                            aspectRatio: 1.0,
+                            videoConstraints: {
+                                facingMode: "environment",
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            }
+                        },
                         (decodedText) => {
                             clearTimeout(timeout);
                             console.log('✅ QR Code detectado (html5-qrcode):', decodedText);
@@ -927,22 +971,9 @@
                     const altCanvas = document.getElementById('qr-alternative-canvas');
                     const ctx = altCanvas.getContext('2d');
                     
-                    // Configurações otimizadas para mobile (APENAS EM MOBILE)
-                    const mobileConstraints = isMobile ? {
-                        video: { 
-                            facingMode: "environment",
-                            width: { ideal: 854 },
-                            height: { ideal: 480 }
-                        } 
-                    } : {
-                        video: { 
-                            facingMode: "environment",
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        } 
-                    };
-                    
-                    alternativeStream = await navigator.mediaDevices.getUserMedia(mobileConstraints);
+                    alternativeStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: "environment" } 
+                    });
                     
                     altVideo.srcObject = alternativeStream;
                     
@@ -961,9 +992,7 @@
                         if (scannerAlternativoAtivo) {
                             reject(new Error('Timeout jsQR'));
                         }
-                    }, 45000);
-                    
-                    const scanInterval = isMobile ? 200 : 100;
+                    }, 30000);
                     
                     function scanFrame() {
                         if (!scannerAlternativoAtivo) return;
@@ -986,7 +1015,7 @@
                             }
                         }
                         
-                        setTimeout(scanFrame, scanInterval);
+                        requestAnimationFrame(scanFrame);
                     }
                     
                     scanFrame();
@@ -1025,7 +1054,7 @@
                     
                     const timeout = setTimeout(() => {
                         reject(new Error('Timeout ZXing'));
-                    }, 45000);
+                    }, 30000);
                     
                     codeReader.decodeFromVideoDevice(null, 'qr-zxing-video', (result, err) => {
                         if (result) {
@@ -1073,20 +1102,20 @@
                     }
                     
                     const canvas = document.getElementById('quagga-canvas');
-                    canvas.width = isMobile ? 480 : 640;
-                    canvas.height = isMobile ? 360 : 480;
+                    canvas.width = 640;
+                    canvas.height = 480;
                     
                     const timeout = setTimeout(() => {
                         reject(new Error('Timeout Quagga'));
-                    }, 45000);
+                    }, 30000);
                     
                     Quagga.init({
                         inputStream: {
                             type: "LiveStream",
                             constraints: {
                                 facingMode: "environment",
-                                width: { ideal: isMobile ? 640 : 854 },
-                                height: { ideal: isMobile ? 480 : 640 }
+                                width: { ideal: 640 },
+                                height: { ideal: 480 }
                             },
                             area: {
                                 top: "0%",
@@ -1096,8 +1125,7 @@
                             }
                         },
                         decoder: {
-                            readers: ["qr_code_reader"],
-                            multiple: false
+                            readers: ["qr_code_reader"]
                         },
                         locator: {
                             patchSize: "medium",
@@ -1158,15 +1186,8 @@
             scannerIniciado = false;
         }
         
-        function atualizarStatusScanner(msg, cor) {
-            if (qrStatus) {
-                qrStatus.innerHTML = msg;
-                qrStatus.style.color = cor;
-            }
-        }
-        
         // ============================================
-        // PROCESSAR QR CODE - COM CORREÇÃO 3 (ALUNO NÃO ENCONTRADO)
+        // PROCESSAR QR CODE
         // ============================================
         
         async function processarQRCode(qrData) {
@@ -1195,16 +1216,13 @@
                 
                 const alunoEncontrado = alunosMap.get(alunoId);
                 
-                // 🔥 CORREÇÃO 3: Se aluno não for encontrado, voltar para scanner QR
+                // 🔥 SE ALUNO NÃO FOR ENCONTRADO, VOLTAR AUTOMATICAMENTE PARA SCANNER QR
                 if (!alunoEncontrado) {
                     console.log('❌ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
                     mostrarAlerta('❌ Aluno não encontrado na turma desta prova!', 'error');
-                    
                     setTimeout(() => {
-                        if (confirm('Aluno não encontrado. Deseja tentar escanear outro QR Code?')) {
-                            voltarParaScannerQR();
-                        }
-                    }, 500);
+                        voltarParaScannerQR();
+                    }, 1500);
                     return;
                 }
                 
@@ -1221,25 +1239,40 @@
                 qrSelecionadoDiv.style.display = 'flex';
                 qrScannerArea.style.display = 'none';
                 
-                // 🔥 CORREÇÃO 2: Habilitar e iniciar câmera automaticamente após escanear QR Code
                 btnIniciarCamera.disabled = false;
                 mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
-                atualizarStatusScanner('Aluno detectado!', '#0f0');
                 
-                // Iniciar câmera automaticamente após 1 segundo (APENAS EM MOBILE)
-                if (isMobile) {
-                    setTimeout(() => {
-                        if (alunoSelecionado && !stream) {
-                            console.log('📷 Iniciando câmera automaticamente para escanear o cartão...');
-                            iniciarCamera();
-                        }
-                    }, 1000);
-                }
+                // 🔥 INICIAR CÂMERA AUTOMATICAMENTE APÓS ESCANEAR QR CODE (PARA TODOS OS DISPOSITIVOS)
+                setTimeout(() => {
+                    if (alunoSelecionado && !stream) {
+                        console.log('📷 Iniciando câmera automaticamente para escanear o cartão...');
+                        iniciarCamera();
+                    }
+                }, 1000);
                 
             } catch (error) {
                 console.error('Erro:', error);
                 mostrarAlerta('❌ QR Code inválido', 'error');
+            }
+        }
+        
+        async function iniciarQRScanner() {
+            if (scannerIniciado) return;
+            if (!modoQRCode) return;
+            
+            scannerAtual = 0;
+            
+            if (isMobile) {
+                const mobileScanners = [
+                    { nome: 'jsQR', func: iniciarScannerJsQR },
+                    { nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode },
+                    { nome: 'ZXing', func: iniciarScannerZXing },
+                    { nome: 'Quagga', func: iniciarScannerQuagga }
+                ];
+                await tentarProximoScannerMobile(mobileScanners);
+            } else {
+                await tentarProximoScanner();
             }
         }
         
@@ -1275,7 +1308,13 @@
                 manualSelectArea.style.display = 'block';
                 qrSelecionadoDiv.style.display = 'none';
                 
-                pararScanner();
+                if (qrScanner && scannerIniciado) {
+                    try {
+                        await qrScanner.stop();
+                        scannerIniciado = false;
+                    } catch(e) {}
+                }
+                
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
@@ -1284,24 +1323,15 @@
             alunoSelecionado = null;
             btnCapturar.disabled = true;
             document.getElementById('resultado').style.display = 'none';
-            btnVoltarQR.style.display = 'none';
         }
         
         // ============================================
-        // FUNÇÕES DO CARTÃO OMR - COM CORREÇÃO 1 (MAIOR SENSIBILIDADE PARA MOBILE)
+        // FUNÇÕES DO CARTÃO OMR
         // ============================================
         
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
-            // Desktop: valores originais
-            let margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
-            let tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
-            
-            // 🔥 CORREÇÃO 1: Apenas em mobile, aumenta o zoom (aproxima mais do cartão)
-            if (isMobile) {
-                const zoomMobile = 1.25;
-                margemPx = Math.min(containerWidth, containerHeight) * margemBusca * zoomMobile;
-                tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia * 1.1;
-            }
+            const margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
+            const tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
             
             const guias = [
                 { id: 'guiaTL', left: margemPx, top: margemPx },
@@ -1324,17 +1354,6 @@
         function detectarQuadradosPretos(ctx, width, height) {
             const imgData = ctx.getImageData(0, 0, width, height);
             const data = imgData.data;
-            
-            // Desktop: valores originais
-            let sensibilidadeAjustada = sensibilidade;
-            let brilhoMaxAjustado = BRILHO_MAX_PRETO;
-            
-            // 🔥 CORREÇÃO 1: Apenas em mobile, aumenta SENSIBILIDADE para detectar pontos pretos
-            if (isMobile) {
-                sensibilidadeAjustada = sensibilidade * 1.7;  // 70% mais sensível
-                brilhoMaxAjustado = BRILHO_MAX_PRETO + 25;    // 25 pontos mais tolerante
-                console.log(`📱 Mobile: sensibilidade=${sensibilidadeAjustada.toFixed(1)}, brilhoMax=${brilhoMaxAjustado}`);
-            }
             
             const margemPx = Math.min(width, height) * margemBusca;
             const tamanhoPx = Math.min(width, height) * tamanhoGuia;
@@ -1360,13 +1379,13 @@
                             if (px >= 0 && px < width && py >= 0 && py < height) {
                                 const idx = (py * width + px) * 4;
                                 const brilho = (data[idx] + data[idx+1] + data[idx+2]) / 3;
-                                if (brilho < brilhoMaxAjustado) pixelsEscuros++;
+                                if (brilho < BRILHO_MAX_PRETO) pixelsEscuros++;
                             }
                         }
                     }
                     
                     const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
-                    const detectado = percentualEscuro > sensibilidadeAjustada;
+                    const detectado = percentualEscuro > sensibilidade;
                     
                     if (!detectado) todosDetectados = false;
                     
@@ -1498,11 +1517,7 @@
                 const containerRect2 = document.getElementById('cameraContainer').getBoundingClientRect();
                 desenharRetanguloCartao(resultado.retangulo, containerRect2.width, containerRect2.height, canvas.width, canvas.height);
                 
-                // Desktop: estabilidade mínima 8 frames
-                // 🔥 Mobile: estabilidade mais rápida (apenas 4 frames)
-                const estabilidadeMinima = isMobile ? 4 : 8;
-                
-                if (estabilidade >= estabilidadeMinima) {
+                if (estabilidade >= 8) {
                     feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados!`;
                     feedback.style.background = '#10b981';
                     
@@ -1536,7 +1551,7 @@
                 mostrarAlerta('Selecione um aluno primeiro!', 'error');
                 return;
             }
-            if (!retanguloAtual || estabilidade < (isMobile ? 4 : 8)) {
+            if (!retanguloAtual || estabilidade < 8) {
                 mostrarAlerta('Aguarde o cartão estabilizar!', 'warning');
                 return;
             }
@@ -1548,9 +1563,7 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // Desktop: expandir 35px
-            // 🔥 Mobile: expandir mais (45px) para capturar mais área
-            const expandir = isMobile ? 45 : 35;
+            const expandir = 35;
             const cartaoX = Math.max(0, retanguloAtual.x - expandir);
             const cartaoY = Math.max(0, retanguloAtual.y - expandir);
             const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width + (expandir * 2));
@@ -1567,9 +1580,7 @@
             tempCanvas.width = cartaoW;
             tempCanvas.height = cartaoH;
             tempCanvas.getContext('2d').putImageData(imagemCartao, 0, 0);
-            // Desktop: qualidade 95%
-            // 🔥 Mobile: qualidade reduzida para 85% (envio mais rápido)
-            const imgData = tempCanvas.toDataURL('image/jpeg', isMobile ? 0.85 : 0.95);
+            const imgData = tempCanvas.toDataURL('image/jpeg', 0.95);
             
             document.getElementById('processando').style.display = 'block';
             document.getElementById('resultado').style.display = 'none';
@@ -1594,7 +1605,6 @@
                 if (data.success && data.answers) {
                     criarInterfaceRespostas(data.answers);
                     document.getElementById('resultado').style.display = 'block';
-                    btnVoltarQR.style.display = 'block';
                     mostrarAlerta(`✅ Correção concluída! ${data.answers.filter(a=>a).length} questões detectadas.`, 'success');
                 } else {
                     throw new Error(data.error || 'Falha na detecção');
@@ -1603,7 +1613,6 @@
                 document.getElementById('processando').style.display = 'none';
                 criarInterfaceManual();
                 document.getElementById('resultado').style.display = 'block';
-                btnVoltarQR.style.display = 'block';
                 mostrarAlerta(`⚠️ Modo manual: ${error.message}`, 'warning');
             }
             capturando = false;
@@ -1711,6 +1720,7 @@
                 const data = await response.json();
                 if (data.success) {
                     mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva!`, 'success');
+                    // 🔥 VOLTAR AUTOMATICAMENTE PARA SCANNER QR APÓS SALVAR
                     setTimeout(() => {
                         voltarParaScannerQR();
                     }, 2000);
@@ -1816,14 +1826,12 @@
                                 mostrarAlerta(`✅ Aluno: ${aluno.alunoNome}`, 'success');
                                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`;
                                 
-                                // 🔥 Em mobile, iniciar câmera automaticamente após seleção manual
-                                if (isMobile) {
-                                    setTimeout(() => {
-                                        if (alunoSelecionado && !stream) {
-                                            iniciarCamera();
-                                        }
-                                    }, 1000);
-                                }
+                                // 🔥 INICIAR CÂMERA AUTOMATICAMENTE APÓS SELEÇÃO MANUAL
+                                setTimeout(() => {
+                                    if (alunoSelecionado && !stream) {
+                                        iniciarCamera();
+                                    }
+                                }, 1000);
                             }
                         } else {
                             alunoSelecionado = null;
@@ -1832,7 +1840,6 @@
                             btnIniciarCamera.disabled = true;
                         }
                         document.getElementById('resultado').style.display = 'none';
-                        btnVoltarQR.style.display = 'none';
                     });
                     
                     mostrarAlerta(`✅ ${alunos.length} alunos carregados! Alinhe o cartão para começar.`, 'success');
@@ -1846,6 +1853,9 @@
                                 nome: alunoPorUrl.alunoNome,
                                 matricula: alunoPorUrl.alunoMatricula
                             };
+                            if (qrScanner && scannerIniciado) {
+                                try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {}
+                            }
                             qrScannerArea.style.display = 'none';
                             qrSelecionadoDiv.style.display = 'flex';
                             document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
@@ -1854,41 +1864,15 @@
                             mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                             document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                             
-                            // 🔥 Em mobile, iniciar câmera automaticamente
-                            if (isMobile) {
-                                setTimeout(() => {
-                                    if (alunoSelecionado && !stream) {
-                                        iniciarCamera();
-                                    }
-                                }, 1000);
-                            }
-                        } else {
-                            console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
-                            mostrarAlerta(`⚠️ Aluno não encontrado nesta prova`, 'warning');
-                        }
-                    } else if (alunos.length === 1) {
-                        console.log('🎯 Apenas um aluno na prova, selecionando automaticamente...');
-                        const unicoAluno = alunos[0];
-                        alunoSelecionado = {
-                            id: unicoAluno.alunoId,
-                            nome: unicoAluno.alunoNome,
-                            matricula: unicoAluno.alunoMatricula
-                        };
-                        qrScannerArea.style.display = 'none';
-                        qrSelecionadoDiv.style.display = 'flex';
-                        document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
-                        document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
-                        btnIniciarCamera.disabled = false;
-                        mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
-                        document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
-                        
-                        // 🔥 Em mobile, iniciar câmera automaticamente
-                        if (isMobile) {
+                            // 🔥 INICIAR CÂMERA AUTOMATICAMENTE
                             setTimeout(() => {
                                 if (alunoSelecionado && !stream) {
                                     iniciarCamera();
                                 }
                             }, 1000);
+                        } else {
+                            console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
+                            mostrarAlerta(`⚠️ Aluno não encontrado nesta prova`, 'warning');
                         }
                     }
                     
@@ -1902,102 +1886,6 @@
             }
         }
         
-        async function carregarAlunosDaTurma(turmaId) {
-            try {
-                console.log('🔍 Buscando alunos da turma:', turmaId);
-                const response = await fazerRequisicao(`/api/turmas/${turmaId}`);
-                const data = await response.json();
-                
-                if (data.success && data.turma && data.turma.alunos) {
-                    alunos = data.turma.alunos.map(a => ({
-                        alunoId: a.id,
-                        id: a.id,
-                        alunoNome: a.nome,
-                        nome: a.nome,
-                        alunoMatricula: a.matricula || '',
-                        matricula: a.matricula || ''
-                    }));
-                    
-                    alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
-                    });
-                    
-                    console.log(`✅ ${alunos.length} alunos carregados da turma`);
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.error('Erro ao buscar alunos da turma:', error);
-                return false;
-            }
-        }
-        
-        async function carregarAlunosDosResultados() {
-            try {
-                console.log('🔍 Buscando alunos dos resultados da prova...');
-                const response = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
-                const data = await response.json();
-                
-                if (data.success && data.resultados && data.resultados.length > 0) {
-                    alunos = data.resultados.map(r => ({
-                        alunoId: r.alunoId || r.userId,
-                        id: r.alunoId || r.userId,
-                        alunoNome: r.alunoNome || r.nome,
-                        nome: r.alunoNome || r.nome,
-                        alunoMatricula: r.alunoMatricula || r.matricula || '',
-                        matricula: r.alunoMatricula || r.matricula || ''
-                    }));
-                    
-                    alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
-                    });
-                    
-                    console.log(`✅ ${alunos.length} alunos carregados dos resultados`);
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.error('Erro ao buscar resultados:', error);
-                return false;
-            }
-        }
-        
-        async function carregarAlunosDaProva(provaData) {
-            try {
-                if (provaData.prova && provaData.prova.alunosAtribuidos && provaData.prova.alunosAtribuidos.length > 0) {
-                    console.log('🔍 Buscando alunos dos alunosAtribuidos da prova...');
-                    
-                    const alunosIds = provaData.prova.alunosAtribuidos.map(a => a.$oid || a);
-                    
-                    alunos = alunosIds.map(id => ({
-                        alunoId: id,
-                        id: id,
-                        alunoNome: `Aluno ${id.slice(-6)}`,
-                        nome: `Aluno ${id.slice(-6)}`,
-                        alunoMatricula: '',
-                        matricula: ''
-                    }));
-                    
-                    alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
-                    });
-                    
-                    console.log(`✅ ${alunos.length} alunos carregados dos alunosAtribuidos`);
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.error('Erro ao carregar alunos da prova:', error);
-                return false;
-            }
-        }
-        
         async function iniciarCamera() {
             if (!alunoSelecionado) {
                 mostrarAlerta('Selecione um aluno primeiro!', 'error');
@@ -2005,26 +1893,14 @@
             }
             
             try {
-                pararScanner();
+                if (qrScanner && scannerIniciado) {
+                    try {
+                        await qrScanner.stop();
+                        scannerIniciado = false;
+                    } catch(e) {}
+                }
                 
-                // Desktop: resolução original
-                // 🔥 Mobile: resolução otimizada e zoom digital
-                const mobileVideoConstraints = isMobile ? {
-                    video: { 
-                        facingMode: { exact: "environment" },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        zoom: { ideal: 1.3 }
-                    }
-                } : {
-                    video: { 
-                        facingMode: { exact: "environment" },
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                };
-                
-                stream = await navigator.mediaDevices.getUserMedia(mobileVideoConstraints)
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
                     .catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 video.srcObject = stream;
                 await video.play();
@@ -2032,10 +1908,7 @@
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Câmera Ativa';
                 cameraContainer.style.display = 'block';
                 if (analiseInterval) clearInterval(analiseInterval);
-                // Desktop: 100ms entre frames
-                // 🔥 Mobile: 60ms entre frames (mais responsivo)
-                const frameRate = isMobile ? 60 : 100;
-                analiseInterval = setInterval(analisarFrame, frameRate);
+                analiseInterval = setInterval(analisarFrame, 100);
                 mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
             } catch (error) {
                 mostrarAlerta('❌ Erro ao acessar câmera', 'error');
@@ -2064,7 +1937,6 @@
         document.getElementById('btnCapturar').addEventListener('click', () => capturarImagem());
         document.getElementById('btnSalvar').addEventListener('click', salvarNota);
         document.getElementById('btnLimparQR').addEventListener('click', limparQRSelecionado);
-        document.getElementById('btnVoltarQR').addEventListener('click', () => voltarParaScannerQR());
         window.addEventListener('beforeunload', pararCamera);
         
         window.setResposta = setResposta;
