@@ -217,6 +217,7 @@
         .btn-primary { background: #1e3c72; color: white; }
         .btn-success { background: #10b981; color: white; }
         .btn-secondary { background: #6b7280; color: white; }
+        .btn-warning { background: #f59e0b; color: white; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         
         .respostas-grid {
@@ -335,6 +336,7 @@
             gap: 15px;
             justify-content: center;
             margin: 20px 0 10px;
+            flex-wrap: wrap;
         }
         
         .dica {
@@ -383,6 +385,14 @@
             margin-top: 15px;
             padding: 14px;
             font-size: 16px;
+        }
+        
+        .btn-tentar-novamente {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            width: 100%;
+            margin-top: 10px;
+            padding: 12px;
+            font-size: 14px;
         }
         
         .aluno-selector {
@@ -473,40 +483,49 @@
             border-left: 3px solid #fff;
         }
         
-        /* 🔥 OTIMIZAÇÕES PARA MOBILE - CÂMERA MAIS PRÓXIMA E INFORMAÇÕES SIMPLIFICADAS */
+        /* 🔥 INFORMAÇÕES MAIS LIMPAS PARA MOBILE */
         @media (max-width: 768px) {
             .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); }
             .btn-opcao { width: 32px; font-size: 11px; }
             .resposta-card .resposta-valor { font-size: 1.4rem; }
             .modo-indicador { font-size: 9px; padding: 2px 8px; top: 5px; right: 5px; }
             
-            /* 🔥 QUADRADOS MAIORES PARA MOBILE */
+            /* 🔥 QUADRADOS MAIORES */
             .guia-quadrado { 
                 width: 45px !important; 
                 height: 45px !important; 
                 border-width: 3px !important;
             }
             
-            /* 🔥 FEEDBACK SIMPLIFICADO */
+            /* 🔥 FEEDBACK SIMPLES E LIMPO */
             .feedback { 
-                font-size: 12px; 
+                font-size: 11px; 
                 padding: 6px 12px; 
                 white-space: nowrap;
                 bottom: 10px;
+                background: rgba(0,0,0,0.8);
             }
             
+            /* 🔥 STATUS APENAS COM QUADRADOS */
             .status-encaixe { 
                 font-size: 14px; 
-                padding: 4px 12px; 
+                padding: 4px 10px; 
                 top: 10px;
-                letter-spacing: 6px;
+                letter-spacing: 4px;
+                background: rgba(0,0,0,0.7);
             }
+            
+            /* 🔥 BOTÕES MENORES */
+            .btn { padding: 8px 16px; font-size: 12px; }
+            .btn-salvar, .btn-tentar-novamente { padding: 10px; font-size: 13px; }
         }
         
         @media (max-width: 480px) {
-            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); }
-            .btn-opcao { width: 32px; font-size: 11px; }
-            .resposta-card .resposta-valor { font-size: 1.4rem; }
+            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); }
+            .btn-opcao { width: 28px; font-size: 10px; }
+            .guia-quadrado { width: 40px !important; height: 40px !important; }
+            .feedback { font-size: 10px; padding: 4px 8px; }
+            .status-encaixe { font-size: 12px; padding: 3px 8px; letter-spacing: 3px; }
         }
     </style>
 </head>
@@ -529,7 +548,7 @@
             
             <div class="dica" id="dicaModo">
                 <i class="fas fa-qrcode"></i> 
-                <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno ou use o link direto.
+                <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno
             </div>
             
             <div id="loading" class="loading">
@@ -553,7 +572,7 @@
                             <canvas id="quagga-canvas"></canvas>
                         </div>
                         <div class="qr-overlay">
-                            <i class="fas fa-qrcode"></i> Posicione o QR Code do aluno
+                            <i class="fas fa-qrcode"></i> Escaneie o QR Code
                         </div>
                     </div>
                 </div>
@@ -586,7 +605,7 @@
                         <div class="guia-quadrado" id="guiaTR"></div>
                         <div class="guia-quadrado" id="guiaBL"></div>
                         <div class="guia-quadrado" id="guiaBR"></div>
-                        <div class="feedback" id="feedback">🎯 Alinhe os 4 quadrados</div>
+                        <div class="feedback" id="feedback">🎯 Alinhe</div>
                         <div class="status-encaixe" id="statusEncaixe">⬜ ⬜ ⬜ ⬜</div>
                         <div id="autoStatus" class="auto-status" style="display: none;"></div>
                     </div>
@@ -594,28 +613,31 @@
                 
                 <div class="button-group">
                     <button class="btn btn-primary" id="btnIniciarCamera" disabled><i class="fas fa-camera"></i> Iniciar Câmera</button>
-                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir Agora</button>
+                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir</button>
                 </div>
                 
                 <div id="processando" style="display: none; text-align: center; padding: 20px;">
                     <div class="spinner"></div>
-                    <p style="font-size:14px; color:#1e3c72; margin-top:10px;">Processando imagem com IA...</p>
+                    <p style="font-size:14px; color:#1e3c72; margin-top:10px;">Processando...</p>
                 </div>
                 
                 <div id="resultado" style="display: none;">
                     <h3 style="font-size:18px; margin:15px 0 10px; color:#1e3c72; text-align:center;">
-                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado da Correção
+                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado
                     </h3>
                     <div id="respostasGrid" class="respostas-grid"></div>
                     <div id="notaFinal" class="nota-final"></div>
                     <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar Nota</button>
+                    <button class="btn btn-warning btn-tentar-novamente" id="btnTentarNovamente">
+                        <i class="fas fa-redo-alt"></i> Tentar Novamente
+                    </button>
                 </div>
             </div>
         </div>
     </div>
     
     <div class="info-bar" id="infoBar">
-        <i class="fas fa-circle" style="color:#10b981; font-size:8px;"></i> Aguardando seleção do aluno
+        <i class="fas fa-circle" style="color:#10b981; font-size:8px;"></i> Aguardando
     </div>
     
     <!-- Indicador de modo -->
@@ -631,10 +653,10 @@
         
         if (isMobile) {
             modoIndicador.className = 'modo-indicador mobile';
-            modoIndicador.innerHTML = '📱 MODO MOBILE';
+            modoIndicador.innerHTML = '📱 MOBILE';
         } else {
             modoIndicador.className = 'modo-indicador desktop';
-            modoIndicador.innerHTML = '💻 MODO DESKTOP';
+            modoIndicador.innerHTML = '💻 DESKTOP';
         }
         
         // ============================================
@@ -727,32 +749,68 @@
         const qrSelecionadoDiv = document.getElementById('qrSelecionado');
         const cameraContainer = document.getElementById('cameraContainer');
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
+        const btnTentarNovamente = document.getElementById('btnTentarNovamente');
         
         // ============================================
-        // FUNÇÃO PARA VOLTAR AO SCANNER QR (AUTOMÁTICO)
+        // FUNÇÃO PARA VOLTAR AO SCANNER QR (CORRIGIDA)
         // ============================================
         
         function voltarParaScannerQR() {
-            console.log('🔄 Voltando para scanner QR automaticamente...');
+            console.log('🔄 Voltando para scanner QR...');
             
+            // Parar tudo
+            if (qrScanner && scannerIniciado) {
+                try {
+                    qrScanner.stop();
+                } catch(e) {}
+            }
+            pararCamera();
+            
+            // Limpar seleção
             alunoSelecionado = null;
+            scannerIniciado = false;
+            
+            // Resetar UI
             qrSelecionadoDiv.style.display = 'none';
             qrScannerArea.style.display = 'block';
             cameraContainer.style.display = 'none';
             document.getElementById('resultado').style.display = 'none';
             btnIniciarCamera.disabled = true;
             btnCapturar.disabled = true;
+            btnTentarNovamente.style.display = 'none';
             
-            pararCamera();
-            scannerIniciado = false;
-            iniciarQRScanner();
+            // Forçar reinício do scanner
+            setTimeout(() => {
+                iniciarQRScanner();
+            }, 500);
             
-            document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando seleção do aluno`;
-            mostrarAlerta('🔄 Volte a escanear o QR Code do aluno', 'info');
+            document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando QR Code`;
+            mostrarAlerta('🔄 Escaneie o QR Code do aluno', 'info');
         }
         
         // ============================================
-        // CARREGAR ALUNOS (VERSÃO CORRIGIDA)
+        // FUNÇÃO PARA TENTAR NOVAMENTE A CAPTURA
+        // ============================================
+        
+        function tentarNovamente() {
+            console.log('🔄 Tentando nova captura...');
+            document.getElementById('resultado').style.display = 'none';
+            btnTentarNovamente.style.display = 'none';
+            
+            if (stream && retanguloAtual && estabilidade >= (isMobile ? 4 : 8)) {
+                capturarImagem();
+            } else {
+                mostrarAlerta('Aguarde o cartão estabilizar', 'warning');
+                setTimeout(() => {
+                    if (retanguloAtual && estabilidade >= (isMobile ? 4 : 8)) {
+                        capturarImagem();
+                    }
+                }, 1000);
+            }
+        }
+        
+        // ============================================
+        // CARREGAR ALUNOS
         // ============================================
         
         async function carregarAlunosDaTurma(turmaId) {
@@ -852,7 +910,7 @@
         }
         
         // ============================================
-        // SCANNER COM MÚLTIPLOS FALLBACKS (4 BIBLIOTECAS)
+        // SCANNER COM MÚLTIPLOS FALLBACKS
         // ============================================
         
         async function iniciarQRScanner() {
@@ -878,7 +936,7 @@
             if (!modoQRCode) return;
             
             if (scannerAtual >= scanners.length) {
-                mostrarAlerta('⚠️ Scanner QR não disponível. Use o modo MANUAL.', 'warning');
+                mostrarAlerta('⚠️ Scanner não disponível. Use o modo MANUAL.', 'warning');
                 return;
             }
             
@@ -907,7 +965,7 @@
             ];
             
             if (scannerAtual >= scanners.length) {
-                mostrarAlerta('⚠️ Scanner QR não disponível. Use o modo MANUAL.', 'warning');
+                mostrarAlerta('⚠️ Scanner não disponível. Use o modo MANUAL.', 'warning');
                 return;
             }
             
@@ -963,7 +1021,7 @@
                         },
                         (decodedText) => {
                             clearTimeout(timeout);
-                            console.log('✅ QR Code detectado (html5-qrcode):', decodedText);
+                            console.log('✅ QR Code detectado:', decodedText);
                             processarQRCode(decodedText);
                             resolve();
                         },
@@ -1245,9 +1303,10 @@
                 
                 const alunoEncontrado = alunosMap.get(alunoId);
                 
+                // 🔥 SE ALUNO NÃO FOR ENCONTRADO, VOLTAR PARA SCANNER QR
                 if (!alunoEncontrado) {
-                    console.log('❌ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
-                    mostrarAlerta('❌ Aluno não encontrado na turma desta prova!', 'error');
+                    console.log('❌ Aluno não encontrado');
+                    mostrarAlerta('❌ Aluno não encontrado!', 'error');
                     setTimeout(() => {
                         voltarParaScannerQR();
                     }, 1500);
@@ -1271,10 +1330,10 @@
                 mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                 
-                // 🔥 INICIAR CÂMERA AUTOMATICAMENTE APÓS ESCANEAR QR CODE
+                // 🔥 INICIAR CÂMERA AUTOMATICAMENTE
                 setTimeout(() => {
                     if (alunoSelecionado && !stream) {
-                        console.log('📷 Iniciando câmera automaticamente para escanear o cartão...');
+                        console.log('📷 Iniciando câmera automaticamente...');
                         iniciarCamera();
                     }
                 }, 1000);
@@ -1282,25 +1341,6 @@
             } catch (error) {
                 console.error('Erro:', error);
                 mostrarAlerta('❌ QR Code inválido', 'error');
-            }
-        }
-        
-        async function iniciarQRScanner() {
-            if (scannerIniciado) return;
-            if (!modoQRCode) return;
-            
-            scannerAtual = 0;
-            
-            if (isMobile) {
-                const mobileScanners = [
-                    { nome: 'jsQR', func: iniciarScannerJsQR },
-                    { nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode },
-                    { nome: 'ZXing', func: iniciarScannerZXing },
-                    { nome: 'Quagga', func: iniciarScannerQuagga }
-                ];
-                await tentarProximoScannerMobile(mobileScanners);
-            } else {
-                await tentarProximoScanner();
             }
         }
         
@@ -1318,7 +1358,7 @@
             if (modoQRCode) {
                 modoQRBtn.classList.add('active');
                 modoManualBtn.classList.remove('active');
-                dicaModo.innerHTML = '<i class="fas fa-qrcode"></i> <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno ou use o link direto.';
+                dicaModo.innerHTML = '<i class="fas fa-qrcode"></i> <strong>Modo QR Code:</strong> Escaneie o QR Code do aluno';
                 qrScannerArea.style.display = 'block';
                 manualSelectArea.style.display = 'none';
                 qrSelecionadoDiv.style.display = 'none';
@@ -1336,13 +1376,7 @@
                 manualSelectArea.style.display = 'block';
                 qrSelecionadoDiv.style.display = 'none';
                 
-                if (qrScanner && scannerIniciado) {
-                    try {
-                        await qrScanner.stop();
-                        scannerIniciado = false;
-                    } catch(e) {}
-                }
-                
+                pararScanner();
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
@@ -1351,6 +1385,7 @@
             alunoSelecionado = null;
             btnCapturar.disabled = true;
             document.getElementById('resultado').style.display = 'none';
+            btnTentarNovamente.style.display = 'none';
         }
         
         // ============================================
@@ -1358,15 +1393,13 @@
         // ============================================
         
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
-            // 🔥 ZOOM AUMENTADO PARA MOBILE - CÂMERA MAIS PRÓXIMA
             let margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
             let tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
             
             if (isMobile) {
-                // Mobile: zoom 30% maior (câmera mais próxima do cartão)
-                const zoomMobile = 1.35;
+                const zoomMobile = 1.4;
                 margemPx = Math.min(containerWidth, containerHeight) * margemBusca * zoomMobile;
-                tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia * 1.15;
+                tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia * 1.2;
             }
             
             const guias = [
@@ -1391,14 +1424,12 @@
             const imgData = ctx.getImageData(0, 0, width, height);
             const data = imgData.data;
             
-            // 🔥 SENSIBILIDADE AUMENTADA PARA MOBILE
             let sensibilidadeAjustada = sensibilidade;
             let brilhoMaxAjustado = BRILHO_MAX_PRETO;
             
             if (isMobile) {
-                sensibilidadeAjustada = sensibilidade * 0.6;  // Mais fácil detectar
-                brilhoMaxAjustado = BRILHO_MAX_PRETO + 40;    // Mais tolerante
-                console.log(`📱 Mobile: sensibilidade=${sensibilidadeAjustada.toFixed(1)}, brilhoMax=${brilhoMaxAjustado}`);
+                sensibilidadeAjustada = sensibilidade * 0.5;
+                brilhoMaxAjustado = BRILHO_MAX_PRETO + 45;
             }
             
             const margemPx = Math.min(width, height) * margemBusca;
@@ -1507,12 +1538,12 @@
             
             autoCorrectionCountdown = 2;
             autoStatusDiv.style.display = 'block';
-            autoStatusDiv.innerHTML = `📸 Corrigindo em ${autoCorrectionCountdown}...`;
+            autoStatusDiv.innerHTML = `📸 ${autoCorrectionCountdown}s`;
             
             autoCorrectionTimer = setInterval(() => {
                 autoCorrectionCountdown--;
                 if (autoCorrectionCountdown > 0) {
-                    autoStatusDiv.innerHTML = `📸 Corrigindo em ${autoCorrectionCountdown}...`;
+                    autoStatusDiv.innerHTML = `📸 ${autoCorrectionCountdown}s`;
                 } else {
                     clearInterval(autoCorrectionTimer);
                     autoCorrectionTimer = null;
@@ -1563,18 +1594,17 @@
                 const containerRect2 = document.getElementById('cameraContainer').getBoundingClientRect();
                 desenharRetanguloCartao(resultado.retangulo, containerRect2.width, containerRect2.height, canvas.width, canvas.height);
                 
-                // 🔥 ESTABILIZAÇÃO MAIS RÁPIDA PARA MOBILE
                 const estabilidadeMinima = isMobile ? 4 : 8;
                 
                 if (estabilidade >= estabilidadeMinima) {
-                    feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados!`;
+                    feedback.innerHTML = `✅ ${encaixadosCount}/4`;
                     feedback.style.background = '#10b981';
                     
                     if (!autoCorrectionTimer && !capturando) {
                         iniciarCorrecaoAutomatica();
                     }
                 } else {
-                    feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados!`;
+                    feedback.innerHTML = `🎯 ${encaixadosCount}/4`;
                     feedback.style.background = '#f59e0b';
                     cancelarCorrecaoAutomatica();
                     btnCapturar.disabled = true;
@@ -1587,7 +1617,7 @@
                 ultimoRetangulo = null;
                 cancelarCorrecaoAutomatica();
                 
-                feedback.innerHTML = `🎯 ${encaixadosCount}/4 Alinhe os 4 quadrados`;
+                feedback.innerHTML = `🎯 ${encaixadosCount}/4`;
                 feedback.style.background = '#f59e0b';
                 infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`;
                 btnCapturar.disabled = true;
@@ -1612,8 +1642,7 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // 🔥 EXPANSÃO MAIOR PARA MOBILE
-            const expandir = isMobile ? 45 : 35;
+            const expandir = isMobile ? 50 : 35;
             const cartaoX = Math.max(0, retanguloAtual.x - expandir);
             const cartaoY = Math.max(0, retanguloAtual.y - expandir);
             const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width + (expandir * 2));
@@ -1643,27 +1672,42 @@
                     gabarito: gabarito.map(g => g.respostaCorreta),
                 };
                 
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                
                 const omrResponse = await fetch(`${OMR_SERVER_URL}/detect`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dadosEnvio)
+                    body: JSON.stringify(dadosEnvio),
+                    signal: controller.signal
                 });
                 
+                clearTimeout(timeoutId);
                 const data = await omrResponse.json();
                 document.getElementById('processando').style.display = 'none';
                 
                 if (data.success && data.answers) {
                     criarInterfaceRespostas(data.answers);
                     document.getElementById('resultado').style.display = 'block';
-                    mostrarAlerta(`✅ Correção concluída! ${data.answers.filter(a=>a).length} questões detectadas.`, 'success');
+                    btnTentarNovamente.style.display = 'block';
+                    mostrarAlerta(`✅ Correção concluída!`, 'success');
                 } else {
                     throw new Error(data.error || 'Falha na detecção');
                 }
             } catch (error) {
                 document.getElementById('processando').style.display = 'none';
-                criarInterfaceManual();
-                document.getElementById('resultado').style.display = 'block';
-                mostrarAlerta(`⚠️ Modo manual: ${error.message}`, 'warning');
+                
+                if (error.name === 'AbortError') {
+                    criarInterfaceManual();
+                    document.getElementById('resultado').style.display = 'block';
+                    btnTentarNovamente.style.display = 'block';
+                    mostrarAlerta(`⚠️ Tempo limite excedido. Modo manual.`, 'warning');
+                } else {
+                    criarInterfaceManual();
+                    document.getElementById('resultado').style.display = 'block';
+                    btnTentarNovamente.style.display = 'block';
+                    mostrarAlerta(`⚠️ Modo manual`, 'warning');
+                }
             }
             capturando = false;
         }
@@ -1682,13 +1726,13 @@
                 const div = document.createElement('div');
                 div.className = `resposta-card ${isCorreta ? 'correta' : (respostaAluno !== '—' ? 'incorreta' : '')}`;
                 div.innerHTML = `
-                    <div class="questao-num">Questão ${i+1}</div>
+                    <div class="questao-num">Q${i+1}</div>
                     <div class="resposta-valor">${respostaAluno}</div>
                     <div>
                         ${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}
                         <button class="btn-opcao" data-q="${i}" data-opcao="">✗</button>
                     </div>
-                    <small style="color:#6b7280;">Gabarito: ${respostaGabarito}</small>
+                    <small>${respostaGabarito}</small>
                 `;
                 grid.appendChild(div);
             }
@@ -1713,13 +1757,13 @@
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
                 div.innerHTML = `
-                    <div class="questao-num">Questão ${i+1}</div>
+                    <div class="questao-num">Q${i+1}</div>
                     <div class="resposta-valor" id="resp-${i}">—</div>
                     <div>
                         ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
                         <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
                     </div>
-                    <small style="color:#6b7280;">Gabarito: ${gabarito[i]?.respostaCorreta || '?'}</small>
+                    <small>${gabarito[i]?.respostaCorreta || '?'}</small>
                 `;
                 grid.appendChild(div);
             }
@@ -1748,7 +1792,7 @@
             const status = notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO';
             const statusClass = notaCalculada >= 6 ? 'aprovado' : 'reprovado';
             document.getElementById('notaFinal').innerHTML = `
-                <h2>${notaCalculada.toFixed(1)} / 10,0</h2>
+                <h2>${notaCalculada.toFixed(1)} / 10</h2>
                 <p>${acertos} acertos de ${totalQuestoes} questões</p>
                 <p class="${statusClass}">${status}</p>
             `;
@@ -1792,16 +1836,32 @@
         
         async function fazerRequisicao(url, options = {}) {
             if (!authToken) throw new Error('Token não fornecido');
-            const response = await fetch(url, {
-                ...options,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`,
-                    ...options.headers 
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`,
+                        ...options.headers 
+                    },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (response.status === 401) throw new Error('Token expirado');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    throw new Error('Tempo limite excedido. Verifique sua conexão.');
                 }
-            });
-            if (response.status === 401) throw new Error('Token expirado');
-            return response;
+                throw error;
+            }
         }
         
         async function carregarDados() {
@@ -1850,7 +1910,7 @@
                     
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('conteudo').style.display = 'block';
-                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${provaInfo.titulo || 'Prova Impressa'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos</p>`;
+                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${provaInfo.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos</p>`;
                     document.getElementById('gabaritoInfo').innerHTML = `<strong><i class="fas fa-key"></i> Gabarito:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
                     
                     const select = document.getElementById('selectAluno');
@@ -1888,9 +1948,10 @@
                             btnIniciarCamera.disabled = true;
                         }
                         document.getElementById('resultado').style.display = 'none';
+                        btnTentarNovamente.style.display = 'none';
                     });
                     
-                    mostrarAlerta(`✅ ${alunos.length} alunos carregados! Alinhe o cartão para começar.`, 'success');
+                    mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
                     
                     if (urlAlunoId) {
                         console.log('🎯 Aluno na URL:', urlAlunoId);
@@ -1919,7 +1980,7 @@
                             }, 1000);
                         } else {
                             console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
-                            mostrarAlerta(`⚠️ Aluno não encontrado nesta prova`, 'warning');
+                            mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning');
                         }
                     }
                     
@@ -1947,13 +2008,12 @@
                     } catch(e) {}
                 }
                 
-                // 🔥 CONFIGURAÇÕES DE VÍDEO COM ZOOM PARA MOBILE
                 const videoConstraints = isMobile ? {
                     video: { 
                         facingMode: { exact: "environment" },
                         width: { ideal: 1280 },
                         height: { ideal: 720 },
-                        zoom: { ideal: 1.5 }
+                        zoom: { ideal: 1.6 }
                     }
                 } : {
                     video: { 
@@ -2001,6 +2061,7 @@
         document.getElementById('btnCapturar').addEventListener('click', () => capturarImagem());
         document.getElementById('btnSalvar').addEventListener('click', salvarNota);
         document.getElementById('btnLimparQR').addEventListener('click', limparQRSelecionado);
+        document.getElementById('btnTentarNovamente').addEventListener('click', tentarNovamente);
         window.addEventListener('beforeunload', pararCamera);
         
         window.setResposta = setResposta;
