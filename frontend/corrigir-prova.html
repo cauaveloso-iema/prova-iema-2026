@@ -2,10 +2,14 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Correção de Prova - EVALBEE OMR</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- MÚLTIPLAS BIBLIOTECAS PARA LEITURA QR CODE (FALLBACK AUTOMÁTICO) -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -13,6 +17,9 @@
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
             padding: 15px;
+            /* Otimizações para mobile */
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
         .container { max-width: 950px; margin: 0 auto; }
         .card {
@@ -52,6 +59,9 @@
             transition: all 0.2s;
             background: transparent;
             color: #64748b;
+            /* Mobile touch */
+            touch-action: manipulation;
+            min-height: 44px;
         }
         .modo-btn.active {
             background: #1e3c72;
@@ -78,6 +88,36 @@
             position: relative;
         }
         #qr-reader video {
+            width: 100%;
+            height: auto;
+        }
+        #qr-alternative-container {
+            width: 100%;
+            min-height: 280px;
+            background: #000;
+            display: none;
+            position: relative;
+        }
+        #qr-alternative-video {
+            width: 100%;
+            height: auto;
+            object-fit: cover;
+        }
+        #qr-zxing-video {
+            width: 100%;
+            min-height: 280px;
+            background: #000;
+            display: none;
+            object-fit: cover;
+        }
+        #quagga-container {
+            width: 100%;
+            min-height: 280px;
+            background: #000;
+            display: none;
+            position: relative;
+        }
+        #quagga-canvas {
             width: 100%;
             height: auto;
         }
@@ -178,6 +218,9 @@
             border: none;
             font-size: 14px;
             transition: all 0.2s;
+            /* Mobile touch */
+            touch-action: manipulation;
+            min-height: 44px;
         }
         .btn:hover { transform: scale(1.02); opacity: 0.95; }
         .btn-primary { background: #1e3c72; color: white; }
@@ -193,6 +236,7 @@
             max-height: 400px;
             overflow-y: auto;
             padding: 5px;
+            -webkit-overflow-scrolling: touch;
         }
         .resposta-card {
             text-align: center;
@@ -231,6 +275,9 @@
             font-weight: bold;
             font-size: 12px;
             transition: all 0.1s;
+            /* Mobile touch */
+            touch-action: manipulation;
+            min-height: 40px;
         }
         .btn-opcao:hover {
             background: #e5e7eb;
@@ -268,6 +315,9 @@
             margin: 15px 0;
             background: white;
             cursor: pointer;
+            /* Mobile touch */
+            touch-action: manipulation;
+            min-height: 44px;
         }
         
         .info-bar {
@@ -294,6 +344,7 @@
             overflow-x: auto;
             text-align: center;
             border: 1px solid #e5e7eb;
+            -webkit-overflow-scrolling: touch;
         }
         
         .button-group {
@@ -301,6 +352,7 @@
             gap: 15px;
             justify-content: center;
             margin: 20px 0 10px;
+            flex-wrap: wrap;
         }
         
         .dica {
@@ -401,6 +453,8 @@
             border-radius: 20px;
             cursor: pointer;
             font-size: 12px;
+            touch-action: manipulation;
+            min-height: 36px;
         }
         
         .respostas-grid::-webkit-scrollbar {
@@ -415,10 +469,48 @@
             border-radius: 10px;
         }
         
-        @media (max-width: 480px) {
+        .qr-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #ff0;
+            padding: 4px 8px;
+            border-radius: 5px;
+            font-size: 10px;
+            font-family: monospace;
+            z-index: 15;
+        }
+        
+        /* Otimizações específicas para mobile */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .card { padding: 15px; }
+            .header h1 { font-size: 1.2rem; }
+            .btn { padding: 10px 16px; font-size: 13px; }
             .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); }
-            .btn-opcao { width: 32px; font-size: 11px; }
+            .btn-opcao { width: 32px; font-size: 11px; min-height: 36px; }
             .resposta-card .resposta-valor { font-size: 1.4rem; }
+            .guia-quadrado { width: 25px; height: 25px; border-width: 2px; }
+            .feedback { font-size: 11px; padding: 8px 12px; white-space: normal; text-align: center; }
+            .status-encaixe { font-size: 12px; padding: 4px 12px; }
+            .qr-status { font-size: 8px; padding: 2px 6px; }
+            .info-bar { font-size: 9px; padding: 4px 8px; bottom: 5px; right: 5px; }
+        }
+        
+        /* Mobile landscape (paisagem) */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .camera-container { max-width: 90%; aspect-ratio: 16/9; }
+            .qr-scanner-container { min-height: 200px; }
+            .guia-quadrado { width: 20px; height: 20px; }
+        }
+        
+        /* Ajustes para telas muito pequenas */
+        @media (max-width: 380px) {
+            .modo-btn { padding: 8px 12px; font-size: 12px; }
+            .btn { padding: 8px 12px; font-size: 12px; }
+            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); }
+            .btn-opcao { width: 28px; font-size: 10px; min-height: 32px; }
         }
     </style>
 </head>
@@ -454,11 +546,20 @@
                 <div id="gabaritoInfo" class="gabarito-display"></div>
                 
                 <div id="qrScannerArea" style="display: block;">
-                    <div class="qr-scanner-container">
+                    <div class="qr-scanner-container" id="qrContainer">
                         <div id="qr-reader" style="width: 100%;"></div>
+                        <div id="qr-alternative-container">
+                            <video id="qr-alternative-video" autoplay playsinline muted></video>
+                            <canvas id="qr-alternative-canvas" style="display: none;"></canvas>
+                        </div>
+                        <video id="qr-zxing-video" autoplay playsinline muted></video>
+                        <div id="quagga-container">
+                            <canvas id="quagga-canvas"></canvas>
+                        </div>
                         <div class="qr-overlay">
                             <i class="fas fa-qrcode"></i> Posicione o QR Code do aluno
                         </div>
+                        <div id="qrStatus" class="qr-status">Iniciando scanner...</div>
                     </div>
                 </div>
                 
@@ -532,20 +633,17 @@
         const urlToken = urlParams.get('token');
         const urlAlunoId = urlParams.get('aluno');
         
-        // VERIFICAÇÃO: Se a URL está sem .html e tem token, redirecionar para versão correta
         const caminhoAtual = window.location.pathname;
         const estaSemHtml = !caminhoAtual.includes('.html') && (caminhoAtual.endsWith('corrigir-prova') || caminhoAtual === '/corrigir-prova');
         
         if (estaSemHtml && urlToken && !urlAlunoId) {
             console.log('🔄 Detectada URL sem .html e com token. Redirecionando para versão correta...');
             
-            // Função para redirecionar
             function redirecionarParaVersaoCorreta(alunoId = null) {
                 let novaUrl = `/corrigir-prova.html?prova=${provaId}`;
                 if (alunoId) {
                     novaUrl += `&aluno=${alunoId}`;
                 }
-                // Preservar o token se não conseguir encontrar aluno
                 if (!alunoId && urlToken) {
                     novaUrl += `&token=${encodeURIComponent(urlToken)}`;
                 }
@@ -553,16 +651,13 @@
                 window.location.href = novaUrl;
             }
             
-            // Tenta extrair aluno do token (se o token contiver um ID válido)
             const matchId = urlToken.match(/[a-f0-9]{24}/);
             if (matchId) {
                 console.log('🎯 Aluno ID encontrado no token:', matchId[0]);
                 redirecionarParaVersaoCorreta(matchId[0]);
             } else {
-                // Se não encontrar, redireciona sem aluno (usuário vai escanear QR Code)
                 redirecionarParaVersaoCorreta();
             }
-            // Interrompe a execução do resto do código
             throw new Error('Redirecionando...');
         }
         
@@ -603,6 +698,11 @@
         
         let qrScanner = null;
         let scannerIniciado = false;
+        let scannerAlternativoAtivo = false;
+        let scannerAtual = 0;
+        let alternativeStream = null;
+        let zxingReader = null;
+        let quaggaInitialized = false;
         
         const modoQRBtn = document.getElementById('modoQRCodeBtn');
         const modoManualBtn = document.getElementById('modoManualBtn');
@@ -614,104 +714,410 @@
         const qrSelecionadoDiv = document.getElementById('qrSelecionado');
         const cameraContainer = document.getElementById('cameraContainer');
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
+        const qrStatus = document.getElementById('qrStatus');
         
         // ============================================
-        // CARREGAR ALUNOS (VERSÃO CORRIGIDA)
+        // DETECÇÃO DE DISPOSITIVO MÓVEL
         // ============================================
         
-        async function carregarAlunosDaTurma(turmaId) {
-            try {
-                console.log('🔍 Buscando alunos da turma:', turmaId);
-                const response = await fazerRequisicao(`/api/turmas/${turmaId}`);
-                const data = await response.json();
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        
+        console.log(`📱 Dispositivo detectado: ${isMobile ? 'MOBILE' : 'DESKTOP'}${isIOS ? ' (iOS)' : ''}`);
+        
+        // ============================================
+        // SCANNER COM MÚLTIPLOS FALLBACKS (4 BIBLIOTECAS) - OTIMIZADO PARA MOBILE
+        // ============================================
+        
+        async function iniciarQRScanner() {
+            if (scannerIniciado) return;
+            if (!modoQRCode) return;
+            
+            scannerAtual = 0;
+            
+            // Para dispositivos móveis, tentar primeiro bibliotecas mais leves
+            if (isMobile) {
+                // Reordenar scanners para mobile: jsQR primeiro (mais leve), depois html5-qrcode
+                const mobileScanners = [
+                    { nome: 'jsQR', func: iniciarScannerJsQR },
+                    { nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode },
+                    { nome: 'ZXing', func: iniciarScannerZXing },
+                    { nome: 'Quagga', func: iniciarScannerQuagga }
+                ];
                 
-                if (data.success && data.turma && data.turma.alunos) {
-                    alunos = data.turma.alunos.map(a => ({
-                        alunoId: a.id,
-                        id: a.id,
-                        alunoNome: a.nome,
-                        nome: a.nome,
-                        alunoMatricula: a.matricula || '',
-                        matricula: a.matricula || ''
-                    }));
-                    
-                    alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
-                    });
-                    
-                    console.log(`✅ ${alunos.length} alunos carregados da turma`);
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.error('Erro ao buscar alunos da turma:', error);
-                return false;
+                await tentarProximoScannerMobile(mobileScanners);
+            } else {
+                await tentarProximoScanner();
             }
         }
         
-        async function carregarAlunosDosResultados() {
+        async function tentarProximoScannerMobile(scanners) {
+            if (!modoQRCode) return;
+            
+            if (scannerAtual >= scanners.length) {
+                atualizarStatusScanner('❌ Todos os scanners falharam. Use modo MANUAL.', '#f00');
+                mostrarAlerta('⚠️ Scanner QR não disponível. Use o modo MANUAL.', 'warning');
+                return;
+            }
+            
+            const scanner = scanners[scannerAtual];
+            atualizarStatusScanner(`🔄 Tentando ${scanner.nome}...`, '#ff0');
+            console.log(`🔄 Tentando scanner: ${scanner.nome}`);
+            
             try {
-                console.log('🔍 Buscando alunos dos resultados da prova...');
-                const response = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
-                const data = await response.json();
-                
-                if (data.success && data.resultados && data.resultados.length > 0) {
-                    alunos = data.resultados.map(r => ({
-                        alunoId: r.alunoId || r.userId,
-                        id: r.alunoId || r.userId,
-                        alunoNome: r.alunoNome || r.nome,
-                        nome: r.alunoNome || r.nome,
-                        alunoMatricula: r.alunoMatricula || r.matricula || '',
-                        matricula: r.alunoMatricula || r.matricula || ''
-                    }));
-                    
-                    alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
-                    });
-                    
-                    console.log(`✅ ${alunos.length} alunos carregados dos resultados`);
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.error('Erro ao buscar resultados:', error);
-                return false;
+                await scanner.func();
+                scannerIniciado = true;
+                atualizarStatusScanner(`✅ Scanner ativo (${scanner.nome})`, '#0f0');
+            } catch (err) {
+                console.warn(`⚠️ ${scanner.nome} falhou:`, err.message);
+                scannerAtual++;
+                await tentarProximoScannerMobile(scanners);
             }
         }
         
-        async function carregarAlunosDaProva(provaData) {
+        async function tentarProximoScanner() {
+            if (!modoQRCode) return;
+            
+            const scanners = [
+                { nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode },
+                { nome: 'jsQR', func: iniciarScannerJsQR },
+                { nome: 'ZXing', func: iniciarScannerZXing },
+                { nome: 'Quagga', func: iniciarScannerQuagga }
+            ];
+            
+            if (scannerAtual >= scanners.length) {
+                atualizarStatusScanner('❌ Todos os scanners falharam. Use modo MANUAL.', '#f00');
+                mostrarAlerta('⚠️ Scanner QR não disponível. Use o modo MANUAL.', 'warning');
+                return;
+            }
+            
+            const scanner = scanners[scannerAtual];
+            atualizarStatusScanner(`🔄 Tentando ${scanner.nome}...`, '#ff0');
+            console.log(`🔄 Tentando scanner: ${scanner.nome}`);
+            
             try {
-                if (provaData.prova && provaData.prova.alunosAtribuidos && provaData.prova.alunosAtribuidos.length > 0) {
-                    console.log('🔍 Buscando alunos dos alunosAtribuidos da prova...');
+                await scanner.func();
+                scannerIniciado = true;
+                atualizarStatusScanner(`✅ Scanner ativo (${scanner.nome})`, '#0f0');
+            } catch (err) {
+                console.warn(`⚠️ ${scanner.nome} falhou:`, err.message);
+                scannerAtual++;
+                await tentarProximoScanner();
+            }
+        }
+        
+        async function iniciarScannerHtml5QrCode() {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    if (qrScanner) {
+                        try { await qrScanner.stop(); } catch(e) {}
+                    }
                     
-                    const alunosIds = provaData.prova.alunosAtribuidos.map(a => a.$oid || a);
+                    const container = document.getElementById('qr-reader');
+                    const altContainer = document.getElementById('qr-alternative-container');
+                    const zxingVideo = document.getElementById('qr-zxing-video');
+                    const quaggaContainer = document.getElementById('quagga-container');
                     
-                    alunos = alunosIds.map(id => ({
-                        alunoId: id,
-                        id: id,
-                        alunoNome: `Aluno ${id.slice(-6)}`,
-                        nome: `Aluno ${id.slice(-6)}`,
-                        alunoMatricula: '',
-                        matricula: ''
-                    }));
+                    container.style.display = 'block';
+                    if (altContainer) altContainer.style.display = 'none';
+                    if (zxingVideo) zxingVideo.style.display = 'none';
+                    if (quaggaContainer) quaggaContainer.style.display = 'none';
                     
-                    alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
+                    const html5QrCode = new Html5Qrcode("qr-reader");
+                    qrScanner = html5QrCode;
+                    
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Timeout ao iniciar html5-qrcode'));
+                    }, 15000); // Aumentado para mobile (15s)
+                    
+                    // Configurações otimizadas para mobile
+                    const mobileConfig = {
+                        fps: isMobile ? 20 : 15,  // Mais FPS para mobile
+                        qrbox: { width: isMobile ? 250 : 280, height: isMobile ? 250 : 280 },
+                        aspectRatio: 1.0,
+                        videoConstraints: {
+                            facingMode: "environment",
+                            width: { ideal: isMobile ? 1024 : 1280 },
+                            height: { ideal: isMobile ? 768 : 720 }
+                        }
+                    };
+                    
+                    await html5QrCode.start(
+                        { facingMode: "environment" },
+                        mobileConfig,
+                        (decodedText) => {
+                            clearTimeout(timeout);
+                            console.log('✅ QR Code detectado (html5-qrcode):', decodedText);
+                            processarQRCode(decodedText);
+                            resolve();
+                        },
+                        (errorMessage) => {}
+                    );
+                    
+                    clearTimeout(timeout);
+                    resolve();
+                    
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+        
+        async function iniciarScannerJsQR() {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    if (qrScanner && scannerIniciado) {
+                        try { await qrScanner.stop(); } catch(e) {}
+                    }
+                    
+                    const container = document.getElementById('qr-reader');
+                    const altContainer = document.getElementById('qr-alternative-container');
+                    const zxingVideo = document.getElementById('qr-zxing-video');
+                    const quaggaContainer = document.getElementById('quagga-container');
+                    
+                    container.style.display = 'none';
+                    altContainer.style.display = 'block';
+                    if (zxingVideo) zxingVideo.style.display = 'none';
+                    if (quaggaContainer) quaggaContainer.style.display = 'none';
+                    
+                    const altVideo = document.getElementById('qr-alternative-video');
+                    const altCanvas = document.getElementById('qr-alternative-canvas');
+                    const ctx = altCanvas.getContext('2d');
+                    
+                    // Configurações otimizadas para mobile
+                    const mobileConstraints = {
+                        video: { 
+                            facingMode: "environment",
+                            width: { ideal: isMobile ? 854 : 1280 },
+                            height: { ideal: isMobile ? 480 : 720 }
+                        } 
+                    };
+                    
+                    alternativeStream = await navigator.mediaDevices.getUserMedia(mobileConstraints);
+                    
+                    altVideo.srcObject = alternativeStream;
+                    
+                    await new Promise((resolveVideo) => {
+                        altVideo.onloadedmetadata = () => {
+                            altVideo.play();
+                            altCanvas.width = altVideo.videoWidth;
+                            altCanvas.height = altVideo.videoHeight;
+                            resolveVideo();
+                        };
                     });
                     
-                    console.log(`✅ ${alunos.length} alunos carregados dos alunosAtribuidos`);
-                    return true;
+                    scannerAlternativoAtivo = true;
+                    
+                    const timeout = setTimeout(() => {
+                        if (scannerAlternativoAtivo) {
+                            reject(new Error('Timeout jsQR'));
+                        }
+                    }, 45000); // Aumentado para mobile (45s)
+                    
+                    let frameCount = 0;
+                    const scanInterval = isMobile ? 200 : 100; // Menos frames por segundo em mobile para economizar bateria
+                    
+                    function scanFrame() {
+                        if (!scannerAlternativoAtivo) return;
+                        
+                        if (altVideo.readyState === altVideo.HAVE_ENOUGH_DATA) {
+                            ctx.drawImage(altVideo, 0, 0, altCanvas.width, altCanvas.height);
+                            const imageData = ctx.getImageData(0, 0, altCanvas.width, altCanvas.height);
+                            
+                            const code = window.jsQR(imageData.data, altCanvas.width, altCanvas.height, {
+                                inversionAttempts: "dontInvert",
+                            });
+                            
+                            if (code) {
+                                clearTimeout(timeout);
+                                console.log('✅ QR Code detectado (jsQR):', code.data);
+                                processarQRCode(code.data);
+                                pararScannerJsQR();
+                                resolve();
+                                return;
+                            }
+                        }
+                        
+                        setTimeout(scanFrame, scanInterval);
+                    }
+                    
+                    scanFrame();
+                    
+                } catch (err) {
+                    reject(err);
                 }
-                return false;
-            } catch (error) {
-                console.error('Erro ao carregar alunos da prova:', error);
-                return false;
+            });
+        }
+        
+        async function iniciarScannerZXing() {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    if (qrScanner && scannerIniciado) {
+                        try { await qrScanner.stop(); } catch(e) {}
+                    }
+                    pararScannerJsQR();
+                    
+                    const container = document.getElementById('qr-reader');
+                    const altContainer = document.getElementById('qr-alternative-container');
+                    const zxingVideo = document.getElementById('qr-zxing-video');
+                    const quaggaContainer = document.getElementById('quagga-container');
+                    
+                    container.style.display = 'none';
+                    if (altContainer) altContainer.style.display = 'none';
+                    zxingVideo.style.display = 'block';
+                    if (quaggaContainer) quaggaContainer.style.display = 'none';
+                    
+                    if (!window.ZXing) {
+                        reject(new Error('ZXing não carregado'));
+                        return;
+                    }
+                    
+                    const codeReader = new ZXing.BrowserQRCodeReader();
+                    zxingReader = codeReader;
+                    
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Timeout ZXing'));
+                    }, 45000);
+                    
+                    const hints = new Map();
+                    const formats = [ZXing.BarcodeFormat.QR_CODE];
+                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+                    
+                    codeReader.decodeFromVideoDevice(null, 'qr-zxing-video', (result, err) => {
+                        if (result) {
+                            clearTimeout(timeout);
+                            console.log('✅ QR Code detectado (ZXing):', result.text);
+                            processarQRCode(result.text);
+                            codeReader.reset();
+                            resolve();
+                        }
+                        if (err && err.name === 'NotFoundException') {
+                            // continua tentando
+                        }
+                    });
+                    
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+        
+        async function iniciarScannerQuagga() {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    if (qrScanner && scannerIniciado) {
+                        try { await qrScanner.stop(); } catch(e) {}
+                    }
+                    pararScannerJsQR();
+                    if (zxingReader) {
+                        try { zxingReader.reset(); } catch(e) {}
+                    }
+                    
+                    const container = document.getElementById('qr-reader');
+                    const altContainer = document.getElementById('qr-alternative-container');
+                    const zxingVideo = document.getElementById('qr-zxing-video');
+                    const quaggaContainer = document.getElementById('quagga-container');
+                    
+                    container.style.display = 'none';
+                    if (altContainer) altContainer.style.display = 'none';
+                    if (zxingVideo) zxingVideo.style.display = 'none';
+                    quaggaContainer.style.display = 'block';
+                    
+                    if (!window.Quagga) {
+                        reject(new Error('Quagga não carregado'));
+                        return;
+                    }
+                    
+                    const canvas = document.getElementById('quagga-canvas');
+                    canvas.width = isMobile ? 480 : 640;
+                    canvas.height = isMobile ? 360 : 480;
+                    
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Timeout Quagga'));
+                    }, 45000);
+                    
+                    Quagga.init({
+                        inputStream: {
+                            type: "LiveStream",
+                            constraints: {
+                                facingMode: "environment",
+                                width: { ideal: isMobile ? 640 : 854 },
+                                height: { ideal: isMobile ? 480 : 640 }
+                            },
+                            area: {
+                                top: "0%",
+                                right: "0%",
+                                left: "0%",
+                                bottom: "0%"
+                            }
+                        },
+                        decoder: {
+                            readers: ["qr_code_reader"],
+                            multiple: false
+                        },
+                        locator: {
+                            patchSize: "medium",
+                            halfSample: true
+                        }
+                    }, function(err) {
+                        if (err) {
+                            clearTimeout(timeout);
+                            reject(err);
+                            return;
+                        }
+                        
+                        Quagga.start();
+                        
+                        Quagga.onDetected(function(result) {
+                            const code = result.codeResult.code;
+                            if (code) {
+                                clearTimeout(timeout);
+                                console.log('✅ QR Code detectado (Quagga):', code);
+                                processarQRCode(code);
+                                Quagga.stop();
+                                resolve();
+                            }
+                        });
+                    });
+                    
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+        
+        function pararScannerJsQR() {
+            scannerAlternativoAtivo = false;
+            if (alternativeStream) {
+                alternativeStream.getTracks().forEach(track => track.stop());
+                alternativeStream = null;
+            }
+        }
+        
+        function pararScanner() {
+            if (qrScanner && scannerIniciado) {
+                try {
+                    qrScanner.stop();
+                } catch(e) {}
+            }
+            pararScannerJsQR();
+            if (zxingReader) {
+                try {
+                    zxingReader.reset();
+                } catch(e) {}
+            }
+            if (window.Quagga) {
+                try {
+                    Quagga.stop();
+                } catch(e) {}
+            }
+            scannerIniciado = false;
+        }
+        
+        function atualizarStatusScanner(msg, cor) {
+            if (qrStatus) {
+                qrStatus.innerHTML = msg;
+                qrStatus.style.color = cor;
             }
         }
         
@@ -757,12 +1163,7 @@
                     matricula: alunoEncontrado.alunoMatricula
                 };
                 
-                if (qrScanner && scannerIniciado) {
-                    try {
-                        await qrScanner.stop();
-                        scannerIniciado = false;
-                    } catch(e) {}
-                }
+                pararScanner();
                 
                 document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
                 document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
@@ -772,31 +1173,11 @@
                 btnIniciarCamera.disabled = false;
                 mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
+                atualizarStatusScanner('Aluno detectado!', '#0f0');
                 
             } catch (error) {
                 console.error('Erro:', error);
                 mostrarAlerta('❌ QR Code inválido', 'error');
-            }
-        }
-        
-        async function iniciarQRScanner() {
-            if (scannerIniciado) return;
-            if (!modoQRCode) return;
-            
-            try {
-                const html5QrCode = new Html5Qrcode("qr-reader");
-                qrScanner = html5QrCode;
-                
-                await html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    (decodedText) => processarQRCode(decodedText),
-                    (errorMessage) => console.debug('QR Scan:', errorMessage)
-                );
-                scannerIniciado = true;
-            } catch (err) {
-                console.error('Erro ao iniciar scanner:', err);
-                mostrarAlerta('Erro ao iniciar câmera para QR Code', 'error');
             }
         }
         
@@ -843,13 +1224,7 @@
                 manualSelectArea.style.display = 'block';
                 qrSelecionadoDiv.style.display = 'none';
                 
-                if (qrScanner && scannerIniciado) {
-                    try {
-                        await qrScanner.stop();
-                        scannerIniciado = false;
-                    } catch(e) {}
-                }
-                
+                pararScanner();
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
@@ -865,8 +1240,10 @@
         // ============================================
         
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
-            const margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
-            const tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
+            // Ajustar margens para mobile
+            const mobileAjuste = isMobile ? 1.2 : 1.0;
+            const margemPx = Math.min(containerWidth, containerHeight) * margemBusca * mobileAjuste;
+            const tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia * (isMobile ? 0.9 : 1.0);
             
             const guias = [
                 { id: 'guiaTL', left: margemPx, top: margemPx },
@@ -889,6 +1266,9 @@
         function detectarQuadradosPretos(ctx, width, height) {
             const imgData = ctx.getImageData(0, 0, width, height);
             const data = imgData.data;
+            
+            // Ajustar sensibilidade para mobile (mais tolerante)
+            const mobileSensibilidade = isMobile ? sensibilidade * 0.8 : sensibilidade;
             
             const margemPx = Math.min(width, height) * margemBusca;
             const tamanhoPx = Math.min(width, height) * tamanhoGuia;
@@ -920,7 +1300,7 @@
                     }
                     
                     const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
-                    const detectado = percentualEscuro > sensibilidade;
+                    const detectado = percentualEscuro > mobileSensibilidade;
                     
                     if (!detectado) todosDetectados = false;
                     
@@ -1052,7 +1432,10 @@
                 const containerRect2 = document.getElementById('cameraContainer').getBoundingClientRect();
                 desenharRetanguloCartao(resultado.retangulo, containerRect2.width, containerRect2.height, canvas.width, canvas.height);
                 
-                if (estabilidade >= 8) {
+                // Estabilização mais rápida em mobile
+                const estabilidadeMinima = isMobile ? 5 : 8;
+                
+                if (estabilidade >= estabilidadeMinima) {
                     feedback.innerHTML = `✅ ${encaixadosCount}/4 Alinhados!`;
                     feedback.style.background = '#10b981';
                     
@@ -1086,7 +1469,7 @@
                 mostrarAlerta('Selecione um aluno primeiro!', 'error');
                 return;
             }
-            if (!retanguloAtual || estabilidade < 8) {
+            if (!retanguloAtual || estabilidade < (isMobile ? 5 : 8)) {
                 mostrarAlerta('Aguarde o cartão estabilizar!', 'warning');
                 return;
             }
@@ -1098,7 +1481,7 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            const expandir = 35;
+            const expandir = isMobile ? 25 : 35;
             const cartaoX = Math.max(0, retanguloAtual.x - expandir);
             const cartaoY = Math.max(0, retanguloAtual.y - expandir);
             const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width + (expandir * 2));
@@ -1115,7 +1498,7 @@
             tempCanvas.width = cartaoW;
             tempCanvas.height = cartaoH;
             tempCanvas.getContext('2d').putImageData(imagemCartao, 0, 0);
-            const imgData = tempCanvas.toDataURL('image/jpeg', 0.95);
+            const imgData = tempCanvas.toDataURL('image/jpeg', 0.85); // Qualidade reduzida para mobile
             
             document.getElementById('processando').style.display = 'block';
             document.getElementById('resultado').style.display = 'none';
@@ -1393,9 +1776,6 @@
                                 nome: alunoPorUrl.alunoNome,
                                 matricula: alunoPorUrl.alunoMatricula
                             };
-                            if (qrScanner && scannerIniciado) {
-                                try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {}
-                            }
                             qrScannerArea.style.display = 'none';
                             qrSelecionadoDiv.style.display = 'flex';
                             document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
@@ -1407,6 +1787,21 @@
                             console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
                             mostrarAlerta(`⚠️ Aluno não encontrado nesta prova`, 'warning');
                         }
+                    } else if (alunos.length === 1) {
+                        console.log('🎯 Apenas um aluno na prova, selecionando automaticamente...');
+                        const unicoAluno = alunos[0];
+                        alunoSelecionado = {
+                            id: unicoAluno.alunoId,
+                            nome: unicoAluno.alunoNome,
+                            matricula: unicoAluno.alunoMatricula
+                        };
+                        qrScannerArea.style.display = 'none';
+                        qrSelecionadoDiv.style.display = 'flex';
+                        document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
+                        document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
+                        btnIniciarCamera.disabled = false;
+                        mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
+                        document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                     }
                     
                     iniciarQRScanner();
@@ -1419,6 +1814,102 @@
             }
         }
         
+        async function carregarAlunosDaTurma(turmaId) {
+            try {
+                console.log('🔍 Buscando alunos da turma:', turmaId);
+                const response = await fazerRequisicao(`/api/turmas/${turmaId}`);
+                const data = await response.json();
+                
+                if (data.success && data.turma && data.turma.alunos) {
+                    alunos = data.turma.alunos.map(a => ({
+                        alunoId: a.id,
+                        id: a.id,
+                        alunoNome: a.nome,
+                        nome: a.nome,
+                        alunoMatricula: a.matricula || '',
+                        matricula: a.matricula || ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados da turma`);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erro ao buscar alunos da turma:', error);
+                return false;
+            }
+        }
+        
+        async function carregarAlunosDosResultados() {
+            try {
+                console.log('🔍 Buscando alunos dos resultados da prova...');
+                const response = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
+                const data = await response.json();
+                
+                if (data.success && data.resultados && data.resultados.length > 0) {
+                    alunos = data.resultados.map(r => ({
+                        alunoId: r.alunoId || r.userId,
+                        id: r.alunoId || r.userId,
+                        alunoNome: r.alunoNome || r.nome,
+                        nome: r.alunoNome || r.nome,
+                        alunoMatricula: r.alunoMatricula || r.matricula || '',
+                        matricula: r.alunoMatricula || r.matricula || ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados dos resultados`);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erro ao buscar resultados:', error);
+                return false;
+            }
+        }
+        
+        async function carregarAlunosDaProva(provaData) {
+            try {
+                if (provaData.prova && provaData.prova.alunosAtribuidos && provaData.prova.alunosAtribuidos.length > 0) {
+                    console.log('🔍 Buscando alunos dos alunosAtribuidos da prova...');
+                    
+                    const alunosIds = provaData.prova.alunosAtribuidos.map(a => a.$oid || a);
+                    
+                    alunos = alunosIds.map(id => ({
+                        alunoId: id,
+                        id: id,
+                        alunoNome: `Aluno ${id.slice(-6)}`,
+                        nome: `Aluno ${id.slice(-6)}`,
+                        alunoMatricula: '',
+                        matricula: ''
+                    }));
+                    
+                    alunosMap.clear();
+                    alunos.forEach(a => {
+                        alunosMap.set(a.alunoId, a);
+                        alunosMap.set(a.id, a);
+                    });
+                    
+                    console.log(`✅ ${alunos.length} alunos carregados dos alunosAtribuidos`);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erro ao carregar alunos da prova:', error);
+                return false;
+            }
+        }
+        
         async function iniciarCamera() {
             if (!alunoSelecionado) {
                 mostrarAlerta('Selecione um aluno primeiro!', 'error');
@@ -1426,14 +1917,18 @@
             }
             
             try {
-                if (qrScanner && scannerIniciado) {
-                    try {
-                        await qrScanner.stop();
-                        scannerIniciado = false;
-                    } catch(e) {}
-                }
+                pararScanner();
                 
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
+                // Configurações otimizadas para mobile
+                const mobileVideoConstraints = {
+                    video: { 
+                        facingMode: { exact: "environment" },
+                        width: { ideal: isMobile ? 1280 : 1920 },
+                        height: { ideal: isMobile ? 720 : 1080 }
+                    }
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(mobileVideoConstraints)
                     .catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 video.srcObject = stream;
                 await video.play();
@@ -1441,7 +1936,8 @@
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Câmera Ativa';
                 cameraContainer.style.display = 'block';
                 if (analiseInterval) clearInterval(analiseInterval);
-                analiseInterval = setInterval(analisarFrame, 100);
+                const frameRate = isMobile ? 60 : 100; // Mais frames por segundo em mobile
+                analiseInterval = setInterval(analisarFrame, frameRate);
                 mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
             } catch (error) {
                 mostrarAlerta('❌ Erro ao acessar câmera', 'error');
