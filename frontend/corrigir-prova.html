@@ -47,6 +47,8 @@
             min-height: 0;
             border-radius: 0;
             aspect-ratio: 16 / 9;
+            width: 100%;
+            height: 100%;
         }
         body.fullscreen-mode .button-group,
         body.fullscreen-mode .header,
@@ -59,23 +61,51 @@
         }
         body.fullscreen-mode .camera-container {
             display: block !important;
-            width: 100%;
-            height: 100%;
         }
         body.fullscreen-mode .feedback,
         body.fullscreen-mode .status-encaixe,
         body.fullscreen-mode .auto-status {
             display: block !important;
+            font-size: 16px;
+            padding: 10px 20px;
         }
         body.fullscreen-mode .feedback {
-            bottom: 30px;
-            font-size: 14px;
-            padding: 8px 16px;
+            bottom: 40px;
         }
         body.fullscreen-mode .status-encaixe {
-            top: 20px;
-            font-size: 14px;
-            padding: 6px 14px;
+            top: 30px;
+            font-size: 16px;
+        }
+        
+        /* Aviso de orientação */
+        .orientacao-aviso {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 30000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: white;
+            font-family: monospace;
+        }
+        .orientacao-aviso i { font-size: 60px; margin-bottom: 20px; color: #ffaa00; }
+        .orientacao-aviso h2 { font-size: 24px; margin-bottom: 10px; }
+        .orientacao-aviso p { font-size: 16px; opacity: 0.8; margin-bottom: 30px; }
+        .orientacao-aviso .btn-continuar {
+            background: #10b981;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 30px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
         }
         
         .container { max-width: 950px; margin: 0 auto; }
@@ -591,6 +621,7 @@
         const modoIndicador = document.getElementById('modoIndicador');
         
         let modoFullscreen = false;
+        let aguardandoOrientacao = false;
         
         if (isMobile) {
             modoIndicador.className = 'modo-indicador mobile';
@@ -599,6 +630,66 @@
             modoIndicador.className = 'modo-indicador desktop';
             modoIndicador.innerHTML = '💻 DESKTOP';
         }
+        
+        // Função para verificar orientação e mostrar aviso
+        function verificarOrientacaoForcar() {
+            if (!isMobile) return true;
+            
+            const isLandscape = window.innerWidth > window.innerHeight;
+            
+            if (!isLandscape && !aguardandoOrientacao) {
+                aguardandoOrientacao = true;
+                
+                // Pausar a câmera se estiver ativa
+                if (stream) {
+                    pararCamera();
+                }
+                
+                // Mostrar aviso de orientação
+                const aviso = document.createElement('div');
+                aviso.className = 'orientacao-aviso';
+                aviso.id = 'aviso-orientacao-mobile';
+                aviso.innerHTML = `
+                    <i class="fas fa-rotate-left"></i>
+                    <h2>📱 Gire o Celular</h2>
+                    <p>Para melhor captura do cartão,<br>use o modo HORIZONTAL</p>
+                    <button class="btn-continuar" id="btn-continuar-vertical">Continuar mesmo assim</button>
+                `;
+                document.body.appendChild(aviso);
+                
+                document.getElementById('btn-continuar-vertical').onclick = () => {
+                    aviso.remove();
+                    aguardandoOrientacao = false;
+                    // Reiniciar a câmera se necessário
+                    if (alunoSelecionado && !stream) {
+                        iniciarCamera();
+                    }
+                };
+                
+                return false;
+            }
+            
+            aguardandoOrientacao = false;
+            const avisoExistente = document.getElementById('aviso-orientacao-mobile');
+            if (avisoExistente) avisoExistente.remove();
+            return true;
+        }
+        
+        // Monitorar mudança de orientação
+        window.addEventListener('resize', () => {
+            if (isMobile && modoFullscreen) {
+                const isLandscape = window.innerWidth > window.innerHeight;
+                if (isLandscape && aguardandoOrientacao) {
+                    // Saiu do aviso, reiniciar câmera
+                    const aviso = document.getElementById('aviso-orientacao-mobile');
+                    if (aviso) aviso.remove();
+                    aguardandoOrientacao = false;
+                    if (alunoSelecionado && !stream) {
+                        iniciarCamera();
+                    }
+                }
+            }
+        });
         
         // Funções de tela cheia
         function entrarTelaCheia() {
@@ -935,11 +1026,18 @@
                 mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                 
-                // 🔥 AUTOMÁTICO: Inicia câmera e entra em tela cheia
+                // 🔥 FLUXO MOBILE: Verificar orientação, entrar em tela cheia e iniciar câmera
                 setTimeout(() => { 
                     if (alunoSelecionado && !stream) {
-                        iniciarCamera();
-                        if (isMobile) entrarTelaCheia();
+                        if (isMobile) {
+                            // Verificar orientação antes de prosseguir
+                            if (verificarOrientacaoForcar()) {
+                                entrarTelaCheia();
+                                iniciarCamera();
+                            }
+                        } else {
+                            iniciarCamera();
+                        }
                     }
                 }, 500);
             } catch (error) { console.error('Erro:', error); mostrarAlerta('❌ QR Code inválido', 'error'); }
@@ -1110,10 +1208,13 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
+            // 🔥 CORTE EXATO DO CARTÃO
             const cartaoX = Math.max(0, retanguloAtual.x);
             const cartaoY = Math.max(0, retanguloAtual.y);
             const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width);
             const cartaoH = Math.min(canvas.height - cartaoY, retanguloAtual.height);
+            
+            console.log(`📐 Recorte do cartão: ${cartaoW}x${cartaoH} pixels`);
             
             if (cartaoW <= 0 || cartaoH <= 0) {
                 mostrarAlerta('Erro ao recortar.', 'error');
@@ -1122,6 +1223,7 @@
                 return;
             }
             
+            // 🔥 CRIA IMAGEM APENAS DO CARTÃO RECORTADO
             const imagemCartao = ctx.getImageData(cartaoX, cartaoY, cartaoW, cartaoH);
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = cartaoW;
@@ -1145,7 +1247,7 @@
                     document.getElementById('resultado').style.display = 'block'; 
                     btnTentarNovamente.style.display = 'block'; 
                     mostrarAlerta(`✅ Correção concluída!`, 'success');
-                    // Sair da tela cheia após captura
+                    // 🔥 SAIR DA TELA CHEIA APÓS CAPTURA
                     if (isMobile && modoFullscreen) sairTelaCheia();
                 } else { 
                     throw new Error(data.error || 'Falha na detecção'); 
@@ -1263,10 +1365,10 @@
                     select.innerHTML = '<option value="">— Selecione —</option>';
                     alunos.forEach(a => { select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; });
                     select.addEventListener('change', (e) => {
-                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); if (isMobile) entrarTelaCheia(); } }, 500); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
+                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { if (verificarOrientacaoForcar()) { entrarTelaCheia(); iniciarCamera(); } } else { iniciarCamera(); } } }, 500); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
                     });
                     mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
-                    if (urlAlunoId) { const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); if (isMobile) entrarTelaCheia(); } }, 500); } else { mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
+                    if (urlAlunoId) { const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { if (verificarOrientacaoForcar()) { entrarTelaCheia(); iniciarCamera(); } } else { iniciarCamera(); } } }, 500); } else { mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
                     iniciarQRScanner();
                 } else { throw new Error('Erro ao carregar'); }
             } catch (error) { document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`; console.error('Erro:', error); }
