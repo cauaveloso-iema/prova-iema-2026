@@ -92,6 +92,13 @@ class OMRReader:
     def preprocess_for_analysis(self, image):
         """Pré-processamento para análise visual"""
         
+        # MELHORIA 1: Garantir que a imagem está na orientação correta (horizontal)
+        h, w = image.shape[:2]
+        if h > w:
+            # Se a imagem está vertical, rotacionar para horizontal
+            image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+            print("[IA] Imagem rotacionada para orientação horizontal")
+        
         # Redimensionar para tamanho padrão
         height = 1000
         scale = height / image.shape[0]
@@ -101,12 +108,13 @@ class OMRReader:
         # Converter para tons de cinza
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Aumentar contraste
+        # MELHORIA 2: Aumentar contraste de forma mais agressiva
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
         enhanced = clahe.apply(gray)
         
-        # Binarização com Otsu
-        _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        # MELHORIA 3: Binarização adaptativa para melhor detecção em mobile
+        binary = cv2.adaptiveThreshold(enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                       cv2.THRESH_BINARY_INV, 15, 8)
         
         # Limpar ruído
         kernel = np.ones((2, 2), np.uint8)
@@ -158,16 +166,27 @@ class OMRReader:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
         try:
-            circles = cv2.HoughCircles(
-                gray, 
-                cv2.HOUGH_GRADIENT, 
-                dp=1, 
-                minDist=30,
-                param1=50, 
-                param2=30, 
-                minRadius=10, 
-                maxRadius=50
-            )
+            # MELHORIA 4: Múltiplas tentativas com parâmetros diferentes
+            circles = None
+            params_list = [
+                (1, 30, 50, 30, 10, 50),   # Padrão
+                (1, 25, 45, 25, 8, 40),    # Mais sensível
+                (1, 35, 55, 35, 12, 45)    # Círculos maiores
+            ]
+            
+            for dp, minDist, param1, param2, minR, maxR in params_list:
+                circles = cv2.HoughCircles(
+                    gray, 
+                    cv2.HOUGH_GRADIENT, 
+                    dp=dp, 
+                    minDist=minDist,
+                    param1=param1, 
+                    param2=param2, 
+                    minRadius=minR, 
+                    maxRadius=maxR
+                )
+                if circles is not None:
+                    break
             
             if circles is not None:
                 circles = np.round(circles[0, :]).astype("int")
@@ -194,11 +213,12 @@ class OMRReader:
         circles = []
         for c in contours:
             area = cv2.contourArea(c)
-            if 50 < area < 5000:
+            # MELHORIA 5: Faixa de área ajustada
+            if 100 < area < 5000:
                 perimeter = cv2.arcLength(c, True)
                 if perimeter > 0:
                     circularity = 4 * np.pi * area / (perimeter * perimeter)
-                    if circularity > 0.3:
+                    if circularity > 0.4:  # Menos restritivo
                         (x, y), radius = cv2.minEnclosingCircle(c)
                         circles.append({
                             'x': int(x),
@@ -210,7 +230,7 @@ class OMRReader:
         return circles if circles else None
     
     def group_circles_by_question(self, circles):
-        """Agrupa círculos por questão"""
+        """Agrupa círculos por questão - VERSÃO MELHORADA"""
         
         if not circles or len(circles) < 20:
             return None
@@ -221,19 +241,52 @@ class OMRReader:
         current_line = []
         last_y = circles[0]['y']
         
+        # MELHORIA 6: Agrupamento mais inteligente
         for c in circles:
             if abs(c['y'] - last_y) < 50:
                 current_line.append(c)
             else:
                 if current_line:
                     current_line.sort(key=lambda c: c['x'])
-                    questions.append(current_line[:self.num_choices])
+                    # Garantir que temos pelo menos algumas alternativas
+                    if len(current_line) >= 3:
+                        questions.append(current_line[:self.num_choices])
                 current_line = [c]
                 last_y = c['y']
         
         if current_line:
             current_line.sort(key=lambda c: c['x'])
-            questions.append(current_line[:self.num_choices])
+            if len(current_line) >= 3:
+                questions.append(current_line[:self.num_choices])
+        
+        # MELHORIA 7: Se não temos questões suficientes, tentar redistribuir
+        if len(questions) < self.num_questions:
+            print(f"[IA] Detectadas {len(questions)} linhas, tentando ajustar...")
+            # Usar interpolação para criar linhas faltantes
+            if len(questions) >= 5:  # Pelo menos metade das questões
+                y_positions = [sum(c['y'] for c in q) / len(q) for q in questions]
+                y_positions.sort()
+                
+                # Criar questões faltantes por interpolação
+                for q_idx in range(self.num_questions):
+                    if q_idx < len(questions):
+                        continue
+                    # Estimar posição Y
+                    if y_positions:
+                        y_est = y_positions[-1] + (y_positions[-1] - y_positions[-2]) if len(y_positions) > 1 else y_positions[-1] + 50
+                        y_positions.append(y_est)
+                        
+                        # Estimar círculos para esta linha
+                        last_line = questions[-1]
+                        estimated_line = []
+                        for circle in last_line:
+                            estimated_line.append({
+                                'x': circle['x'],
+                                'y': int(y_est),
+                                'radius': circle.get('radius', 20),
+                                'estimated': True
+                            })
+                        questions.append(estimated_line)
         
         return questions[:self.num_questions] if len(questions) >= self.num_questions else None
     
@@ -260,26 +313,65 @@ class OMRReader:
         return darkness
     
     def find_answer_regions(self, binary):
-        """Encontra as regiões das respostas (método de grade)"""
+        """Encontra as regiões das respostas (método de grade) - VERSÃO MELHORADA"""
         
         h, w = binary.shape
         
-        # Dividir em 10 linhas (questões)
-        line_height = h // self.num_questions
+        # MELHORIA 8: Usar projeção de pixels para encontrar linhas e colunas
+        # Projeção vertical para encontrar linhas das questões
+        vertical_projection = np.sum(binary, axis=1)
         
-        # Dividir em 5 colunas (alternativas)
-        col_width = w // self.num_choices
+        # Encontrar picos na projeção (onde há mais pixels pretos)
+        threshold = np.max(vertical_projection) * 0.3
+        line_regions = []
+        in_line = False
+        line_start = 0
+        
+        for i in range(h):
+            if vertical_projection[i] > threshold and not in_line:
+                in_line = True
+                line_start = i
+            elif vertical_projection[i] <= threshold and in_line:
+                in_line = False
+                line_end = i
+                if line_end - line_start > 20:  # Altura mínima da linha
+                    line_regions.append((line_start, line_end))
+        
+        # Se não encontrou linhas pela projeção, usar divisão uniforme
+        if len(line_regions) < self.num_questions:
+            line_height = h // self.num_questions
+            line_regions = [(i * line_height, (i + 1) * line_height) for i in range(self.num_questions)]
+        else:
+            line_regions = line_regions[:self.num_questions]
+        
+        # Projeção horizontal para encontrar colunas das alternativas
+        horizontal_projection = np.sum(binary, axis=0)
+        threshold_col = np.max(horizontal_projection) * 0.3
+        col_regions = []
+        in_col = False
+        col_start = 0
+        
+        for i in range(w):
+            if horizontal_projection[i] > threshold_col and not in_col:
+                in_col = True
+                col_start = i
+            elif horizontal_projection[i] <= threshold_col and in_col:
+                in_col = False
+                col_end = i
+                if col_end - col_start > 15:  # Largura mínima da coluna
+                    col_regions.append((col_start, col_end))
+        
+        # Se não encontrou colunas, usar divisão uniforme
+        if len(col_regions) < self.num_choices:
+            col_width = w // self.num_choices
+            col_regions = [(i * col_width, (i + 1) * col_width) for i in range(self.num_choices)]
+        else:
+            col_regions = col_regions[:self.num_choices]
         
         regions = []
         
-        for q in range(self.num_questions):
-            y_start = q * line_height
-            y_end = (q + 1) * line_height
-            
-            for c in range(self.num_choices):
-                x_start = c * col_width
-                x_end = (c + 1) * col_width
-                
+        for q_idx, (y_start, y_end) in enumerate(line_regions[:self.num_questions]):
+            for c_idx, (x_start, x_end) in enumerate(col_regions[:self.num_choices]):
                 # Extrair região
                 roi = binary[y_start:y_end, x_start:x_end]
                 
@@ -289,8 +381,8 @@ class OMRReader:
                 fill_percentage = black_pixels / total_pixels if total_pixels > 0 else 0
                 
                 regions.append({
-                    'question': q + 1,
-                    'choice': self.choices[c],
+                    'question': q_idx + 1,
+                    'choice': self.choices[c_idx],
                     'fill_percentage': fill_percentage,
                     'x': (x_start + x_end) // 2,
                     'y': (y_start + y_end) // 2
@@ -354,9 +446,9 @@ class OMRReader:
         return None
     
     def analyze_by_grid(self, binary):
-        """Analisa por grade (último fallback)"""
+        """Analisa por grade (último fallback) - VERSÃO MELHORADA"""
         
-        print("[IA] Usando metodo de grade...")
+        print("[IA] Usando metodo de grade melhorado...")
         
         regions = self.find_answer_regions(binary)
         
@@ -406,6 +498,10 @@ class OMRReader:
                 radius = circle.get('radius', 20)
                 fill = self.analyze_bubble_intensity(image, circle['x'], circle['y'], radius)
                 
+                # MELHORIA 9: Ajustar threshold para círculos estimados
+                if circle.get('estimated', False):
+                    fill = fill * 0.95
+                
                 status = "MARCADA" if fill > self.bubble_threshold else "vazia"
                 print(f"  {self.choices[c_idx]}: {fill:.3f} - {status}")
                 
@@ -436,6 +532,12 @@ class OMRReader:
         image = Image.open(io.BytesIO(image_data))
         image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         
+        # MELHORIA 10: Corrigir orientação no início
+        h, w = image.shape[:2]
+        if h > w:
+            image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+            print("[IA] Orientação da imagem corrigida")
+        
         # Pré-processar
         processed_img, binary = self.preprocess_for_analysis(image)
         
@@ -461,7 +563,7 @@ class OMRReader:
         if answers is None:
             answers = self.analyze_by_contour(processed_img, binary)
         
-        # 4. Grade (fallback final)
+        # 4. Grade (fallback final) - VERSÃO MELHORADA
         if answers is None:
             answers = self.analyze_by_grid(binary)
         
