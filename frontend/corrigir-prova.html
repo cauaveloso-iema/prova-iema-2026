@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Correção de Prova - EVALBEE OMR</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- MÚLTIPLAS BIBLIOTECAS PARA LEITURA QR CODE (FALLBACK AUTOMÁTICO) -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
@@ -185,6 +184,7 @@
             border-radius: 8px;
             box-shadow: 0 0 20px rgba(0,255,0,0.5);
             background: rgba(0,255,0,0.1);
+            transition: all 0.1s ease-out;
         }
         
         .feedback {
@@ -459,7 +459,6 @@
             border-radius: 10px;
         }
         
-        /* Indicador de modo */
         .modo-indicador {
             position: fixed;
             top: 10px;
@@ -483,35 +482,14 @@
             border-left: 3px solid #fff;
         }
         
-        /* INFORMAÇÕES MAIS LIMPAS PARA MOBILE */
         @media (max-width: 768px) {
             .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); }
             .btn-opcao { width: 32px; font-size: 11px; }
             .resposta-card .resposta-valor { font-size: 1.4rem; }
             .modo-indicador { font-size: 9px; padding: 2px 8px; top: 5px; right: 5px; }
-            
-            .guia-quadrado { 
-                width: 45px !important; 
-                height: 45px !important; 
-                border-width: 3px !important;
-            }
-            
-            .feedback { 
-                font-size: 11px; 
-                padding: 6px 12px; 
-                white-space: nowrap;
-                bottom: 10px;
-                background: rgba(0,0,0,0.8);
-            }
-            
-            .status-encaixe { 
-                font-size: 14px; 
-                padding: 4px 10px; 
-                top: 10px;
-                letter-spacing: 4px;
-                background: rgba(0,0,0,0.7);
-            }
-            
+            .guia-quadrado { width: 45px !important; height: 45px !important; border-width: 3px !important; }
+            .feedback { font-size: 11px; padding: 6px 12px; white-space: nowrap; bottom: 10px; background: rgba(0,0,0,0.8); }
+            .status-encaixe { font-size: 14px; padding: 4px 10px; top: 10px; letter-spacing: 4px; background: rgba(0,0,0,0.7); }
             .btn { padding: 8px 16px; font-size: 12px; }
             .btn-salvar, .btn-tentar-novamente { padding: 10px; font-size: 13px; }
         }
@@ -530,7 +508,7 @@
         <div class="card">
             <div class="header">
                 <h1><i class="fas fa-robot"></i> Correção Inteligente</h1>
-                <p><strong style="color:#ff4444;">🔴 Alinhe os 4 quadrados vermelhos com os quadrados pretos do cartão</strong></p>
+                <p><strong style="color:#00ff00;">🟢 A linha verde mostra a área exata do cartão que será enviada</strong></p>
             </div>
             
             <div class="modo-selector">
@@ -601,7 +579,7 @@
                         <div class="guia-quadrado" id="guiaTR"></div>
                         <div class="guia-quadrado" id="guiaBL"></div>
                         <div class="guia-quadrado" id="guiaBR"></div>
-                        <div class="feedback" id="feedback">🎯 Alinhe</div>
+                        <div class="feedback" id="feedback">🎯 Alinhe os 4 quadrados</div>
                         <div class="status-encaixe" id="statusEncaixe">⬜ ⬜ ⬜ ⬜</div>
                         <div id="autoStatus" class="auto-status" style="display: none;"></div>
                     </div>
@@ -636,14 +614,9 @@
         <i class="fas fa-circle" style="color:#10b981; font-size:8px;"></i> Aguardando
     </div>
     
-    <!-- Indicador de modo -->
     <div id="modoIndicador" class="modo-indicador">🔍 CARREGANDO...</div>
     
     <script>
-        // ============================================
-        // DETECÇÃO DE DISPOSITIVO E INDICADOR
-        // ============================================
-        
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const modoIndicador = document.getElementById('modoIndicador');
         
@@ -654,10 +627,6 @@
             modoIndicador.className = 'modo-indicador desktop';
             modoIndicador.innerHTML = '💻 DESKTOP';
         }
-        
-        // ============================================
-        // CORREÇÃO DE URL - REDIRECIONAMENTO INTELIGENTE
-        // ============================================
         
         const urlParams = new URLSearchParams(window.location.search);
         const provaId = urlParams.get('prova');
@@ -692,10 +661,6 @@
             throw new Error('Redirecionando...');
         }
         
-        // ============================================
-        // CONFIGURAÇÕES
-        // ============================================
-        
         let modoQRCode = true;
         let alunoSelecionado = null;
         let autoCorrectionTimer = null;
@@ -703,11 +668,9 @@
         
         let sensibilidade = 12;
         const BRILHO_MAX_PRETO = 110;
-        
         let margemBusca = 0.12;
         let tamanhoGuia = 0.14;
         
-        // Configuração inteligente do OMR (funciona local e no Render)
         const isRender = window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
         const OMR_URL = isRender ? '/api/omr/detect' : 'http://localhost:5001/detect';
 
@@ -728,7 +691,7 @@
         let stream = null;
         let analiseInterval = null;
         let capturando = false;
-        let capturaRealizada = false; // 🔥 CONTROLE PARA EVITAR MÚLTIPLAS CAPTURAS
+        let capturaRealizada = false;
         let quadradosEncaixados = [false, false, false, false];
         let retanguloAtual = null;
         let estabilidade = 0;
@@ -753,27 +716,13 @@
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
         const btnTentarNovamente = document.getElementById('btnTentarNovamente');
         
-        // ============================================
-        // FUNÇÃO PARA VOLTAR AO SCANNER QR (CORRIGIDA)
-        // ============================================
-        
         function voltarParaScannerQR() {
             console.log('🔄 Voltando para scanner QR...');
-            
-            // Parar tudo
-            if (qrScanner && scannerIniciado) {
-                try {
-                    qrScanner.stop();
-                } catch(e) {}
-            }
+            if (qrScanner && scannerIniciado) { try { qrScanner.stop(); } catch(e) {} }
             pararCamera();
-            
-            // Limpar seleção
             alunoSelecionado = null;
             scannerIniciado = false;
-            capturaRealizada = false; // Resetar flag
-            
-            // Resetar UI
+            capturaRealizada = false;
             qrSelecionadoDiv.style.display = 'none';
             qrScannerArea.style.display = 'block';
             cameraContainer.style.display = 'none';
@@ -781,78 +730,41 @@
             btnIniciarCamera.disabled = true;
             btnCapturar.disabled = true;
             btnTentarNovamente.style.display = 'none';
-            
-            // Forçar reinício do scanner
-            setTimeout(() => {
-                iniciarQRScanner();
-            }, 500);
-            
+            setTimeout(() => { iniciarQRScanner(); }, 500);
             document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando QR Code`;
             mostrarAlerta('🔄 Escaneie o QR Code do aluno', 'info');
         }
-        
-        // ============================================
-        // FUNÇÃO PARA TENTAR NOVAMENTE A CAPTURA
-        // ============================================
         
         function tentarNovamente() {
             console.log('🔄 Tentando nova captura...');
             document.getElementById('resultado').style.display = 'none';
             btnTentarNovamente.style.display = 'none';
-            capturaRealizada = false; // Resetar flag para permitir nova captura
-            
-            // Resetar estabilidade
+            capturaRealizada = false;
             estabilidade = 0;
             quadradosEncaixados = [false, false, false, false];
             retanguloAtual = null;
-            
-            // Atualizar UI
             const guias = ['guiaTL', 'guiaTR', 'guiaBL', 'guiaBR'];
-            guias.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.classList.remove('encaixado');
-            });
+            guias.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('encaixado'); });
             document.getElementById('statusEncaixe').innerHTML = '⬜ ⬜ ⬜ ⬜';
             document.getElementById('feedback').innerHTML = '🎯 Alinhe';
             document.getElementById('feedback').style.background = '#f59e0b';
-            
             mostrarAlerta('Posicione o cartão novamente', 'info');
         }
-        
-        // ============================================
-        // CARREGAR ALUNOS
-        // ============================================
         
         async function carregarAlunosDaTurma(turmaId) {
             try {
                 console.log('🔍 Buscando alunos da turma:', turmaId);
                 const response = await fazerRequisicao(`/api/turmas/${turmaId}`);
                 const data = await response.json();
-                
                 if (data.success && data.turma && data.turma.alunos) {
-                    alunos = data.turma.alunos.map(a => ({
-                        alunoId: a.id,
-                        id: a.id,
-                        alunoNome: a.nome,
-                        nome: a.nome,
-                        alunoMatricula: a.matricula || '',
-                        matricula: a.matricula || ''
-                    }));
-                    
+                    alunos = data.turma.alunos.map(a => ({ alunoId: a.id, id: a.id, alunoNome: a.nome, nome: a.nome, alunoMatricula: a.matricula || '', matricula: a.matricula || '' }));
                     alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
-                    });
-                    
+                    alunos.forEach(a => { alunosMap.set(a.alunoId, a); alunosMap.set(a.id, a); });
                     console.log(`✅ ${alunos.length} alunos carregados da turma`);
                     return true;
                 }
                 return false;
-            } catch (error) {
-                console.error('Erro ao buscar alunos da turma:', error);
-                return false;
-            }
+            } catch (error) { console.error('Erro ao buscar alunos da turma:', error); return false; }
         }
         
         async function carregarAlunosDosResultados() {
@@ -860,511 +772,189 @@
                 console.log('🔍 Buscando alunos dos resultados da prova...');
                 const response = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
                 const data = await response.json();
-                
                 if (data.success && data.resultados && data.resultados.length > 0) {
-                    alunos = data.resultados.map(r => ({
-                        alunoId: r.alunoId || r.userId,
-                        id: r.alunoId || r.userId,
-                        alunoNome: r.alunoNome || r.nome,
-                        nome: r.alunoNome || r.nome,
-                        alunoMatricula: r.alunoMatricula || r.matricula || '',
-                        matricula: r.alunoMatricula || r.matricula || ''
-                    }));
-                    
+                    alunos = data.resultados.map(r => ({ alunoId: r.alunoId || r.userId, id: r.alunoId || r.userId, alunoNome: r.alunoNome || r.nome, nome: r.alunoNome || r.nome, alunoMatricula: r.alunoMatricula || r.matricula || '', matricula: r.alunoMatricula || r.matricula || '' }));
                     alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
-                    });
-                    
+                    alunos.forEach(a => { alunosMap.set(a.alunoId, a); alunosMap.set(a.id, a); });
                     console.log(`✅ ${alunos.length} alunos carregados dos resultados`);
                     return true;
                 }
                 return false;
-            } catch (error) {
-                console.error('Erro ao buscar resultados:', error);
-                return false;
-            }
+            } catch (error) { console.error('Erro ao buscar resultados:', error); return false; }
         }
         
         async function carregarAlunosDaProva(provaData) {
             try {
                 if (provaData.prova && provaData.prova.alunosAtribuidos && provaData.prova.alunosAtribuidos.length > 0) {
                     console.log('🔍 Buscando alunos dos alunosAtribuidos da prova...');
-                    
                     const alunosIds = provaData.prova.alunosAtribuidos.map(a => a.$oid || a);
-                    
-                    alunos = alunosIds.map(id => ({
-                        alunoId: id,
-                        id: id,
-                        alunoNome: `Aluno ${id.slice(-6)}`,
-                        nome: `Aluno ${id.slice(-6)}`,
-                        alunoMatricula: '',
-                        matricula: ''
-                    }));
-                    
+                    alunos = alunosIds.map(id => ({ alunoId: id, id: id, alunoNome: `Aluno ${id.slice(-6)}`, nome: `Aluno ${id.slice(-6)}`, alunoMatricula: '', matricula: '' }));
                     alunosMap.clear();
-                    alunos.forEach(a => {
-                        alunosMap.set(a.alunoId, a);
-                        alunosMap.set(a.id, a);
-                    });
-                    
+                    alunos.forEach(a => { alunosMap.set(a.alunoId, a); alunosMap.set(a.id, a); });
                     console.log(`✅ ${alunos.length} alunos carregados dos alunosAtribuidos`);
                     return true;
                 }
                 return false;
-            } catch (error) {
-                console.error('Erro ao carregar alunos da prova:', error);
-                return false;
-            }
+            } catch (error) { console.error('Erro ao carregar alunos da prova:', error); return false; }
         }
-        
-        // ============================================
-        // SCANNER COM MÚLTIPLOS FALLBACKS
-        // ============================================
         
         async function iniciarQRScanner() {
             if (scannerIniciado) return;
             if (!modoQRCode) return;
-            
             scannerAtual = 0;
-            
             if (isMobile) {
-                const mobileScanners = [
-                    { nome: 'jsQR', func: iniciarScannerJsQR },
-                    { nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode },
-                    { nome: 'ZXing', func: iniciarScannerZXing },
-                    { nome: 'Quagga', func: iniciarScannerQuagga }
-                ];
+                const mobileScanners = [{ nome: 'jsQR', func: iniciarScannerJsQR }, { nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode }, { nome: 'ZXing', func: iniciarScannerZXing }, { nome: 'Quagga', func: iniciarScannerQuagga }];
                 await tentarProximoScannerMobile(mobileScanners);
-            } else {
-                await tentarProximoScanner();
-            }
+            } else { await tentarProximoScanner(); }
         }
         
         async function tentarProximoScannerMobile(scanners) {
             if (!modoQRCode) return;
-            
-            if (scannerAtual >= scanners.length) {
-                mostrarAlerta('⚠️ Scanner não disponível. Use o modo MANUAL.', 'warning');
-                return;
-            }
-            
+            if (scannerAtual >= scanners.length) { mostrarAlerta('⚠️ Scanner não disponível. Use o modo MANUAL.', 'warning'); return; }
             const scanner = scanners[scannerAtual];
             console.log(`🔄 Tentando scanner: ${scanner.nome}`);
-            
-            try {
-                await scanner.func();
-                scannerIniciado = true;
-                console.log(`✅ Scanner ativo (${scanner.nome})`);
-            } catch (err) {
-                console.warn(`⚠️ ${scanner.nome} falhou:`, err.message);
-                scannerAtual++;
-                await tentarProximoScannerMobile(scanners);
-            }
+            try { await scanner.func(); scannerIniciado = true; console.log(`✅ Scanner ativo (${scanner.nome})`); } catch (err) { console.warn(`⚠️ ${scanner.nome} falhou:`, err.message); scannerAtual++; await tentarProximoScannerMobile(scanners); }
         }
         
         async function tentarProximoScanner() {
             if (!modoQRCode) return;
-            
-            const scanners = [
-                { nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode },
-                { nome: 'jsQR', func: iniciarScannerJsQR },
-                { nome: 'ZXing', func: iniciarScannerZXing },
-                { nome: 'Quagga', func: iniciarScannerQuagga }
-            ];
-            
-            if (scannerAtual >= scanners.length) {
-                mostrarAlerta('⚠️ Scanner não disponível. Use o modo MANUAL.', 'warning');
-                return;
-            }
-            
+            const scanners = [{ nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode }, { nome: 'jsQR', func: iniciarScannerJsQR }, { nome: 'ZXing', func: iniciarScannerZXing }, { nome: 'Quagga', func: iniciarScannerQuagga }];
+            if (scannerAtual >= scanners.length) { mostrarAlerta('⚠️ Scanner não disponível. Use o modo MANUAL.', 'warning'); return; }
             const scanner = scanners[scannerAtual];
             console.log(`🔄 Tentando scanner: ${scanner.nome}`);
-            
-            try {
-                await scanner.func();
-                scannerIniciado = true;
-                console.log(`✅ Scanner ativo (${scanner.nome})`);
-            } catch (err) {
-                console.warn(`⚠️ ${scanner.nome} falhou:`, err.message);
-                scannerAtual++;
-                await tentarProximoScanner();
-            }
+            try { await scanner.func(); scannerIniciado = true; console.log(`✅ Scanner ativo (${scanner.nome})`); } catch (err) { console.warn(`⚠️ ${scanner.nome} falhou:`, err.message); scannerAtual++; await tentarProximoScanner(); }
         }
         
         async function iniciarScannerHtml5QrCode() {
             return new Promise(async (resolve, reject) => {
                 try {
-                    if (qrScanner) {
-                        try { await qrScanner.stop(); } catch(e) {}
-                    }
-                    
+                    if (qrScanner) { try { await qrScanner.stop(); } catch(e) {} }
                     const container = document.getElementById('qr-reader');
                     const altContainer = document.getElementById('qr-alternative-container');
                     const zxingVideo = document.getElementById('qr-zxing-video');
                     const quaggaContainer = document.getElementById('quagga-container');
-                    
                     container.style.display = 'block';
                     if (altContainer) altContainer.style.display = 'none';
                     if (zxingVideo) zxingVideo.style.display = 'none';
                     if (quaggaContainer) quaggaContainer.style.display = 'none';
-                    
                     const html5QrCode = new Html5Qrcode("qr-reader");
                     qrScanner = html5QrCode;
-                    
-                    const timeout = setTimeout(() => {
-                        reject(new Error('Timeout ao iniciar html5-qrcode'));
-                    }, 15000);
-                    
-                    await html5QrCode.start(
-                        { facingMode: "environment" },
-                        { 
-                            fps: 15, 
-                            qrbox: { width: 280, height: 280 },
-                            aspectRatio: 1.0,
-                            videoConstraints: {
-                                facingMode: "environment",
-                                width: { ideal: 1280 },
-                                height: { ideal: 720 }
-                            }
-                        },
-                        (decodedText) => {
-                            clearTimeout(timeout);
-                            console.log('✅ QR Code detectado:', decodedText);
-                            processarQRCode(decodedText);
-                            resolve();
-                        },
-                        (errorMessage) => {}
-                    );
-                    
+                    const timeout = setTimeout(() => { reject(new Error('Timeout ao iniciar html5-qrcode')); }, 15000);
+                    await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } }, (decodedText) => { clearTimeout(timeout); console.log('✅ QR Code detectado:', decodedText); processarQRCode(decodedText); resolve(); }, (errorMessage) => {});
                     clearTimeout(timeout);
                     resolve();
-                    
-                } catch (err) {
-                    reject(err);
-                }
+                } catch (err) { reject(err); }
             });
         }
         
         async function iniciarScannerJsQR() {
             return new Promise(async (resolve, reject) => {
                 try {
-                    if (qrScanner && scannerIniciado) {
-                        try { await qrScanner.stop(); } catch(e) {}
-                    }
-                    
+                    if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); } catch(e) {} }
                     const container = document.getElementById('qr-reader');
                     const altContainer = document.getElementById('qr-alternative-container');
                     const zxingVideo = document.getElementById('qr-zxing-video');
                     const quaggaContainer = document.getElementById('quagga-container');
-                    
                     container.style.display = 'none';
                     altContainer.style.display = 'block';
                     if (zxingVideo) zxingVideo.style.display = 'none';
                     if (quaggaContainer) quaggaContainer.style.display = 'none';
-                    
                     const altVideo = document.getElementById('qr-alternative-video');
                     const altCanvas = document.getElementById('qr-alternative-canvas');
                     const ctx = altCanvas.getContext('2d');
-                    
-                    alternativeStream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "environment" } 
-                    });
-                    
+                    alternativeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                     altVideo.srcObject = alternativeStream;
-                    
-                    await new Promise((resolveVideo) => {
-                        altVideo.onloadedmetadata = () => {
-                            altVideo.play();
-                            altCanvas.width = altVideo.videoWidth;
-                            altCanvas.height = altVideo.videoHeight;
-                            resolveVideo();
-                        };
-                    });
-                    
+                    await new Promise((resolveVideo) => { altVideo.onloadedmetadata = () => { altVideo.play(); altCanvas.width = altVideo.videoWidth; altCanvas.height = altVideo.videoHeight; resolveVideo(); }; });
                     scannerAlternativoAtivo = true;
-                    
-                    const timeout = setTimeout(() => {
-                        if (scannerAlternativoAtivo) {
-                            reject(new Error('Timeout jsQR'));
-                        }
-                    }, 30000);
-                    
+                    const timeout = setTimeout(() => { if (scannerAlternativoAtivo) reject(new Error('Timeout jsQR')); }, 30000);
                     function scanFrame() {
                         if (!scannerAlternativoAtivo) return;
-                        
                         if (altVideo.readyState === altVideo.HAVE_ENOUGH_DATA) {
                             ctx.drawImage(altVideo, 0, 0, altCanvas.width, altCanvas.height);
                             const imageData = ctx.getImageData(0, 0, altCanvas.width, altCanvas.height);
-                            
-                            const code = window.jsQR(imageData.data, altCanvas.width, altCanvas.height, {
-                                inversionAttempts: "dontInvert",
-                            });
-                            
-                            if (code) {
-                                clearTimeout(timeout);
-                                console.log('✅ QR Code detectado (jsQR):', code.data);
-                                processarQRCode(code.data);
-                                pararScannerJsQR();
-                                resolve();
-                                return;
-                            }
+                            const code = window.jsQR(imageData.data, altCanvas.width, altCanvas.height, { inversionAttempts: "dontInvert" });
+                            if (code) { clearTimeout(timeout); console.log('✅ QR Code detectado (jsQR):', code.data); processarQRCode(code.data); pararScannerJsQR(); resolve(); return; }
                         }
-                        
                         requestAnimationFrame(scanFrame);
                     }
-                    
                     scanFrame();
-                    
-                } catch (err) {
-                    reject(err);
-                }
+                } catch (err) { reject(err); }
             });
         }
         
         async function iniciarScannerZXing() {
             return new Promise(async (resolve, reject) => {
                 try {
-                    if (qrScanner && scannerIniciado) {
-                        try { await qrScanner.stop(); } catch(e) {}
-                    }
+                    if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); } catch(e) {} }
                     pararScannerJsQR();
-                    
                     const container = document.getElementById('qr-reader');
                     const altContainer = document.getElementById('qr-alternative-container');
                     const zxingVideo = document.getElementById('qr-zxing-video');
                     const quaggaContainer = document.getElementById('quagga-container');
-                    
                     container.style.display = 'none';
                     if (altContainer) altContainer.style.display = 'none';
                     zxingVideo.style.display = 'block';
                     if (quaggaContainer) quaggaContainer.style.display = 'none';
-                    
-                    if (!window.ZXing) {
-                        reject(new Error('ZXing não carregado'));
-                        return;
-                    }
-                    
+                    if (!window.ZXing) { reject(new Error('ZXing não carregado')); return; }
                     const codeReader = new ZXing.BrowserQRCodeReader();
                     zxingReader = codeReader;
-                    
-                    const timeout = setTimeout(() => {
-                        reject(new Error('Timeout ZXing'));
-                    }, 30000);
-                    
-                    codeReader.decodeFromVideoDevice(null, 'qr-zxing-video', (result, err) => {
-                        if (result) {
-                            clearTimeout(timeout);
-                            console.log('✅ QR Code detectado (ZXing):', result.text);
-                            processarQRCode(result.text);
-                            codeReader.reset();
-                            resolve();
-                        }
-                        if (err && err.name === 'NotFoundException') {
-                            // continua tentando
-                        }
-                    });
-                    
-                } catch (err) {
-                    reject(err);
-                }
+                    const timeout = setTimeout(() => { reject(new Error('Timeout ZXing')); }, 30000);
+                    codeReader.decodeFromVideoDevice(null, 'qr-zxing-video', (result, err) => { if (result) { clearTimeout(timeout); console.log('✅ QR Code detectado (ZXing):', result.text); processarQRCode(result.text); codeReader.reset(); resolve(); } });
+                } catch (err) { reject(err); }
             });
         }
         
         async function iniciarScannerQuagga() {
             return new Promise(async (resolve, reject) => {
                 try {
-                    if (qrScanner && scannerIniciado) {
-                        try { await qrScanner.stop(); } catch(e) {}
-                    }
+                    if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); } catch(e) {} }
                     pararScannerJsQR();
-                    if (zxingReader) {
-                        try { zxingReader.reset(); } catch(e) {}
-                    }
-                    
+                    if (zxingReader) { try { zxingReader.reset(); } catch(e) {} }
                     const container = document.getElementById('qr-reader');
                     const altContainer = document.getElementById('qr-alternative-container');
                     const zxingVideo = document.getElementById('qr-zxing-video');
                     const quaggaContainer = document.getElementById('quagga-container');
-                    
                     container.style.display = 'none';
                     if (altContainer) altContainer.style.display = 'none';
                     if (zxingVideo) zxingVideo.style.display = 'none';
                     quaggaContainer.style.display = 'block';
-                    
-                    if (!window.Quagga) {
-                        reject(new Error('Quagga não carregado'));
-                        return;
-                    }
-                    
+                    if (!window.Quagga) { reject(new Error('Quagga não carregado')); return; }
                     const canvas = document.getElementById('quagga-canvas');
-                    canvas.width = 640;
-                    canvas.height = 480;
-                    
-                    const timeout = setTimeout(() => {
-                        reject(new Error('Timeout Quagga'));
-                    }, 30000);
-                    
-                    Quagga.init({
-                        inputStream: {
-                            type: "LiveStream",
-                            constraints: {
-                                facingMode: "environment",
-                                width: { ideal: 640 },
-                                height: { ideal: 480 }
-                            },
-                            area: {
-                                top: "0%",
-                                right: "0%",
-                                left: "0%",
-                                bottom: "0%"
-                            }
-                        },
-                        decoder: {
-                            readers: ["qr_code_reader"]
-                        },
-                        locator: {
-                            patchSize: "medium",
-                            halfSample: true
-                        }
-                    }, function(err) {
-                        if (err) {
-                            clearTimeout(timeout);
-                            reject(err);
-                            return;
-                        }
-                        
-                        Quagga.start();
-                        
-                        Quagga.onDetected(function(result) {
-                            const code = result.codeResult.code;
-                            if (code) {
-                                clearTimeout(timeout);
-                                console.log('✅ QR Code detectado (Quagga):', code);
-                                processarQRCode(code);
-                                Quagga.stop();
-                                resolve();
-                            }
-                        });
-                    });
-                    
-                } catch (err) {
-                    reject(err);
-                }
+                    canvas.width = 640; canvas.height = 480;
+                    const timeout = setTimeout(() => { reject(new Error('Timeout Quagga')); }, 30000);
+                    Quagga.init({ inputStream: { type: "LiveStream", constraints: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }, area: { top: "0%", right: "0%", left: "0%", bottom: "0%" } }, decoder: { readers: ["qr_code_reader"] }, locator: { patchSize: "medium", halfSample: true } }, function(err) { if (err) { clearTimeout(timeout); reject(err); return; } Quagga.start(); Quagga.onDetected(function(result) { const code = result.codeResult.code; if (code) { clearTimeout(timeout); console.log('✅ QR Code detectado (Quagga):', code); processarQRCode(code); Quagga.stop(); resolve(); } }); });
+                } catch (err) { reject(err); }
             });
         }
         
-        function pararScannerJsQR() {
-            scannerAlternativoAtivo = false;
-            if (alternativeStream) {
-                alternativeStream.getTracks().forEach(track => track.stop());
-                alternativeStream = null;
-            }
-        }
-        
-        function pararScanner() {
-            if (qrScanner && scannerIniciado) {
-                try {
-                    qrScanner.stop();
-                } catch(e) {}
-            }
-            pararScannerJsQR();
-            if (zxingReader) {
-                try {
-                    zxingReader.reset();
-                } catch(e) {}
-            }
-            if (window.Quagga) {
-                try {
-                    Quagga.stop();
-                } catch(e) {}
-            }
-            scannerIniciado = false;
-        }
-        
-        // ============================================
-        // PROCESSAR QR CODE
-        // ============================================
+        function pararScannerJsQR() { scannerAlternativoAtivo = false; if (alternativeStream) { alternativeStream.getTracks().forEach(track => track.stop()); alternativeStream = null; } }
+        function pararScanner() { if (qrScanner && scannerIniciado) { try { qrScanner.stop(); } catch(e) {} } pararScannerJsQR(); if (zxingReader) { try { zxingReader.reset(); } catch(e) {} } if (window.Quagga) { try { Quagga.stop(); } catch(e) {} } scannerIniciado = false; }
         
         async function processarQRCode(qrData) {
             try {
                 console.log('🔍 QR Code escaneado:', qrData);
-                
                 let alunoId = null;
-                
-                try {
-                    const alunoData = JSON.parse(qrData);
-                    alunoId = alunoData.id || alunoData.alunoId || alunoData;
-                } catch (e) {
-                    if (qrData.includes('aluno=')) {
-                        const match = qrData.match(/aluno=([a-f0-9]+)/);
-                        if (match) {
-                            alunoId = match[1];
-                        } else {
-                            alunoId = qrData;
-                        }
-                    } else {
-                        alunoId = qrData;
-                    }
-                }
-                
+                try { const alunoData = JSON.parse(qrData); alunoId = alunoData.id || alunoData.alunoId || alunoData; } catch (e) { if (qrData.includes('aluno=')) { const match = qrData.match(/aluno=([a-f0-9]+)/); if (match) { alunoId = match[1]; } else { alunoId = qrData; } } else { alunoId = qrData; } }
                 console.log('🎯 ID extraído:', alunoId);
-                
                 const alunoEncontrado = alunosMap.get(alunoId);
-                
-                // SE ALUNO NÃO FOR ENCONTRADO, VOLTAR PARA SCANNER QR
-                if (!alunoEncontrado) {
-                    console.log('❌ Aluno não encontrado');
-                    mostrarAlerta('❌ Aluno não encontrado!', 'error');
-                    setTimeout(() => {
-                        voltarParaScannerQR();
-                    }, 1500);
-                    return;
-                }
-                
-                alunoSelecionado = {
-                    id: alunoEncontrado.alunoId,
-                    nome: alunoEncontrado.alunoNome,
-                    matricula: alunoEncontrado.alunoMatricula
-                };
-                
+                if (!alunoEncontrado) { console.log('❌ Aluno não encontrado'); mostrarAlerta('❌ Aluno não encontrado!', 'error'); setTimeout(() => { voltarParaScannerQR(); }, 1500); return; }
+                alunoSelecionado = { id: alunoEncontrado.alunoId, nome: alunoEncontrado.alunoNome, matricula: alunoEncontrado.alunoMatricula };
                 pararScanner();
-                
                 document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
                 document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
                 qrSelecionadoDiv.style.display = 'flex';
                 qrScannerArea.style.display = 'none';
-                
                 btnIniciarCamera.disabled = false;
                 mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
-                
-                // INICIAR CÂMERA AUTOMATICAMENTE
-                setTimeout(() => {
-                    if (alunoSelecionado && !stream) {
-                        console.log('📷 Iniciando câmera automaticamente...');
-                        iniciarCamera();
-                    }
-                }, 1000);
-                
-            } catch (error) {
-                console.error('Erro:', error);
-                mostrarAlerta('❌ QR Code inválido', 'error');
-            }
+                setTimeout(() => { if (alunoSelecionado && !stream) { console.log('📷 Iniciando câmera automaticamente...'); iniciarCamera(); } }, 1000);
+            } catch (error) { console.error('Erro:', error); mostrarAlerta('❌ QR Code inválido', 'error'); }
         }
         
-        function limparQRSelecionado() {
-            voltarParaScannerQR();
-        }
-        
-        // ============================================
-        // ALTERNAR MODO
-        // ============================================
+        function limparQRSelecionado() { voltarParaScannerQR(); }
         
         async function setModo(qrCode) {
             modoQRCode = qrCode;
-            
             if (modoQRCode) {
                 modoQRBtn.classList.add('active');
                 modoManualBtn.classList.remove('active');
@@ -1372,11 +962,9 @@
                 qrScannerArea.style.display = 'block';
                 manualSelectArea.style.display = 'none';
                 qrSelecionadoDiv.style.display = 'none';
-                
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
-                
                 iniciarQRScanner();
             } else {
                 modoManualBtn.classList.add('active');
@@ -1385,13 +973,11 @@
                 qrScannerArea.style.display = 'none';
                 manualSelectArea.style.display = 'block';
                 qrSelecionadoDiv.style.display = 'none';
-                
                 pararScanner();
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
             }
-            
             alunoSelecionado = null;
             btnCapturar.disabled = true;
             document.getElementById('resultado').style.display = 'none';
@@ -1399,142 +985,52 @@
             capturaRealizada = false;
         }
         
-        // ============================================
-        // FUNÇÕES DO CARTÃO OMR
-        // ============================================
-        
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
             let margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
             let tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
-            
-            if (isMobile) {
-                const zoomMobile = 1.4;
-                margemPx = Math.min(containerWidth, containerHeight) * margemBusca * zoomMobile;
-                tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia * 1.2;
-            }
-            
-            const guias = [
-                { id: 'guiaTL', left: margemPx, top: margemPx },
-                { id: 'guiaTR', left: containerWidth - margemPx - tamanhoPx, top: margemPx },
-                { id: 'guiaBL', left: margemPx, top: containerHeight - margemPx - tamanhoPx },
-                { id: 'guiaBR', left: containerWidth - margemPx - tamanhoPx, top: containerHeight - margemPx - tamanhoPx }
-            ];
-            
-            for (const guia of guias) {
-                const el = document.getElementById(guia.id);
-                if (el) {
-                    el.style.left = guia.left + 'px';
-                    el.style.top = guia.top + 'px';
-                    el.style.width = tamanhoPx + 'px';
-                    el.style.height = tamanhoPx + 'px';
-                }
-            }
+            if (isMobile) { const zoomMobile = 1.4; margemPx = Math.min(containerWidth, containerHeight) * margemBusca * zoomMobile; tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia * 1.2; }
+            const guias = [{ id: 'guiaTL', left: margemPx, top: margemPx }, { id: 'guiaTR', left: containerWidth - margemPx - tamanhoPx, top: margemPx }, { id: 'guiaBL', left: margemPx, top: containerHeight - margemPx - tamanhoPx }, { id: 'guiaBR', left: containerWidth - margemPx - tamanhoPx, top: containerHeight - margemPx - tamanhoPx }];
+            for (const guia of guias) { const el = document.getElementById(guia.id); if (el) { el.style.left = guia.left + 'px'; el.style.top = guia.top + 'px'; el.style.width = tamanhoPx + 'px'; el.style.height = tamanhoPx + 'px'; } }
         }
         
         function detectarQuadradosPretos(ctx, width, height) {
             const imgData = ctx.getImageData(0, 0, width, height);
             const data = imgData.data;
-            
             let sensibilidadeAjustada = sensibilidade;
             let brilhoMaxAjustado = BRILHO_MAX_PRETO;
-            
-            if (isMobile) {
-                sensibilidadeAjustada = sensibilidade * 0.5;
-                brilhoMaxAjustado = BRILHO_MAX_PRETO + 45;
-            }
-            
+            if (isMobile) { sensibilidadeAjustada = sensibilidade * 0.5; brilhoMaxAjustado = BRILHO_MAX_PRETO + 45; }
             const margemPx = Math.min(width, height) * margemBusca;
             const tamanhoPx = Math.min(width, height) * tamanhoGuia;
-            
-            const areas = [
-                { nome: 'TL', x: margemPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTL'), posicao: 0 },
-                { nome: 'TR', x: width - margemPx - tamanhoPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTR'), posicao: 1 },
-                { nome: 'BL', x: margemPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBL'), posicao: 2 },
-                { nome: 'BR', x: width - margemPx - tamanhoPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBR'), posicao: 3 }
-            ];
-            
+            const areas = [{ nome: 'TL', x: margemPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTL'), posicao: 0 }, { nome: 'TR', x: width - margemPx - tamanhoPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTR'), posicao: 1 }, { nome: 'BL', x: margemPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBL'), posicao: 2 }, { nome: 'BR', x: width - margemPx - tamanhoPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBR'), posicao: 3 }];
             let todosDetectados = true;
-            
             for (const area of areas) {
                 try {
                     let pixelsEscuros = 0;
                     let totalPixels = area.w * area.h;
-                    
-                    for (let y = 0; y < area.h; y++) {
-                        for (let x = 0; x < area.w; x++) {
-                            const px = Math.floor(area.x + x);
-                            const py = Math.floor(area.y + y);
-                            if (px >= 0 && px < width && py >= 0 && py < height) {
-                                const idx = (py * width + px) * 4;
-                                const brilho = (data[idx] + data[idx+1] + data[idx+2]) / 3;
-                                if (brilho < brilhoMaxAjustado) pixelsEscuros++;
-                            }
-                        }
-                    }
-                    
+                    for (let y = 0; y < area.h; y++) { for (let x = 0; x < area.w; x++) { const px = Math.floor(area.x + x); const py = Math.floor(area.y + y); if (px >= 0 && px < width && py >= 0 && py < height) { const idx = (py * width + px) * 4; const brilho = (data[idx] + data[idx+1] + data[idx+2]) / 3; if (brilho < brilhoMaxAjustado) pixelsEscuros++; } } }
                     const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
                     const detectado = percentualEscuro > sensibilidadeAjustada;
-                    
                     if (!detectado) todosDetectados = false;
-                    
-                    if (detectado) {
-                        if (!area.elemento.classList.contains('encaixado')) area.elemento.classList.add('encaixado');
-                        quadradosEncaixados[area.posicao] = true;
-                    } else {
-                        area.elemento.classList.remove('encaixado');
-                        quadradosEncaixados[area.posicao] = false;
-                    }
-                } catch(e) {
-                    todosDetectados = false;
-                    area.elemento?.classList.remove('encaixado');
-                    quadradosEncaixados[area.posicao] = false;
-                }
+                    if (detectado) { if (!area.elemento.classList.contains('encaixado')) area.elemento.classList.add('encaixado'); quadradosEncaixados[area.posicao] = true; } else { area.elemento.classList.remove('encaixado'); quadradosEncaixados[area.posicao] = false; }
+                } catch(e) { todosDetectados = false; area.elemento?.classList.remove('encaixado'); quadradosEncaixados[area.posicao] = false; }
             }
-            
             const statusEl = document.getElementById('statusEncaixe');
             const icons = quadradosEncaixados.map(e => e ? '⬛' : '⬜').join(' ');
             statusEl.innerHTML = icons;
-            
-            if (quadradosEncaixados.every(e => e === true)) {
-                statusEl.style.background = 'rgba(0,255,0,0.9)';
-                statusEl.style.color = '#000';
-            } else {
-                statusEl.style.background = 'rgba(0,0,0,0.8)';
-                statusEl.style.color = '#fff';
-            }
-            
+            if (quadradosEncaixados.every(e => e === true)) { statusEl.style.background = 'rgba(0,255,0,0.9)'; statusEl.style.color = '#000'; } else { statusEl.style.background = 'rgba(0,0,0,0.8)'; statusEl.style.color = '#fff'; }
             const todosEncaixados = quadradosEncaixados.every(e => e === true);
             let retangulo = null;
-            if (todosEncaixados) {
-                retangulo = {
-                    x: margemPx,
-                    y: margemPx,
-                    width: width - (margemPx * 2),
-                    height: height - (margemPx * 2)
-                };
-            }
-            
+            if (todosEncaixados) { retangulo = { x: margemPx, y: margemPx, width: width - (margemPx * 2), height: height - (margemPx * 2) }; }
             return { sucesso: todosEncaixados, retangulo: retangulo, encaixados: [...quadradosEncaixados] };
         }
         
         function desenharRetanguloCartao(retangulo, overlayWidth, overlayHeight, canvasWidth, canvasHeight) {
             const rectGuide = document.getElementById('rectGuide');
-            if (!retangulo) {
-                if (rectGuide) rectGuide.style.display = 'none';
-                return;
-            }
-            
+            if (!retangulo) { if (rectGuide) rectGuide.style.display = 'none'; return; }
             const scaleX = overlayWidth / canvasWidth;
             const scaleY = overlayHeight / canvasHeight;
-            
             let guide = rectGuide;
-            if (!guide) {
-                guide = document.createElement('div');
-                guide.id = 'rectGuide';
-                guide.className = 'retangulo-enquadramento';
-                document.getElementById('overlay').appendChild(guide);
-            }
-            
+            if (!guide) { guide = document.createElement('div'); guide.id = 'rectGuide'; guide.className = 'retangulo-enquadramento'; document.getElementById('overlay').appendChild(guide); }
             guide.style.left = (retangulo.x * scaleX) + 'px';
             guide.style.top = (retangulo.y * scaleY) + 'px';
             guide.style.width = (retangulo.width * scaleX) + 'px';
@@ -1546,124 +1042,66 @@
         
         function iniciarCorrecaoAutomatica() {
             if (autoCorrectionTimer) return;
-            if (capturaRealizada) return; // 🔥 NÃO INICIAR SE JÁ CAPTUROU
-            
-            autoCorrectionCountdown = 5; // 🔥 ALTERADO DE 2 PARA 5 SEGUNDOS
+            if (capturaRealizada) return;
+            autoCorrectionCountdown = 5;
             autoStatusDiv.style.display = 'block';
             autoStatusDiv.innerHTML = `📸 ${autoCorrectionCountdown}s`;
-            
             autoCorrectionTimer = setInterval(() => {
                 autoCorrectionCountdown--;
-                if (autoCorrectionCountdown > 0) {
-                    autoStatusDiv.innerHTML = `📸 ${autoCorrectionCountdown}s`;
-                } else {
-                    clearInterval(autoCorrectionTimer);
-                    autoCorrectionTimer = null;
-                    autoStatusDiv.style.display = 'none';
-                    if (!capturaRealizada) {
-                        capturaRealizada = true; // 🔥 MARCA QUE A CAPTURA FOI REALIZADA
-                        capturarImagem();
-                    }
-                }
+                if (autoCorrectionCountdown > 0) { autoStatusDiv.innerHTML = `📸 ${autoCorrectionCountdown}s`; } else { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; autoStatusDiv.style.display = 'none'; if (!capturaRealizada) { capturaRealizada = true; capturarImagem(); } }
             }, 1000);
         }
         
-        function cancelarCorrecaoAutomatica() {
-            if (autoCorrectionTimer) {
-                clearInterval(autoCorrectionTimer);
-                autoCorrectionTimer = null;
-            }
-            autoStatusDiv.style.display = 'none';
-        }
+        function cancelarCorrecaoAutomatica() { if (autoCorrectionTimer) { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; } autoStatusDiv.style.display = 'none'; }
         
         function analisarFrame() {
             if (!video.videoWidth || !video.videoHeight) return;
-            if (capturaRealizada) return; // 🔥 NÃO ANALISAR SE JÁ CAPTUROU
-            
+            if (capturaRealizada) return;
             const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
             const container = document.getElementById('cameraContainer');
             const containerRect = container.getBoundingClientRect();
             atualizarPosicaoGuias(containerRect.width, containerRect.height, canvas.width, canvas.height);
-            
             const resultado = detectarQuadradosPretos(ctx, canvas.width, canvas.height);
-            
             const feedback = document.getElementById('feedback');
             const infoBar = document.getElementById('infoBar');
             const encaixadosCount = resultado.encaixados.filter(e => e).length;
-            
             if (resultado.sucesso && resultado.retangulo) {
-                if (ultimoRetangulo && 
-                    Math.abs(ultimoRetangulo.x - resultado.retangulo.x) < 20 &&
-                    Math.abs(ultimoRetangulo.y - resultado.retangulo.y) < 20) {
-                    estabilidade++;
-                } else {
-                    estabilidade = Math.max(0, estabilidade - 1);
-                    cancelarCorrecaoAutomatica();
-                }
+                if (ultimoRetangulo && Math.abs(ultimoRetangulo.x - resultado.retangulo.x) < 20 && Math.abs(ultimoRetangulo.y - resultado.retangulo.y) < 20) { estabilidade++; } else { estabilidade = Math.max(0, estabilidade - 1); cancelarCorrecaoAutomatica(); }
                 ultimoRetangulo = resultado.retangulo;
                 retanguloAtual = resultado.retangulo;
-                
                 const containerRect2 = document.getElementById('cameraContainer').getBoundingClientRect();
                 desenharRetanguloCartao(resultado.retangulo, containerRect2.width, containerRect2.height, canvas.width, canvas.height);
-                
                 const estabilidadeMinima = isMobile ? 4 : 8;
-                
                 if (estabilidade >= estabilidadeMinima && !capturaRealizada) {
-                    feedback.innerHTML = `✅ ${encaixadosCount}/4`;
+                    feedback.innerHTML = `✅ ${encaixadosCount}/4 - Cartão estabilizado`;
                     feedback.style.background = '#10b981';
-                    
-                    if (!autoCorrectionTimer && !capturando && !capturaRealizada) {
-                        iniciarCorrecaoAutomatica();
-                    }
-                } else {
-                    feedback.innerHTML = `🎯 ${encaixadosCount}/4`;
-                    feedback.style.background = '#f59e0b';
-                    cancelarCorrecaoAutomatica();
-                }
+                    if (!autoCorrectionTimer && !capturando && !capturaRealizada) { iniciarCorrecaoAutomatica(); }
+                } else { feedback.innerHTML = `🎯 ${encaixadosCount}/4 - Alinhe os quadrados`; feedback.style.background = '#f59e0b'; cancelarCorrecaoAutomatica(); }
                 infoBar.innerHTML = `<i class="fas fa-check-circle"></i> ${encaixadosCount}/4`;
-            } else {
-                desenharRetanguloCartao(null);
-                retanguloAtual = null;
-                estabilidade = Math.max(0, estabilidade - 2);
-                ultimoRetangulo = null;
-                cancelarCorrecaoAutomatica();
-                
-                feedback.innerHTML = `🎯 ${encaixadosCount}/4`;
-                feedback.style.background = '#f59e0b';
-                infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`;
-                btnCapturar.disabled = true;
-            }
+            } else { desenharRetanguloCartao(null); retanguloAtual = null; estabilidade = Math.max(0, estabilidade - 2); ultimoRetangulo = null; cancelarCorrecaoAutomatica(); feedback.innerHTML = `🎯 ${encaixadosCount}/4 - Alinhe os quadrados`; feedback.style.background = '#f59e0b'; infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`; btnCapturar.disabled = true; }
         }
         
         async function capturarImagem() {
             if (capturando) return;
-            if (!alunoSelecionado) {
-                mostrarAlerta('Selecione um aluno primeiro!', 'error');
-                capturaRealizada = false;
-                return;
-            }
-            if (!retanguloAtual || estabilidade < (isMobile ? 4 : 8)) {
-                mostrarAlerta('Aguarde o cartão estabilizar!', 'warning');
-                capturaRealizada = false;
-                return;
-            }
+            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); capturaRealizada = false; return; }
+            if (!retanguloAtual || estabilidade < (isMobile ? 4 : 8)) { mostrarAlerta('Aguarde o cartão estabilizar!', 'warning'); capturaRealizada = false; return; }
             
             capturando = true;
-            
             const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            const expandir = isMobile ? 15 : 10;
-            const cartaoX = Math.max(0, retanguloAtual.x - expandir);
-            const cartaoY = Math.max(0, retanguloAtual.y - expandir);
-            const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width + (expandir * 2));
-            const cartaoH = Math.min(canvas.height - cartaoY, retanguloAtual.height + (expandir * 2));
+            // 🔥 RECORTE EXATO - SEM MARGEM (apenas a área delimitada)
+            const cartaoX = Math.max(0, retanguloAtual.x);
+            const cartaoY = Math.max(0, retanguloAtual.y);
+            const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width);
+            const cartaoH = Math.min(canvas.height - cartaoY, retanguloAtual.height);
+            
+            console.log(`📐 Recorte exato: x=${cartaoX}, y=${cartaoY}, w=${cartaoW}, h=${cartaoH}`);
             
             if (cartaoW <= 0 || cartaoH <= 0) {
                 mostrarAlerta('Erro ao recortar. Tente aproximar mais.', 'error');
@@ -1672,6 +1110,7 @@
                 return;
             }
             
+            // Recortar APENAS a área do cartão (sem margem)
             const imagemCartao = ctx.getImageData(cartaoX, cartaoY, cartaoW, cartaoH);
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = cartaoW;
@@ -1679,53 +1118,23 @@
             tempCanvas.getContext('2d').putImageData(imagemCartao, 0, 0);
             const imgData = tempCanvas.toDataURL('image/jpeg', isMobile ? 0.85 : 0.95);
             
+            console.log(`📸 Imagem do cartão recortada: ${cartaoW}x${cartaoH}`);
+            
             document.getElementById('processando').style.display = 'block';
             document.getElementById('resultado').style.display = 'none';
             
             try {
-                const dadosEnvio = {
-                    image: imgData,
-                    questions: totalQuestoes,
-                    choices: 5,
-                    gabarito: gabarito.map(g => g.respostaCorreta),
-                };
-                
+                const dadosEnvio = { image: imgData, questions: totalQuestoes, choices: 5, gabarito: gabarito.map(g => g.respostaCorreta) };
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000);
-                
-                const omrResponse = await fetch(OMR_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dadosEnvio),
-                    signal: controller.signal
-                });
-                
+                const omrResponse = await fetch(OMR_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dadosEnvio), signal: controller.signal });
                 clearTimeout(timeoutId);
                 const data = await omrResponse.json();
                 document.getElementById('processando').style.display = 'none';
-                
-                if (data.success && data.answers) {
-                    criarInterfaceRespostas(data.answers);
-                    document.getElementById('resultado').style.display = 'block';
-                    btnTentarNovamente.style.display = 'block';
-                    mostrarAlerta(`✅ Correção concluída!`, 'success');
-                } else {
-                    throw new Error(data.error || 'Falha na detecção');
-                }
+                if (data.success && data.answers) { criarInterfaceRespostas(data.answers); document.getElementById('resultado').style.display = 'block'; btnTentarNovamente.style.display = 'block'; mostrarAlerta(`✅ Correção concluída!`, 'success'); } else { throw new Error(data.error || 'Falha na detecção'); }
             } catch (error) {
                 document.getElementById('processando').style.display = 'none';
-                
-                if (error.name === 'AbortError') {
-                    criarInterfaceManual();
-                    document.getElementById('resultado').style.display = 'block';
-                    btnTentarNovamente.style.display = 'block';
-                    mostrarAlerta(`⚠️ Tempo limite excedido. Modo manual.`, 'warning');
-                } else {
-                    criarInterfaceManual();
-                    document.getElementById('resultado').style.display = 'block';
-                    btnTentarNovamente.style.display = 'block';
-                    mostrarAlerta(`⚠️ Modo manual`, 'warning');
-                }
+                if (error.name === 'AbortError') { criarInterfaceManual(); document.getElementById('resultado').style.display = 'block'; btnTentarNovamente.style.display = 'block'; mostrarAlerta(`⚠️ Tempo limite excedido. Modo manual.`, 'warning'); } else { criarInterfaceManual(); document.getElementById('resultado').style.display = 'block'; btnTentarNovamente.style.display = 'block'; mostrarAlerta(`⚠️ Modo manual`, 'warning'); }
             }
             capturando = false;
         }
@@ -1735,33 +1144,16 @@
             const letras = ['A', 'B', 'C', 'D', 'E'];
             const grid = document.getElementById('respostasGrid');
             grid.innerHTML = '';
-            
             for (let i = 0; i < totalQuestoes; i++) {
                 const respostaAluno = sugestoes[i] || '—';
                 const respostaGabarito = gabarito[i]?.respostaCorreta || '?';
                 const isCorreta = respostaAluno !== '—' && respostaAluno === respostaGabarito;
-                
                 const div = document.createElement('div');
                 div.className = `resposta-card ${isCorreta ? 'correta' : (respostaAluno !== '—' ? 'incorreta' : '')}`;
-                div.innerHTML = `
-                    <div class="questao-num">Q${i+1}</div>
-                    <div class="resposta-valor">${respostaAluno}</div>
-                    <div>
-                        ${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}
-                        <button class="btn-opcao" data-q="${i}" data-opcao="">✗</button>
-                    </div>
-                    <small>${respostaGabarito}</small>
-                `;
+                div.innerHTML = `<div class="questao-num">Q${i+1}</div><div class="resposta-valor">${respostaAluno}</div><div>${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}<button class="btn-opcao" data-q="${i}" data-opcao="">✗</button></div><small>${respostaGabarito}</small>`;
                 grid.appendChild(div);
             }
-            
-            document.querySelectorAll('.btn-opcao').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const q = parseInt(btn.dataset.q);
-                    const opcao = btn.dataset.opcao || null;
-                    setResposta(q, opcao);
-                });
-            });
+            document.querySelectorAll('.btn-opcao').forEach(btn => { btn.addEventListener('click', () => { const q = parseInt(btn.dataset.q); const opcao = btn.dataset.opcao || null; setResposta(q, opcao); }); });
             atualizarNota();
         }
         
@@ -1770,19 +1162,10 @@
             const letras = ['A', 'B', 'C', 'D', 'E'];
             const grid = document.getElementById('respostasGrid');
             grid.innerHTML = '';
-            
             for (let i = 0; i < totalQuestoes; i++) {
                 const div = document.createElement('div');
                 div.className = 'resposta-card';
-                div.innerHTML = `
-                    <div class="questao-num">Q${i+1}</div>
-                    <div class="resposta-valor" id="resp-${i}">—</div>
-                    <div>
-                        ${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}
-                        <button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button>
-                    </div>
-                    <small>${gabarito[i]?.respostaCorreta || '?'}</small>
-                `;
+                div.innerHTML = `<div class="questao-num">Q${i+1}</div><div class="resposta-valor" id="resp-${i}">—</div><div>${letras.map(l => `<button class="btn-opcao" onclick="setResposta(${i}, '${l}')">${l}</button>`).join('')}<button class="btn-opcao" onclick="setResposta(${i}, null)">✗</button></div><small>${gabarito[i]?.respostaCorreta || '?'}</small>`;
                 grid.appendChild(div);
             }
             atualizarNota();
@@ -1803,250 +1186,79 @@
         
         function atualizarNota() {
             let acertos = 0;
-            for (let i = 0; i < totalQuestoes; i++) {
-                if (respostasAtuais[i] && respostasAtuais[i] === gabarito[i]?.respostaCorreta) acertos++;
-            }
+            for (let i = 0; i < totalQuestoes; i++) { if (respostasAtuais[i] && respostasAtuais[i] === gabarito[i]?.respostaCorreta) acertos++; }
             notaCalculada = (acertos / totalQuestoes) * 10;
             const status = notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO';
             const statusClass = notaCalculada >= 6 ? 'aprovado' : 'reprovado';
-            document.getElementById('notaFinal').innerHTML = `
-                <h2>${notaCalculada.toFixed(1)} / 10</h2>
-                <p>${acertos} acertos de ${totalQuestoes} questões</p>
-                <p class="${statusClass}">${status}</p>
-            `;
+            document.getElementById('notaFinal').innerHTML = `<h2>${notaCalculada.toFixed(1)} / 10</h2><p>${acertos} acertos de ${totalQuestoes} questões</p><p class="${statusClass}">${status}</p>`;
         }
         
         async function salvarNota() {
             if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno!', 'error'); return; }
             if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)} para ${alunoSelecionado.nome}?`)) return;
-            
             try {
-                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, {
-                    method: 'POST',
-                    body: JSON.stringify({ 
-                        alunoId: alunoSelecionado.id, 
-                        nota: notaCalculada, 
-                        observacao: `Corrigido automaticamente em ${new Date().toLocaleString()}`
-                    })
-                });
+                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { method: 'POST', body: JSON.stringify({ alunoId: alunoSelecionado.id, nota: notaCalculada, observacao: `Corrigido automaticamente em ${new Date().toLocaleString()}` }) });
                 const data = await response.json();
-                if (data.success) {
-                    mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva!`, 'success');
-                    setTimeout(() => {
-                        voltarParaScannerQR();
-                    }, 2000);
-                } else {
-                    throw new Error(data.error || 'Erro ao salvar');
-                }
-            } catch (error) {
-                mostrarAlerta(`❌ Erro: ${error.message}`, 'error');
-            }
+                if (data.success) { mostrarAlerta(`✅ Nota ${notaCalculada.toFixed(1)} salva!`, 'success'); setTimeout(() => { voltarParaScannerQR(); }, 2000); } else { throw new Error(data.error || 'Erro ao salvar'); }
+            } catch (error) { mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); }
         }
         
-        function mostrarAlerta(msg, tipo) {
-            const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' };
-            const alertDiv = document.createElement('div');
-            alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:14px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`;
-            alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`;
-            document.body.appendChild(alertDiv);
-            setTimeout(() => alertDiv.remove(), 3000);
-        }
+        function mostrarAlerta(msg, tipo) { const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' }; const alertDiv = document.createElement('div'); alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:14px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`; alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`; document.body.appendChild(alertDiv); setTimeout(() => alertDiv.remove(), 3000); }
         
         async function fazerRequisicao(url, options = {}) {
             if (!authToken) throw new Error('Token não fornecido');
-            
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000);
-            
             try {
-                const response = await fetch(url, {
-                    ...options,
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`,
-                        ...options.headers 
-                    },
-                    signal: controller.signal
-                });
+                const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`, ...options.headers }, signal: controller.signal });
                 clearTimeout(timeoutId);
-                
                 if (response.status === 401) throw new Error('Token expirado');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response;
-            } catch (error) {
-                clearTimeout(timeoutId);
-                if (error.name === 'AbortError') {
-                    throw new Error('Tempo limite excedido. Verifique sua conexão.');
-                }
-                throw error;
-            }
+            } catch (error) { clearTimeout(timeoutId); if (error.name === 'AbortError') { throw new Error('Tempo limite excedido. Verifique sua conexão.'); } throw error; }
         }
         
         async function carregarDados() {
-            if (!provaId) { 
-                document.getElementById('loading').innerHTML = '<p style="color:red;">❌ ID da prova não informado</p>'; 
-                return; 
-            }
+            if (!provaId) { document.getElementById('loading').innerHTML = '<p style="color:red;">❌ ID da prova não informado</p>'; return; }
             authToken = urlToken || localStorage.getItem('auth_token');
-            if (!authToken) { 
-                document.getElementById('loading').innerHTML = '<p style="color:red;">❌ Token não informado</p>'; 
-                return; 
-            }
-            
+            if (!authToken) { document.getElementById('loading').innerHTML = '<p style="color:red;">❌ Token não informado</p>'; return; }
             try {
                 const provaRes = await fazerRequisicao(`/api/provas/${provaId}`);
                 const provaData = await provaRes.json();
-                
                 if (provaData.success && provaData.prova) {
                     provaInfo = provaData.prova;
                     totalQuestoes = provaInfo.quantidadeQuestoes || 10;
-                    
-                    if (provaData.questoes) {
-                        const letras = ['A', 'B', 'C', 'D', 'E'];
-                        gabarito = provaData.questoes.map((q, i) => ({ 
-                            numero: i+1, 
-                            respostaCorreta: letras[q.respostaCorreta] 
-                        }));
-                    }
-                    
+                    if (provaData.questoes) { const letras = ['A', 'B', 'C', 'D', 'E']; gabarito = provaData.questoes.map((q, i) => ({ numero: i+1, respostaCorreta: letras[q.respostaCorreta] })); }
                     let alunosCarregados = false;
-                    
-                    if (provaInfo.turmaId) {
-                        const turmaId = provaInfo.turmaId.$oid || provaInfo.turmaId;
-                        alunosCarregados = await carregarAlunosDaTurma(turmaId);
-                    }
-                    
-                    if (!alunosCarregados || alunos.length === 0) {
-                        console.log('⚠️ Fallback: carregando alunos dos resultados...');
-                        alunosCarregados = await carregarAlunosDosResultados();
-                    }
-                    
-                    if (!alunosCarregados || alunos.length === 0) {
-                        console.log('⚠️ Fallback 2: carregando alunos dos alunosAtribuidos...');
-                        alunosCarregados = await carregarAlunosDaProva(provaData);
-                    }
-                    
+                    if (provaInfo.turmaId) { const turmaId = provaInfo.turmaId.$oid || provaInfo.turmaId; alunosCarregados = await carregarAlunosDaTurma(turmaId); }
+                    if (!alunosCarregados || alunos.length === 0) { console.log('⚠️ Fallback: carregando alunos dos resultados...'); alunosCarregados = await carregarAlunosDosResultados(); }
+                    if (!alunosCarregados || alunos.length === 0) { console.log('⚠️ Fallback 2: carregando alunos dos alunosAtribuidos...'); alunosCarregados = await carregarAlunosDaProva(provaData); }
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('conteudo').style.display = 'block';
                     document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${provaInfo.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos</p>`;
                     document.getElementById('gabaritoInfo').innerHTML = `<strong><i class="fas fa-key"></i> Gabarito:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
-                    
                     const select = document.getElementById('selectAluno');
                     select.innerHTML = '<option value="">— Selecione um aluno —</option>';
-                    alunos.forEach(a => { 
-                        select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; 
-                    });
+                    alunos.forEach(a => { select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; });
                     select.addEventListener('change', (e) => {
-                        if (e.target.value) {
-                            const aluno = alunos.find(a => a.alunoId === e.target.value);
-                            if (aluno) {
-                                alunoSelecionado = {
-                                    id: aluno.alunoId,
-                                    nome: aluno.alunoNome,
-                                    matricula: aluno.alunoMatricula
-                                };
-                                qrSelecionadoDiv.style.display = 'flex';
-                                document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
-                                document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
-                                manualSelectArea.style.display = 'none';
-                                btnIniciarCamera.disabled = false;
-                                mostrarAlerta(`✅ Aluno: ${aluno.alunoNome}`, 'success');
-                                document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`;
-                                
-                                setTimeout(() => {
-                                    if (alunoSelecionado && !stream) {
-                                        iniciarCamera();
-                                    }
-                                }, 1000);
-                            }
-                        } else {
-                            alunoSelecionado = null;
-                            qrSelecionadoDiv.style.display = 'none';
-                            manualSelectArea.style.display = 'block';
-                            btnIniciarCamera.disabled = true;
-                        }
-                        document.getElementById('resultado').style.display = 'none';
-                        btnTentarNovamente.style.display = 'none';
+                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ Aluno: ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); } }, 1000); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
                     });
-                    
                     mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
-                    
-                    if (urlAlunoId) {
-                        console.log('🎯 Aluno na URL:', urlAlunoId);
-                        const alunoPorUrl = alunosMap.get(urlAlunoId);
-                        if (alunoPorUrl) {
-                            alunoSelecionado = {
-                                id: alunoPorUrl.alunoId,
-                                nome: alunoPorUrl.alunoNome,
-                                matricula: alunoPorUrl.alunoMatricula
-                            };
-                            if (qrScanner && scannerIniciado) {
-                                try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {}
-                            }
-                            qrScannerArea.style.display = 'none';
-                            qrSelecionadoDiv.style.display = 'flex';
-                            document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
-                            document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
-                            btnIniciarCamera.disabled = false;
-                            mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
-                            document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
-                            
-                            setTimeout(() => {
-                                if (alunoSelecionado && !stream) {
-                                    iniciarCamera();
-                                }
-                            }, 1000);
-                        } else {
-                            console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys()));
-                            mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning');
-                        }
-                    }
-                    
+                    if (urlAlunoId) { console.log('🎯 Aluno na URL:', urlAlunoId); const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); } }, 1000); } else { console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys())); mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
                     iniciarQRScanner();
-                } else {
-                    throw new Error('Erro ao carregar dados da prova');
-                }
-            } catch (error) {
-                document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`;
-                console.error('Erro ao carregar:', error);
-            }
+                } else { throw new Error('Erro ao carregar dados da prova'); }
+            } catch (error) { document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`; console.error('Erro ao carregar:', error); }
         }
         
         async function iniciarCamera() {
-            if (!alunoSelecionado) {
-                mostrarAlerta('Selecione um aluno primeiro!', 'error');
-                return;
-            }
-            
+            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); return; }
             try {
-                if (qrScanner && scannerIniciado) {
-                    try {
-                        await qrScanner.stop();
-                        scannerIniciado = false;
-                    } catch(e) {}
-                }
-                
-                capturaRealizada = false; // 🔥 RESETAR FLAG AO INICIAR CÂMERA
+                if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} }
+                capturaRealizada = false;
                 estabilidade = 0;
                 quadradosEncaixados = [false, false, false, false];
-                
-                const videoConstraints = isMobile ? {
-                    video: { 
-                        facingMode: { exact: "environment" },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        zoom: { ideal: 1.6 }
-                    }
-                } : {
-                    video: { 
-                        facingMode: { exact: "environment" },
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                };
-                
-                stream = await navigator.mediaDevices.getUserMedia(videoConstraints)
-                    .catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+                const videoConstraints = isMobile ? { video: { facingMode: { exact: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, zoom: { ideal: 1.6 } } } : { video: { facingMode: { exact: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } };
+                stream = await navigator.mediaDevices.getUserMedia(videoConstraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 video.srcObject = stream;
                 await video.play();
                 btnIniciarCamera.disabled = true;
@@ -2056,26 +1268,10 @@
                 const frameRate = isMobile ? 60 : 100;
                 analiseInterval = setInterval(analisarFrame, frameRate);
                 mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
-            } catch (error) {
-                mostrarAlerta('❌ Erro ao acessar câmera', 'error');
-            }
+            } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
         }
         
-        function pararCamera() {
-            if (analiseInterval) {
-                clearInterval(analiseInterval);
-                analiseInterval = null;
-            }
-            if (stream) {
-                stream.getTracks().forEach(t => t.stop());
-                stream = null;
-            }
-            if (autoCorrectionTimer) {
-                clearInterval(autoCorrectionTimer);
-                autoCorrectionTimer = null;
-            }
-            cancelarCorrecaoAutomatica();
-        }
+        function pararCamera() { if (analiseInterval) { clearInterval(analiseInterval); analiseInterval = null; } if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } if (autoCorrectionTimer) { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; } cancelarCorrecaoAutomatica(); }
         
         modoQRBtn.addEventListener('click', () => setModo(true));
         modoManualBtn.addEventListener('click', () => setModo(false));
@@ -2085,7 +1281,6 @@
         document.getElementById('btnLimparQR').addEventListener('click', limparQRSelecionado);
         document.getElementById('btnTentarNovamente').addEventListener('click', tentarNovamente);
         window.addEventListener('beforeunload', pararCamera);
-        
         window.setResposta = setResposta;
         carregarDados();
     </script>
