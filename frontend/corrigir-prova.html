@@ -15,39 +15,40 @@
             font-family: 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
-            padding: 15px;
+            padding: 10px;
         }
         .container { max-width: 950px; margin: 0 auto; }
         .card {
             background: white;
-            border-radius: 24px;
-            padding: 20px;
-            margin-bottom: 15px;
+            border-radius: 20px;
+            padding: 15px;
+            margin-bottom: 10px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
-        .header { text-align: center; margin-bottom: 20px; }
+        .header { text-align: center; margin-bottom: 15px; }
         .header h1 { 
             color: #1e3c72; 
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
         }
         .header h1 i { color: #10b981; }
+        .header p { font-size: 12px; }
         
         .modo-selector {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             justify-content: center;
-            margin: 15px 0;
+            margin: 10px 0;
             background: #f1f5f9;
-            padding: 8px;
+            padding: 5px;
             border-radius: 40px;
         }
         .modo-btn {
             flex: 1;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border: none;
             border-radius: 30px;
             font-weight: 600;
@@ -55,65 +56,31 @@
             transition: all 0.2s;
             background: transparent;
             color: #64748b;
+            font-size: 13px;
         }
         .modo-btn.active {
             background: #1e3c72;
             color: white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
-        .modo-btn i { margin-right: 8px; }
+        .modo-btn i { margin-right: 6px; }
         
         .qr-scanner-container {
             background: #000;
             border-radius: 16px;
             overflow: hidden;
-            margin: 15px 0;
+            margin: 10px 0;
             position: relative;
-            min-height: 280px;
+            min-height: 250px;
         }
-        #qr-reader {
-            width: 100%;
-            border: none;
-        }
-        #qr-reader__scan_region {
-            background: #000;
-            min-height: 280px;
-            position: relative;
-        }
-        #qr-reader video {
-            width: 100%;
-            height: auto;
-        }
-        #qr-alternative-container {
-            width: 100%;
-            min-height: 280px;
-            background: #000;
-            display: none;
-            position: relative;
-        }
-        #qr-alternative-video {
-            width: 100%;
-            height: auto;
-            object-fit: cover;
-        }
-        #qr-zxing-video {
-            width: 100%;
-            min-height: 280px;
-            background: #000;
-            display: none;
-            object-fit: cover;
-        }
-        #quagga-container {
-            width: 100%;
-            min-height: 280px;
-            background: #000;
-            display: none;
-            position: relative;
-        }
-        #quagga-canvas {
-            width: 100%;
-            height: auto;
-        }
+        #qr-reader { width: 100%; border: none; }
+        #qr-reader__scan_region { background: #000; min-height: 250px; position: relative; }
+        #qr-reader video { width: 100%; height: auto; }
+        #qr-alternative-container { width: 100%; min-height: 250px; background: #000; display: none; position: relative; }
+        #qr-alternative-video { width: 100%; height: auto; object-fit: cover; }
+        #qr-zxing-video { width: 100%; min-height: 250px; background: #000; display: none; object-fit: cover; }
+        #quagga-container { width: 100%; min-height: 250px; background: #000; display: none; position: relative; }
+        #quagga-canvas { width: 100%; height: auto; }
         .qr-overlay {
             position: absolute;
             bottom: 10px;
@@ -122,8 +89,8 @@
             text-align: center;
             background: rgba(0,0,0,0.7);
             color: white;
-            padding: 6px;
-            font-size: 11px;
+            padding: 5px;
+            font-size: 10px;
             z-index: 5;
         }
         
@@ -132,11 +99,17 @@
             border-radius: 16px;
             overflow: hidden;
             position: relative;
-            margin: 15px auto;
+            margin: 10px auto;
             width: 100%;
-            max-width: 800px;
-            aspect-ratio: 4 / 3;
             display: none;
+        }
+        
+        /* Suporte para orientação */
+        .camera-container.landscape {
+            aspect-ratio: 16 / 9;
+        }
+        .camera-container.portrait {
+            aspect-ratio: 4 / 3;
         }
         
         video {
@@ -157,8 +130,6 @@
         
         .guia-quadrado {
             position: absolute;
-            width: 35px;
-            height: 35px;
             border: 3px solid #ff4444;
             transition: all 0.2s;
             background: rgba(255,68,68,0.2);
@@ -184,19 +155,18 @@
             border-radius: 8px;
             box-shadow: 0 0 20px rgba(0,255,0,0.5);
             background: rgba(0,255,0,0.1);
-            transition: all 0.1s ease-out;
         }
         
         .feedback {
             position: absolute;
-            bottom: 15px;
+            bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
             color: white;
-            padding: 10px 20px;
+            padding: 6px 12px;
             border-radius: 30px;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: bold;
             white-space: nowrap;
             z-index: 20;
@@ -205,12 +175,12 @@
         }
         
         .btn {
-            padding: 12px 24px;
+            padding: 10px 20px;
             border-radius: 30px;
             font-weight: 600;
             cursor: pointer;
             border: none;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.2s;
         }
         .btn:hover { transform: scale(1.02); opacity: 0.95; }
@@ -222,98 +192,80 @@
         
         .respostas-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 12px;
-            margin: 20px 0;
-            max-height: 400px;
+            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+            gap: 8px;
+            margin: 15px 0;
+            max-height: 300px;
             overflow-y: auto;
             padding: 5px;
         }
         .resposta-card {
             text-align: center;
-            padding: 12px 8px;
+            padding: 8px 4px;
             border: 2px solid #e5e7eb;
-            border-radius: 12px;
+            border-radius: 10px;
             background: white;
             transition: all 0.2s;
         }
-        .resposta-card.correta { 
-            border-color: #10b981; 
-            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
-        }
-        .resposta-card.incorreta { 
-            border-color: #ef4444; 
-            background: linear-gradient(135deg, #fef2f2, #fee2e2);
-        }
-        .resposta-card .questao-num {
-            font-size: 12px;
-            color: #6b7280;
-            margin-bottom: 5px;
-        }
-        .resposta-card .resposta-valor {
-            font-size: 1.8rem;
-            font-weight: bold;
-            margin: 8px 0;
-        }
+        .resposta-card.correta { border-color: #10b981; background: linear-gradient(135deg, #f0fdf4, #dcfce7); }
+        .resposta-card.incorreta { border-color: #ef4444; background: linear-gradient(135deg, #fef2f2, #fee2e2); }
+        .resposta-card .questao-num { font-size: 10px; color: #6b7280; margin-bottom: 4px; }
+        .resposta-card .resposta-valor { font-size: 1.4rem; font-weight: bold; margin: 4px 0; }
         .btn-opcao {
-            width: 36px;
-            padding: 6px;
+            width: 30px;
+            padding: 4px;
             background: #f3f4f6;
             border: 1px solid #ddd;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
-            margin: 2px;
+            margin: 1px;
             font-weight: bold;
-            font-size: 12px;
-            transition: all 0.1s;
+            font-size: 10px;
         }
-        .btn-opcao:hover {
-            background: #e5e7eb;
-            transform: scale(1.05);
-        }
+        .btn-opcao:hover { background: #e5e7eb; transform: scale(1.05); }
         .nota-final {
             text-align: center;
-            padding: 20px;
+            padding: 15px;
             background: linear-gradient(135deg, #1e3c72, #2a5298);
             color: white;
             border-radius: 16px;
-            margin-top: 20px;
+            margin-top: 15px;
         }
-        .nota-final h2 { font-size: 2.5rem; margin-bottom: 8px; }
+        .nota-final h2 { font-size: 2rem; margin-bottom: 5px; }
         .nota-final .aprovado { color: #10b981; }
         .nota-final .reprovado { color: #f97316; }
-        .loading { text-align: center; padding: 40px; }
+        .loading { text-align: center; padding: 30px; }
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e5e7eb;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #e5e7eb;
             border-top-color: #1e3c72;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
+            margin: 0 auto 10px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
         select {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             border: 2px solid #e5e7eb;
             border-radius: 12px;
-            font-size: 14px;
-            margin: 15px 0;
+            font-size: 13px;
+            margin: 10px 0;
             background: white;
             cursor: pointer;
         }
         
         .info-bar {
             position: fixed;
-            bottom: 15px;
-            right: 15px;
+            bottom: 10px;
+            right: 10px;
             background: rgba(0,0,0,0.8);
             color: #10b981;
-            padding: 8px 12px;
+            padding: 5px 10px;
             border-radius: 20px;
-            font-size: 11px;
+            font-size: 10px;
             font-family: monospace;
             z-index: 1000;
             backdrop-filter: blur(4px);
@@ -321,11 +273,11 @@
         
         .gabarito-display {
             background: #f8fafc;
-            padding: 12px;
-            border-radius: 12px;
-            margin: 10px 0;
+            padding: 8px;
+            border-radius: 10px;
+            margin: 8px 0;
             font-family: monospace;
-            font-size: 12px;
+            font-size: 10px;
             overflow-x: auto;
             text-align: center;
             border: 1px solid #e5e7eb;
@@ -333,78 +285,67 @@
         
         .button-group {
             display: flex;
-            gap: 15px;
+            gap: 10px;
             justify-content: center;
-            margin: 20px 0 10px;
+            margin: 15px 0 8px;
             flex-wrap: wrap;
         }
         
         .dica {
             background: linear-gradient(135deg, #e8f0fe, #d9e6f5);
-            padding: 10px 15px;
-            border-radius: 12px;
-            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 11px;
             text-align: center;
-            margin-top: 12px;
+            margin-top: 10px;
             color: #1e3c72;
         }
         
         .status-encaixe {
             position: absolute;
-            top: 15px;
+            top: 10px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.8);
-            padding: 6px 16px;
+            padding: 4px 12px;
             border-radius: 30px;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             font-family: monospace;
             z-index: 20;
-            letter-spacing: 4px;
+            letter-spacing: 3px;
             backdrop-filter: blur(4px);
         }
         
         .prova-info {
             background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-            padding: 15px;
-            border-radius: 16px;
-            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 12px;
+            margin-bottom: 10px;
             text-align: center;
             border: 1px solid #e5e7eb;
         }
-        
-        .prova-info h3 {
-            color: #1e3c72;
-            margin-bottom: 8px;
-        }
+        .prova-info h3 { font-size: 14px; margin-bottom: 5px; }
+        .prova-info p { font-size: 11px; }
         
         .btn-salvar {
             background: linear-gradient(135deg, #10b981, #059669);
             width: 100%;
-            margin-top: 15px;
-            padding: 14px;
-            font-size: 16px;
+            margin-top: 10px;
+            padding: 10px;
+            font-size: 14px;
         }
         
         .btn-tentar-novamente {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             width: 100%;
-            margin-top: 10px;
-            padding: 12px;
-            font-size: 14px;
+            margin-top: 8px;
+            padding: 10px;
+            font-size: 13px;
         }
         
-        .aluno-selector {
-            margin: 15px 0;
-        }
-        
-        .aluno-selector label {
-            font-weight: 600;
-            color: #374151;
-            margin-bottom: 8px;
-            display: block;
-        }
+        .aluno-selector { margin: 10px 0; }
+        .aluno-selector label { font-weight: 600; color: #374151; margin-bottom: 5px; display: block; font-size: 12px; }
         
         .auto-status {
             position: absolute;
@@ -412,9 +353,9 @@
             left: 50%;
             transform: translate(-50%, -50%);
             background: rgba(0,0,0,0.9);
-            padding: 8px 20px;
+            padding: 6px 15px;
             border-radius: 40px;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             color: #ffaa00;
             z-index: 25;
@@ -426,80 +367,69 @@
         
         .qr-selecionado {
             background: linear-gradient(135deg, #10b981, #059669);
-            padding: 12px 16px;
-            border-radius: 12px;
-            margin: 10px 0;
+            padding: 8px 12px;
+            border-radius: 10px;
+            margin: 8px 0;
             color: white;
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 5px;
+            font-size: 12px;
         }
         
         .btn-limpar-qr {
             background: rgba(255,255,255,0.2);
             border: none;
             color: white;
-            padding: 6px 14px;
+            padding: 4px 10px;
             border-radius: 20px;
             cursor: pointer;
-            font-size: 12px;
-        }
-        
-        .respostas-grid::-webkit-scrollbar {
-            width: 8px;
-        }
-        .respostas-grid::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-        .respostas-grid::-webkit-scrollbar-thumb {
-            background: #1e3c72;
-            border-radius: 10px;
+            font-size: 11px;
         }
         
         .modo-indicador {
             position: fixed;
-            top: 10px;
-            right: 10px;
+            top: 5px;
+            right: 5px;
             background: rgba(0,0,0,0.7);
             color: white;
-            padding: 4px 10px;
+            padding: 2px 8px;
             border-radius: 20px;
-            font-size: 11px;
+            font-size: 9px;
             font-family: monospace;
             z-index: 10000;
             backdrop-filter: blur(4px);
             pointer-events: none;
         }
-        .modo-indicador.desktop {
-            background: rgba(30,60,114,0.9);
-            border-left: 3px solid #10b981;
+        
+        .orientacao-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 10px 0;
         }
-        .modo-indicador.mobile {
-            background: rgba(16,185,129,0.9);
-            border-left: 3px solid #fff;
+        .orientacao-btn {
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+            background: #f1f5f9;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .orientacao-btn.active {
+            background: #1e3c72;
+            color: white;
+            border-color: #1e3c72;
         }
         
         @media (max-width: 768px) {
-            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); }
-            .btn-opcao { width: 32px; font-size: 11px; }
-            .resposta-card .resposta-valor { font-size: 1.4rem; }
-            .modo-indicador { font-size: 9px; padding: 2px 8px; top: 5px; right: 5px; }
-            .guia-quadrado { width: 45px !important; height: 45px !important; border-width: 3px !important; }
-            .feedback { font-size: 11px; padding: 6px 12px; white-space: nowrap; bottom: 10px; background: rgba(0,0,0,0.8); }
-            .status-encaixe { font-size: 14px; padding: 4px 10px; top: 10px; letter-spacing: 4px; background: rgba(0,0,0,0.7); }
-            .btn { padding: 8px 16px; font-size: 12px; }
-            .btn-salvar, .btn-tentar-novamente { padding: 10px; font-size: 13px; }
-        }
-        
-        @media (max-width: 480px) {
-            .respostas-grid { grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); }
-            .btn-opcao { width: 28px; font-size: 10px; }
-            .guia-quadrado { width: 40px !important; height: 40px !important; }
-            .feedback { font-size: 10px; padding: 4px 8px; }
-            .status-encaixe { font-size: 12px; padding: 3px 8px; letter-spacing: 3px; }
+            .btn { padding: 8px 14px; font-size: 12px; }
+            .feedback { font-size: 10px; padding: 4px 10px; }
+            .status-encaixe { font-size: 11px; padding: 3px 8px; letter-spacing: 2px; }
+            .guia-quadrado { border-width: 2px !important; }
         }
     </style>
 </head>
@@ -508,7 +438,7 @@
         <div class="card">
             <div class="header">
                 <h1><i class="fas fa-robot"></i> Correção Inteligente</h1>
-                <p><strong style="color:#00ff00;">🟢 A linha verde mostra a área exata do cartão que será enviada</strong></p>
+                <p><strong style="color:#ff4444;">🔴 Alinhe os 4 quadrados vermelhos com os pontos pretos</strong></p>
             </div>
             
             <div class="modo-selector">
@@ -564,11 +494,17 @@
                     <div>
                         <i class="fas fa-check-circle"></i>
                         <strong id="qrAlunoNome">Aluno</strong>
-                        <span id="qrAlunoMatricula" style="font-size: 11px;"></span>
+                        <span id="qrAlunoMatricula" style="font-size: 10px;"></span>
                     </div>
                     <button class="btn-limpar-qr" id="btnLimparQR">
                         <i class="fas fa-times"></i> Trocar
                     </button>
+                </div>
+                
+                <!-- Botões de orientação -->
+                <div class="orientacao-buttons" id="orientacaoButtons" style="display: none;">
+                    <button class="orientacao-btn active" data-orientacao="portrait">📱 Vertical</button>
+                    <button class="orientacao-btn" data-orientacao="landscape">📱 Horizontal</button>
                 </div>
                 
                 <div class="camera-container" id="cameraContainer">
@@ -579,24 +515,24 @@
                         <div class="guia-quadrado" id="guiaTR"></div>
                         <div class="guia-quadrado" id="guiaBL"></div>
                         <div class="guia-quadrado" id="guiaBR"></div>
-                        <div class="feedback" id="feedback">🎯 Alinhe os 4 quadrados</div>
+                        <div class="feedback" id="feedback">🎯 Alinhe</div>
                         <div class="status-encaixe" id="statusEncaixe">⬜ ⬜ ⬜ ⬜</div>
                         <div id="autoStatus" class="auto-status" style="display: none;"></div>
                     </div>
                 </div>
                 
                 <div class="button-group">
-                    <button class="btn btn-primary" id="btnIniciarCamera" disabled><i class="fas fa-camera"></i> Iniciar Câmera</button>
+                    <button class="btn btn-primary" id="btnIniciarCamera" disabled><i class="fas fa-camera"></i> Iniciar</button>
                     <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir</button>
                 </div>
                 
-                <div id="processando" style="display: none; text-align: center; padding: 20px;">
+                <div id="processando" style="display: none; text-align: center; padding: 15px;">
                     <div class="spinner"></div>
-                    <p style="font-size:14px; color:#1e3c72; margin-top:10px;">Processando...</p>
+                    <p style="font-size:12px; color:#1e3c72; margin-top:8px;">Processando...</p>
                 </div>
                 
                 <div id="resultado" style="display: none;">
-                    <h3 style="font-size:18px; margin:15px 0 10px; color:#1e3c72; text-align:center;">
+                    <h3 style="font-size:16px; margin:10px 0 8px; color:#1e3c72; text-align:center;">
                         <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado
                     </h3>
                     <div id="respostasGrid" class="respostas-grid"></div>
@@ -627,6 +563,9 @@
             modoIndicador.className = 'modo-indicador desktop';
             modoIndicador.innerHTML = '💻 DESKTOP';
         }
+        
+        // Variável para controlar orientação
+        let orientacaoAtual = 'portrait';
         
         const urlParams = new URLSearchParams(window.location.search);
         const provaId = urlParams.get('prova');
@@ -666,10 +605,13 @@
         let autoCorrectionTimer = null;
         let autoCorrectionCountdown = 0;
         
-        let sensibilidade = 12;
+        // CONFIGURAÇÕES AJUSTADAS PARA MOBILE - GUIAS MAIORES
+        let sensibilidade = 15;
         const BRILHO_MAX_PRETO = 110;
-        let margemBusca = 0.12;
-        let tamanhoGuia = 0.14;
+        
+        // Aumentar margem e tamanho das guias no mobile para melhor detecção
+        let margemBusca = isMobile ? 0.15 : 0.12;
+        let tamanhoGuia = isMobile ? 0.22 : 0.14;
         
         const isRender = window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
         const OMR_URL = isRender ? '/api/omr/detect' : 'http://localhost:5001/detect';
@@ -702,7 +644,6 @@
         let scannerAtual = 0;
         let alternativeStream = null;
         let zxingReader = null;
-        let quaggaInitialized = false;
         
         const modoQRBtn = document.getElementById('modoQRCodeBtn');
         const modoManualBtn = document.getElementById('modoManualBtn');
@@ -715,6 +656,7 @@
         const cameraContainer = document.getElementById('cameraContainer');
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
         const btnTentarNovamente = document.getElementById('btnTentarNovamente');
+        const orientacaoButtons = document.getElementById('orientacaoButtons');
         
         function voltarParaScannerQR() {
             console.log('🔄 Voltando para scanner QR...');
@@ -730,6 +672,7 @@
             btnIniciarCamera.disabled = true;
             btnCapturar.disabled = true;
             btnTentarNovamente.style.display = 'none';
+            if (orientacaoButtons) orientacaoButtons.style.display = 'none';
             setTimeout(() => { iniciarQRScanner(); }, 500);
             document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando QR Code`;
             mostrarAlerta('🔄 Escaneie o QR Code do aluno', 'info');
@@ -945,6 +888,7 @@
                 qrSelecionadoDiv.style.display = 'flex';
                 qrScannerArea.style.display = 'none';
                 btnIniciarCamera.disabled = false;
+                if (orientacaoButtons) orientacaoButtons.style.display = 'flex';
                 mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                 setTimeout(() => { if (alunoSelecionado && !stream) { console.log('📷 Iniciando câmera automaticamente...'); iniciarCamera(); } }, 1000);
@@ -952,6 +896,69 @@
         }
         
         function limparQRSelecionado() { voltarParaScannerQR(); }
+        
+        // Função para mudar orientação
+        function mudarOrientacao(orientacao) {
+            orientacaoAtual = orientacao;
+            const cameraContainerEl = document.getElementById('cameraContainer');
+            cameraContainerEl.classList.remove('landscape', 'portrait');
+            cameraContainerEl.classList.add(orientacao);
+            
+            // Atualizar botões
+            document.querySelectorAll('.orientacao-btn').forEach(btn => {
+                if (btn.dataset.orientacao === orientacao) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            console.log(`🔄 Orientação alterada para: ${orientacao}`);
+            
+            // Reiniciar câmera se estiver ativa
+            if (stream) {
+                const constraints = getVideoConstraints(orientacao);
+                stream.getTracks().forEach(track => track.stop());
+                iniciarCameraComConstraints(constraints);
+            }
+        }
+        
+        function getVideoConstraints(orientacao) {
+            if (orientacao === 'landscape') {
+                return {
+                    video: { 
+                        facingMode: { exact: "environment" },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+            } else {
+                return {
+                    video: { 
+                        facingMode: { exact: "environment" },
+                        width: { ideal: 1080 },
+                        height: { ideal: 1920 }
+                    }
+                };
+            }
+        }
+        
+        async function iniciarCameraComConstraints(constraints) {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+                video.srcObject = stream;
+                await video.play();
+                btnIniciarCamera.disabled = true;
+                btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
+                cameraContainer.style.display = 'block';
+                if (analiseInterval) clearInterval(analiseInterval);
+                const frameRate = isMobile ? 60 : 100;
+                analiseInterval = setInterval(analisarFrame, frameRate);
+                mostrarAlerta(`📷 Câmera iniciada (${orientacaoAtual === 'landscape' ? 'Horizontal' : 'Vertical'})! Posicione o cartão.`, 'info');
+            } catch (error) {
+                mostrarAlerta('❌ Erro ao acessar câmera', 'error');
+            }
+        }
         
         async function setModo(qrCode) {
             modoQRCode = qrCode;
@@ -965,6 +972,7 @@
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
+                if (orientacaoButtons) orientacaoButtons.style.display = 'none';
                 iniciarQRScanner();
             } else {
                 modoManualBtn.classList.add('active');
@@ -977,6 +985,7 @@
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
+                if (orientacaoButtons) orientacaoButtons.style.display = 'none';
             }
             alunoSelecionado = null;
             btnCapturar.disabled = true;
@@ -988,9 +997,29 @@
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
             let margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
             let tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
-            if (isMobile) { const zoomMobile = 1.4; margemPx = Math.min(containerWidth, containerHeight) * margemBusca * zoomMobile; tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia * 1.2; }
-            const guias = [{ id: 'guiaTL', left: margemPx, top: margemPx }, { id: 'guiaTR', left: containerWidth - margemPx - tamanhoPx, top: margemPx }, { id: 'guiaBL', left: margemPx, top: containerHeight - margemPx - tamanhoPx }, { id: 'guiaBR', left: containerWidth - margemPx - tamanhoPx, top: containerHeight - margemPx - tamanhoPx }];
-            for (const guia of guias) { const el = document.getElementById(guia.id); if (el) { el.style.left = guia.left + 'px'; el.style.top = guia.top + 'px'; el.style.width = tamanhoPx + 'px'; el.style.height = tamanhoPx + 'px'; } }
+            
+            if (isMobile) {
+                const zoomMobile = 1.3;
+                margemPx = Math.min(containerWidth, containerHeight) * margemBusca * zoomMobile;
+                tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia * 1.1;
+            }
+            
+            const guias = [
+                { id: 'guiaTL', left: margemPx, top: margemPx },
+                { id: 'guiaTR', left: containerWidth - margemPx - tamanhoPx, top: margemPx },
+                { id: 'guiaBL', left: margemPx, top: containerHeight - margemPx - tamanhoPx },
+                { id: 'guiaBR', left: containerWidth - margemPx - tamanhoPx, top: containerHeight - margemPx - tamanhoPx }
+            ];
+            
+            for (const guia of guias) {
+                const el = document.getElementById(guia.id);
+                if (el) {
+                    el.style.left = guia.left + 'px';
+                    el.style.top = guia.top + 'px';
+                    el.style.width = tamanhoPx + 'px';
+                    el.style.height = tamanhoPx + 'px';
+                }
+            }
         }
         
         function detectarQuadradosPretos(ctx, width, height) {
@@ -998,10 +1027,15 @@
             const data = imgData.data;
             let sensibilidadeAjustada = sensibilidade;
             let brilhoMaxAjustado = BRILHO_MAX_PRETO;
-            if (isMobile) { sensibilidadeAjustada = sensibilidade * 0.5; brilhoMaxAjustado = BRILHO_MAX_PRETO + 45; }
+            if (isMobile) { sensibilidadeAjustada = sensibilidade * 0.6; brilhoMaxAjustado = BRILHO_MAX_PRETO + 35; }
             const margemPx = Math.min(width, height) * margemBusca;
             const tamanhoPx = Math.min(width, height) * tamanhoGuia;
-            const areas = [{ nome: 'TL', x: margemPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTL'), posicao: 0 }, { nome: 'TR', x: width - margemPx - tamanhoPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTR'), posicao: 1 }, { nome: 'BL', x: margemPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBL'), posicao: 2 }, { nome: 'BR', x: width - margemPx - tamanhoPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBR'), posicao: 3 }];
+            const areas = [
+                { nome: 'TL', x: margemPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTL'), posicao: 0 },
+                { nome: 'TR', x: width - margemPx - tamanhoPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTR'), posicao: 1 },
+                { nome: 'BL', x: margemPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBL'), posicao: 2 },
+                { nome: 'BR', x: width - margemPx - tamanhoPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBR'), posicao: 3 }
+            ];
             let todosDetectados = true;
             for (const area of areas) {
                 try {
@@ -1076,12 +1110,12 @@
                 desenharRetanguloCartao(resultado.retangulo, containerRect2.width, containerRect2.height, canvas.width, canvas.height);
                 const estabilidadeMinima = isMobile ? 4 : 8;
                 if (estabilidade >= estabilidadeMinima && !capturaRealizada) {
-                    feedback.innerHTML = `✅ ${encaixadosCount}/4 - Cartão estabilizado`;
+                    feedback.innerHTML = `✅ ${encaixadosCount}/4`;
                     feedback.style.background = '#10b981';
                     if (!autoCorrectionTimer && !capturando && !capturaRealizada) { iniciarCorrecaoAutomatica(); }
-                } else { feedback.innerHTML = `🎯 ${encaixadosCount}/4 - Alinhe os quadrados`; feedback.style.background = '#f59e0b'; cancelarCorrecaoAutomatica(); }
+                } else { feedback.innerHTML = `🎯 ${encaixadosCount}/4`; feedback.style.background = '#f59e0b'; cancelarCorrecaoAutomatica(); }
                 infoBar.innerHTML = `<i class="fas fa-check-circle"></i> ${encaixadosCount}/4`;
-            } else { desenharRetanguloCartao(null); retanguloAtual = null; estabilidade = Math.max(0, estabilidade - 2); ultimoRetangulo = null; cancelarCorrecaoAutomatica(); feedback.innerHTML = `🎯 ${encaixadosCount}/4 - Alinhe os quadrados`; feedback.style.background = '#f59e0b'; infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`; btnCapturar.disabled = true; }
+            } else { desenharRetanguloCartao(null); retanguloAtual = null; estabilidade = Math.max(0, estabilidade - 2); ultimoRetangulo = null; cancelarCorrecaoAutomatica(); feedback.innerHTML = `🎯 ${encaixadosCount}/4`; feedback.style.background = '#f59e0b'; infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`; btnCapturar.disabled = true; }
         }
         
         async function capturarImagem() {
@@ -1095,13 +1129,11 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // 🔥 RECORTE EXATO - SEM MARGEM (apenas a área delimitada)
+            // Recorte exato - sem margem
             const cartaoX = Math.max(0, retanguloAtual.x);
             const cartaoY = Math.max(0, retanguloAtual.y);
             const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width);
             const cartaoH = Math.min(canvas.height - cartaoY, retanguloAtual.height);
-            
-            console.log(`📐 Recorte exato: x=${cartaoX}, y=${cartaoY}, w=${cartaoW}, h=${cartaoH}`);
             
             if (cartaoW <= 0 || cartaoH <= 0) {
                 mostrarAlerta('Erro ao recortar. Tente aproximar mais.', 'error');
@@ -1110,15 +1142,12 @@
                 return;
             }
             
-            // Recortar APENAS a área do cartão (sem margem)
             const imagemCartao = ctx.getImageData(cartaoX, cartaoY, cartaoW, cartaoH);
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = cartaoW;
             tempCanvas.height = cartaoH;
             tempCanvas.getContext('2d').putImageData(imagemCartao, 0, 0);
             const imgData = tempCanvas.toDataURL('image/jpeg', isMobile ? 0.85 : 0.95);
-            
-            console.log(`📸 Imagem do cartão recortada: ${cartaoW}x${cartaoH}`);
             
             document.getElementById('processando').style.display = 'block';
             document.getElementById('resultado').style.display = 'none';
@@ -1203,7 +1232,7 @@
             } catch (error) { mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); }
         }
         
-        function mostrarAlerta(msg, tipo) { const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' }; const alertDiv = document.createElement('div'); alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:14px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`; alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`; document.body.appendChild(alertDiv); setTimeout(() => alertDiv.remove(), 3000); }
+        function mostrarAlerta(msg, tipo) { const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' }; const alertDiv = document.createElement('div'); alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:12px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:12px;box-shadow:0 4px 12px rgba(0,0,0,0.2);`; alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`; document.body.appendChild(alertDiv); setTimeout(() => alertDiv.remove(), 3000); }
         
         async function fazerRequisicao(url, options = {}) {
             if (!authToken) throw new Error('Token não fornecido');
@@ -1241,10 +1270,10 @@
                     select.innerHTML = '<option value="">— Selecione um aluno —</option>';
                     alunos.forEach(a => { select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; });
                     select.addEventListener('change', (e) => {
-                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ Aluno: ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); } }, 1000); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
+                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; if (orientacaoButtons) orientacaoButtons.style.display = 'flex'; mostrarAlerta(`✅ Aluno: ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); } }, 1000); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; if (orientacaoButtons) orientacaoButtons.style.display = 'none'; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
                     });
                     mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
-                    if (urlAlunoId) { console.log('🎯 Aluno na URL:', urlAlunoId); const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); } }, 1000); } else { console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys())); mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
+                    if (urlAlunoId) { console.log('🎯 Aluno na URL:', urlAlunoId); const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; if (orientacaoButtons) orientacaoButtons.style.display = 'flex'; mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); } }, 1000); } else { console.warn('⚠️ Aluno não encontrado. IDs disponíveis:', Array.from(alunosMap.keys())); mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
                     iniciarQRScanner();
                 } else { throw new Error('Erro ao carregar dados da prova'); }
             } catch (error) { document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`; console.error('Erro ao carregar:', error); }
@@ -1257,22 +1286,24 @@
                 capturaRealizada = false;
                 estabilidade = 0;
                 quadradosEncaixados = [false, false, false, false];
-                const videoConstraints = isMobile ? { video: { facingMode: { exact: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, zoom: { ideal: 1.6 } } } : { video: { facingMode: { exact: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } };
-                stream = await navigator.mediaDevices.getUserMedia(videoConstraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+                
+                const constraints = getVideoConstraints(orientacaoAtual);
+                stream = await navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 video.srcObject = stream;
                 await video.play();
                 btnIniciarCamera.disabled = true;
-                btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Câmera Ativa';
+                btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
                 cameraContainer.style.display = 'block';
                 if (analiseInterval) clearInterval(analiseInterval);
                 const frameRate = isMobile ? 60 : 100;
                 analiseInterval = setInterval(analisarFrame, frameRate);
-                mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
+                mostrarAlerta(`📷 Câmera iniciada (${orientacaoAtual === 'landscape' ? 'Horizontal' : 'Vertical'})! Posicione o cartão.`, 'info');
             } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
         }
         
         function pararCamera() { if (analiseInterval) { clearInterval(analiseInterval); analiseInterval = null; } if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } if (autoCorrectionTimer) { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; } cancelarCorrecaoAutomatica(); }
         
+        // Event listeners
         modoQRBtn.addEventListener('click', () => setModo(true));
         modoManualBtn.addEventListener('click', () => setModo(false));
         document.getElementById('btnIniciarCamera').addEventListener('click', iniciarCamera);
@@ -1280,6 +1311,16 @@
         document.getElementById('btnSalvar').addEventListener('click', salvarNota);
         document.getElementById('btnLimparQR').addEventListener('click', limparQRSelecionado);
         document.getElementById('btnTentarNovamente').addEventListener('click', tentarNovamente);
+        
+        // Botões de orientação
+        if (orientacaoButtons) {
+            document.querySelectorAll('.orientacao-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    mudarOrientacao(btn.dataset.orientacao);
+                });
+            });
+        }
+        
         window.addEventListener('beforeunload', pararCamera);
         window.setResposta = setResposta;
         carregarDados();
