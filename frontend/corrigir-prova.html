@@ -18,7 +18,7 @@
             padding: 10px;
         }
         
-        /* Modo tela cheia para mobile */
+        /* Modo tela cheia para mobile - INTERFACE MÍNIMA */
         body.fullscreen-mode {
             padding: 0;
             overflow: hidden;
@@ -56,56 +56,81 @@
         body.fullscreen-mode .dica,
         body.fullscreen-mode .prova-info,
         body.fullscreen-mode .gabarito-display,
-        body.fullscreen-mode .qr-selecionado {
+        body.fullscreen-mode .qr-selecionado,
+        body.fullscreen-mode .info-bar {
             display: none;
         }
         body.fullscreen-mode .camera-container {
             display: block !important;
         }
-        body.fullscreen-mode .feedback,
-        body.fullscreen-mode .status-encaixe,
+        body.fullscreen-mode .feedback {
+            display: block !important;
+            bottom: 30px;
+            font-size: 14px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.7);
+        }
+        body.fullscreen-mode .status-encaixe {
+            display: block !important;
+            top: 20px;
+            font-size: 14px;
+            padding: 6px 14px;
+            background: rgba(0,0,0,0.7);
+        }
         body.fullscreen-mode .auto-status {
             display: block !important;
             font-size: 16px;
-            padding: 10px 20px;
-        }
-        body.fullscreen-mode .feedback {
-            bottom: 40px;
-        }
-        body.fullscreen-mode .status-encaixe {
-            top: 30px;
-            font-size: 16px;
+            padding: 8px 20px;
         }
         
-        /* Aviso de orientação */
-        .orientacao-aviso {
+        /* Botões de zoom flutuantes */
+        .zoom-controls {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.95);
-            z-index: 30000;
+            bottom: 20px;
+            right: 20px;
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            color: white;
-            font-family: monospace;
+            gap: 10px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 12px;
+            border-radius: 40px;
+            backdrop-filter: blur(4px);
         }
-        .orientacao-aviso i { font-size: 60px; margin-bottom: 20px; color: #ffaa00; }
-        .orientacao-aviso h2 { font-size: 24px; margin-bottom: 10px; }
-        .orientacao-aviso p { font-size: 16px; opacity: 0.8; margin-bottom: 30px; }
-        .orientacao-aviso .btn-continuar {
-            background: #10b981;
+        .zoom-controls button {
+            background: rgba(255,255,255,0.2);
             border: none;
-            padding: 12px 30px;
-            border-radius: 30px;
             color: white;
-            font-size: 16px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 20px;
             font-weight: bold;
             cursor: pointer;
+            transition: all 0.2s;
+        }
+        .zoom-controls button:hover {
+            background: rgba(255,255,255,0.4);
+            transform: scale(1.05);
+        }
+        .zoom-controls button:active {
+            transform: scale(0.95);
+        }
+        .zoom-level {
+            color: white;
+            font-size: 12px;
+            font-family: monospace;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+        }
+        
+        body.fullscreen-mode .zoom-controls {
+            display: flex;
+        }
+        
+        /* Ocultar zoom controls fora da tela cheia */
+        .zoom-controls {
+            display: none;
         }
         
         .container { max-width: 950px; margin: 0 auto; }
@@ -616,12 +641,20 @@
     
     <div id="modoIndicador" class="modo-indicador">🔍 CARREGANDO...</div>
     
+    <!-- Botões de zoom flutuantes -->
+    <div class="zoom-controls" id="zoomControls">
+        <button id="zoomOutBtn" title="Diminuir zoom (Ctrl -)">−</button>
+        <span class="zoom-level" id="zoomLevel">1.0x</span>
+        <button id="zoomInBtn" title="Aumentar zoom (Ctrl +)">+</button>
+    </div>
+    
     <script>
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const modoIndicador = document.getElementById('modoIndicador');
         
         let modoFullscreen = false;
-        let aguardandoOrientacao = false;
+        let currentZoom = 1.0;
+        let videoTrack = null;
         
         if (isMobile) {
             modoIndicador.className = 'modo-indicador mobile';
@@ -631,65 +664,48 @@
             modoIndicador.innerHTML = '💻 DESKTOP';
         }
         
-        // Função para verificar orientação e mostrar aviso
-        function verificarOrientacaoForcar() {
-            if (!isMobile) return true;
+        // Funções de zoom
+        async function aplicarZoom(zoom) {
+            if (!stream) return;
             
-            const isLandscape = window.innerWidth > window.innerHeight;
+            const track = stream.getVideoTracks()[0];
+            if (!track) return;
             
-            if (!isLandscape && !aguardandoOrientacao) {
-                aguardandoOrientacao = true;
+            const capabilities = track.getCapabilities();
+            const settings = track.getSettings();
+            
+            console.log('Zoom capabilities:', capabilities.zoom);
+            
+            if (capabilities.zoom && capabilities.zoom.max) {
+                const minZoom = capabilities.zoom.min || 1;
+                const maxZoom = capabilities.zoom.max;
+                const step = (maxZoom - minZoom) / 10;
                 
-                // Pausar a câmera se estiver ativa
-                if (stream) {
-                    pararCamera();
+                let newZoom = zoom;
+                if (zoom === 'in') {
+                    newZoom = Math.min(maxZoom, (settings.zoom || minZoom) + step);
+                } else if (zoom === 'out') {
+                    newZoom = Math.max(minZoom, (settings.zoom || minZoom) - step);
+                } else {
+                    newZoom = Math.min(maxZoom, Math.max(minZoom, zoom));
                 }
                 
-                // Mostrar aviso de orientação
-                const aviso = document.createElement('div');
-                aviso.className = 'orientacao-aviso';
-                aviso.id = 'aviso-orientacao-mobile';
-                aviso.innerHTML = `
-                    <i class="fas fa-rotate-left"></i>
-                    <h2>📱 Gire o Celular</h2>
-                    <p>Para melhor captura do cartão,<br>use o modo HORIZONTAL</p>
-                    <button class="btn-continuar" id="btn-continuar-vertical">Continuar mesmo assim</button>
-                `;
-                document.body.appendChild(aviso);
-                
-                document.getElementById('btn-continuar-vertical').onclick = () => {
-                    aviso.remove();
-                    aguardandoOrientacao = false;
-                    // Reiniciar a câmera se necessário
-                    if (alunoSelecionado && !stream) {
-                        iniciarCamera();
-                    }
-                };
-                
-                return false;
+                try {
+                    await track.applyConstraints({
+                        advanced: [{ zoom: newZoom }]
+                    });
+                    currentZoom = newZoom;
+                    const zoomPercent = ((newZoom - minZoom) / (maxZoom - minZoom) * 100).toFixed(0);
+                    document.getElementById('zoomLevel').innerHTML = `${zoomPercent}%`;
+                    console.log(`Zoom aplicado: ${zoomPercent}%`);
+                } catch (err) {
+                    console.error('Erro ao aplicar zoom:', err);
+                }
+            } else {
+                console.log('Zoom não suportado por esta câmera');
+                document.getElementById('zoomLevel').innerHTML = 'N/A';
             }
-            
-            aguardandoOrientacao = false;
-            const avisoExistente = document.getElementById('aviso-orientacao-mobile');
-            if (avisoExistente) avisoExistente.remove();
-            return true;
         }
-        
-        // Monitorar mudança de orientação
-        window.addEventListener('resize', () => {
-            if (isMobile && modoFullscreen) {
-                const isLandscape = window.innerWidth > window.innerHeight;
-                if (isLandscape && aguardandoOrientacao) {
-                    // Saiu do aviso, reiniciar câmera
-                    const aviso = document.getElementById('aviso-orientacao-mobile');
-                    if (aviso) aviso.remove();
-                    aguardandoOrientacao = false;
-                    if (alunoSelecionado && !stream) {
-                        iniciarCamera();
-                    }
-                }
-            }
-        });
         
         // Funções de tela cheia
         function entrarTelaCheia() {
@@ -704,6 +720,10 @@
             }
             document.body.classList.add('fullscreen-mode');
             modoFullscreen = true;
+            
+            // Mostrar botões de zoom
+            const zoomControls = document.getElementById('zoomControls');
+            if (zoomControls) zoomControls.style.display = 'flex';
         }
         
         function sairTelaCheia() {
@@ -717,7 +737,27 @@
             }
             document.body.classList.remove('fullscreen-mode');
             modoFullscreen = false;
+            
+            // Esconder botões de zoom
+            const zoomControls = document.getElementById('zoomControls');
+            if (zoomControls) zoomControls.style.display = 'none';
         }
+        
+        // Eventos de teclado para zoom (desktop)
+        document.addEventListener('keydown', (e) => {
+            if (modoFullscreen || (!isMobile && stream)) {
+                if (e.ctrlKey && e.key === '+') {
+                    e.preventDefault();
+                    aplicarZoom('in');
+                } else if (e.ctrlKey && e.key === '-') {
+                    e.preventDefault();
+                    aplicarZoom('out');
+                } else if (e.ctrlKey && e.key === '0') {
+                    e.preventDefault();
+                    aplicarZoom(1.0);
+                }
+            }
+        });
         
         const urlParams = new URLSearchParams(window.location.search);
         const provaId = urlParams.get('prova');
@@ -794,6 +834,17 @@
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
         const btnTentarNovamente = document.getElementById('btnTentarNovamente');
         
+        // Botões de zoom
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        
+        if (zoomInBtn) {
+            zoomInBtn.addEventListener('click', () => aplicarZoom('in'));
+        }
+        if (zoomOutBtn) {
+            zoomOutBtn.addEventListener('click', () => aplicarZoom('out'));
+        }
+        
         function voltarParaScannerQR() {
             console.log('🔄 Voltando para scanner QR...');
             if (qrScanner && scannerIniciado) { try { qrScanner.stop(); } catch(e) {} }
@@ -814,19 +865,48 @@
             mostrarAlerta('🔄 Escaneie o QR Code', 'info');
         }
         
+        // Modificar a função tentarNovamente para reexibir a câmera
         function tentarNovamente() {
             console.log('🔄 Tentando nova captura...');
+            
+            // Limpar resultados
             document.getElementById('resultado').style.display = 'none';
             btnTentarNovamente.style.display = 'none';
+            
+            // Resetar flags
             capturaRealizada = false;
             estabilidade = 0;
             quadradosEncaixados = [false, false, false, false];
             retanguloAtual = null;
+            ultimoRetangulo = null;
+            
+            // Limpar UI dos guias
             const guias = ['guiaTL', 'guiaTR', 'guiaBL', 'guiaBR'];
-            guias.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('encaixado'); });
+            guias.forEach(id => { 
+                const el = document.getElementById(id); 
+                if (el) el.classList.remove('encaixado'); 
+            });
             document.getElementById('statusEncaixe').innerHTML = '⬜ ⬜ ⬜ ⬜';
             document.getElementById('feedback').innerHTML = '🎯 Alinhe';
             document.getElementById('feedback').style.background = '#f59e0b';
+            
+            // Mostrar a câmera novamente
+            cameraContainer.style.display = 'block';
+            
+            // Reexibir botões de zoom se necessário
+            if (isMobile && modoFullscreen) {
+                const zoomControls = document.getElementById('zoomControls');
+                if (zoomControls) zoomControls.style.display = 'flex';
+            }
+            
+            // Reiniciar a câmera
+            iniciarCamera();
+            
+            // Se estiver em mobile, entrar em tela cheia novamente
+            if (isMobile && !modoFullscreen) {
+                entrarTelaCheia();
+            }
+            
             mostrarAlerta('Posicione o cartão novamente', 'info');
         }
         
@@ -1026,15 +1106,11 @@
                 mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                 
-                // 🔥 FLUXO MOBILE: Verificar orientação, entrar em tela cheia e iniciar câmera
                 setTimeout(() => { 
                     if (alunoSelecionado && !stream) {
                         if (isMobile) {
-                            // Verificar orientação antes de prosseguir
-                            if (verificarOrientacaoForcar()) {
-                                entrarTelaCheia();
-                                iniciarCamera();
-                            }
+                            entrarTelaCheia();
+                            iniciarCamera();
                         } else {
                             iniciarCamera();
                         }
@@ -1198,69 +1274,189 @@
         }
         
         async function capturarImagem() {
-            if (capturando) return;
-            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno!', 'error'); capturaRealizada = false; return; }
-            if (!retanguloAtual || estabilidade < 8) { mostrarAlerta('Aguarde o cartão estabilizar!', 'warning'); capturaRealizada = false; return; }
+            console.log('📸 Iniciando captura...');
             
-            capturando = true;
-            const ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            if (capturando) {
+                console.log('⚠️ Já está capturando, ignorando...');
+                return;
+            }
             
-            // 🔥 CORTE EXATO DO CARTÃO
-            const cartaoX = Math.max(0, retanguloAtual.x);
-            const cartaoY = Math.max(0, retanguloAtual.y);
-            const cartaoW = Math.min(canvas.width - cartaoX, retanguloAtual.width);
-            const cartaoH = Math.min(canvas.height - cartaoY, retanguloAtual.height);
-            
-            console.log(`📐 Recorte do cartão: ${cartaoW}x${cartaoH} pixels`);
-            
-            if (cartaoW <= 0 || cartaoH <= 0) {
-                mostrarAlerta('Erro ao recortar.', 'error');
-                capturando = false;
+            if (!alunoSelecionado) {
+                mostrarAlerta('Selecione um aluno primeiro!', 'error');
                 capturaRealizada = false;
                 return;
             }
             
-            // 🔥 CRIA IMAGEM APENAS DO CARTÃO RECORTADO
-            const imagemCartao = ctx.getImageData(cartaoX, cartaoY, cartaoW, cartaoH);
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = cartaoW;
-            tempCanvas.height = cartaoH;
-            tempCanvas.getContext('2d').putImageData(imagemCartao, 0, 0);
-            const imgData = tempCanvas.toDataURL('image/jpeg', 0.9);
+            if (!retanguloAtual) {
+                console.log('⚠️ Nenhum retângulo detectado! Tentando detectar novamente...');
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const resultado = detectarQuadradosPretos(ctx, canvas.width, canvas.height);
+                
+                if (resultado.sucesso && resultado.retangulo) {
+                    retanguloAtual = resultado.retangulo;
+                    quadradosEncaixados = resultado.encaixados;
+                    estabilidade = 10;
+                    console.log('✅ Retângulo detectado na segunda tentativa!', retanguloAtual);
+                } else {
+                    console.log('❌ Não foi possível detectar o cartão.');
+                    mostrarAlerta('Posicione o cartão nos 4 quadrados vermelhos!', 'warning');
+                    capturaRealizada = false;
+                    return;
+                }
+            }
             
-            document.getElementById('processando').style.display = 'block';
-            document.getElementById('resultado').style.display = 'none';
+            const estabilidadeMinima = 8;
+            if (estabilidade < estabilidadeMinima) {
+                console.log(`⚠️ Estabilidade insuficiente: ${estabilidade}/${estabilidadeMinima}`);
+                mostrarAlerta(`Aguarde o cartão estabilizar! (${estabilidade}/${estabilidadeMinima})`, 'warning');
+                capturaRealizada = false;
+                return;
+            }
+            
+            const quadradosVerdes = quadradosEncaixados.filter(q => q === true).length;
+            if (quadradosVerdes < 4) {
+                console.log(`⚠️ Apenas ${quadradosVerdes}/4 quadrados estão alinhados`);
+                mostrarAlerta(`Alinhe os 4 quadrados! (${quadradosVerdes}/4)`, 'warning');
+                capturaRealizada = false;
+                return;
+            }
+            
+            capturando = true;
             
             try {
-                const dadosEnvio = { image: imgData, questions: totalQuestoes, choices: 5, gabarito: gabarito.map(g => g.respostaCorreta) };
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                console.log('📐 Retângulo detectado:', retanguloAtual);
+                console.log(`📐 Tamanho original do frame: ${canvas.width}x${canvas.height}`);
+                
+                let cartaoX = Math.max(0, retanguloAtual.x);
+                let cartaoY = Math.max(0, retanguloAtual.y);
+                let cartaoW = retanguloAtual.width;
+                let cartaoH = retanguloAtual.height;
+                
+                if (cartaoX + cartaoW > canvas.width) {
+                    cartaoW = canvas.width - cartaoX;
+                }
+                if (cartaoY + cartaoH > canvas.height) {
+                    cartaoH = canvas.height - cartaoY;
+                }
+                
+                console.log(`📐 Recorte calculado: x=${cartaoX}, y=${cartaoY}, w=${cartaoW}, h=${cartaoH}`);
+                
+                if (cartaoW <= 0 || cartaoH <= 0) {
+                    console.error('❌ Erro no recorte: dimensões inválidas');
+                    mostrarAlerta('Erro ao recortar. Tente aproximar mais o cartão.', 'error');
+                    capturando = false;
+                    capturaRealizada = false;
+                    return;
+                }
+                
+                if (cartaoW < 100 || cartaoH < 100) {
+                    console.warn(`⚠️ Recorte muito pequeno: ${cartaoW}x${cartaoH} pixels`);
+                    mostrarAlerta('Aproxime mais o cartão da câmera!', 'warning');
+                    capturando = false;
+                    capturaRealizada = false;
+                    return;
+                }
+                
+                console.log('✂️ Executando recorte...');
+                const imagemCartao = ctx.getImageData(cartaoX, cartaoY, cartaoW, cartaoH);
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = cartaoW;
+                tempCanvas.height = cartaoH;
+                tempCanvas.getContext('2d').putImageData(imagemCartao, 0, 0);
+                const imgData = tempCanvas.toDataURL('image/jpeg', 0.9);
+                
+                console.log(`✅ Imagem recortada com sucesso: ${cartaoW}x${cartaoH} pixels`);
+                console.log(`📊 Tamanho da imagem base64: ${Math.round(imgData.length / 1024)} KB`);
+                
+                // 🔥 OCULTAR A CÂMERA IMEDIATAMENTE
+                pararCamera();
+                cameraContainer.style.display = 'none';
+                
+                // 🔥 SAIR DA TELA CHEIA SE ESTIVER NELA
+                if (isMobile && modoFullscreen) {
+                    sairTelaCheia();
+                }
+                
+                // 🔥 ESCONDER BOTÕES DE ZOOM
+                const zoomControls = document.getElementById('zoomControls');
+                if (zoomControls) zoomControls.style.display = 'none';
+                
+                document.getElementById('processando').style.display = 'block';
+                document.getElementById('resultado').style.display = 'none';
+                
+                const dadosEnvio = {
+                    image: imgData,
+                    questions: totalQuestoes,
+                    choices: 5,
+                    gabarito: gabarito.map(g => g.respostaCorreta)
+                };
+                
+                console.log('📤 Enviando imagem recortada para API OMR...');
+                
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000);
-                const omrResponse = await fetch(OMR_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dadosEnvio), signal: controller.signal });
+                
+                const omrResponse = await fetch(OMR_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dadosEnvio),
+                    signal: controller.signal
+                });
+                
                 clearTimeout(timeoutId);
                 const data = await omrResponse.json();
+                
+                console.log('📥 Resposta da API:', data);
+                
                 document.getElementById('processando').style.display = 'none';
-                if (data.success && data.answers) { 
-                    criarInterfaceRespostas(data.answers); 
-                    document.getElementById('resultado').style.display = 'block'; 
-                    btnTentarNovamente.style.display = 'block'; 
+                
+                if (data.success && data.answers) {
+                    criarInterfaceRespostas(data.answers);
+                    document.getElementById('resultado').style.display = 'block';
+                    btnTentarNovamente.style.display = 'block';
                     mostrarAlerta(`✅ Correção concluída!`, 'success');
-                    // 🔥 SAIR DA TELA CHEIA APÓS CAPTURA
-                    if (isMobile && modoFullscreen) sairTelaCheia();
-                } else { 
-                    throw new Error(data.error || 'Falha na detecção'); 
+                } else {
+                    throw new Error(data.error || 'Falha na detecção das respostas');
                 }
+                
             } catch (error) {
+                console.error('❌ Erro na captura:', error);
                 document.getElementById('processando').style.display = 'none';
+                
+                // 🔥 MESMO EM CASO DE ERRO, OCULTAR A CÂMERA
+                pararCamera();
+                cameraContainer.style.display = 'none';
+                
+                if (isMobile && modoFullscreen) {
+                    sairTelaCheia();
+                }
+                
+                const zoomControls = document.getElementById('zoomControls');
+                if (zoomControls) zoomControls.style.display = 'none';
+                
+                if (error.name === 'AbortError') {
+                    mostrarAlerta(`⚠️ Tempo limite excedido. Tente novamente.`, 'warning');
+                } else {
+                    mostrarAlerta(`⚠️ Erro: ${error.message}. Usando modo manual.`, 'warning');
+                }
+                
                 criarInterfaceManual();
                 document.getElementById('resultado').style.display = 'block';
                 btnTentarNovamente.style.display = 'block';
-                mostrarAlerta(`⚠️ Modo manual`, 'warning');
-                if (isMobile && modoFullscreen) sairTelaCheia();
+                
+            } finally {
+                capturando = false;
+                capturaRealizada = true;
+                console.log('🏁 Captura finalizada');
             }
-            capturando = false;
         }
         
         function criarInterfaceRespostas(sugestoes) {
@@ -1318,13 +1514,35 @@
         }
         
         async function salvarNota() {
-            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno!', 'error'); return; }
+            if (!alunoSelecionado) { 
+                mostrarAlerta('Selecione um aluno!', 'error'); 
+                return; 
+            }
             if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)} para ${alunoSelecionado.nome}?`)) return;
+            
             try {
-                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { method: 'POST', body: JSON.stringify({ alunoId: alunoSelecionado.id, nota: notaCalculada, observacao: `Corrigido em ${new Date().toLocaleString()}` }) });
+                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { 
+                    method: 'POST', 
+                    body: JSON.stringify({ 
+                        alunoId: alunoSelecionado.id, 
+                        nota: notaCalculada, 
+                        observacao: `Corrigido em ${new Date().toLocaleString()}` 
+                    }) 
+                });
                 const data = await response.json();
-                if (data.success) { mostrarAlerta(`✅ Nota salva!`, 'success'); setTimeout(() => voltarParaScannerQR(), 2000); } else { throw new Error(data.error || 'Erro'); }
-            } catch (error) { mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); }
+                if (data.success) { 
+                    mostrarAlerta(`✅ Nota salva!`, 'success');
+                    
+                    // 🔥 VOLTAR PARA O SCANNER QR APÓS SALVAR
+                    setTimeout(() => { 
+                        voltarParaScannerQR(); 
+                    }, 1500);
+                } else { 
+                    throw new Error(data.error || 'Erro'); 
+                }
+            } catch (error) { 
+                mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); 
+            }
         }
         
         function mostrarAlerta(msg, tipo) { const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' }; const alertDiv = document.createElement('div'); alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:12px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:12px;`; alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`; document.body.appendChild(alertDiv); setTimeout(() => alertDiv.remove(), 3000); }
@@ -1365,10 +1583,10 @@
                     select.innerHTML = '<option value="">— Selecione —</option>';
                     alunos.forEach(a => { select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; });
                     select.addEventListener('change', (e) => {
-                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { if (verificarOrientacaoForcar()) { entrarTelaCheia(); iniciarCamera(); } } else { iniciarCamera(); } } }, 500); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
+                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { entrarTelaCheia(); iniciarCamera(); } else { iniciarCamera(); } } }, 500); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
                     });
                     mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
-                    if (urlAlunoId) { const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { if (verificarOrientacaoForcar()) { entrarTelaCheia(); iniciarCamera(); } } else { iniciarCamera(); } } }, 500); } else { mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
+                    if (urlAlunoId) { const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { entrarTelaCheia(); iniciarCamera(); } else { iniciarCamera(); } } }, 500); } else { mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
                     iniciarQRScanner();
                 } else { throw new Error('Erro ao carregar'); }
             } catch (error) { document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`; console.error('Erro:', error); }
@@ -1396,12 +1614,19 @@
                 stream = await navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 video.srcObject = stream;
                 await video.play();
+                
+                // Reset zoom ao iniciar câmera
+                currentZoom = 1.0;
+                if (!isMobile) {
+                    aplicarZoom(1.0);
+                }
+                
                 btnIniciarCamera.disabled = true;
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
                 cameraContainer.style.display = 'block';
                 if (analiseInterval) clearInterval(analiseInterval);
                 analiseInterval = setInterval(analisarFrame, 100);
-                mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
+                mostrarAlerta('📷 Câmera iniciada! Use os botões + e - para zoom.', 'info');
             } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
         }
         
