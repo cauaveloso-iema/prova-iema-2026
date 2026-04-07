@@ -19188,6 +19188,241 @@ app.get('/api/omr/test', async (req, res) => {
 
 console.log('✅ Rotas OMR registradas com sucesso!');
 
+// ============================================================================
+// ROTAS OMR DEBUG - ADMIN (LÊ DA PASTA backend/debug_omr)
+// ============================================================================
+
+const { promisify } = require('util');
+const readdir = promisify(fs.readdir);
+const stat = promisify(fs.stat);
+const unlink = promisify(fs.unlink);
+
+// Configuração da pasta debug (dentro de backend/)
+const OMR_DEBUG_FOLDER = path.join(__dirname, 'debug_omr');
+const OMR_IMAGES_URL = '/api/omr/imagens'; // Rota para servir as imagens
+
+// Garantir que a pasta existe
+if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
+    fs.mkdirSync(OMR_DEBUG_FOLDER, { recursive: true });
+    console.log('📁 Pasta debug_omr criada em:', OMR_DEBUG_FOLDER);
+} else {
+    console.log('📁 Pasta debug_omr encontrada em:', OMR_DEBUG_FOLDER);
+}
+
+// Função para formatar bytes
+function formatarBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+    return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
+}
+
+// Função para determinar o tipo da imagem pelo nome
+function determinarTipoImagem(nomeArquivo) {
+    const nome = nomeArquivo.toLowerCase();
+    if (nome.includes('original') || nome === '0_original.jpg') {
+        return 'original';
+    } else if (nome.includes('binary') || nome === '1_binary.jpg') {
+        return 'processada';
+    } else if (nome.includes('resultado') || nome === '2_resultado.jpg') {
+        return 'resultado';
+    } else if (nome.includes('processed')) {
+        return 'processada';
+    }
+    return 'outro';
+}
+
+// Função para extrair informações do nome do arquivo
+function extrairInfoDoNome(nomeArquivo) {
+    const info = {
+        prova: null,
+        aluno: null,
+        respostas: null,
+        nota: null
+    };
+    
+    // Tentar extrair respostas (ex: respostas_ABCDE)
+    const respostaMatch = nomeArquivo.match(/respostas?_([A-E]+)/i);
+    if (respostaMatch) {
+        info.respostas = respostaMatch[1].split('');
+    }
+    
+    // Tentar extrair nota (ex: nota_7.5)
+    const notaMatch = nomeArquivo.match(/nota_([\d.]+)/i);
+    if (notaMatch) {
+        info.nota = parseFloat(notaMatch[1]);
+    }
+    
+    return info;
+}
+
+// ============ 1. LISTAR TODAS AS IMAGENS OMR ============
+app.get('/api/admin/omr/imagens', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        console.log(`📋 Admin ${req.userId} listando imagens OMR da pasta: ${OMR_DEBUG_FOLDER}`);
+        
+        // Verificar se a pasta existe
+        if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
+            return res.json({
+                success: true,
+                imagens: [],
+                total: 0,
+                estatisticas: { total: 0, originais: 0, processadas: 0, resultados: 0 }
+            });
+        }
+        
+        const files = await readdir(OMR_DEBUG_FOLDER);
+        
+        // Filtrar apenas arquivos de imagem
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+        const imageFiles = files.filter(file => 
+            imageExtensions.includes(path.extname(file).toLowerCase())
+        );
+        
+        console.log(`📊 Encontrados ${imageFiles.length} arquivos de imagem`);
+        
+        // Obter informações detalhadas de cada arquivo
+        const imagens = await Promise.all(imageFiles.map(async (file) => {
+            const filePath = path.join(OMR_DEBUG_FOLDER, file);
+            const fileStat = await stat(filePath);
+            
+            // Determinar o tipo da imagem
+            const tipo = determinarTipoImagem(file);
+            const info = extrairInfoDoNome(file);
+            
+            // Ler o arquivo e converter para base64 para exibição
+            const imageBuffer = fs.readFileSync(filePath);
+            const base64Image = imageBuffer.toString('base64');
+            const mimeType = `image/${path.extname(file).substring(1)}`;
+            const dataUrl = `data:${mimeType};base64,${base64Image}`;
+            
+            // Criar miniatura (mesma imagem, redimensionada via CSS)
+            const thumbnail = dataUrl;
+            
+            return {
+                id: file,
+                nome: file,
+                url: dataUrl,
+                thumbnail: thumbnail,
+                tipo: tipo,
+                data: fileStat.mtime,
+                tamanho: formatarBytes(fileStat.size),
+                respostas: info.respostas,
+                nota: info.nota,
+                prova: info.prova,
+                aluno: info.aluno
+            };
+        }));
+        
+        // Ordenar por data (mais recentes primeiro)
+        imagens.sort((a, b) => new Date(b.data) - new Date(a.data));
+        
+        // Calcular estatísticas
+        const estatisticas = {
+            total: imagens.length,
+            originais: imagens.filter(i => i.tipo === 'original').length,
+            processadas: imagens.filter(i => i.tipo === 'processada').length,
+            resultados: imagens.filter(i => i.tipo === 'resultado').length
+        };
+        
+        console.log(`✅ Retornando ${imagens.length} imagens (${estatisticas.originais} originais, ${estatisticas.processadas} processadas, ${estatisticas.resultados} com resultado)`);
+        
+        res.json({
+            success: true,
+            imagens: imagens,
+            total: imagens.length,
+            estatisticas: estatisticas
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar imagens OMR:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao listar imagens: ' + error.message
+        });
+    }
+});
+
+// ============ 2. EXCLUIR UMA IMAGEM ESPECÍFICA ============
+app.delete('/api/admin/omr/imagens/:nomeArquivo', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { nomeArquivo } = req.params;
+        
+        console.log(`🗑️ Admin ${req.userId} excluindo imagem OMR: ${nomeArquivo}`);
+        
+        // Validar nome do arquivo (segurança)
+        if (nomeArquivo.includes('..') || nomeArquivo.includes('/') || nomeArquivo.includes('\\')) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nome de arquivo inválido'
+            });
+        }
+        
+        const filePath = path.join(OMR_DEBUG_FOLDER, nomeArquivo);
+        
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({
+                success: false,
+                error: 'Arquivo não encontrado'
+            });
+        }
+        
+        fs.unlinkSync(filePath);
+        
+        console.log(`✅ Imagem ${nomeArquivo} excluída com sucesso`);
+        
+        res.json({
+            success: true,
+            message: 'Imagem excluída com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir imagem:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao excluir imagem: ' + error.message
+        });
+    }
+});
+
+// ============ 3. LIMPAR TODAS AS IMAGENS OMR ============
+app.delete('/api/admin/omr/limpar', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        console.log(`🗑️ Admin ${req.userId} limpando TODAS as imagens OMR`);
+        
+        const files = await readdir(OMR_DEBUG_FOLDER);
+        let deletados = 0;
+        
+        for (const file of files) {
+            const filePath = path.join(OMR_DEBUG_FOLDER, file);
+            const statFile = await stat(filePath);
+            
+            if (statFile.isFile()) {
+                fs.unlinkSync(filePath);
+                deletados++;
+            }
+        }
+        
+        console.log(`✅ ${deletados} arquivos excluídos da pasta debug_omr`);
+        
+        res.json({
+            success: true,
+            message: `${deletados} imagens excluídas com sucesso!`,
+            total: deletados
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao limpar imagens:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao limpar imagens: ' + error.message
+        });
+    }
+});
+
+console.log('✅ Rotas OMR Debug registradas com sucesso!');
+console.log(`📁 Pasta debug_omr: ${OMR_DEBUG_FOLDER}`);
+
 
 // ============================================================================
 // VERIFICADOR AUTOMÁTICO DE NOTIFICAÇÕES (A CADA 1 MINUTO)

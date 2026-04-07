@@ -355,6 +355,7 @@ class AdminPanel {
             cursos: 'Gerenciar Cursos',
             faceid: 'Gerenciar Face ID',
             onesignal: '📱 Notificações Push (OneSignal)',  // <-- ADICIONAR ESTA LINHA
+            'omr-debug': 'OMR Debug - Imagens Processadas',
             monitoramento: 'Monitoramento do Sistema',
             configuracoes: 'Configurações do Sistema'
         };
@@ -409,6 +410,9 @@ class AdminPanel {
                 break;
             case 'onesignal':
                 await this.loadOneSignal();
+                break;
+            case 'omr-debug':
+                await this.loadOMRDebug();
                 break;
             case 'eixos':
                 await this.loadEixos();
@@ -26439,6 +26443,1252 @@ class AdminPanel {
         document.getElementById('modalSaveBtn').onclick = () => this.salvarMatricula(isEdit ? matriculaExistente : null);
         
         this.openModal();
+    }
+
+    // ============================================================================
+    // MÓDULO OMR DEBUG - VERSÃO PROFISSIONAL
+    // ============================================================================
+
+    // ============ CARREGAR OMR DEBUG ============
+    async loadOMRDebug() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Mostrar loading no mesmo padrão das outras seções
+        contentArea.innerHTML = `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #10b981; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                <p style="color: #6b7280;">Carregando imagens processadas...</p>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch('/api/admin/omr/imagens', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar imagens');
+            }
+            
+            this.omrImagens = data.imagens || [];
+            this.omrImagensFiltradas = [...this.omrImagens];
+            this.paginaAtualOMR = 1;
+            this.itensPorPaginaOMR = 24;
+            this.viewAtualOMR = 'grid';
+            
+            contentArea.innerHTML = this.renderOMRDebugCompleto();
+            
+            setTimeout(() => {
+                this.renderizarGaleriaOMR();
+                this.configurarEventosOMR();
+            }, 100);
+            
+            console.log(`✅ ${this.omrImagens.length} imagens OMR carregadas`);
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar OMR Debug:', error);
+            contentArea.innerHTML = this.renderOMRErro(error.message);
+        }
+    }
+
+    // ============ RENDERIZAR INTERFACE COMPLETA ============
+    renderOMRDebugCompleto() {
+        const total = this.omrImagens.length;
+        const originais = this.omrImagens.filter(i => i.tipo === 'original').length;
+        const processadas = this.omrImagens.filter(i => i.tipo === 'processada').length;
+        const resultados = this.omrImagens.filter(i => i.tipo === 'resultado').length;
+        
+        return `
+            <div class="omr-debug-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="omr-debug-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>OMR Debug</h1>
+                            <p>Visualize todas as imagens processadas pelo sistema de correção de provas</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.atualizarOMRDebug()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-header btn-primary" onclick="admin.limparOMRDebug()" title="Limpar todas as imagens">
+                            <i class="fas fa-trash-alt"></i>
+                            <span>Limpar Todas</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE ESTATÍSTICAS -->
+                <div class="stats-grid">
+                    <div class="stat-card primary" onclick="admin.filtrarOMRPorTipo('todas')">
+                        <div class="stat-icon">
+                            <i class="fas fa-images"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Total de Imagens</span>
+                            <span class="stat-value" id="statTotalImagens">${total}</span>
+                            <span class="stat-detail">Clique para ver todas</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card success" onclick="admin.filtrarOMRPorTipo('original')">
+                        <div class="stat-icon">
+                            <i class="fas fa-file-image"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Originais</span>
+                            <span class="stat-value" id="statOriginal">${originais}</span>
+                            <span class="stat-detail">Imagens originais</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card warning" onclick="admin.filtrarOMRPorTipo('processada')">
+                        <div class="stat-icon">
+                            <i class="fas fa-filter"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Processadas</span>
+                            <span class="stat-value" id="statProcessada">${processadas}</span>
+                            <span class="stat-detail">Pré-processadas</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card info" onclick="admin.filtrarOMRPorTipo('resultado')">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Com Resultados</span>
+                            <span class="stat-value" id="statResultado">${resultados}</span>
+                            <span class="stat-detail">Questões detectadas</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BARRA DE FILTROS -->
+                <div class="filters-card">
+                    <div class="filters-header">
+                        <div class="filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <h3>Filtros e Busca</h3>
+                        </div>
+                        <span class="filters-badge" id="resultadosBadge">${total} imagens</span>
+                    </div>
+                    
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label><i class="fas fa-search"></i> Buscar</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="buscaOMR" 
+                                    placeholder="Nome do arquivo..." 
+                                    autocomplete="off">
+                                <i class="fas fa-search input-icon"></i>
+                                <button class="input-clear" onclick="admin.limparBuscaOMR()" style="display: none;" id="clearBuscaOMR">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-filter"></i> Tipo</label>
+                            <select id="filtroTipoOMR" class="filter-select">
+                                <option value="todas">Todas</option>
+                                <option value="original">📸 Originais</option>
+                                <option value="processada">🔧 Processadas</option>
+                                <option value="resultado">📊 Com Resultados</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-sort"></i> Ordenar</label>
+                            <select id="ordenacaoOMR" class="filter-select">
+                                <option value="data_desc">Mais recentes</option>
+                                <option value="data_asc">Mais antigas</option>
+                                <option value="nome_asc">Nome (A-Z)</option>
+                                <option value="nome_desc">Nome (Z-A)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-actions">
+                            <button class="btn-filter" onclick="admin.aplicarFiltrosOMR()">
+                                <i class="fas fa-filter"></i> Filtrar
+                            </button>
+                            <button class="btn-filter btn-clear" onclick="admin.limparFiltrosOMR()">
+                                <i class="fas fa-eraser"></i> Limpar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GALERIA DE IMAGENS -->
+                <div class="galeria-container">
+                    <div class="galeria-header">
+                        <div class="galeria-title">
+                            <i class="fas fa-images"></i>
+                            <h3>Galeria de Imagens Processadas</h3>
+                        </div>
+                        <div class="galeria-view">
+                            <button class="view-btn active" onclick="admin.mudarViewOMR('grid')" data-view="grid">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button class="view-btn" onclick="admin.mudarViewOMR('list')" data-view="list">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="galeriaGrid" class="galeria-grid">
+                        <div class="loading-grid">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Carregando imagens...</span>
+                        </div>
+                    </div>
+                    
+                    <div id="galeriaList" class="galeria-list" style="display: none;"></div>
+                    
+                    <!-- Paginação -->
+                    <div class="pagination-omr" id="paginacaoOMR">
+                        <button class="btn-page" onclick="admin.paginaAnteriorOMR()" id="btnAnteriorOMR" disabled>
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <span class="page-info" id="pageInfoOMR">Página 1 de 1</span>
+                        <button class="btn-page" onclick="admin.proximaPaginaOMR()" id="btnProximaOMR" disabled>
+                            Próxima <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MODAL DE VISUALIZAÇÃO -->
+                <div id="modalOMR" class="modal-omr" style="display: none;">
+                    <div class="modal-omr-content">
+                        <div class="modal-omr-header">
+                            <h3 id="modalOMRTitulo">Visualizar Imagem</h3>
+                            <button class="modal-omr-close" onclick="admin.fecharModalOMR()">&times;</button>
+                        </div>
+                        <div class="modal-omr-body">
+                            <img id="modalOMRImagem" src="" alt="Imagem OMR">
+                            <div class="modal-omr-info" id="modalOMRInfo"></div>
+                        </div>
+                        <div class="modal-omr-footer">
+                            <button class="btn-primary" onclick="admin.baixarImagemOMRAtual()">
+                                <i class="fas fa-download"></i> Baixar
+                            </button>
+                            <button class="btn-secondary" onclick="admin.excluirImagemOMRAtual()">
+                                <i class="fas fa-trash"></i> Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            ${this.getOMRDebugCSS()}
+        `;
+    }
+
+    // ============ CSS DO OMR DEBUG ============
+    getOMRDebugCSS() {
+        return `
+            <style>
+                .omr-debug-container {
+                    padding: 24px;
+                    max-width: 1400px;
+                    margin: 0 auto;
+                }
+
+                .omr-debug-header {
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .omr-debug-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -50px;
+                    right: -50px;
+                    width: 200px;
+                    height: 200px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 50%;
+                }
+
+                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
+                .header-icon {
+                    width: 70px; height: 70px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.2);
+                }
+                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
+                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
+                
+                .btn-header {
+                    padding: 12px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    border: none;
+                    position: relative;
+                    z-index: 2;
+                }
+                .btn-header.btn-primary { background: white; color: #10b981; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
+                .btn-header.btn-refresh {
+                    background: rgba(255,255,255,0.15);
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    backdrop-filter: blur(5px);
+                    padding: 12px;
+                }
+                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
+                
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                .stat-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    transition: all 0.3s;
+                    border: 1px solid rgba(0,0,0,0.05);
+                    cursor: pointer;
+                }
+                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .stat-card.primary .stat-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
+                .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
+                .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+                .stat-icon {
+                    width: 60px; height: 60px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                    color: white;
+                }
+                .stat-content { flex: 1; }
+                .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
+                .stat-detail { font-size: 11px; color: #9ca3af; }
+                
+                .filters-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+                .filters-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+                .filters-title { display: flex; align-items: center; gap: 10px; }
+                .filters-title i { font-size: 18px; color: #10b981; background: #d1fae5; padding: 8px; border-radius: 10px; }
+                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                .filters-badge { background: #10b981; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+                
+                .filters-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 1fr 1fr auto;
+                    gap: 15px;
+                }
+                .filter-group { display: flex; flex-direction: column; gap: 5px; }
+                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; display: flex; align-items: center; gap: 5px; }
+                
+                .input-wrapper { position: relative; }
+                .input-wrapper input {
+                    width: 100%;
+                    padding: 10px 35px 10px 40px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    transition: all 0.3s;
+                }
+                .input-wrapper input:focus { outline: none; border-color: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,0.1); }
+                .input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 14px; }
+                .input-clear {
+                    position: absolute;
+                    right: 10px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background: none;
+                    border: none;
+                    color: #9ca3af;
+                    cursor: pointer;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .input-clear:hover { background: #f3f4f6; color: #4b5563; }
+                
+                .filter-select {
+                    width: 100%;
+                    padding: 10px 15px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    background: white;
+                    cursor: pointer;
+                }
+                
+                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+                .btn-filter {
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    background: #10b981;
+                    color: white;
+                    white-space: nowrap;
+                }
+                .btn-filter:hover { background: #059669; transform: translateY(-2px); }
+                .btn-filter.btn-clear { background: #6b7280; }
+                .btn-filter.btn-clear:hover { background: #4b5563; }
+                
+                .galeria-container {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    border: 1px solid rgba(0,0,0,0.05);
+                }
+                .galeria-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+                .galeria-title { display: flex; align-items: center; gap: 10px; }
+                .galeria-title i { color: #10b981; font-size: 18px; background: #d1fae5; padding: 8px; border-radius: 10px; }
+                .galeria-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                
+                .galeria-view { display: flex; gap: 8px; }
+                .view-btn {
+                    padding: 8px 12px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                    color: #6b7280;
+                }
+                .view-btn:hover { background: #f3f4f6; border-color: #10b981; color: #10b981; }
+                .view-btn.active { background: #10b981; border-color: #10b981; color: white; }
+                
+                .galeria-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                    gap: 20px;
+                    min-height: 400px;
+                }
+                
+                .imagem-card {
+                    background: white;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    border: 1px solid #e5e7eb;
+                    transition: all 0.3s;
+                    cursor: pointer;
+                }
+                .imagem-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .imagem-preview {
+                    width: 100%;
+                    height: 200px;
+                    object-fit: cover;
+                    background: #f3f4f6;
+                }
+                .imagem-info { padding: 12px; }
+                .imagem-nome {
+                    font-weight: 600;
+                    color: #1f2937;
+                    margin-bottom: 5px;
+                    font-size: 13px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .imagem-meta {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 11px;
+                    color: #6b7280;
+                    margin-bottom: 10px;
+                }
+                .imagem-badge {
+                    display: inline-block;
+                    padding: 2px 8px;
+                    border-radius: 20px;
+                    font-size: 10px;
+                    font-weight: 600;
+                }
+                .badge-original { background: #d1fae5; color: #065f46; }
+                .badge-processada { background: #fef3c7; color: #92400e; }
+                .badge-resultado { background: #fee2e2; color: #991b1b; }
+                
+                .imagem-acoes {
+                    display: flex;
+                    gap: 5px;
+                    margin-top: 8px;
+                }
+                .imagem-acoes button {
+                    flex: 1;
+                    padding: 5px;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 11px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 4px;
+                    transition: all 0.2s;
+                }
+                .btn-view { background: #e5e7eb; color: #4b5563; }
+                .btn-view:hover { background: #d1d5db; }
+                .btn-download { background: #10b981; color: white; }
+                .btn-download:hover { background: #059669; }
+                .btn-delete { background: #ef4444; color: white; }
+                .btn-delete:hover { background: #dc2626; }
+                
+                .galeria-list { min-height: 400px; }
+                .list-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                    padding: 15px;
+                    border-bottom: 1px solid #e5e7eb;
+                    transition: all 0.3s;
+                    cursor: pointer;
+                }
+                .list-item:hover { background: #f9fafb; }
+                .list-item-thumb {
+                    width: 60px;
+                    height: 60px;
+                    object-fit: cover;
+                    border-radius: 8px;
+                    background: #f3f4f6;
+                }
+                .list-item-info { flex: 1; }
+                .list-item-nome { font-weight: 600; color: #1f2937; margin-bottom: 5px; font-size: 14px; }
+                .list-item-meta { font-size: 12px; color: #6b7280; }
+                .list-item-actions { display: flex; gap: 8px; }
+                .list-item-actions button {
+                    padding: 6px 12px;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+                
+                .pagination-omr {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 20px;
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #e5e7eb;
+                }
+                .btn-page {
+                    padding: 8px 20px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #4b5563;
+                }
+                .btn-page:hover:not(:disabled) { background: #10b981; border-color: #10b981; color: white; }
+                .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+                .page-info { font-size: 14px; color: #6b7280; }
+                
+                .modal-omr {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.85);
+                    z-index: 10002;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    animation: fadeIn 0.3s ease;
+                }
+                .modal-omr-content {
+                    background: white;
+                    border-radius: 20px;
+                    max-width: 90vw;
+                    max-height: 90vh;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+                }
+                .modal-omr-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 15px 20px;
+                    border-bottom: 1px solid #e5e7eb;
+                    background: #f8fafc;
+                }
+                .modal-omr-header h3 { margin: 0; font-size: 18px; font-weight: 600; color: #1f2937; }
+                .modal-omr-close {
+                    background: none;
+                    border: none;
+                    font-size: 28px;
+                    cursor: pointer;
+                    color: #6b7280;
+                    transition: all 0.2s;
+                }
+                .modal-omr-close:hover { color: #ef4444; }
+                .modal-omr-body {
+                    padding: 20px;
+                    text-align: center;
+                    overflow-y: auto;
+                    background: #f9fafb;
+                }
+                .modal-omr-body img {
+                    max-width: 100%;
+                    max-height: 60vh;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                }
+                .modal-omr-info {
+                    margin-top: 15px;
+                    padding: 15px;
+                    background: white;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    color: #4b5563;
+                    text-align: left;
+                    border: 1px solid #e5e7eb;
+                }
+                .modal-omr-footer {
+                    display: flex;
+                    gap: 10px;
+                    padding: 15px 20px;
+                    border-top: 1px solid #e5e7eb;
+                    justify-content: flex-end;
+                    background: #f8fafc;
+                }
+                
+                .loading-grid {
+                    grid-column: 1 / -1;
+                    text-align: center;
+                    padding: 60px;
+                    color: #6b7280;
+                }
+                .loading-grid i { font-size: 48px; margin-bottom: 15px; display: block; }
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                
+                @media (max-width: 1024px) {
+                    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+                    .filters-grid { grid-template-columns: 1fr; }
+                }
+                @media (max-width: 768px) {
+                    .omr-debug-header { flex-direction: column; align-items: flex-start; }
+                    .header-actions { width: 100%; display: flex; gap: 10px; }
+                    .btn-header { flex: 1; }
+                    .stats-grid { grid-template-columns: 1fr; }
+                    .galeria-grid { grid-template-columns: 1fr; }
+                    .pagination-omr { flex-direction: column; gap: 10px; }
+                }
+            </style>
+        `;
+    }
+
+    // ============ RENDERIZAR GALERIA ============
+    renderizarGaleriaOMR() {
+        const gridContainer = document.getElementById('galeriaGrid');
+        const listContainer = document.getElementById('galeriaList');
+        
+        if (!gridContainer) return;
+        
+        if (this.omrImagensFiltradas.length === 0) {
+            gridContainer.innerHTML = `
+                <div class="loading-grid">
+                    <i class="fas fa-camera"></i>
+                    <span>Nenhuma imagem encontrada</span>
+                </div>
+            `;
+            if (listContainer) listContainer.innerHTML = '';
+            return;
+        }
+        
+        const inicio = (this.paginaAtualOMR - 1) * this.itensPorPaginaOMR;
+        const fim = inicio + this.itensPorPaginaOMR;
+        const paginaImagens = this.omrImagensFiltradas.slice(inicio, fim);
+        
+        // Renderizar grid
+        let gridHtml = '';
+        paginaImagens.forEach(img => {
+            const data = new Date(img.data);
+            const dataFormatada = data.toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+            
+            let badgeClass = '';
+            let badgeText = '';
+            
+            if (img.tipo === 'original') {
+                badgeClass = 'badge-original';
+                badgeText = '📸 Original';
+            } else if (img.tipo === 'processada') {
+                badgeClass = 'badge-processada';
+                badgeText = '🔧 Processada';
+            } else {
+                badgeClass = 'badge-resultado';
+                badgeText = '📊 Com Resultado';
+            }
+            
+            gridHtml += `
+                <div class="imagem-card" data-id="${img.id}" onclick="admin.abrirModalOMR('${img.id}')">
+                    <img class="imagem-preview" src="${img.thumbnail || img.url}" alt="${img.nome}" 
+                        onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'100\\' viewBox=\\'0 0 100 100\\'%3E%3Crect width=\\'100\\' height=\\'100\\' fill=\\'%23f3f4f6\\'/%3E%3Ctext x=\\'50\\' y=\\'50\\' text-anchor=\\'middle\\' dy=\\'.3em\\' fill=\\'%239ca3af\\'%3ESem imagem%3C/text%3E%3C/svg%3E'">
+                    <div class="imagem-info">
+                        <div class="imagem-nome" title="${img.nome}">${img.nome}</div>
+                        <div class="imagem-meta">
+                            <span>${dataFormatada}</span>
+                            <span class="imagem-badge ${badgeClass}">${badgeText}</span>
+                        </div>
+                        <div class="imagem-acoes">
+                            <button class="btn-view" onclick="event.stopPropagation(); admin.verImagemOMR('${img.id}')">
+                                <i class="fas fa-eye"></i> Ver
+                            </button>
+                            <button class="btn-download" onclick="event.stopPropagation(); admin.baixarImagemOMR('${img.id}')">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <button class="btn-delete" onclick="event.stopPropagation(); admin.excluirImagemOMR('${img.id}', '${img.nome}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        gridContainer.innerHTML = gridHtml;
+        
+        // Renderizar lista
+        let listHtml = '';
+        paginaImagens.forEach(img => {
+            const data = new Date(img.data);
+            const dataFormatada = data.toLocaleString('pt-BR');
+            
+            let badgeClass = '';
+            let badgeText = '';
+            
+            if (img.tipo === 'original') {
+                badgeClass = 'badge-original';
+                badgeText = 'Original';
+            } else if (img.tipo === 'processada') {
+                badgeClass = 'badge-processada';
+                badgeText = 'Processada';
+            } else {
+                badgeClass = 'badge-resultado';
+                badgeText = 'Com Resultado';
+            }
+            
+            listHtml += `
+                <div class="list-item" onclick="admin.abrirModalOMR('${img.id}')">
+                    <img class="list-item-thumb" src="${img.thumbnail || img.url}" alt="${img.nome}"
+                        onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'60\\' height=\\'60\\' viewBox=\\'0 0 60 60\\'%3E%3Crect width=\\'60\\' height=\\'60\\' fill=\\'%23f3f4f6\\'/%3E%3C/svg%3E'">
+                    <div class="list-item-info">
+                        <div class="list-item-nome">${img.nome}</div>
+                        <div class="list-item-meta">
+                            ${dataFormatada} • <span class="imagem-badge ${badgeClass}">${badgeText}</span>
+                        </div>
+                    </div>
+                    <div class="list-item-actions" onclick="event.stopPropagation()">
+                        <button class="btn-view" onclick="admin.verImagemOMR('${img.id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-download" onclick="admin.baixarImagemOMR('${img.id}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button class="btn-delete" onclick="admin.excluirImagemOMR('${img.id}', '${img.nome}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        if (listContainer) listContainer.innerHTML = listHtml;
+        
+        // Atualizar paginação e estatísticas
+        this.atualizarPaginacaoOMR();
+        this.atualizarEstatisticasOMR();
+    }
+
+    // ============ CONFIGURAR EVENTOS ============
+    configurarEventosOMR() {
+        const buscaInput = document.getElementById('buscaOMR');
+        if (buscaInput) {
+            let timeout;
+            buscaInput.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => this.filtrarOMR(), 300);
+            });
+        }
+        
+        const tipoSelect = document.getElementById('filtroTipoOMR');
+        if (tipoSelect) {
+            tipoSelect.addEventListener('change', () => this.filtrarOMR());
+        }
+        
+        const ordenacaoSelect = document.getElementById('ordenacaoOMR');
+        if (ordenacaoSelect) {
+            ordenacaoSelect.addEventListener('change', () => this.ordenarOMR());
+        }
+    }
+
+    // ============ FILTRAR OMR ============
+    filtrarOMR() {
+        const termo = document.getElementById('buscaOMR')?.value.toLowerCase() || '';
+        const tipo = document.getElementById('filtroTipoOMR')?.value || 'todas';
+        
+        const clearBtn = document.getElementById('clearBuscaOMR');
+        if (clearBtn) clearBtn.style.display = termo ? 'flex' : 'none';
+        
+        this.omrImagensFiltradas = this.omrImagens.filter(img => {
+            const matchSearch = termo === '' || img.nome.toLowerCase().includes(termo);
+            const matchTipo = tipo === 'todas' || img.tipo === tipo;
+            return matchSearch && matchTipo;
+        });
+        
+        this.paginaAtualOMR = 1;
+        this.renderizarGaleriaOMR();
+        this.atualizarEstatisticasOMR();
+    }
+
+    // ============ ORDENAR OMR ============
+    ordenarOMR() {
+        const ordenacao = document.getElementById('ordenacaoOMR')?.value || 'data_desc';
+        
+        this.omrImagensFiltradas.sort((a, b) => {
+            switch(ordenacao) {
+                case 'data_desc': return new Date(b.data) - new Date(a.data);
+                case 'data_asc': return new Date(a.data) - new Date(b.data);
+                case 'nome_asc': return a.nome.localeCompare(b.nome);
+                case 'nome_desc': return b.nome.localeCompare(a.nome);
+                default: return 0;
+            }
+        });
+        
+        this.paginaAtualOMR = 1;
+        this.renderizarGaleriaOMR();
+    }
+
+    // ============ APLICAR FILTROS ============
+    aplicarFiltrosOMR() {
+        this.filtrarOMR();
+    }
+
+    // ============ LIMPAR FILTROS ============
+    limparFiltrosOMR() {
+        const buscaInput = document.getElementById('buscaOMR');
+        const tipoSelect = document.getElementById('filtroTipoOMR');
+        const ordenacaoSelect = document.getElementById('ordenacaoOMR');
+        
+        if (buscaInput) buscaInput.value = '';
+        if (tipoSelect) tipoSelect.value = 'todas';
+        if (ordenacaoSelect) ordenacaoSelect.value = 'data_desc';
+        
+        this.omrImagensFiltradas = [...this.omrImagens];
+        this.paginaAtualOMR = 1;
+        this.renderizarGaleriaOMR();
+        this.atualizarEstatisticasOMR();
+        
+        const clearBtn = document.getElementById('clearBuscaOMR');
+        if (clearBtn) clearBtn.style.display = 'none';
+    }
+
+    // ============ LIMPAR BUSCA ============
+    limparBuscaOMR() {
+        const buscaInput = document.getElementById('buscaOMR');
+        if (buscaInput) buscaInput.value = '';
+        this.filtrarOMR();
+    }
+
+    // ============ FILTRAR POR TIPO ============
+    filtrarOMRPorTipo(tipo) {
+        const select = document.getElementById('filtroTipoOMR');
+        if (select) {
+            select.value = tipo;
+            this.filtrarOMR();
+        }
+    }
+
+    // ============ MUDAR VIEW ============
+    mudarViewOMR(view) {
+        const grid = document.getElementById('galeriaGrid');
+        const list = document.getElementById('galeriaList');
+        const buttons = document.querySelectorAll('.view-btn');
+        
+        buttons.forEach(btn => btn.classList.remove('active'));
+        
+        if (view === 'grid') {
+            grid.style.display = 'grid';
+            list.style.display = 'none';
+            buttons[0].classList.add('active');
+        } else {
+            grid.style.display = 'none';
+            list.style.display = 'block';
+            buttons[1].classList.add('active');
+        }
+        this.viewAtualOMR = view;
+    }
+
+    // ============ PAGINAÇÃO ============
+    atualizarPaginacaoOMR() {
+        const total = this.omrImagensFiltradas.length;
+        const totalPaginas = Math.ceil(total / this.itensPorPaginaOMR);
+        const paginaAtual = this.paginaAtualOMR;
+        
+        const btnAnterior = document.getElementById('btnAnteriorOMR');
+        const btnProxima = document.getElementById('btnProximaOMR');
+        const pageInfo = document.getElementById('pageInfoOMR');
+        
+        if (btnAnterior) btnAnterior.disabled = paginaAtual === 1;
+        if (btnProxima) btnProxima.disabled = paginaAtual === totalPaginas;
+        if (pageInfo) pageInfo.textContent = `Página ${paginaAtual} de ${totalPaginas || 1}`;
+    }
+
+    paginaAnteriorOMR() {
+        if (this.paginaAtualOMR > 1) {
+            this.paginaAtualOMR--;
+            this.renderizarGaleriaOMR();
+        }
+    }
+
+    proximaPaginaOMR() {
+        const totalPaginas = Math.ceil(this.omrImagensFiltradas.length / this.itensPorPaginaOMR);
+        if (this.paginaAtualOMR < totalPaginas) {
+            this.paginaAtualOMR++;
+            this.renderizarGaleriaOMR();
+        }
+    }
+
+    // ============ ATUALIZAR ESTATÍSTICAS ============
+    atualizarEstatisticasOMR() {
+        const total = document.getElementById('statTotalImagens');
+        const original = document.getElementById('statOriginal');
+        const processada = document.getElementById('statProcessada');
+        const resultado = document.getElementById('statResultado');
+        const resultadosBadge = document.getElementById('resultadosBadge');
+        
+        if (total) total.textContent = this.omrImagens.length;
+        if (original) original.textContent = this.omrImagens.filter(i => i.tipo === 'original').length;
+        if (processada) processada.textContent = this.omrImagens.filter(i => i.tipo === 'processada').length;
+        if (resultado) resultado.textContent = this.omrImagens.filter(i => i.tipo === 'resultado').length;
+        if (resultadosBadge) resultadosBadge.textContent = `${this.omrImagensFiltradas.length} imagens`;
+    }
+
+    // ============ ATUALIZAR OMR DEBUG ============
+    async atualizarOMRDebug() {
+        const refreshBtn = document.querySelector('.omr-debug-header .btn-refresh i');
+        
+        try {
+            if (refreshBtn) refreshBtn.className = 'fas fa-spinner fa-spin';
+            this.showToast('🔄 Atualizando imagens...', 'info');
+            await this.loadOMRDebug();
+            this.showToast('✅ Imagens atualizadas!', 'success');
+        } catch (error) {
+            console.error('Erro:', error);
+            this.showToast('❌ Erro ao atualizar', 'error');
+        } finally {
+            if (refreshBtn) setTimeout(() => refreshBtn.className = 'fas fa-sync-alt', 500);
+        }
+    }
+
+    // ============ VER IMAGEM ============
+    async verImagemOMR(imagemId) {
+        const imagem = this.omrImagens.find(i => i.id === imagemId);
+        if (!imagem) {
+            this.showToast('❌ Imagem não encontrada', 'error');
+            return;
+        }
+        this.abrirModalOMR(imagemId);
+    }
+
+    // ============ ABRIR MODAL OMR ============
+    async abrirModalOMR(imagemId) {
+        try {
+            const imagem = this.omrImagens.find(i => i.id === imagemId);
+            if (!imagem) {
+                this.showToast('❌ Imagem não encontrada', 'error');
+                return;
+            }
+            
+            const modal = document.getElementById('modalOMR');
+            const modalImg = document.getElementById('modalOMRImagem');
+            const modalTitulo = document.getElementById('modalOMRTitulo');
+            const modalInfo = document.getElementById('modalOMRInfo');
+            
+            if (!modal || !modalImg) return;
+            
+            const data = new Date(imagem.data);
+            const dataFormatada = data.toLocaleString('pt-BR');
+            
+            let badgeText = '';
+            if (imagem.tipo === 'original') badgeText = '📸 Original';
+            else if (imagem.tipo === 'processada') badgeText = '🔧 Processada';
+            else badgeText = '📊 Com Resultado';
+            
+            modalTitulo.innerHTML = `${badgeText}: ${imagem.nome}`;
+            modalImg.src = imagem.url;
+            
+            modalInfo.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div><strong>Nome:</strong> ${imagem.nome}</div>
+                    <div><strong>Data:</strong> ${dataFormatada}</div>
+                    <div><strong>Tipo:</strong> ${badgeText}</div>
+                    <div><strong>Tamanho:</strong> ${imagem.tamanho || 'N/A'}</div>
+                </div>
+                ${imagem.respostas ? `
+                    <div style="margin-top: 10px; padding: 10px; background: #f0fdf4; border-radius: 8px;">
+                        <strong>📊 Respostas detectadas:</strong>
+                        <div>${imagem.respostas.join(', ')}</div>
+                    </div>
+                ` : ''}
+                ${imagem.nota ? `
+                    <div style="margin-top: 10px; padding: 10px; background: #fef3c7; border-radius: 8px;">
+                        <strong>⭐ Nota:</strong> ${imagem.nota}
+                    </div>
+                ` : ''}
+            `;
+            
+            this.imagemAtualOMR = imagem;
+            modal.style.display = 'flex';
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ Erro ao abrir imagem', 'error');
+        }
+    }
+
+    // ============ FECHAR MODAL OMR ============
+    fecharModalOMR() {
+        const modal = document.getElementById('modalOMR');
+        if (modal) modal.style.display = 'none';
+        this.imagemAtualOMR = null;
+    }
+
+    // ============ BAIXAR IMAGEM ============
+    async baixarImagemOMR(imagemId = null) {
+        const imagem = imagemId ? this.omrImagens.find(i => i.id === imagemId) : this.imagemAtualOMR;
+        
+        if (!imagem) {
+            this.showToast('❌ Imagem não encontrada', 'error');
+            return;
+        }
+        
+        try {
+            const link = document.createElement('a');
+            link.href = imagem.url;
+            link.download = imagem.nome;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            this.showToast('✅ Download iniciado!', 'success');
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ Erro ao baixar imagem', 'error');
+        }
+    }
+
+    baixarImagemOMRAtual() {
+        this.baixarImagemOMR();
+    }
+
+    // ============ EXCLUIR IMAGEM ============
+    async excluirImagemOMR(imagemId, nomeImagem = null) {
+        const imagem = this.omrImagens.find(i => i.id === imagemId);
+        
+        if (!imagem) {
+            this.showToast('❌ Imagem não encontrada', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🗑️ Excluir Imagem',
+            `Tem certeza que deseja excluir a imagem <strong>${imagem.nome}</strong>?<br><br>Esta ação não pode ser desfeita.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🗑️ Excluindo imagem...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/omr/imagens/${imagemId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Imagem excluída!', 'success');
+                this.fecharModalOMR();
+                await this.loadOMRDebug();
+            } else {
+                throw new Error(data.error || 'Erro ao excluir');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    excluirImagemOMRAtual() {
+        if (this.imagemAtualOMR) {
+            this.excluirImagemOMR(this.imagemAtualOMR.id, this.imagemAtualOMR.nome);
+        }
+    }
+
+    // ============ LIMPAR TODAS AS IMAGENS ============
+    async limparOMRDebug() {
+        if (this.omrImagens.length === 0) {
+            this.showToast('ℹ️ Nenhuma imagem para limpar', 'info');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '⚠️ Limpar Todas as Imagens',
+            `<strong style="color: #dc3545;">ATENÇÃO!</strong><br><br>
+            Você está prestes a excluir <strong>TODAS as ${this.omrImagens.length} imagens</strong> do debug OMR.<br><br>
+            Esta ação não pode ser desfeita.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🗑️ Excluindo todas as imagens...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/omr/limpar', {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Todas as imagens foram excluídas!', 'success');
+                await this.loadOMRDebug();
+            } else {
+                throw new Error(data.error || 'Erro ao limpar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ RENDERIZAR ERRO ============
+    renderOMRErro(mensagem) {
+        return `
+            <div class="error-container-omr">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h2>Erro ao carregar imagens</h2>
+                <p>${mensagem}</p>
+                <button class="btn-primary" onclick="admin.loadOMRDebug()" style="background: #10b981; color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                </button>
+            </div>
+            <style>
+                .error-container-omr {
+                    text-align: center;
+                    padding: 80px;
+                    background: white;
+                    border-radius: 16px;
+                }
+                .error-container-omr i {
+                    font-size: 64px;
+                    color: #dc3545;
+                    margin-bottom: 20px;
+                }
+                .error-container-omr h2 {
+                    color: #721c24;
+                    margin-bottom: 10px;
+                }
+                .error-container-omr p {
+                    color: #6c757d;
+                    margin-bottom: 25px;
+                }
+            </style>
+        `;
     }
 
     // ============ BACKUPS E RESTAURAÇÃO ============
