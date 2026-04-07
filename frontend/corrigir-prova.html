@@ -16,39 +16,37 @@
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
             padding: 10px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
         
-        /* Modo tela cheia para mobile - INTERFACE MÍNIMA */
+        /* Modo tela cheia para mobile - INTERFACE MÍNIMA COM ROLAGEM PERMITIDA */
         body.fullscreen-mode {
             padding: 0;
-            overflow: hidden;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            overflow-y: auto;
+            position: relative;
             background: #000;
         }
         body.fullscreen-mode .container {
             max-width: 100%;
-            height: 100%;
+            min-height: 100%;
             margin: 0;
         }
         body.fullscreen-mode .card {
-            height: 100%;
+            min-height: 100%;
             border-radius: 0;
             padding: 0;
             margin: 0;
             background: #000;
         }
         body.fullscreen-mode .camera-container {
-            flex: 1;
             margin: 0;
-            min-height: 0;
+            min-height: 100vh;
             border-radius: 0;
             aspect-ratio: 16 / 9;
             width: 100%;
-            height: 100%;
+            height: auto;
+            min-height: 100vh;
         }
         body.fullscreen-mode .button-group,
         body.fullscreen-mode .header,
@@ -69,6 +67,7 @@
             font-size: 14px;
             padding: 8px 16px;
             background: rgba(0,0,0,0.7);
+            position: fixed;
         }
         body.fullscreen-mode .status-encaixe {
             display: block !important;
@@ -76,61 +75,13 @@
             font-size: 14px;
             padding: 6px 14px;
             background: rgba(0,0,0,0.7);
+            position: fixed;
         }
         body.fullscreen-mode .auto-status {
             display: block !important;
             font-size: 16px;
             padding: 8px 20px;
-        }
-        
-        /* Botões de zoom flutuantes */
-        .zoom-controls {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 10px;
-            z-index: 1000;
-            background: rgba(0,0,0,0.6);
-            padding: 8px 12px;
-            border-radius: 40px;
-            backdrop-filter: blur(4px);
-        }
-        .zoom-controls button {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: white;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            font-size: 20px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .zoom-controls button:hover {
-            background: rgba(255,255,255,0.4);
-            transform: scale(1.05);
-        }
-        .zoom-controls button:active {
-            transform: scale(0.95);
-        }
-        .zoom-level {
-            color: white;
-            font-size: 12px;
-            font-family: monospace;
-            display: flex;
-            align-items: center;
-            padding: 0 8px;
-        }
-        
-        body.fullscreen-mode .zoom-controls {
-            display: flex;
-        }
-        
-        /* Ocultar zoom controls fora da tela cheia */
-        .zoom-controls {
-            display: none;
         }
         
         .container { max-width: 950px; margin: 0 auto; }
@@ -513,6 +464,25 @@
             pointer-events: none;
         }
         
+        /* Dica de rolagem */
+        .scroll-dica {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: #ffaa00;
+            padding: 6px 12px;
+            border-radius: 30px;
+            font-size: 11px;
+            font-family: monospace;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+            white-space: nowrap;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+        
         @media (max-width: 768px) {
             .btn { padding: 8px 14px; font-size: 12px; }
             .feedback { font-size: 10px; padding: 4px 10px; }
@@ -641,20 +611,12 @@
     
     <div id="modoIndicador" class="modo-indicador">🔍 CARREGANDO...</div>
     
-    <!-- Botões de zoom flutuantes -->
-    <div class="zoom-controls" id="zoomControls">
-        <button id="zoomOutBtn" title="Diminuir zoom (Ctrl -)">−</button>
-        <span class="zoom-level" id="zoomLevel">1.0x</span>
-        <button id="zoomInBtn" title="Aumentar zoom (Ctrl +)">+</button>
-    </div>
-    
     <script>
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const modoIndicador = document.getElementById('modoIndicador');
         
         let modoFullscreen = false;
-        let currentZoom = 1.0;
-        let videoTrack = null;
+        let dicaScroll = null;
         
         if (isMobile) {
             modoIndicador.className = 'modo-indicador mobile';
@@ -664,47 +626,17 @@
             modoIndicador.innerHTML = '💻 DESKTOP';
         }
         
-        // Funções de zoom
-        async function aplicarZoom(zoom) {
-            if (!stream) return;
-            
-            const track = stream.getVideoTracks()[0];
-            if (!track) return;
-            
-            const capabilities = track.getCapabilities();
-            const settings = track.getSettings();
-            
-            console.log('Zoom capabilities:', capabilities.zoom);
-            
-            if (capabilities.zoom && capabilities.zoom.max) {
-                const minZoom = capabilities.zoom.min || 1;
-                const maxZoom = capabilities.zoom.max;
-                const step = (maxZoom - minZoom) / 10;
-                
-                let newZoom = zoom;
-                if (zoom === 'in') {
-                    newZoom = Math.min(maxZoom, (settings.zoom || minZoom) + step);
-                } else if (zoom === 'out') {
-                    newZoom = Math.max(minZoom, (settings.zoom || minZoom) - step);
-                } else {
-                    newZoom = Math.min(maxZoom, Math.max(minZoom, zoom));
-                }
-                
-                try {
-                    await track.applyConstraints({
-                        advanced: [{ zoom: newZoom }]
-                    });
-                    currentZoom = newZoom;
-                    const zoomPercent = ((newZoom - minZoom) / (maxZoom - minZoom) * 100).toFixed(0);
-                    document.getElementById('zoomLevel').innerHTML = `${zoomPercent}%`;
-                    console.log(`Zoom aplicado: ${zoomPercent}%`);
-                } catch (err) {
-                    console.error('Erro ao aplicar zoom:', err);
-                }
-            } else {
-                console.log('Zoom não suportado por esta câmera');
-                document.getElementById('zoomLevel').innerHTML = 'N/A';
-            }
+        // Mostrar dica de rolagem
+        function mostrarDicaScroll() {
+            if (dicaScroll) dicaScroll.remove();
+            dicaScroll = document.createElement('div');
+            dicaScroll.className = 'scroll-dica';
+            dicaScroll.innerHTML = '<i class="fas fa-arrows-alt-v"></i> Deslize para alinhar o cartão';
+            document.body.appendChild(dicaScroll);
+            setTimeout(() => {
+                if (dicaScroll) dicaScroll.style.opacity = '0';
+                setTimeout(() => { if (dicaScroll) dicaScroll.remove(); }, 500);
+            }, 4000);
         }
         
         // Funções de tela cheia
@@ -721,9 +653,8 @@
             document.body.classList.add('fullscreen-mode');
             modoFullscreen = true;
             
-            // Mostrar botões de zoom
-            const zoomControls = document.getElementById('zoomControls');
-            if (zoomControls) zoomControls.style.display = 'flex';
+            // Mostrar dica de rolagem
+            setTimeout(() => mostrarDicaScroll(), 1000);
         }
         
         function sairTelaCheia() {
@@ -737,27 +668,7 @@
             }
             document.body.classList.remove('fullscreen-mode');
             modoFullscreen = false;
-            
-            // Esconder botões de zoom
-            const zoomControls = document.getElementById('zoomControls');
-            if (zoomControls) zoomControls.style.display = 'none';
         }
-        
-        // Eventos de teclado para zoom (desktop)
-        document.addEventListener('keydown', (e) => {
-            if (modoFullscreen || (!isMobile && stream)) {
-                if (e.ctrlKey && e.key === '+') {
-                    e.preventDefault();
-                    aplicarZoom('in');
-                } else if (e.ctrlKey && e.key === '-') {
-                    e.preventDefault();
-                    aplicarZoom('out');
-                } else if (e.ctrlKey && e.key === '0') {
-                    e.preventDefault();
-                    aplicarZoom(1.0);
-                }
-            }
-        });
         
         const urlParams = new URLSearchParams(window.location.search);
         const provaId = urlParams.get('prova');
@@ -834,17 +745,6 @@
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
         const btnTentarNovamente = document.getElementById('btnTentarNovamente');
         
-        // Botões de zoom
-        const zoomInBtn = document.getElementById('zoomInBtn');
-        const zoomOutBtn = document.getElementById('zoomOutBtn');
-        
-        if (zoomInBtn) {
-            zoomInBtn.addEventListener('click', () => aplicarZoom('in'));
-        }
-        if (zoomOutBtn) {
-            zoomOutBtn.addEventListener('click', () => aplicarZoom('out'));
-        }
-        
         function voltarParaScannerQR() {
             console.log('🔄 Voltando para scanner QR...');
             if (qrScanner && scannerIniciado) { try { qrScanner.stop(); } catch(e) {} }
@@ -865,22 +765,18 @@
             mostrarAlerta('🔄 Escaneie o QR Code', 'info');
         }
         
-        // Modificar a função tentarNovamente para reexibir a câmera
         function tentarNovamente() {
             console.log('🔄 Tentando nova captura...');
             
-            // Limpar resultados
             document.getElementById('resultado').style.display = 'none';
             btnTentarNovamente.style.display = 'none';
             
-            // Resetar flags
             capturaRealizada = false;
             estabilidade = 0;
             quadradosEncaixados = [false, false, false, false];
             retanguloAtual = null;
             ultimoRetangulo = null;
             
-            // Limpar UI dos guias
             const guias = ['guiaTL', 'guiaTR', 'guiaBL', 'guiaBR'];
             guias.forEach(id => { 
                 const el = document.getElementById(id); 
@@ -890,21 +786,13 @@
             document.getElementById('feedback').innerHTML = '🎯 Alinhe';
             document.getElementById('feedback').style.background = '#f59e0b';
             
-            // Mostrar a câmera novamente
             cameraContainer.style.display = 'block';
             
-            // Reexibir botões de zoom se necessário
-            if (isMobile && modoFullscreen) {
-                const zoomControls = document.getElementById('zoomControls');
-                if (zoomControls) zoomControls.style.display = 'flex';
-            }
-            
-            // Reiniciar a câmera
             iniciarCamera();
             
-            // Se estiver em mobile, entrar em tela cheia novamente
             if (isMobile && !modoFullscreen) {
                 entrarTelaCheia();
+                setTimeout(() => mostrarDicaScroll(), 1000);
             }
             
             mostrarAlerta('Posicione o cartão novamente', 'info');
@@ -1376,18 +1264,13 @@
                 console.log(`✅ Imagem recortada com sucesso: ${cartaoW}x${cartaoH} pixels`);
                 console.log(`📊 Tamanho da imagem base64: ${Math.round(imgData.length / 1024)} KB`);
                 
-                // 🔥 OCULTAR A CÂMERA IMEDIATAMENTE
+                // OCULTAR A CÂMERA
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 
-                // 🔥 SAIR DA TELA CHEIA SE ESTIVER NELA
                 if (isMobile && modoFullscreen) {
                     sairTelaCheia();
                 }
-                
-                // 🔥 ESCONDER BOTÕES DE ZOOM
-                const zoomControls = document.getElementById('zoomControls');
-                if (zoomControls) zoomControls.style.display = 'none';
                 
                 document.getElementById('processando').style.display = 'block';
                 document.getElementById('resultado').style.display = 'none';
@@ -1431,16 +1314,12 @@
                 console.error('❌ Erro na captura:', error);
                 document.getElementById('processando').style.display = 'none';
                 
-                // 🔥 MESMO EM CASO DE ERRO, OCULTAR A CÂMERA
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 
                 if (isMobile && modoFullscreen) {
                     sairTelaCheia();
                 }
-                
-                const zoomControls = document.getElementById('zoomControls');
-                if (zoomControls) zoomControls.style.display = 'none';
                 
                 if (error.name === 'AbortError') {
                     mostrarAlerta(`⚠️ Tempo limite excedido. Tente novamente.`, 'warning');
@@ -1514,35 +1393,18 @@
         }
         
         async function salvarNota() {
-            if (!alunoSelecionado) { 
-                mostrarAlerta('Selecione um aluno!', 'error'); 
-                return; 
-            }
+            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno!', 'error'); return; }
             if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)} para ${alunoSelecionado.nome}?`)) return;
-            
             try {
-                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { 
-                    method: 'POST', 
-                    body: JSON.stringify({ 
-                        alunoId: alunoSelecionado.id, 
-                        nota: notaCalculada, 
-                        observacao: `Corrigido em ${new Date().toLocaleString()}` 
-                    }) 
-                });
+                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { method: 'POST', body: JSON.stringify({ alunoId: alunoSelecionado.id, nota: notaCalculada, observacao: `Corrigido em ${new Date().toLocaleString()}` }) });
                 const data = await response.json();
                 if (data.success) { 
-                    mostrarAlerta(`✅ Nota salva!`, 'success');
-                    
-                    // 🔥 VOLTAR PARA O SCANNER QR APÓS SALVAR
-                    setTimeout(() => { 
-                        voltarParaScannerQR(); 
-                    }, 1500);
+                    mostrarAlerta(`✅ Nota salva!`, 'success'); 
+                    setTimeout(() => { voltarParaScannerQR(); }, 1500);
                 } else { 
                     throw new Error(data.error || 'Erro'); 
                 }
-            } catch (error) { 
-                mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); 
-            }
+            } catch (error) { mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); }
         }
         
         function mostrarAlerta(msg, tipo) { const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' }; const alertDiv = document.createElement('div'); alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:12px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:12px;`; alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`; document.body.appendChild(alertDiv); setTimeout(() => alertDiv.remove(), 3000); }
@@ -1615,18 +1477,12 @@
                 video.srcObject = stream;
                 await video.play();
                 
-                // Reset zoom ao iniciar câmera
-                currentZoom = 1.0;
-                if (!isMobile) {
-                    aplicarZoom(1.0);
-                }
-                
                 btnIniciarCamera.disabled = true;
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
                 cameraContainer.style.display = 'block';
                 if (analiseInterval) clearInterval(analiseInterval);
                 analiseInterval = setInterval(analisarFrame, 100);
-                mostrarAlerta('📷 Câmera iniciada! Use os botões + e - para zoom.', 'info');
+                mostrarAlerta('📷 Câmera iniciada! Deslize para alinhar o cartão.', 'info');
             } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
         }
         
