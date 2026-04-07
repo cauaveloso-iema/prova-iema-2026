@@ -1,9 +1,22 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+
+        <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Sistema de Provas>
+
+    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>Correção de Prova - EVALBEE OMR</title>
+    <title>Correção de Prova OMR - Sistema de Provas</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -269,8 +282,10 @@
         }
         .resposta-card.correta { border-color: #10b981; background: linear-gradient(135deg, #f0fdf4, #dcfce7); }
         .resposta-card.incorreta { border-color: #ef4444; background: linear-gradient(135deg, #fef2f2, #fee2e2); }
+        .resposta-card.anulada { border-color: #f59e0b; background: linear-gradient(135deg, #fffbeb, #fef3c7); }
         .resposta-card .questao-num { font-size: 10px; color: #6b7280; margin-bottom: 4px; }
         .resposta-card .resposta-valor { font-size: 1.4rem; font-weight: bold; margin: 4px 0; }
+        .resposta-card .resposta-valor.anulada { color: #f59e0b; font-size: 1rem; }
         .btn-opcao {
             width: 30px;
             padding: 4px;
@@ -438,6 +453,9 @@
             gap: 5px;
             font-size: 12px;
         }
+        .qr-selecionado.ja-corrigido {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
         
         .btn-limpar-qr {
             background: rgba(255,255,255,0.2);
@@ -482,6 +500,45 @@
             pointer-events: none;
             transition: opacity 0.5s;
         }
+        
+        /* Modal de confirmação */
+        .modal-confirmacao {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20000;
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            max-width: 300px;
+            text-align: center;
+            animation: modalSlide 0.3s ease-out;
+        }
+        @keyframes modalSlide {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .modal-content h3 { margin-bottom: 10px; color: #f59e0b; }
+        .modal-content p { margin-bottom: 20px; font-size: 14px; color: #374151; }
+        .modal-buttons { display: flex; gap: 10px; justify-content: center; }
+        .modal-buttons button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-confirmar { background: #10b981; color: white; }
+        .btn-cancelar { background: #ef4444; color: white; }
         
         @media (max-width: 768px) {
             .btn { padding: 8px 14px; font-size: 12px; }
@@ -716,6 +773,9 @@
         let authToken = null;
         let provaInfo = null;
         
+        // NOVA VARIÁVEL: Armazenar resultados já salvos por aluno
+        let resultadosSalvos = new Map();
+        
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         let stream = null;
@@ -744,6 +804,52 @@
         const cameraContainer = document.getElementById('cameraContainer');
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
         const btnTentarNovamente = document.getElementById('btnTentarNovamente');
+        
+        // NOVA FUNÇÃO: Verificar se aluno já foi corrigido
+        async function verificarAlunoJaCorrigido(alunoId) {
+            try {
+                const response = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
+                const data = await response.json();
+                if (data.success && data.resultados) {
+                    const jaCorrigido = data.resultados.some(r => (r.alunoId === alunoId || r.userId === alunoId));
+                    if (jaCorrigido) {
+                        // Armazenar que este aluno já foi corrigido
+                        resultadosSalvos.set(alunoId, true);
+                    }
+                    return jaCorrigido;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erro ao verificar aluno:', error);
+                return false;
+            }
+        }
+        
+        // NOVA FUNÇÃO: Mostrar modal de confirmação
+        function mostrarModalConfirmacao(alunoNome, onConfirm, onCancel) {
+            const modal = document.createElement('div');
+            modal.className = 'modal-confirmacao';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Atenção!</h3>
+                    <p>O aluno <strong>${alunoNome}</strong> já possui uma correção salva.<br>Deseja corrigir novamente?</p>
+                    <div class="modal-buttons">
+                        <button class="btn-confirmar" id="modalConfirmar">Sim, corrigir</button>
+                        <button class="btn-cancelar" id="modalCancelar">Não, cancelar</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            document.getElementById('modalConfirmar').onclick = () => {
+                modal.remove();
+                if (onConfirm) onConfirm();
+            };
+            document.getElementById('modalCancelar').onclick = () => {
+                modal.remove();
+                if (onCancel) onCancel();
+            };
+        }
         
         function voltarParaScannerQR() {
             console.log('🔄 Voltando para scanner QR...');
@@ -977,6 +1083,7 @@
         function pararScannerJsQR() { scannerAlternativoAtivo = false; if (alternativeStream) { alternativeStream.getTracks().forEach(track => track.stop()); alternativeStream = null; } }
         function pararScanner() { if (qrScanner && scannerIniciado) { try { qrScanner.stop(); } catch(e) {} } pararScannerJsQR(); if (zxingReader) { try { zxingReader.reset(); } catch(e) {} } if (window.Quagga) { try { Quagga.stop(); } catch(e) {} } scannerIniciado = false; }
         
+        // NOVA FUNÇÃO MODIFICADA: Processar QR Code com verificação
         async function processarQRCode(qrData) {
             try {
                 console.log('🔍 QR Code:', qrData);
@@ -984,27 +1091,63 @@
                 try { const alunoData = JSON.parse(qrData); alunoId = alunoData.id || alunoData.alunoId || alunoData; } catch (e) { if (qrData.includes('aluno=')) { const match = qrData.match(/aluno=([a-f0-9]+)/); if (match) alunoId = match[1]; else alunoId = qrData; } else alunoId = qrData; }
                 const alunoEncontrado = alunosMap.get(alunoId);
                 if (!alunoEncontrado) { mostrarAlerta('❌ Aluno não encontrado!', 'error'); setTimeout(() => voltarParaScannerQR(), 1500); return; }
-                alunoSelecionado = { id: alunoEncontrado.alunoId, nome: alunoEncontrado.alunoNome, matricula: alunoEncontrado.alunoMatricula };
-                pararScanner();
-                document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
-                document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
-                qrSelecionadoDiv.style.display = 'flex';
-                qrScannerArea.style.display = 'none';
-                btnIniciarCamera.disabled = false;
-                mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
-                document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
                 
-                setTimeout(() => { 
-                    if (alunoSelecionado && !stream) {
-                        if (isMobile) {
-                            entrarTelaCheia();
-                            iniciarCamera();
-                        } else {
-                            iniciarCamera();
+                // NOVA VERIFICAÇÃO: Verificar se aluno já foi corrigido
+                const jaCorrigido = await verificarAlunoJaCorrigido(alunoId);
+                
+                if (jaCorrigido) {
+                    // Mostrar modal perguntando se deseja prosseguir
+                    mostrarModalConfirmacao(alunoEncontrado.alunoNome, 
+                        async () => {
+                            // Confirmou - prosseguir com a correção
+                            await continuarProcessamentoQRCode(alunoEncontrado);
+                        },
+                        () => {
+                            // Cancelou - voltar ao scanner
+                            mostrarAlerta('Correção cancelada', 'info');
+                            setTimeout(() => voltarParaScannerQR(), 1000);
                         }
-                    }
-                }, 500);
+                    );
+                } else {
+                    // Aluno não corrigido ainda - prosseguir normalmente
+                    await continuarProcessamentoQRCode(alunoEncontrado);
+                }
+                
             } catch (error) { console.error('Erro:', error); mostrarAlerta('❌ QR Code inválido', 'error'); }
+        }
+        
+        // NOVA FUNÇÃO: Continuar processamento após confirmação
+        async function continuarProcessamentoQRCode(alunoEncontrado) {
+            alunoSelecionado = { id: alunoEncontrado.alunoId, nome: alunoEncontrado.alunoNome, matricula: alunoEncontrado.alunoMatricula };
+            pararScanner();
+            document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
+            document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
+            qrSelecionadoDiv.style.display = 'flex';
+            qrScannerArea.style.display = 'none';
+            btnIniciarCamera.disabled = false;
+            
+            // Verificar se já foi corrigido para mudar a cor do card
+            const jaCorrigido = resultadosSalvos.has(alunoSelecionado.id);
+            if (jaCorrigido) {
+                qrSelecionadoDiv.classList.add('ja-corrigido');
+                mostrarAlerta(`⚠️ ${alunoSelecionado.nome} já possui correção!`, 'warning');
+            } else {
+                qrSelecionadoDiv.classList.remove('ja-corrigido');
+                mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
+            }
+            
+            document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
+            
+            setTimeout(() => { 
+                if (alunoSelecionado && !stream) {
+                    if (isMobile) {
+                        entrarTelaCheia();
+                        iniciarCamera();
+                    } else {
+                        iniciarCamera();
+                    }
+                }
+            }, 500);
         }
         
         function limparQRSelecionado() { voltarParaScannerQR(); }
@@ -1338,18 +1481,38 @@
             }
         }
         
+        // NOVA FUNÇÃO MODIFICADA: Criar interface com suporte a questões anuladas
         function criarInterfaceRespostas(sugestoes) {
             respostasAtuais = [...sugestoes];
             const letras = ['A', 'B', 'C', 'D', 'E'];
             const grid = document.getElementById('respostasGrid');
             grid.innerHTML = '';
             for (let i = 0; i < totalQuestoes; i++) {
-                const respostaAluno = sugestoes[i] || '—';
+                const respostaAluno = sugestoes[i];
                 const respostaGabarito = gabarito[i]?.respostaCorreta || '?';
-                const isCorreta = respostaAluno !== '—' && respostaAluno === respostaGabarito;
+                
+                // NOVA LÓGICA: Verificar se a questão foi anulada (resposta === null)
+                const isAnulada = respostaAluno === null || respostaAluno === undefined;
+                const respostaExibida = isAnulada ? '🚫 ANULADA' : (respostaAluno || '—');
+                const isCorreta = !isAnulada && respostaAluno === respostaGabarito;
+                
+                let classeCard = '';
+                if (isAnulada) {
+                    classeCard = 'anulada';
+                } else if (isCorreta) {
+                    classeCard = 'correta';
+                } else if (respostaAluno !== null && respostaAluno !== undefined && respostaAluno !== '—') {
+                    classeCard = 'incorreta';
+                }
+                
                 const div = document.createElement('div');
-                div.className = `resposta-card ${isCorreta ? 'correta' : (respostaAluno !== '—' ? 'incorreta' : '')}`;
-                div.innerHTML = `<div class="questao-num">Q${i+1}</div><div class="resposta-valor">${respostaAluno}</div><div>${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}<button class="btn-opcao" data-q="${i}" data-opcao="">✗</button></div><small>${respostaGabarito}</small>`;
+                div.className = `resposta-card ${classeCard}`;
+                div.innerHTML = `
+                    <div class="questao-num">Q${i+1}</div>
+                    <div class="resposta-valor ${isAnulada ? 'anulada' : ''}">${respostaExibida}</div>
+                    <div>${letras.map(l => `<button class="btn-opcao" data-q="${i}" data-opcao="${l}">${l}</button>`).join('')}<button class="btn-opcao" data-q="${i}" data-opcao="">✗</button></div>
+                    <small>${respostaGabarito}</small>
+                `;
                 grid.appendChild(div);
             }
             document.querySelectorAll('.btn-opcao').forEach(btn => { btn.addEventListener('click', () => { const q = parseInt(btn.dataset.q); const opcao = btn.dataset.opcao || null; setResposta(q, opcao); }); });
@@ -1370,22 +1533,49 @@
             atualizarNota();
         }
         
+        // NOVA FUNÇÃO MODIFICADA: Set resposta com suporte a anulação
         function setResposta(questao, letra) {
             respostasAtuais[questao] = letra;
             const cards = document.querySelectorAll('.resposta-card');
             if (cards[questao]) {
                 const respostaDiv = cards[questao].querySelector('.resposta-valor');
-                if (respostaDiv) respostaDiv.innerHTML = letra || '—';
+                if (respostaDiv) {
+                    if (letra === null) {
+                        respostaDiv.innerHTML = '🚫 ANULADA';
+                        respostaDiv.classList.add('anulada');
+                    } else {
+                        respostaDiv.innerHTML = letra || '—';
+                        respostaDiv.classList.remove('anulada');
+                    }
+                }
                 const respostaGabarito = gabarito[questao]?.respostaCorreta;
-                const isCorreta = letra && letra === respostaGabarito;
-                cards[questao].className = `resposta-card ${isCorreta ? 'correta' : (letra ? 'incorreta' : '')}`;
+                const isAnulada = letra === null;
+                const isCorreta = !isAnulada && letra && letra === respostaGabarito;
+                
+                if (isAnulada) {
+                    cards[questao].className = 'resposta-card anulada';
+                } else if (isCorreta) {
+                    cards[questao].className = 'resposta-card correta';
+                } else if (letra) {
+                    cards[questao].className = 'resposta-card incorreta';
+                } else {
+                    cards[questao].className = 'resposta-card';
+                }
             }
             atualizarNota();
         }
         
+        // NOVA FUNÇÃO MODIFICADA: Atualizar nota considerando questões anuladas como erradas
         function atualizarNota() {
             let acertos = 0;
-            for (let i = 0; i < totalQuestoes; i++) { if (respostasAtuais[i] && respostasAtuais[i] === gabarito[i]?.respostaCorreta) acertos++; }
+            for (let i = 0; i < totalQuestoes; i++) { 
+                const resposta = respostasAtuais[i];
+                const gab = gabarito[i]?.respostaCorreta;
+                // Questão anulada (null) ou vazia conta como errada
+                if (resposta && resposta !== null && resposta === gab) {
+                    acertos++;
+                }
+            }
             notaCalculada = (acertos / totalQuestoes) * 10;
             const status = notaCalculada >= 6 ? '✅ APROVADO' : '⚠️ REPROVADO';
             const statusClass = notaCalculada >= 6 ? 'aprovado' : 'reprovado';
@@ -1399,6 +1589,9 @@
                 const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { method: 'POST', body: JSON.stringify({ alunoId: alunoSelecionado.id, nota: notaCalculada, observacao: `Corrigido em ${new Date().toLocaleString()}` }) });
                 const data = await response.json();
                 if (data.success) { 
+                    // Marcar que este aluno já foi corrigido
+                    resultadosSalvos.set(alunoSelecionado.id, true);
+                    qrSelecionadoDiv.classList.add('ja-corrigido');
                     mostrarAlerta(`✅ Nota salva!`, 'success'); 
                     setTimeout(() => { voltarParaScannerQR(); }, 1500);
                 } else { 
@@ -1437,6 +1630,20 @@
                     if (provaInfo.turmaId) { const turmaId = provaInfo.turmaId.$oid || provaInfo.turmaId; alunosCarregados = await carregarAlunosDaTurma(turmaId); }
                     if (!alunosCarregados || alunos.length === 0) alunosCarregados = await carregarAlunosDosResultados();
                     if (!alunosCarregados || alunos.length === 0) alunosCarregados = await carregarAlunosDaProva(provaData);
+                    
+                    // NOVO: Carregar resultados já salvos para verificar alunos corrigidos
+                    try {
+                        const resultadosRes = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
+                        const resultadosData = await resultadosRes.json();
+                        if (resultadosData.success && resultadosData.resultados) {
+                            resultadosData.resultados.forEach(r => {
+                                const alunoId = r.alunoId || r.userId;
+                                if (alunoId) resultadosSalvos.set(alunoId, true);
+                            });
+                            console.log(`📊 ${resultadosSalvos.size} alunos já corrigidos`);
+                        }
+                    } catch (e) { console.warn('Não foi possível carregar resultados:', e); }
+                    
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('conteudo').style.display = 'block';
                     document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${provaInfo.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos</p>`;
@@ -1445,7 +1652,28 @@
                     select.innerHTML = '<option value="">— Selecione —</option>';
                     alunos.forEach(a => { select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; });
                     select.addEventListener('change', (e) => {
-                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { entrarTelaCheia(); iniciarCamera(); } else { iniciarCamera(); } } }, 500); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
+                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { 
+                            alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; 
+                            qrSelecionadoDiv.style.display = 'flex'; 
+                            document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; 
+                            document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; 
+                            manualSelectArea.style.display = 'none'; 
+                            btnIniciarCamera.disabled = false; 
+                            
+                            // Verificar se já foi corrigido
+                            const jaCorrigido = resultadosSalvos.has(alunoSelecionado.id);
+                            if (jaCorrigido) {
+                                qrSelecionadoDiv.classList.add('ja-corrigido');
+                                mostrarAlerta(`⚠️ ${alunoSelecionado.nome} já possui correção!`, 'warning');
+                            } else {
+                                qrSelecionadoDiv.classList.remove('ja-corrigido');
+                                mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success');
+                            }
+                            
+                            document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; 
+                            setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { entrarTelaCheia(); iniciarCamera(); } else { iniciarCamera(); } } }, 500); 
+                        } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } 
+                        document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
                     });
                     mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
                     if (urlAlunoId) { const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { entrarTelaCheia(); iniciarCamera(); } else { iniciarCamera(); } } }, 500); } else { mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
@@ -1500,5 +1728,82 @@
         window.setResposta = setResposta;
         carregarDados();
     </script>
+
+        <script>
+        // ============================================
+        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+        // ============================================
+        (function() {
+            if (window.innerWidth > 768) {
+                console.log('📐 Desktop detectado - escalonamento desativado');
+                return;
+            }
+            
+            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+            
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                const baseWidth = 768;
+                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+                
+                if (width <= 320) escala = 0.55;
+                else if (width <= 360) escala = 0.6;
+                else if (width <= 400) escala = 0.65;
+                else if (width <= 500) escala = 0.75;
+                else if (width <= 600) escala = 0.85;
+                else if (width <= 700) escala = 0.95;
+                else escala = 1;
+                
+                return escala;
+            }
+            
+            function aplicarEscalaMobile() {
+                if (window.innerWidth > 768) return;
+                const escala = calcularEscalaMobile();
+                document.documentElement.style.setProperty('--scale-ratio', escala);
+                document.documentElement.style.setProperty('--current-width', window.innerWidth);
+                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+            }
+            
+            aplicarEscalaMobile();
+            
+            let timeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    } else {
+                        document.documentElement.style.setProperty('--scale-ratio', '1');
+                        console.log('📐 Modo desktop - escala resetada');
+                    }
+                }, 100);
+            });
+            
+            window.addEventListener('orientationchange', function() {
+                setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    }
+                }, 200);
+            });
+            
+            console.log('✅ Sistema de escalonamento mobile ativo!');
+        })();
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
+
+        window.addEventListener('online', () => console.log('🌐 Online'));
+        window.addEventListener('offline', () => console.log('📴 Offline'));
+    </script>
+
 </body>
 </html>

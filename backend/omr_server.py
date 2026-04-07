@@ -61,6 +61,9 @@ class OMRReader:
         # AJUSTE 2: Confiança mínima para detecção do YOLO (mais alto)
         self.yolo_confidence_threshold = 0.7  # Aumentado de 0.5 para 0.7
         
+        # NOVA CONFIGURAÇÃO: Threshold para considerar múltiplas marcações
+        self.multiple_mark_threshold = 0.45  # Se mais de uma alternativa tiver preenchimento > este valor, anula
+        
         # Inicializar modelos de IA
         self.yolo_model = None
         self.google_client = None
@@ -458,8 +461,8 @@ class OMRReader:
             question_regions = [r for r in regions if r['question'] == q]
             question_regions.sort(key=lambda r: r['choice'])
             
-            best_choice = None
-            best_fill = 0
+            # NOVA LÓGICA: Detectar múltiplas marcações
+            marked_alternatives = []
             
             print(f"\n[OMR] Questao {q}:")
             
@@ -468,15 +471,28 @@ class OMRReader:
                 status = "MARCADA" if fill > self.bubble_threshold else "vazia"
                 print(f"  {region['choice']}: {fill:.3f} - {status}")
                 
-                if fill > self.bubble_threshold and fill > best_fill:
-                    best_fill = fill
-                    best_choice = region['choice']
+                # NOVA LÓGICA: Coletar todas as alternativas marcadas
+                if fill > self.bubble_threshold:
+                    marked_alternatives.append({
+                        'choice': region['choice'],
+                        'fill': fill
+                    })
             
-            answers.append(best_choice)
-            
-            if best_choice:
+            # NOVA LÓGICA: Verificar se há múltiplas marcações
+            if len(marked_alternatives) > 1:
+                # Mais de uma alternativa marcada - ANULAR QUESTÃO
+                print(f"  ⚠️ MULTIPLAS MARCAÇÕES DETECTADAS: {[m['choice'] for m in marked_alternatives]}")
+                print(f"  >> QUESTÃO ANULADA (sem resposta)")
+                answers.append(None)  # None indica questão anulada
+            elif len(marked_alternatives) == 1:
+                # Apenas uma alternativa marcada
+                best_choice = marked_alternatives[0]['choice']
+                best_fill = marked_alternatives[0]['fill']
+                answers.append(best_choice)
                 print(f"  >> RESPOSTA: {best_choice} (preenchimento: {best_fill:.3f})")
             else:
+                # Nenhuma alternativa marcada
+                answers.append(None)
                 print(f"  >> NENHUMA RESPOSTA")
         
         return answers
@@ -491,8 +507,8 @@ class OMRReader:
         for q_idx, line in enumerate(questions[:self.num_questions]):
             print(f"\n[IA] Questao {q_idx+1}:")
             
-            best_choice = None
-            best_fill = 0
+            # NOVA LÓGICA: Coletar todas as alternativas marcadas
+            marked_alternatives = []
             
             for c_idx, circle in enumerate(line[:self.num_choices]):
                 radius = circle.get('radius', 20)
@@ -505,15 +521,28 @@ class OMRReader:
                 status = "MARCADA" if fill > self.bubble_threshold else "vazia"
                 print(f"  {self.choices[c_idx]}: {fill:.3f} - {status}")
                 
-                if fill > self.bubble_threshold and fill > best_fill:
-                    best_fill = fill
-                    best_choice = self.choices[c_idx]
+                # NOVA LÓGICA: Coletar todas as alternativas marcadas
+                if fill > self.bubble_threshold:
+                    marked_alternatives.append({
+                        'choice': self.choices[c_idx],
+                        'fill': fill
+                    })
             
-            answers.append(best_choice)
-            
-            if best_choice:
+            # NOVA LÓGICA: Verificar se há múltiplas marcações
+            if len(marked_alternatives) > 1:
+                # Mais de uma alternativa marcada - ANULAR QUESTÃO
+                print(f"  ⚠️ MULTIPLAS MARCAÇÕES DETECTADAS: {[m['choice'] for m in marked_alternatives]}")
+                print(f"  >> QUESTÃO ANULADA (sem resposta)")
+                answers.append(None)  # None indica questão anulada
+            elif len(marked_alternatives) == 1:
+                # Apenas uma alternativa marcada
+                best_choice = marked_alternatives[0]['choice']
+                best_fill = marked_alternatives[0]['fill']
+                answers.append(best_choice)
                 print(f"  >> RESPOSTA: {best_choice} (preenchimento: {best_fill:.3f})")
             else:
+                # Nenhuma alternativa marcada
+                answers.append(None)
                 print(f"  >> NENHUMA RESPOSTA")
         
         return answers
@@ -578,28 +607,51 @@ class OMRReader:
                 for c in range(self.num_choices):
                     x = c * col_width + col_width // 2
                     y = q * line_height + line_height // 2
-                    color = (0, 255, 0) if answers[q] == self.choices[c] else (0, 0, 255)
+                    
+                    # NOVA LÓGICA: Diferentes cores para respostas
+                    if answers[q] == self.choices[c]:
+                        color = (0, 255, 0)  # Verde para resposta marcada
+                    elif answers[q] is None and self.choices[c] in [a for a in answers if a is not None]:
+                        # Esta lógica é apenas para visualização
+                        color = (0, 100, 255)  # Laranja para anulada
+                    else:
+                        color = (0, 0, 255)  # Vermelho para não marcada
+                    
                     cv2.circle(debug_img, (x, y), min(line_height, col_width)//3, color, 2)
                     cv2.putText(debug_img, self.choices[c], (x-15, y-15),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
             
+            # NOVA LÓGICA: Adicionar texto indicando questões anuladas
+            for q in range(self.num_questions):
+                if answers[q] is None:
+                    x = col_width * 2.5  # Centro aproximado
+                    y = q * line_height + line_height // 2
+                    cv2.putText(debug_img, "ANULADA", (int(x-40), y+5),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 100, 255), 2)
+            
             cv2.imwrite(f"{self.debug_folder}/2_resultado.jpg", debug_img)
         
+        # NOVA LÓGICA: Contar estatísticas incluindo questões anuladas
         detected_count = sum(1 for a in answers if a is not None)
+        nullified_count = sum(1 for a in answers if a is None)
         
         print(f"\n[IA] ========== RESUMO ==========")
         print(f"[IA] Respostas detectadas: {detected_count}/{self.num_questions}")
+        print(f"[IA] Questões anuladas (múltiplas marcações): {nullified_count}")
         print(f"[IA] Respostas: {answers}")
         
         return {
             'success': True,
             'answers': answers,
             'detected_answers': detected_count,
+            'nullified_questions': nullified_count,  # NOVO CAMPO
             'statistics': {
                 'total_questions': self.num_questions,
                 'detected_answers': detected_count,
+                'nullified_answers': nullified_count,  # NOVO CAMPO
                 'detection_rate': round(detected_count / self.num_questions * 100, 1),
-                'threshold_used': self.bubble_threshold
+                'threshold_used': self.bubble_threshold,
+                'multiple_mark_threshold': self.multiple_mark_threshold  # NOVO CAMPO
             }
         }
 
@@ -612,11 +664,12 @@ def health():
     return jsonify({
         'status': 'online',
         'service': 'OMR Reader IA',
-        'version': '7.1',
+        'version': '7.2',  # Versão atualizada
         'yolo_available': YOLO_AVAILABLE and omr.yolo_model is not None,
         'google_vision_available': GOOGLE_VISION_AVAILABLE and omr.google_client is not None,
         'current_threshold': omr.bubble_threshold,
-        'yolo_confidence_threshold': omr.yolo_confidence_threshold
+        'yolo_confidence_threshold': omr.yolo_confidence_threshold,
+        'multiple_mark_threshold': omr.multiple_mark_threshold  # NOVO CAMPO
     })
 
 
@@ -647,12 +700,14 @@ def detect():
         if gabarito and result.get('success') and result.get('answers'):
             answers = result['answers']
             score = 0
+            # NOVA LÓGICA: Questões anuladas (None) são consideradas erradas
             for i, ans in enumerate(answers):
                 if ans and i < len(gabarito) and ans == gabarito[i]:
                     score += 1
             result['score'] = score
             result['nota'] = round(score * 10 / omr.num_questions, 1)
             print(f"[IA] NOTA: {result['nota']} ({score}/{omr.num_questions})")
+            print(f"[IA] Questões anuladas: {result.get('nullified_questions', 0)}")
         
         return jsonify(result)
         
@@ -677,6 +732,7 @@ if __name__ == '__main__':
     print("   - Grade: SIM")
     print(f"[IA] Threshold preenchimento: {omr.bubble_threshold}")
     print(f"[IA] YOLO confianca minima: {omr.yolo_confidence_threshold}")
+    print(f"[IA] Multiplas marcações: detecta e anula questão")  # NOVA INFORMAÇÃO
     print("=" * 60)
     
     app.run(host='0.0.0.0', port=args.port, debug=False, threaded=True)
