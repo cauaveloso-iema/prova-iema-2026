@@ -17,6 +17,53 @@
             min-height: 100vh;
             padding: 10px;
         }
+        body.fullscreen-mode {
+            padding: 0;
+            overflow: hidden;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        body.fullscreen-mode .container {
+            max-width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+        body.fullscreen-mode .card {
+            height: 100%;
+            border-radius: 0;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+        }
+        body.fullscreen-mode .camera-container {
+            flex: 1;
+            margin: 0;
+            min-height: 0;
+            border-radius: 0;
+        }
+        body.fullscreen-mode .button-group,
+        body.fullscreen-mode .header,
+        body.fullscreen-mode .modo-selector,
+        body.fullscreen-mode .dica,
+        body.fullscreen-mode .prova-info,
+        body.fullscreen-mode .gabarito-display,
+        body.fullscreen-mode .qr-selecionado {
+            display: none;
+        }
+        body.fullscreen-mode .camera-container {
+            display: block !important;
+        }
+        body.fullscreen-mode .feedback,
+        body.fullscreen-mode .status-encaixe,
+        body.fullscreen-mode .auto-status {
+            display: block !important;
+        }
+        
         .container { max-width: 950px; margin: 0 auto; }
         .card {
             background: white;
@@ -397,29 +444,25 @@
             pointer-events: none;
         }
         
-        /* Orientação obrigatória - aviso */
-        .orientacao-aviso {
+        /* Dica de orientação - não obrigatória */
+        .orientacao-dica {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.95);
-            z-index: 20000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            color: white;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            color: #ffaa00;
+            padding: 6px 12px;
+            border-radius: 30px;
+            font-size: 10px;
             font-family: monospace;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+            white-space: nowrap;
+            pointer-events: none;
+            transition: opacity 0.5s;
         }
-        .orientacao-aviso i { font-size: 50px; margin-bottom: 20px; color: #ffaa00; }
-        .orientacao-aviso h2 { font-size: 20px; margin-bottom: 10px; }
-        .orientacao-aviso p { font-size: 14px; opacity: 0.8; }
-        
-        /* Esconder aviso quando em landscape */
-        body.landscape .orientacao-aviso { display: none; }
+        .orientacao-dica i { margin-right: 5px; }
         
         @media (max-width: 768px) {
             .btn { padding: 8px 14px; font-size: 12px; }
@@ -438,24 +481,16 @@
     </style>
 </head>
 <body>
-    <!-- Aviso de orientação obrigatória -->
-    <div id="orientacaoAviso" class="orientacao-aviso" style="display: none;">
-        <i class="fas fa-rotate-left"></i>
-        <h2>📱 Gire o Celular</h2>
-        <p>Use o modo HORIZONTAL para melhor leitura</p>
-        <p style="font-size: 12px; margin-top: 15px;">↙️ Gire o dispositivo ↪️</p>
-    </div>
-    
     <div class="container">
         <div class="card">
             <div class="header">
-                <h1><i class="fas fa-robot"></i> Correção</h1>
-                <p><strong style="color:#ff4444;">🔴 Alinhe os 4 quadrados vermelhos</strong> | <strong style="color:#10b981;">🟢 Use na horizontal</strong></p>
+                <h1><i class="fas fa-robot"></i> Correção de Prova</h1>
+                <p><strong style="color:#ff4444;">🔴 Alinhe os 4 quadrados vermelhos</strong></p>
             </div>
             
             <div class="modo-selector">
                 <button class="modo-btn active" id="modoQRCodeBtn">
-                    <i class="fas fa-qrcode"></i> QR
+                    <i class="fas fa-qrcode"></i> QR Code
                 </button>
                 <button class="modo-btn" id="modoManualBtn">
                     <i class="fas fa-hand-pointer"></i> Manual
@@ -463,7 +498,7 @@
             </div>
             
             <div class="dica" id="dicaModo">
-                <i class="fas fa-qrcode"></i> Escaneie o QR Code
+                <i class="fas fa-qrcode"></i> Escaneie o QR Code do aluno
             </div>
             
             <div id="loading" class="loading">
@@ -494,7 +529,7 @@
                 
                 <div id="manualSelectArea" style="display: none;">
                     <div class="aluno-selector">
-                        <label><i class="fas fa-user-graduate"></i> Aluno:</label>
+                        <label><i class="fas fa-user-graduate"></i> Selecione o Aluno:</label>
                         <select id="selectAluno">
                             <option value="">— Selecione —</option>
                         </select>
@@ -508,7 +543,7 @@
                         <span id="qrAlunoMatricula" style="font-size: 10px;"></span>
                     </div>
                     <button class="btn-limpar-qr" id="btnLimparQR">
-                        <i class="fas fa-times"></i> Trocar
+                        <i class="fas fa-times"></i> Trocar Aluno
                     </button>
                 </div>
                 
@@ -520,31 +555,31 @@
                         <div class="guia-quadrado" id="guiaTR"></div>
                         <div class="guia-quadrado" id="guiaBL"></div>
                         <div class="guia-quadrado" id="guiaBR"></div>
-                        <div class="feedback" id="feedback">🎯 Alinhe</div>
+                        <div class="feedback" id="feedback">🎯 Alinhe o cartão</div>
                         <div class="status-encaixe" id="statusEncaixe">⬜ ⬜ ⬜ ⬜</div>
                         <div id="autoStatus" class="auto-status" style="display: none;"></div>
                     </div>
                 </div>
                 
                 <div class="button-group">
-                    <button class="btn btn-primary" id="btnIniciarCamera" disabled><i class="fas fa-camera"></i> Iniciar</button>
-                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir</button>
+                    <button class="btn btn-primary" id="btnIniciarCamera" disabled><i class="fas fa-camera"></i> Iniciar Câmera</button>
+                    <button class="btn btn-success" id="btnCapturar" disabled><i class="fas fa-camera-retro"></i> Corrigir Agora</button>
                 </div>
                 
                 <div id="processando" style="display: none; text-align: center; padding: 15px;">
                     <div class="spinner"></div>
-                    <p style="font-size:12px; color:#1e3c72; margin-top:8px;">Processando...</p>
+                    <p style="font-size:12px; color:#1e3c72; margin-top:8px;">Processando imagem...</p>
                 </div>
                 
                 <div id="resultado" style="display: none;">
                     <h3 style="font-size:16px; margin:10px 0 8px; color:#1e3c72; text-align:center;">
-                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado
+                        <i class="fas fa-check-circle" style="color:#10b981;"></i> Resultado da Correção
                     </h3>
                     <div id="respostasGrid" class="respostas-grid"></div>
                     <div id="notaFinal" class="nota-final"></div>
-                    <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar</button>
+                    <button class="btn btn-salvar" id="btnSalvar"><i class="fas fa-save"></i> Salvar Nota</button>
                     <button class="btn btn-warning btn-tentar-novamente" id="btnTentarNovamente">
-                        <i class="fas fa-redo-alt"></i> Nova tentativa
+                        <i class="fas fa-redo-alt"></i> Nova Tentativa
                     </button>
                 </div>
             </div>
@@ -561,50 +596,57 @@
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const modoIndicador = document.getElementById('modoIndicador');
         
-        // Controle de orientação obrigatória
-        let orientacaoCorreta = false;
-        const orientacaoAviso = document.getElementById('orientacaoAviso');
-        
-        function verificarOrientacao() {
-            if (window.innerWidth > window.innerHeight) {
-                // Landscape (horizontal) - correto
-                orientacaoCorreta = true;
-                if (orientacaoAviso) orientacaoAviso.style.display = 'none';
-                document.body.classList.add('landscape');
-                console.log('📱 Orientação HORIZONTAL - OK');
-                return true;
-            } else {
-                // Portrait (vertical) - incorreto
-                orientacaoCorreta = false;
-                if (orientacaoAviso && isMobile) {
-                    orientacaoAviso.style.display = 'flex';
-                }
-                document.body.classList.remove('landscape');
-                console.log('⚠️ Orientação VERTICAL - Gire o celular');
-                return false;
-            }
-        }
-        
-        // Monitorar mudança de orientação
-        window.addEventListener('resize', () => {
-            const estaHorizontal = verificarOrientacao();
-            if (estaHorizontal && stream && !cameraContainer.style.display === 'block') {
-                // Se estava com a câmera ativa e agora está horizontal, reiniciar
-                if (stream && cameraContainer.style.display === 'block') {
-                    console.log('🔄 Orientação corrigida, reiniciando câmera...');
-                    const constraints = getVideoConstraints();
-                    stream.getTracks().forEach(track => track.stop());
-                    iniciarCameraComConstraints(constraints);
-                }
-            }
-        });
+        let modoFullscreen = false;
+        let alunoSelecionadoFullscreen = null;
         
         if (isMobile) {
             modoIndicador.className = 'modo-indicador mobile';
-            modoIndicador.innerHTML = '📱 HORIZONTAL';
+            modoIndicador.innerHTML = '📱 MODO MOBILE';
         } else {
             modoIndicador.className = 'modo-indicador desktop';
-            modoIndicador.innerHTML = '💻 DESKTOP';
+            modoIndicador.innerHTML = '💻 MODO DESKTOP';
+        }
+        
+        function entrarTelaCheia() {
+            if (!isMobile) return;
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+            }
+            document.body.classList.add('fullscreen-mode');
+            modoFullscreen = true;
+        }
+        
+        function sairTelaCheia() {
+            if (!isMobile) return;
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+            document.body.classList.remove('fullscreen-mode');
+            modoFullscreen = false;
+        }
+        
+        let dicaOrientacao = null;
+        
+        function mostrarDicaOrientacao() {
+            if (!isMobile) return;
+            if (dicaOrientacao) dicaOrientacao.remove();
+            dicaOrientacao = document.createElement('div');
+            dicaOrientacao.className = 'orientacao-dica';
+            dicaOrientacao.innerHTML = '<i class="fas fa-rotate-left"></i> Use o celular na HORIZONTAL para melhor captura';
+            document.body.appendChild(dicaOrientacao);
+            setTimeout(() => {
+                if (dicaOrientacao) dicaOrientacao.style.opacity = '0';
+                setTimeout(() => { if (dicaOrientacao) dicaOrientacao.remove(); }, 500);
+            }, 4000);
         }
         
         const urlParams = new URLSearchParams(window.location.search);
@@ -633,7 +675,6 @@
         let autoCorrectionTimer = null;
         let autoCorrectionCountdown = 0;
         
-        // Configurações IGUAIS para desktop e mobile (guias do mesmo tamanho)
         let sensibilidade = 12;
         const BRILHO_MAX_PRETO = 110;
         let margemBusca = 0.12;
@@ -687,6 +728,7 @@
             console.log('🔄 Voltando para scanner QR...');
             if (qrScanner && scannerIniciado) { try { qrScanner.stop(); } catch(e) {} }
             pararCamera();
+            if (modoFullscreen) sairTelaCheia();
             alunoSelecionado = null;
             scannerIniciado = false;
             capturaRealizada = false;
@@ -698,12 +740,12 @@
             btnCapturar.disabled = true;
             btnTentarNovamente.style.display = 'none';
             setTimeout(() => { iniciarQRScanner(); }, 500);
-            document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando QR`;
-            mostrarAlerta('🔄 Escaneie o QR Code', 'info');
+            document.getElementById('infoBar').innerHTML = `<i class="fas fa-circle" style="color:#10b981;"></i> Aguardando QR Code`;
+            mostrarAlerta('🔄 Escaneie o QR Code do aluno', 'info');
         }
         
         function tentarNovamente() {
-            console.log('🔄 Tentando nova captura...');
+            console.log('🔄 Nova tentativa de captura...');
             document.getElementById('resultado').style.display = 'none';
             btnTentarNovamente.style.display = 'none';
             capturaRealizada = false;
@@ -713,7 +755,7 @@
             const guias = ['guiaTL', 'guiaTR', 'guiaBL', 'guiaBR'];
             guias.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('encaixado'); });
             document.getElementById('statusEncaixe').innerHTML = '⬜ ⬜ ⬜ ⬜';
-            document.getElementById('feedback').innerHTML = '🎯 Alinhe';
+            document.getElementById('feedback').innerHTML = '🎯 Alinhe o cartão';
             document.getElementById('feedback').style.background = '#f59e0b';
             mostrarAlerta('Posicione o cartão novamente', 'info');
         }
@@ -777,19 +819,19 @@
         
         async function tentarProximoScannerMobile(scanners) {
             if (!modoQRCode) return;
-            if (scannerAtual >= scanners.length) { mostrarAlerta('⚠️ Scanner não disponível. Use MANUAL.', 'warning'); return; }
+            if (scannerAtual >= scanners.length) { mostrarAlerta('⚠️ Scanner não disponível. Use modo MANUAL.', 'warning'); return; }
             const scanner = scanners[scannerAtual];
-            console.log(`🔄 Tentando: ${scanner.nome}`);
-            try { await scanner.func(); scannerIniciado = true; console.log(`✅ Scanner ativo (${scanner.nome})`); } catch (err) { console.warn(`⚠️ ${scanner.nome} falhou:`, err.message); scannerAtual++; await tentarProximoScannerMobile(scanners); }
+            console.log(`🔄 Tentando scanner: ${scanner.nome}`);
+            try { await scanner.func(); scannerIniciado = true; console.log(`✅ Scanner ativo: ${scanner.nome}`); } catch (err) { console.warn(`⚠️ ${scanner.nome} falhou:`, err.message); scannerAtual++; await tentarProximoScannerMobile(scanners); }
         }
         
         async function tentarProximoScanner() {
             if (!modoQRCode) return;
             const scanners = [{ nome: 'html5-qrcode', func: iniciarScannerHtml5QrCode }, { nome: 'jsQR', func: iniciarScannerJsQR }, { nome: 'ZXing', func: iniciarScannerZXing }, { nome: 'Quagga', func: iniciarScannerQuagga }];
-            if (scannerAtual >= scanners.length) { mostrarAlerta('⚠️ Scanner não disponível. Use MANUAL.', 'warning'); return; }
+            if (scannerAtual >= scanners.length) { mostrarAlerta('⚠️ Scanner não disponível. Use modo MANUAL.', 'warning'); return; }
             const scanner = scanners[scannerAtual];
-            console.log(`🔄 Tentando: ${scanner.nome}`);
-            try { await scanner.func(); scannerIniciado = true; console.log(`✅ Scanner ativo (${scanner.nome})`); } catch (err) { console.warn(`⚠️ ${scanner.nome} falhou:`, err.message); scannerAtual++; await tentarProximoScanner(); }
+            console.log(`🔄 Tentando scanner: ${scanner.nome}`);
+            try { await scanner.func(); scannerIniciado = true; console.log(`✅ Scanner ativo: ${scanner.nome}`); } catch (err) { console.warn(`⚠️ ${scanner.nome} falhou:`, err.message); scannerAtual++; await tentarProximoScanner(); }
         }
         
         async function iniciarScannerHtml5QrCode() {
@@ -807,7 +849,7 @@
                     const html5QrCode = new Html5Qrcode("qr-reader");
                     qrScanner = html5QrCode;
                     const timeout = setTimeout(() => { reject(new Error('Timeout')); }, 15000);
-                    await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } }, (decodedText) => { clearTimeout(timeout); console.log('✅ QR Code:', decodedText); processarQRCode(decodedText); resolve(); }, (errorMessage) => {});
+                    await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } }, (decodedText) => { clearTimeout(timeout); console.log('✅ QR Code detectado:', decodedText); processarQRCode(decodedText); resolve(); }, (errorMessage) => {});
                     clearTimeout(timeout);
                     resolve();
                 } catch (err) { reject(err); }
@@ -840,7 +882,7 @@
                             ctx.drawImage(altVideo, 0, 0, altCanvas.width, altCanvas.height);
                             const imageData = ctx.getImageData(0, 0, altCanvas.width, altCanvas.height);
                             const code = window.jsQR(imageData.data, altCanvas.width, altCanvas.height, { inversionAttempts: "dontInvert" });
-                            if (code) { clearTimeout(timeout); console.log('✅ QR Code (jsQR):', code.data); processarQRCode(code.data); pararScannerJsQR(); resolve(); return; }
+                            if (code) { clearTimeout(timeout); console.log('✅ QR Code detectado (jsQR):', code.data); processarQRCode(code.data); pararScannerJsQR(); resolve(); return; }
                         }
                         requestAnimationFrame(scanFrame);
                     }
@@ -866,7 +908,7 @@
                     const codeReader = new ZXing.BrowserQRCodeReader();
                     zxingReader = codeReader;
                     const timeout = setTimeout(() => { reject(new Error('Timeout')); }, 30000);
-                    codeReader.decodeFromVideoDevice(null, 'qr-zxing-video', (result, err) => { if (result) { clearTimeout(timeout); console.log('✅ QR Code (ZXing):', result.text); processarQRCode(result.text); codeReader.reset(); resolve(); } });
+                    codeReader.decodeFromVideoDevice(null, 'qr-zxing-video', (result, err) => { if (result) { clearTimeout(timeout); console.log('✅ QR Code detectado (ZXing):', result.text); processarQRCode(result.text); codeReader.reset(); resolve(); } });
                 } catch (err) { reject(err); }
             });
         }
@@ -889,7 +931,7 @@
                     const canvas = document.getElementById('quagga-canvas');
                     canvas.width = 640; canvas.height = 480;
                     const timeout = setTimeout(() => { reject(new Error('Timeout')); }, 30000);
-                    Quagga.init({ inputStream: { type: "LiveStream", constraints: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }, area: { top: "0%", right: "0%", left: "0%", bottom: "0%" } }, decoder: { readers: ["qr_code_reader"] }, locator: { patchSize: "medium", halfSample: true } }, function(err) { if (err) { clearTimeout(timeout); reject(err); return; } Quagga.start(); Quagga.onDetected(function(result) { const code = result.codeResult.code; if (code) { clearTimeout(timeout); console.log('✅ QR Code (Quagga):', code); processarQRCode(code); Quagga.stop(); resolve(); } }); });
+                    Quagga.init({ inputStream: { type: "LiveStream", constraints: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }, area: { top: "0%", right: "0%", left: "0%", bottom: "0%" } }, decoder: { readers: ["qr_code_reader"] }, locator: { patchSize: "medium", halfSample: true } }, function(err) { if (err) { clearTimeout(timeout); reject(err); return; } Quagga.start(); Quagga.onDetected(function(result) { const code = result.codeResult.code; if (code) { clearTimeout(timeout); console.log('✅ QR Code detectado (Quagga):', code); processarQRCode(code); Quagga.stop(); resolve(); } }); });
                 } catch (err) { reject(err); }
             });
         }
@@ -899,7 +941,7 @@
         
         async function processarQRCode(qrData) {
             try {
-                console.log('🔍 QR Code:', qrData);
+                console.log('🔍 Processando QR Code:', qrData);
                 let alunoId = null;
                 try { const alunoData = JSON.parse(qrData); alunoId = alunoData.id || alunoData.alunoId || alunoData; } catch (e) { if (qrData.includes('aluno=')) { const match = qrData.match(/aluno=([a-f0-9]+)/); if (match) alunoId = match[1]; else alunoId = qrData; } else alunoId = qrData; }
                 const alunoEncontrado = alunosMap.get(alunoId);
@@ -911,9 +953,17 @@
                 qrSelecionadoDiv.style.display = 'flex';
                 qrScannerArea.style.display = 'none';
                 btnIniciarCamera.disabled = false;
-                mostrarAlerta(`✅ Aluno: ${alunoSelecionado.nome}`, 'success');
+                mostrarAlerta(`✅ Aluno selecionado: ${alunoSelecionado.nome}`, 'success');
                 document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`;
-                setTimeout(() => { if (alunoSelecionado && !stream) iniciarCamera(); }, 1000);
+                
+                if (isMobile) mostrarDicaOrientacao();
+                
+                setTimeout(() => { 
+                    if (alunoSelecionado && !stream) {
+                        iniciarCamera();
+                        if (isMobile) entrarTelaCheia();
+                    }
+                }, 1000);
             } catch (error) { console.error('Erro:', error); mostrarAlerta('❌ QR Code inválido', 'error'); }
         }
         
@@ -924,18 +974,19 @@
             if (modoQRCode) {
                 modoQRBtn.classList.add('active');
                 modoManualBtn.classList.remove('active');
-                dicaModo.innerHTML = '<i class="fas fa-qrcode"></i> Escaneie o QR Code';
+                dicaModo.innerHTML = '<i class="fas fa-qrcode"></i> Escaneie o QR Code do aluno';
                 qrScannerArea.style.display = 'block';
                 manualSelectArea.style.display = 'none';
                 qrSelecionadoDiv.style.display = 'none';
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
+                if (modoFullscreen) sairTelaCheia();
                 iniciarQRScanner();
             } else {
                 modoManualBtn.classList.add('active');
                 modoQRBtn.classList.remove('active');
-                dicaModo.innerHTML = '<i class="fas fa-hand-pointer"></i> Selecione o aluno';
+                dicaModo.innerHTML = '<i class="fas fa-hand-pointer"></i> Selecione o aluno manualmente';
                 qrScannerArea.style.display = 'none';
                 manualSelectArea.style.display = 'block';
                 qrSelecionadoDiv.style.display = 'none';
@@ -943,6 +994,7 @@
                 pararCamera();
                 cameraContainer.style.display = 'none';
                 btnIniciarCamera.disabled = true;
+                if (modoFullscreen) sairTelaCheia();
             }
             alunoSelecionado = null;
             btnCapturar.disabled = true;
@@ -1030,10 +1082,10 @@
             if (capturaRealizada) return;
             autoCorrectionCountdown = 5;
             autoStatusDiv.style.display = 'block';
-            autoStatusDiv.innerHTML = `📸 ${autoCorrectionCountdown}s`;
+            autoStatusDiv.innerHTML = `📸 Captura automática em ${autoCorrectionCountdown}s`;
             autoCorrectionTimer = setInterval(() => {
                 autoCorrectionCountdown--;
-                if (autoCorrectionCountdown > 0) { autoStatusDiv.innerHTML = `📸 ${autoCorrectionCountdown}s`; } else { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; autoStatusDiv.style.display = 'none'; if (!capturaRealizada) { capturaRealizada = true; capturarImagem(); } }
+                if (autoCorrectionCountdown > 0) { autoStatusDiv.innerHTML = `📸 Captura automática em ${autoCorrectionCountdown}s`; } else { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; autoStatusDiv.style.display = 'none'; if (!capturaRealizada) { capturaRealizada = true; capturarImagem(); } }
             }, 1000);
         }
         
@@ -1061,17 +1113,17 @@
                 desenharRetanguloCartao(resultado.retangulo, containerRect2.width, containerRect2.height, canvas.width, canvas.height);
                 const estabilidadeMinima = 8;
                 if (estabilidade >= estabilidadeMinima && !capturaRealizada) {
-                    feedback.innerHTML = `✅ ${encaixadosCount}/4`;
+                    feedback.innerHTML = `✅ ${encaixadosCount}/4 quadrados alinhados`;
                     feedback.style.background = '#10b981';
                     if (!autoCorrectionTimer && !capturando && !capturaRealizada) { iniciarCorrecaoAutomatica(); }
-                } else { feedback.innerHTML = `🎯 ${encaixadosCount}/4`; feedback.style.background = '#f59e0b'; cancelarCorrecaoAutomatica(); }
+                } else { feedback.innerHTML = `🎯 ${encaixadosCount}/4 quadrados alinhados`; feedback.style.background = '#f59e0b'; cancelarCorrecaoAutomatica(); }
                 infoBar.innerHTML = `<i class="fas fa-check-circle"></i> ${encaixadosCount}/4`;
-            } else { desenharRetanguloCartao(null); retanguloAtual = null; estabilidade = Math.max(0, estabilidade - 2); ultimoRetangulo = null; cancelarCorrecaoAutomatica(); feedback.innerHTML = `🎯 ${encaixadosCount}/4`; feedback.style.background = '#f59e0b'; infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`; btnCapturar.disabled = true; }
+            } else { desenharRetanguloCartao(null); retanguloAtual = null; estabilidade = Math.max(0, estabilidade - 2); ultimoRetangulo = null; cancelarCorrecaoAutomatica(); feedback.innerHTML = `🎯 ${encaixadosCount}/4 quadrados alinhados`; feedback.style.background = '#f59e0b'; infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`; btnCapturar.disabled = true; }
         }
         
         async function capturarImagem() {
             if (capturando) return;
-            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno!', 'error'); capturaRealizada = false; return; }
+            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); capturaRealizada = false; return; }
             if (!retanguloAtual || estabilidade < 8) { mostrarAlerta('Aguarde o cartão estabilizar!', 'warning'); capturaRealizada = false; return; }
             
             capturando = true;
@@ -1086,7 +1138,7 @@
             const cartaoH = Math.min(canvas.height - cartaoY, retanguloAtual.height);
             
             if (cartaoW <= 0 || cartaoH <= 0) {
-                mostrarAlerta('Erro ao recortar.', 'error');
+                mostrarAlerta('Erro ao recortar a imagem.', 'error');
                 capturando = false;
                 capturaRealizada = false;
                 return;
@@ -1110,13 +1162,22 @@
                 clearTimeout(timeoutId);
                 const data = await omrResponse.json();
                 document.getElementById('processando').style.display = 'none';
-                if (data.success && data.answers) { criarInterfaceRespostas(data.answers); document.getElementById('resultado').style.display = 'block'; btnTentarNovamente.style.display = 'block'; mostrarAlerta(`✅ Correção concluída!`, 'success'); } else { throw new Error(data.error || 'Falha na detecção'); }
+                if (data.success && data.answers) { 
+                    criarInterfaceRespostas(data.answers); 
+                    document.getElementById('resultado').style.display = 'block'; 
+                    btnTentarNovamente.style.display = 'block'; 
+                    mostrarAlerta(`✅ Correção concluída!`, 'success');
+                    if (isMobile && modoFullscreen) sairTelaCheia();
+                } else { 
+                    throw new Error(data.error || 'Falha na detecção'); 
+                }
             } catch (error) {
                 document.getElementById('processando').style.display = 'none';
                 criarInterfaceManual();
                 document.getElementById('resultado').style.display = 'block';
                 btnTentarNovamente.style.display = 'block';
-                mostrarAlerta(`⚠️ Modo manual`, 'warning');
+                mostrarAlerta(`⚠️ Modo manual ativado`, 'warning');
+                if (isMobile && modoFullscreen) sairTelaCheia();
             }
             capturando = false;
         }
@@ -1181,7 +1242,7 @@
             try {
                 const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { method: 'POST', body: JSON.stringify({ alunoId: alunoSelecionado.id, nota: notaCalculada, observacao: `Corrigido em ${new Date().toLocaleString()}` }) });
                 const data = await response.json();
-                if (data.success) { mostrarAlerta(`✅ Nota salva!`, 'success'); setTimeout(() => voltarParaScannerQR(), 2000); } else { throw new Error(data.error || 'Erro'); }
+                if (data.success) { mostrarAlerta(`✅ Nota salva com sucesso!`, 'success'); setTimeout(() => voltarParaScannerQR(), 2000); } else { throw new Error(data.error || 'Erro ao salvar'); }
             } catch (error) { mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); }
         }
         
@@ -1197,7 +1258,7 @@
                 if (response.status === 401) throw new Error('Token expirado');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response;
-            } catch (error) { clearTimeout(timeoutId); if (error.name === 'AbortError') throw new Error('Tempo limite'); throw error; }
+            } catch (error) { clearTimeout(timeoutId); if (error.name === 'AbortError') throw new Error('Tempo limite excedido'); throw error; }
         }
         
         async function carregarDados() {
@@ -1217,19 +1278,18 @@
                     if (!alunosCarregados || alunos.length === 0) alunosCarregados = await carregarAlunosDaProva(provaData);
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('conteudo').style.display = 'block';
-                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${provaInfo.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos</p>`;
-                    document.getElementById('gabaritoInfo').innerHTML = `<strong><i class="fas fa-key"></i> Gabarito:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
+                    document.getElementById('provaInfo').innerHTML = `<h3><i class="fas fa-graduation-cap"></i> ${provaInfo.titulo || 'Prova'}</h3><p>${totalQuestoes} questões | ${alunos.length} alunos cadastrados</p>`;
+                    document.getElementById('gabaritoInfo').innerHTML = `<strong><i class="fas fa-key"></i> Gabarito oficial:</strong> ${gabarito.map(g => `${g.numero}:${g.respostaCorreta}`).join(' • ')}`;
                     const select = document.getElementById('selectAluno');
-                    select.innerHTML = '<option value="">— Selecione —</option>';
+                    select.innerHTML = '<option value="">— Selecione um aluno —</option>';
                     alunos.forEach(a => { select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; });
                     select.addEventListener('change', (e) => {
-                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; setTimeout(() => { if (alunoSelecionado && !stream) iniciarCamera(); }, 1000); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
+                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; manualSelectArea.style.display = 'none'; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${aluno.alunoNome} selecionado`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; if (isMobile) mostrarDicaOrientacao(); setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); if (isMobile) entrarTelaCheia(); } }, 1000); } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
                     });
                     mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
-                    if (urlAlunoId) { const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) iniciarCamera(); }, 1000); } else { mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
+                    if (urlAlunoId) { const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; if (isMobile) mostrarDicaOrientacao(); setTimeout(() => { if (alunoSelecionado && !stream) { iniciarCamera(); if (isMobile) entrarTelaCheia(); } }, 1000); } else { mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
                     iniciarQRScanner();
-                    verificarOrientacao();
-                } else { throw new Error('Erro ao carregar'); }
+                } else { throw new Error('Erro ao carregar dados da prova'); }
             } catch (error) { document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`; console.error('Erro:', error); }
         }
         
@@ -1243,23 +1303,8 @@
             };
         }
         
-        async function iniciarCameraComConstraints(constraints) {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
-                video.srcObject = stream;
-                await video.play();
-                btnIniciarCamera.disabled = true;
-                btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
-                cameraContainer.style.display = 'block';
-                if (analiseInterval) clearInterval(analiseInterval);
-                analiseInterval = setInterval(analisarFrame, 100);
-                mostrarAlerta(`📷 Câmera iniciada! Posicione o cartão na horizontal.`, 'info');
-            } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
-        }
-        
         async function iniciarCamera() {
             if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); return; }
-            if (!verificarOrientacao()) { mostrarAlerta('⚠️ Gire o celular para o modo HORIZONTAL!', 'warning'); return; }
             
             try {
                 if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} }
@@ -1271,12 +1316,12 @@
                 video.srcObject = stream;
                 await video.play();
                 btnIniciarCamera.disabled = true;
-                btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
+                btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Câmera Ativa';
                 cameraContainer.style.display = 'block';
                 if (analiseInterval) clearInterval(analiseInterval);
                 analiseInterval = setInterval(analisarFrame, 100);
-                mostrarAlerta('📷 Câmera iniciada! Posicione o cartão.', 'info');
-            } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
+                mostrarAlerta('📷 Câmera iniciada! Posicione o cartão na área indicada.', 'info');
+            } catch (error) { mostrarAlerta('❌ Erro ao acessar a câmera', 'error'); }
         }
         
         function pararCamera() { if (analiseInterval) { clearInterval(analiseInterval); analiseInterval = null; } if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } if (autoCorrectionTimer) { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; } cancelarCorrecaoAutomatica(); }
