@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Sistema de Provas>
+    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
 
     <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
@@ -727,6 +727,65 @@
             modoFullscreen = false;
         }
         
+        // 🔥 FUNÇÃO: Abrir câmera em tela cheia no desktop (duplo toque/clique)
+        function abrirCameraTelaCheia() {
+            if (!alunoSelecionado) {
+                mostrarAlerta('Selecione um aluno primeiro!', 'warning');
+                return;
+            }
+            
+            console.log('🖥️ Duplo clique detectado - abrindo câmera em tela cheia');
+            
+            // Se a câmera já está aberta, apenas entra em tela cheia
+            if (cameraContainer.style.display === 'block' || cameraContainer.style.display === 'flex') {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
+                document.body.classList.add('fullscreen-mode');
+                mostrarAlerta('🎥 Modo tela cheia ativado!', 'success');
+            } else {
+                // Se a câmera não está aberta, inicia e depois entra em tela cheia
+                if (stream) {
+                    // Já tem stream, só entra em tela cheia
+                    cameraContainer.style.display = 'block';
+                    const elem = document.documentElement;
+                    if (elem.requestFullscreen) {
+                        elem.requestFullscreen();
+                    } else if (elem.webkitRequestFullscreen) {
+                        elem.webkitRequestFullscreen();
+                    } else if (elem.msRequestFullscreen) {
+                        elem.msRequestFullscreen();
+                    }
+                    document.body.classList.add('fullscreen-mode');
+                    mostrarAlerta('🎥 Modo tela cheia ativado!', 'success');
+                } else {
+                    // Iniciar câmera primeiro
+                    iniciarCamera().then(() => {
+                        setTimeout(() => {
+                            const elem = document.documentElement;
+                            if (elem.requestFullscreen) {
+                                elem.requestFullscreen();
+                            } else if (elem.webkitRequestFullscreen) {
+                                elem.webkitRequestFullscreen();
+                            } else if (elem.msRequestFullscreen) {
+                                elem.msRequestFullscreen();
+                            }
+                            document.body.classList.add('fullscreen-mode');
+                            mostrarAlerta('🎥 Modo tela cheia ativado!', 'success');
+                        }, 500);
+                    }).catch(err => {
+                        console.error('Erro ao iniciar câmera:', err);
+                        mostrarAlerta('❌ Erro ao iniciar câmera', 'error');
+                    });
+                }
+            }
+        }
+        
         const urlParams = new URLSearchParams(window.location.search);
         const provaId = urlParams.get('prova');
         const urlToken = urlParams.get('token');
@@ -805,24 +864,89 @@
         const btnIniciarCamera = document.getElementById('btnIniciarCamera');
         const btnTentarNovamente = document.getElementById('btnTentarNovamente');
         
-        // NOVA FUNÇÃO: Verificar se aluno já foi corrigido
+        // NOVA FUNÇÃO: Verificar se aluno já foi corrigido (APENAS em ProvaRealizada)
         async function verificarAlunoJaCorrigido(alunoId) {
             try {
+                console.log(`🔍 Verificando se aluno ${alunoId} já possui correção manual (ProvaRealizada)...`);
+                
+                // Buscar resultados da prova (que inclui ProvaRealizada)
                 const response = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
                 const data = await response.json();
+                
                 if (data.success && data.resultados) {
-                    const jaCorrigido = data.resultados.some(r => (r.alunoId === alunoId || r.userId === alunoId));
-                    if (jaCorrigido) {
-                        // Armazenar que este aluno já foi corrigido
-                        resultadosSalvos.set(alunoId, true);
+                    // Procurar na lista de resultados (que vem do backend combinando ambas coleções)
+                    // Mas vamos verificar especificamente se veio de ProvaRealizada
+                    const resultadoAluno = data.resultados.find(r => 
+                        r.alunoId?.toString() === alunoId.toString() && 
+                        (r.origem === 'prova_realizada' || r.tipoNota === 'manual')
+                    );
+                    
+                    if (resultadoAluno) {
+                        console.log(`⚠️ Aluno ${alunoId} já possui correção MANUAL (ProvaRealizada)`);
+                        console.log(`   Nota manual: ${resultadoAluno.notaManual || resultadoAluno.nota}`);
+                        console.log(`   Origem: ${resultadoAluno.origem || 'prova_realizada'}`);
+                        return true;
                     }
-                    return jaCorrigido;
                 }
+                
+                // 🔥 VERIFICAÇÃO DIRETA NA ROTA ESPECÍFICA DE NOTAS MANUAIS
+                try {
+                    const manualResponse = await fazerRequisicao(`/api/professor/provas/${provaId}/notas-manuais`);
+                    const manualData = await manualResponse.json();
+                    
+                    if (manualData.success && manualData.notasManuais) {
+                        const temNotaManual = manualData.notasManuais.some(n => 
+                            n.alunoId?.toString() === alunoId.toString()
+                        );
+                        
+                        if (temNotaManual) {
+                            console.log(`⚠️ Aluno ${alunoId} possui nota manual cadastrada`);
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                    // Rota pode não existir ainda, ignorar
+                    console.log('Rota de notas manuais não disponível, usando fallback');
+                }
+                
+                console.log(`✅ Aluno ${alunoId} NÃO possui correção manual ainda`);
                 return false;
+                
             } catch (error) {
                 console.error('Erro ao verificar aluno:', error);
                 return false;
             }
+        }
+        
+        async function continuarSelecaoManual(aluno) {
+            alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula };
+            qrSelecionadoDiv.style.display = 'flex';
+            document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome;
+            document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : '';
+            manualSelectArea.style.display = 'none';
+            btnIniciarCamera.disabled = false;
+            
+            // 🔥 CORREÇÃO: Verificar se já foi corrigido usando resultadosSalvos (que agora só tem manuais)
+            const temCorrecaoManual = resultadosSalvos.has(alunoSelecionado.id);
+            if (temCorrecaoManual) {
+                qrSelecionadoDiv.classList.add('ja-corrigido');
+                mostrarAlerta(`⚠️ ${alunoSelecionado.nome} já possui correção manual!`, 'warning');
+            } else {
+                qrSelecionadoDiv.classList.remove('ja-corrigido');
+                mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success');
+            }
+            
+            document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`;
+            setTimeout(() => { 
+                if (alunoSelecionado && !stream) {
+                    if (isMobile) { 
+                        entrarTelaCheia(); 
+                        iniciarCamera(); 
+                    } else { 
+                        iniciarCamera(); 
+                    } 
+                } 
+            }, 500);
         }
         
         // NOVA FUNÇÃO: Mostrar modal de confirmação
@@ -1088,11 +1212,27 @@
             try {
                 console.log('🔍 QR Code:', qrData);
                 let alunoId = null;
-                try { const alunoData = JSON.parse(qrData); alunoId = alunoData.id || alunoData.alunoId || alunoData; } catch (e) { if (qrData.includes('aluno=')) { const match = qrData.match(/aluno=([a-f0-9]+)/); if (match) alunoId = match[1]; else alunoId = qrData; } else alunoId = qrData; }
-                const alunoEncontrado = alunosMap.get(alunoId);
-                if (!alunoEncontrado) { mostrarAlerta('❌ Aluno não encontrado!', 'error'); setTimeout(() => voltarParaScannerQR(), 1500); return; }
+                try { 
+                    const alunoData = JSON.parse(qrData); 
+                    alunoId = alunoData.id || alunoData.alunoId || alunoData; 
+                } catch (e) { 
+                    if (qrData.includes('aluno=')) { 
+                        const match = qrData.match(/aluno=([a-f0-9]+)/); 
+                        if (match) alunoId = match[1]; 
+                        else alunoId = qrData; 
+                    } else { 
+                        alunoId = qrData; 
+                    } 
+                }
                 
-                // NOVA VERIFICAÇÃO: Verificar se aluno já foi corrigido
+                const alunoEncontrado = alunosMap.get(alunoId);
+                if (!alunoEncontrado) { 
+                    mostrarAlerta('❌ Aluno não encontrado!', 'error'); 
+                    setTimeout(() => voltarParaScannerQR(), 1500); 
+                    return; 
+                }
+                
+                // 🔥 VERIFICAR APENAS EM ProvaRealizada (notas manuais)
                 const jaCorrigido = await verificarAlunoJaCorrigido(alunoId);
                 
                 if (jaCorrigido) {
@@ -1113,7 +1253,10 @@
                     await continuarProcessamentoQRCode(alunoEncontrado);
                 }
                 
-            } catch (error) { console.error('Erro:', error); mostrarAlerta('❌ QR Code inválido', 'error'); }
+            } catch (error) { 
+                console.error('Erro:', error); 
+                mostrarAlerta('❌ QR Code inválido', 'error'); 
+            }
         }
         
         // NOVA FUNÇÃO: Continuar processamento após confirmação
@@ -1631,18 +1774,37 @@
                     if (!alunosCarregados || alunos.length === 0) alunosCarregados = await carregarAlunosDosResultados();
                     if (!alunosCarregados || alunos.length === 0) alunosCarregados = await carregarAlunosDaProva(provaData);
                     
-                    // NOVO: Carregar resultados já salvos para verificar alunos corrigidos
+                    // 🔥 CORREÇÃO: Limpar resultadosSalvos ANTES de recarregar
+                    resultadosSalvos.clear();
+                    
+                    // 🔥 CORREÇÃO: Carregar resultados APENAS da ProvaRealizada (notas manuais)
                     try {
                         const resultadosRes = await fazerRequisicao(`/api/provas/${provaId}/resultados`);
                         const resultadosData = await resultadosRes.json();
                         if (resultadosData.success && resultadosData.resultados) {
-                            resultadosData.resultados.forEach(r => {
+                            // 🔥 FILTRAR APENAS resultados com nota MANUAL (ProvaRealizada)
+                            const resultadosManuais = resultadosData.resultados.filter(r => 
+                                r.origem === 'prova_realizada' || 
+                                r.tipoNota === 'manual' ||
+                                (r.notaManual !== null && r.notaManual !== undefined)
+                            );
+                            
+                            resultadosManuais.forEach(r => {
                                 const alunoId = r.alunoId || r.userId;
-                                if (alunoId) resultadosSalvos.set(alunoId, true);
+                                if (alunoId) {
+                                    resultadosSalvos.set(alunoId.toString(), {
+                                        temNotaManual: true,
+                                        notaManual: r.notaManual,
+                                        data: r.notaManualData || r.dataRealizacao
+                                    });
+                                }
                             });
-                            console.log(`📊 ${resultadosSalvos.size} alunos já corrigidos`);
+                            console.log(`📊 ${resultadosSalvos.size} alunos com correção MANUAL (ProvaRealizada)`);
+                            console.log('   Alunos:', Array.from(resultadosSalvos.keys()));
                         }
-                    } catch (e) { console.warn('Não foi possível carregar resultados:', e); }
+                    } catch (e) { 
+                        console.warn('Não foi possível carregar resultados:', e); 
+                    }
                     
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('conteudo').style.display = 'block';
@@ -1651,32 +1813,81 @@
                     const select = document.getElementById('selectAluno');
                     select.innerHTML = '<option value="">— Selecione —</option>';
                     alunos.forEach(a => { select.innerHTML += `<option value="${a.alunoId}">${a.alunoNome} ${a.alunoMatricula ? `(${a.alunoMatricula})` : ''}</option>`; });
-                    select.addEventListener('change', (e) => {
-                        if (e.target.value) { const aluno = alunos.find(a => a.alunoId === e.target.value); if (aluno) { 
-                            alunoSelecionado = { id: aluno.alunoId, nome: aluno.alunoNome, matricula: aluno.alunoMatricula }; 
+                    
+                    // 🔥 CORREÇÃO: Evento do select com verificação correta
+                    select.addEventListener('change', async (e) => {
+                        if (e.target.value) { 
+                            const aluno = alunos.find(a => a.alunoId === e.target.value); 
+                            if (aluno) { 
+                                // Verificar se aluno tem correção MANUAL
+                                const temCorrecaoManual = resultadosSalvos.has(aluno.alunoId.toString());
+                                
+                                if (temCorrecaoManual) {
+                                    const dadosCorrecao = resultadosSalvos.get(aluno.alunoId.toString());
+                                    console.log(`⚠️ Aluno ${aluno.alunoNome} JÁ TEM correção manual: nota ${dadosCorrecao.notaManual}`);
+                                    
+                                    // Mostrar modal perguntando se deseja prosseguir
+                                    mostrarModalConfirmacao(aluno.alunoNome, 
+                                        async () => {
+                                            // Confirmou - prosseguir com a correção
+                                            await continuarSelecaoManual(aluno);
+                                        },
+                                        () => {
+                                            // Cancelou - voltar ao select
+                                            mostrarAlerta('Correção cancelada', 'info');
+                                            document.getElementById('selectAluno').value = '';
+                                            alunoSelecionado = null;
+                                            qrSelecionadoDiv.style.display = 'none';
+                                            manualSelectArea.style.display = 'block';
+                                            btnIniciarCamera.disabled = true;
+                                        }
+                                    );
+                                } else {
+                                    // Aluno sem correção manual - prosseguir normalmente
+                                    console.log(`✅ Aluno ${aluno.alunoNome} SEM correção manual`);
+                                    await continuarSelecaoManual(aluno);
+                                }
+                            } 
+                        } else { 
+                            alunoSelecionado = null; 
+                            qrSelecionadoDiv.style.display = 'none'; 
+                            manualSelectArea.style.display = 'block'; 
+                            btnIniciarCamera.disabled = true; 
+                        } 
+                        document.getElementById('resultado').style.display = 'none'; 
+                        btnTentarNovamente.style.display = 'none';
+                    });
+                    
+                    mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
+                    
+                    // URL com aluno específico
+                    if (urlAlunoId) { 
+                        const alunoPorUrl = alunosMap.get(urlAlunoId); 
+                        if (alunoPorUrl) { 
+                            alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; 
+                            if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } 
+                            qrScannerArea.style.display = 'none'; 
                             qrSelecionadoDiv.style.display = 'flex'; 
                             document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; 
                             document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; 
-                            manualSelectArea.style.display = 'none'; 
                             btnIniciarCamera.disabled = false; 
                             
-                            // Verificar se já foi corrigido
-                            const jaCorrigido = resultadosSalvos.has(alunoSelecionado.id);
-                            if (jaCorrigido) {
+                            // Verificar se já tem correção manual
+                            const temCorrecaoManual = resultadosSalvos.has(alunoSelecionado.id);
+                            if (temCorrecaoManual) {
                                 qrSelecionadoDiv.classList.add('ja-corrigido');
-                                mostrarAlerta(`⚠️ ${alunoSelecionado.nome} já possui correção!`, 'warning');
+                                mostrarAlerta(`⚠️ ${alunoSelecionado.nome} já possui correção manual!`, 'warning');
                             } else {
                                 qrSelecionadoDiv.classList.remove('ja-corrigido');
-                                mostrarAlerta(`✅ ${aluno.alunoNome}`, 'success');
+                                mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success');
                             }
                             
-                            document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${aluno.alunoNome}`; 
+                            document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; 
                             setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { entrarTelaCheia(); iniciarCamera(); } else { iniciarCamera(); } } }, 500); 
-                        } } else { alunoSelecionado = null; qrSelecionadoDiv.style.display = 'none'; manualSelectArea.style.display = 'block'; btnIniciarCamera.disabled = true; } 
-                        document.getElementById('resultado').style.display = 'none'; btnTentarNovamente.style.display = 'none';
-                    });
-                    mostrarAlerta(`✅ ${alunos.length} alunos carregados!`, 'success');
-                    if (urlAlunoId) { const alunoPorUrl = alunosMap.get(urlAlunoId); if (alunoPorUrl) { alunoSelecionado = { id: alunoPorUrl.alunoId, nome: alunoPorUrl.alunoNome, matricula: alunoPorUrl.alunoMatricula }; if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} } qrScannerArea.style.display = 'none'; qrSelecionadoDiv.style.display = 'flex'; document.getElementById('qrAlunoNome').textContent = alunoSelecionado.nome; document.getElementById('qrAlunoMatricula').textContent = alunoSelecionado.matricula ? `Mat: ${alunoSelecionado.matricula}` : ''; btnIniciarCamera.disabled = false; mostrarAlerta(`✅ ${alunoSelecionado.nome}`, 'success'); document.getElementById('infoBar').innerHTML = `<i class="fas fa-user-check"></i> ${alunoSelecionado.nome}`; setTimeout(() => { if (alunoSelecionado && !stream) { if (isMobile) { entrarTelaCheia(); iniciarCamera(); } else { iniciarCamera(); } } }, 500); } else { mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); } }
+                        } else { 
+                            mostrarAlerta(`⚠️ Aluno não encontrado`, 'warning'); 
+                        } 
+                    }
                     iniciarQRScanner();
                 } else { throw new Error('Erro ao carregar'); }
             } catch (error) { document.getElementById('loading').innerHTML = `<p style="color:red;">❌ Erro: ${error.message}</p>`; console.error('Erro:', error); }
@@ -1715,6 +1926,136 @@
         }
         
         function pararCamera() { if (analiseInterval) { clearInterval(analiseInterval); analiseInterval = null; } if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } if (autoCorrectionTimer) { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; } cancelarCorrecaoAutomatica(); }
+        
+        // 🔥 ADICIONAR EVENTOS DE DUPLO CLIQUE AQUI (DEPOIS QUE TODAS AS VARIÁVEIS FORAM DECLARADAS)
+        document.body.addEventListener('dblclick', function(e) {
+            // Verificar se está em modo desktop (não mobile)
+            if (!isMobile) {
+                // Verificar se já tem aluno selecionado
+                if (alunoSelecionado) {
+                    abrirCameraTelaCheia();
+                } else {
+                    mostrarAlerta('Selecione um aluno primeiro antes de abrir a câmera!', 'warning');
+                }
+            }
+        });
+        
+        // 🔥 EVENTO PARA O CONTAINER DA CÂMERA
+        cameraContainer.addEventListener('dblclick', function(e) {
+            if (!isMobile && alunoSelecionado) {
+                e.stopPropagation();
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
+                document.body.classList.add('fullscreen-mode');
+                mostrarAlerta('🎥 Modo tela cheia ativado!', 'success');
+            }
+        });
+
+        // 🔥 FUNÇÃO ALTERNAR TELA CHEIA (entrar/sair)
+        function alternarTelaCheia() {
+            if (!alunoSelecionado) {
+                mostrarAlerta('Selecione um aluno primeiro!', 'warning');
+                return false;
+            }
+            
+            const elem = document.documentElement;
+            
+            // Verificar se já está em tela cheia
+            const isFullscreen = document.fullscreenElement || 
+                                document.webkitFullscreenElement || 
+                                document.mozFullScreenElement ||
+                                document.msFullscreenElement;
+            
+            if (isFullscreen) {
+                // SAIR da tela cheia
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                document.body.classList.remove('fullscreen-mode');
+                mostrarAlerta('🔓 Modo tela cheia desativado', 'info');
+                console.log('🖥️ Saindo do modo tela cheia');
+            } else {
+                // ENTRAR em tela cheia
+                console.log('🖥️ Entrando em modo tela cheia');
+                
+                // Se a câmera não está aberta, inicia primeiro
+                if (!stream || cameraContainer.style.display !== 'block') {
+                    iniciarCamera().then(() => {
+                        setTimeout(() => {
+                            if (elem.requestFullscreen) {
+                                elem.requestFullscreen();
+                            } else if (elem.webkitRequestFullscreen) {
+                                elem.webkitRequestFullscreen();
+                            } else if (elem.msRequestFullscreen) {
+                                elem.msRequestFullscreen();
+                            }
+                            document.body.classList.add('fullscreen-mode');
+                            mostrarAlerta('🎥 Modo tela cheia ativado! (Clique duas vezes para sair)', 'success');
+                        }, 500);
+                    }).catch(err => {
+                        console.error('Erro ao iniciar câmera:', err);
+                        mostrarAlerta('❌ Erro ao iniciar câmera', 'error');
+                    });
+                } else {
+                    // Câmera já está aberta, só entra em tela cheia
+                    if (elem.requestFullscreen) {
+                        elem.requestFullscreen();
+                    } else if (elem.webkitRequestFullscreen) {
+                        elem.webkitRequestFullscreen();
+                    } else if (elem.msRequestFullscreen) {
+                        elem.msRequestFullscreen();
+                    }
+                    document.body.classList.add('fullscreen-mode');
+                    mostrarAlerta('🎥 Modo tela cheia ativado! (Clique duas vezes para sair)', 'success');
+                }
+            }
+            return true;
+        }
+        
+        // 🔥 EVENTO DE DUPLO CLIQUE NO CORPO (alterna tela cheia)
+        document.body.addEventListener('dblclick', function(e) {
+            // Verificar se está em modo desktop (não mobile)
+            if (!isMobile) {
+                e.preventDefault();
+                alternarTelaCheia();
+            }
+        });
+        
+        // 🔥 EVENTO DE DUPLO CLIQUE NO CONTAINER DA CÂMERA (alterna tela cheia)
+        cameraContainer.addEventListener('dblclick', function(e) {
+            if (!isMobile && alunoSelecionado) {
+                e.stopPropagation();
+                alternarTelaCheia();
+            }
+        });
+        
+        // 🔥 ESCUTAR MUDANÇAS NO ESTADO DE TELA CHEIA (para sincronizar a classe)
+        document.addEventListener('fullscreenchange', function() {
+            if (!document.fullscreenElement) {
+                document.body.classList.remove('fullscreen-mode');
+                console.log('🖥️ Tela cheia desativada pelo sistema');
+            }
+        });
+        document.addEventListener('webkitfullscreenchange', function() {
+            if (!document.webkitFullscreenElement) {
+                document.body.classList.remove('fullscreen-mode');
+            }
+        });
+        document.addEventListener('msfullscreenchange', function() {
+            if (!document.msFullscreenElement) {
+                document.body.classList.remove('fullscreen-mode');
+            }
+        });
         
         modoQRBtn.addEventListener('click', () => setModo(true));
         modoManualBtn.addEventListener('click', () => setModo(false));

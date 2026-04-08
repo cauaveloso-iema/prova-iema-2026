@@ -6887,7 +6887,7 @@
                 }
             }
 
-            // ============ MODAL DE OPÇÕES DE ADAPTAÇÃO COM AMPLIAÇÃO DINÂMICA ============
+            // ============ MODAL DE OPÇÕES DE ADAPTAÇÃO COM CAIXA ALTA ============
             mostrarModalOpcoesAdaptacao() {
                 if (!window.provaParaImpressao || !window.provaParaImpressao.prova) {
                     this.showToast('❌ Dados da prova não encontrados.', 'error');
@@ -6918,8 +6918,8 @@
                 const isAdaptada = prova?.tipoProva === 'adaptada' || prova?.adaptada === true;
                 
                 modal.innerHTML = `
-                    <div class="modal-content" style="max-width: 550px; width: 90%; background: white; border-radius: 24px; padding: 0;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0; display: flex; justify-content: space-between;">
+                    <div class="modal-content" style="max-width: 580px; width: 90%; background: white; border-radius: 24px; padding: 0; max-height: 90vh; overflow-y: auto;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0; display: flex; justify-content: space-between; position: sticky; top: 0; z-index: 10;">
                             <h3 style="margin: 0;"><i class="fas fa-universal-access"></i> Opções de Adaptação</h3>
                             <button onclick="adminSimples.fecharModalOpcoesAdaptacao()" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer;">&times;</button>
                         </div>
@@ -6927,7 +6927,7 @@
                             ${isAdaptada ? `<div style="background: #dbeafe; padding: 10px; margin-bottom: 15px; border-radius: 8px;"><i class="fas fa-info-circle"></i> Prova originalmente adaptada - 3 alternativas</div>` : ''}
                             
                             <div style="display: flex; flex-direction: column; gap: 15px;">
-                                <!-- AMPLIAÇÃO DINÂMICA - CONTROLE DESLIZANTE -->
+                                <!-- FONTE DINÂMICA -->
                                 <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
                                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 10px;">
                                         <input type="checkbox" id="optFonteDinamica" style="width: 20px; height: 20px;">
@@ -6936,7 +6936,6 @@
                                             <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Amplie o tamanho da fonte conforme sua necessidade</p>
                                         </div>
                                     </label>
-                                    
                                     <div id="sliderContainer" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
                                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                                             <span style="font-size: 12px;">Normal (12pt)</span>
@@ -6958,7 +6957,21 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Negrito -->
+                                <!-- 🔥 CAIXA ALTA (MAIÚSCULAS) - NOVO -->
+                                <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
+                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="optCaixaAlta" style="width: 20px; height: 20px;">
+                                        <div>
+                                            <strong style="font-size: 1rem;">🔠 CAIXA ALTA (Maiúsculas)</strong>
+                                            <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Converte todo o texto para letras maiúsculas</p>
+                                        </div>
+                                    </label>
+                                    <div id="caixaAltaPreview" style="margin-top: 10px; padding: 8px; background: #fff; border-radius: 8px; font-size: 12px; color: #64748b; border: 1px solid #e5e7eb;">
+                                        <i class="fas fa-eye"></i> Pré-visualização: <span id="previewCaixaAlta">Exemplo de texto em maiúsculas</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- NEGRITO -->
                                 <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
                                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                         <input type="checkbox" id="optNegrito" style="width: 20px; height: 20px;">
@@ -6969,7 +6982,7 @@
                                     </label>
                                 </div>
                                 
-                                <!-- Alto Contraste -->
+                                <!-- ALTO CONTRASTE -->
                                 <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
                                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                         <input type="checkbox" id="optAltoContraste" style="width: 20px; height: 20px;">
@@ -6980,7 +6993,7 @@
                                     </label>
                                 </div>
                                 
-                                <!-- Layout Simplificado -->
+                                <!-- LAYOUT SIMPLIFICADO -->
                                 <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
                                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                         <input type="checkbox" id="optLayoutSimplificado" style="width: 20px; height: 20px;">
@@ -6997,8 +7010,8 @@
                             </div>
                             
                             <div style="display: flex; gap: 12px; margin-top: 25px;">
-                                <button onclick="adminSimples.gerarImpressaoComOpcoes()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">Imprimir com Adaptações</button>
-                                <button onclick="adminSimples.fecharModalOpcoesAdaptacao()" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">Cancelar</button>
+                                <button type="button" onclick="adminSimples.gerarImpressaoComOpcoes()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">Imprimir com Adaptações</button>
+                                <button type="button" onclick="adminSimples.fecharModalOpcoesAdaptacao()" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">Cancelar</button>
                             </div>
                         </div>
                     </div>
@@ -7006,7 +7019,7 @@
                 
                 document.body.appendChild(modal);
                 
-                // Adicionar event listeners
+                // Event listeners
                 setTimeout(() => {
                     const fonteDinamicaCheckbox = document.getElementById('optFonteDinamica');
                     const sliderContainer = document.getElementById('sliderContainer');
@@ -7014,23 +7027,39 @@
                     const tamanhoAtual = document.getElementById('tamanhoFonteAtual');
                     const previewFonte = document.getElementById('previewFonte');
                     
+                    // 🔥 CAIXA ALTA
+                    const caixaAltaCheckbox = document.getElementById('optCaixaAlta');
+                    const previewCaixaAlta = document.getElementById('previewCaixaAlta');
+                    
+                    if (caixaAltaCheckbox && previewCaixaAlta) {
+                        caixaAltaCheckbox.addEventListener('change', function() {
+                            if (this.checked) {
+                                previewCaixaAlta.style.textTransform = 'uppercase';
+                                previewCaixaAlta.style.fontWeight = 'bold';
+                                previewCaixaAlta.style.color = '#10b981';
+                                previewCaixaAlta.innerHTML = 'EXEMPLO DE TEXTO EM MAIÚSCULAS';
+                            } else {
+                                previewCaixaAlta.style.textTransform = 'none';
+                                previewCaixaAlta.style.fontWeight = 'normal';
+                                previewCaixaAlta.style.color = '#64748b';
+                                previewCaixaAlta.innerHTML = 'Exemplo de texto em maiúsculas';
+                            }
+                        });
+                    }
+                    
                     if (fonteDinamicaCheckbox) {
                         fonteDinamicaCheckbox.addEventListener('change', function() {
-                            if (sliderContainer) {
-                                sliderContainer.style.display = this.checked ? 'block' : 'none';
-                            }
+                            sliderContainer.style.display = this.checked ? 'block' : 'none';
                         });
                     }
                     
                     if (fonteSlider) {
                         fonteSlider.addEventListener('input', function() {
                             const tamanho = this.value;
-                            if (tamanhoAtual) tamanhoAtual.textContent = tamanho + 'pt';
-                            if (previewFonte) previewFonte.style.fontSize = tamanho + 'pt';
-                            if (previewFonte) previewFonte.style.fontWeight = 'bold';
+                            tamanhoAtual.textContent = tamanho + 'pt';
+                            previewFonte.style.fontSize = tamanho + 'pt';
+                            previewFonte.style.fontWeight = 'bold';
                         });
-                        
-                        // Inicializar preview
                         fonteSlider.dispatchEvent(new Event('input'));
                     }
                 }, 100);
@@ -7134,7 +7163,7 @@
                 await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl, alunoNome);
             }
 
-            // ============ IMPRESSÃO COM OPÇÕES ============
+            // ============ IMPRESSÃO COM OPÇÕES (COM CAIXA ALTA) ============
             async gerarImpressaoComOpcoes() {
                 console.log('🎨 Gerando impressão com as opções selecionadas...');
                 
@@ -7154,12 +7183,13 @@
                     negrito: document.getElementById('optNegrito')?.checked || false,
                     altoContraste: document.getElementById('optAltoContraste')?.checked || false,
                     layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false,
-                    tamanhoFonte: parseInt(tamanhoFonte)
+                    tamanhoFonte: parseInt(tamanhoFonte),
+                    caixaAlta: document.getElementById('optCaixaAlta')?.checked || false
                 };
                 
                 console.log('🎨 Opções selecionadas:', opcoes);
                 
-                const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado;
+                const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
                 
                 if (nenhumaOpcao) {
                     const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
@@ -7194,26 +7224,10 @@
                     return;
                 }
                 
-                // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
-                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
-                                    window.location.hostname === '127.0.0.1';
-                const IS_RENDER = window.location.hostname.includes('render.com') || 
-                                window.location.hostname.includes('sistema-avaliativo');
-                
-                let BASE_URL;
-                if (IS_LOCALHOST) {
-                    BASE_URL = 'http://localhost:3000';
-                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
-                } else if (IS_RENDER) {
-                    BASE_URL = window.location.origin;
-                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
-                } else {
-                    BASE_URL = window.location.origin;
-                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
-                }
-                
+                // DETECTAR AMBIENTE
+                const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : window.location.origin;
                 const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-                console.log('🔗 URL de correção gerada:', urlCorrecao);
                 
                 let qrCodeAlunoUrl = null;
                 try {
@@ -7228,10 +7242,10 @@
                     const data = await response.json();
                     if (data.success && data.qrCode) {
                         qrCodeAlunoUrl = data.qrCode;
-                        console.log('✅ QR Code do aluno gerado com sucesso!');
+                        console.log('✅ QR Code do aluno gerado!');
                     }
                 } catch (error) {
-                    console.error('❌ Erro ao gerar QR Code do aluno:', error);
+                    console.error('❌ Erro ao gerar QR Code:', error);
                 }
                 
                 await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl, alunoNome);
@@ -7486,6 +7500,22 @@
                 };
                 
                 let cssAdaptacoes = '';
+
+                // CAIXA ALTA - Forçar maiúsculas em todo o texto
+                if (opcoesAdaptacao.caixaAlta) {
+                    cssAdaptacoes += `
+                        body, .questao-texto, .opcao-linha, .instrucoes-cartao, .questao-numero, 
+                        .cartao-header h4, .print-header h1, .print-prova-info h3, .label, .campo-label,
+                        .instrucoes-box h4, .info-label, .info-linha, .instrucoes-box li, .print-footer,
+                        .student-item, .campo-item, .cartao-resposta td, .cartao-resposta th,
+                        .rascunho-area small, .instrucoes-box ul, .instrucoes-box p,
+                        .student-item .label, .campo-item .campo-label, .info-linha .info-item,
+                        .print-prova-info .info-linha span, .questao-print, .opcoes-print,
+                        .opcao-linha .opcao-letra, .opcao-linha .opcao-texto, .print-header .student-row {
+                            text-transform: uppercase !important;
+                        }
+                    `;
+                }
 
                 // AMPLIAÇÃO DINÂMICA (personalizada)
                 if (opcoesAdaptacao.fontePersonalizada && opcoesAdaptacao.tamanhoFonte) {

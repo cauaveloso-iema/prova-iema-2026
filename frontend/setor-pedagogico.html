@@ -1876,6 +1876,20 @@
                                     </label>
                                 </div>
                             </div>
+
+                            <!-- 🔥 CAIXA ALTA (MAIÚSCULAS) -->
+                            <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
+                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                    <input type="checkbox" id="optCaixaAlta" style="width: 20px; height: 20px;">
+                                    <div>
+                                        <strong style="font-size: 1rem;">🔠 CAIXA ALTA (Maiúsculas)</strong>
+                                        <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Converte todo o texto para letras maiúsculas</p>
+                                    </div>
+                                </label>
+                                <div id="caixaAltaPreview" style="margin-top: 10px; padding: 8px; background: #fff; border-radius: 8px; font-size: 12px; color: #64748b; border: 1px solid #e5e7eb;">
+                                    <i class="fas fa-eye"></i> Pré-visualização: <span id="previewCaixaAlta">Exemplo de texto em maiúsculas</span>
+                                </div>
+                            </div>
                             
                             <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-radius: 12px;">
                                 <p style="margin: 0; font-size: 0.85rem;"><i class="fas fa-lightbulb"></i> <strong>Dica:</strong> Você pode combinar várias opções conforme a necessidade do aluno.</p>
@@ -1896,6 +1910,24 @@
                     const fonteSlider = document.getElementById('fonteSlider');
                     const tamanhoAtual = document.getElementById('tamanhoFonteAtual');
                     const previewFonte = document.getElementById('previewFonte');
+                    const caixaAltaCheckbox = document.getElementById('optCaixaAlta');
+                    const previewCaixaAlta = document.getElementById('previewCaixaAlta');
+
+                    if (caixaAltaCheckbox && previewCaixaAlta) {
+                        caixaAltaCheckbox.addEventListener('change', function() {
+                            if (this.checked) {
+                                previewCaixaAlta.style.textTransform = 'uppercase';
+                                previewCaixaAlta.style.fontWeight = 'bold';
+                                previewCaixaAlta.style.color = '#10b981';
+                                previewCaixaAlta.innerHTML = 'EXEMPLO DE TEXTO EM MAIÚSCULAS';
+                            } else {
+                                previewCaixaAlta.style.textTransform = 'none';
+                                previewCaixaAlta.style.fontWeight = 'normal';
+                                previewCaixaAlta.style.color = '#64748b';
+                                previewCaixaAlta.innerHTML = 'Exemplo de texto em maiúsculas';
+                            }
+                        });
+                    }
                     
                     if (fonteDinamicaCheckbox) {
                         fonteDinamicaCheckbox.addEventListener('change', function() {
@@ -2006,10 +2038,11 @@
                     negrito: document.getElementById('optNegrito')?.checked || false,
                     altoContraste: document.getElementById('optAltoContraste')?.checked || false,
                     layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false,
-                    tamanhoFonte: parseInt(tamanhoFonte)
+                    tamanhoFonte: parseInt(tamanhoFonte),
+                    caixaAlta: document.getElementById('optCaixaAlta')?.checked || false  // 🔥 ADICIONAR ESTA LINHA
                 };
                 
-                const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado;
+                const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
                 if (nenhumaOpcao) {
                     if (confirm('Nenhuma opção selecionada. Imprimir normalmente?')) {
                         this.fecharModalAdaptacao('modalOpcoesAdaptacao');
@@ -2252,6 +2285,23 @@
                 };
                 
                 let cssAdaptacoes = '';
+                
+                // CAIXA ALTA - Forçar maiúsculas em todo o texto
+                if (opcoesAdaptacao.caixaAlta) {
+                    cssAdaptacoes += `
+                        body, .questao-texto, .opcao-linha, .instrucoes-cartao, .questao-numero, 
+                        .cartao-header h4, .print-header h1, .print-prova-info h3, .label, .campo-label,
+                        .instrucoes-box h4, .info-label, .info-linha, .instrucoes-box li, .print-footer,
+                        .student-item, .campo-item, .cartao-resposta td, .cartao-resposta th,
+                        .rascunho-area small, .instrucoes-box ul, .instrucoes-box p,
+                        .student-item .label, .campo-item .campo-label, .info-linha .info-item,
+                        .print-prova-info .info-linha span, .questao-print, .opcoes-print,
+                        .opcao-linha .opcao-letra, .opcao-linha .opcao-texto, .print-header .student-row {
+                            text-transform: uppercase !important;
+                        }
+                    `;
+                }
+
                 if (opcoesAdaptacao.fontePersonalizada && opcoesAdaptacao.tamanhoFonte) {
                     const t = opcoesAdaptacao.tamanhoFonte;
                     cssAdaptacoes += `body{font-size:${t}pt!important}.questao-texto{font-size:${t}pt!important}.opcao-linha{font-size:${t-2}pt!important}.instrucoes-cartao{font-size:${t-5}pt!important}.rascunho-area small{font-size:${t-5}pt!important}.questao-numero{font-size:${t-2}pt!important}.print-header h1{font-size:${t+4}pt!important}.print-prova-info h3{font-size:${t+2}pt!important}.campos-box .campo-label,.student-item .label{font-size:${t-2}pt!important}.instrucoes-box li,.instrucoes-box h4,.info-linha,.info-item{font-size:${t-4}pt!important}.cartao-resposta th,.cartao-resposta td{font-size:${t-4}pt!important}.instrucoes-cartao p{font-size:${t-4}pt!important}.print-footer{font-size:${t-4.5}pt!important}`;
