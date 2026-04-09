@@ -814,7 +814,7 @@
         
         let sensibilidade = 12;
         const BRILHO_MAX_PRETO = 110;
-        let margemBusca = 0.32;
+        let margemBusca = 0.12;
         let tamanhoGuia = 0.14;
         
         const isRender = window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
@@ -1956,52 +1956,6 @@
                 mostrarAlerta('🎥 Modo tela cheia ativado!', 'success');
             }
         });
-
-        // ============================================
-        // FUNÇÃO ADICIONAL - Não substitui a original
-        // ============================================
-        function ajustarGuiasPersonalizadas() {
-            // Controle separado sem alterar o código original
-            const lateral = 0.32;   // ← Longe das laterais (como você quer)
-            const vertical = 0.08;   // ← Perto do topo/base (guias separadas)
-            const tamanho = 0.14;    // ← Tamanho original
-            
-            const container = document.getElementById('cameraContainer');
-            if (!container) return;
-            
-            const rect = container.getBoundingClientRect();
-            const tamanhoPx = Math.min(rect.width, rect.height) * tamanho;
-            
-            const left = rect.width * lateral;
-            const right = rect.width - (rect.width * lateral) - tamanhoPx;
-            const top = rect.height * vertical;
-            const bottom = rect.height - (rect.height * vertical) - tamanhoPx;
-            
-            const guias = ['guiaTL', 'guiaTR', 'guiaBL', 'guiaBR'];
-            const posicoes = [
-                { left: left, top: top },      // TL
-                { left: right, top: top },     // TR
-                { left: left, top: bottom },   // BL
-                { left: right, top: bottom }   // BR
-            ];
-            
-            guias.forEach((id, i) => {
-                const el = document.getElementById(id);
-                if (el) {
-                    el.style.left = posicoes[i].left + 'px';
-                    el.style.top = posicoes[i].top + 'px';
-                    el.style.width = tamanhoPx + 'px';
-                    el.style.height = tamanhoPx + 'px';
-                }
-            });
-        }
-
-        // Chamar esta função após o analisarFrame
-        const analisarFrameOriginal = analisarFrame;
-        analisarFrame = function() {
-            analisarFrameOriginal();
-            ajustarGuiasPersonalizadas();
-        };
 
         // 🔥 FUNÇÃO ALTERNAR TELA CHEIA (entrar/sair)
         function alternarTelaCheia() {
