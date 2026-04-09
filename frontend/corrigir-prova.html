@@ -1345,26 +1345,27 @@
         }
         
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
-            // CONTROLE INDIVIDUAL DE CADA LADO
-            const margemEsquerda = 0.10;   // ← Distância da borda ESQUERDA (guia TL e BL)
-            const margemDireita = 0.10;    // ← Distância da borda DIREITA (guia TR e BR)
-            const margemTopo = 0.18;       // ← Distância da borda SUPERIOR (guia TL e TR)
-            const margemBase = 0.18;       // ← Distância da borda INFERIOR (guia BL e BR)
+            // ============================================
+            // CONTROLE INDIVIDUAL - MEXA SÓ AQUI!
+            // ============================================
+            const margemEsquerda = 0.32;   // ← Distância da borda ESQUERDA
+            const margemDireita = 0.32;    // ← Distância da borda DIREITA
+            const margemTopo = 0.08;       // ← Distância da borda SUPERIOR
+            const margemBase = 0.08;       // ← Distância da borda INFERIOR
+            const tamanhoGuia = 0.160;     // ← Tamanho do quadrado
+            // ============================================
             
-            // Tamanho das guias
-            const tamanhoGuiaPx = Math.min(containerWidth, containerHeight) * 0.160;
+            const tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
             
-            // Calcula posições em pixels
             const leftTL = containerWidth * margemEsquerda;
             const topTL = containerHeight * margemTopo;
-            const leftTR = containerWidth - (containerWidth * margemDireita) - tamanhoGuiaPx;
+            const leftTR = containerWidth - (containerWidth * margemDireita) - tamanhoPx;
             const topTR = containerHeight * margemTopo;
             const leftBL = containerWidth * margemEsquerda;
-            const topBL = containerHeight - (containerHeight * margemBase) - tamanhoGuiaPx;
-            const leftBR = containerWidth - (containerWidth * margemDireita) - tamanhoGuiaPx;
-            const topBR = containerHeight - (containerHeight * margemBase) - tamanhoGuiaPx;
+            const topBL = containerHeight - (containerHeight * margemBase) - tamanhoPx;
+            const leftBR = containerWidth - (containerWidth * margemDireita) - tamanhoPx;
+            const topBR = containerHeight - (containerHeight * margemBase) - tamanhoPx;
             
-            // Aplica as posições
             const guiaTL = document.getElementById('guiaTL');
             const guiaTR = document.getElementById('guiaTR');
             const guiaBL = document.getElementById('guiaBL');
@@ -1373,26 +1374,26 @@
             if (guiaTL) {
                 guiaTL.style.left = leftTL + 'px';
                 guiaTL.style.top = topTL + 'px';
-                guiaTL.style.width = tamanhoGuiaPx + 'px';
-                guiaTL.style.height = tamanhoGuiaPx + 'px';
+                guiaTL.style.width = tamanhoPx + 'px';
+                guiaTL.style.height = tamanhoPx + 'px';
             }
             if (guiaTR) {
                 guiaTR.style.left = leftTR + 'px';
                 guiaTR.style.top = topTR + 'px';
-                guiaTR.style.width = tamanhoGuiaPx + 'px';
-                guiaTR.style.height = tamanhoGuiaPx + 'px';
+                guiaTR.style.width = tamanhoPx + 'px';
+                guiaTR.style.height = tamanhoPx + 'px';
             }
             if (guiaBL) {
                 guiaBL.style.left = leftBL + 'px';
                 guiaBL.style.top = topBL + 'px';
-                guiaBL.style.width = tamanhoGuiaPx + 'px';
-                guiaBL.style.height = tamanhoGuiaPx + 'px';
+                guiaBL.style.width = tamanhoPx + 'px';
+                guiaBL.style.height = tamanhoPx + 'px';
             }
             if (guiaBR) {
                 guiaBR.style.left = leftBR + 'px';
                 guiaBR.style.top = topBR + 'px';
-                guiaBR.style.width = tamanhoGuiaPx + 'px';
-                guiaBR.style.height = tamanhoGuiaPx + 'px';
+                guiaBR.style.width = tamanhoPx + 'px';
+                guiaBR.style.height = tamanhoPx + 'px';
             }
         }
         
