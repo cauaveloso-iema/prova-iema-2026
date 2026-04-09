@@ -554,6 +554,38 @@
             .btn-opcao { width: 28px; font-size: 9px; }
             .resposta-card .resposta-valor { font-size: 1.2rem; }
         }
+        /* Ajustes para tela cheia mobile - guias proporcionais */
+        body.fullscreen-mode .guia-quadrado {
+            transition: all 0.1s ease-out;
+            box-sizing: border-box;
+        }
+
+        /* Para telas muito pequenas (iPhone SE, etc) */
+        @media (max-width: 380px) and (orientation: portrait) {
+            .guia-quadrado {
+                border-width: 2px !important;
+            }
+            .status-encaixe {
+                font-size: 10px !important;
+                padding: 4px 8px !important;
+                top: 5px !important;
+            }
+            .feedback {
+                font-size: 10px !important;
+                bottom: 5px !important;
+            }
+        }
+
+        /* Para orientação landscape (tela cheia) */
+        @media (max-width: 900px) and (orientation: landscape) {
+            .guia-quadrado {
+                border-width: 2px !important;
+            }
+            .status-encaixe {
+                font-size: 9px !important;
+                top: 5px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1329,61 +1361,163 @@
             capturaRealizada = false;
         }
         
-        function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
-            let margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
-            let tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
+        // ============================================
+        // FUNÇÕES CORRIGIDAS PARA TELA CHEIA MOBILE
+        // ============================================
+
+        function atualizarPosicaoGuias(containerWidth, containerHeight, videoWidth, videoHeight) {
+            // 🔥 CORREÇÃO: Usar dimensões REAIS do vídeo para calcular proporção
+            if (!videoWidth || !videoHeight) {
+                // Fallback: usar dimensões do container
+                videoWidth = containerWidth;
+                videoHeight = containerHeight;
+            }
             
-            const guias = [
-                { id: 'guiaTL', left: margemPx, top: margemPx },
-                { id: 'guiaTR', left: containerWidth - margemPx - tamanhoPx, top: margemPx },
-                { id: 'guiaBL', left: margemPx, top: containerHeight - margemPx - tamanhoPx },
-                { id: 'guiaBR', left: containerWidth - margemPx - tamanhoPx, top: containerHeight - margemPx - tamanhoPx }
+            // Calcular a área útil onde o vídeo é exibido (letterbox/pillarbox)
+            const containerAspect = containerWidth / containerHeight;
+            const videoAspect = videoWidth / videoHeight;
+            
+            let displayWidth, displayHeight, offsetX, offsetY;
+            
+            if (videoAspect > containerAspect) {
+                // Vídeo mais largo que container - letterbox nas laterais
+                displayHeight = containerHeight;
+                displayWidth = displayHeight * videoAspect;
+                offsetX = (containerWidth - displayWidth) / 2;
+                offsetY = 0;
+            } else {
+                // Vídeo mais alto que container - letterbox em cima/baixo
+                displayWidth = containerWidth;
+                displayHeight = displayWidth / videoAspect;
+                offsetX = 0;
+                offsetY = (containerHeight - displayHeight) / 2;
+            }
+            
+            // Margem e tamanho baseados nas dimensões do VÍDEO (não do container)
+            const margemPxVideo = Math.min(videoWidth, videoHeight) * margemBusca;
+            const tamanhoPxVideo = Math.min(videoWidth, videoHeight) * tamanhoGuia;
+            
+            // Posições das guias NO ESPAÇO DO VÍDEO
+            const guiasVideo = [
+                { left: margemPxVideo, top: margemPxVideo },
+                { left: videoWidth - margemPxVideo - tamanhoPxVideo, top: margemPxVideo },
+                { left: margemPxVideo, top: videoHeight - margemPxVideo - tamanhoPxVideo },
+                { left: videoWidth - margemPxVideo - tamanhoPxVideo, top: videoHeight - margemPxVideo - tamanhoPxVideo }
             ];
             
-            for (const guia of guias) {
+            // Converter coordenadas do vídeo para coordenadas do overlay
+            const scaleX = displayWidth / videoWidth;
+            const scaleY = displayHeight / videoHeight;
+            
+            const guiasOverlay = [
+                { id: 'guiaTL', left: offsetX + (guiasVideo[0].left * scaleX), top: offsetY + (guiasVideo[0].top * scaleY), width: tamanhoPxVideo * scaleX, height: tamanhoPxVideo * scaleY },
+                { id: 'guiaTR', left: offsetX + (guiasVideo[1].left * scaleX), top: offsetY + (guiasVideo[1].top * scaleY), width: tamanhoPxVideo * scaleX, height: tamanhoPxVideo * scaleY },
+                { id: 'guiaBL', left: offsetX + (guiasVideo[2].left * scaleX), top: offsetY + (guiasVideo[2].top * scaleY), width: tamanhoPxVideo * scaleX, height: tamanhoPxVideo * scaleY },
+                { id: 'guiaBR', left: offsetX + (guiasVideo[3].left * scaleX), top: offsetY + (guiasVideo[3].top * scaleY), width: tamanhoPxVideo * scaleX, height: tamanhoPxVideo * scaleY }
+            ];
+            
+            // Aplicar posições
+            for (const guia of guiasOverlay) {
                 const el = document.getElementById(guia.id);
                 if (el) {
                     el.style.left = guia.left + 'px';
                     el.style.top = guia.top + 'px';
-                    el.style.width = tamanhoPx + 'px';
-                    el.style.height = tamanhoPx + 'px';
+                    el.style.width = guia.width + 'px';
+                    el.style.height = guia.height + 'px';
+                    
+                    // Ajustar tamanho da borda para telas muito pequenas
+                    const borderWidth = Math.max(2, Math.min(6, guia.width / 15));
+                    el.style.borderWidth = borderWidth + 'px';
                 }
             }
+            
+            return { offsetX, offsetY, scaleX, scaleY, videoWidth, videoHeight, displayWidth, displayHeight };
         }
-        
-        function detectarQuadradosPretos(ctx, width, height) {
+
+        function detectarQuadradosPretos(ctx, width, height, offsetX = 0, offsetY = 0, scaleX = 1, scaleY = 1) {
             const imgData = ctx.getImageData(0, 0, width, height);
             const data = imgData.data;
+            
             let sensibilidadeAjustada = sensibilidade;
             let brilhoMaxAjustado = BRILHO_MAX_PRETO;
             
             const margemPx = Math.min(width, height) * margemBusca;
             const tamanhoPx = Math.min(width, height) * tamanhoGuia;
+            
+            // Áreas de detecção (coordenadas do VÍDEO)
             const areas = [
                 { nome: 'TL', x: margemPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTL'), posicao: 0 },
                 { nome: 'TR', x: width - margemPx - tamanhoPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTR'), posicao: 1 },
                 { nome: 'BL', x: margemPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBL'), posicao: 2 },
                 { nome: 'BR', x: width - margemPx - tamanhoPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBR'), posicao: 3 }
             ];
+            
             let todosDetectados = true;
+            let quadradosDetectados = [false, false, false, false];
+            
             for (const area of areas) {
                 try {
                     let pixelsEscuros = 0;
                     let totalPixels = area.w * area.h;
-                    for (let y = 0; y < area.h; y++) { for (let x = 0; x < area.w; x++) { const px = Math.floor(area.x + x); const py = Math.floor(area.y + y); if (px >= 0 && px < width && py >= 0 && py < height) { const idx = (py * width + px) * 4; const brilho = (data[idx] + data[idx+1] + data[idx+2]) / 3; if (brilho < brilhoMaxAjustado) pixelsEscuros++; } } }
+                    
+                    for (let y = 0; y < area.h; y++) {
+                        for (let x = 0; x < area.w; x++) {
+                            const px = Math.floor(area.x + x);
+                            const py = Math.floor(area.y + y);
+                            if (px >= 0 && px < width && py >= 0 && py < height) {
+                                const idx = (py * width + px) * 4;
+                                const brilho = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+                                if (brilho < brilhoMaxAjustado) pixelsEscuros++;
+                            }
+                        }
+                    }
+                    
                     const percentualEscuro = (pixelsEscuros / totalPixels) * 100;
                     const detectado = percentualEscuro > sensibilidadeAjustada;
+                    
                     if (!detectado) todosDetectados = false;
-                    if (detectado) { if (!area.elemento.classList.contains('encaixado')) area.elemento.classList.add('encaixado'); quadradosEncaixados[area.posicao] = true; } else { area.elemento.classList.remove('encaixado'); quadradosEncaixados[area.posicao] = false; }
-                } catch(e) { todosDetectados = false; area.elemento?.classList.remove('encaixado'); quadradosEncaixados[area.posicao] = false; }
+                    quadradosDetectados[area.posicao] = detectado;
+                    
+                    if (detectado) {
+                        if (!area.elemento.classList.contains('encaixado')) area.elemento.classList.add('encaixado');
+                        quadradosEncaixados[area.posicao] = true;
+                    } else {
+                        area.elemento.classList.remove('encaixado');
+                        quadradosEncaixados[area.posicao] = false;
+                    }
+                } catch(e) {
+                    todosDetectados = false;
+                    area.elemento?.classList.remove('encaixado');
+                    quadradosEncaixados[area.posicao] = false;
+                }
             }
+            
+            // Atualizar status visual
             const statusEl = document.getElementById('statusEncaixe');
             const icons = quadradosEncaixados.map(e => e ? '⬛' : '⬜').join(' ');
             statusEl.innerHTML = icons;
-            if (quadradosEncaixados.every(e => e === true)) { statusEl.style.background = 'rgba(0,255,0,0.9)'; statusEl.style.color = '#000'; } else { statusEl.style.background = 'rgba(0,0,0,0.8)'; statusEl.style.color = '#fff'; }
+            
+            if (quadradosEncaixados.every(e => e === true)) {
+                statusEl.style.background = 'rgba(0,255,0,0.9)';
+                statusEl.style.color = '#000';
+            } else {
+                statusEl.style.background = 'rgba(0,0,0,0.8)';
+                statusEl.style.color = '#fff';
+            }
+            
             const todosEncaixados = quadradosEncaixados.every(e => e === true);
             let retangulo = null;
-            if (todosEncaixados) { retangulo = { x: margemPx, y: margemPx, width: width - (margemPx * 2), height: height - (margemPx * 2) }; }
+            
+            if (todosEncaixados) {
+                // Calcular retângulo do cartão (descontando as margens)
+                retangulo = {
+                    x: margemPx,
+                    y: margemPx,
+                    width: width - (margemPx * 2),
+                    height: height - (margemPx * 2)
+                };
+            }
+            
             return { sucesso: todosEncaixados, retangulo: retangulo, encaixados: [...quadradosEncaixados] };
         }
         
@@ -1420,31 +1554,77 @@
         function analisarFrame() {
             if (!video.videoWidth || !video.videoHeight) return;
             if (capturaRealizada) return;
+            
             const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
             const container = document.getElementById('cameraContainer');
             const containerRect = container.getBoundingClientRect();
-            atualizarPosicaoGuias(containerRect.width, containerRect.height, canvas.width, canvas.height);
-            const resultado = detectarQuadradosPretos(ctx, canvas.width, canvas.height);
+            
+            // 🔥 Obter informações de posicionamento do vídeo
+            const posInfo = atualizarPosicaoGuias(
+                containerRect.width, 
+                containerRect.height, 
+                canvas.width, 
+                canvas.height
+            );
+            
+            // 🔥 Detectar quadrados usando as coordenadas corretas do vídeo
+            const resultado = detectarQuadradosPretos(
+                ctx, 
+                canvas.width, 
+                canvas.height,
+                posInfo.offsetX,
+                posInfo.offsetY,
+                posInfo.scaleX,
+                posInfo.scaleY
+            );
+            
             const feedback = document.getElementById('feedback');
             const infoBar = document.getElementById('infoBar');
             const encaixadosCount = resultado.encaixados.filter(e => e).length;
+            
             if (resultado.sucesso && resultado.retangulo) {
-                if (ultimoRetangulo && Math.abs(ultimoRetangulo.x - resultado.retangulo.x) < 20 && Math.abs(ultimoRetangulo.y - resultado.retangulo.y) < 20) { estabilidade++; } else { estabilidade = Math.max(0, estabilidade - 1); cancelarCorrecaoAutomatica(); }
+                // Verificar estabilidade
+                if (ultimoRetangulo && 
+                    Math.abs(ultimoRetangulo.x - resultado.retangulo.x) < 20 && 
+                    Math.abs(ultimoRetangulo.y - resultado.retangulo.y) < 20) {
+                    estabilidade++;
+                } else {
+                    estabilidade = Math.max(0, estabilidade - 1);
+                    cancelarCorrecaoAutomatica();
+                }
+                
                 ultimoRetangulo = resultado.retangulo;
                 retanguloAtual = resultado.retangulo;
-                const containerRect2 = document.getElementById('cameraContainer').getBoundingClientRect();
-                desenharRetanguloCartao(resultado.retangulo, containerRect2.width, containerRect2.height, canvas.width, canvas.height);
+                
                 const estabilidadeMinima = 8;
                 if (estabilidade >= estabilidadeMinima && !capturaRealizada) {
                     feedback.innerHTML = `✅ ${encaixadosCount}/4`;
                     feedback.style.background = '#10b981';
-                    if (!autoCorrectionTimer && !capturando && !capturaRealizada) { iniciarCorrecaoAutomatica(); }
-                } else { feedback.innerHTML = `🎯 ${encaixadosCount}/4`; feedback.style.background = '#f59e0b'; cancelarCorrecaoAutomatica(); }
+                    if (!autoCorrectionTimer && !capturando && !capturaRealizada) {
+                        iniciarCorrecaoAutomatica();
+                    }
+                } else {
+                    feedback.innerHTML = `🎯 ${encaixadosCount}/4`;
+                    feedback.style.background = '#f59e0b';
+                    cancelarCorrecaoAutomatica();
+                }
+                
                 infoBar.innerHTML = `<i class="fas fa-check-circle"></i> ${encaixadosCount}/4`;
-            } else { desenharRetanguloCartao(null); retanguloAtual = null; estabilidade = Math.max(0, estabilidade - 2); ultimoRetangulo = null; cancelarCorrecaoAutomatica(); feedback.innerHTML = `🎯 ${encaixadosCount}/4`; feedback.style.background = '#f59e0b'; infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`; btnCapturar.disabled = true; }
+                
+            } else {
+                retanguloAtual = null;
+                estabilidade = Math.max(0, estabilidade - 2);
+                ultimoRetangulo = null;
+                cancelarCorrecaoAutomatica();
+                feedback.innerHTML = `🎯 ${encaixadosCount}/4`;
+                feedback.style.background = '#f59e0b';
+                infoBar.innerHTML = `<i class="fas fa-camera"></i> ${encaixadosCount}/4`;
+                btnCapturar.disabled = true;
+            }
         }
         
         async function capturarImagem() {
