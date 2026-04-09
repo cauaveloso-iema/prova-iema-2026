@@ -1345,24 +1345,54 @@
         }
         
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
-            let margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
-            let tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
+            // CONTROLE INDIVIDUAL DE CADA LADO
+            const margemEsquerda = 0.10;   // ← Distância da borda ESQUERDA (guia TL e BL)
+            const margemDireita = 0.10;    // ← Distância da borda DIREITA (guia TR e BR)
+            const margemTopo = 0.18;       // ← Distância da borda SUPERIOR (guia TL e TR)
+            const margemBase = 0.18;       // ← Distância da borda INFERIOR (guia BL e BR)
             
-            const guias = [
-                { id: 'guiaTL', left: margemPx, top: margemPx },
-                { id: 'guiaTR', left: containerWidth - margemPx - tamanhoPx, top: margemPx },
-                { id: 'guiaBL', left: margemPx, top: containerHeight - margemPx - tamanhoPx },
-                { id: 'guiaBR', left: containerWidth - margemPx - tamanhoPx, top: containerHeight - margemPx - tamanhoPx }
-            ];
+            // Tamanho das guias
+            const tamanhoGuiaPx = Math.min(containerWidth, containerHeight) * 0.160;
             
-            for (const guia of guias) {
-                const el = document.getElementById(guia.id);
-                if (el) {
-                    el.style.left = guia.left + 'px';
-                    el.style.top = guia.top + 'px';
-                    el.style.width = tamanhoPx + 'px';
-                    el.style.height = tamanhoPx + 'px';
-                }
+            // Calcula posições em pixels
+            const leftTL = containerWidth * margemEsquerda;
+            const topTL = containerHeight * margemTopo;
+            const leftTR = containerWidth - (containerWidth * margemDireita) - tamanhoGuiaPx;
+            const topTR = containerHeight * margemTopo;
+            const leftBL = containerWidth * margemEsquerda;
+            const topBL = containerHeight - (containerHeight * margemBase) - tamanhoGuiaPx;
+            const leftBR = containerWidth - (containerWidth * margemDireita) - tamanhoGuiaPx;
+            const topBR = containerHeight - (containerHeight * margemBase) - tamanhoGuiaPx;
+            
+            // Aplica as posições
+            const guiaTL = document.getElementById('guiaTL');
+            const guiaTR = document.getElementById('guiaTR');
+            const guiaBL = document.getElementById('guiaBL');
+            const guiaBR = document.getElementById('guiaBR');
+            
+            if (guiaTL) {
+                guiaTL.style.left = leftTL + 'px';
+                guiaTL.style.top = topTL + 'px';
+                guiaTL.style.width = tamanhoGuiaPx + 'px';
+                guiaTL.style.height = tamanhoGuiaPx + 'px';
+            }
+            if (guiaTR) {
+                guiaTR.style.left = leftTR + 'px';
+                guiaTR.style.top = topTR + 'px';
+                guiaTR.style.width = tamanhoGuiaPx + 'px';
+                guiaTR.style.height = tamanhoGuiaPx + 'px';
+            }
+            if (guiaBL) {
+                guiaBL.style.left = leftBL + 'px';
+                guiaBL.style.top = topBL + 'px';
+                guiaBL.style.width = tamanhoGuiaPx + 'px';
+                guiaBL.style.height = tamanhoGuiaPx + 'px';
+            }
+            if (guiaBR) {
+                guiaBR.style.left = leftBR + 'px';
+                guiaBR.style.top = topBR + 'px';
+                guiaBR.style.width = tamanhoGuiaPx + 'px';
+                guiaBR.style.height = tamanhoGuiaPx + 'px';
             }
         }
         
