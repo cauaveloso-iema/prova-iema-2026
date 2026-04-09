@@ -814,7 +814,8 @@
         
         let sensibilidade = 12;
         const BRILHO_MAX_PRETO = 110;
-        let margemBusca = 0.12;
+        let margemHorizontal = 0.12;  // Originalmente era margemBusca = 0.12
+        let margemVertical = 0.12;    // Originalmente era margemBusca = 0.12
         let tamanhoGuia = 0.14;
         
         const isRender = window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
@@ -1330,14 +1331,15 @@
         }
         
         function atualizarPosicaoGuias(containerWidth, containerHeight, imageWidth, imageHeight) {
-            let margemPx = Math.min(containerWidth, containerHeight) * margemBusca;
+            let margemHorPx = Math.min(containerWidth, containerHeight) * margemHorizontal;
+            let margemVerPx = Math.min(containerWidth, containerHeight) * margemVertical;
             let tamanhoPx = Math.min(containerWidth, containerHeight) * tamanhoGuia;
             
             const guias = [
-                { id: 'guiaTL', left: margemPx, top: margemPx },
-                { id: 'guiaTR', left: containerWidth - margemPx - tamanhoPx, top: margemPx },
-                { id: 'guiaBL', left: margemPx, top: containerHeight - margemPx - tamanhoPx },
-                { id: 'guiaBR', left: containerWidth - margemPx - tamanhoPx, top: containerHeight - margemPx - tamanhoPx }
+                { id: 'guiaTL', left: margemHorPx, top: margemVerPx },
+                { id: 'guiaTR', left: containerWidth - margemHorPx - tamanhoPx, top: margemVerPx },
+                { id: 'guiaBL', left: margemHorPx, top: containerHeight - margemVerPx - tamanhoPx },
+                { id: 'guiaBR', left: containerWidth - margemHorPx - tamanhoPx, top: containerHeight - margemVerPx - tamanhoPx }
             ];
             
             for (const guia of guias) {
@@ -1357,13 +1359,15 @@
             let sensibilidadeAjustada = sensibilidade;
             let brilhoMaxAjustado = BRILHO_MAX_PRETO;
             
-            const margemPx = Math.min(width, height) * margemBusca;
-            const tamanhoPx = Math.min(width, height) * tamanhoGuia;
+            let margemHorPx = Math.min(width, height) * margemHorizontal;
+            let margemVerPx = Math.min(width, height) * margemVertical;
+            let tamanhoPx = Math.min(width, height) * tamanhoGuia;
+            
             const areas = [
-                { nome: 'TL', x: margemPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTL'), posicao: 0 },
-                { nome: 'TR', x: width - margemPx - tamanhoPx, y: margemPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTR'), posicao: 1 },
-                { nome: 'BL', x: margemPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBL'), posicao: 2 },
-                { nome: 'BR', x: width - margemPx - tamanhoPx, y: height - margemPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBR'), posicao: 3 }
+                { nome: 'TL', x: margemHorPx, y: margemVerPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTL'), posicao: 0 },
+                { nome: 'TR', x: width - margemHorPx - tamanhoPx, y: margemVerPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaTR'), posicao: 1 },
+                { nome: 'BL', x: margemHorPx, y: height - margemVerPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBL'), posicao: 2 },
+                { nome: 'BR', x: width - margemHorPx - tamanhoPx, y: height - margemVerPx - tamanhoPx, w: tamanhoPx, h: tamanhoPx, elemento: document.getElementById('guiaBR'), posicao: 3 }
             ];
             let todosDetectados = true;
             for (const area of areas) {
@@ -1383,7 +1387,14 @@
             if (quadradosEncaixados.every(e => e === true)) { statusEl.style.background = 'rgba(0,255,0,0.9)'; statusEl.style.color = '#000'; } else { statusEl.style.background = 'rgba(0,0,0,0.8)'; statusEl.style.color = '#fff'; }
             const todosEncaixados = quadradosEncaixados.every(e => e === true);
             let retangulo = null;
-            if (todosEncaixados) { retangulo = { x: margemPx, y: margemPx, width: width - (margemPx * 2), height: height - (margemPx * 2) }; }
+            if (todosEncaixados) { 
+                retangulo = { 
+                    x: margemHorPx, 
+                    y: margemVerPx, 
+                    width: width - (margemHorPx * 2), 
+                    height: height - (margemVerPx * 2) 
+                }; 
+            }
             return { sucesso: todosEncaixados, retangulo: retangulo, encaixados: [...quadradosEncaixados] };
         }
         
