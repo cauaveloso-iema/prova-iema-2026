@@ -244,6 +244,8 @@ const EmailService = require('./services/email-service');
 const matriculasManager = require('./matriculas/index');
 const OneSignalAdminService = require('./services/onesignal-admin-service');
 const oneSignalAdmin = new OneSignalAdminService();
+const adaptarDocumentoRouter = require('./adaptar-documento');
+app.use('/api', adaptarDocumentoRouter);
 
 // ============================================================================
 // CONFIGURAÇÃO DO QR CODE (TOTP)

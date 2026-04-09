@@ -817,6 +817,27 @@
                 <p class="text-muted mb-0 mt-1">Acompanhamento de alunos com necessidades especiais</p>
             </div>
             <div class="d-flex align-items-center gap-3">
+                <!-- 🔥 BOTÃO DE ADAPTAÇÃO DE DOCUMENTOS - ADICIONAR AQUI -->
+                <button onclick="setorPedagogico.abrirModalUploadAdaptarDocumento()" style="
+                    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                    color: white;
+                    border: none;
+                    border-radius: 40px;
+                    padding: 8px 20px;
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(139,92,246,0.4)'" 
+                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(139,92,246,0.3)'">
+                    <i class="fas fa-universal-access"></i>
+                    <span>Adaptar Documento</span>
+                </button>
+
                 <div class="user-info">
                     <div class="user-avatar" id="userAvatar">
                         <i class="fas fa-user-circle"></i>
@@ -894,6 +915,7 @@
                 this.token = localStorage.getItem('auth_token');
                 this.currentUser = null;
                 this.notificacoes = [];
+                this.arquivoSelecionadoSetor = null;  
                 
                 this.init();
             }
@@ -2434,6 +2456,368 @@
                 await this.marcarLida(id);
                 const notif = this.notificacoes.find(n => n._id === id);
                 if (notif && notif.link) window.location.href = notif.link;
+            }
+
+            // ============================================================================
+            // FUNÇÕES DE ADAPTAÇÃO DE DOCUMENTOS COM GOOGLE DOCS API
+            // ============================================================================
+
+            // ============ ABRIR MODAL DE ADAPTAÇÃO ============
+            async abrirModalUploadAdaptarDocumento() {
+                console.log('📂 Abrindo modal de adaptação de documentos...');
+                
+                // Criar modal se não existir
+                let modal = document.getElementById('modalAdaptacaoDocumento');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.id = 'modalAdaptacaoDocumento';
+                    document.body.appendChild(modal);
+                }
+                
+                modal.innerHTML = `
+                    <div class="modal-dialog modal-dialog-centered" style="max-width: 600px; margin: auto;">
+                        <div class="modal-content" style="border-radius: 24px; overflow: hidden; max-height: 85vh; display: flex; flex-direction: column;">
+                            <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 20px 25px; border: none; flex-shrink: 0;">
+                                <h5 class="modal-title fw-bold" style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-universal-access"></i> Adaptar Documento
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" onclick="setorPedagogico.fecharModalAdaptacaoDocumento()"></button>
+                            </div>
+                            
+                            <div style="flex: 1; overflow-y: auto; padding: 25px;">
+                                <div class="upload-area" 
+                                    onclick="document.getElementById('fileInputAdaptarSetor').click()"
+                                    ondrop="setorPedagogico.handleDropAdaptar(event)"
+                                    ondragover="setorPedagogico.handleDragOverAdaptar(event)"
+                                    style="
+                                        background: #f8fafc;
+                                        border: 3px dashed #cbd5e0;
+                                        border-radius: 16px;
+                                        padding: 40px;
+                                        text-align: center;
+                                        cursor: pointer;
+                                        transition: all 0.3s;
+                                    ">
+                                    <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #8b5cf6; margin-bottom: 15px;"></i>
+                                    <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
+                                    <p style="margin: 0; color: #718096;">PDF, DOCX, DOC (até 10MB)</p>
+                                    <p style="margin-top: 10px; font-size: 12px; color: #f59e0b;">
+                                        <i class="fas fa-info-circle"></i> O documento mantém 100% da formatação original
+                                    </p>
+                                </div>
+                                <input type="file" id="fileInputAdaptarSetor" style="display: none;" accept=".pdf,.docx,.doc" onchange="setorPedagogico.handleFileSelectAdaptar(event)">
+                                
+                                <div id="previewArquivoSetor" style="display: none; margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 15px;">
+                                        <i id="fileIconSetor" class="fas fa-file-word" style="font-size: 40px; color: #2b5797;"></i>
+                                        <div style="flex: 1;">
+                                            <div><strong id="nomeArquivoSetor">-</strong></div>
+                                            <div><small id="tamanhoArquivoSetor">-</small></div>
+                                        </div>
+                                        <button onclick="setorPedagogico.removerArquivoAdaptar()" style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #dc2626;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div id="opcoesAdaptacaoSetor" style="display: none; margin-top: 20px;">
+                                    <div style="background: #f8fafc; border-radius: 16px; padding: 20px; border: 2px solid #e5e7eb;">
+                                        <h3 style="margin: 0 0 15px; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fas fa-universal-access" style="color: #10b981;"></i>
+                                            Opções de Acessibilidade
+                                        </h3>
+                                        
+                                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                                            <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                                    <input type="checkbox" id="optFonteAmpliadaSetor" onchange="setorPedagogico.toggleSliderFonte()" style="width: 18px; height: 18px;">
+                                                    <div>
+                                                        <strong style="font-size: 1rem;">🔍 Fonte Ampliada</strong>
+                                                        <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aumenta o tamanho da fonte</p>
+                                                    </div>
+                                                </label>
+                                                <div id="sliderFonteSetor" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                                        <span>Normal (12pt)</span>
+                                                        <span id="fonteValueSetor">18pt</span>
+                                                        <span>Grande (24pt)</span>
+                                                    </div>
+                                                    <input type="range" id="fonteSliderSetor" min="12" max="24" step="1" value="18" style="width: 100%;">
+                                                </div>
+                                            </div>
+                                            
+                                            <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                                    <input type="checkbox" id="optCaixaAltaSetor" style="width: 18px; height: 18px;">
+                                                    <div>
+                                                        <strong style="font-size: 1rem;">🔠 CAIXA ALTA (Maiúsculas)</strong>
+                                                        <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Converte todo o texto para maiúsculas</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                            
+                                            <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                                    <input type="checkbox" id="optNegritoSetor" style="width: 18px; height: 18px;">
+                                                    <div>
+                                                        <strong style="font-size: 1rem;">🔤 Negrito</strong>
+                                                        <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Deixa o texto em negrito</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                            
+                                            <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                                    <input type="checkbox" id="optAltoContrasteSetor" style="width: 18px; height: 18px;">
+                                                    <div>
+                                                        <strong style="font-size: 1rem;">🎨 Alto Contraste</strong>
+                                                        <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Fundo escuro com texto claro</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                            
+                                            <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                                    <input type="checkbox" id="optFonteDislexiaSetor" style="width: 18px; height: 18px;">
+                                                    <div>
+                                                        <strong style="font-size: 1rem;">📖 Fonte para Dislexia</strong>
+                                                        <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Utiliza fonte OpenDyslexic</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-radius: 12px;">
+                                            <p style="margin: 0; font-size: 0.85rem;">
+                                                <i class="fas fa-lightbulb"></i> 
+                                                <strong>Processado pelo Google Docs!</strong> Mantém 100% da formatação original.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="processandoMsgSetor" style="display: none; margin-top: 20px; padding: 15px; background: #e6f7ff; border-radius: 12px; text-align: center;">
+                                    <i class="fas fa-spinner fa-spin" style="font-size: 20px; color: #1890ff;"></i>
+                                    <span style="margin-left: 10px;">Processando documento no Google Docs...</span>
+                                    <div style="font-size: 12px; color: #666; margin-top: 8px;">Isso pode levar alguns segundos</div>
+                                </div>
+                            </div>
+                            
+                            <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #dee2e6; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;">
+                                <button type="button" class="btn btn-secondary" onclick="setorPedagogico.fecharModalAdaptacaoDocumento()" style="border-radius: 12px; padding: 10px 20px;">Cancelar</button>
+                                <button type="button" class="btn btn-primary" id="btnAplicarAdaptacoesSetor" onclick="setorPedagogico.aplicarAdaptacoesComGoogle()" style="border-radius: 12px; padding: 10px 20px; background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                                    <i class="fas fa-magic"></i> Aplicar Adaptações
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <style>
+                        .upload-area:hover {
+                            background: #f0f9ff !important;
+                            border-color: #8b5cf6 !important;
+                        }
+                        #modalAdaptacaoDocumento {
+                            background-color: rgba(0,0,0,0.5);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            z-index: 10001;
+                        }
+                    </style>
+                `;
+                
+                this.arquivoSelecionadoSetor = null;
+                
+                // Event listeners
+                const fonteCheckbox = document.getElementById('optFonteAmpliadaSetor');
+                const slider = document.getElementById('fonteSliderSetor');
+                const fonteValue = document.getElementById('fonteValueSetor');
+                
+                if (fonteCheckbox) {
+                    fonteCheckbox.addEventListener('change', () => {
+                        const sliderDiv = document.getElementById('sliderFonteSetor');
+                        if (sliderDiv) sliderDiv.style.display = fonteCheckbox.checked ? 'block' : 'none';
+                    });
+                }
+                
+                if (slider) {
+                    slider.addEventListener('input', () => {
+                        if (fonteValue) fonteValue.textContent = slider.value + 'pt';
+                    });
+                }
+                
+                modal.style.display = 'flex';
+            }
+
+            // ============ FECHAR MODAL ============
+            fecharModalAdaptacaoDocumento() {
+                const modal = document.getElementById('modalAdaptacaoDocumento');
+                if (modal) modal.style.display = 'none';
+                this.arquivoSelecionadoSetor = null;
+            }
+
+            // ============ HANDLE DROP ============
+            handleDropAdaptar(e) {
+                e.preventDefault();
+                const area = e.currentTarget;
+                area.style.background = '';
+                area.style.borderColor = '#cbd5e0';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.processarArquivoAdaptar(files[0]);
+                }
+            }
+
+            handleDragOverAdaptar(e) {
+                e.preventDefault();
+                const area = e.currentTarget;
+                area.style.background = '#f0f9ff';
+                area.style.borderColor = '#8b5cf6';
+            }
+
+            handleFileSelectAdaptar(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    this.processarArquivoAdaptar(files[0]);
+                }
+            }
+
+            // ============ PROCESSAR ARQUIVO ============
+            processarArquivoAdaptar(file) {
+                const extensoes = ['pdf', 'docx', 'doc'];
+                const ext = file.name.split('.').pop().toLowerCase();
+                
+                if (!extensoes.includes(ext)) {
+                    this.showToast('❌ Tipo de arquivo não suportado', 'error');
+                    return;
+                }
+                
+                if (file.size > 10 * 1024 * 1024) {
+                    this.showToast('❌ Arquivo muito grande. Máximo 10MB.', 'error');
+                    return;
+                }
+                
+                this.arquivoSelecionadoSetor = file;
+                
+                const fileIcon = document.getElementById('fileIconSetor');
+                if (fileIcon) {
+                    if (ext === 'pdf') {
+                        fileIcon.className = 'fas fa-file-pdf';
+                        fileIcon.style.color = '#dc2626';
+                    } else {
+                        fileIcon.className = 'fas fa-file-word';
+                        fileIcon.style.color = '#2b5797';
+                    }
+                }
+                
+                document.getElementById('previewArquivoSetor').style.display = 'block';
+                document.getElementById('nomeArquivoSetor').textContent = file.name;
+                document.getElementById('tamanhoArquivoSetor').textContent = `${(file.size / 1024).toFixed(2)} KB`;
+                document.getElementById('opcoesAdaptacaoSetor').style.display = 'block';
+            }
+
+            // ============ REMOVER ARQUIVO ============
+            removerArquivoAdaptar() {
+                this.arquivoSelecionadoSetor = null;
+                document.getElementById('previewArquivoSetor').style.display = 'none';
+                document.getElementById('opcoesAdaptacaoSetor').style.display = 'none';
+                document.getElementById('fileInputAdaptarSetor').value = '';
+            }
+
+            // ============ TOGGLE SLIDER FONTE ============
+            toggleSliderFonte() {
+                const slider = document.getElementById('sliderFonteSetor');
+                if (slider) {
+                    slider.style.display = document.getElementById('optFonteAmpliadaSetor').checked ? 'block' : 'none';
+                }
+            }
+
+            // ============ APLICAR ADAPTAÇÕES COM GOOGLE DOCS ============
+            async aplicarAdaptacoesComGoogle() {
+                if (!this.arquivoSelecionadoSetor) {
+                    this.showToast('❌ Nenhum arquivo selecionado', 'error');
+                    return;
+                }
+                
+                const opcoes = {
+                    caixa_alta: document.getElementById('optCaixaAltaSetor')?.checked || false,
+                    negrito: document.getElementById('optNegritoSetor')?.checked || false,
+                    alto_contraste: document.getElementById('optAltoContrasteSetor')?.checked || false,
+                    fonte_dislexia: document.getElementById('optFonteDislexiaSetor')?.checked || false,
+                    tamanho_fonte: document.getElementById('optFonteAmpliadaSetor')?.checked 
+                        ? parseInt(document.getElementById('fonteSliderSetor')?.value) || 18 
+                        : 12
+                };
+                
+                const nenhumaOpcao = !opcoes.caixa_alta && !opcoes.negrito && 
+                                    !opcoes.alto_contraste && !opcoes.fonte_dislexia && 
+                                    opcoes.tamanho_fonte === 12;
+                
+                if (nenhumaOpcao) {
+                    const confirmar = confirm('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?');
+                    if (!confirmar) return;
+                }
+                
+                const processandoDiv = document.getElementById('processandoMsgSetor');
+                const btnSalvar = document.getElementById('btnAplicarAdaptacoesSetor');
+                
+                if (processandoDiv) processandoDiv.style.display = 'block';
+                if (btnSalvar) {
+                    btnSalvar.disabled = true;
+                    btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+                }
+                
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const formData = new FormData();
+                    formData.append('arquivo', this.arquivoSelecionadoSetor);
+                    formData.append('opcoes', JSON.stringify(opcoes));
+                    
+                    const response = await fetch('/api/adaptar-documento', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const byteCharacters = atob(data.pdf);
+                        const byteNumbers = new Array(byteCharacters.length);
+                        for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }
+                        const byteArray = new Uint8Array(byteNumbers);
+                        const blob = new Blob([byteArray], { type: 'application/pdf' });
+                        const url = URL.createObjectURL(blob);
+                        
+                        const novaJanela = window.open(url, '_blank');
+                        if (novaJanela) {
+                            novaJanela.onload = () => {
+                                setTimeout(() => novaJanela.print(), 1000);
+                            };
+                            this.fecharModalAdaptacaoDocumento();
+                            this.showToast('✅ Documento adaptado! Aguardando impressão...', 'success');
+                        } else {
+                            this.showToast('⚠️ Permita pop-ups para abrir o documento', 'warning');
+                        }
+                    } else {
+                        throw new Error(data.error || 'Erro ao processar documento');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                } finally {
+                    if (processandoDiv) processandoDiv.style.display = 'none';
+                    if (btnSalvar) {
+                        btnSalvar.disabled = false;
+                        btnSalvar.innerHTML = '<i class="fas fa-magic"></i> Aplicar Adaptações';
+                    }
+                }
             }
             
             // ============ RELATÓRIOS ============

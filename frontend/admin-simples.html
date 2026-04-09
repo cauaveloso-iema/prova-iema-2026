@@ -1295,7 +1295,7 @@
             <div class="modal-body" id="modalBody"></div>
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="adminSimples.fecharModal()">Cancelar</button>
-                <button class="btn-save" id="modalSaveBtn" onclick="adminSimples.salvarModal()">Salvar</button>
+                <button class="btn-save" id="modalSaveBtn">Salvar</button>
             </div>
         </div>
     </div>
@@ -1331,6 +1331,7 @@
                 // ===== NOVAS VARIÁVEIS =====
                 this.eixos = [];
                 this.cursos = [];
+                this.arquivoSelecionado = null;
                 
                 // ===== VARIÁVEIS PARA RESULTADOS =====
                 this.resultadosCompletos = [];
@@ -1375,6 +1376,352 @@
                         }, 300);
                     }
                 });
+            }
+
+            // ============================================================================
+            // FUNÇÕES DE ADAPTAÇÃO DE DOCUMENTOS COM GOOGLE DOCS API
+            // ============================================================================
+
+            // ============ ABRIR MODAL DE ADAPTAÇÃO ============
+            async abrirModalUploadAdaptarDocumento() {
+                console.log('📂 Abrindo modal de adaptação de documentos...');
+                
+                const modalBody = document.getElementById('modalBody');
+                const modalTitle = document.getElementById('modalTitle');
+                const modalSaveBtn = document.getElementById('modalSaveBtn');
+                
+                modalTitle.innerHTML = '<i class="fas fa-universal-access"></i> Adaptar Documento';
+                
+                modalBody.innerHTML = `
+                    <div style="padding: 20px;">
+                        <div class="upload-area" 
+                            onclick="document.getElementById('fileInputAdaptar').click()"
+                            ondrop="adminSimples.handleDropAdaptar(event)"
+                            ondragover="adminSimples.handleDragOverAdaptar(event)"
+                            style="
+                                background: #f8fafc;
+                                border: 3px dashed #cbd5e0;
+                                border-radius: 16px;
+                                padding: 40px;
+                                text-align: center;
+                                cursor: pointer;
+                                transition: all 0.3s;
+                            ">
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #667eea; margin-bottom: 15px;"></i>
+                            <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
+                            <p style="margin: 0; color: #718096;">PDF, DOCX, DOC (até 10MB)</p>
+                            <p style="margin-top: 10px; font-size: 12px; color: #f59e0b;">
+                                <i class="fas fa-info-circle"></i> O documento mantém 100% da formatação original
+                            </p>
+                        </div>
+                        <input type="file" id="fileInputAdaptar" style="display: none;" accept=".pdf,.docx,.doc" onchange="adminSimples.handleFileSelectAdaptar(event)">
+                        
+                        <div id="previewArquivo" style="display: none; margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <i id="fileIcon" class="fas fa-file-word" style="font-size: 40px; color: #2b5797;"></i>
+                                <div style="flex: 1;">
+                                    <div><strong id="nomeArquivo">-</strong></div>
+                                    <div><small id="tamanhoArquivo">-</small></div>
+                                </div>
+                                <button onclick="adminSimples.removerArquivoAdaptar()" style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #dc2626;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="opcoesAdaptacao" style="display: none; margin-top: 20px;">
+                            <div style="background: #f8fafc; border-radius: 16px; padding: 20px; border: 2px solid #e5e7eb;">
+                                <h3 style="margin: 0 0 15px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-universal-access" style="color: #10b981;"></i>
+                                    Opções de Acessibilidade
+                                </h3>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 15px;">
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optFonteAmpliada" onchange="adminSimples.toggleSliderFonte()" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">🔍 Fonte Ampliada</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aumenta o tamanho da fonte</p>
+                                            </div>
+                                        </label>
+                                        <div id="sliderFonte" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                                <span>Normal (12pt)</span>
+                                                <span id="fonteValue">18pt</span>
+                                                <span>Grande (24pt)</span>
+                                            </div>
+                                            <input type="range" id="fonteSlider" min="12" max="24" step="1" value="18" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optCaixaAlta" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">🔠 CAIXA ALTA (Maiúsculas)</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Converte todo o texto para maiúsculas</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optNegrito" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">🔤 Negrito</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Deixa o texto em negrito</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optAltoContraste" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">🎨 Alto Contraste</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Fundo escuro com texto claro</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optFonteDislexia" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">📖 Fonte para Dislexia</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Utiliza fonte OpenDyslexic</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-radius: 12px;">
+                                    <p style="margin: 0; font-size: 0.85rem;">
+                                        <i class="fas fa-lightbulb"></i> 
+                                        <strong>Processado pelo Google Docs!</strong> Mantém 100% da formatação original.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="processandoMsg" style="display: none; margin-top: 20px; padding: 15px; background: #e6f7ff; border-radius: 12px; text-align: center;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 20px; color: #1890ff;"></i>
+                            <span style="margin-left: 10px;">Processando documento no Google Docs...</span>
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">Isso pode levar alguns segundos</div>
+                        </div>
+                    </div>
+                    
+                    <style>
+                        .upload-area:hover {
+                            background: #f0f9ff !important;
+                            border-color: #667eea !important;
+                        }
+                    </style>
+                `;
+                
+                // 🔥 ABRIR O MODAL PRIMEIRO
+                this.abrirModal(modalTitle.innerHTML, modalBody.innerHTML, true);
+                
+                // 🔥 DEPOIS DE ABRIR, RECONFIGURAR O BOTÃO (FORÇADAMENTE)
+                setTimeout(() => {
+                    const btn = document.getElementById('modalSaveBtn');
+                    if (btn) {
+                        console.log('🔧 Reconfigurando botão do modal de adaptação...');
+                        btn.removeAttribute('onclick');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-magic"></i> Aplicar Adaptações';
+                        btn.onclick = (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('🔘 Botão de adaptação clicado!');
+                            this.aplicarAdaptacoesComGoogle();
+                        };
+                        console.log('✅ Botão reconfigurado com sucesso!');
+                    }
+                }, 100);
+                
+                this.arquivoSelecionado = null;
+                
+                const fonteCheckbox = document.getElementById('optFonteAmpliada');
+                const slider = document.getElementById('fonteSlider');
+                const fonteValue = document.getElementById('fonteValue');
+                
+                if (fonteCheckbox) {
+                    fonteCheckbox.addEventListener('change', () => {
+                        const sliderDiv = document.getElementById('sliderFonte');
+                        if (sliderDiv) sliderDiv.style.display = fonteCheckbox.checked ? 'block' : 'none';
+                    });
+                }
+                
+                if (slider) {
+                    slider.addEventListener('input', () => {
+                        if (fonteValue) fonteValue.textContent = slider.value + 'pt';
+                    });
+                }
+            }
+
+            // ============ HANDLE DROP ============
+            handleDropAdaptar(e) {
+                e.preventDefault();
+                const area = e.currentTarget;
+                area.style.background = '';
+                area.style.borderColor = '#cbd5e0';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.processarArquivoAdaptar(files[0]);
+                }
+            }
+
+            handleDragOverAdaptar(e) {
+                e.preventDefault();
+                const area = e.currentTarget;
+                area.style.background = '#f0f9ff';
+                area.style.borderColor = '#667eea';
+            }
+
+            handleFileSelectAdaptar(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    this.processarArquivoAdaptar(files[0]);
+                }
+            }
+
+            // ============ PROCESSAR ARQUIVO ============
+            processarArquivoAdaptar(file) {
+                const extensoes = ['pdf', 'docx', 'doc'];
+                const ext = file.name.split('.').pop().toLowerCase();
+                
+                if (!extensoes.includes(ext)) {
+                    this.showToast('❌ Tipo de arquivo não suportado', 'error');
+                    return;
+                }
+                
+                if (file.size > 10 * 1024 * 1024) {
+                    this.showToast('❌ Arquivo muito grande. Máximo 10MB.', 'error');
+                    return;
+                }
+                
+                this.arquivoSelecionado = file;
+                
+                const fileIcon = document.getElementById('fileIcon');
+                if (fileIcon) {
+                    if (ext === 'pdf') {
+                        fileIcon.className = 'fas fa-file-pdf';
+                        fileIcon.style.color = '#dc2626';
+                    } else {
+                        fileIcon.className = 'fas fa-file-word';
+                        fileIcon.style.color = '#2b5797';
+                    }
+                }
+                
+                document.getElementById('previewArquivo').style.display = 'block';
+                document.getElementById('nomeArquivo').textContent = file.name;
+                document.getElementById('tamanhoArquivo').textContent = `${(file.size / 1024).toFixed(2)} KB`;
+                document.getElementById('opcoesAdaptacao').style.display = 'block';
+            }
+
+            // ============ REMOVER ARQUIVO ============
+            removerArquivoAdaptar() {
+                this.arquivoSelecionado = null;
+                document.getElementById('previewArquivo').style.display = 'none';
+                document.getElementById('opcoesAdaptacao').style.display = 'none';
+                document.getElementById('fileInputAdaptar').value = '';
+            }
+
+            // ============ TOGGLE SLIDER FONTE ============
+            toggleSliderFonte() {
+                const slider = document.getElementById('sliderFonte');
+                if (slider) {
+                    slider.style.display = document.getElementById('optFonteAmpliada').checked ? 'block' : 'none';
+                }
+            }
+
+            // ============ APLICAR ADAPTAÇÕES COM GOOGLE DOCS ============
+            async aplicarAdaptacoesComGoogle() {
+                if (!this.arquivoSelecionado) {
+                    this.showToast('❌ Nenhum arquivo selecionado', 'error');
+                    return;
+                }
+                
+                const opcoes = {
+                    caixa_alta: document.getElementById('optCaixaAlta')?.checked || false,
+                    negrito: document.getElementById('optNegrito')?.checked || false,
+                    alto_contraste: document.getElementById('optAltoContraste')?.checked || false,
+                    fonte_dislexia: document.getElementById('optFonteDislexia')?.checked || false,
+                    tamanho_fonte: document.getElementById('optFonteAmpliada')?.checked 
+                        ? parseInt(document.getElementById('fonteSlider')?.value) || 18 
+                        : 12
+                };
+                
+                const nenhumaOpcao = !opcoes.caixa_alta && !opcoes.negrito && 
+                                    !opcoes.alto_contraste && !opcoes.fonte_dislexia && 
+                                    opcoes.tamanho_fonte === 12;
+                
+                if (nenhumaOpcao) {
+                    const confirmar = await this.confirmar(
+                        '⚠️ Nenhuma Adaptação',
+                        'Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?'
+                    );
+                    if (!confirmar) return;
+                }
+                
+                const processandoDiv = document.getElementById('processandoMsg');
+                const btnSalvar = document.getElementById('modalSaveBtn');
+                
+                processandoDiv.style.display = 'block';
+                btnSalvar.disabled = true;
+                btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+                
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const formData = new FormData();
+                    formData.append('arquivo', this.arquivoSelecionado);
+                    formData.append('opcoes', JSON.stringify(opcoes));
+                    
+                    const response = await fetch('/api/adaptar-documento', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Converter base64 para blob
+                        const byteCharacters = atob(data.pdf);
+                        const byteNumbers = new Array(byteCharacters.length);
+                        for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }
+                        const byteArray = new Uint8Array(byteNumbers);
+                        const blob = new Blob([byteArray], { type: 'application/pdf' });
+                        const url = URL.createObjectURL(blob);
+                        
+                        // Abrir para impressão
+                        const novaJanela = window.open(url, '_blank');
+                        if (novaJanela) {
+                            novaJanela.onload = () => {
+                                setTimeout(() => novaJanela.print(), 1000);
+                            };
+                            this.fecharModal();
+                            this.showToast('✅ Documento adaptado! Aguardando impressão...', 'success');
+                        } else {
+                            this.showToast('⚠️ Permita pop-ups para abrir o documento', 'warning');
+                        }
+                    } else {
+                        throw new Error(data.error || 'Erro ao processar documento');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                } finally {
+                    processandoDiv.style.display = 'none';
+                    btnSalvar.disabled = false;
+                    btnSalvar.innerHTML = '<i class="fas fa-magic"></i> Aplicar Adaptações';
+                }
             }
 
             async verificarAuth() {
@@ -5194,6 +5541,13 @@
                                     <button class="btn-header btn-primary" onclick="adminSimples.mostrarFormCriarProva()">
                                         <i class="fas fa-magic"></i>
                                         <span>Nova Prova com IA</span>
+                                    </button>
+                                    
+                                    <!-- 🔥 BOTÃO DE ADAPTAÇÃO DE DOCUMENTOS (MESMO ESTILO) -->
+                                    <button class="btn-header" style="background: #8b5cf6; color: white; border: none;" 
+                                            onclick="adminSimples.abrirModalUploadAdaptarDocumento()" title="Adaptar documento para acessibilidade">
+                                        <i class="fas fa-universal-access"></i>
+                                        <span>Adaptar Documento</span>
                                     </button>
                                 </div>
                             </div>

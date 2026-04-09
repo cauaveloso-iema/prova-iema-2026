@@ -1854,6 +1854,28 @@ window.addEventListener('scroll', function() {
                         </div>
                     </div>
 
+                    <!-- 🔥 BOTÃO DE ADAPTAÇÃO DE DOCUMENTOS - ADICIONAR AQUI -->
+                    <button onclick="abrirModalUploadAdaptarDocumento()" style="
+                        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                        color: white;
+                        border: none;
+                        border-radius: 40px;
+                        padding: 8px 20px;
+                        font-size: 0.9rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin-right: 10px;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(139,92,246,0.4)'" 
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(139,92,246,0.3)'">
+                        <i class="fas fa-universal-access"></i>
+                        <span>Adaptar Documento</span>
+                    </button>
+
                     <!-- COLE AQUI O LINK DO APP (ANTES DAS NOTIFICAÇÕES) -->
                     <a href="https://drive.google.com/file/d/1C54bIkD9O57DB1zaheqM6o1kLp7mXJxE/view?usp=sharing" target="_blank" style="
                         background: linear-gradient(135deg, #10b981, #059669);
@@ -13040,7 +13062,396 @@ window.addEventListener('scroll', function() {
             }
         }
 
+        // ============================================================================
+        // FUNÇÕES DE ADAPTAÇÃO DE DOCUMENTOS COM GOOGLE DOCS API
+        // ============================================================================
 
+        let arquivoSelecionadoProfessor = null;
+
+        // ============ ABRIR MODAL DE ADAPTAÇÃO ============
+        window.abrirModalUploadAdaptarDocumento = async function() {
+            console.log('📂 Abrindo modal de adaptação de documentos...');
+            
+            // Criar modal se não existir
+            let modal = document.getElementById('modalAdaptacaoDocumento');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.id = 'modalAdaptacaoDocumento';
+                document.body.appendChild(modal);
+            }
+            
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 600px; width: 90%; max-height: 85vh; background: white; border-radius: 24px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-universal-access"></i> Adaptar Documento
+                        </h3>
+                        <button onclick="fecharModalAdaptacao()" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1;">&times;</button>
+                    </div>
+                    
+                    <div style="flex: 1; overflow-y: auto; padding: 25px;">
+                        <div class="upload-area" 
+                            onclick="document.getElementById('fileInputAdaptarProfessor').click()"
+                            ondrop="handleDropAdaptarProfessor(event)"
+                            ondragover="handleDragOverAdaptarProfessor(event)"
+                            style="
+                                background: #f8fafc;
+                                border: 3px dashed #cbd5e0;
+                                border-radius: 16px;
+                                padding: 40px;
+                                text-align: center;
+                                cursor: pointer;
+                                transition: all 0.3s;
+                            ">
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #8b5cf6; margin-bottom: 15px;"></i>
+                            <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
+                            <p style="margin: 0; color: #718096;">PDF, DOCX, DOC (até 10MB)</p>
+                            <p style="margin-top: 10px; font-size: 12px; color: #f59e0b;">
+                                <i class="fas fa-info-circle"></i> O documento mantém 100% da formatação original
+                            </p>
+                        </div>
+                        <input type="file" id="fileInputAdaptarProfessor" style="display: none;" accept=".pdf,.docx,.doc" onchange="handleFileSelectAdaptarProfessor(event)">
+                        
+                        <div id="previewArquivoProfessor" style="display: none; margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <i id="fileIconProfessor" class="fas fa-file-word" style="font-size: 40px; color: #2b5797;"></i>
+                                <div style="flex: 1;">
+                                    <div><strong id="nomeArquivoProfessor">-</strong></div>
+                                    <div><small id="tamanhoArquivoProfessor">-</small></div>
+                                </div>
+                                <button onclick="removerArquivoAdaptarProfessor()" style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #dc2626;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="opcoesAdaptacaoProfessor" style="display: none; margin-top: 20px;">
+                            <div style="background: #f8fafc; border-radius: 16px; padding: 20px; border: 2px solid #e5e7eb;">
+                                <h3 style="margin: 0 0 15px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-universal-access" style="color: #10b981;"></i>
+                                    Opções de Acessibilidade
+                                </h3>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 15px;">
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optFonteAmpliadaProf" onchange="toggleSliderFonteProfessor()" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">🔍 Fonte Ampliada</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aumenta o tamanho da fonte</p>
+                                            </div>
+                                        </label>
+                                        <div id="sliderFonteProf" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                                <span>Normal (12pt)</span>
+                                                <span id="fonteValueProf">18pt</span>
+                                                <span>Grande (24pt)</span>
+                                            </div>
+                                            <input type="range" id="fonteSliderProf" min="12" max="24" step="1" value="18" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optCaixaAltaProf" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">🔠 CAIXA ALTA (Maiúsculas)</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Converte todo o texto para maiúsculas</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optNegritoProf" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">🔤 Negrito</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Deixa o texto em negrito</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optAltoContrasteProf" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">🎨 Alto Contraste</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Fundo escuro com texto claro</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    
+                                    <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="optFonteDislexiaProf" style="width: 18px; height: 18px;">
+                                            <div>
+                                                <strong style="font-size: 1rem;">📖 Fonte para Dislexia</strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Utiliza fonte OpenDyslexic</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-radius: 12px;">
+                                    <p style="margin: 0; font-size: 0.85rem;">
+                                        <i class="fas fa-lightbulb"></i> 
+                                        <strong>Processado pelo Google Docs!</strong> Mantém 100% da formatação original.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="processandoMsgProf" style="display: none; margin-top: 20px; padding: 15px; background: #e6f7ff; border-radius: 12px; text-align: center;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 20px; color: #1890ff;"></i>
+                            <span style="margin-left: 10px;">Processando documento no Google Docs...</span>
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">Isso pode levar alguns segundos</div>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #dee2e6; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;">
+                        <button class="btn-cancel" onclick="fecharModalAdaptacao()" style="padding: 8px 20px; background: #e9ecef; color: #666; border: none; border-radius: 5px; cursor: pointer;">Cancelar</button>
+                        <button class="btn-save" id="btnAplicarAdaptacoesProf" onclick="aplicarAdaptacoesComGoogleProfessor()" style="padding: 8px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            <i class="fas fa-magic"></i> Aplicar Adaptações
+                        </button>
+                    </div>
+                </div>
+                
+                <style>
+                    .upload-area:hover {
+                        background: #f0f9ff !important;
+                        border-color: #8b5cf6 !important;
+                    }
+                    #modalAdaptacaoDocumento .modal-content {
+                        animation: slideUp 0.3s ease-out;
+                    }
+                    @keyframes slideUp {
+                        from {
+                            opacity: 0;
+                            transform: translateY(30px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateY(0);
+                        }
+                    }
+                </style>
+            `;
+            
+            arquivoSelecionadoProfessor = null;
+            
+            // Event listeners
+            const fonteCheckbox = document.getElementById('optFonteAmpliadaProf');
+            const slider = document.getElementById('fonteSliderProf');
+            const fonteValue = document.getElementById('fonteValueProf');
+            
+            if (fonteCheckbox) {
+                fonteCheckbox.addEventListener('change', () => {
+                    const sliderDiv = document.getElementById('sliderFonteProf');
+                    if (sliderDiv) sliderDiv.style.display = fonteCheckbox.checked ? 'block' : 'none';
+                });
+            }
+            
+            if (slider) {
+                slider.addEventListener('input', () => {
+                    if (fonteValue) fonteValue.textContent = slider.value + 'pt';
+                });
+            }
+            
+            modal.style.display = 'flex';
+        };
+
+        // ============ FECHAR MODAL ============
+        window.fecharModalAdaptacao = function() {
+            const modal = document.getElementById('modalAdaptacaoDocumento');
+            if (modal) modal.style.display = 'none';
+            arquivoSelecionadoProfessor = null;
+        };
+
+        // ============ HANDLE DROP ============
+        window.handleDropAdaptarProfessor = function(e) {
+            e.preventDefault();
+            const area = e.currentTarget;
+            area.style.background = '';
+            area.style.borderColor = '#cbd5e0';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processarArquivoAdaptarProfessor(files[0]);
+            }
+        };
+
+        window.handleDragOverAdaptarProfessor = function(e) {
+            e.preventDefault();
+            const area = e.currentTarget;
+            area.style.background = '#f0f9ff';
+            area.style.borderColor = '#8b5cf6';
+        };
+
+        window.handleFileSelectAdaptarProfessor = function(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                processarArquivoAdaptarProfessor(files[0]);
+            }
+        };
+
+        // ============ PROCESSAR ARQUIVO ============
+        function processarArquivoAdaptarProfessor(file) {
+            const extensoes = ['pdf', 'docx', 'doc'];
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            if (!extensoes.includes(ext)) {
+                mostrarAlertaGeral('❌ Tipo de arquivo não suportado', 'error');
+                return;
+            }
+            
+            if (file.size > 10 * 1024 * 1024) {
+                mostrarAlertaGeral('❌ Arquivo muito grande. Máximo 10MB.', 'error');
+                return;
+            }
+            
+            arquivoSelecionadoProfessor = file;
+            
+            const fileIcon = document.getElementById('fileIconProfessor');
+            if (fileIcon) {
+                if (ext === 'pdf') {
+                    fileIcon.className = 'fas fa-file-pdf';
+                    fileIcon.style.color = '#dc2626';
+                } else {
+                    fileIcon.className = 'fas fa-file-word';
+                    fileIcon.style.color = '#2b5797';
+                }
+            }
+            
+            document.getElementById('previewArquivoProfessor').style.display = 'block';
+            document.getElementById('nomeArquivoProfessor').textContent = file.name;
+            document.getElementById('tamanhoArquivoProfessor').textContent = `${(file.size / 1024).toFixed(2)} KB`;
+            document.getElementById('opcoesAdaptacaoProfessor').style.display = 'block';
+        }
+
+        // ============ REMOVER ARQUIVO ============
+        window.removerArquivoAdaptarProfessor = function() {
+            arquivoSelecionadoProfessor = null;
+            document.getElementById('previewArquivoProfessor').style.display = 'none';
+            document.getElementById('opcoesAdaptacaoProfessor').style.display = 'none';
+            document.getElementById('fileInputAdaptarProfessor').value = '';
+        };
+
+        // ============ TOGGLE SLIDER FONTE ============
+        window.toggleSliderFonteProfessor = function() {
+            const slider = document.getElementById('sliderFonteProf');
+            if (slider) {
+                slider.style.display = document.getElementById('optFonteAmpliadaProf').checked ? 'block' : 'none';
+            }
+        };
+
+        // ============ APLICAR ADAPTAÇÕES COM GOOGLE DOCS ============
+        window.aplicarAdaptacoesComGoogleProfessor = async function() {
+            console.log('🚀 Aplicando adaptações...');
+            
+            if (!arquivoSelecionadoProfessor) {
+                mostrarAlertaGeral('❌ Nenhum arquivo selecionado', 'error');
+                return;
+            }
+            
+            const opcoes = {
+                caixa_alta: document.getElementById('optCaixaAltaProf')?.checked || false,
+                negrito: document.getElementById('optNegritoProf')?.checked || false,
+                alto_contraste: document.getElementById('optAltoContrasteProf')?.checked || false,
+                fonte_dislexia: document.getElementById('optFonteDislexiaProf')?.checked || false,
+                tamanho_fonte: document.getElementById('optFonteAmpliadaProf')?.checked 
+                    ? parseInt(document.getElementById('fonteSliderProf')?.value) || 18 
+                    : 12
+            };
+            
+            const nenhumaOpcao = !opcoes.caixa_alta && !opcoes.negrito && 
+                                !opcoes.alto_contraste && !opcoes.fonte_dislexia && 
+                                opcoes.tamanho_fonte === 12;
+            
+            if (nenhumaOpcao) {
+                const confirmar = confirm('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?');
+                if (!confirmar) return;
+            }
+            
+            const processandoDiv = document.getElementById('processandoMsgProf');
+            const btnSalvar = document.getElementById('btnAplicarAdaptacoesProf');
+            
+            if (processandoDiv) processandoDiv.style.display = 'block';
+            if (btnSalvar) {
+                btnSalvar.disabled = true;
+                btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+            }
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                const formData = new FormData();
+                formData.append('arquivo', arquivoSelecionadoProfessor);
+                formData.append('opcoes', JSON.stringify(opcoes));
+                
+                const response = await fetch('/api/adaptar-documento', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const byteCharacters = atob(data.pdf);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const novaJanela = window.open(url, '_blank');
+                    if (novaJanela) {
+                        novaJanela.onload = () => {
+                            setTimeout(() => novaJanela.print(), 1000);
+                        };
+                        fecharModalAdaptacao();
+                        mostrarAlertaGeral('✅ Documento adaptado! Aguardando impressão...', 'success');
+                    } else {
+                        mostrarAlertaGeral('⚠️ Permita pop-ups para abrir o documento', 'warning');
+                    }
+                } else {
+                    throw new Error(data.error || 'Erro ao processar documento');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                mostrarAlertaGeral('❌ ' + error.message, 'error');
+            } finally {
+                if (processandoDiv) processandoDiv.style.display = 'none';
+                if (btnSalvar) {
+                    btnSalvar.disabled = false;
+                    btnSalvar.innerHTML = '<i class="fas fa-magic"></i> Aplicar Adaptações';
+                }
+            }
+        };
+
+        // Função auxiliar para mostrar alerta
+        function mostrarAlertaGeral(mensagem, tipo = 'info') {
+            const alerta = document.getElementById('alertGeral');
+            if (alerta) {
+                alerta.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                        <div>${mensagem}</div>
+                    </div>
+                `;
+                alerta.className = `alert alert-${tipo}`;
+                alerta.style.display = 'block';
+                
+                setTimeout(() => {
+                    alerta.style.display = 'none';
+                }, 5000);
+            } else {
+                alert(mensagem);
+            }
+        }
         
         // Função mostrarTab atualizada
         function mostrarTab(tabId) {
