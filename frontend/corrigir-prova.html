@@ -554,52 +554,6 @@
             .btn-opcao { width: 28px; font-size: 9px; }
             .resposta-card .resposta-valor { font-size: 1.2rem; }
         }
-        /* Correção de orientação para câmera no mobile */
-        @media (max-width: 768px) {
-            .camera-container {
-                position: relative;
-                width: 100%;
-                height: auto;
-                min-height: 300px;
-                background: #000;
-                overflow: hidden;
-            }
-            
-            .camera-container video {
-                width: 100%;
-                height: auto;
-                min-height: 300px;
-                object-fit: cover;
-                /* 🔥 CORREÇÃO: Não forçar rotação, deixar o dispositivo decidir */
-                transform: none;
-            }
-            
-            /* Modo tela cheia */
-            body.fullscreen-mode .camera-container {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                width: 100vw;
-                height: 100vh;
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            body.fullscreen-mode .camera-container video {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-            
-            /* Guias no modo tela cheia */
-            body.fullscreen-mode .guia-quadrado {
-                border-width: 3px !important;
-            }
-        }
     </style>
 </head>
 <body>
@@ -1965,142 +1919,38 @@
         }
         
         function getVideoConstraints() {
-            // Detectar orientação atual do dispositivo
+            // Forçar orientação correta baseada no dispositivo
             const isPortrait = window.innerHeight > window.innerWidth;
-            const isLandscape = window.innerWidth > window.innerHeight;
             
-            // Verificar orientação da tela
-            let orientation = 'portrait';
-            if (window.screen.orientation) {
-                const angle = window.screen.orientation.angle;
-                if (angle === 90 || angle === -90 || angle === 270) {
-                    orientation = 'landscape';
-                } else {
-                    orientation = 'portrait';
-                }
-            } else if (isLandscape) {
-                orientation = 'landscape';
-            }
-            
-            console.log(`📱 Orientação detectada: ${orientation}`);
-            console.log(`📱 Dimensões: ${window.innerWidth}x${window.innerHeight}`);
-            
-            // Configurações otimizadas para mobile
-            if (isMobile) {
-                // MODO MOBILE - Otimizado para leitura de QR Code e cartão
-                return {
-                    video: { 
-                        facingMode: { exact: "environment" }, // Câmera traseira
-                        width: { ideal: 1920, min: 1280 },
-                        height: { ideal: 1080, min: 720 },
-                        aspectRatio: { ideal: 4/3 }, // Proporção 4:3 (melhor para leitura)
-                        zoom: { ideal: 1.0, max: 2.0 } // Zoom controlado
-                    }
-                };
-            } else {
-                // MODO DESKTOP
-                return {
-                    video: { 
-                        facingMode: { exact: "environment" },
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                };
-            }
-        }
-
-        // Corrigir orientação do vídeo no mobile
-        function corrigirOrientacaoVideo(videoElement) {
-            if (!isMobile) return;
-            
-            // Detectar orientação atual
-            const detectarOrientacao = () => {
-                const isPortrait = window.innerHeight > window.innerWidth;
-                const videoParent = videoElement.parentElement;
-                
-                if (videoParent) {
-                    if (isPortrait) {
-                        // Modo retrato - aplicar transform para corrigir
-                        videoElement.style.transform = 'rotate(0deg) scaleX(1)';
-                        videoElement.style.width = '100%';
-                        videoElement.style.height = 'auto';
-                        videoElement.style.objectFit = 'cover';
-                    } else {
-                        // Modo paisagem
-                        videoElement.style.transform = 'rotate(0deg) scaleX(1)';
-                        videoElement.style.width = '100%';
-                        videoElement.style.height = '100%';
-                        videoElement.style.objectFit = 'cover';
-                    }
+            return {
+                video: { 
+                    facingMode: { exact: "environment" },
+                    width: { ideal: isPortrait ? 1080 : 1920 },
+                    height: { ideal: isPortrait ? 1920 : 1080 }
                 }
             };
-            
-            // Detectar inicial
-            detectarOrientacao();
-            
-            // Detectar mudanças de orientação
-            window.addEventListener('resize', () => {
-                setTimeout(detectarOrientacao, 100);
-            });
-            
-            window.addEventListener('orientationchange', () => {
-                setTimeout(detectarOrientacao, 200);
-            });
         }
         
         async function iniciarCamera() {
-            if (!alunoSelecionado) { 
-                mostrarAlerta('Selecione um aluno primeiro!', 'error'); 
-                return; 
-            }
+            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); return; }
             
             try {
-                if (qrScanner && scannerIniciado) { 
-                    try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} 
-                }
-                
+                if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} }
                 capturaRealizada = false;
                 estabilidade = 0;
                 quadradosEncaixados = [false, false, false, false];
-                
                 const constraints = getVideoConstraints();
-                console.log('📷 Iniciando câmera com constraints:', constraints);
-                
-                stream = await navigator.mediaDevices.getUserMedia(constraints)
-                    .catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
-                
+                stream = await navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 video.srcObject = stream;
                 await video.play();
-                
-                // 🔥 CORRIGIR ORIENTAÇÃO DO VÍDEO
-                corrigirOrientacaoVideo(video);
-                
-                // 🔥 AJUSTAR ZOOM SE DISPONÍVEL
-                if (stream && stream.getVideoTracks().length > 0) {
-                    const track = stream.getVideoTracks()[0];
-                    const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-                    
-                    if (capabilities.zoom && capabilities.zoom.max > 1) {
-                        // Tentar aplicar zoom ótimo para leitura
-                        const zoomIdeal = Math.min(capabilities.zoom.max, 1.5);
-                        await track.applyConstraints({ advanced: [{ zoom: zoomIdeal }] });
-                        console.log(`🔍 Zoom aplicado: ${zoomIdeal}`);
-                    }
-                }
                 
                 btnIniciarCamera.disabled = true;
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
                 cameraContainer.style.display = 'block';
-                
                 if (analiseInterval) clearInterval(analiseInterval);
                 analiseInterval = setInterval(analisarFrame, 100);
-                
-                mostrarAlerta('📷 Câmera iniciada! Aponte para o cartão.', 'info');
-                
-            } catch (error) { 
-                console.error('❌ Erro ao acessar câmera:', error);
-                mostrarAlerta('❌ Erro ao acessar câmera: ' + error.message, 'error'); 
-            }
+                mostrarAlerta('📷 Câmera iniciada! Deslize para alinhar o cartão.', 'info');
+            } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
         }
         
         function pararCamera() { if (analiseInterval) { clearInterval(analiseInterval); analiseInterval = null; } if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } if (autoCorrectionTimer) { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; } cancelarCorrecaoAutomatica(); }
