@@ -699,9 +699,15 @@
         // Funções de tela cheia
         function entrarTelaCheia() {
             if (!isMobile) return;
-            
-            // 🔥 PRIMEIRO: Entrar em tela cheia
             const elem = document.documentElement;
+            
+            // 🔥 TENTAR TRAVAR ORIENTAÇÃO
+            try {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('landscape').catch(e => console.log('Não foi possível travar:', e));
+                }
+            } catch(e) {}
+            
             if (elem.requestFullscreen) {
                 elem.requestFullscreen();
             } else if (elem.webkitRequestFullscreen) {
@@ -711,18 +717,6 @@
             }
             document.body.classList.add('fullscreen-mode');
             modoFullscreen = true;
-            
-            // 🔥 SEGUNDO: Após entrar em tela cheia, travar orientação
-            setTimeout(async () => {
-                try {
-                    if (screen.orientation && screen.orientation.lock) {
-                        await screen.orientation.lock('landscape');
-                        console.log('🔒 Orientação travada em PAISAGEM');
-                    }
-                } catch(e) {
-                    console.log('⚠️ Não foi possível travar orientação:', e.message);
-                }
-            }, 500);
             
             setTimeout(() => mostrarDicaScroll(), 1000);
         }
@@ -738,6 +732,72 @@
             }
             document.body.classList.remove('fullscreen-mode');
             modoFullscreen = false;
+        }
+
+        // Função para aplicar configuração completa da câmera (igual ao "Tentar Novamente")
+        async function aplicarConfiguracaoCompleta() {
+            if (!isMobile) return;
+            
+            console.log('🔧 Aplicando configuração completa da câmera...');
+            
+            // 1. Garantir tela cheia
+            if (!document.fullscreenElement) {
+                await entrarTelaCheia();
+                await new Promise(r => setTimeout(r, 500));
+            }
+            
+            // 2. Travar orientação em paisagem
+            try {
+                if (screen.orientation && screen.orientation.lock) {
+                    await screen.orientation.lock('landscape');
+                    console.log('🔒 Orientação travada em PAISAGEM');
+                }
+            } catch(e) {
+                console.log('⚠️ Não foi possível travar orientação:', e.message);
+            }
+            
+            // 3. Reconfigurar stream da câmera se existir
+            if (stream) {
+                const track = stream.getVideoTracks()[0];
+                if (track) {
+                    try {
+                        await track.applyConstraints({
+                            width: { exact: 1280 },
+                            height: { exact: 720 }
+                        });
+                        console.log('✅ Câmera reconfigurada para 1280x720');
+                    } catch(e) {
+                        console.log('⚠️ Erro ao reconfigurar:', e.message);
+                    }
+                }
+            }
+            
+            // 4. Ajustar CSS do vídeo
+            if (video) {
+                video.style.width = '100%';
+                video.style.height = '100%';
+                video.style.objectFit = 'cover';
+                video.style.transform = 'rotate(0deg)';
+            }
+            
+            // 5. Resetar variáveis de detecção (igual ao tentarNovamente)
+            capturaRealizada = false;
+            estabilidade = 0;
+            quadradosEncaixados = [false, false, false, false];
+            retanguloAtual = null;
+            ultimoRetangulo = null;
+            
+            // 6. Resetar guias
+            const guias = ['guiaTL', 'guiaTR', 'guiaBL', 'guiaBR'];
+            guias.forEach(id => { 
+                const el = document.getElementById(id); 
+                if (el) el.classList.remove('encaixado'); 
+            });
+            document.getElementById('statusEncaixe').innerHTML = '⬜ ⬜ ⬜ ⬜';
+            document.getElementById('feedback').innerHTML = '🎯 Alinhe';
+            document.getElementById('feedback').style.background = '#f59e0b';
+            
+            console.log('✅ Configuração completa aplicada!');
         }
         
         // 🔥 FUNÇÃO: Abrir câmera em tela cheia no desktop (duplo toque/clique)
@@ -1314,10 +1374,12 @@
                     if (isMobile) {
                         entrarTelaCheia();
                         iniciarCamera();
+                        // 🔥 ADICIONAR ESTA LINHA - APLICAR CONFIGURAÇÃO APÓS INICIAR
+                        setTimeout(() => aplicarConfiguracaoCompleta(), 1000);
                     } else {
                         iniciarCamera();
                     }
-                }
+                } 
             }, 500);
         }
         
@@ -1953,52 +2015,29 @@
         }
         
         async function iniciarCamera() {
-            if (!alunoSelecionado) { 
-                mostrarAlerta('Selecione um aluno primeiro!', 'error'); 
-                return; 
-            }
+            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); return; }
             
             try {
-                if (qrScanner && scannerIniciado) { 
-                    try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} 
-                }
-                
+                if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} }
                 capturaRealizada = false;
                 estabilidade = 0;
                 quadradosEncaixados = [false, false, false, false];
-                
                 const constraints = getVideoConstraints();
-                console.log('📷 Iniciando câmera com constraints:', constraints);
-                
-                stream = await navigator.mediaDevices.getUserMedia(constraints)
-                    .catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
-                
+                stream = await navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
                 video.srcObject = stream;
                 await video.play();
-                
-                // 🔥 ADICIONAR ESTA LINHA - AJUSTE AUTOMÁTICO
-                await ajustarCameraMobile();
-                
-                // 🔥 ADICIONAR ESTA LINHA - FORÇAR ORIENTAÇÃO PAISAGEM
-                if (isMobile && window.innerWidth > window.innerHeight) {
-                    video.style.width = '100%';
-                    video.style.height = '100%';
-                    video.style.objectFit = 'cover';
-                }
                 
                 btnIniciarCamera.disabled = true;
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
                 cameraContainer.style.display = 'block';
-                
                 if (analiseInterval) clearInterval(analiseInterval);
                 analiseInterval = setInterval(analisarFrame, 100);
                 
-                mostrarAlerta('📷 Câmera iniciada! Aponte para o cartão.', 'info');
+                // 🔥 ADICIONAR ESTA LINHA - APLICAR CONFIGURAÇÃO COMPLETA
+                setTimeout(() => aplicarConfiguracaoCompleta(), 500);
                 
-            } catch (error) { 
-                console.error('❌ Erro ao acessar câmera:', error);
-                mostrarAlerta('❌ Erro ao acessar câmera: ' + error.message, 'error'); 
-            }
+                mostrarAlerta('📷 Câmera iniciada! Deslize para alinhar o cartão.', 'info');
+            } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
         }
 
         // Função para ajustar a câmera automaticamente (chamar após iniciar)
