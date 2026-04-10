@@ -1506,7 +1506,7 @@
         function iniciarCorrecaoAutomatica() {
             if (autoCorrectionTimer) return;
             if (capturaRealizada) return;
-            autoCorrectionCountdown = 5;
+            autoCorrectionCountdown = 2;
             autoStatusDiv.style.display = 'block';
             autoStatusDiv.innerHTML = `📸 ${autoCorrectionCountdown}s`;
             autoCorrectionTimer = setInterval(() => {
