@@ -700,16 +700,7 @@
         function entrarTelaCheia() {
             if (!isMobile) return;
             
-            // 🔥 FORÇAR ORIENTAÇÃO PAISAGEM
-            try {
-                if (screen.orientation && screen.orientation.lock) {
-                    screen.orientation.lock('landscape');
-                    console.log('🔒 Orientação travada em PAISAGEM');
-                }
-            } catch(e) {
-                console.log('⚠️ Não foi possível travar orientação:', e.message);
-            }
-            
+            // 🔥 PRIMEIRO: Entrar em tela cheia
             const elem = document.documentElement;
             if (elem.requestFullscreen) {
                 elem.requestFullscreen();
@@ -720,6 +711,34 @@
             }
             document.body.classList.add('fullscreen-mode');
             modoFullscreen = true;
+            
+            // 🔥 SEGUNDO: Após entrar em tela cheia, travar orientação
+            setTimeout(async () => {
+                try {
+                    if (screen.orientation && screen.orientation.lock) {
+                        await screen.orientation.lock('landscape');
+                        console.log('🔒 Orientação travada em PAISAGEM');
+                    }
+                } catch(e) {
+                    console.log('⚠️ Não foi possível travar orientação:', e.message);
+                }
+                
+                // 🔥 TERCEIRO: Se a câmera já estiver ativa, reconfigurar
+                if (stream) {
+                    try {
+                        const track = stream.getVideoTracks()[0];
+                        if (track) {
+                            await track.applyConstraints({
+                                width: { exact: 1280 },
+                                height: { exact: 720 }
+                            });
+                            console.log('✅ Câmera reconfigurada para 1280x720');
+                        }
+                    } catch(e) {
+                        console.log('⚠️ Não foi possível reconfigurar:', e.message);
+                    }
+                }
+            }, 500);
             
             setTimeout(() => mostrarDicaScroll(), 1000);
         }
@@ -832,8 +851,8 @@
         // IDENTIFICAR MODO E APLICAR PARÂMETROS CORRETOS
         if (isMobile) {
             // Parâmetros para MOBILE (tela cheia)
-            margemHorizontal = 0.07;
-            margemVertical = 0.31;
+            margemHorizontal = 0.15;
+            margemVertical = 0.15;
             console.log('📱 Modo MOBILE ativado - Parâmetros: margemHorizontal=0.07, margemVertical=0.31');
         } else {
             // Parâmetros para DESKTOP
@@ -1929,14 +1948,13 @@
         }
         
         function getVideoConstraints() {
-            // 🔥 CONFIGURAÇÃO FINAL OTIMIZADA PARA MOBILE
+            // 🔥 CONFIGURAÇÃO QUE FUNCIONOU NO TESTE - MODO PAISAGEM
             if (isMobile) {
-                // Forçar modo PAISAGEM (largura > altura)
+                // IMPORTANTE: SEM facingMode para funcionar em paisagem!
                 return {
                     video: { 
-                        facingMode: { exact: "environment" }, // Câmera TRASEIRA
-                        width: { ideal: 1280, min: 1024 },   // Largura maior
-                        height: { ideal: 720, min: 768 }      // Altura menor
+                        width: { exact: 1280 },
+                        height: { exact: 720 }
                     }
                 };
             } else {
