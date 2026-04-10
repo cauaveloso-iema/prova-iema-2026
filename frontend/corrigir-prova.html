@@ -1919,38 +1919,110 @@
         }
         
         function getVideoConstraints() {
-            // Forçar orientação correta baseada no dispositivo
+            // Detectar orientação
             const isPortrait = window.innerHeight > window.innerWidth;
             
-            return {
-                video: { 
-                    facingMode: { exact: "environment" },
-                    width: { ideal: isPortrait ? 1080 : 1920 },
-                    height: { ideal: isPortrait ? 1920 : 1080 }
-                }
-            };
+            // 🔥 CONFIGURAÇÃO FINAL OTIMIZADA PARA MOBILE
+            if (isMobile) {
+                return {
+                    video: { 
+                        facingMode: { exact: "environment" }, // Câmera TRASEIRA
+                        width: { ideal: 800, max: 1280 },    // Resolução controlada
+                        height: { ideal: 600, max: 720 }
+                    }
+                };
+            } else {
+                // Desktop
+                return {
+                    video: { 
+                        facingMode: { exact: "environment" },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+            }
         }
         
         async function iniciarCamera() {
-            if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno primeiro!', 'error'); return; }
+            if (!alunoSelecionado) { 
+                mostrarAlerta('Selecione um aluno primeiro!', 'error'); 
+                return; 
+            }
             
             try {
-                if (qrScanner && scannerIniciado) { try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} }
+                if (qrScanner && scannerIniciado) { 
+                    try { await qrScanner.stop(); scannerIniciado = false; } catch(e) {} 
+                }
+                
                 capturaRealizada = false;
                 estabilidade = 0;
                 quadradosEncaixados = [false, false, false, false];
+                
                 const constraints = getVideoConstraints();
-                stream = await navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+                console.log('📷 Iniciando câmera com constraints:', constraints);
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints)
+                    .catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+                
                 video.srcObject = stream;
                 await video.play();
+                
+                // 🔥 ADICIONAR ESTA LINHA - AJUSTE AUTOMÁTICO
+                await ajustarCameraMobile();
+                
+                // 🔥 ADICIONAR ESTA LINHA - FORÇAR ORIENTAÇÃO PAISAGEM
+                if (isMobile && window.innerWidth > window.innerHeight) {
+                    video.style.width = '100%';
+                    video.style.height = '100%';
+                    video.style.objectFit = 'cover';
+                }
                 
                 btnIniciarCamera.disabled = true;
                 btnIniciarCamera.innerHTML = '<i class="fas fa-camera"></i> Ativa';
                 cameraContainer.style.display = 'block';
+                
                 if (analiseInterval) clearInterval(analiseInterval);
                 analiseInterval = setInterval(analisarFrame, 100);
-                mostrarAlerta('📷 Câmera iniciada! Deslize para alinhar o cartão.', 'info');
-            } catch (error) { mostrarAlerta('❌ Erro ao acessar câmera', 'error'); }
+                
+                mostrarAlerta('📷 Câmera iniciada! Aponte para o cartão.', 'info');
+                
+            } catch (error) { 
+                console.error('❌ Erro ao acessar câmera:', error);
+                mostrarAlerta('❌ Erro ao acessar câmera: ' + error.message, 'error'); 
+            }
+        }
+
+        // Função para ajustar a câmera automaticamente (chamar após iniciar)
+        async function ajustarCameraMobile() {
+            if (!isMobile) return;
+            
+            // Aguardar câmera estabilizar
+            await new Promise(r => setTimeout(r, 500));
+            
+            if (!stream) return;
+            
+            const track = stream.getVideoTracks()[0];
+            if (!track) return;
+            
+            try {
+                // Forçar resolução otimizada
+                await track.applyConstraints({
+                    width: { ideal: 800, max: 1280 },
+                    height: { ideal: 600, max: 720 }
+                });
+                console.log('✅ Resolução ajustada para 800x600');
+            } catch(e) {
+                console.log('⚠️ Não foi possível ajustar resolução:', e.message);
+            }
+            
+            // Ajustar zoom se disponível
+            const capabilities = track.getCapabilities();
+            if (capabilities.zoom) {
+                try {
+                    await track.applyConstraints({ advanced: [{ zoom: 1.0 }] });
+                    console.log('✅ Zoom ajustado para 1.0');
+                } catch(e) {}
+            }
         }
         
         function pararCamera() { if (analiseInterval) { clearInterval(analiseInterval); analiseInterval = null; } if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } if (autoCorrectionTimer) { clearInterval(autoCorrectionTimer); autoCorrectionTimer = null; } cancelarCorrecaoAutomatica(); }
