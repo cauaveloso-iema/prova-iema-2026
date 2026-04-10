@@ -6163,7 +6163,7 @@ class AdminPanel {
                     </h4>
                     
                     <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px;">
-                        ${this.gerarListaAlunosHTML(turmaCompleta.alunos)}
+                        ${this.gerarListaAlunosComBotaoExcluir(turmaCompleta.alunos, turmaId)}
                     </div>
                 </div>
             `;
@@ -6177,6 +6177,164 @@ class AdminPanel {
             this.showToast('❌ Erro ao carregar detalhes: ' + error.message, 'error');
         }
     }
+
+    // ============ GERAR LISTA DE ALUNOS COM BOTÃO EXCLUIR (VERSÃO CORRIGIDA) ============
+    gerarListaAlunosComBotaoExcluir(alunos, turmaId) {
+        if (!alunos || alunos.length === 0) {
+            return `<div style="text-align: center; padding: 40px; color: #6b7280;">
+                        <i class="fas fa-user-graduate" style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
+                        Nenhum aluno matriculado nesta turma
+                    </div>`;
+        }
+        
+        // 🔥 REMOVER DUPLICATAS POR ID DO ALUNO
+        const alunosUnicos = new Map();
+        
+        for (const aluno of alunos) {
+            const alunoId = aluno._id || aluno.id || aluno.alunoId;
+            if (alunoId && !alunosUnicos.has(alunoId.toString())) {
+                alunosUnicos.set(alunoId.toString(), {
+                    id: alunoId,
+                    nome: aluno.nome || aluno.alunoNome || 'Aluno',
+                    matricula: aluno.matricula || aluno.alunoMatricula || '',
+                    email: aluno.email || aluno.alunoEmail || ''
+                });
+            }
+        }
+        
+        const alunosUnicosArray = Array.from(alunosUnicos.values());
+        
+        console.log(`📊 Alunos únicos: ${alunosUnicosArray.length} (original: ${alunos.length})`);
+        
+        if (alunosUnicosArray.length === 0) {
+            return `<div style="text-align: center; padding: 40px; color: #6b7280;">
+                        <i class="fas fa-user-graduate" style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
+                        Nenhum aluno matriculado nesta turma
+                    </div>`;
+        }
+        
+        return `
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead style="background: #f3f4f6; position: sticky; top: 0;">
+                    <tr>
+                        <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #374151;">#</th>
+                        <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #374151;">Nome</th>
+                        <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #374151;">Matrícula</th>
+                        <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: #374151;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${alunosUnicosArray.map((aluno, index) => `
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                            <td style="padding: 12px; font-size: 13px;">${index + 1}</td>
+                            <td style="padding: 12px; font-size: 13px;">
+                                <strong>${aluno.nome}</strong>
+                            </td>
+                            <td style="padding: 12px; font-size: 13px; font-family: monospace;">
+                                ${aluno.matricula || 'N/A'}
+                            </td>
+                            <td style="padding: 12px; text-align: center;">
+                                <button onclick="admin.excluirAlunoDaTurma('${turmaId}', '${aluno.id}')" 
+                                        style="background: #ef4444; border: none; color: white; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-trash"></i> Excluir
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    // ============ EXCLUIR ALUNO DA TURMA (VERSÃO CORRIGIDA) ============
+    async excluirAlunoDaTurma(turmaId, alunoId) {
+        console.log(`🗑️ Excluindo aluno ${alunoId} da turma ${turmaId}`);
+        
+        if (!alunoId) {
+            this.showToast('❌ ID do aluno inválido', 'error');
+            return;
+        }
+        
+        if (!turmaId) {
+            this.showToast('❌ ID da turma inválido', 'error');
+            return;
+        }
+        
+        // Buscar o aluno e a turma primeiro
+        const turma = this.turmas.find(t => t.id === turmaId);
+        const aluno = this.usuarios?.find(u => u.id === alunoId) || { nome: 'Aluno' };
+        
+        if (!turma) {
+            this.showToast('❌ Turma não encontrada', 'error');
+            return;
+        }
+        
+        // Verificar se o aluno está realmente na turma
+        const alunoNaTurma = turma.alunos?.some(a => (a.id || a._id) === alunoId);
+        
+        if (!alunoNaTurma) {
+            this.showToast(`❌ Aluno ${aluno.nome} não está nesta turma`, 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🗑️ Remover Aluno',
+            `Tem certeza que deseja remover <strong>${aluno.nome}</strong> da turma <strong>${turma.nome}</strong>?<br><br>
+            <strong style="color: #dc3545;">Esta ação não pode ser desfeita.</strong>`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🔄 Removendo aluno...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // 🔥 USAR A ROTA CORRETA - COM BARRA NO FINAL
+            const response = await fetch(`/api/admin/turmas/${turmaId}/alunos/${alunoId}`, {
+                method: 'DELETE',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // Verificar se a resposta é JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+                throw new Error('Erro no servidor. Resposta não é JSON.');
+            }
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Erro ${response.status}: ${response.statusText}`);
+            }
+            
+            if (data.success) {
+                this.showToast(`✅ Aluno ${aluno.nome} removido com sucesso!`, 'success');
+                
+                // Fechar modal atual
+                this.closeModal();
+                
+                // Recarregar os dados da turma (para atualizar a lista)
+                await this.verTurma(turmaId);
+                
+                // Atualizar lista de turmas no menu
+                await this.carregarTurmas();
+                
+            } else {
+                throw new Error(data.error || 'Erro ao remover aluno');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro detalhado:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+    
 
     // ============ NOVAS FUNÇÕES PARA MENU DE CURSOS ============
 

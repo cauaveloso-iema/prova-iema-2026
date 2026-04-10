@@ -806,7 +806,8 @@
             else redirecionarParaVersaoCorreta();
             throw new Error('Redirecionando...');
         }
-        
+
+        let screenOrientation = window.screen.orientation?.type || '';
         let modoQRCode = true;
         let alunoSelecionado = null;
         let autoCorrectionTimer = null;
@@ -814,9 +815,22 @@
         
         let sensibilidade = 12;
         const BRILHO_MAX_PRETO = 110;
-        let margemHorizontal = 0.12;  // Originalmente era margemBusca = 0.12
-        let margemVertical = 0.12;    // Originalmente era margemBusca = 0.12
+        let margemHorizontal;
+        let margemVertical;
         let tamanhoGuia = 0.14;
+        
+        // IDENTIFICAR MODO E APLICAR PARÂMETROS CORRETOS
+        if (isMobile) {
+            // Parâmetros para MOBILE (tela cheia)
+            margemHorizontal = 0.07;
+            margemVertical = 0.31;
+            console.log('📱 Modo MOBILE ativado - Parâmetros: margemHorizontal=0.07, margemVertical=0.31');
+        } else {
+            // Parâmetros para DESKTOP
+            margemHorizontal = 0.12;
+            margemVertical = 0.12;
+            console.log('💻 Modo DESKTOP ativado - Parâmetros: margemHorizontal=0.12, margemVertical=0.12');
+        }
         
         const isRender = window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
         const OMR_URL = isRender ? '/api/omr/detect' : 'http://localhost:5001/detect';
@@ -1905,11 +1919,14 @@
         }
         
         function getVideoConstraints() {
+            // Forçar orientação correta baseada no dispositivo
+            const isPortrait = window.innerHeight > window.innerWidth;
+            
             return {
                 video: { 
                     facingMode: { exact: "environment" },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
+                    width: { ideal: isPortrait ? 1080 : 1920 },
+                    height: { ideal: isPortrait ? 1920 : 1080 }
                 }
             };
         }
