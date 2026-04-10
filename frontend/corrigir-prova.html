@@ -722,22 +722,6 @@
                 } catch(e) {
                     console.log('⚠️ Não foi possível travar orientação:', e.message);
                 }
-                
-                // 🔥 TERCEIRO: Se a câmera já estiver ativa, reconfigurar
-                if (stream) {
-                    try {
-                        const track = stream.getVideoTracks()[0];
-                        if (track) {
-                            await track.applyConstraints({
-                                width: { exact: 1280 },
-                                height: { exact: 720 }
-                            });
-                            console.log('✅ Câmera reconfigurada para 1280x720');
-                        }
-                    } catch(e) {
-                        console.log('⚠️ Não foi possível reconfigurar:', e.message);
-                    }
-                }
             }, 500);
             
             setTimeout(() => mostrarDicaScroll(), 1000);
@@ -1948,13 +1932,12 @@
         }
         
         function getVideoConstraints() {
-            // 🔥 CONFIGURAÇÃO QUE FUNCIONOU NO TESTE - MODO PAISAGEM
+            // 🔥 CONFIGURAÇÃO QUE FUNCIONOU - CÂMERA TRASEIRA EM PAISAGEM
             if (isMobile) {
-                // IMPORTANTE: SEM facingMode para funcionar em paisagem!
                 return {
                     video: { 
-                        width: { exact: 1280 },
-                        height: { exact: 720 }
+                        facingMode: { exact: "environment" }, // Câmera TRASEIRA
+                        aspectRatio: { exact: 16/9 }          // Força proporção 16:9 (paisagem)
                     }
                 };
             } else {
