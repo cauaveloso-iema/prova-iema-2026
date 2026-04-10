@@ -699,6 +699,17 @@
         // Funções de tela cheia
         function entrarTelaCheia() {
             if (!isMobile) return;
+            
+            // 🔥 FORÇAR ORIENTAÇÃO PAISAGEM
+            try {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('landscape');
+                    console.log('🔒 Orientação travada em PAISAGEM');
+                }
+            } catch(e) {
+                console.log('⚠️ Não foi possível travar orientação:', e.message);
+            }
+            
             const elem = document.documentElement;
             if (elem.requestFullscreen) {
                 elem.requestFullscreen();
@@ -710,7 +721,6 @@
             document.body.classList.add('fullscreen-mode');
             modoFullscreen = true;
             
-            // Mostrar dica de rolagem
             setTimeout(() => mostrarDicaScroll(), 1000);
         }
         
@@ -1919,16 +1929,14 @@
         }
         
         function getVideoConstraints() {
-            // Detectar orientação
-            const isPortrait = window.innerHeight > window.innerWidth;
-            
             // 🔥 CONFIGURAÇÃO FINAL OTIMIZADA PARA MOBILE
             if (isMobile) {
+                // Forçar modo PAISAGEM (largura > altura)
                 return {
                     video: { 
                         facingMode: { exact: "environment" }, // Câmera TRASEIRA
-                        width: { ideal: 800, max: 1280 },    // Resolução controlada
-                        height: { ideal: 600, max: 720 }
+                        width: { ideal: 1280, min: 1024 },   // Largura maior
+                        height: { ideal: 720, min: 768 }      // Altura menor
                     }
                 };
             } else {
