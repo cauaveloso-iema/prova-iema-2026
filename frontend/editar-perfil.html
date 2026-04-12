@@ -404,6 +404,54 @@
             color: #ef4444;
         }
 
+        /* ===== ESTILOS PARA QR CODE ===== */
+        .loading {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        #qrCodeSection {
+            transition: all 0.3s ease;
+        }
+        
+        #qrCodeSection img {
+            transition: transform 0.3s ease;
+        }
+        
+        #qrCodeSection img:hover {
+            transform: scale(1.05);
+        }
+
+        /* Estilos para o card de preferências alimentares */
+        .alerta-info-card {
+            background: #e0f2fe;
+            border-left: 4px solid #0284c7;
+            padding: 12px 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+            color: #0c4a6e;
+        }
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+            padding-left: 10px;
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
         @media (max-width: 768px) {
             .perfil-container {
                 margin: 1rem auto;
@@ -619,7 +667,51 @@
                         </div>
                     </div>
                     
-                    <!-- Seção 6: Dados Específicos do Perfil (dinâmico conforme role) -->
+                    <!-- Seção 6: Preferências Alimentares (SOMENTE PARA ALUNOS) -->
+                    <div id="preferenciasAlimentares" style="display: none;">
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-utensils"></i>
+                                <span>Preferências Alimentares</span>
+                            </div>
+                            <div class="alerta-info-card">
+                                <i class="fas fa-info-circle"></i> Estas informações ajudam a cozinha a planejar a quantidade de comida, evitando desperdício.
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-question-circle"></i> Você participa das refeições na escola?
+                                    </label>
+                                    <select id="perfilAlimentar" name="perfilAlimentar" class="form-control">
+                                        <option value="sempre">✅ Sim, sempre participo</option>
+                                        <option value="as_vezes">⚠️ Participo às vezes</option>
+                                        <option value="nunca">❌ Não, nunca participo</option>
+                                        <option value="nao_informado">❓ Prefiro não informar</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="refeicoesQueParticipaDiv" style="display: none; margin-top: 15px;">
+                                <label class="form-label">Quais refeições você costuma participar?</label>
+                                <div class="checkbox-group">
+                                    <label>
+                                        <input type="checkbox" value="manha" id="refeicaoManha">
+                                        ☀️ Lanche da Manhã (8h - 10h)
+                                    </label>
+                                    <label>
+                                        <input type="checkbox" value="almoco" id="refeicaoAlmoco">
+                                        🍽️ Almoço (11h - 13h)
+                                    </label>
+                                    <label>
+                                        <input type="checkbox" value="tarde" id="refeicaoTarde">
+                                        🌙 Lanche da Tarde (14h - 16h)
+                                    </label>
+                                </div>
+                                <small style="color: #6b7280; font-size: 0.7rem;">Selecione as refeições que você costuma fazer na escola.</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seção 7: Dados Específicos do Perfil (dinâmico conforme role) -->
                     <div id="dadosEspecificos"></div>
                     
                     <!-- Botão Salvar -->
@@ -627,6 +719,32 @@
                         <i class="fas fa-save"></i> Salvar Alterações
                     </button>
                 </form>
+                
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- 🔥 SEÇÃO DO QR CODE - ADICIONADA AQUI 🔥                     -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <div class="form-section" id="qrCodeSection" style="display: none;">
+                    <div class="form-section-title">
+                        <i class="fas fa-qrcode"></i>
+                        <span>Meu QR Code de Identificação</span>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: #f8fafc; border-radius: 16px;">
+                        <div id="qrCodeContainer" style="margin-bottom: 15px;">
+                            <div class="loading" style="width: 30px; height: 30px;"></div>
+                        </div>
+                        <p style="color: #6b7280; font-size: 0.85rem; margin-bottom: 10px;">
+                            <i class="fas fa-info-circle"></i> Este QR Code é único e identifica você no sistema.
+                        </p>
+                        <p id="qrCodeInfo" style="color: #6b7280; font-size: 0.85rem;"></p>
+                        <button onclick="baixarQRCode()" class="btn-salvar" style="margin-top: 15px; width: auto; padding: 10px 20px;">
+                            <i class="fas fa-download"></i> Baixar QR Code
+                        </button>
+                    </div>
+                </div>
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- FIM DA SEÇÃO DO QR CODE                                      -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                
             </div>
         </div>
     </div>
@@ -684,6 +802,12 @@
                     // Carregar campos específicos conforme role
                     carregarCamposEspecificos(userData);
                     
+                    // Mostrar seção de preferências alimentares apenas para alunos
+                    if (userRole === 'aluno') {
+                        document.getElementById('preferenciasAlimentares').style.display = 'block';
+                        carregarPreferenciasAlimentares(userData);
+                    }
+                    
                     // Atualizar título e badge
                     document.getElementById('perfilNome').textContent = userData.nome;
                     
@@ -718,6 +842,41 @@
             } catch (error) {
                 console.error('Erro ao carregar perfil:', error);
                 mostrarAlerta('Erro ao carregar perfil. Tente novamente.', 'error');
+            }
+        }
+        
+        // ============================================
+        // CARREGAR PREFERÊNCIAS ALIMENTARES
+        // ============================================
+        function carregarPreferenciasAlimentares(data) {
+            const perfilAlimentar = data.perfilAlimentar || 'nao_informado';
+            const refeicoesQueParticipa = data.refeicoesQueParticipa || [];
+            
+            const select = document.getElementById('perfilAlimentar');
+            if (select) {
+                select.value = perfilAlimentar;
+                toggleRefeicoesDiv(perfilAlimentar);
+            }
+            
+            // Marcar checkboxes
+            if (refeicoesQueParticipa.includes('manha')) document.getElementById('refeicaoManha').checked = true;
+            if (refeicoesQueParticipa.includes('almoco')) document.getElementById('refeicaoAlmoco').checked = true;
+            if (refeicoesQueParticipa.includes('tarde')) document.getElementById('refeicaoTarde').checked = true;
+            
+            // Event listener para mostrar/esconder checkboxes
+            if (select) {
+                select.addEventListener('change', function() {
+                    toggleRefeicoesDiv(this.value);
+                });
+            }
+        }
+        
+        function toggleRefeicoesDiv(perfilAlimentar) {
+            const div = document.getElementById('refeicoesQueParticipaDiv');
+            if (perfilAlimentar === 'sempre' || perfilAlimentar === 'as_vezes') {
+                div.style.display = 'block';
+            } else {
+                div.style.display = 'none';
             }
         }
         
@@ -1011,7 +1170,7 @@
         }
         
         // ============================================
-        // SALVAR PERFIL (CORRIGIDO PARA TODOS OS ROLES)
+        // SALVAR PERFIL (CORRIGIDO PARA TODOS OS ROLES E PREFERÊNCIAS ALIMENTARES)
         // ============================================
         async function salvarPerfil(event) {
             event.preventDefault();
@@ -1040,6 +1199,22 @@
                     website: document.getElementById('website').value,
                     interesses: interessesList
                 };
+                
+                // 🔥 ADICIONAR PREFERÊNCIAS ALIMENTARES (se for aluno)
+                if (userRole === 'aluno') {
+                    dados.perfilAlimentar = document.getElementById('perfilAlimentar')?.value || 'nao_informado';
+                    
+                    const refeicoesQueParticipa = [];
+                    if (document.getElementById('refeicaoManha')?.checked) refeicoesQueParticipa.push('manha');
+                    if (document.getElementById('refeicaoAlmoco')?.checked) refeicoesQueParticipa.push('almoco');
+                    if (document.getElementById('refeicaoTarde')?.checked) refeicoesQueParticipa.push('tarde');
+                    dados.refeicoesQueParticipa = refeicoesQueParticipa;
+                    
+                    console.log('🍽️ Salvando preferências alimentares:', {
+                        perfilAlimentar: dados.perfilAlimentar,
+                        refeicoesQueParticipa: dados.refeicoesQueParticipa
+                    });
+                }
                 
                 // 🔥 ADICIONAR CAMPOS ESPECÍFICOS POR ROLE
                 if (userRole === 'aluno') {
@@ -1083,6 +1258,8 @@
                         userDataStorage.curso = dados.curso;
                         userDataStorage.turma = dados.turma;
                         userDataStorage.periodo = dados.periodo;
+                        userDataStorage.perfilAlimentar = dados.perfilAlimentar;
+                        userDataStorage.refeicoesQueParticipa = dados.refeicoesQueParticipa;
                     } else if (userRole === 'professor') {
                         userDataStorage.eixo = dados.eixo;
                         userDataStorage.departamento = dados.departamento;
@@ -1133,6 +1310,88 @@
         }
         
         // ============================================
+        // CARREGAR QR CODE DO USUÁRIO (QUALQUER PERFIL)
+        // ============================================
+        async function carregarQRCodeUsuario() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const userDataStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
+                
+                console.log(`📱 Carregando QR Code para ${userDataStorage.role}: ${userDataStorage.nome}`);
+                
+                const response = await fetch('/api/usuario/qrcode', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.qrCode) {
+                    const container = document.getElementById('qrCodeContainer');
+                    const section = document.getElementById('qrCodeSection');
+                    const info = document.getElementById('qrCodeInfo');
+                    
+                    if (container && section) {
+                        container.innerHTML = `
+                            <img src="${data.qrCode}" 
+                                 alt="QR Code do Usuário" 
+                                 style="width: 180px; height: 180px; margin: 0 auto; border: 2px solid #e5e7eb; border-radius: 16px; padding: 10px; background: white;">
+                            <div style="margin-top: 10px;">
+                                <p style="font-size: 0.8rem; color: #10b981;">
+                                    <i class="fas fa-check-circle"></i> QR Code gerado em ${new Date(data.geradoEm).toLocaleDateString('pt-BR')}
+                                </p>
+                                <p style="font-size: 0.75rem; color: #6b7280;">
+                                    <i class="fas fa-user"></i> ${data.usuario.nome}
+                                </p>
+                                <p style="font-size: 0.7rem; color: #8b5cf6;">
+                                    <i class="fas fa-arrow-right"></i> Escaneie para acessar: ${data.usuario.tituloDestino}
+                                </p>
+                            </div>
+                        `;
+                        
+                        if (info) {
+                            info.innerHTML = `Escaneie este QR Code para acessar sua área personalizada: <strong>${data.usuario.tituloDestino}</strong>`;
+                        }
+                        
+                        section.style.display = 'block';
+                        console.log(`✅ QR Code carregado para ${userDataStorage.role}`);
+                    }
+                } else {
+                    console.log('⚠️ QR Code não encontrado:', data.error);
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar QR Code:', error);
+            }
+        }
+        
+        // ============================================
+        // BAIXAR QR CODE COMO IMAGEM
+        // ============================================
+        function baixarQRCode() {
+            const img = document.querySelector('#qrCodeContainer img');
+            if (!img) {
+                alert('QR Code não disponível');
+                return;
+            }
+            
+            const userDataStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const nomeArquivo = `qrcode-${userDataStorage.role}-${Date.now()}.png`;
+            
+            const link = document.createElement('a');
+            link.download = nomeArquivo;
+            link.href = img.src;
+            link.click();
+            
+            // Feedback visual
+            const btn = event.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Baixado!';
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+            }, 2000);
+        }
+        
+        // ============================================
         // INICIALIZAÇÃO
         // ============================================
         document.addEventListener('DOMContentLoaded', () => {
@@ -1171,6 +1430,11 @@
                     adicionarInteresse();
                 }
             });
+            
+            // Carregar QR Code após 1 segundo
+            setTimeout(() => {
+                carregarQRCodeUsuario();
+            }, 1000);
         });
     </script>
 

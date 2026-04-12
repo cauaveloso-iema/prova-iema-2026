@@ -2634,7 +2634,7 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- Perfil (com Setor Pedagógico) -->
+                        <!-- Perfil-->
                         <div class="filter-group">
                             <label><i class="fas fa-user-tag"></i> Perfil</label>
                             <select id="filterRole" class="filter-select">
@@ -2642,8 +2642,10 @@ class AdminPanel {
                                 <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>👨‍🎓 Alunos</option>
                                 <option value="professor" ${role === 'professor' ? 'selected' : ''}>👨‍🏫 Professores</option>
                                 <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>👩‍🏫 Setor Pedagógico</option>
-                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admins</option>
-                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 Super Admins</option>
+                                <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>🏃 Coordenação de Pátio</option>
+                                <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>🍽️ Cozinha</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
+                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
                             </select>
                         </div>
                         
@@ -2994,6 +2996,22 @@ class AdminPanel {
                 .role-badge.aluno { background: #10b981; color: white; }
                 .role-badge.setor_pedagogico { background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; }
                 .role-badge.setor_pedagogico i { color: white; margin-right: 4px; }
+
+                .role-badge.coordenacao_patio {
+                    background: linear-gradient(135deg, #f59e0b, #d97706);
+                    color: white;
+                }
+                .role-badge.coordenacao_patio i {
+                    margin-right: 4px;
+                }
+
+                .role-badge.cozinha {
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    color: white;
+                }
+                .role-badge.cozinha i {
+                    margin-right: 4px;
+                }
                 
                 /* Status badges */
                 .status-badge {
@@ -3204,7 +3222,7 @@ class AdminPanel {
         if (!usuarios || usuarios.length === 0) {
             return `
                 <tr>
-                    <td colspan="9" style="text-align: center; padding: 40px;">
+                    <td colspan="10" style="text-align: center; padding: 40px;">
                         <i class="fas fa-users-slash" style="font-size: 2rem; color: #dee2e6; margin-bottom: 10px; display: block;"></i>
                         Nenhum usuário encontrado
                     </td>
@@ -3213,7 +3231,7 @@ class AdminPanel {
         }
 
         return usuarios.map(user => {
-            // Badge do perfil
+            // Badge do perfil - ATUALIZADO COM NOVOS PERFIS
             let roleBadge = '';
             if (user.role === 'aluno') {
                 roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
@@ -3225,6 +3243,10 @@ class AdminPanel {
                 roleBadge = '<span class="role-badge super_admin"><i class="fas fa-crown"></i> Super Admin</span>';
             } else if (user.role === 'setor_pedagogico') {
                 roleBadge = '<span class="role-badge setor_pedagogico"><i class="fas fa-chalkboard-user"></i> Setor Pedagógico</span>';
+            } else if (user.role === 'coordenacao_patio') {
+                roleBadge = '<span class="role-badge coordenacao_patio"><i class="fas fa-utensils"></i> Coordenação de Pátio</span>';
+            } else if (user.role === 'cozinha') {
+                roleBadge = '<span class="role-badge cozinha"><i class="fas fa-kitchen-set"></i> Cozinha</span>';
             } else {
                 roleBadge = `<span class="role-badge">${user.role || 'Desconhecido'}</span>`;
             }
@@ -3238,6 +3260,18 @@ class AdminPanel {
             const acessibilidadeBadge = user.precisaAcessibilidade 
                 ? '<span class="badge-acessibilidade" title="Necessita acessibilidade"><i class="fas fa-wheelchair"></i></span>' 
                 : '';
+            
+            // Perfil alimentar badge (para alunos)
+            let perfilAlimentarBadge = '';
+            if (user.role === 'aluno' && user.perfilAlimentar) {
+                if (user.perfilAlimentar === 'sempre') {
+                    perfilAlimentarBadge = '<span class="badge-alimentar sempre" title="Participa sempre"><i class="fas fa-utensils"></i> Sempre</span>';
+                } else if (user.perfilAlimentar === 'as_vezes') {
+                    perfilAlimentarBadge = '<span class="badge-alimentar as_vezes" title="Participa às vezes"><i class="fas fa-clock"></i> Às vezes</span>';
+                } else if (user.perfilAlimentar === 'nunca') {
+                    perfilAlimentarBadge = '<span class="badge-alimentar nunca" title="Não participa"><i class="fas fa-ban"></i> Nunca</span>';
+                }
+            }
             
             // Formatar CPF
             let cpfFormatado = '-';
@@ -3287,14 +3321,12 @@ class AdminPanel {
             if (user.role === 'aluno' && user.turma) {
                 extraInfo = `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">Turma: ${user.turma}</div>`;
             }
-            if (user.role === 'setor_pedagogico' && user.atribuicoes) {
-                extraInfo = `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">${user.atribuicoes.substring(0, 30)}...</div>`;
-            }
             
             return `
                 <tr data-user-id="${user._id}">
                     <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
                         <strong>${user.nome || 'N/A'}</strong> ${acessibilidadeBadge}
+                        ${perfilAlimentarBadge}
                         ${extraInfo}
                     </td>
                     <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; color: #6c757d;">${user.email || '-'}</td>
@@ -3305,12 +3337,16 @@ class AdminPanel {
                     <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${statusBadge}</td>
                     <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; font-weight: 500;">${dataCadastro}</td>
                     <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
-                        <div class="action-buttons" style="display: flex; gap: 5px;">
+                        <div class="action-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
                             <button class="btn-icon" onclick="admin.visualizarPerfilUsuario('${user._id}')" title="Visualizar Perfil Completo">
                                 <i class="fas fa-eye"></i>
                             </button>
                             <button class="btn-icon" onclick="admin.editarUsuario('${user._id}')" title="Editar">
                                 <i class="fas fa-edit"></i>
+                            </button>
+                            <!-- 🔥 BOTÃO QR CODE -->
+                            <button class="btn-icon" onclick="admin.visualizarQRCodeUsuario('${user._id}')" title="Ver QR Code do usuário">
+                                <i class="fas fa-qrcode" style="color: #8b5cf6;"></i>
                             </button>
                             <button class="btn-icon ${user.ativo ? 'warning' : 'success'}" 
                                     onclick="admin.toggleStatusUsuario('${user._id}', ${user.ativo})" 
@@ -3328,6 +3364,203 @@ class AdminPanel {
                 </tr>
             `;
         }).join('');
+    }
+
+    // ============================================
+    // 📱 VISUALIZAR QR CODE DO USUÁRIO - CORRIGIDO
+    // ============================================
+    async visualizarQRCodeUsuario(usuarioId) {
+        try {
+            console.log('📱 Buscando QR Code do usuário:', usuarioId);
+            this.showToast('🔄 Carregando QR Code...', 'info');
+            
+            // 🔥 PRIMEIRO: Tentar encontrar o usuário na lista já carregada (this.usuarios)
+            let usuario = this.usuarios?.find(u => u._id === usuarioId || u.id === usuarioId);
+            
+            // Se não encontrou na lista, buscar da API
+            if (!usuario) {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                if (data.success && data.user) {
+                    usuario = data.user;
+                }
+            }
+            
+            if (!usuario) {
+                this.showToast('❌ Usuário não encontrado', 'error');
+                return;
+            }
+            
+            // 🔥 AGORA O QR CODE ESTÁ DISPONÍVEL NO OBJETO!
+            const qrCodeDataUrl = usuario.qrCodeUsuario || null;
+            const qrCodeGeradoEm = usuario.qrCodeUsuarioGeradoEm || null;
+            
+            console.log('📦 QR Code encontrado:', {
+                existe: !!qrCodeDataUrl,
+                tamanho: qrCodeDataUrl ? qrCodeDataUrl.length : 0,
+                geradoEm: qrCodeGeradoEm
+            });
+            
+            const modalBody = document.getElementById('modalBody');
+            
+            let qrCodeHtml = '';
+            if (qrCodeDataUrl) {
+                qrCodeHtml = `
+                    <div style="text-align: center; padding: 20px;">
+                        <img src="${qrCodeDataUrl}" alt="QR Code do Usuário" 
+                            style="width: 220px; height: 220px; margin: 0 auto; border: 3px solid #e5e7eb; border-radius: 20px; padding: 15px; background: white; box-shadow: 0 8px 20px rgba(0,0,0,0.15);">
+                        <div style="margin-top: 15px;">
+                            <p style="font-size: 0.85rem; color: #10b981;">
+                                <i class="fas fa-check-circle"></i> QR Code ${qrCodeGeradoEm ? `gerado em ${new Date(qrCodeGeradoEm).toLocaleDateString('pt-BR')} às ${new Date(qrCodeGeradoEm).toLocaleTimeString('pt-BR')}` : 'disponível'}
+                            </p>
+                            <p style="font-size: 0.8rem; color: #6b7280;">
+                                <i class="fas fa-user"></i> <strong>${usuario.nome}</strong>
+                            </p>
+                            <p style="font-size: 0.75rem; color: #8b5cf6;">
+                                <i class="fas fa-arrow-right"></i> <strong>Destino:</strong> ${this.getRoleLabel(usuario.role)}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                qrCodeHtml = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-qrcode" style="font-size: 64px; color: #d1d5db; margin-bottom: 15px;"></i>
+                        <h3 style="color: #6b7280;">QR Code não disponível</h3>
+                        <p style="color: #9ca3af;">O usuário ainda não possui um QR Code gerado.</p>
+                        <div style="margin-top: 15px; padding: 12px; background: #fef3c7; border-radius: 8px;">
+                            <i class="fas fa-info-circle" style="color: #f59e0b;"></i>
+                            <span style="font-size: 0.85rem; color: #92400e;">O QR Code é gerado automaticamente no cadastro do usuário.</span>
+                        </div>
+                        <button onclick="admin.gerarQRCodeParaUsuario('${usuarioId}')" 
+                            style="margin-top: 20px; padding: 12px 24px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-sync-alt"></i> Gerar QR Code
+                        </button>
+                    </div>
+                `;
+            }
+            
+            modalBody.innerHTML = `
+                <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                    <!-- Cabeçalho -->
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="
+                            width: 80px;
+                            height: 80px;
+                            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin: 0 auto 15px;
+                            border: 3px solid white;
+                            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+                        ">
+                            <i class="fas fa-qrcode" style="font-size: 36px; color: white;"></i>
+                        </div>
+                        <h2 style="margin: 0; color: #1f2937; font-size: 1.5rem;">QR Code de Identificação</h2>
+                        <p style="color: #6b7280; margin: 5px 0;">
+                            <strong>${usuario.nome}</strong> • ${usuario.email}
+                        </p>
+                    </div>
+
+                    <!-- Informações do usuário -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <div style="font-size: 0.7rem; color: #64748b;">Perfil</div>
+                                <div style="font-weight: 600;">${this.getRoleLabel(usuario.role)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; color: #64748b;">Matrícula</div>
+                                <div style="font-weight: 600;">${usuario.matricula || 'Não informada'}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; color: #64748b;">Status</div>
+                                <div><span class="status-badge ${usuario.ativo ? 'active' : 'inactive'}">${usuario.ativo ? 'Ativo' : 'Inativo'}</span></div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; color: #64748b;">Curso/Turma</div>
+                                <div style="font-weight: 600;">${usuario.curso || '—'} • ${usuario.turma || '—'}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; color: #64748b;">Destino</div>
+                                <div style="font-weight: 600; color: #8b5cf6;">${this.getRoleLabel(usuario.role)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; color: #64748b;">Data Cadastro</div>
+                                <div style="font-weight: 600;">${usuario.createdAt ? new Date(usuario.createdAt).toLocaleDateString('pt-BR') : '—'}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- QR Code -->
+                    ${qrCodeHtml}
+                    
+                    <!-- Botões de ação -->
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        ${qrCodeDataUrl ? `
+                            <button onclick="admin.baixarQRCodeImagem('${qrCodeDataUrl}', '${usuario.nome}')" 
+                                style="flex: 1; padding: 12px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <i class="fas fa-download"></i> Baixar QR Code
+                            </button>
+                        ` : ''}
+                        <button onclick="admin.closeModal()" 
+                            style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                            Fechar
+                        </button>
+                    </div>
+                    
+                    <div style="margin-top: 15px; text-align: center; font-size: 0.7rem; color: #94a3b8;">
+                        <i class="fas fa-info-circle"></i> 
+                        Este QR Code é único e identifica o usuário no sistema
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-qrcode" style="color: #8b5cf6;"></i> QR Code do Usuário';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    getRoleLabel(role) {
+        const labels = {
+            'aluno': 'Aluno',
+            'professor': 'Professor',
+            'admin': 'Administrador',
+            'super_admin': 'Super Administrador',
+            'setor_pedagogico': 'Setor Pedagógico',
+            'coordenacao_patio': 'Coordenação de Pátio',
+            'cozinha': 'Cozinha'
+        };
+        return labels[role] || role || 'Desconhecido';
+    }
+
+    // ============================================
+    // 📥 BAIXAR QR CODE COMO IMAGEM
+    // ============================================
+    baixarQRCodeImagem(qrCodeDataUrl, nomeUsuario) {
+        try {
+            const link = document.createElement('a');
+            link.download = `qrcode-${nomeUsuario.replace(/\s/g, '-')}-${Date.now()}.png`;
+            link.href = qrCodeDataUrl;
+            link.click();
+            
+            this.showToast('✅ QR Code baixado!', 'success');
+        } catch (error) {
+            console.error('❌ Erro ao baixar QR Code:', error);
+            this.showToast('❌ Erro ao baixar QR Code', 'error');
+        }
     }
 
     // ============ VISUALIZAR PERFIL COMPLETO DO USUÁRIO (VERSÃO CORRIGIDA COM FOTO) ============
@@ -3358,10 +3591,9 @@ class AdminPanel {
                 id: user._id,
                 nome: user.nome,
                 role: user.role,
-                fotoPerfil: user.fotoPerfil ? 'EXISTE' : 'NÃO',
-                endereco: user.endereco,
-                cidade: user.cidade,
-                atribuicoes: user.atribuicoes
+                perfilAlimentar: user.perfilAlimentar,
+                refeicoesQueParticipa: user.refeicoesQueParticipa,
+                fotoPerfil: user.fotoPerfil ? 'EXISTE' : 'NÃO'
             });
             
             // Formatar data de cadastro
@@ -3399,7 +3631,7 @@ class AdminPanel {
             const dataNascimento = user.dataNascimento ? 
                 new Date(user.dataNascimento).toLocaleDateString('pt-BR') : 'Não informada';
             
-            // Role com ícone e cores
+            // Role com ícone e cores - ATUALIZADO COM NOVOS PERFIS
             let roleIcon = '';
             let roleColor = '';
             let roleBg = '';
@@ -3430,6 +3662,16 @@ class AdminPanel {
                     roleColor = '#a855f7';
                     roleBg = '#f3e8ff';
                     break;
+                case 'coordenacao_patio':
+                    roleIcon = '🏃';
+                    roleColor = '#f59e0b';
+                    roleBg = '#fef3c7';
+                    break;
+                case 'cozinha':
+                    roleIcon = '🍽️';
+                    roleColor = '#10b981';
+                    roleBg = '#d1fae5';
+                    break;
                 default:
                     roleIcon = '👤';
                     roleColor = '#6b7280';
@@ -3442,6 +3684,60 @@ class AdminPanel {
             const avatarHtml = user.fotoPerfil ? 
                 `<img src="${user.fotoPerfil}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">` :
                 `<span style="font-size: 48px; font-weight: bold; color: ${roleColor};">${iniciais}</span>`;
+            
+            // 🔥 PERFIL ALIMENTAR HTML
+            let perfilAlimentarHtml = '';
+            if (user.role === 'aluno' && (user.perfilAlimentar || user.refeicoesQueParticipa)) {
+                let perfilText = '';
+                let perfilColor = '';
+                
+                if (user.perfilAlimentar === 'sempre') {
+                    perfilText = '✅ Sempre participa';
+                    perfilColor = '#10b981';
+                } else if (user.perfilAlimentar === 'as_vezes') {
+                    perfilText = '⚠️ Participa às vezes';
+                    perfilColor = '#f59e0b';
+                } else if (user.perfilAlimentar === 'nunca') {
+                    perfilText = '❌ Nunca participa';
+                    perfilColor = '#ef4444';
+                } else {
+                    perfilText = '❓ Não informado';
+                    perfilColor = '#6b7280';
+                }
+                
+                let refeicoesHtml = '';
+                if (user.refeicoesQueParticipa && user.refeicoesQueParticipa.length > 0) {
+                    const refeicoesMap = {
+                        'manha': '☀️ Manhã (8h-10h)',
+                        'almoco': '🍽️ Almoço (11h-13h)',
+                        'tarde': '🌙 Tarde (14h-16h)'
+                    };
+                    refeicoesHtml = `
+                        <div style="margin-top: 10px;">
+                            <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 4px;">Refeições que participa:</div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                ${user.refeicoesQueParticipa.map(r => `<span class="badge-refeicao" style="background: #e0e7ff; color: #4f46e5; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem;">${refeicoesMap[r] || r}</span>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                perfilAlimentarHtml = `
+                    <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #374151; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-utensils" style="color: ${perfilColor};"></i>
+                            Perfil Alimentar
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 4px;">Preferência</div>
+                                <div style="font-weight: 600; color: ${perfilColor};">${perfilText}</div>
+                            </div>
+                        </div>
+                        ${refeicoesHtml}
+                    </div>
+                `;
+            }
             
             modalBody.innerHTML = `
                 <div style="padding: 0; max-height: 85vh; overflow-y: auto;">
@@ -3465,10 +3761,7 @@ class AdminPanel {
                         <h2 style="margin: 0 0 5px; font-size: 24px;">${user.nome || 'Usuário'}</h2>
                         <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 30px; margin-top: 8px;">
                             <span style="font-size: 18px;">${roleIcon}</span>
-                            <span style="font-weight: 600;">${user.role === 'super_admin' ? 'Super Administrador' : 
-                                    user.role === 'admin' ? 'Administrador' : 
-                                    user.role === 'professor' ? 'Professor' : 
-                                    user.role === 'setor_pedagogico' ? 'Setor Pedagógico' : 'Aluno'}</span>
+                            <span style="font-weight: 600;">${this.getRoleLabel(user.role)}</span>
                         </div>
                         <div style="margin-top: 10px;">
                             <span class="status-badge ${user.ativo ? 'active' : 'inactive'}" style="background: rgba(255,255,255,0.2); color: white; border: none;">
@@ -3518,6 +3811,9 @@ class AdminPanel {
                             </div>
                         </div>
                         
+                        <!-- PERFIL ALIMENTAR (APENAS PARA ALUNOS) -->
+                        ${perfilAlimentarHtml}
+                        
                         <!-- SEÇÃO 2: ENDEREÇO -->
                         ${user.endereco || user.cidade || user.estado ? `
                         <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
@@ -3529,18 +3825,6 @@ class AdminPanel {
                                 <div>
                                     <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Endereço</div>
                                     <div>${user.endereco || '—'}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Número</div>
-                                    <div>${user.numero || '—'}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Complemento</div>
-                                    <div>${user.complemento || '—'}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Bairro</div>
-                                    <div>${user.bairro || '—'}</div>
                                 </div>
                                 <div>
                                     <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Cidade</div>
@@ -3563,11 +3847,15 @@ class AdminPanel {
                             <h3 style="margin: 0 0 15px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
                                 <i class="fas ${user.role === 'aluno' ? 'fa-graduation-cap' : 
                                         user.role === 'professor' ? 'fa-chalkboard-teacher' : 
-                                        user.role === 'setor_pedagogico' ? 'fa-chalkboard-user' : 'fa-user-tie'}" 
+                                        user.role === 'setor_pedagogico' ? 'fa-chalkboard-user' : 
+                                        user.role === 'coordenacao_patio' ? 'fa-utensils' :
+                                        user.role === 'cozinha' ? 'fa-kitchen-set' : 'fa-user-tie'}" 
                                 style="color: ${roleColor};"></i>
                                 ${user.role === 'aluno' ? 'Dados Acadêmicos' : 
                                 user.role === 'professor' ? 'Dados Profissionais' : 
-                                user.role === 'setor_pedagogico' ? 'Dados do Setor Pedagógico' : 'Dados Administrativos'}
+                                user.role === 'setor_pedagogico' ? 'Dados do Setor Pedagógico' : 
+                                user.role === 'coordenacao_patio' ? 'Dados da Coordenação' :
+                                user.role === 'cozinha' ? 'Dados da Cozinha' : 'Dados Administrativos'}
                             </h3>
                             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
                                 ${user.role === 'aluno' ? `
@@ -3626,7 +3914,9 @@ class AdminPanel {
                                     </div>
                                     <div>
                                         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Nível</div>
-                                        <div>${user.role === 'super_admin' ? 'Super Administrador' : 'Administrador'}</div>
+                                        <div>${user.role === 'super_admin' ? 'Super Administrador' : 
+                                            user.role === 'coordenacao_patio' ? 'Coordenação de Pátio' :
+                                            user.role === 'cozinha' ? 'Cozinha' : 'Administrador'}</div>
                                     </div>
                                 `}
                             </div>
@@ -3725,22 +4015,37 @@ class AdminPanel {
         `;
     }
 
-    // ============ EDITAR USUÁRIO ============
-    editarUsuario(usuarioId) {
-        console.log('✏️ Editando usuário:', usuarioId);
+    // ============ EDITAR USUÁRIO (VERSÃO CORRIGIDA - BUSCA DADOS ATUALIZADOS) ============
+    async editarUsuario(usuarioId) {
+        console.log('✏️ Admin editando usuário:', usuarioId);
         
-        // Encontrar o usuário na lista
-        const usuario = this.usuarios.find(u => u._id === usuarioId || u.id === usuarioId);
-        
-        if (!usuario) {
-            this.showToast('❌ Usuário não encontrado', 'error');
-            return;
+        try {
+            this.showToast('🔄 Carregando dados do usuário...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // 🔥 BUSCAR DADOS ATUALIZADOS DIRETAMENTE DO BANCO
+            const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar usuário');
+            }
+            
+            const usuario = data.user;
+            
+            console.log('📋 Dados atualizados do usuário:', usuario);
+            
+            // Abrir modal com os dados atualizados
+            this.abrirModalUsuario(usuarioId);
+            
+        } catch (error) {
+            console.error('❌ Erro ao editar usuário:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
-        
-        console.log('📋 Dados do usuário:', usuario);
-        
-        // Abrir modal com os dados do usuário
-        this.abrirModalUsuario(usuarioId);
     }
 
     filtrarUsuarios() {
@@ -3779,19 +4084,31 @@ class AdminPanel {
 
     // ============ MODAL USUÁRIO ============
 
-    abrirModalUsuario(usuarioId = null) {
+    // ============ ABRIR MODAL USUÁRIO (VERSÃO CORRIGIDA) ============
+    async abrirModalUsuario(usuarioId = null) {
         console.log('🔍 Abrindo modal para usuário ID:', usuarioId);
         
-        // Buscar usuário se tiver ID
         let usuario = null;
+        
         if (usuarioId) {
-            // 🔥 CORREÇÃO: Usar this.usuarios para encontrar
-            usuario = this.usuarios.find(u => u._id === usuarioId || u.id === usuarioId);
-            console.log('👤 Usuário encontrado:', usuario);
-            
-            // Se não encontrar na lista local, buscar da API
-            if (!usuario) {
-                this.buscarUsuarioParaEdicao(usuarioId);
+            // 🔥 BUSCAR DADOS ATUALIZADOS DO BACKEND
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    usuario = data.user;
+                    console.log('✅ Usuário carregado do backend:', usuario);
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar usuário');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao buscar usuário:', error);
+                this.showToast('❌ Erro ao carregar dados do usuário', 'error');
                 return;
             }
         }
@@ -3811,18 +4128,20 @@ class AdminPanel {
         const departamento = usuario?.departamento || '';
         const titulacao = usuario?.titulacao || '';
         const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
-        
-        // 🔥 CAMPOS DO SETOR PEDAGÓGICO
         const atribuicoes = usuario?.atribuicoes || '';
-
-        // Escapar valores para evitar problemas com aspas
+        
+        // 🔥 CAMPOS DE PERFIL ALIMENTAR
+        const perfilAlimentar = usuario?.perfilAlimentar || 'nao_informado';
+        const refeicoesQueParticipa = usuario?.refeicoesQueParticipa || [];
+        
+        // Escapar valores
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         
         const modalBody = document.getElementById('modalBody');
         
         // Criar HTML do conteúdo
         modalBody.innerHTML = `
-            <form id="userForm">
+            <form id="userForm" style="padding: 20px;">
                 <div class="form-group">
                     <label><i class="fas fa-user"></i> Nome Completo</label>
                     <input type="text" id="userNome" class="form-control" value="${escapeStr(nome)}" required>
@@ -3842,6 +4161,8 @@ class AdminPanel {
                             <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
                             <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option>
                             <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>Setor Pedagógico</option>
+                            <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>Coordenação de Pátio</option>
+                            <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>Cozinha</option>
                         </select>
                     </div>
                     
@@ -3890,6 +4211,38 @@ class AdminPanel {
                             <input type="text" id="userTurma" class="form-control" value="${escapeStr(turma)}" placeholder="Ex: 101, 102">
                         </div>
                     </div>
+                    
+                    <!-- 🔥 SEÇÃO DE PERFIL ALIMENTAR -->
+                    <div style="margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: #334155;">
+                            <i class="fas fa-utensils"></i> Preferências Alimentares
+                        </h4>
+                        <div class="form-group">
+                            <label>Participa das refeições?</label>
+                            <select id="userPerfilAlimentar" class="form-control">
+                                <option value="sempre" ${perfilAlimentar === 'sempre' ? 'selected' : ''}>✅ Sim, sempre participo</option>
+                                <option value="as_vezes" ${perfilAlimentar === 'as_vezes' ? 'selected' : ''}>⚠️ Participo às vezes</option>
+                                <option value="nunca" ${perfilAlimentar === 'nunca' ? 'selected' : ''}>❌ Não, nunca participo</option>
+                                <option value="nao_informado" ${perfilAlimentar === 'nao_informado' ? 'selected' : ''}>❓ Prefiro não informar</option>
+                            </select>
+                        </div>
+                        
+                        <div id="refeicoesDiv" style="${perfilAlimentar === 'sempre' || perfilAlimentar === 'as_vezes' ? 'display: block;' : 'display: none;'}">
+                            <label>Quais refeições participa?</label>
+                            <div style="display: flex; gap: 15px; margin-top: 8px;">
+                                <label>
+                                    <input type="checkbox" value="manha" ${refeicoesQueParticipa.includes('manha') ? 'checked' : ''}> ☀️ Manhã (8h-10h)
+                                </label>
+                                <label>
+                                    <input type="checkbox" value="almoco" ${refeicoesQueParticipa.includes('almoco') ? 'checked' : ''}> 🍽️ Almoço (11h-13h)
+                                </label>
+                                <label>
+                                    <input type="checkbox" value="tarde" ${refeicoesQueParticipa.includes('tarde') ? 'checked' : ''}> 🌙 Tarde (14h-16h)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="checkbox-group" style="margin: 10px 0;">
                         <input type="checkbox" id="userAcessibilidade" ${precisaAcessibilidade ? 'checked' : ''}>
                         <label for="userAcessibilidade"><i class="fas fa-wheelchair"></i> Necessita de acessibilidade</label>
@@ -3923,7 +4276,7 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- 🔥 Campos específicos para Setor Pedagógico -->
+                <!-- Campos específicos para Setor Pedagógico -->
                 <div id="setorPedagogicoFields" class="role-specific" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -3936,12 +4289,32 @@ class AdminPanel {
                         </div>
                     </div>
                     <div class="form-group">
-                        <label><i class="fas fa-tasks"></i> Atribuições (AEE, Sala de Recursos, etc)</label>
-                        <textarea id="userAtribuicoes" class="form-control" rows="2" placeholder="Ex: Acompanhamento AEE, Sala de Recursos Multifuncionais, Atendimento Psicopedagógico...">${escapeStr(atribuicoes)}</textarea>
+                        <label><i class="fas fa-tasks"></i> Atribuições</label>
+                        <textarea id="userAtribuicoes" class="form-control" rows="2" placeholder="Ex: Acompanhamento AEE, Sala de Recursos...">${escapeStr(atribuicoes)}</textarea>
                     </div>
-                    <div class="info-card" style="background: #f3e8ff; margin-top: 10px; padding: 12px; border-radius: 8px;">
-                        <i class="fas fa-info-circle" style="color: #a855f7;"></i>
-                        <span style="margin-left: 8px;">O Setor Pedagógico tem acesso ao dashboard AEE e pode acompanhar alunos com necessidades especiais.</span>
+                </div>
+                
+                <!-- Campos específicos para Coordenação de Pátio -->
+                <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Departamento</label>
+                        <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Matrícula</label>
+                        <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                    </div>
+                </div>
+                
+                <!-- Campos específicos para Cozinha -->
+                <div id="cozinhaFields" class="role-specific" style="${role === 'cozinha' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Departamento</label>
+                        <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Matrícula</label>
+                        <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
                     </div>
                 </div>
                 
@@ -3975,12 +4348,24 @@ class AdminPanel {
             const modalSaveBtn = document.getElementById('modalSaveBtn');
             if (modalSaveBtn) {
                 modalSaveBtn.onclick = () => this.salvarUsuario(id);
+                modalSaveBtn.style.display = 'inline-block';
             }
             
             // Configurar toggle dos campos específicos
             const roleSelect = document.getElementById('userRole');
             if (roleSelect) {
                 roleSelect.addEventListener('change', () => this.toggleCamposRole());
+            }
+            
+            // Configurar toggle das refeições baseado no perfil alimentar
+            const perfilSelect = document.getElementById('userPerfilAlimentar');
+            if (perfilSelect) {
+                perfilSelect.addEventListener('change', () => {
+                    const refeicoesDiv = document.getElementById('refeicoesDiv');
+                    if (refeicoesDiv) {
+                        refeicoesDiv.style.display = (perfilSelect.value === 'sempre' || perfilSelect.value === 'as_vezes') ? 'block' : 'none';
+                    }
+                });
             }
         }, 100);
         
@@ -4022,19 +4407,18 @@ class AdminPanel {
     // ============ TOGGLE CAMPOS POR ROLE ============
     toggleCamposRole() {
         const role = document.getElementById('userRole')?.value;
+        
         const alunoFields = document.getElementById('alunoFields');
         const professorFields = document.getElementById('professorFields');
         const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
+        const coordenacaoPatioFields = document.getElementById('coordenacaoPatioFields');
+        const cozinhaFields = document.getElementById('cozinhaFields');
         
-        if (alunoFields) {
-            alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
-        }
-        if (professorFields) {
-            professorFields.style.display = role === 'professor' ? 'block' : 'none';
-        }
-        if (setorPedagogicoFields) {
-            setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
-        }
+        if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
+        if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
+        if (setorPedagogicoFields) setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
+        if (coordenacaoPatioFields) coordenacaoPatioFields.style.display = role === 'coordenacao_patio' ? 'block' : 'none';
+        if (cozinhaFields) cozinhaFields.style.display = role === 'cozinha' ? 'block' : 'none';
     }
 
     gerarSenha() {
@@ -15886,6 +16270,27 @@ class AdminPanel {
                             align-items: flex-start;
                         }
                     }
+
+                    .badge-alimentar {
+                        display: inline-block;
+                        padding: 2px 8px;
+                        border-radius: 20px;
+                        font-size: 10px;
+                        font-weight: 600;
+                        margin-left: 5px;
+                    }
+                    .badge-alimentar.sempre {
+                        background: #d1fae5;
+                        color: #065f46;
+                    }
+                    .badge-alimentar.as_vezes {
+                        background: #fef3c7;
+                        color: #92400e;
+                    }
+                    .badge-alimentar.nunca {
+                        background: #fee2e2;
+                        color: #991b1b;
+                    }
                     
                     /* No seu CSS, adicione estes estilos */
                     .badge-manual {
@@ -26016,44 +26421,33 @@ class AdminPanel {
             return;
         }
         
-        // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
-        const IS_LOCALHOST = window.location.hostname === 'localhost' || 
-                            window.location.hostname === '127.0.0.1';
-        const IS_RENDER = window.location.hostname.includes('render.com') || 
-                        window.location.hostname.includes('sistema-avaliativo');
-        
-        let BASE_URL;
-        if (IS_LOCALHOST) {
-            BASE_URL = 'http://localhost:3000';
-            console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
-        } else if (IS_RENDER) {
-            BASE_URL = window.location.origin;
-            console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
-        } else {
-            BASE_URL = window.location.origin;
-            console.log('⚙️ Modo: FALLBACK - Usando origem atual');
-        }
-        
-        const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-        console.log('🔗 URL de correção gerada:', urlCorrecao);
-        
+        // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO (EM VEZ DE GERAR NOVO)
         let qrCodeAlunoUrl = null;
         try {
-            const response = await fetch('/api/qrcode/gerar', {
-                method: 'POST',
+            const token = localStorage.getItem('auth_token');
+            console.log(`📱 Buscando QR Code do aluno ${alunoId} no banco...`);
+            
+            const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ url: urlCorrecao })
+                }
             });
+            
             const data = await response.json();
+            
             if (data.success && data.qrCode) {
                 qrCodeAlunoUrl = data.qrCode;
-                console.log('✅ QR Code do aluno gerado com sucesso!');
+                window.alunoSelecionadoNome = alunoNome;
+                console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco (gerado em ${data.geradoEm})`);
+            } else {
+                console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoId);
+                this.showToast('⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
             }
         } catch (error) {
-            console.error('❌ Erro ao gerar QR Code do aluno:', error);
+            console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
+            this.showToast('❌ Erro ao buscar QR Code do aluno', 'error');
         }
         
         await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl, alunoNome);
@@ -26119,26 +26513,33 @@ class AdminPanel {
             return;
         }
         
-        const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : window.location.origin;
-        const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-        
+        // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO
         let qrCodeAlunoUrl = null;
         try {
-            const response = await fetch('/api/qrcode/gerar', {
-                method: 'POST',
+            const token = localStorage.getItem('auth_token');
+            console.log(`📱 Buscando QR Code do aluno ${alunoId} no banco...`);
+            
+            const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ url: urlCorrecao })
+                }
             });
+            
             const data = await response.json();
+            
             if (data.success && data.qrCode) {
                 qrCodeAlunoUrl = data.qrCode;
+                window.alunoSelecionadoNome = alunoNome;
+                console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco (gerado em ${data.geradoEm})`);
+            } else {
+                console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoId);
+                this.showToast('⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
             }
         } catch (error) {
-            console.error('Erro ao gerar QR Code:', error);
+            console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
+            this.showToast('❌ Erro ao buscar QR Code do aluno', 'error');
         }
         
         await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl, alunoNome);
@@ -26169,32 +26570,34 @@ class AdminPanel {
                 console.log('⚙️ Modo: FALLBACK - Usando origem atual');
             }
             
-            this.showToast(`📱 Gerando QR Codes para ${alunos.length} aluno(s)...`, 'info');
+            this.showToast(`📱 Buscando QR Codes dos ${alunos.length} alunos no banco...`, 'info');
             
+            // 🔥 BUSCAR QR CODES DE TODOS OS ALUNOS DO BANCO (EM VEZ DE GERAR NOVOS)
             const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
                 const alunoId = aluno.id || aluno._id;
                 const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
                 
-                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-                console.log(`🔗 Gerando QR Code para ${alunoNome}: ${urlCorrecao}`);
+                console.log(`📱 Buscando QR Code do aluno ${alunoNome} no banco...`);
                 
                 let qrCodeAlunoUrl = '';
                 try {
-                    const qrResponse = await fetch('/api/qrcode/gerar', {
-                        method: 'POST',
+                    const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                        method: 'GET',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ url: urlCorrecao })
+                        }
                     });
                     
-                    const qrData = await qrResponse.json();
-                    if (qrData.success && qrData.qrCode) {
-                        qrCodeAlunoUrl = qrData.qrCode;
+                    const data = await response.json();
+                    if (data.success && data.qrCode) {
+                        qrCodeAlunoUrl = data.qrCode;
+                        console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco`);
+                    } else {
+                        console.warn(`⚠️ QR Code não encontrado para ${alunoNome}`);
                     }
-                } catch (qrError) {
-                    console.error(`❌ Erro ao gerar QR Code para ${alunoNome}:`, qrError);
+                } catch (error) {
+                    console.error(`❌ Erro ao buscar QR Code para ${alunoNome}:`, error);
                 }
                 
                 return { 
@@ -26213,27 +26616,17 @@ class AdminPanel {
                 
                 console.log(`📄 Gerando prova para: ${aluno.nome} (${i + 1}/${alunosComQRCode.length})`);
                 
-                // Salvar nome do aluno para exibir no QR Code
                 window.alunoSelecionadoNome = aluno.nome;
                 
-                // Reutilizar a mesma função que gera o HTML
                 const htmlAluno = this.gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, aluno.qrCodeDataUrl, aluno.nome);
-                
                 htmlCompleto += htmlAluno;
                 
-                // Quebra de página após cada aluno (exceto o último)
                 if (i < alunosComQRCode.length - 1) {
                     htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
                 }
             }
             
-            // Abrir janela de impressão
             const printWindow = window.open('', '_blank');
-            
-            if (!printWindow) {
-                throw new Error('Pop-up bloqueado! Permita pop-ups para este site.');
-            }
-            
             printWindow.document.write(htmlCompleto);
             printWindow.document.close();
             

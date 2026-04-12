@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+
+            <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+
+    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Cozinha - Monitoramento Inteligente de Refeições</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Acessibilidade -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/push-client.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        /* Header e Navegação */
+        .navbar-custom {
+            background: white;
+            border-radius: 20px;
+            padding: 12px 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .logo-area h2 {
+            margin: 0;
+            font-size: 1.3rem;
+            color: #1e3c72;
+        }
+        
+        .logo-area p {
+            margin: 0;
+            font-size: 0.75rem;
+            color: #6c757d;
+        }
+        
+        .user-area {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            position: relative;
+        }
+        
+        .user-info {
+            text-align: right;
+        }
+        
+        .user-name {
+            font-weight: bold;
+            color: #1e3c72;
+        }
+        
+        .user-role {
+            font-size: 0.7rem;
+            color: #6c757d;
+        }
+        
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        
+        .user-avatar img {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        
+        .btn-header {
+            background: none;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #4b5563;
+        }
+        
+        .btn-header:hover { background: #f3f4f6; }
+        
+        /* Dropdown Menu */
+        .dropdown-menu-custom {
+            position: absolute;
+            top: 55px;
+            right: 0;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 10px 0;
+            min-width: 200px;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .dropdown-menu-custom.show { display: block; }
+        
+        .dropdown-item {
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .dropdown-item:hover { background: #f3f4f6; }
+        .dropdown-item.danger { color: #dc2626; }
+        .dropdown-item.danger:hover { background: #fee2e2; }
+        
+        hr { margin: 8px 0; }
+        
+        .card {
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            height: 100%;
+        }
+        
+        .stat-card:hover { transform: translateY(-5px); }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #1e3c72;
+        }
+        
+        .stat-label { color: #6c757d; font-size: 0.85rem; }
+        
+        .previsao-card {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border-radius: 16px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .insight-card {
+            border-left: 4px solid;
+            padding: 12px 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .insight-card.success { border-left-color: #10b981; background: #d1fae5; }
+        .insight-card.warning { border-left-color: #f59e0b; background: #fef3c7; }
+        .insight-card.danger { border-left-color: #ef4444; background: #fee2e2; }
+        .insight-card.info { border-left-color: #3b82f6; background: #dbeafe; }
+        
+        .badge-manha { background: #fef3c7; color: #d97706; padding: 5px 10px; border-radius: 20px; font-size: 0.7rem; }
+        .badge-almoco { background: #fee2e2; color: #dc2626; padding: 5px 10px; border-radius: 20px; font-size: 0.7rem; }
+        .badge-tarde { background: #d1fae5; color: #059669; padding: 5px 10px; border-radius: 20px; font-size: 0.7rem; }
+        
+        .btn-refresh {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-refresh:hover { background: rgba(255,255,255,0.3); }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1e3c72;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .turma-table { font-size: 0.85rem; }
+        .turma-table th { background: #f8fafc; position: sticky; top: 0; }
+        
+        .progress-bar-custom {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.5s;
+        }
+        
+        .progress-fill.low { background: #ef4444; }
+        .progress-fill.medium { background: #f59e0b; }
+        .progress-fill.high { background: #10b981; }
+        
+        /* Modal de relatório */
+        .modal-custom {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-custom.show { display: flex; }
+        
+        .modal-content-custom {
+            background: white;
+            border-radius: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .stat-number { font-size: 1.8rem; }
+            .navbar-custom { flex-direction: column; text-align: center; }
+            .user-area { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Barra de Navegação -->
+        <div class="navbar-custom">
+            <div class="logo-area">
+                <h2><i class="fas fa-utensils"></i> Cozinha Inteligente</h2>
+                <p>Monitoramento e Previsão de Refeições</p>
+            </div>
+            <div class="user-area">
+                <div class="user-info">
+                    <div class="user-name" id="userName">Carregando...</div>
+                    <div class="user-role" id="userRole">Cozinha</div>
+                </div>
+                <div class="user-avatar" id="userAvatar" onclick="toggleDropdown()">
+                    <i class="fas fa-user"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dropdown Menu -->
+        <div class="dropdown-menu-custom" id="dropdownMenu">
+            <div class="dropdown-item" onclick="window.location.href='editar-perfil.html'">
+                <i class="fas fa-user-edit"></i> Editar Perfil
+            </div>
+            <div class="dropdown-item" onclick="gerarRelatorioPDF()">
+                <i class="fas fa-file-pdf"></i> Exportar Relatório (PDF)
+            </div>
+            <div class="dropdown-item" onclick="exportarCSV()">
+                <i class="fas fa-file-csv"></i> Exportar Dados (CSV)
+            </div>
+            <div class="dropdown-item" onclick="abrirModalFaltantes()">
+                <i class="fas fa-users-slash"></i> Ver Faltantes do Dia
+            </div>
+            <hr>
+            <div class="dropdown-item danger" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+            </div>
+        </div>
+        
+        <!-- Data e Hora + Botão Atualizar -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                <div>
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    <span id="dataAtual"></span>
+                    <span class="ms-3"><i class="fas fa-clock me-1"></i><span id="horaAtual"></span></span>
+                    <span class="ms-3" id="refeicaoAtualBadge"></span>
+                </div>
+                <button class="btn-refresh" onclick="carregarDashboard()">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+        </div>
+        
+        <!-- Cards de Estatísticas Principais -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                    <div class="stat-number" id="totalPessoas">-</div>
+                    <div class="stat-label">Total de Pessoas</div>
+                    <small id="detalhePerfis" class="text-muted"></small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                    <div class="stat-number" id="pessoasQueComeram">-</div>
+                    <div class="stat-label">Comeram hoje</div>
+                    <small id="percentualGeral" class="text-muted"></small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
+                    <div class="stat-number" id="taxaAdesao">-</div>
+                    <div class="stat-label">Taxa de Adesão</div>
+                    <small>quem disse vs quem veio</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="fas fa-utensils fa-2x text-danger mb-2"></i>
+                    <div class="stat-number" id="refeicaoHoje">-</div>
+                    <div class="stat-label">Refeições Servidas Hoje</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Contagem por Refeição -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-sun fa-3x text-warning mb-2"></i>
+                        <h3 id="contManha" class="mb-0">0</h3>
+                        <p class="text-muted mb-0">Lanche da Manhã</p>
+                        <small>8h - 10h</small>
+                        <div class="mt-2"><span class="badge-manha">Previsto: <span id="prevManha">-</span></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-utensils fa-3x text-danger mb-2"></i>
+                        <h3 id="contAlmoco" class="mb-0">0</h3>
+                        <p class="text-muted mb-0">Almoço</p>
+                        <small>11h - 13h</small>
+                        <div class="mt-2"><span class="badge-almoco">Previsto: <span id="prevAlmoco">-</span></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-moon fa-3x text-info mb-2"></i>
+                        <h3 id="contTarde" class="mb-0">0</h3>
+                        <p class="text-muted mb-0">Lanche da Tarde</p>
+                        <small>14h - 16h</small>
+                        <div class="mt-2"><span class="badge-tarde">Previsto: <span id="prevTarde">-</span></span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Previsão de Comida e Sugestão -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-chart-simple me-2"></i> Previsão de Comida (kg)
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-4 text-center">
+                                <div class="previsao-card">
+                                    <small>🌅 Manhã</small>
+                                    <h3 id="kgManha" class="mb-0">-</h3>
+                                    <small>kg</small>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="previsao-card">
+                                    <small>🍽️ Almoço</small>
+                                    <h3 id="kgAlmoco" class="mb-0">-</h3>
+                                    <small>kg</small>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="previsao-card">
+                                    <small>🌙 Tarde</small>
+                                    <h3 id="kgTarde" class="mb-0">-</h3>
+                                    <small>kg</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="sugestaoPreparo" class="alert alert-info mt-3 mb-0">
+                            <i class="fas fa-lightbulb me-2"></i> Carregando sugestão...
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-chart-pie me-2"></i> Perfil Alimentar dos Usuários
+                    </div>
+                    <div class="card-body">
+                        <canvas id="perfilChart" style="max-height: 200px;"></canvas>
+                        <div class="row text-center mt-3">
+                            <div class="col-3"><span class="badge bg-success">Sempre</span><br><span id="perfilSempre">0</span></div>
+                            <div class="col-3"><span class="badge bg-warning">Às vezes</span><br><span id="perfilAsVezes">0</span></div>
+                            <div class="col-3"><span class="badge bg-danger">Nunca</span><br><span id="perfilNunca">0</span></div>
+                            <div class="col-3"><span class="badge bg-secondary">Não informado</span><br><span id="perfilNaoInformado">0</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Insights Inteligentes -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-brain me-2"></i> Insights e Recomendações
+            </div>
+            <div class="card-body" id="insightsContainer">
+                <div class="text-center py-3"><div class="loading-spinner"></div> Carregando insights...</div>
+            </div>
+        </div>
+        
+        <!-- Gráfico de Barras por Turma -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-chart-bar me-2"></i> Refeições por Turma
+            </div>
+            <div class="card-body">
+                <canvas id="turmasChart" style="max-height: 400px;"></canvas>
+            </div>
+        </div>
+        
+        <!-- Tabela de Análise por Turma -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                <span><i class="fas fa-table me-2"></i> Análise Detalhada por Turma</span>
+                <div>
+                    <input type="text" id="filtroTurma" class="form-control form-control-sm" placeholder="Filtrar turma..." style="width: 200px;">
+                </div>
+            </div>
+            <div class="card-body" style="overflow-x: auto;">
+                <table class="table table-hover turma-table">
+                    <thead>
+                        <tr>
+                            <th>Turma</th>
+                            <th class="text-center">Total</th>
+                            <th class="text-center">Dizem que comem</th>
+                            <th class="text-center">Comeram hoje</th>
+                            <th class="text-center">Taxa Adesão</th>
+                            <th class="text-center">Faltantes</th>
+                            <th class="text-center">Situação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaTurmas">
+                        <tr><td colspan="7" class="text-center"><div class="loading-spinner"></div> Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Faltantes -->
+    <div id="modalFaltantes" class="modal-custom">
+        <div class="modal-content-custom">
+            <h4><i class="fas fa-users-slash"></i> Pessoas que não comeram hoje</h4>
+            <p id="modalInfo" class="text-muted"></p>
+            <div id="listaFaltantes" style="max-height: 400px; overflow-y: auto;">
+                <div class="loading-spinner"></div> Carregando...
+            </div>
+            <button class="btn btn-primary mt-3 w-100" onclick="fecharModalFaltantes()">Fechar</button>
+        </div>
+    </div>
+    
+    <script>
+        // ============================================
+        // COZINHA - DASHBOARD INTELIGENTE
+        // ============================================
+        
+        let token = localStorage.getItem('auth_token');
+        let userData = {};
+        let dashboardData = {};
+        let chartPerfil = null;
+        let chartTurmas = null;
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!token) { window.location.href = '/login.html'; return; }
+            
+            // Carregar dados do usuário
+            const userStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
+            userData = userStorage;
+            
+            document.getElementById('userName').textContent = userStorage.nome || 'Usuário';
+            document.getElementById('userRole').textContent = 'Cozinha';
+            
+            // Verificar perfil
+            if (!['cozinha', 'super_admin', 'admin'].includes(userStorage.role)) {
+                alert('Acesso negado. Perfil não autorizado.');
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Carregar foto de perfil
+            await carregarFotoPerfil();
+            
+            // Carregar dashboard
+            await carregarDashboard();
+            
+            // Atualizar relógio
+            atualizarRelogio();
+            setInterval(atualizarRelogio, 1000);
+            
+            // Atualizar dashboard a cada 30 segundos
+            setInterval(carregarDashboard, 30000);
+            
+            // Filtro da tabela
+            document.getElementById('filtroTurma').addEventListener('input', filtrarTabela);
+        });
+        
+        async function carregarFotoPerfil() {
+            try {
+                const response = await fetch('/api/perfil/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success && data.perfil.fotoPerfil) {
+                    const avatar = document.getElementById('userAvatar');
+                    avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar foto:', error);
+            }
+        }
+        
+        function atualizarRelogio() {
+            const agora = new Date();
+            document.getElementById('dataAtual').textContent = agora.toLocaleDateString('pt-BR');
+            document.getElementById('horaAtual').textContent = agora.toLocaleTimeString('pt-BR');
+        }
+        
+        async function carregarDashboard() {
+            try {
+                const response = await fetch('/api/cozinha/dashboard', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    dashboardData = data;
+                    
+                    // Atualizar cards principais
+                    document.getElementById('totalPessoas').textContent = data.perfis?.total || 0;
+                    document.getElementById('detalhePerfis').innerHTML = `👍 ${data.perfis?.sempre || 0} | ⚠️ ${data.perfis?.as_vezes || 0} | ❌ ${data.perfis?.nunca || 0}`;
+                    document.getElementById('pessoasQueComeram').textContent = data.registrosReais?.pessoasUnicas || 0;
+                    document.getElementById('percentualGeral').innerHTML = `${data.analiseAdesao?.taxaAdesao || 0}% do esperado`;
+                    document.getElementById('taxaAdesao').textContent = `${data.analiseAdesao?.taxaAdesao || 0}%`;
+                    document.getElementById('refeicaoHoje').textContent = data.registrosReais?.total || 0;
+                    
+                    // Contagem por refeição
+                    document.getElementById('contManha').textContent = data.registrosReais?.manha || 0;
+                    document.getElementById('contAlmoco').textContent = data.registrosReais?.almoco || 0;
+                    document.getElementById('contTarde').textContent = data.registrosReais?.tarde || 0;
+                    
+                    // Previsões
+                    document.getElementById('prevManha').textContent = data.previsao?.manha?.pessoas || 0;
+                    document.getElementById('prevAlmoco').textContent = data.previsao?.almoco?.pessoas || 0;
+                    document.getElementById('prevTarde').textContent = data.previsao?.tarde?.pessoas || 0;
+                    
+                    // KG de comida
+                    document.getElementById('kgManha').textContent = data.previsao?.manha?.kg || 0;
+                    document.getElementById('kgAlmoco').textContent = data.previsao?.almoco?.kg || 0;
+                    document.getElementById('kgTarde').textContent = data.previsao?.tarde?.kg || 0;
+                    
+                    // Sugestão
+                    if (data.sugestaoAtual) {
+                        const sugestaoDiv = document.getElementById('sugestaoPreparo');
+                        let alertClass = 'alert-info';
+                        if (data.sugestaoAtual.mensagem.includes('⚠️')) alertClass = 'alert-warning';
+                        else if (data.sugestaoAtual.mensagem.includes('✅')) alertClass = 'alert-success';
+                        else if (data.sugestaoAtual.mensagem.includes('URGENTE')) alertClass = 'alert-danger';
+                        
+                        sugestaoDiv.className = `alert ${alertClass} mt-3 mb-0`;
+                        sugestaoDiv.innerHTML = `<i class="fas fa-lightbulb me-2"></i> ${data.sugestaoAtual.mensagem}<br><small>${data.sugestaoAtual.acao}</small>`;
+                    }
+                    
+                    // Refeição atual badge
+                    const refeicaoBadge = document.getElementById('refeicaoAtualBadge');
+                    if (data.refeicaoAtual === 'manha') refeicaoBadge.innerHTML = '<span class="badge bg-warning">🌅 Lanche da Manhã</span>';
+                    else if (data.refeicaoAtual === 'almoco') refeicaoBadge.innerHTML = '<span class="badge bg-danger">🍽️ Almoço</span>';
+                    else if (data.refeicaoAtual === 'tarde') refeicaoBadge.innerHTML = '<span class="badge bg-info">🌙 Lanche da Tarde</span>';
+                    else refeicaoBadge.innerHTML = '<span class="badge bg-secondary">⏰ Fora do horário</span>';
+                    
+                    // Perfis alimentares
+                    if (data.perfis) {
+                        document.getElementById('perfilSempre').textContent = data.perfis.sempre || 0;
+                        document.getElementById('perfilAsVezes').textContent = data.perfis.as_vezes || 0;
+                        document.getElementById('perfilNunca').textContent = data.perfis.nunca || 0;
+                        document.getElementById('perfilNaoInformado').textContent = data.perfis.nao_informado || 0;
+                        atualizarGraficoPerfil(data.perfis);
+                    }
+                    
+                    // Insights
+                    if (data.insights && data.insights.length > 0) {
+                        const container = document.getElementById('insightsContainer');
+                        container.innerHTML = data.insights.map(insight => `
+                            <div class="insight-card ${insight.tipo}">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong><i class="fas ${insight.tipo === 'danger' ? 'fa-exclamation-triangle' : insight.tipo === 'warning' ? 'fa-clock' : insight.tipo === 'success' ? 'fa-check-circle' : 'fa-info-circle'} me-2"></i> ${insight.titulo}</strong>
+                                        <p class="mb-1 mt-1">${insight.mensagem}</p>
+                                        <small class="text-muted"><i class="fas fa-lightbulb"></i> Sugestão: ${insight.acao}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        document.getElementById('insightsContainer').innerHTML = '<div class="text-center text-muted py-3">Nenhum insight no momento</div>';
+                    }
+                    
+                    // Tabela por turma
+                    if (data.analisePorTurma && data.analisePorTurma.length > 0) {
+                        window.turmasData = data.analisePorTurma;
+                        atualizarTabelaTurmas(data.analisePorTurma);
+                        atualizarGraficoTurmas(data.analisePorTurma);
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dashboard:', error);
+                document.getElementById('insightsContainer').innerHTML = '<div class="alert alert-danger">Erro ao carregar dados. Tente novamente.</div>';
+            }
+        }
+        
+        function atualizarGraficoPerfil(perfis) {
+            const ctx = document.getElementById('perfilChart').getContext('2d');
+            if (chartPerfil) chartPerfil.destroy();
+            
+            chartPerfil = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Sempre', 'Às vezes', 'Nunca', 'Não informado'],
+                    datasets: [{
+                        data: [perfis.sempre || 0, perfis.as_vezes || 0, perfis.nunca || 0, perfis.nao_informado || 0],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#6b7280'],
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+        
+        function atualizarGraficoTurmas(turmas) {
+            const ctx = document.getElementById('turmasChart').getContext('2d');
+            if (chartTurmas) chartTurmas.destroy();
+            
+            const labels = turmas.map(t => t.turma);
+            const dizemQueComem = turmas.map(t => t.dizemQueComem);
+            const comeramHoje = turmas.map(t => t.comeramHoje);
+            
+            chartTurmas = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Dizem que comem', data: dizemQueComem, backgroundColor: '#f59e0b', borderRadius: 8 },
+                        { label: 'Comeram hoje', data: comeramHoje, backgroundColor: '#10b981', borderRadius: 8 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Número de Pessoas' } } },
+                    plugins: { legend: { position: 'top' } }
+                }
+            });
+        }
+        
+        function atualizarTabelaTurmas(turmas) {
+            const tbody = document.getElementById('tabelaTurmas');
+            if (!turmas || turmas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma turma cadastrada</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = turmas.map(t => {
+                let situacao = '';
+                let situacaoClass = '';
+                if (t.taxaAdesao >= 70) {
+                    situacao = '✅ Boa adesão';
+                    situacaoClass = 'text-success';
+                } else if (t.taxaAdesao >= 40) {
+                    situacao = '⚠️ Adesão média';
+                    situacaoClass = 'text-warning';
+                } else {
+                    situacao = '❌ Baixa adesão';
+                    situacaoClass = 'text-danger';
+                }
+                
+                let barColor = t.taxaAdesao >= 70 ? 'high' : (t.taxaAdesao >= 40 ? 'medium' : 'low');
+                
+                return `
+                    <tr data-turma="${t.turma}">
+                        <td><strong>${t.turma}</strong></td>
+                        <td class="text-center">${t.totalAlunos}</td>
+                        <td class="text-center">${t.dizemQueComem}</td>
+                        <td class="text-center"><span class="badge bg-success">${t.comeramHoje}</span></td>
+                        <td class="text-center" style="min-width: 100px;">
+                            <div class="progress-bar-custom">
+                                <div class="progress-fill ${barColor}" style="width: ${t.taxaAdesao}%"></div>
+                            </div>
+                            <small>${t.taxaAdesao}%</small>
+                        </td>
+                        <td class="text-center">${t.faltantes}</td>
+                        <td class="text-center ${situacaoClass}">${situacao}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function filtrarTabela() {
+            const filtro = document.getElementById('filtroTurma').value.toLowerCase();
+            const linhas = document.querySelectorAll('#tabelaTurmas tr');
+            
+            linhas.forEach(linha => {
+                const turma = linha.getAttribute('data-turma');
+                if (turma && turma.toLowerCase().includes(filtro)) {
+                    linha.style.display = '';
+                } else if (linha.getAttribute('data-turma')) {
+                    linha.style.display = 'none';
+                }
+            });
+        }
+        
+        // ============================================
+        // FUNÇÕES DO MENU
+        // ============================================
+        
+        function toggleDropdown() {
+            const menu = document.getElementById('dropdownMenu');
+            menu.classList.toggle('show');
+        }
+        
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('dropdownMenu');
+            const avatar = document.getElementById('userAvatar');
+            if (menu && !menu.contains(event.target) && !avatar.contains(event.target)) {
+                menu.classList.remove('show');
+            }
+        });
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user_data');
+                window.location.href = '/login.html';
+            }
+        }
+        
+        // ============================================
+        // EXPORTAR RELATÓRIO PDF (SIMULADO)
+        // ============================================
+        function gerarRelatorioPDF() {
+            alert('📄 Função de exportar PDF será implementada em breve.\n\nPor enquanto, você pode usar "Ctrl+P" para imprimir esta página.');
+            // Aqui você pode implementar uma biblioteca como jsPDF
+        }
+        
+        // ============================================
+        // EXPORTAR CSV
+        // ============================================
+        function exportarCSV() {
+            if (!dashboardData.analisePorTurma || dashboardData.analisePorTurma.length === 0) {
+                alert('Nenhum dado para exportar');
+                return;
+            }
+            
+            let csv = "Turma,Total Alunos,Dizem que Comem,Comeram Hoje,Taxa Adesão,Faltantes\n";
+            dashboardData.analisePorTurma.forEach(t => {
+                csv += `"${t.turma}",${t.totalAlunos},${t.dizemQueComem},${t.comeramHoje},${t.taxaAdesao},${t.faltantes}\n`;
+            });
+            
+            const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `relatorio_cozinha_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = "hidden";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            alert('✅ CSV exportado com sucesso!');
+        }
+        
+        // ============================================
+        // MODAL DE FALTANTES
+        // ============================================
+        async function abrirModalFaltantes() {
+            const modal = document.getElementById('modalFaltantes');
+            const listaDiv = document.getElementById('listaFaltantes');
+            const infoSpan = document.getElementById('modalInfo');
+            
+            modal.classList.add('show');
+            listaDiv.innerHTML = '<div class="loading-spinner"></div> Carregando...';
+            
+            try {
+                const hoje = new Date().toISOString().split('T')[0];
+                const response = await fetch(`/api/cozinha/faltantes?data=${hoje}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.faltantes.length > 0) {
+                    infoSpan.innerHTML = `${data.totalFaltantes} pessoas que disseram que comeriam mas não vieram hoje.`;
+                    listaDiv.innerHTML = data.faltantes.map(f => `
+                        <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
+                            <div>
+                                <strong>${f.nome}</strong>
+                                <br>
+                                <small class="text-muted">${f.turma} • Perfil: ${f.perfil === 'sempre' ? 'Sempre' : 'Às vezes'}</small>
+                            </div>
+                            <span class="badge bg-secondary">não comeu</span>
+                        </div>
+                    `).join('');
+                } else {
+                    infoSpan.innerHTML = 'Nenhum faltante hoje! Todos que disseram que comeriam vieram. 🎉';
+                    listaDiv.innerHTML = '<div class="text-center text-success py-3"><i class="fas fa-check-circle fa-2x"></i><br>Todos compareceram!</div>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar faltantes:', error);
+                listaDiv.innerHTML = '<div class="alert alert-danger">Erro ao carregar lista de faltantes</div>';
+            }
+        }
+        
+        function fecharModalFaltantes() {
+            const modal = document.getElementById('modalFaltantes');
+            modal.classList.remove('show');
+        }
+        
+        window.toggleDropdown = toggleDropdown;
+        window.logout = logout;
+        window.carregarDashboard = carregarDashboard;
+        window.gerarRelatorioPDF = gerarRelatorioPDF;
+        window.exportarCSV = exportarCSV;
+        window.abrirModalFaltantes = abrirModalFaltantes;
+        window.fecharModalFaltantes = fecharModalFaltantes;
+    </script>
+    
+    <script>
+        // Escalonamento mobile
+        (function() {
+            if (window.innerWidth > 768) return;
+            
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                if (width <= 320) return 0.55;
+                if (width <= 360) return 0.6;
+                if (width <= 400) return 0.65;
+                if (width <= 500) return 0.75;
+                if (width <= 600) return 0.85;
+                if (width <= 700) return 0.95;
+                return 1;
+            }
+            
+            const escala = calcularEscalaMobile();
+            document.documentElement.style.setProperty('--scale-ratio', escala);
+        })();
+    </script>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1295,55 +1295,119 @@
         function pararScannerJsQR() { scannerAlternativoAtivo = false; if (alternativeStream) { alternativeStream.getTracks().forEach(track => track.stop()); alternativeStream = null; } }
         function pararScanner() { if (qrScanner && scannerIniciado) { try { qrScanner.stop(); } catch(e) {} } pararScannerJsQR(); if (zxingReader) { try { zxingReader.reset(); } catch(e) {} } if (window.Quagga) { try { Quagga.stop(); } catch(e) {} } scannerIniciado = false; }
         
-        // NOVA FUNÇÃO MODIFICADA: Processar QR Code com verificação
+
         async function processarQRCode(qrData) {
             try {
-                console.log('🔍 QR Code:', qrData);
+                console.log('🔍 QR Code escaneado (bruto):', qrData);
+                console.log('📏 Tamanho do QR Code:', qrData.length);
+                
                 let alunoId = null;
-                try { 
-                    const alunoData = JSON.parse(qrData); 
-                    alunoId = alunoData.id || alunoData.alunoId || alunoData; 
-                } catch (e) { 
-                    if (qrData.includes('aluno=')) { 
-                        const match = qrData.match(/aluno=([a-f0-9]+)/); 
-                        if (match) alunoId = match[1]; 
-                        else alunoId = qrData; 
-                    } else { 
-                        alunoId = qrData; 
-                    } 
+                
+                if (qrData.match(/^[a-f0-9]{24}$/i)) {
+                    alunoId = qrData;
+                    console.log('✅ ID extraído (formato SIMPLES - apenas ID):', alunoId);
                 }
                 
+                if (!alunoId && qrData.includes('aluno=')) {
+                    const match = qrData.match(/[?&]aluno=([a-f0-9]{24})/i);
+                    if (match) {
+                        alunoId = match[1];
+                        console.log('✅ ID extraído (parâmetro aluno= na URL):', alunoId);
+                    }
+                }
+                
+                if (!alunoId && qrData.includes('id=')) {
+                    const match = qrData.match(/[?&]id=([a-f0-9]{24})/i);
+                    if (match) {
+                        alunoId = match[1];
+                        console.log('✅ ID extraído (parâmetro id= na URL):', alunoId);
+                    }
+                }
+                
+                if (!alunoId) {
+                    try {
+                        const parsed = JSON.parse(qrData);
+                        alunoId = parsed.id || parsed.alunoId || parsed.userId;
+                        if (alunoId) {
+                            console.log('✅ ID extraído (JSON):', alunoId);
+                        }
+                    } catch (e) {
+                        // Não é JSON, continua
+                    }
+                }
+
+                if (!alunoId) {
+                    const hexMatch = qrData.match(/[a-f0-9]{24}/i);
+                    if (hexMatch) {
+                        alunoId = hexMatch[0];
+                        console.log('✅ ID extraído (busca geral por hex 24):', alunoId);
+                    }
+                }
+                
+                if (!alunoId) {
+                    console.error('❌ Não foi possível extrair ID do aluno do QR Code:', qrData);
+                    mostrarAlerta('❌ QR Code inválido - ID não reconhecido', 'error');
+                    return;
+                }
+                
+                // Validar formato do ID (deve ter 24 caracteres hexadecimais)
+                if (alunoId.length !== 24 || !alunoId.match(/^[a-f0-9]{24}$/i)) {
+                    console.error('❌ ID do aluno em formato inválido:', alunoId);
+                    mostrarAlerta('❌ QR Code inválido - formato de ID incorreto', 'error');
+                    return;
+                }
+                
+                console.log('🎯 ID final do aluno:', alunoId);
+                
+                // ============================================
+                // BUSCAR ALUNO NA LISTA DA TURMA
+                // ============================================
                 const alunoEncontrado = alunosMap.get(alunoId);
-                if (!alunoEncontrado) { 
-                    mostrarAlerta('❌ Aluno não encontrado!', 'error'); 
-                    setTimeout(() => voltarParaScannerQR(), 1500); 
-                    return; 
+                
+                if (!alunoEncontrado) {
+                    console.error('❌ Aluno não encontrado na turma. ID:', alunoId);
+                    console.log('📋 IDs disponíveis no mapa:', Array.from(alunosMap.keys()));
+                    mostrarAlerta(`❌ Aluno não encontrado nesta turma! ID: ${alunoId.substring(0, 8)}...`, 'error');
+                    
+                    // Tentar recarregar os alunos
+                    mostrarAlerta('🔄 Tentando recarregar lista de alunos...', 'info');
+                    await carregarDados();
+                    
+                    // Tentar novamente
+                    const alunoRecarregado = alunosMap.get(alunoId);
+                    if (alunoRecarregado) {
+                        console.log('✅ Aluno encontrado após recarregar!');
+                        await continuarProcessamentoQRCode(alunoRecarregado);
+                    } else {
+                        mostrarAlerta('❌ Aluno não encontrado. Verifique se ele está matriculado nesta turma.', 'error');
+                    }
+                    return;
                 }
                 
-                // 🔥 VERIFICAR APENAS EM ProvaRealizada (notas manuais)
+                console.log('✅ Aluno encontrado:', alunoEncontrado.alunoNome);
+                
+                // ============================================
+                // VERIFICAR SE JÁ FOI CORRIGIDO
+                // ============================================
                 const jaCorrigido = await verificarAlunoJaCorrigido(alunoId);
                 
                 if (jaCorrigido) {
-                    // Mostrar modal perguntando se deseja prosseguir
                     mostrarModalConfirmacao(alunoEncontrado.alunoNome, 
                         async () => {
-                            // Confirmou - prosseguir com a correção
                             await continuarProcessamentoQRCode(alunoEncontrado);
                         },
                         () => {
-                            // Cancelou - voltar ao scanner
                             mostrarAlerta('Correção cancelada', 'info');
                             setTimeout(() => voltarParaScannerQR(), 1000);
                         }
                     );
                 } else {
-                    // Aluno não corrigido ainda - prosseguir normalmente
                     await continuarProcessamentoQRCode(alunoEncontrado);
                 }
                 
-            } catch (error) { 
-                console.error('Erro:', error); 
-                mostrarAlerta('❌ QR Code inválido', 'error'); 
+            } catch (error) {
+                console.error('❌ Erro no processamento do QR Code:', error);
+                mostrarAlerta('❌ Erro ao processar QR Code: ' + error.message, 'error');
             }
         }
         

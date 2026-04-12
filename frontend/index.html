@@ -9321,63 +9321,41 @@ window.addEventListener('scroll', function() {
             }
             
             const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
-            let qrCodeAlunoUrl = null;
+            const selectAluno = document.getElementById('selectAlunoImpressao');
+            const alunoId = selectAluno?.value;
+            const alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim();
             
-            // 🔥 SE FOR IMPRESSÃO PARA TODOS OS ALUNOS
+            const modalPergunta = document.getElementById('modalPerguntaAdaptacao');
+            if (modalPergunta) modalPergunta.style.display = 'none';
+            
             if (tipoImpressao === 'todos') {
-                if (alunosDaTurma.length === 0) {
+                const alunos = window.alunosDaTurma || [];
+                if (alunos.length === 0) {
                     mostrarAlerta('alertMinhasProvas', '⚠️ Nenhum aluno encontrado nesta turma', 'info');
                     return;
                 }
-                
-                await gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, {}, alunosDaTurma);
+                await gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, {}, alunos);
                 return;
             }
             
-            // 🔥 IMPRESSÃO INDIVIDUAL (um aluno específico)
-            const alunoSelecionadoId = document.getElementById('selectAlunoImpressao')?.value;
-            
-            if (!alunoSelecionadoId) {
-                mostrarAlerta('alertMinhasProvas', '⚠️ Selecione um aluno para gerar o QR Code individual', 'info');
+            if (!alunoId) {
+                mostrarAlerta('alertMinhasProvas', '⚠️ Selecione um aluno', 'info');
+                mostrarModalPerguntaAdaptacao();
                 return;
             }
             
-            // Buscar nome do aluno
-            const selectAluno = document.getElementById('selectAlunoImpressao');
-            const alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim() || 'Aluno';
-            
-            // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
-            const IS_LOCALHOST = window.location.hostname === 'localhost' || 
-                                window.location.hostname === '127.0.0.1';
-            const IS_RENDER = window.location.hostname.includes('render.com') || 
-                            window.location.hostname.includes('sistema-avaliativo');
-            
-            let BASE_URL;
-            if (IS_LOCALHOST) {
-                BASE_URL = 'http://localhost:3000';
-                console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
-            } else if (IS_RENDER) {
-                BASE_URL = window.location.origin;
-                console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
-            } else {
-                BASE_URL = window.location.origin;
-                console.log('⚙️ Modo: FALLBACK - Usando origem atual');
-            }
-            
-            const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoSelecionadoId}`;
-            console.log('🔗 URL de correção gerada:', urlCorrecao);
-            
-            // Gerar QR Code do aluno
+            // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO (EM VEZ DE GERAR NOVO)
+            let qrCodeAlunoUrl = null;
             try {
-                const tokenLocal = localStorage.getItem('auth_token');
+                const token = localStorage.getItem('auth_token');
+                console.log(`📱 Buscando QR Code do aluno ${alunoId} no banco...`);
                 
-                const response = await fetch('/api/qrcode/gerar', {
-                    method: 'POST',
+                const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                    method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${tokenLocal}`,
+                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ url: urlCorrecao })
+                    }
                 });
                 
                 const data = await response.json();
@@ -9385,13 +9363,16 @@ window.addEventListener('scroll', function() {
                 if (data.success && data.qrCode) {
                     qrCodeAlunoUrl = data.qrCode;
                     window.alunoSelecionadoNome = alunoNome;
-                    console.log('✅ QR Code do aluno gerado com sucesso!');
+                    console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco (gerado em ${data.geradoEm})`);
+                } else {
+                    console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoId);
+                    mostrarAlerta('alertMinhasProvas', '⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
                 }
             } catch (error) {
-                console.error('❌ Erro ao gerar QR Code do aluno:', error);
+                console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
+                mostrarAlerta('alertMinhasProvas', '❌ Erro ao buscar QR Code do aluno', 'error');
             }
             
-            // Chamar a função de impressão com o QR Code do aluno
             await gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl);
         }
 
@@ -9423,39 +9404,56 @@ window.addEventListener('scroll', function() {
             }
         }
 
-        // ============ GERAR IMPRESSÃO PARA TODOS OS ALUNOS ============
         async function gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, alunos) {
             mostrarAlerta('alertMinhasProvas', `🖨️ Gerando prova para ${alunos.length} aluno(s)...`, 'info');
             
             try {
                 const token = localStorage.getItem('auth_token');
                 
-                // Gerar QR Codes para todos os alunos em paralelo
-                mostrarAlerta('alertMinhasProvas', `📱 Gerando QR Codes para ${alunos.length} aluno(s)...`, 'info');
+                // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
+                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                    window.location.hostname === '127.0.0.1';
+                const IS_RENDER = window.location.hostname.includes('render.com') || 
+                                window.location.hostname.includes('sistema-avaliativo');
                 
+                let BASE_URL;
+                if (IS_LOCALHOST) {
+                    BASE_URL = 'http://localhost:3000';
+                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Codes com localhost');
+                } else if (IS_RENDER) {
+                    BASE_URL = window.location.origin;
+                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Codes com domínio do Render');
+                } else {
+                    BASE_URL = window.location.origin;
+                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
+                }
+                
+                // 🔥 BUSCAR QR CODES DE TODOS OS ALUNOS DO BANCO (EM VEZ DE GERAR NOVOS)
                 const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
                     const alunoId = aluno.id || aluno._id;
                     const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
                     
-                    const urlCorrecao = `${window.location.origin}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
+                    console.log(`📱 Buscando QR Code do aluno ${alunoNome} no banco...`);
                     
                     let qrCodeAlunoUrl = '';
                     try {
-                        const qrResponse = await fetch('/api/qrcode/gerar', {
-                            method: 'POST',
+                        const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                            method: 'GET',
                             headers: {
                                 'Authorization': `Bearer ${token}`,
                                 'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ url: urlCorrecao })
+                            }
                         });
                         
-                        const qrData = await qrResponse.json();
-                        if (qrData.success && qrData.qrCode) {
-                            qrCodeAlunoUrl = qrData.qrCode;
+                        const data = await response.json();
+                        if (data.success && data.qrCode) {
+                            qrCodeAlunoUrl = data.qrCode;
+                            console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco`);
+                        } else {
+                            console.warn(`⚠️ QR Code não encontrado para ${alunoNome}`);
                         }
-                    } catch (qrError) {
-                        console.error(`❌ Erro ao gerar QR Code para ${alunoNome}:`, qrError);
+                    } catch (error) {
+                        console.error(`❌ Erro ao buscar QR Code para ${alunoNome}:`, error);
                     }
                     
                     return { 
@@ -9465,10 +9463,6 @@ window.addEventListener('scroll', function() {
                         nome: alunoNome
                     };
                 }));
-                
-                // 🔥 CALCULAR O NÚMERO DE PÁGINAS DA PROVA (para saber se precisa de ajuste)
-                // Como a prova tem 5 páginas (número ímpar), a primeira página do próximo aluno
-                // vai cair na frente/verso corretamente
                 
                 // Gerar HTML completo com todos os alunos
                 let htmlCompleto = '';
@@ -9488,11 +9482,7 @@ window.addEventListener('scroll', function() {
                     
                     // 🔥 QUEBRA DE PÁGINA APÓS CADA ALUNO (exceto o último)
                     if (i < alunosComQRCode.length - 1) {
-                        // Como a prova tem 5 páginas (ímpar), a próxima prova começa em uma nova folha
-                        // Isso é perfeito para impressão frente e verso
-                        htmlCompleto += `
-                            <div style="page-break-before: always; break-before: page;"></div>
-                        `;
+                        htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
                     }
                 }
                 
@@ -9502,7 +9492,6 @@ window.addEventListener('scroll', function() {
                 printWindow.document.close();
                 
                 printWindow.onload = function() {
-                    // Aguardar um pouco para garantir que o CSS foi aplicado
                     setTimeout(() => {
                         printWindow.print();
                         printWindow.onafterprint = function() {
@@ -9520,7 +9509,7 @@ window.addEventListener('scroll', function() {
         }
 
         async function gerarImpressaoAdaptada() {
-            const { prova, questoes, qrCodeDataUrl, API_BASE_URL, token } = window.provaParaImpressao || {};
+            const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
             if (!prova) {
                 console.error('❌ Dados da prova não encontrados');
                 mostrarAlerta('alertMinhasProvas', '❌ Erro: dados da prova não encontrados', 'error');
@@ -9557,6 +9546,12 @@ window.addEventListener('scroll', function() {
                 return;
             }
             
+            // Fechar modais
+            const modalOpcoes = document.getElementById('modalOpcoesAdaptacao');
+            const modalPergunta = document.getElementById('modalPerguntaAdaptacao');
+            if (modalOpcoes) modalOpcoes.style.display = 'none';
+            if (modalPergunta) modalPergunta.style.display = 'none';
+            
             let qrCodeAlunoUrl = null;
             let alunoNome = null;
             
@@ -9570,45 +9565,31 @@ window.addEventListener('scroll', function() {
                 const selectAluno = document.getElementById('selectAlunoImpressao');
                 alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim() || 'Aluno';
                 
-                const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                const IS_RENDER = window.location.hostname.includes('render.com') || window.location.hostname.includes('sistema-avaliativo');
-                
-                let BASE_URL;
-                if (IS_LOCALHOST) {
-                    BASE_URL = 'http://localhost:3000';
-                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
-                } else if (IS_RENDER) {
-                    BASE_URL = window.location.origin;
-                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
-                } else {
-                    BASE_URL = window.location.origin;
-                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
-                }
-                
-                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoSelecionadoId}`;
-                console.log('🔗 URL de correção gerada:', urlCorrecao);
-                
+                // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO
                 try {
-                    const tokenLocal = localStorage.getItem('auth_token');
+                    const token = localStorage.getItem('auth_token');
+                    console.log(`📱 Buscando QR Code do aluno ${alunoSelecionadoId} no banco...`);
                     
-                    const response = await fetch('/api/qrcode/gerar', {
-                        method: 'POST',
+                    const response = await fetch(`/api/aluno/qrcode/${alunoSelecionadoId}`, {
+                        method: 'GET',
                         headers: {
-                            'Authorization': `Bearer ${tokenLocal}`,
+                            'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ url: urlCorrecao })
+                        }
                     });
                     
                     const data = await response.json();
                     
                     if (data.success && data.qrCode) {
                         qrCodeAlunoUrl = data.qrCode;
-                        console.log('✅ QR Code do aluno gerado com sucesso!');
                         window.alunoSelecionadoNome = alunoNome;
+                        console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco`);
+                    } else {
+                        console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoSelecionadoId);
+                        mostrarAlerta('alertMinhasProvas', '⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
                     }
                 } catch (error) {
-                    console.error('❌ Erro ao gerar QR Code do aluno:', error);
+                    console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
                 }
                 
                 const alunoSelecionado = alunosDaTurma.find(a => (a.id || a._id) === alunoSelecionadoId);
@@ -9622,7 +9603,6 @@ window.addEventListener('scroll', function() {
                     mostrarAlerta('alertMinhasProvas', '⚠️ Nenhum aluno encontrado nesta turma', 'info');
                     return;
                 }
-                
                 await gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoes, alunosDaTurma);
             }
         }
@@ -11302,22 +11282,26 @@ window.addEventListener('scroll', function() {
         
         // Solicitar exclusão de turma
         function solicitarExclusaoTurma(turmaId, turmaNome) {
-            turmaParaExcluir = { id: turmaId, nome: turmaNome }; // ALTERAÇÃO AQUI
+            turmaParaExcluir = { id: turmaId, nome: turmaNome };
             
-            document.getElementById('modalExcluirConteudo').innerHTML = `
-                <p>Tem certeza que deseja excluir a turma <strong>"${turmaNome}"</strong>?</p>
-                <div class="warning-box" style="margin-top: 15px;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <div>
-                        <strong>Atenção:</strong> Esta ação não pode ser desfeita.
-                        <ul style="margin: 10px 0 0 20px;">
-                            <li>Todas as provas associadas a esta turma serão removidas</li>
-                            <li>Os alunos serão removidos da turma</li>
-                            <li>Os resultados das provas serão mantidos</li>
-                        </ul>
+            // 🔥 CORREÇÃO: Mostrar no modal que é o professor excluindo
+            const modalConteudo = document.getElementById('modalExcluirConteudo');
+            if (modalConteudo) {
+                modalConteudo.innerHTML = `
+                    <p>Tem certeza que deseja excluir a turma <strong>"${turmaNome}"</strong>?</p>
+                    <div style="margin-top: 15px; padding: 15px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444;">
+                        <i class="fas fa-exclamation-circle" style="color: #ef4444; margin-right: 10px;"></i>
+                        <div style="display: inline-block; vertical-align: middle;">
+                            <strong style="color: #7f1d1d;">Atenção:</strong> 
+                            <ul style="margin: 10px 0 0 20px; color: #7f1d1d;">
+                                <li>Se houver provas, a exclusão será bloqueada</li>
+                                <li>Exclua as provas primeiro ou peça para um admin</li>
+                                <li>Alunos serão removidos da turma</li>
+                            </ul>
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
             
             mostrarModal('modalExcluirTurma');
         }
@@ -11518,6 +11502,7 @@ window.addEventListener('scroll', function() {
             try {
                 const token = localStorage.getItem('auth_token');
                 const turmaId = turmaParaExcluir.id || turmaParaExcluir;
+                const turmaNome = turmaParaExcluir.nome;
                 
                 // Mostrar loading no modal
                 document.getElementById('modalExcluirConteudo').innerHTML = `
@@ -11532,6 +11517,7 @@ window.addEventListener('scroll', function() {
                 const buttons = document.querySelectorAll('#modalExcluirTurma button');
                 buttons.forEach(btn => btn.disabled = true);
                 
+                // 🔥 CORREÇÃO: Usar a rota /api/turmas (não /api/admin/turmas)
                 const response = await fetch(`/api/turmas/${turmaId}`, {
                     method: 'DELETE',
                     headers: {

@@ -2011,38 +2011,33 @@
                 
                 if (!alunoId) { this.showToast('⚠️ Selecione um aluno', 'info'); this.mostrarModalPerguntaAdaptacao(); return; }
                 
-                // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
-                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
-                                    window.location.hostname === '127.0.0.1';
-                const IS_RENDER = window.location.hostname.includes('render.com') || 
-                                window.location.hostname.includes('sistema-avaliativo');
-                
-                let BASE_URL;
-                if (IS_LOCALHOST) {
-                    BASE_URL = 'http://localhost:3000';
-                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
-                } else if (IS_RENDER) {
-                    BASE_URL = window.location.origin;
-                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
-                } else {
-                    BASE_URL = window.location.origin;
-                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
-                }
-                
-                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-                console.log('🔗 URL de correção gerada:', urlCorrecao);
-                
+                // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO (EM VEZ DE GERAR NOVO)
                 let qrCodeAlunoUrl = null;
                 try {
-                    const response = await fetch('/api/qrcode/gerar', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: urlCorrecao })
+                    const token = localStorage.getItem('auth_token');
+                    console.log(`📱 Buscando QR Code do aluno ${alunoId} no banco...`);
+                    
+                    const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
                     });
+                    
                     const data = await response.json();
-                    if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
-                    console.log('✅ QR Code do aluno gerado com sucesso!');
-                } catch (error) { console.error('Erro ao gerar QR Code:', error); }
+                    
+                    if (data.success && data.qrCode) {
+                        qrCodeAlunoUrl = data.qrCode;
+                        console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco (gerado em ${data.geradoEm})`);
+                    } else {
+                        console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoId);
+                        this.showToast('⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
+                    this.showToast('❌ Erro ao buscar QR Code do aluno', 'error');
+                }
                 
                 await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl, alunoNome);
             }
@@ -2061,7 +2056,7 @@
                     altoContraste: document.getElementById('optAltoContraste')?.checked || false,
                     layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false,
                     tamanhoFonte: parseInt(tamanhoFonte),
-                    caixaAlta: document.getElementById('optCaixaAlta')?.checked || false  // 🔥 ADICIONAR ESTA LINHA
+                    caixaAlta: document.getElementById('optCaixaAlta')?.checked || false
                 };
                 
                 const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
@@ -2090,38 +2085,33 @@
                 
                 if (!alunoId) { this.showToast('⚠️ Selecione um aluno', 'info'); this.mostrarModalPerguntaAdaptacao(); return; }
                 
-                // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
-                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
-                                    window.location.hostname === '127.0.0.1';
-                const IS_RENDER = window.location.hostname.includes('render.com') || 
-                                window.location.hostname.includes('sistema-avaliativo');
-                
-                let BASE_URL;
-                if (IS_LOCALHOST) {
-                    BASE_URL = 'http://localhost:3000';
-                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
-                } else if (IS_RENDER) {
-                    BASE_URL = window.location.origin;
-                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
-                } else {
-                    BASE_URL = window.location.origin;
-                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
-                }
-                
-                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-                console.log('🔗 URL de correção gerada:', urlCorrecao);
-                
+                // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO
                 let qrCodeAlunoUrl = null;
                 try {
-                    const response = await fetch('/api/qrcode/gerar', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: urlCorrecao })
+                    const token = localStorage.getItem('auth_token');
+                    console.log(`📱 Buscando QR Code do aluno ${alunoId} no banco...`);
+                    
+                    const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
                     });
+                    
                     const data = await response.json();
-                    if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
-                    console.log('✅ QR Code do aluno gerado com sucesso!');
-                } catch (error) { console.error('Erro ao gerar QR Code:', error); }
+                    
+                    if (data.success && data.qrCode) {
+                        qrCodeAlunoUrl = data.qrCode;
+                        console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco (gerado em ${data.geradoEm})`);
+                    } else {
+                        console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoId);
+                        this.showToast('⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
+                    this.showToast('❌ Erro ao buscar QR Code do aluno', 'error');
+                }
                 
                 await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl, alunoNome);
             }
@@ -2149,28 +2139,46 @@
                         console.log('⚙️ Modo: FALLBACK - Usando origem atual');
                     }
                     
+                    this.showToast(`📱 Buscando QR Codes dos ${alunos.length} alunos no banco...`, 'info');
+                    
+                    // 🔥 BUSCAR QR CODES DE TODOS OS ALUNOS DO BANCO (EM VEZ DE GERAR NOVOS)
                     const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
                         const alunoId = aluno._id || aluno.id;
                         const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
-                        const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-                        console.log(`🔗 Gerando QR Code para ${alunoNome}: ${urlCorrecao}`);
+                        
+                        console.log(`📱 Buscando QR Code do aluno ${alunoNome} no banco...`);
                         
                         let qrCodeAlunoUrl = '';
                         try {
-                            const qrResponse = await fetch('/api/qrcode/gerar', {
-                                method: 'POST',
-                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ url: urlCorrecao })
+                            const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                                method: 'GET',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                }
                             });
-                            const qrData = await qrResponse.json();
-                            if (qrData.success && qrData.qrCode) qrCodeAlunoUrl = qrData.qrCode;
-                        } catch (error) { console.error(`Erro ao gerar QR Code para ${alunoNome}:`, error); }
+                            
+                            const data = await response.json();
+                            if (data.success && data.qrCode) {
+                                qrCodeAlunoUrl = data.qrCode;
+                                console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco`);
+                            } else {
+                                console.warn(`⚠️ QR Code não encontrado para ${alunoNome}`);
+                            }
+                        } catch (error) {
+                            console.error(`❌ Erro ao buscar QR Code para ${alunoNome}:`, error);
+                        }
+                        
                         return { ...aluno, qrCodeDataUrl: qrCodeAlunoUrl, id: alunoId, nome: alunoNome };
                     }));
                     
                     let htmlCompleto = '';
                     for (let i = 0; i < alunosComQRCode.length; i++) {
                         const aluno = alunosComQRCode[i];
+                        console.log(`📄 Gerando prova para: ${aluno.nome} (${i + 1}/${alunosComQRCode.length})`);
+                        
+                        window.alunoSelecionadoNome = aluno.nome;
+                        
                         const htmlAluno = this.gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, aluno.qrCodeDataUrl, aluno.nome);
                         htmlCompleto += htmlAluno;
                         if (i < alunosComQRCode.length - 1) htmlCompleto += `<div style="page-break-before: always;"></div>`;
@@ -2181,6 +2189,7 @@
                     printWindow.document.close();
                     printWindow.onload = () => { printWindow.print(); printWindow.onafterprint = () => printWindow.close(); };
                     this.showToast(`✅ Impressão preparada para ${alunosComQRCode.length} aluno(s)!`, 'success');
+                    
                 } catch (error) {
                     console.error('❌ Erro:', error);
                     this.showToast(`❌ Erro: ${error.message}`, 'error');

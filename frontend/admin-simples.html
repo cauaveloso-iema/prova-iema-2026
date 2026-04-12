@@ -717,6 +717,19 @@
             display: inline-block;
         }
 
+        .role-badge.setor_pedagogico {
+            background: #a855f7;
+            color: white;
+        }
+        .role-badge.coordenacao_patio {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        .role-badge.cozinha {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
         .role-badge.admin { background: #cfe2ff; color: #084298; }
         .role-badge.professor { background: #d1e7dd; color: #0f5132; }
         .role-badge.aluno { background: #fff3cd; color: #856404; }
@@ -2270,7 +2283,7 @@
                     let roleColor = '';
                     let roleBg = '';
                     let roleIcon = '';
-                    
+
                     if (usuario.role === 'aluno') {
                         roleColor = '#1e40af';
                         roleBg = '#dbeafe';
@@ -2291,6 +2304,14 @@
                         roleColor = '#a855f7';
                         roleBg = '#f3e8ff';
                         roleIcon = '👩‍🏫';
+                    } else if (usuario.role === 'coordenacao_patio') {
+                        roleColor = '#d97706';  // laranja escuro
+                        roleBg = '#fef3c7';      // fundo amarelo claro
+                        roleIcon = '🏃';
+                    } else if (usuario.role === 'cozinha') {
+                        roleColor = '#059669';   // verde escuro
+                        roleBg = '#d1fae5';      // fundo verde claro
+                        roleIcon = '🍽️';
                     } else {
                         roleColor = '#6b7280';
                         roleBg = '#f3f4f6';
@@ -2785,8 +2806,10 @@
                                     <option value="todos">Todos</option>
                                     <option value="aluno">Alunos</option>
                                     <option value="professor">Professores</option>
-                                    <option value="admin">Admins</option>
+                                    <option value="admin">Admins</option>                                    
                                     <option value="setor_pedagogico">Setor Pedagógico</option>
+                                    <option value="coordenacao_patio"> Coordenação de Pátio</option>
+                                    <option value="cozinha">Cozinha</option>
                                 </select>
                             </div>
                             <div class="filter-actions">
@@ -2878,6 +2901,10 @@
                         roleBadge = '<span class="role-badge" style="background: #ffd966; color: #856404;"><i class="fas fa-crown"></i> Super Admin</span>';
                     } else if (u.role === 'setor_pedagogico') {
                         roleBadge = '<span class="role-badge setor_pedagogico"><i class="fas fa-chalkboard-user"></i> Setor Pedagógico</span>';
+                    } else if (u.role === 'coordenacao_patio') {
+                        roleBadge = '<span class="role-badge coordenacao_patio"><i class="fas fa-utensils"></i> Coordenação de Pátio</span>';
+                    } else if (u.role === 'cozinha') {
+                        roleBadge = '<span class="role-badge cozinha"><i class="fas fa-kitchen-set"></i> Cozinha</span>';
                     } else {
                         roleBadge = `<span class="role-badge">${u.role || 'aluno'}</span>`;
                     }
@@ -2897,6 +2924,9 @@
                             </td>
                             <td>
                                 <div class="action-buttons">
+                                    <button class="btn-icon" onclick="adminSimples.visualizarQRCodeUsuario('${u._id}')" title="Ver QR Code">
+                                        <i class="fas fa-qrcode" style="color: #8b5cf6;"></i>
+                                    </button>
                                     <button class="btn-icon edit" onclick="adminSimples.editarUsuario('${u._id}')" title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </button>
@@ -3315,6 +3345,180 @@
                     this.abrirModalUsuario(usuario);
                 }
             }
+            
+            // ============================================
+            // 📱 VISUALIZAR QR CODE DO USUÁRIO - CORRIGIDO
+            // ============================================
+            async visualizarQRCodeUsuario(usuarioId) {
+                try {
+                    console.log('📱 Buscando QR Code do usuário:', usuarioId);
+                    this.showToast('🔄 Carregando QR Code...', 'info');
+                    
+                    const token = localStorage.getItem('auth_token');
+                    
+                    // 🔥 BUSCAR USUÁRIO VIA ROTA ADMIN
+                    const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        throw new Error(data.error || 'Erro ao carregar usuário');
+                    }
+                    
+                    const usuario = data.user;
+                    
+                    // 🔥 VERIFICAR SE O QR CODE ESTÁ NO OBJETO RETORNADO
+                    console.log('📦 Dados do usuário:', {
+                        nome: usuario.nome,
+                        role: usuario.role,
+                        temQRCode: !!usuario.qrCodeUsuario,
+                        qrCodeLength: usuario.qrCodeUsuario ? usuario.qrCodeUsuario.length : 0
+                    });
+                    
+                    // 🔥 SE O BACKEND NÃO RETORNOU O QR CODE, TENTAR ROTA ALTERNATIVA
+                    let qrCodeDataUrl = usuario.qrCodeUsuario || null;
+                    let qrCodeGeradoEm = usuario.qrCodeUsuarioGeradoEm || null;
+                    
+                    // Se não veio na resposta, tentar buscar do perfil
+                    if (!qrCodeDataUrl) {
+                        try {
+                            console.log('🔄 QR Code não veio na resposta, tentando rota /api/perfil/me...');
+                            const perfilResponse = await fetch('/api/perfil/me', {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const perfilData = await perfilResponse.json();
+                            if (perfilData.success && perfilData.perfil && perfilData.perfil.qrCodeUsuario) {
+                                qrCodeDataUrl = perfilData.perfil.qrCodeUsuario;
+                                qrCodeGeradoEm = perfilData.perfil.qrCodeUsuarioGeradoEm;
+                                console.log('✅ QR Code encontrado via /api/perfil/me');
+                            }
+                        } catch (e) {
+                            console.log('⚠️ Erro na rota alternativa:', e.message);
+                        }
+                    }
+                    
+                    const modalBody = document.getElementById('modalBody');
+                    
+                    let qrCodeHtml = '';
+                    if (qrCodeDataUrl) {
+                        qrCodeHtml = `
+                            <div style="text-align: center; padding: 20px;">
+                                <img src="${qrCodeDataUrl}" alt="QR Code do Usuário" 
+                                    style="width: 200px; height: 200px; margin: 0 auto; border: 3px solid #e5e7eb; border-radius: 16px; padding: 15px; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                <div style="margin-top: 15px;">
+                                    <p style="font-size: 0.85rem; color: #10b981;">
+                                        <i class="fas fa-check-circle"></i> QR Code ${qrCodeGeradoEm ? `gerado em ${new Date(qrCodeGeradoEm).toLocaleDateString('pt-BR')}` : 'disponível'}
+                                    </p>
+                                    <p style="font-size: 0.8rem; color: #6b7280;">
+                                        <i class="fas fa-user"></i> <strong>${usuario.nome}</strong>
+                                    </p>
+                                    <p style="font-size: 0.75rem; color: #8b5cf6;">
+                                        <i class="fas fa-arrow-right"></i> <strong>Destino:</strong> ${this.getDestinoLabel(usuario.role)}
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        qrCodeHtml = `
+                            <div style="text-align: center; padding: 40px;">
+                                <i class="fas fa-qrcode" style="font-size: 64px; color: #d1d5db; margin-bottom: 15px;"></i>
+                                <h3 style="color: #6b7280;">QR Code não disponível</h3>
+                                <p style="color: #9ca3af;">O usuário ainda não possui um QR Code gerado.</p>
+                                <div style="margin-top: 15px; padding: 12px; background: #fef3c7; border-radius: 8px;">
+                                    <i class="fas fa-info-circle" style="color: #f59e0b;"></i>
+                                    <span style="font-size: 0.85rem; color: #92400e;">O QR Code é gerado automaticamente no cadastro do usuário.</span>
+                                </div>
+                                <button onclick="adminSimples.gerarQRCodeParaUsuario('${usuarioId}')" 
+                                    style="margin-top: 20px; padding: 12px 24px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                    <i class="fas fa-sync-alt"></i> Gerar QR Code
+                                </button>
+                            </div>
+                        `;
+                    }
+                    
+                    modalBody.innerHTML = `
+                        <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                            <!-- Cabeçalho -->
+                            <div style="text-align: center; margin-bottom: 20px;">
+                                <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                                    <i class="fas fa-qrcode" style="font-size: 36px; color: white;"></i>
+                                </div>
+                                <h2 style="margin: 0; color: #1f2937;">QR Code de Identificação</h2>
+                                <p style="color: #6b7280; margin: 5px 0;">
+                                    <strong>${usuario.nome}</strong> • ${usuario.email}
+                                </p>
+                            </div>
+
+                            <!-- Informações do usuário -->
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b;">Perfil</div>
+                                        <div style="font-weight: 600;">${this.getRoleLabel(usuario.role)}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b;">Matrícula</div>
+                                        <div style="font-weight: 600;">${usuario.matricula || 'Não informada'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b;">Status</div>
+                                        <div><span class="status-badge ${usuario.ativo ? 'active' : 'inactive'}">${usuario.ativo ? 'Ativo' : 'Inativo'}</span></div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b;">Destino</div>
+                                        <div style="font-weight: 600; color: #8b5cf6;">${this.getDestinoLabel(usuario.role)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- QR Code -->
+                            ${qrCodeHtml}
+                            
+                            <!-- Botões -->
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                ${qrCodeDataUrl ? `
+                                    <button onclick="adminSimples.baixarQRCodeImagem('${qrCodeDataUrl}', '${usuario.nome}')" 
+                                        style="flex: 1; padding: 12px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                        <i class="fas fa-download"></i> Baixar QR Code
+                                    </button>
+                                ` : ''}
+                                <button onclick="adminSimples.fecharModal()" 
+                                    style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-qrcode" style="color: #8b5cf6;"></i> QR Code do Usuário';
+                    document.getElementById('modalSaveBtn').style.display = 'none';
+                    
+                    this.abrirModal(document.getElementById('modalTitle').innerHTML, modalBody.innerHTML, false);
+                    
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                    this.showToast('❌ ' + error.message, 'error');
+                }
+            }
+
+            // ============================================
+            // 📥 BAIXAR QR CODE COMO IMAGEM
+            // ============================================
+            baixarQRCodeImagem(qrCodeDataUrl, nomeUsuario) {
+                try {
+                    const link = document.createElement('a');
+                    const nomeArquivo = `qrcode-${nomeUsuario.replace(/\s/g, '-')}-${Date.now()}.png`;
+                    link.download = nomeArquivo;
+                    link.href = qrCodeDataUrl;
+                    link.click();
+                    this.showToast(`✅ QR Code "${nomeArquivo}" baixado!`, 'success');
+                } catch (error) {
+                    console.error('❌ Erro ao baixar QR Code:', error);
+                    this.showToast('❌ Erro ao baixar QR Code', 'error');
+                }
+            }
 
             async resetarSenha(id) {
                 const usuario = this.usuarios.find(u => u._id === id);
@@ -3424,6 +3628,8 @@
                                     <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professor</option>
                                     <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
                                     <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>Setor Pedagógico</option>
+                                    <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>Coordenação de Pátio</option>
+                                    <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>Cozinha</option>
                                 </select>
                             </div>
                             
@@ -3483,19 +3689,23 @@
                             </div>
                         </div>
 
-                        <!-- Campos específicos para Setor Pedagógico -->
-                        <div id="setorPedagogicoFields" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
+                        <!-- Campos específicos para Coordenação de Pátio -->
+                        <div id="coordenacaoPatioFields" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
                             <div class="form-group">
-                                <label>Departamento</label>
-                                <input type="text" id="departamentoUsuario" class="form-control" value="${escapeStr(usuario?.departamento || '')}" placeholder="Ex: AEE, Psicopedagogia, Coordenação">
+                                <label><i class="fas fa-building"></i> Departamento</label>
+                                <input type="text" id="departamentoUsuario" class="form-control" value="${escapeStr(usuario?.departamento || '')}">
                             </div>
                             <div class="form-group">
-                                <label>Atribuições</label>
-                                <textarea id="atribuicoesUsuario" class="form-control" rows="3" placeholder="Ex: Acompanhamento AEE, Sala de Recursos, Atendimento Psicopedagógico...">${escapeStr(usuario?.atribuicoes || '')}</textarea>
+                                <label><i class="fas fa-id-card"></i> Matrícula</label>
+                                <input type="text" id="matriculaUsuario" class="form-control" value="${escapeStr(usuario?.matricula || '')}" maxlength="6" placeholder="6 dígitos">
                             </div>
-                            <div class="info-card" style="background: #f3e8ff; margin-top: 10px;">
+                            <div class="info-card" style="background: #fef3c7; margin-top: 10px;">
                                 <i class="fas fa-info-circle"></i>
-                                <span>O Setor Pedagógico tem acesso ao dashboard AEE e pode acompanhar alunos com necessidades especiais.</span>
+                                <span>A Coordenação de Pátio controla as refeições dos alunos</span>
+                            </div>
+                            <div class="info-card" style="background: #d1fae5; margin-top: 10px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>A Cozinha monitora as refeições e planeja a quantidade de comida</span>
                             </div>
                         </div>
                         
@@ -3543,16 +3753,40 @@
                 const alunoFields = document.getElementById('alunoFields');
                 const professorFields = document.getElementById('professorFields');
                 const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
+                const coordenacaoPatioFields = document.getElementById('coordenacaoPatioFields');
+                const cozinhaFields = document.getElementById('cozinhaFields');
                 
-                if (alunoFields) {
-                    alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
-                }
-                if (professorFields) {
-                    professorFields.style.display = role === 'professor' ? 'block' : 'none';
-                }
-                if (setorPedagogicoFields) {
-                    setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
-                }
+                if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
+                if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
+                if (setorPedagogicoFields) setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
+                if (coordenacaoPatioFields) coordenacaoPatioFields.style.display = role === 'coordenacao_patio' ? 'block' : 'none';
+                if (cozinhaFields) cozinhaFields.style.display = role === 'cozinha' ? 'block' : 'none';
+            }
+
+            getRoleLabel(role) {
+                const labels = {
+                    'aluno': 'Aluno',
+                    'professor': 'Professor',
+                    'admin': 'Administrador',
+                    'super_admin': 'Super Administrador',
+                    'setor_pedagogico': 'Setor Pedagógico',
+                    'coordenacao_patio': 'Coordenação de Pátio',
+                    'cozinha': 'Cozinha'
+                };
+                return labels[role] || role || 'Desconhecido';
+            }
+
+            getDestinoLabel(role) {
+                const labels = {
+                    'aluno': '📱 Correção de Prova',
+                    'professor': '👨‍🏫 Área do Professor',
+                    'setor_pedagogico': '👩‍🏫 Setor Pedagógico',
+                    'coordenacao_patio': '🏃 Coordenação de Pátio - Controle de Refeições',
+                    'cozinha': '🍽️ Cozinha - Monitoramento de Refeições',
+                    'admin': '👑 Área Administrativa',
+                    'super_admin': '⭐ Super Administrador'
+                };
+                return labels[role] || 'Área do Sistema';
             }
 
             async salvarUsuario(id = null) {
@@ -3587,6 +3821,15 @@
                 } else if (roleSelecionada === 'setor_pedagogico') {
                     dados.departamento = document.getElementById('departamentoUsuario')?.value;
                     dados.atribuicoes = document.getElementById('atribuicoesUsuario')?.value;
+                }
+                // Para setor_pedagogico, coordenacao_patio, cozinha
+                if (roleSelecionada === 'setor_pedagogico') {
+                    dados.departamento = document.getElementById('departamentoUsuario')?.value;
+                    dados.atribuicoes = document.getElementById('atribuicoesUsuario')?.value;
+                }
+                if (roleSelecionada === 'coordenacao_patio' || roleSelecionada === 'cozinha') {
+                    dados.departamento = document.getElementById('departamentoUsuario')?.value;
+                    dados.matricula = document.getElementById('matriculaUsuario')?.value;
                 }
 
                 if (!id) {
@@ -7474,48 +7717,37 @@
                     return;
                 }
                 
-                // 🔥 DETECTAR AMBIENTE PARA OS LINKS DOS QR CODES
-                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
-                                    window.location.hostname === '127.0.0.1';
-                const IS_RENDER = window.location.hostname.includes('render.com') || 
-                                window.location.hostname.includes('sistema-avaliativo');
-                
-                let BASE_URL;
-                if (IS_LOCALHOST) {
-                    BASE_URL = 'http://localhost:3000';
-                    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL - QR Code com localhost');
-                } else if (IS_RENDER) {
-                    BASE_URL = window.location.origin;
-                    console.log('🚀 Modo: PRODUÇÃO (Render) - QR Code com domínio do Render');
-                } else {
-                    BASE_URL = window.location.origin;
-                    console.log('⚙️ Modo: FALLBACK - Usando origem atual');
-                }
-                
-                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-                console.log('🔗 URL de correção gerada:', urlCorrecao);
-                
+                // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO (EM VEZ DE GERAR NOVO)
                 let qrCodeAlunoUrl = null;
                 try {
-                    const response = await fetch('/api/qrcode/gerar', {
-                        method: 'POST',
+                    const token = localStorage.getItem('auth_token');
+                    console.log(`📱 Buscando QR Code do aluno ${alunoId} no banco...`);
+                    
+                    const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                        method: 'GET',
                         headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                            'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ url: urlCorrecao })
+                        }
                     });
+                    
                     const data = await response.json();
+                    
                     if (data.success && data.qrCode) {
                         qrCodeAlunoUrl = data.qrCode;
-                        console.log('✅ QR Code do aluno gerado com sucesso!');
+                        window.alunoSelecionadoNome = alunoNome;
+                        console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco (gerado em ${data.geradoEm})`);
+                    } else {
+                        console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoId);
+                        this.showToast('⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
                     }
                 } catch (error) {
-                    console.error('❌ Erro ao gerar QR Code do aluno:', error);
+                    console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
+                    this.showToast('❌ Erro ao buscar QR Code do aluno', 'error');
                 }
                 
                 await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl, alunoNome);
-            }
+            }a
 
             // ============ IMPRESSÃO COM OPÇÕES (COM CAIXA ALTA) ============
             async gerarImpressaoComOpcoes() {
@@ -7578,28 +7810,33 @@
                     return;
                 }
                 
-                // DETECTAR AMBIENTE
-                const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : window.location.origin;
-                const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-                
+                // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO
                 let qrCodeAlunoUrl = null;
                 try {
-                    const response = await fetch('/api/qrcode/gerar', {
-                        method: 'POST',
+                    const token = localStorage.getItem('auth_token');
+                    console.log(`📱 Buscando QR Code do aluno ${alunoId} no banco...`);
+                    
+                    const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                        method: 'GET',
                         headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                            'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ url: urlCorrecao })
+                        }
                     });
+                    
                     const data = await response.json();
+                    
                     if (data.success && data.qrCode) {
                         qrCodeAlunoUrl = data.qrCode;
-                        console.log('✅ QR Code do aluno gerado!');
+                        window.alunoSelecionadoNome = alunoNome;
+                        console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco (gerado em ${data.geradoEm})`);
+                    } else {
+                        console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoId);
+                        this.showToast('⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
                     }
                 } catch (error) {
-                    console.error('❌ Erro ao gerar QR Code:', error);
+                    console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
+                    this.showToast('❌ Erro ao buscar QR Code do aluno', 'error');
                 }
                 
                 await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl, alunoNome);
@@ -7630,32 +7867,34 @@
                         console.log('⚙️ Modo: FALLBACK - Usando origem atual');
                     }
                     
-                    this.showToast(`📱 Gerando QR Codes para ${alunos.length} aluno(s)...`, 'info');
+                    this.showToast(`📱 Buscando QR Codes dos ${alunos.length} alunos no banco...`, 'info');
                     
+                    // 🔥 BUSCAR QR CODES DE TODOS OS ALUNOS DO BANCO (EM VEZ DE GERAR NOVOS)
                     const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
                         const alunoId = aluno.id || aluno._id;
                         const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
                         
-                        const urlCorrecao = `${BASE_URL}/corrigir-prova.html?prova=${prova.id}&aluno=${alunoId}`;
-                        console.log(`🔗 Gerando QR Code para ${alunoNome}: ${urlCorrecao}`);
+                        console.log(`📱 Buscando QR Code do aluno ${alunoNome} no banco...`);
                         
                         let qrCodeAlunoUrl = '';
                         try {
-                            const qrResponse = await fetch('/api/qrcode/gerar', {
-                                method: 'POST',
+                            const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
+                                method: 'GET',
                                 headers: {
                                     'Authorization': `Bearer ${token}`,
                                     'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ url: urlCorrecao })
+                                }
                             });
                             
-                            const qrData = await qrResponse.json();
-                            if (qrData.success && qrData.qrCode) {
-                                qrCodeAlunoUrl = qrData.qrCode;
+                            const data = await response.json();
+                            if (data.success && data.qrCode) {
+                                qrCodeAlunoUrl = data.qrCode;
+                                console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco`);
+                            } else {
+                                console.warn(`⚠️ QR Code não encontrado para ${alunoNome}`);
                             }
-                        } catch (qrError) {
-                            console.error(`❌ Erro ao gerar QR Code para ${alunoNome}:`, qrError);
+                        } catch (error) {
+                            console.error(`❌ Erro ao buscar QR Code para ${alunoNome}:`, error);
                         }
                         
                         return { 
@@ -7674,27 +7913,17 @@
                         
                         console.log(`📄 Gerando prova para: ${aluno.nome} (${i + 1}/${alunosComQRCode.length})`);
                         
-                        // Salvar nome do aluno para exibir no QR Code
                         window.alunoSelecionadoNome = aluno.nome;
                         
-                        // Reutilizar a mesma função que gera o HTML
                         const htmlAluno = this.gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, aluno.qrCodeDataUrl, aluno.nome);
-                        
                         htmlCompleto += htmlAluno;
                         
-                        // Quebra de página após cada aluno (exceto o último)
                         if (i < alunosComQRCode.length - 1) {
                             htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
                         }
                     }
                     
-                    // Abrir janela de impressão
                     const printWindow = window.open('', '_blank');
-                    
-                    if (!printWindow) {
-                        throw new Error('Pop-up bloqueado! Permita pop-ups para este site.');
-                    }
-                    
                     printWindow.document.write(htmlCompleto);
                     printWindow.document.close();
                     

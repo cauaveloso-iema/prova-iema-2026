@@ -587,7 +587,7 @@
                 <div id="professorFields" class="role-fields">
                     <div class="form-group">
                         <label for="registerEixo"><i class="fas fa-sitemap"></i> Eixo</label>
-                        <select id="registerEixo" class="form-control" required>
+                        <select id="registerEixo" class="form-control"></select>
                             <option value="">Carregando eixos...</option>
                         </select>
                     </div>
@@ -1111,6 +1111,10 @@
                             destino = '/index.html';
                         } else if (dados.user.role === 'setor_pedagogico') {
                             destino = '/setor-pedagogico.html';
+                        } else if (dados.user.role === 'coordenacao_patio') {
+                            destino = '/coordenacao-patio.html';
+                        } else if (dados.user.role === 'cozinha') {
+                            destino = '/cozinha-dashboard.html';
                         } else if (dados.user.role === 'aluno') {
                             destino = '/aluno.html';
                         } else {
