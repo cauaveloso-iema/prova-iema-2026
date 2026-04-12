@@ -452,6 +452,17 @@
             cursor: pointer;
         }
 
+        /* 🔥 ESPAÇAMENTO ADICIONAL PARA PREFERÊNCIAS ALIMENTARES */
+        .preferencias-alimentares-section {
+            margin-bottom: 2.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        
+        .preferencias-alimentares-section .form-section-title {
+            margin-top: 0.5rem;
+        }
+
         @media (max-width: 768px) {
             .perfil-container {
                 margin: 1rem auto;
@@ -667,9 +678,12 @@
                         </div>
                     </div>
                     
-                    <!-- Seção 6: Preferências Alimentares (SOMENTE PARA ALUNOS) -->
+                    <!-- 🔥 Seção 6: Dados Específicos do Perfil (dinâmico conforme role) -->
+                    <div id="dadosEspecificos"></div>
+                    
+                    <!-- 🔥 Seção 7: Preferências Alimentares (SOMENTE PARA ALUNOS - COM ESPAÇAMENTO) -->
                     <div id="preferenciasAlimentares" style="display: none;">
-                        <div class="form-section">
+                        <div class="preferencias-alimentares-section">
                             <div class="form-section-title">
                                 <i class="fas fa-utensils"></i>
                                 <span>Preferências Alimentares</span>
@@ -710,9 +724,6 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Seção 7: Dados Específicos do Perfil (dinâmico conforme role) -->
-                    <div id="dadosEspecificos"></div>
                     
                     <!-- Botão Salvar -->
                     <button type="submit" class="btn-salvar" id="btnSalvar">
@@ -825,6 +836,15 @@
                     } else if (userData.role === 'super_admin') {
                         roleText = '⭐ Super Administrador';
                         roleIcon = 'fa-crown';
+                    } else if (userData.role === 'setor_pedagogico') {
+                        roleText = '👩‍🏫 Setor Pedagógico';
+                        roleIcon = 'fa-chalkboard-user';
+                    } else if (userData.role === 'coordenacao_patio') {
+                        roleText = '🏃 Coordenação de Pátio';
+                        roleIcon = 'fa-utensils';
+                    } else if (userData.role === 'cozinha') {
+                        roleText = '🍽️ Cozinha';
+                        roleIcon = 'fa-kitchen-set';
                     }
                     
                     document.getElementById('perfilRole').textContent = roleText;

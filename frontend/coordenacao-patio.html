@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
 
-    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <!-- 🔥 FAVICON LOCAL -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
@@ -331,7 +331,7 @@
                         <i class="fas fa-qrcode"></i> Automático (QR Code)
                     </button>
                     <button class="modo-btn" id="modoManualBtn">
-                        <i class="fas fa-users"></i> Manual (Por Turma)
+                        <i class="fas fa-users"></i> Manual (Selecionar Aluno)
                     </button>
                 </div>
             </div>
@@ -344,7 +344,7 @@
                     <h5 class="card-title">
                         <i class="fas fa-qrcode me-2"></i> Escanear QR Code do Aluno
                     </h5>
-                    <div id="qr-reader" class="qr-scanner-container"></div>
+                    <div id="qr-reader-auto" class="qr-scanner-container"></div>
                     <div class="text-center mt-2">
                         <small class="text-muted">Aponte a câmera para o QR Code do aluno</small>
                     </div>
@@ -352,42 +352,61 @@
             </div>
         </div>
         
-        <!-- MODO MANUAL (Por Turma) -->
+        <!-- MODO MANUAL (Selecionar Aluno por Turma) -->
         <div id="modoManual" style="display: none;">
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">
                         <i class="fas fa-users me-2"></i> Selecionar Aluno por Turma
                     </h5>
+                    <p class="text-muted mb-3">
+                        <i class="fas fa-info-circle"></i> Selecione uma turma, escolha um aluno e aponte a câmera para o QR Code.
+                    </p>
                     
-                    <!-- Filtros -->
+                    <!-- Filtro de Turma -->
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <select id="filtroTurma" class="form-select">
-                                <option value="">Todas as Turmas</option>
+                        <div class="col-md-6">
+                            <label class="form-label">Turma</label>
+                            <select id="filtroTurmaManual" class="form-select">
+                                <option value="">Selecione uma turma...</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <select id="filtroCurso" class="form-select">
-                                <option value="">Todos os Cursos</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <input type="text" id="filtroBusca" class="form-control" placeholder="Buscar aluno...">
+                        <div class="col-md-6">
+                            <label class="form-label">Buscar Aluno</label>
+                            <input type="text" id="filtroBuscaManual" class="form-control" placeholder="Digite o nome do aluno...">
                         </div>
                     </div>
                     
-                    <div id="listaAlunos" class="mt-3">
+                    <!-- Lista de Alunos -->
+                    <div id="listaAlunosManual" class="mt-3">
                         <div class="text-center py-3">
                             <div class="loading"></div>
-                            <p>Carregando alunos...</p>
+                            <p>Selecione uma turma para ver os alunos</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Área da Câmera do Modo Manual -->
+                    <div id="cameraAreaManual" style="display: none; margin-top: 20px;">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-camera"></i> Leitura de QR Code
+                                </h5>
+                                <div id="qr-reader-manual" class="qr-scanner-container"></div>
+                                <div class="text-center mt-2">
+                                    <small class="text-muted" id="cameraMensagemManual">Aponte a câmera para o QR Code do aluno</small>
+                                </div>
+                                <button class="btn btn-secondary w-100 mt-2" onclick="fecharCameraManual()">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Informações do Aluno (aparece após scan ou seleção) -->
+        <!-- Informações do Aluno (aparece após scan) -->
         <div id="alunoInfo" style="display: none;">
             <div class="aluno-card">
                 <div class="d-flex flex-wrap align-items-center">
@@ -473,8 +492,13 @@
         
         let token = localStorage.getItem('auth_token');
         let currentAluno = null;
-        let qrScanner = null;
-        let modoAtual = 'automatico'; // 'automatico' ou 'manual'
+        let scannerAuto = null;
+        let scannerManual = null;
+        let scannerAutoAtivo = false;
+        let scannerManualAtivo = false;
+        let modoAtual = 'automatico';
+        let aguardandoLeituraQR = false;
+        let alunoSelecionadoParaQR = null;
         
         // Inicialização
         document.addEventListener('DOMContentLoaded', async () => {
@@ -487,29 +511,23 @@
                 return;
             }
             
-            // Carregar informações do usuário
             document.getElementById('userName').textContent = userData.nome || 'Usuário';
             document.getElementById('dataAtual').textContent = new Date().toLocaleDateString('pt-BR');
             
-            // Carregar foto de perfil
             await carregarFotoPerfil();
-            
             await carregarContadores();
-            await carregarAlunosParaManual(); // Carregar lista para modo manual
+            await carregarTurmasParaManual();
             
-            iniciarScanner();
+            // Iniciar o modo automático (câmera sempre ativa)
+            iniciarScannerAutomatico();
             
             setInterval(carregarContadores, 30000);
-            setInterval(() => { if (currentAluno) buscarAluno(currentAluno.id); }, 60000);
             
-            // Eventos dos modos
             document.getElementById('modoAutomaticoBtn').addEventListener('click', () => setModo('automatico'));
             document.getElementById('modoManualBtn').addEventListener('click', () => setModo('manual'));
             
-            // Filtros do modo manual
-            document.getElementById('filtroTurma').addEventListener('change', () => filtrarAlunos());
-            document.getElementById('filtroCurso').addEventListener('change', () => filtrarAlunos());
-            document.getElementById('filtroBusca').addEventListener('input', () => filtrarAlunos());
+            document.getElementById('filtroTurmaManual').addEventListener('change', () => carregarAlunosPorTurma());
+            document.getElementById('filtroBuscaManual').addEventListener('input', () => filtrarAlunosManual());
         });
         
         async function carregarFotoPerfil() {
@@ -530,148 +548,46 @@
             }
         }
         
-        function setModo(modo) {
-            modoAtual = modo;
-            
-            if (modo === 'automatico') {
-                document.getElementById('modoAutomaticoBtn').classList.add('active');
-                document.getElementById('modoManualBtn').classList.remove('active');
-                document.getElementById('modoAutomatico').style.display = 'block';
-                document.getElementById('modoManual').style.display = 'none';
-                iniciarScanner();
-            } else {
-                document.getElementById('modoManualBtn').classList.add('active');
-                document.getElementById('modoAutomaticoBtn').classList.remove('active');
-                document.getElementById('modoAutomatico').style.display = 'none';
-                document.getElementById('modoManual').style.display = 'block';
-                if (qrScanner) { qrScanner.stop(); }
-                carregarAlunosParaManual();
-            }
-            
-            document.getElementById('alunoInfo').style.display = 'none';
-            currentAluno = null;
-        }
-        
         // ============================================
-        // MODO MANUAL - CARREGAR ALUNOS
+        // SCANNER DO MODO AUTOMÁTICO
         // ============================================
-        async function carregarAlunosParaManual() {
+        async function iniciarScannerAutomatico() {
+            // Parar scanner manual se estiver ativo
+            await pararScannerManual();
+            
+            const qrContainer = document.getElementById('qr-reader-auto');
+            qrContainer.innerHTML = '<div id="qr-reader-auto-new" style="width: 100%;"></div>';
+            
+            scannerAuto = new Html5Qrcode("qr-reader-auto-new");
+            
+            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+            
             try {
-                const response = await fetch('/api/coordenacao-patio/alunos', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    window.alunosData = data;
-                    
-                    // Preencher filtros
-                    const turmaSelect = document.getElementById('filtroTurma');
-                    turmaSelect.innerHTML = '<option value="">Todas as Turmas</option>';
-                    if (data.turmas) {
-                        data.turmas.forEach(t => {
-                            turmaSelect.innerHTML += `<option value="${t}">${t}</option>`;
-                        });
-                    }
-                    
-                    const cursoSelect = document.getElementById('filtroCurso');
-                    cursoSelect.innerHTML = '<option value="">Todos os Cursos</option>';
-                    if (data.cursos) {
-                        data.cursos.forEach(c => {
-                            cursoSelect.innerHTML += `<option value="${c}">${c}</option>`;
-                        });
-                    }
-                    
-                    filtrarAlunos();
+                await scannerAuto.start({ facingMode: "environment" }, config, onScanSuccessAuto, onScanError);
+                scannerAutoAtivo = true;
+                console.log('✅ Scanner Automático iniciado');
+            } catch (err) {
+                console.error('Erro ao iniciar scanner automático:', err);
+                qrContainer.innerHTML = `<div class="alert alert-warning m-3">Não foi possível acessar a câmera.</div>`;
+                scannerAutoAtivo = false;
+            }
+        }
+        
+        async function pararScannerAutomatico() {
+            if (scannerAuto && scannerAutoAtivo) {
+                try {
+                    await scannerAuto.stop();
+                    scannerAutoAtivo = false;
+                    console.log('✅ Scanner Automático parado');
+                } catch (e) {
+                    console.log('⚠️ Erro ao parar scanner automático:', e.message);
                 }
-            } catch (error) {
-                console.error('Erro ao carregar alunos:', error);
-                document.getElementById('listaAlunos').innerHTML = '<div class="alert alert-danger">Erro ao carregar alunos</div>';
             }
+            scannerAuto = null;
         }
         
-        function filtrarAlunos() {
-            if (!window.alunosData) return;
-            
-            const turmaFiltro = document.getElementById('filtroTurma').value;
-            const cursoFiltro = document.getElementById('filtroCurso').value;
-            const buscaFiltro = document.getElementById('filtroBusca').value.toLowerCase();
-            
-            let alunos = window.alunosData.alunos || [];
-            
-            if (turmaFiltro) alunos = alunos.filter(a => a.turma === turmaFiltro);
-            if (cursoFiltro) alunos = alunos.filter(a => a.curso === cursoFiltro);
-            if (buscaFiltro) alunos = alunos.filter(a => a.nome.toLowerCase().includes(buscaFiltro));
-            
-            // Agrupar por turma
-            const porTurma = {};
-            alunos.forEach(aluno => {
-                const turma = aluno.turma || 'Sem Turma';
-                if (!porTurma[turma]) porTurma[turma] = [];
-                porTurma[turma].push(aluno);
-            });
-            
-            // Renderizar
-            const container = document.getElementById('listaAlunos');
-            if (Object.keys(porTurma).length === 0) {
-                container.innerHTML = '<div class="text-center text-muted py-3">Nenhum aluno encontrado</div>';
-                return;
-            }
-            
-            let html = '';
-            for (const [turma, turmaAlunos] of Object.entries(porTurma)) {
-                html += `
-                    <div class="turma-group">
-                        <div class="turma-header">
-                            <span><i class="fas fa-users me-2"></i> ${turma}</span>
-                            <span class="badge bg-primary">${turmaAlunos.length} alunos</span>
-                        </div>
-                        <div>
-                            ${turmaAlunos.map(aluno => `
-                                <div class="aluno-item" data-aluno-id="${aluno.id}" onclick="selecionarAlunoManual('${aluno.id}')">
-                                    <div>
-                                        <strong>${aluno.nome}</strong>
-                                        <br>
-                                        <small class="text-muted">${aluno.curso || ''} • ${aluno.matricula || 'Sem matrícula'}</small>
-                                    </div>
-                                    <button class="btn-selecionar-aluno">
-                                        <i class="fas fa-arrow-right"></i> Selecionar
-                                    </button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-            container.innerHTML = html;
-        }
-        
-        async function selecionarAlunoManual(alunoId) {
-            await buscarAluno(alunoId);
-        }
-        
-        // ============================================
-        // MODO AUTOMÁTICO - SCANNER QR CODE
-        // ============================================
-        function iniciarScanner() {
-            if (modoAtual !== 'automatico') return;
-            
-            const qrContainer = document.getElementById('qr-reader');
-            if (qrScanner) {
-                try { qrScanner.stop(); } catch(e) {}
-                qrContainer.innerHTML = '';
-            }
-            
-            qrScanner = new Html5Qrcode("qr-reader");
-            qrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess, onScanError)
-                .catch(err => {
-                    console.error('Erro ao iniciar scanner:', err);
-                    qrContainer.innerHTML = `<div class="alert alert-warning m-3">Não foi possível acessar a câmera. Verifique as permissões.</div>`;
-                });
-        }
-        
-        async function onScanSuccess(decodedText) {
-            console.log('QR Code escaneado:', decodedText);
+        async function onScanSuccessAuto(decodedText) {
+            console.log('QR Code escaneado (Automático):', decodedText);
             
             let alunoId = null;
             if (decodedText.match(/^[a-f0-9]{24}$/i)) alunoId = decodedText;
@@ -683,12 +599,269 @@
                 if (match) alunoId = match[1];
             }
             
-            if (!alunoId) { alert('QR Code inválido'); return; }
+            if (!alunoId) { 
+                alert('QR Code inválido'); 
+                return; 
+            }
+            
+            // Parar scanner automático durante o processamento
+            await pararScannerAutomatico();
+            
+            // Buscar dados do aluno
             await buscarAluno(alunoId);
         }
         
-        function onScanError(error) {
-            // Silencioso
+        // ============================================
+        // SCANNER DO MODO MANUAL
+        // ============================================
+        async function iniciarScannerManual(alunoId, alunoNome) {
+            // Parar scanner automático
+            await pararScannerAutomatico();
+            
+            // Esconder lista de alunos e mostrar câmera
+            document.getElementById('listaAlunosManual').style.display = 'none';
+            document.getElementById('cameraAreaManual').style.display = 'block';
+            
+            // Atualizar mensagem
+            document.getElementById('cameraMensagemManual').innerHTML = `Aponte a câmera para o QR Code do aluno: <strong>${alunoNome}</strong>`;
+            
+            aguardandoLeituraQR = true;
+            alunoSelecionadoParaQR = { id: alunoId, nome: alunoNome };
+            
+            const qrContainer = document.getElementById('qr-reader-manual');
+            qrContainer.innerHTML = '<div id="qr-reader-manual-new" style="width: 100%;"></div>';
+            
+            scannerManual = new Html5Qrcode("qr-reader-manual-new");
+            
+            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+            
+            try {
+                await scannerManual.start({ facingMode: "environment" }, config, onScanSuccessManual, onScanError);
+                scannerManualAtivo = true;
+                console.log('✅ Scanner Manual iniciado');
+            } catch (err) {
+                console.error('Erro ao iniciar scanner manual:', err);
+                qrContainer.innerHTML = `<div class="alert alert-warning m-3">Não foi possível acessar a câmera.</div>`;
+                scannerManualAtivo = false;
+            }
+        }
+        
+        async function pararScannerManual() {
+            if (scannerManual && scannerManualAtivo) {
+                try {
+                    await scannerManual.stop();
+                    scannerManualAtivo = false;
+                    console.log('✅ Scanner Manual parado');
+                } catch (e) {
+                    console.log('⚠️ Erro ao parar scanner manual:', e.message);
+                }
+            }
+            scannerManual = null;
+        }
+        
+        function fecharCameraManual() {
+            pararScannerManual();
+            document.getElementById('cameraAreaManual').style.display = 'none';
+            document.getElementById('listaAlunosManual').style.display = 'block';
+            aguardandoLeituraQR = false;
+            alunoSelecionadoParaQR = null;
+            
+            // Reativar scanner automático se ainda estiver no modo automático
+            if (modoAtual === 'automatico') {
+                iniciarScannerAutomatico();
+            }
+        }
+        
+        async function onScanSuccessManual(decodedText) {
+            console.log('QR Code escaneado (Manual):', decodedText);
+            
+            let alunoId = null;
+            if (decodedText.match(/^[a-f0-9]{24}$/i)) alunoId = decodedText;
+            else if (decodedText.includes('aluno=')) {
+                const match = decodedText.match(/[?&]aluno=([a-f0-9]{24})/i);
+                if (match) alunoId = match[1];
+            } else if (decodedText.includes('id=')) {
+                const match = decodedText.match(/[?&]id=([a-f0-9]{24})/i);
+                if (match) alunoId = match[1];
+            }
+            
+            if (!alunoId) { 
+                alert('QR Code inválido'); 
+                return; 
+            }
+            
+            // Verificar se é o aluno correto
+            if (aguardandoLeituraQR && alunoSelecionadoParaQR && alunoId !== alunoSelecionadoParaQR.id) {
+                alert(`QR Code incorreto! Escaneie o QR Code do aluno: ${alunoSelecionadoParaQR.nome}`);
+                return;
+            }
+            
+            // Parar scanner manual
+            await pararScannerManual();
+            
+            // Esconder área da câmera
+            document.getElementById('cameraAreaManual').style.display = 'none';
+            
+            // Buscar dados do aluno
+            await buscarAluno(alunoId);
+        }
+        
+        function onScanError(error) {}
+        
+        // ============================================
+        // GERENCIAMENTO DE MODOS
+        // ============================================
+        async function setModo(modo) {
+            modoAtual = modo;
+            
+            // Limpar estado
+            document.getElementById('alunoInfo').style.display = 'none';
+            currentAluno = null;
+            aguardandoLeituraQR = false;
+            alunoSelecionadoParaQR = null;
+            
+            if (modo === 'automatico') {
+                document.getElementById('modoAutomaticoBtn').classList.add('active');
+                document.getElementById('modoManualBtn').classList.remove('active');
+                document.getElementById('modoAutomatico').style.display = 'block';
+                document.getElementById('modoManual').style.display = 'none';
+                
+                // Parar scanner manual e iniciar automático
+                await pararScannerManual();
+                await iniciarScannerAutomatico();
+            } else {
+                document.getElementById('modoManualBtn').classList.add('active');
+                document.getElementById('modoAutomaticoBtn').classList.remove('active');
+                document.getElementById('modoAutomatico').style.display = 'none';
+                document.getElementById('modoManual').style.display = 'block';
+                
+                // Parar scanner automático
+                await pararScannerAutomatico();
+                
+                // Garantir que a câmera manual está fechada
+                document.getElementById('cameraAreaManual').style.display = 'none';
+                document.getElementById('listaAlunosManual').style.display = 'block';
+                
+                // Recarregar lista de alunos se já houver turma selecionada
+                const turmaSelecionada = document.getElementById('filtroTurmaManual').value;
+                if (turmaSelecionada) {
+                    await carregarAlunosPorTurma();
+                } else {
+                    document.getElementById('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
+                }
+            }
+        }
+        
+        // ============================================
+        // MODO MANUAL - CARREGAR ALUNOS
+        // ============================================
+        async function carregarTurmasParaManual() {
+            try {
+                const response = await fetch('/api/coordenacao-patio/alunos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.turmas) {
+                    const turmaSelect = document.getElementById('filtroTurmaManual');
+                    turmaSelect.innerHTML = '<option value="">Selecione uma turma...</option>';
+                    data.turmas.forEach(turma => {
+                        turmaSelect.innerHTML += `<option value="${turma}">${turma}</option>`;
+                    });
+                    window.turmasData = data;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar turmas:', error);
+            }
+        }
+        
+        async function carregarAlunosPorTurma() {
+            const turmaSelecionada = document.getElementById('filtroTurmaManual').value;
+            
+            if (!turmaSelecionada) {
+                document.getElementById('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
+                return;
+            }
+            
+            document.getElementById('listaAlunosManual').innerHTML = '<div class="text-center py-3"><div class="loading"></div><p>Carregando alunos...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/coordenacao-patio/alunos?turma=${encodeURIComponent(turmaSelecionada)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.alunos) {
+                    window.alunosPorTurma = data.alunos;
+                    filtrarAlunosManual();
+                } else {
+                    document.getElementById('listaAlunosManual').innerHTML = '<div class="alert alert-warning">Nenhum aluno encontrado nesta turma</div>';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                document.getElementById('listaAlunosManual').innerHTML = '<div class="alert alert-danger">Erro ao carregar alunos</div>';
+            }
+        }
+        
+        function filtrarAlunosManual() {
+            if (!window.alunosPorTurma) return;
+            
+            const busca = document.getElementById('filtroBuscaManual').value.toLowerCase();
+            
+            let alunosFiltrados = window.alunosPorTurma;
+            if (busca) {
+                alunosFiltrados = alunosFiltrados.filter(a => a.nome.toLowerCase().includes(busca));
+            }
+            
+            alunosFiltrados.sort((a, b) => a.nome.localeCompare(b.nome));
+            
+            const container = document.getElementById('listaAlunosManual');
+            
+            if (alunosFiltrados.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted py-3">Nenhum aluno encontrado</div>';
+                return;
+            }
+            
+            let html = '<div class="list-group">';
+            alunosFiltrados.forEach(aluno => {
+                html += `
+                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" 
+                         onclick="selecionarAlunoParaCamera('${aluno.id}', '${aluno.nome}')"
+                         style="cursor: pointer;">
+                        <div>
+                            <strong>${aluno.nome}</strong>
+                            <br>
+                            <small class="text-muted">${aluno.matricula || 'Sem matrícula'} • ${aluno.curso || ''}</small>
+                        </div>
+                        <i class="fas fa-qrcode fa-2x text-primary"></i>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+        
+        async function selecionarAlunoParaCamera(alunoId, alunoNome) {
+            console.log(`🎯 Aluno selecionado: ${alunoNome} (${alunoId})`);
+            
+            // Verificar se o aluno existe
+            try {
+                const response = await fetch(`/api/coordenacao-patio/aluno/${alunoId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Iniciar scanner manual para este aluno
+                    await iniciarScannerManual(alunoId, alunoNome);
+                } else {
+                    alert('Aluno não encontrado');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao buscar dados do aluno');
+            }
         }
         
         // ============================================
@@ -705,16 +878,21 @@
                     currentAluno = data.aluno;
                     exibirAluno(data);
                     
-                    if (modoAtual === 'automatico' && qrScanner) {
-                        await qrScanner.stop();
-                        document.getElementById('qr-reader').style.opacity = '0.5';
-                    }
+                    // Registrar automaticamente após exibir
+                    await registrarRefeicaoAutomatico();
                 } else {
                     alert('Usuário não encontrado');
+                    // Reativar scanner do modo atual
+                    if (modoAtual === 'automatico') {
+                        await iniciarScannerAutomatico();
+                    }
                 }
             } catch (error) {
                 console.error('Erro:', error);
                 alert('Erro ao buscar usuário');
+                if (modoAtual === 'automatico') {
+                    await iniciarScannerAutomatico();
+                }
             }
         }
         
@@ -765,8 +943,8 @@
             document.getElementById('alunoInfo').scrollIntoView({ behavior: 'smooth' });
         }
         
-        async function registrarRefeicao() {
-            if (!currentAluno) { alert('Nenhum usuário selecionado'); return; }
+        async function registrarRefeicaoAutomatico() {
+            if (!currentAluno) return;
             
             const hora = new Date().getHours();
             let tipoRefeicao = null;
@@ -774,9 +952,14 @@
             else if (hora >= 11 && hora <= 13) tipoRefeicao = 'almoco';
             else if (hora >= 14 && hora <= 16) tipoRefeicao = 'tarde';
             
-            if (!tipoRefeicao) { alert('Fora do horário de refeição'); return; }
-            
-            if (!confirm(`Confirmar ${tipoRefeicao === 'manha' ? 'LANCHE DA MANHÃ' : tipoRefeicao === 'almoco' ? 'ALMOÇO' : 'LANCHE DA TARDE'} para ${currentAluno.nome}?`)) return;
+            if (!tipoRefeicao) {
+                alert('Fora do horário de refeição');
+                // Reativar scanner do modo atual
+                if (modoAtual === 'automatico') {
+                    await iniciarScannerAutomatico();
+                }
+                return;
+            }
             
             try {
                 const response = await fetch('/api/coordenacao-patio/registrar-refeicao', {
@@ -790,21 +973,37 @@
                     alert(`✅ ${data.message}`);
                     document.getElementById('alunoInfo').style.display = 'none';
                     currentAluno = null;
-                    
-                    if (modoAtual === 'automatico' && qrScanner) {
-                        document.getElementById('qr-reader').style.opacity = '1';
-                        await qrScanner.resume();
-                    }
+                    aguardandoLeituraQR = false;
+                    alunoSelecionadoParaQR = null;
                     
                     await carregarContadores();
-                    if (modoAtual === 'manual') await carregarAlunosParaManual();
+                    
+                    // Reativar scanner do modo atual
+                    if (modoAtual === 'automatico') {
+                        await iniciarScannerAutomatico();
+                    } else {
+                        // No modo manual, fechar câmera e mostrar lista
+                        document.getElementById('cameraAreaManual').style.display = 'none';
+                        document.getElementById('listaAlunosManual').style.display = 'block';
+                        await carregarAlunosPorTurma();
+                    }
                 } else {
                     alert('❌ ' + data.error);
+                    if (modoAtual === 'automatico') {
+                        await iniciarScannerAutomatico();
+                    }
                 }
             } catch (error) {
                 console.error('Erro:', error);
                 alert('Erro ao registrar');
+                if (modoAtual === 'automatico') {
+                    await iniciarScannerAutomatico();
+                }
             }
+        }
+        
+        async function registrarRefeicao() {
+            await registrarRefeicaoAutomatico();
         }
         
         async function carregarContadores() {
@@ -836,9 +1035,6 @@
             }
         }
         
-        // ============================================
-        // FUNÇÕES DE NAVEGAÇÃO
-        // ============================================
         function logout() {
             if (confirm('Tem certeza que deseja sair do sistema?')) {
                 localStorage.removeItem('auth_token');
@@ -848,20 +1044,23 @@
         }
         
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && currentAluno) {
-                document.getElementById('alunoInfo').style.display = 'none';
-                currentAluno = null;
-                if (modoAtual === 'automatico' && qrScanner) {
-                    document.getElementById('qr-reader').style.opacity = '1';
-                    qrScanner.resume();
+            if (e.key === 'Escape') {
+                if (document.getElementById('cameraAreaManual').style.display === 'block') {
+                    fecharCameraManual();
+                } else if (currentAluno) {
+                    document.getElementById('alunoInfo').style.display = 'none';
+                    currentAluno = null;
+                    if (modoAtual === 'automatico') {
+                        iniciarScannerAutomatico();
+                    }
                 }
             }
         });
         
-        // Expor funções globalmente
-        window.selecionarAlunoManual = selecionarAlunoManual;
+        window.selecionarAlunoParaCamera = selecionarAlunoParaCamera;
         window.registrarRefeicao = registrarRefeicao;
         window.logout = logout;
+        window.fecharCameraManual = fecharCameraManual;
     </script>
 
     <script>
@@ -869,61 +1068,30 @@
         // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
         // ============================================
         (function() {
-            if (window.innerWidth > 768) {
-                console.log('📐 Desktop detectado - escalonamento desativado');
-                return;
-            }
-            
-            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
+            if (window.innerWidth > 768) return;
             
             function calcularEscalaMobile() {
                 const width = window.innerWidth;
-                const baseWidth = 768;
-                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-                
-                if (width <= 320) escala = 0.55;
-                else if (width <= 360) escala = 0.6;
-                else if (width <= 400) escala = 0.65;
-                else if (width <= 500) escala = 0.75;
-                else if (width <= 600) escala = 0.85;
-                else if (width <= 700) escala = 0.95;
-                else escala = 1;
-                
-                return escala;
+                if (width <= 320) return 0.55;
+                if (width <= 360) return 0.6;
+                if (width <= 400) return 0.65;
+                if (width <= 500) return 0.75;
+                if (width <= 600) return 0.85;
+                if (width <= 700) return 0.95;
+                return 1;
             }
             
-            function aplicarEscalaMobile() {
-                if (window.innerWidth > 768) return;
-                const escala = calcularEscalaMobile();
-                document.documentElement.style.setProperty('--scale-ratio', escala);
-                document.documentElement.style.setProperty('--current-width', window.innerWidth);
-                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-            }
-            
-            aplicarEscalaMobile();
+            const escala = calcularEscalaMobile();
+            document.documentElement.style.setProperty('--scale-ratio', escala);
             
             let timeout;
-            window.addEventListener('resize', function() {
+            window.addEventListener('resize', () => {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
-                    if (window.innerWidth <= 768) {
-                        aplicarEscalaMobile();
-                    } else {
-                        document.documentElement.style.setProperty('--scale-ratio', '1');
-                        console.log('📐 Modo desktop - escala resetada');
-                    }
+                    const novaEscala = calcularEscalaMobile();
+                    document.documentElement.style.setProperty('--scale-ratio', novaEscala);
                 }, 100);
             });
-            
-            window.addEventListener('orientationchange', function() {
-                setTimeout(() => {
-                    if (window.innerWidth <= 768) {
-                        aplicarEscalaMobile();
-                    }
-                }, 200);
-            });
-            
-            console.log('✅ Sistema de escalonamento mobile ativo!');
         })();
     </script>
 
@@ -935,9 +1103,6 @@
                     .catch(err => console.log('❌ Erro:', err));
             });
         }
-
-        window.addEventListener('online', () => console.log('🌐 Online'));
-        window.addEventListener('offline', () => console.log('📴 Offline'));
     </script>
 
 </body>

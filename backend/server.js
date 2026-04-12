@@ -18244,7 +18244,11 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
             condicaoAcessibilidade: user.condicaoAcessibilidade,
             dataCadastro: user.createdAt,
             ultimaAtualizacaoPerfil: user.ultimaAtualizacaoPerfil,
-            twoFactorEnabled: user.twoFactorEnabled
+            twoFactorEnabled: user.twoFactorEnabled,
+            
+            // 🔥 ADICIONAR CAMPOS DE PERFIL ALIMENTAR
+            perfilAlimentar: user.perfilAlimentar || 'nao_informado',
+            refeicoesQueParticipa: user.refeicoesQueParticipa || []
         };
         
         // Dados específicos por role
@@ -18263,6 +18267,13 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (user.role === 'admin' || user.role === 'super_admin') {
             dadosEspecificos.departamento = user.departamento;
             dadosEspecificos.nivel = user.role === 'super_admin' ? 'Super Administrador' : 'Administrador';
+        } else if (user.role === 'setor_pedagogico') {
+            dadosEspecificos.departamento = user.departamento;
+            dadosEspecificos.atribuicoes = user.atribuicoes;
+        } else if (user.role === 'coordenacao_patio') {
+            dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'cozinha') {
+            dadosEspecificos.departamento = user.departamento;
         }
         
         res.json({
@@ -18289,13 +18300,16 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         const updates = req.body;
         
         console.log(`✏️ Usuário ${userId} (${req.userRole}) atualizando perfil`);
+        console.log('📦 Dados recebidos:', updates);
         
         // Campos permitidos para atualização (todos os perfis)
         const camposPermitidos = [
             'nome', 'telefone', 'bio', 'dataNascimento', 'genero',
             'endereco', 'cidade', 'estado', 'cep',
             'instagram', 'linkedin', 'website', 'interesses',
-            'preferenciasNotificacao', 'fotoPerfil', 'fotoPerfilTipo'
+            'preferenciasNotificacao', 'fotoPerfil', 'fotoPerfilTipo',
+            // 🔥 ADICIONAR CAMPOS DE PERFIL ALIMENTAR
+            'perfilAlimentar', 'refeicoesQueParticipa'
         ];
         
         // Campos específicos por role (verificar permissão)
@@ -18304,6 +18318,12 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (req.userRole === 'professor') {
             camposPermitidos.push('eixo', 'departamento', 'titulacao');
         } else if (req.userRole === 'admin' || req.userRole === 'super_admin') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'setor_pedagogico') {
+            camposPermitidos.push('departamento', 'atribuicoes');
+        } else if (req.userRole === 'coordenacao_patio') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'cozinha') {
             camposPermitidos.push('departamento');
         }
         
@@ -18327,19 +18347,42 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         }
         
         if (dadosAtualizar.instagram && dadosAtualizar.instagram.trim()) {
-            // Remover @ se existir
             dadosAtualizar.instagram = dadosAtualizar.instagram.replace(/^@/, '');
         }
         
         if (dadosAtualizar.linkedin && dadosAtualizar.linkedin.trim()) {
-            // Se for apenas o nome do perfil, adicionar URL base
             if (!dadosAtualizar.linkedin.includes('linkedin.com')) {
                 dadosAtualizar.linkedin = 'https://linkedin.com/in/' + dadosAtualizar.linkedin.replace(/^\/+/, '');
             }
         }
         
+        // 🔥 VALIDAÇÃO DO PERFIL ALIMENTAR
+        if (dadosAtualizar.perfilAlimentar) {
+            const valoresPermitidos = ['sempre', 'as_vezes', 'nunca', 'nao_informado'];
+            if (!valoresPermitidos.includes(dadosAtualizar.perfilAlimentar)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Valor inválido para perfilAlimentar'
+                });
+            }
+        }
+        
+        if (dadosAtualizar.refeicoesQueParticipa) {
+            const refeicoesPermitidas = ['manha', 'almoco', 'tarde'];
+            for (const ref of dadosAtualizar.refeicoesQueParticipa) {
+                if (!refeicoesPermitidas.includes(ref)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Valor inválido para refeicoesQueParticipa: ${ref}`
+                    });
+                }
+            }
+        }
+        
         // Adicionar data de atualização
         dadosAtualizar.ultimaAtualizacaoPerfil = new Date();
+        
+        console.log('💾 Salvando dados:', dadosAtualizar);
         
         // Atualizar usuário
         const user = await User.findByIdAndUpdate(
@@ -18356,6 +18399,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         }
         
         console.log(`✅ Perfil do usuário ${user.email} atualizado`);
+        console.log(`   perfilAlimentar: ${user.perfilAlimentar}`);
+        console.log(`   refeicoesQueParticipa: ${user.refeicoesQueParticipa}`);
         
         // Preparar resposta com dados do perfil
         const perfilAtualizado = {
@@ -18376,7 +18421,12 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
             website: user.website,
             interesses: user.interesses,
             preferenciasNotificacao: user.preferenciasNotificacao,
-            ultimaAtualizacaoPerfil: user.ultimaAtualizacaoPerfil
+            ultimaAtualizacaoPerfil: user.ultimaAtualizacaoPerfil,
+            role: user.role,
+            
+            // 🔥 ADICIONAR PERFIL ALIMENTAR NA RESPOSTA
+            perfilAlimentar: user.perfilAlimentar || 'nao_informado',
+            refeicoesQueParticipa: user.refeicoesQueParticipa || []
         };
         
         // Adicionar campos específicos
@@ -18389,6 +18439,13 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
             perfilAtualizado.departamento = user.departamento;
             perfilAtualizado.titulacao = user.titulacao;
         } else if (user.role === 'admin' || user.role === 'super_admin') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'setor_pedagogico') {
+            perfilAtualizado.departamento = user.departamento;
+            perfilAtualizado.atribuicoes = user.atribuicoes;
+        } else if (user.role === 'coordenacao_patio') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'cozinha') {
             perfilAtualizado.departamento = user.departamento;
         }
         

@@ -208,6 +208,18 @@ tokenExpired: { type: Boolean, default: false },
     default: null
   },
 
+  // ========== PERFIL ALIMENTAR ==========
+  perfilAlimentar: {
+      type: String,
+      enum: ['sempre', 'as_vezes', 'nunca', 'nao_informado'],
+      default: 'nao_informado'
+  },
+  refeicoesQueParticipa: {
+      type: [String],
+      enum: ['manha', 'almoco', 'tarde'],
+      default: []
+  },
+
 // ========== CAMPOS DE SUPERUSUÁRIO ==========
 isSuperUser: {
   type: Boolean,
