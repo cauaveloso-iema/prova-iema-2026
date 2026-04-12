@@ -842,6 +842,14 @@ app.use('/api/admin', adminConfigRoutes);
 const calendarioRoutes = require('./routes/calendario-routes');
 app.use('/api/calendario', calendarioRoutes);
 
+// ============ NOVO SERVIÇO DE REFEIÇÃO - COORDENAÇÃO PATIO ============
+const coordenacaoPatioRoutes = require('./routes/coordenacaoPatio');
+app.use('/api/coordenacao-patio', coordenacaoPatioRoutes);
+
+// Rotas da Cozinha
+const cozinhaRoutes = require('./routes/cozinha');
+app.use('/api/cozinha', cozinhaRoutes);
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ
 // ============================================================================
@@ -1173,7 +1181,6 @@ const validateInputs = (validations) => {
   };
 };
 
-
 // ============================================================================
 // ROTAS PÚBLICAS
 // ============================================================================
@@ -1453,7 +1460,6 @@ app.post('/api/auth/register', [
     }
     
     // ========== CRIAR USUÁRIO ==========
-    // USUÁRIO SE CADASTROU - NÃO FORÇAR TROCA DE SENHA
     const user = new User({
       nome,
       email,
@@ -1462,7 +1468,7 @@ app.post('/api/auth/register', [
       telefone: telefoneNumeros,
       matricula: matricula || undefined,
       ativo: true,
-      forcePasswordChange: false, // ✅ CORRETO: Usuário escolheu a senha
+      forcePasswordChange: false,
       role,
       eixo: role === 'professor' ? eixo : null,
       curso: role === 'aluno' ? curso : undefined,
@@ -1477,7 +1483,6 @@ app.post('/api/auth/register', [
       outraCondicao: role === 'aluno' && precisaAcessibilidade && condicaoAcessibilidade === 'outra' ? outraCondicao : null,
       dataSolicitacaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? new Date() : null,
       
-      // ========== 🔥 CAMPOS DE 2FA ADICIONADOS ==========
       twoFactorEnabled: false,
       twoFactorBackupCodes: [],
       twoFactorBackupCodesShown: false,
@@ -1486,17 +1491,83 @@ app.post('/api/auth/register', [
       telefoneVerificado: false,
       lastOtpRequest: null,
       otpRequestCount: 0
-      
     });
     
     await user.save();
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔥 GERAR QR CODE CORRIGIDO - APENAS O ID DO ALUNO
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    try {
+        const QRCode = require('qrcode');
+        
+        // Detectar ambiente
+        const IS_LOCALHOST = process.env.NODE_ENV === 'development' || 
+                            process.env.HOSTNAME?.includes('localhost');
+        const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : 'https://sistema-avaliativo-iemacentro.onrender.com';
+        
+        let qrCodeDataUrl;
+        let usuarioUrl;
+        
+        // 🔥 GERAR QR CODE DIFERENTE PARA CADA ROLE
+        switch(user.role) {
+            case 'aluno':
+                // ✅ CORREÇÃO: Apenas o ID do aluno (formato SIMPLES)
+                // O corrigir-prova.html vai processar apenas o ID
+                usuarioUrl = `${BASE_URL}/corrigir-prova.html?aluno=${user._id}`;
+                console.log(`📱 QR Code de aluno gerado (correção direta): ${usuarioUrl}`);
+                break;
+                
+            case 'professor':
+                usuarioUrl = `${BASE_URL}/identificar-professor.html?id=${user._id}&tipo=professor`;
+                break;
+                
+            case 'admin':
+            case 'super_admin':
+                usuarioUrl = `${BASE_URL}/identificar-admin.html?id=${user._id}&tipo=admin`;
+                break;
+                
+            case 'setor_pedagogico':
+                usuarioUrl = `${BASE_URL}/identificar-setor.html?id=${user._id}&tipo=setor`;
+                break;
+                
+            default:
+                usuarioUrl = `${BASE_URL}/identificar-usuario.html?id=${user._id}&tipo=usuario`;
+        }
+        
+        // Gerar QR Code
+        qrCodeDataUrl = await QRCode.toDataURL(usuarioUrl, {
+            errorCorrectionLevel: 'H',
+            margin: 1,
+            width: 200,
+            color: {
+                dark: '#000000',
+                light: '#ffffff'
+            }
+        });
+        
+        // Salvar no usuário
+        user.qrCodeUsuario = qrCodeDataUrl;
+        user.qrCodeUsuarioGeradoEm = new Date();
+        user.qrCodeUsuarioTipo = user.role;
+        await user.save();
+        
+        console.log(`✅ QR Code gerado para ${user.role}: ${user.nome} (${user.email})`);
+        console.log(`   URL: ${usuarioUrl}`);
+        
+    } catch (qrError) {
+        console.error('❌ Erro ao gerar QR Code:', qrError.message);
+        // Não falha o cadastro se o QR Code falhar
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
     
     console.log('✅ Usuário criado com sucesso!');
     console.log(`   📚 Curso: ${user.curso}`);
     console.log(`   🏫 Turma: ${user.turma}`);     
     console.log(`   🎯 Eixo: ${user.eixo}`);
     console.log(`   ♿ Acessibilidade: ${user.precisaAcessibilidade ? 'Sim' : 'Não'}`);
-    console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange} (NÃO forçado - cadastro normal)`);
     
     const token = jwt.sign(
       { 
@@ -1521,7 +1592,7 @@ app.post('/api/auth/register', [
     } else if (user.role === 'professor') {
         redirectTo = '/index.html';
     } else if (user.role === 'aluno') {
-        redirectTo = '/capturar-face.html';  // ← ALTERADO AQUI!
+        redirectTo = '/capturar-face.html';
     } else {
         redirectTo = '/aluno.html';
     }
@@ -1544,7 +1615,8 @@ app.post('/api/auth/register', [
         titulacao: user.titulacao,
         precisaAcessibilidade: user.precisaAcessibilidade,
         condicaoAcessibilidade: user.condicaoAcessibilidade,
-        outraCondicao: user.outraCondicao
+        outraCondicao: user.outraCondicao,
+        qrCodeUsuario: user.qrCodeUsuario  // ← Retorna o QR Code na resposta
       },
       redirectTo: redirectTo
     });
@@ -1707,7 +1779,7 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: jwtExpiracao }
           );
           
-          // 🔥 CORREÇÃO: Definir redirecionamento para setor_pedagogico
+          // 🔥 CORREÇÃO: Definir redirecionamento para todos os perfis
           let redirectTo = '';
           if (user.forcePasswordChange) {
             redirectTo = '/trocar-senha.html';
@@ -1719,6 +1791,10 @@ app.post('/api/auth/login', async (req, res) => {
             redirectTo = '/index.html';
           } else if (user.role === 'setor_pedagogico') {
             redirectTo = '/setor-pedagogico.html';
+          } else if (user.role === 'coordenacao_patio') {
+            redirectTo = '/coordenacao-patio.html';
+          } else if (user.role === 'cozinha') {
+            redirectTo = '/cozinha-dashboard.html';
           } else if (user.role === 'aluno') {
             redirectTo = '/aluno.html';
           } else {
@@ -1851,7 +1927,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
     const perfisCom2FA = ['super_admin'];
     if (exigir2FA) {
-      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico');
+      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio');
     }
     
     if (perfisCom2FA.includes(user.role)) {
@@ -1915,7 +1991,7 @@ app.post('/api/auth/login', async (req, res) => {
       maxAge: parseJwtExpiration(jwtExpiracao) * 1000
     });
     
-    // 🔥 CORREÇÃO: Definir redirecionamento para setor_pedagogico
+    // 🔥 CORREÇÃO: Definir redirecionamento para todos os perfis
     let redirectTo = '';
     if (user.forcePasswordChange) {
       redirectTo = '/trocar-senha.html';
@@ -1927,6 +2003,10 @@ app.post('/api/auth/login', async (req, res) => {
       redirectTo = '/index.html';
     } else if (user.role === 'setor_pedagogico') {
       redirectTo = '/setor-pedagogico.html';
+    } else if (user.role === 'coordenacao_patio') {
+      redirectTo = '/coordenacao-patio.html';
+    } else if (user.role === 'cozinha') {
+      redirectTo = '/cozinha-dashboard.html';
     } else if (user.role === 'aluno') {
       redirectTo = '/aluno.html';
     } else {
@@ -10854,9 +10934,11 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
         
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
+        // 🔥 CORREÇÃO: Usar select POSITIVO (listar apenas os campos que queremos)
+        // Em vez de excluir campos, vamos INCLUIR explicitamente os que precisamos
         const [usuarios, total] = await Promise.all([
             User.find(query)
-                .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret')
+                .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade twoFactorEnabled telefoneVerificado createdAt updatedAt qrCodeUsuario qrCodeUsuarioGeradoEm qrCodeUsuarioTipo')
                 .sort({ nome: 1 })
                 .skip(skip)
                 .limit(parseInt(limit))
@@ -10888,10 +10970,15 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
             twoFactorEnabled: user.twoFactorEnabled || false,
             telefoneVerificado: user.telefoneVerificado || false,
             createdAt: user.createdAt,
-            updatedAt: user.updatedAt
+            updatedAt: user.updatedAt,
+            // 🔥 ADICIONAR OS CAMPOS DO QR CODE AQUI
+            qrCodeUsuario: user.qrCodeUsuario || null,
+            qrCodeUsuarioGeradoEm: user.qrCodeUsuarioGeradoEm || null,
+            qrCodeUsuarioTipo: user.qrCodeUsuarioTipo || null
         }));
         
         console.log(`✅ ${usuariosFormatados.length} usuários encontrados (total: ${total})`);
+        console.log(`   📱 Usuários com QR Code: ${usuariosFormatados.filter(u => u.qrCodeUsuario).length}`);
         
         res.json({
             success: true,
@@ -11066,7 +11153,7 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
         
         console.log(`🔍 Admin ${req.userId} buscando usuário ${id}`);
         
-        // 🔥 CORREÇÃO: Incluir TODOS os campos de perfil
+        // 🔥 CORREÇÃO: Incluir TODOS os campos de perfil + QR CODE
         const user = await User.findById(id)
             .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor twoFactorEnabled twoFactorBackupCodesShown telefoneVerificado lastLogin loginAttempts lockUntil onesignalPlayerId createdAt updatedAt' +
                 // 🔥 ADICIONAR CAMPOS DE PERFIL
@@ -11074,7 +11161,9 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
                 ' endereco numero complemento bairro cidade estado cep' +
                 ' dataNascimento genero' +
                 ' instagram linkedin website interesses' +
-                ' ultimaAtualizacaoPerfil')
+                ' ultimaAtualizacaoPerfil' +
+                // 🔥 ADICIONAR CAMPOS DE QR CODE
+                ' qrCodeUsuario qrCodeUsuarioGeradoEm qrCodeUsuarioTipo')
             .lean();
         
         if (!user) {
@@ -11090,7 +11179,9 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
             email: user.email,
             fotoPerfil: user.fotoPerfil ? '✅ EXISTE' : '❌ NÃO',
             endereco: user.endereco || '—',
-            cidade: user.cidade || '—'
+            cidade: user.cidade || '—',
+            temQRCode: !!user.qrCodeUsuario,
+            qrCodeLength: user.qrCodeUsuario ? user.qrCodeUsuario.length : 0
         });
         
         res.json({
@@ -11148,7 +11239,12 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
                 interesses: user.interesses || [],
                 
                 // Metadados
-                ultimaAtualizacaoPerfil: user.ultimaAtualizacaoPerfil || null
+                ultimaAtualizacaoPerfil: user.ultimaAtualizacaoPerfil || null,
+                
+                // 🔥 CAMPOS DE QR CODE ADICIONADOS
+                qrCodeUsuario: user.qrCodeUsuario || null,
+                qrCodeUsuarioGeradoEm: user.qrCodeUsuarioGeradoEm || null,
+                qrCodeUsuarioTipo: user.qrCodeUsuarioTipo || null
             }
         });
         
@@ -12612,7 +12708,7 @@ app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) =
     }
 });
 
-// ============ ROTA PARA EXCLUIR TURMA (COM REMOÇÃO EM CASCATA) ============
+// ============ ROTA PARA EXCLUIR TURMA (CORRIGIDA - VERIFICAÇÃO MELHORADA) ============
 app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
     try {
         const turmaId = req.params.id;
@@ -12629,15 +12725,58 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
             });
         }
 
-        const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
-        const isProfessorDaTurma = turma.professorId && turma.professorId.toString() === usuarioId;
+        // 🔥 LOG PARA DEBUG - Ver o que tem no banco
+        console.log('📊 Dados da turma encontrada:');
+        console.log('   professorId:', turma.professorId);
+        console.log('   professorId type:', typeof turma.professorId);
+        console.log('   professorId string:', turma.professorId?.toString());
+        console.log('   usuarioId:', usuarioId);
+        console.log('   usuarioId type:', typeof usuarioId);
+        console.log('   usuarioId string:', usuarioId?.toString());
 
+        const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
+        
+        // 🔥 CORREÇÃO: Múltiplas formas de verificar se é o professor
+        let isProfessorDaTurma = false;
+        
+        // Tentativa 1: comparar professorId diretamente
+        if (turma.professorId) {
+            const professorIdStr = turma.professorId.toString();
+            const usuarioIdStr = usuarioId.toString();
+            isProfessorDaTurma = professorIdStr === usuarioIdStr;
+            console.log(`   Comparação direta: ${professorIdStr} === ${usuarioIdStr} = ${isProfessorDaTurma}`);
+        }
+        
+        // Tentativa 2: se professorId for um objeto (populado)
+        if (!isProfessorDaTurma && turma.professorId && turma.professorId._id) {
+            isProfessorDaTurma = turma.professorId._id.toString() === usuarioId.toString();
+            console.log(`   Comparação com _id: ${isProfessorDaTurma}`);
+        }
+        
+        // Tentativa 3: se tiver campo professor (string)
+        if (!isProfessorDaTurma && turma.professor) {
+            if (typeof turma.professor === 'string') {
+                isProfessorDaTurma = turma.professor === usuarioId.toString();
+            } else if (turma.professor.id) {
+                isProfessorDaTurma = turma.professor.id.toString() === usuarioId.toString();
+            } else if (turma.professor._id) {
+                isProfessorDaTurma = turma.professor._id.toString() === usuarioId.toString();
+            }
+            console.log(`   Comparação via professor objeto: ${isProfessorDaTurma}`);
+        }
+
+        console.log(`📊 Resultado final - Admin: ${isAdmin}, Professor da Turma: ${isProfessorDaTurma}`);
+
+        // Permitir: Admin OU Professor da turma
         if (!isAdmin && !isProfessorDaTurma) {
+            console.log(`🚫 Acesso negado: Usuário ${usuarioId} não é admin nem professor da turma`);
             return res.status(403).json({
                 success: false,
                 error: 'Você não tem permissão para excluir esta turma'
             });
         }
+
+        console.log(`✅ Permissão concedida. Prosseguindo com exclusão...`);
 
         // Verificar provas associadas
         const provasAssociadas = await Prova.find({ turmaId: turmaId });
@@ -12691,6 +12830,43 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
             success: false,
             error: 'Erro interno ao excluir turma: ' + error.message
         });
+    }
+});
+
+// ============ ROTA DE DIAGNÓSTICO PARA VER TURMA (APENAS DEBUG) ============
+app.get('/api/debug/turma/:id', authenticateToken, async (req, res) => {
+    try {
+        const turmaId = req.params.id;
+        
+        const turma = await Turma.findById(turmaId).lean();
+        
+        if (!turma) {
+            return res.status(404).json({ error: 'Turma não encontrada' });
+        }
+        
+        // Remover dados sensíveis
+        const turmaDebug = {
+            id: turma._id,
+            nome: turma.nome,
+            professorId: turma.professorId,
+            professorIdType: typeof turma.professorId,
+            professorIdString: turma.professorId?.toString(),
+            professor: turma.professor,
+            eixo: turma.eixo,
+            createdAt: turma.createdAt
+        };
+        
+        res.json({
+            success: true,
+            turma: turmaDebug,
+            usuarioLogado: {
+                id: req.userId,
+                role: req.userRole
+            }
+        });
+        
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -19425,6 +19601,233 @@ app.delete('/api/admin/omr/limpar', authenticateToken, isSuperAdmin, async (req,
 console.log('✅ Rotas OMR Debug registradas com sucesso!');
 console.log(`📁 Pasta debug_omr: ${OMR_DEBUG_FOLDER}`);
 
+// ============ ROTA PARA OBTER QR CODE DO USUÁRIO LOGADO ============
+app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.userId).select('+qrCodeUsuario qrCodeUsuarioGeradoEm qrCodeUsuarioTipo nome role');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Se não tiver QR Code, gerar agora (fallback)
+        if (!user.qrCodeUsuario) {
+            const QRCode = require('qrcode');
+            const IS_LOCALHOST = process.env.NODE_ENV === 'development';
+            const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : (process.env.BASE_URL || 'https://seu-dominio.com');
+            
+            let paginaDestino = '';
+            switch(user.role) {
+                case 'aluno': paginaDestino = 'identificar-aluno'; break;
+                case 'professor': paginaDestino = 'identificar-professor'; break;
+                case 'admin': case 'super_admin': paginaDestino = 'identificar-admin'; break;
+                case 'setor_pedagogico': paginaDestino = 'identificar-setor'; break;
+                default: paginaDestino = 'identificar-usuario';
+            }
+            
+            const usuarioUrl = `${BASE_URL}/${paginaDestino}.html?id=${user._id}`;
+            const qrCodeDataUrl = await QRCode.toDataURL(usuarioUrl, {
+                errorCorrectionLevel: 'H',
+                margin: 1,
+                width: 200
+            });
+            
+            user.qrCodeUsuario = qrCodeDataUrl;
+            user.qrCodeUsuarioGeradoEm = new Date();
+            user.qrCodeUsuarioTipo = user.role;
+            await user.save();
+        }
+        
+        // Determinar qual página exibir para cada role
+        let paginaExibicao = '';
+        let tituloExibicao = '';
+        
+        switch(user.role) {
+            case 'aluno':
+                paginaExibicao = 'aluno.html';
+                tituloExibicao = 'Área do Aluno';
+                break;
+            case 'professor':
+                paginaExibicao = 'index.html';
+                tituloExibicao = 'Dashboard do Professor';
+                break;
+            case 'admin':
+            case 'super_admin':
+                paginaExibicao = 'admin.html';
+                tituloExibicao = 'Painel Administrativo';
+                break;
+            case 'setor_pedagogico':
+                paginaExibicao = 'setor-pedagogico.html';
+                tituloExibicao = 'Setor Pedagógico';
+                break;
+            default:
+                paginaExibicao = 'login.html';
+                tituloExibicao = 'Sistema de Provas';
+        }
+        
+        res.json({
+            success: true,
+            qrCode: user.qrCodeUsuario,
+            geradoEm: user.qrCodeUsuarioGeradoEm,
+            tipo: user.qrCodeUsuarioTipo,
+            usuario: {
+                id: user._id,
+                nome: user.nome,
+                role: user.role,
+                paginaDestino: paginaExibicao,
+                tituloDestino: tituloExibicao
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar QR Code:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ ROTA PÚBLICA PARA IDENTIFICAR QUALQUER USUÁRIO PELO QR CODE ============
+app.get('/api/identificar-usuario/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const user = await User.findById(id).select('nome email role matricula curso turma eixo departamento');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Dados específicos por role
+        const dadosEspecificos = {};
+        
+        if (user.role === 'aluno') {
+            dadosEspecificos.matricula = user.matricula;
+            dadosEspecificos.curso = user.curso;
+            dadosEspecificos.turma = user.turma;
+        } else if (user.role === 'professor') {
+            dadosEspecificos.matricula = user.matricula;
+            dadosEspecificos.eixo = user.eixo;
+            dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'setor_pedagogico') {
+            dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'admin' || user.role === 'super_admin') {
+            dadosEspecificos.departamento = user.departamento;
+            dadosEspecificos.nivel = user.role === 'super_admin' ? 'Super Administrador' : 'Administrador';
+        }
+        
+        res.json({
+            success: true,
+            usuario: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email,
+                role: user.role,
+                ...dadosEspecificos
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============ ROTA PARA OBTER QR CODE DE UM ALUNO ESPECÍFICO (PARA IMPRESSÃO) ============
+// ============ ROTA PARA OBTER QR CODE DE UM ALUNO ============
+app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
+    try {
+        const { alunoId } = req.params;
+        
+        console.log(`📱 Buscando QR Code do aluno: ${alunoId}`);
+        
+        // Verificar permissão
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        const isProfessor = req.userRole === 'professor';
+        const isSetorPedagogico = req.userRole === 'setor_pedagogico';
+        
+        if (!isAdmin && !isProfessor && !isSetorPedagogico) {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado'
+            });
+        }
+        
+        // 🔥 IMPORTANTE: Usar '+qrCodeUsuario' para incluir o campo que tem select:false
+        const aluno = await User.findById(alunoId).select('+qrCodeUsuario qrCodeUsuarioGeradoEm nome email matricula role');
+        
+        if (!aluno) {
+            return res.status(404).json({
+                success: false,
+                error: 'Aluno não encontrado'
+            });
+        }
+        
+        // Verificar se é aluno
+        if (aluno.role !== 'aluno') {
+            return res.status(400).json({
+                success: false,
+                error: 'O ID informado não pertence a um aluno'
+            });
+        }
+        
+        console.log(`👤 Aluno: ${aluno.nome}`);
+        console.log(`📱 QR Code no banco: ${aluno.qrCodeUsuario ? '✅ SIM' : '❌ NÃO'}`);
+        console.log(`📏 Tamanho: ${aluno.qrCodeUsuario?.length || 0} caracteres`);
+        
+        // Se não tiver QR Code, gerar agora (fallback)
+        if (!aluno.qrCodeUsuario) {
+            console.log(`🆕 Gerando QR Code para ${aluno.nome} (fallback)`);
+            
+            const QRCode = require('qrcode');
+            const IS_LOCALHOST = process.env.NODE_ENV === 'development';
+            const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : (process.env.BASE_URL || 'https://seu-dominio.com');
+            
+            const alunoUrl = `${BASE_URL}/identificar-aluno.html?id=${aluno._id}`;
+            
+            const qrCodeDataUrl = await QRCode.toDataURL(alunoUrl, {
+                errorCorrectionLevel: 'H',
+                margin: 1,
+                width: 200
+            });
+            
+            aluno.qrCodeUsuario = qrCodeDataUrl;
+            aluno.qrCodeUsuarioGeradoEm = new Date();
+            await aluno.save();
+            
+            console.log(`✅ QR Code gerado e salvo`);
+        }
+        
+        res.json({
+            success: true,
+            qrCode: aluno.qrCodeUsuario,
+            geradoEm: aluno.qrCodeUsuarioGeradoEm,
+            aluno: {
+                id: aluno._id,
+                nome: aluno.nome,
+                email: aluno.email,
+                matricula: aluno.matricula
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
 
 // ============================================================================
 // VERIFICADOR AUTOMÁTICO DE NOTIFICAÇÕES (A CADA 1 MINUTO)

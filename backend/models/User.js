@@ -82,7 +82,7 @@ ultimaValidacaoPush: {
 },
 role: {
   type: String,
-  enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico'], // ADICIONADO
+  enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha'], // ADICIONADO
   default: 'aluno'
 },
 
@@ -187,6 +187,24 @@ tokenExpired: { type: Boolean, default: false },
   
   ultimoLoginDispositivo: {
     type: String,
+    default: null
+  },
+
+    // ========== QR CODE DO USUÁRIO (GERADO NO CADASTRO PARA TODOS) ==========
+  qrCodeUsuario: {
+    type: String,
+    default: null,
+    select: false  // Não retornar por padrão por ser grande (base64)
+  },
+  
+  qrCodeUsuarioGeradoEm: {
+    type: Date,
+    default: null
+  },
+  
+  qrCodeUsuarioTipo: {
+    type: String,
+    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', null],
     default: null
   },
 
