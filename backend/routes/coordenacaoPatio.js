@@ -114,6 +114,9 @@ router.get('/alunos',
 // ============================================
 // 🔍 BUSCAR ALUNO POR QR CODE (ID)
 // ============================================
+// ============================================
+// 🔍 BUSCAR ALUNO POR QR CODE (ID) - COM VERIFICAÇÃO DE RODÍZIO
+// ============================================
 router.get('/aluno/:id', 
   authenticateToken, 
   verificarCoordenacaoPatio, 
@@ -123,15 +126,26 @@ router.get('/aluno/:id',
       
       const aluno = await User.findOne({ 
         _id: alunoId, 
-        role: 'aluno',
         ativo: true 
-      }).select('nome email matricula curso turma fotoPerfil');
+      }).select('nome email matricula curso turma fotoPerfil role');
       
       if (!aluno) {
         return res.status(404).json({
           success: false,
-          error: 'Aluno não encontrado'
+          error: 'Usuário não encontrado'
         });
+      }
+      
+      // 🔥 VERIFICAR RODÍZIO DE ALMOÇO (se for aluno)
+      let podeAlmocarRodizio = true;
+      let mensagemRodizio = '';
+      
+      if (aluno.role === 'aluno' && aluno.turma) {
+        const rodizioCheck = await RodizioRefeicao.turmaPodeAlmocarHoje(aluno.turma);
+        podeAlmocarRodizio = rodizioCheck.pode;
+        mensagemRodizio = rodizioCheck.motivo;
+        
+        console.log(`🍽️ Verificação de rodízio para turma ${aluno.turma}: ${podeAlmocarRodizio ? '✅ PODE almoçar' : '❌ NÃO PODE almoçar'} - ${mensagemRodizio}`);
       }
       
       const agora = new Date();
@@ -163,6 +177,12 @@ router.get('/aluno/:id',
         mensagemHorario = '❌ Fora do horário de refeições (Refeições: 8h-10h, 11h-13h, 14h-16h)';
       }
       
+      // 🔥 SE FOR ALMOÇO E NÃO PODE PELO RODÍZIO, BLOQUEAR
+      if (tipoRefeicao === 'almoco' && !podeAlmocarRodizio) {
+        horarioPermitido = false;
+        mensagemHorario = `❌ ${mensagemRodizio}`;
+      }
+      
       let jaComeu = false;
       let mensagemRefeicao = '';
       
@@ -191,7 +211,8 @@ router.get('/aluno/:id',
           matricula: aluno.matricula,
           turma: aluno.turma,
           curso: aluno.curso,
-          fotoPerfil: aluno.fotoPerfil || null
+          fotoPerfil: aluno.fotoPerfil || null,
+          role: aluno.role
         },
         horario: {
           atual: horaAtual,
@@ -203,6 +224,11 @@ router.get('/aluno/:id',
           refeicoesHoje,
           limiteDiario: 3,
           isObrigatorio
+        },
+        rodizio: {
+          verificado: aluno.role === 'aluno' && tipoRefeicao === 'almoco',
+          podeAlmocar: podeAlmocarRodizio,
+          mensagem: mensagemRodizio
         },
         mensagemRefeicao
       });

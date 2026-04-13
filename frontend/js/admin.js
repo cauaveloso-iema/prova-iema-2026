@@ -13,6 +13,8 @@ class AdminPanel {
         this.monitoramento = [];
         this.graficos = {};
         this.wsListener = null;
+        this.cozinhaMonitoramento = null;
+
     
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
@@ -405,8 +407,8 @@ class AdminPanel {
             case 'faceid':
                 await this.loadFaceID();
                 break;
-            case 'cursos':                    // <-- ADICIONE ESTE CASE
-                await this.loadCursos();       // <-- CHAMA O MÉTODO QUE CRIAMOS
+            case 'cursos':
+                await this.loadCursos();
                 break;
             case 'onesignal':
                 await this.loadOneSignal();
@@ -414,11 +416,38 @@ class AdminPanel {
             case 'omr-debug':
                 await this.loadOMRDebug();
                 break;
+            // ============================================
+            // 🔥 ADICIONAR ESTE CASE AQUI 🔥
+            // ============================================
+            case 'cozinha-monitoramento':
+                console.log('🍽️ Carregando módulo Cozinha Monitoramento...');
+                
+                // Verificar se o módulo foi carregado
+                if (typeof monitoramentoTempoReal === 'undefined' || monitoramentoTempoReal === null) {
+                    console.warn('⚠️ monitoramentoTempoReal não encontrado, tentando criar...');
+                    if (typeof MonitoramentoTempoReal !== 'undefined') {
+                        monitoramentoTempoReal = new MonitoramentoTempoReal();
+                        window.monitoramentoTempoReal = monitoramentoTempoReal;
+                    } else {
+                        contentArea.innerHTML = `
+                            <div class="alert alert-danger m-4">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>Erro:</strong> Módulo de monitoramento não carregado.
+                                <br><small>Verifique se o arquivo admin-cozinha-monitoramento.js foi carregado corretamente.</small>
+                                <br><button class="btn btn-sm btn-primary mt-2" onclick="location.reload()">
+                                    <i class="fas fa-sync-alt"></i> Recarregar página
+                                </button>
+                            </div>
+                        `;
+                        return;
+                    }
+                }
+                
+                await monitoramentoTempoReal.carregar();
+                break;
+            // ============================================
             case 'eixos':
                 await this.loadEixos();
-                break;
-            case 'cursos':
-                await this.loadCursos();
                 break;
             case 'backups':
                 await this.loadBackups();
@@ -429,6 +458,8 @@ class AdminPanel {
             case 'configuracoes':
                 await this.loadConfiguracoes();
                 break;
+            default:
+                contentArea.innerHTML = `<div class="alert alert-warning">Seção "${section}" em desenvolvimento</div>`;
         }
     }
 
@@ -2644,6 +2675,7 @@ class AdminPanel {
                                 <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>👩‍🏫 Setor Pedagógico</option>
                                 <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>🏃 Coordenação de Pátio</option>
                                 <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>🍽️ Cozinha</option>
+                                <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>📊 Gestão Geral</option>
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
                                 <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
                             </select>
@@ -2997,6 +3029,14 @@ class AdminPanel {
                 .role-badge.setor_pedagogico { background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; }
                 .role-badge.setor_pedagogico i { color: white; margin-right: 4px; }
 
+                .role-badge.gestao_geral {
+                    background: linear-gradient(135deg, #1e3c72, #2a5298);
+                    color: white;
+                }
+                .role-badge.gestao_geral i {
+                    margin-right: 4px;
+                }
+
                 .role-badge.coordenacao_patio {
                     background: linear-gradient(135deg, #f59e0b, #d97706);
                     color: white;
@@ -3247,6 +3287,8 @@ class AdminPanel {
                 roleBadge = '<span class="role-badge coordenacao_patio"><i class="fas fa-utensils"></i> Coordenação de Pátio</span>';
             } else if (user.role === 'cozinha') {
                 roleBadge = '<span class="role-badge cozinha"><i class="fas fa-kitchen-set"></i> Cozinha</span>';
+            } else if (user.role === 'gestao_geral') {
+                roleBadge = '<span class="role-badge gestao_geral"><i class="fas fa-chart-line"></i> Gestão Geral</span>';
             } else {
                 roleBadge = `<span class="role-badge">${user.role || 'Desconhecido'}</span>`;
             }
@@ -3541,7 +3583,8 @@ class AdminPanel {
             'super_admin': 'Super Administrador',
             'setor_pedagogico': 'Setor Pedagógico',
             'coordenacao_patio': 'Coordenação de Pátio',
-            'cozinha': 'Cozinha'
+            'cozinha': 'Cozinha',
+            'gestao_geral': 'Gestão Geral'
         };
         return labels[role] || role || 'Desconhecido';
     }
@@ -3631,11 +3674,10 @@ class AdminPanel {
             const dataNascimento = user.dataNascimento ? 
                 new Date(user.dataNascimento).toLocaleDateString('pt-BR') : 'Não informada';
             
-            // Role com ícone e cores - ATUALIZADO COM NOVOS PERFIS
             let roleIcon = '';
             let roleColor = '';
             let roleBg = '';
-            
+
             switch(user.role) {
                 case 'aluno':
                     roleIcon = '👨‍🎓';
@@ -3671,6 +3713,11 @@ class AdminPanel {
                     roleIcon = '🍽️';
                     roleColor = '#10b981';
                     roleBg = '#d1fae5';
+                    break;
+                case 'gestao_geral':
+                    roleIcon = '📊';
+                    roleColor = '#1e3c72';
+                    roleBg = '#e0f2fe';
                     break;
                 default:
                     roleIcon = '👤';
@@ -4163,6 +4210,7 @@ class AdminPanel {
                             <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>Setor Pedagógico</option>
                             <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>Coordenação de Pátio</option>
                             <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>Cozinha</option>
+                            <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>Gestão Geral</option>
                         </select>
                     </div>
                     
@@ -4293,6 +4341,22 @@ class AdminPanel {
                         <textarea id="userAtribuicoes" class="form-control" rows="2" placeholder="Ex: Acompanhamento AEE, Sala de Recursos...">${escapeStr(atribuicoes)}</textarea>
                     </div>
                 </div>
+
+                <!-- Campos específicos para Gestão Geral -->
+                <div id="gestaoGeralFields" class="role-specific" style="${role === 'gestao_geral' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Departamento</label>
+                        <input type="text" id="departamentoUsuario" class="form-control" value="${escapeStr(usuario?.departamento || '')}">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Matrícula</label>
+                        <input type="text" id="matriculaUsuario" class="form-control" value="${escapeStr(usuario?.matricula || '')}" maxlength="6" placeholder="6 dígitos">
+                    </div>
+                    <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>A Gestão Geral controla o rodízio de refeições por turma.</span>
+                    </div>
+                </div>
                 
                 <!-- Campos específicos para Coordenação de Pátio -->
                 <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
@@ -4413,12 +4477,14 @@ class AdminPanel {
         const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
         const coordenacaoPatioFields = document.getElementById('coordenacaoPatioFields');
         const cozinhaFields = document.getElementById('cozinhaFields');
+        const gestaoGeralFields = document.getElementById('gestaoGeralFields');
         
         if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
         if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
         if (setorPedagogicoFields) setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
         if (coordenacaoPatioFields) coordenacaoPatioFields.style.display = role === 'coordenacao_patio' ? 'block' : 'none';
         if (cozinhaFields) cozinhaFields.style.display = role === 'cozinha' ? 'block' : 'none';
+        if (gestaoGeralFields) gestaoGeralFields.style.display = role === 'gestao_geral' ? 'block' : 'none';
     }
 
     gerarSenha() {
@@ -4522,7 +4588,27 @@ class AdminPanel {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+            } else if (role === 'coordenador_patio') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'admin') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+            
+            } else if (role === 'cozinha') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+            
+            } else if (role === 'gestao_geral') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             }
+            
 
             // Se for criação (sem ID), adicionar senha
             if (!id) {
@@ -29152,6 +29238,839 @@ class AdminPanel {
         } catch (error) {
             console.error('❌ Erro ao carregar foto:', error);
         }
+    }
+
+    async abrirModalRodizioGestao(turma = null) {
+        console.log('📝 Abrindo modal de rodízio para:', turma);
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar rodízio existente se for edição
+            let rodizioData = null;
+            if (turma) {
+                const rodizioResponse = await fetch(`/api/gestao-geral/rodizios/${turma}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const rodizioDataRes = await rodizioResponse.json();
+                if (rodizioDataRes.success && rodizioDataRes.rodizio) {
+                    rodizioData = rodizioDataRes.rodizio;
+                }
+            }
+            
+            // Buscar todas as turmas
+            const turmasResponse = await fetch('/api/admin/turmas?limit=100', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const turmasData = await turmasResponse.json();
+            const todasTurmas = turmasData.success ? turmasData.turmas.map(t => t.nome) : [];
+            
+            const modalBody = document.getElementById('modalBody');
+            
+            // Gerar checkboxes dos dias do mês (1 a 31) em grupos de 7
+            let diasMesHtml = '';
+            for (let i = 1; i <= 31; i++) {
+                const isChecked = rodizioData?.diasMes?.includes(i) ? 'checked' : '';
+                diasMesHtml += `
+                    <div class="dia-mes-item">
+                        <input type="checkbox" class="form-check-input" value="${i}" id="diaMes${i}" ${isChecked}>
+                        <label class="form-check-label" for="diaMes${i}">${i}</label>
+                    </div>
+                `;
+            }
+            
+            // Gerar checkboxes das semanas
+            const semanas = [
+                { id: 1, label: '1ª Semana (Dias 1-7)' },
+                { id: 2, label: '2ª Semana (Dias 8-14)' },
+                { id: 3, label: '3ª Semana (Dias 15-21)' },
+                { id: 4, label: '4ª Semana (Dias 22-28)' },
+                { id: 5, label: '5ª Semana (Dias 29-31)' }
+            ];
+            
+            let semanasHtml = '';
+            semanas.forEach(semana => {
+                const isChecked = rodizioData?.semanasMes?.includes(semana.id) ? 'checked' : '';
+                semanasHtml += `
+                    <div class="semana-item">
+                        <input type="checkbox" class="form-check-input" value="${semana.id}" id="semana${semana.id}" ${isChecked}>
+                        <label class="form-check-label" for="semana${semana.id}">${semana.label}</label>
+                    </div>
+                `;
+            });
+            
+            modalBody.innerHTML = `
+                <div class="modal-rodizio">
+                    <!-- Cabeçalho do Modal -->
+                    <div class="modal-rodizio-header">
+                        <div class="header-icon">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                        <div class="header-title">
+                            <h2>${turma ? '✏️ Editar Rodízio' : '➕ Novo Rodízio'}</h2>
+                            <p>Configure as regras de acesso ao almoço para a turma</p>
+                        </div>
+                    </div>
+
+                    <form id="formRodizioGestao" class="modal-rodizio-form">
+                        <!-- Informações Básicas -->
+                        <div class="form-section">
+                            <div class="section-title">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Informações Básicas</span>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label class="form-label">
+                                        <i class="fas fa-school"></i>
+                                        <span>Turma</span>
+                                        <span class="required">*</span>
+                                    </label>
+                                    <div class="select-wrapper">
+                                        <select id="rodizioTurma" class="form-control" ${turma ? 'disabled' : ''} required>
+                                            <option value="">Selecione uma turma...</option>
+                                            ${todasTurmas.map(t => `<option value="${t}" ${rodizioData?.turma === t ? 'selected' : ''}>${t}</option>`).join('')}
+                                        </select>
+                                        <i class="fas fa-chevron-down select-arrow"></i>
+                                    </div>
+                                    ${turma ? `<small class="form-hint"><i class="fas fa-lock"></i> Turma bloqueada para edição</small>` : ''}
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-chart-line"></i>
+                                        <span>Tipo de Rodízio</span>
+                                        <span class="required">*</span>
+                                    </label>
+                                    <div class="select-wrapper">
+                                        <select id="rodizioTipo" class="form-control" onchange="admin.toggleTipoRodizioGestao()">
+                                            <option value="semanal" ${rodizioData?.tipoRodizio === 'semanal' ? 'selected' : ''}>
+                                                <i class="fas fa-calendar-week"></i> 📅 Semanal (dias da semana)
+                                            </option>
+                                            <option value="mensal" ${rodizioData?.tipoRodizio === 'mensal' ? 'selected' : ''}>
+                                                <i class="fas fa-calendar-alt"></i> 📆 Mensal (dias do mês)
+                                            </option>
+                                            <option value="ambos" ${rodizioData?.tipoRodizio === 'ambos' ? 'selected' : ''}>
+                                                <i class="fas fa-sync-alt"></i> 🔄 Ambos
+                                            </option>
+                                        </select>
+                                        <i class="fas fa-chevron-down select-arrow"></i>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-toggle-on"></i>
+                                        <span>Status</span>
+                                    </label>
+                                    <div class="status-toggle">
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="rodizioAtivo" ${rodizioData?.ativo !== false ? 'checked' : ''}>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                        <span class="toggle-label" id="statusLabel">${rodizioData?.ativo !== false ? 'Ativo' : 'Inativo'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Configuração Semanal -->
+                        <div id="configSemanal" class="form-section" style="display: ${rodizioData?.tipoRodizio === 'mensal' ? 'none' : 'block'}">
+                            <div class="section-title">
+                                <i class="fas fa-calendar-week"></i>
+                                <span>Dias da Semana Permitidos</span>
+                            </div>
+                            <div class="dias-semana-grid">
+                                <div class="dia-semana-card">
+                                    <input type="checkbox" class="dias-checkbox" value="0" id="diaDomingo" ${rodizioData?.diasSemana?.includes(0) ? 'checked' : ''}>
+                                    <label for="diaDomingo">
+                                        <i class="fas fa-sun"></i>
+                                        <span>Domingo</span>
+                                    </label>
+                                </div>
+                                <div class="dia-semana-card">
+                                    <input type="checkbox" class="dias-checkbox" value="1" id="diaSegunda" ${rodizioData?.diasSemana?.includes(1) ? 'checked' : ''}>
+                                    <label for="diaSegunda">
+                                        <i class="fas fa-calendar-day"></i>
+                                        <span>Segunda</span>
+                                    </label>
+                                </div>
+                                <div class="dia-semana-card">
+                                    <input type="checkbox" class="dias-checkbox" value="2" id="diaTerca" ${rodizioData?.diasSemana?.includes(2) ? 'checked' : ''}>
+                                    <label for="diaTerca">
+                                        <i class="fas fa-calendar-day"></i>
+                                        <span>Terça</span>
+                                    </label>
+                                </div>
+                                <div class="dia-semana-card">
+                                    <input type="checkbox" class="dias-checkbox" value="3" id="diaQuarta" ${rodizioData?.diasSemana?.includes(3) ? 'checked' : ''}>
+                                    <label for="diaQuarta">
+                                        <i class="fas fa-calendar-day"></i>
+                                        <span>Quarta</span>
+                                    </label>
+                                </div>
+                                <div class="dia-semana-card">
+                                    <input type="checkbox" class="dias-checkbox" value="4" id="diaQuinta" ${rodizioData?.diasSemana?.includes(4) ? 'checked' : ''}>
+                                    <label for="diaQuinta">
+                                        <i class="fas fa-calendar-day"></i>
+                                        <span>Quinta</span>
+                                    </label>
+                                </div>
+                                <div class="dia-semana-card">
+                                    <input type="checkbox" class="dias-checkbox" value="5" id="diaSexta" ${rodizioData?.diasSemana?.includes(5) ? 'checked' : ''}>
+                                    <label for="diaSexta">
+                                        <i class="fas fa-calendar-day"></i>
+                                        <span>Sexta</span>
+                                    </label>
+                                </div>
+                                <div class="dia-semana-card">
+                                    <input type="checkbox" class="dias-checkbox" value="6" id="diaSabado" ${rodizioData?.diasSemana?.includes(6) ? 'checked' : ''}>
+                                    <label for="diaSabado">
+                                        <i class="fas fa-calendar-day"></i>
+                                        <span>Sábado</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Configuração Mensal - Dias do Mês -->
+                        <div id="configMensalDias" class="form-section" style="display: ${rodizioData?.tipoRodizio === 'semanal' ? 'none' : 'block'}">
+                            <div class="section-title">
+                                <i class="fas fa-calendar-alt"></i>
+                                <span>Dias do Mês Permitidos</span>
+                            </div>
+                            <div class="dias-mes-grid">
+                                ${diasMesHtml}
+                            </div>
+                            <div class="selection-actions">
+                                <button type="button" class="btn-selection" onclick="admin.selecionarTodosDiasMes()">
+                                    <i class="fas fa-check-double"></i> Selecionar Todos
+                                </button>
+                                <button type="button" class="btn-selection clear" onclick="admin.desselecionarTodosDiasMes()">
+                                    <i class="fas fa-times"></i> Limpar Todos
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Configuração Mensal - Semanas do Mês -->
+                        <div id="configMensalSemanas" class="form-section" style="display: ${rodizioData?.tipoRodizio === 'semanal' ? 'none' : 'block'}">
+                            <div class="section-title">
+                                <i class="fas fa-layer-group"></i>
+                                <span>Semanas do Mês Permitidas</span>
+                            </div>
+                            <div class="semanas-mes-grid">
+                                ${semanasHtml}
+                            </div>
+                            <div class="selection-actions">
+                                <button type="button" class="btn-selection" onclick="admin.selecionarTodasSemanas()">
+                                    <i class="fas fa-check-double"></i> Selecionar Todas
+                                </button>
+                                <button type="button" class="btn-selection clear" onclick="admin.desselecionarTodasSemanas()">
+                                    <i class="fas fa-times"></i> Limpar Todas
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Horários -->
+                        <div class="form-section">
+                            <div class="section-title">
+                                <i class="fas fa-clock"></i>
+                                <span>Horário de Funcionamento</span>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-play-circle"></i>
+                                        <span>Horário de Início</span>
+                                    </label>
+                                    <input type="time" id="rodizioHorarioInicio" class="form-control" value="${rodizioData?.horarioInicio || '11:00'}">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-stop-circle"></i>
+                                        <span>Horário de Término</span>
+                                    </label>
+                                    <input type="time" id="rodizioHorarioFim" class="form-control" value="${rodizioData?.horarioFim || '13:00'}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Descrição -->
+                        <div class="form-section">
+                            <div class="section-title">
+                                <i class="fas fa-align-left"></i>
+                                <span>Descrição (opcional)</span>
+                            </div>
+                            <textarea id="rodizioDescricao" class="form-control" rows="3" placeholder="Informações adicionais sobre o rodízio...">${rodizioData?.descricao || ''}</textarea>
+                        </div>
+
+                        <!-- Resumo -->
+                        <div class="form-section resumo">
+                            <div class="section-title">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Resumo da Configuração</span>
+                            </div>
+                            <div class="resumo-content" id="resumoRodizio">
+                                <p><i class="fas fa-spinner fa-spin"></i> Aguardando configuração...</p>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <style>
+                    .modal-rodizio {
+                        max-height: 85vh;
+                        overflow-y: auto;
+                    }
+                    
+                    .modal-rodizio-header {
+                        background: linear-gradient(135deg, #1e3c72, #2a5298);
+                        margin: -20px -20px 0 -20px;
+                        padding: 25px 30px;
+                        border-radius: 20px 20px 0 0;
+                        color: white;
+                        display: flex;
+                        align-items: center;
+                        gap: 20px;
+                    }
+                    
+                    .modal-rodizio-header .header-icon {
+                        width: 60px;
+                        height: 60px;
+                        background: rgba(255,255,255,0.2);
+                        border-radius: 16px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 28px;
+                    }
+                    
+                    .modal-rodizio-header .header-title h2 {
+                        margin: 0;
+                        font-size: 1.4rem;
+                        font-weight: 600;
+                    }
+                    
+                    .modal-rodizio-header .header-title p {
+                        margin: 5px 0 0;
+                        opacity: 0.9;
+                        font-size: 0.85rem;
+                    }
+                    
+                    .modal-rodizio-form {
+                        padding: 20px 0;
+                    }
+                    
+                    .form-section {
+                        background: #f8fafc;
+                        border-radius: 16px;
+                        padding: 20px;
+                        margin-bottom: 20px;
+                        border: 1px solid #e5e7eb;
+                    }
+                    
+                    .section-title {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin-bottom: 20px;
+                        padding-bottom: 12px;
+                        border-bottom: 2px solid #e5e7eb;
+                        font-weight: 600;
+                        color: #1e293b;
+                    }
+                    
+                    .section-title i {
+                        color: #1e3c72;
+                        font-size: 18px;
+                    }
+                    
+                    .form-row {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 20px;
+                    }
+                    
+                    .form-group {
+                        margin-bottom: 0;
+                    }
+                    
+                    .form-group.full-width {
+                        grid-column: span 2;
+                    }
+                    
+                    .form-label {
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        margin-bottom: 8px;
+                        font-weight: 500;
+                        font-size: 13px;
+                        color: #334155;
+                    }
+                    
+                    .form-label .required {
+                        color: #ef4444;
+                        margin-left: 4px;
+                    }
+                    
+                    .form-control {
+                        width: 100%;
+                        padding: 10px 14px;
+                        border: 2px solid #e5e7eb;
+                        border-radius: 10px;
+                        font-size: 14px;
+                        transition: all 0.3s;
+                    }
+                    
+                    .form-control:focus {
+                        outline: none;
+                        border-color: #1e3c72;
+                        box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+                    }
+                    
+                    .select-wrapper {
+                        position: relative;
+                    }
+                    
+                    .select-wrapper select {
+                        appearance: none;
+                        padding-right: 40px;
+                    }
+                    
+                    .select-arrow {
+                        position: absolute;
+                        right: 15px;
+                        top: 50%;
+                        transform: translateY(-50%);
+                        color: #94a3b8;
+                        pointer-events: none;
+                    }
+                    
+                    .form-hint {
+                        display: block;
+                        margin-top: 6px;
+                        font-size: 11px;
+                        color: #64748b;
+                    }
+                    
+                    /* Toggle Switch */
+                    .status-toggle {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        margin-top: 8px;
+                    }
+                    
+                    .toggle-switch {
+                        position: relative;
+                        display: inline-block;
+                        width: 52px;
+                        height: 26px;
+                    }
+                    
+                    .toggle-switch input {
+                        opacity: 0;
+                        width: 0;
+                        height: 0;
+                    }
+                    
+                    .toggle-slider {
+                        position: absolute;
+                        cursor: pointer;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background-color: #cbd5e1;
+                        transition: 0.3s;
+                        border-radius: 34px;
+                    }
+                    
+                    .toggle-slider:before {
+                        position: absolute;
+                        content: "";
+                        height: 20px;
+                        width: 20px;
+                        left: 3px;
+                        bottom: 3px;
+                        background-color: white;
+                        transition: 0.3s;
+                        border-radius: 50%;
+                    }
+                    
+                    input:checked + .toggle-slider {
+                        background-color: #10b981;
+                    }
+                    
+                    input:checked + .toggle-slider:before {
+                        transform: translateX(26px);
+                    }
+                    
+                    .toggle-label {
+                        font-size: 13px;
+                        font-weight: 500;
+                        color: #334155;
+                    }
+                    
+                    /* Dias da Semana Grid */
+                    .dias-semana-grid {
+                        display: grid;
+                        grid-template-columns: repeat(7, 1fr);
+                        gap: 12px;
+                    }
+                    
+                    .dia-semana-card {
+                        text-align: center;
+                    }
+                    
+                    .dia-semana-card input {
+                        display: none;
+                    }
+                    
+                    .dia-semana-card label {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 12px 8px;
+                        background: white;
+                        border: 2px solid #e5e7eb;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    }
+                    
+                    .dia-semana-card label i {
+                        font-size: 20px;
+                        color: #94a3b8;
+                    }
+                    
+                    .dia-semana-card label span {
+                        font-size: 12px;
+                        font-weight: 500;
+                        color: #475569;
+                    }
+                    
+                    .dia-semana-card input:checked + label {
+                        background: #1e3c72;
+                        border-color: #1e3c72;
+                    }
+                    
+                    .dia-semana-card input:checked + label i,
+                    .dia-semana-card input:checked + label span {
+                        color: white;
+                    }
+                    
+                    /* Dias do Mês Grid */
+                    .dias-mes-grid {
+                        display: grid;
+                        grid-template-columns: repeat(7, 1fr);
+                        gap: 8px;
+                        margin-bottom: 15px;
+                    }
+                    
+                    .dia-mes-item {
+                        text-align: center;
+                    }
+                    
+                    .dia-mes-item input {
+                        display: none;
+                    }
+                    
+                    .dia-mes-item label {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 8px;
+                        background: white;
+                        border: 2px solid #e5e7eb;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 13px;
+                        font-weight: 500;
+                        transition: all 0.3s;
+                    }
+                    
+                    .dia-mes-item input:checked + label {
+                        background: #1e3c72;
+                        border-color: #1e3c72;
+                        color: white;
+                    }
+                    
+                    /* Semanas Grid */
+                    .semanas-mes-grid {
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 12px;
+                        margin-bottom: 15px;
+                    }
+                    
+                    .semana-item {
+                        text-align: left;
+                    }
+                    
+                    .semana-item input {
+                        display: none;
+                    }
+                    
+                    .semana-item label {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        padding: 12px 16px;
+                        background: white;
+                        border: 2px solid #e5e7eb;
+                        border-radius: 10px;
+                        cursor: pointer;
+                        font-size: 13px;
+                        font-weight: 500;
+                        transition: all 0.3s;
+                    }
+                    
+                    .semana-item input:checked + label {
+                        background: #1e3c72;
+                        border-color: #1e3c72;
+                        color: white;
+                    }
+                    
+                    .selection-actions {
+                        display: flex;
+                        gap: 10px;
+                        justify-content: flex-end;
+                        margin-top: 10px;
+                    }
+                    
+                    .btn-selection {
+                        padding: 6px 14px;
+                        background: #e2e8f0;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 12px;
+                        font-weight: 500;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    }
+                    
+                    .btn-selection:hover {
+                        background: #cbd5e1;
+                    }
+                    
+                    .btn-selection.clear:hover {
+                        background: #fee2e2;
+                        color: #dc2626;
+                    }
+                    
+                    /* Resumo */
+                    .resumo {
+                        background: #f0f9ff;
+                        border: 1px solid #bae6fd;
+                    }
+                    
+                    .resumo-content {
+                        padding: 12px;
+                        background: white;
+                        border-radius: 10px;
+                        font-size: 13px;
+                        color: #334155;
+                    }
+                    
+                    .resumo-content p {
+                        margin: 5px 0;
+                    }
+                    
+                    /* Responsividade */
+                    @media (max-width: 768px) {
+                        .modal-rodizio-header {
+                            flex-direction: column;
+                            text-align: center;
+                        }
+                        
+                        .form-row {
+                            grid-template-columns: 1fr;
+                        }
+                        
+                        .form-group.full-width {
+                            grid-column: span 1;
+                        }
+                        
+                        .dias-semana-grid {
+                            grid-template-columns: repeat(4, 1fr);
+                        }
+                        
+                        .dias-mes-grid {
+                            grid-template-columns: repeat(4, 1fr);
+                        }
+                        
+                        .semanas-mes-grid {
+                            grid-template-columns: 1fr;
+                        }
+                    }
+                </style>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = turma ? 
+                '<i class="fas fa-edit"></i> Editar Rodízio' : 
+                '<i class="fas fa-plus"></i> Novo Rodízio';
+            document.getElementById('modalSaveBtn').onclick = () => this.salvarRodizioGestao(turma);
+            document.getElementById('modalSaveBtn').style.display = 'inline-block';
+            document.getElementById('modalSaveBtn').textContent = 'Salvar Rodízio';
+            document.getElementById('modalSaveBtn').className = 'btn-save-rodizio';
+            
+            // Adicionar estilo do botão salvar
+            const style = document.createElement('style');
+            style.textContent = `
+                .btn-save-rodizio {
+                    background: linear-gradient(135deg, #10b981, #059669) !important;
+                    color: white !important;
+                    padding: 10px 28px !important;
+                    border-radius: 40px !important;
+                    font-weight: 600 !important;
+                }
+                .btn-save-rodizio:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Configurar evento de mudança para atualizar resumo
+            setTimeout(() => {
+                this.atualizarResumoRodizio();
+                document.getElementById('rodizioTipo')?.addEventListener('change', () => this.atualizarResumoRodizio());
+                document.querySelectorAll('.dias-checkbox').forEach(cb => {
+                    cb.addEventListener('change', () => this.atualizarResumoRodizio());
+                });
+                document.querySelectorAll('.dias-mes-grid input').forEach(cb => {
+                    cb.addEventListener('change', () => this.atualizarResumoRodizio());
+                });
+                document.querySelectorAll('.semanas-mes-grid input').forEach(cb => {
+                    cb.addEventListener('change', () => this.atualizarResumoRodizio());
+                });
+                document.getElementById('rodizioHorarioInicio')?.addEventListener('change', () => this.atualizarResumoRodizio());
+                document.getElementById('rodizioHorarioFim')?.addEventListener('change', () => this.atualizarResumoRodizio());
+                document.getElementById('rodizioAtivo')?.addEventListener('change', (e) => {
+                    const statusLabel = document.getElementById('statusLabel');
+                    if (statusLabel) statusLabel.textContent = e.target.checked ? 'Ativo' : 'Inativo';
+                    this.atualizarResumoRodizio();
+                });
+            }, 100);
+            
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ MÉTODOS AUXILIARES PARA O MODAL ============
+
+    atualizarResumoRodizio() {
+        const resumoContent = document.getElementById('resumoRodizio');
+        if (!resumoContent) return;
+        
+        const tipo = document.getElementById('rodizioTipo')?.value || 'semanal';
+        const ativo = document.getElementById('rodizioAtivo')?.checked;
+        const horarioInicio = document.getElementById('rodizioHorarioInicio')?.value || '11:00';
+        const horarioFim = document.getElementById('rodizioHorarioFim')?.value || '13:00';
+        
+        let diasTexto = '';
+        
+        if (tipo === 'semanal' || tipo === 'ambos') {
+            const diasSelecionados = [];
+            const diasMap = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+            for (let i = 0; i <= 6; i++) {
+                const cb = document.getElementById(`dia${diasMap[i]}`);
+                if (cb && cb.checked) diasSelecionados.push(diasMap[i]);
+            }
+            if (diasSelecionados.length > 0) {
+                diasTexto = `<strong>Dias da semana:</strong> ${diasSelecionados.join(', ')}<br>`;
+            }
+        }
+        
+        if (tipo === 'mensal' || tipo === 'ambos') {
+            const diasMesSelecionados = [];
+            for (let i = 1; i <= 31; i++) {
+                const cb = document.getElementById(`diaMes${i}`);
+                if (cb && cb.checked) diasMesSelecionados.push(i);
+            }
+            if (diasMesSelecionados.length > 0) {
+                diasTexto += `<strong>Dias do mês:</strong> ${diasMesSelecionados.length} dias selecionados<br>`;
+            }
+            
+            const semanasSelecionadas = [];
+            for (let i = 1; i <= 5; i++) {
+                const cb = document.getElementById(`semana${i}`);
+                if (cb && cb.checked) semanasSelecionadas.push(i);
+            }
+            if (semanasSelecionadas.length > 0) {
+                diasTexto += `<strong>Semanas:</strong> ${semanasSelecionadas.map(s => `${s}ª`).join(', ')}<br>`;
+            }
+        }
+        
+        resumoContent.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div><i class="fas fa-chart-line"></i> <strong>Tipo:</strong> ${tipo === 'semanal' ? 'Semanal' : tipo === 'mensal' ? 'Mensal' : 'Ambos'}</div>
+                <div><i class="fas fa-clock"></i> <strong>Horário:</strong> ${horarioInicio} - ${horarioFim}</div>
+                ${diasTexto ? `<div><i class="fas fa-calendar-alt"></i> ${diasTexto}</div>` : ''}
+                <div><i class="fas ${ativo ? 'fa-check-circle' : 'fa-pause-circle'}"></i> <strong>Status:</strong> ${ativo ? 'Ativo' : 'Inativo'}</div>
+            </div>
+        `;
+    }
+
+    selecionarTodosDiasMes() {
+        for (let i = 1; i <= 31; i++) {
+            const cb = document.getElementById(`diaMes${i}`);
+            if (cb) cb.checked = true;
+        }
+        this.atualizarResumoRodizio();
+    }
+
+    desselecionarTodosDiasMes() {
+        for (let i = 1; i <= 31; i++) {
+            const cb = document.getElementById(`diaMes${i}`);
+            if (cb) cb.checked = false;
+        }
+        this.atualizarResumoRodizio();
+    }
+
+    selecionarTodasSemanas() {
+        for (let i = 1; i <= 5; i++) {
+            const cb = document.getElementById(`semana${i}`);
+            if (cb) cb.checked = true;
+        }
+        this.atualizarResumoRodizio();
+    }
+
+    desselecionarTodasSemanas() {
+        for (let i = 1; i <= 5; i++) {
+            const cb = document.getElementById(`semana${i}`);
+            if (cb) cb.checked = false;
+        }
+        this.atualizarResumoRodizio();
+    }
+
+    toggleTipoRodizioGestao() {
+        const tipo = document.getElementById('rodizioTipo')?.value;
+        const configSemanal = document.getElementById('configSemanal');
+        const configMensalDias = document.getElementById('configMensalDias');
+        const configMensalSemanas = document.getElementById('configMensalSemanas');
+        
+        if (configSemanal) {
+            configSemanal.style.display = (tipo === 'semanal' || tipo === 'ambos') ? 'block' : 'none';
+        }
+        if (configMensalDias) {
+            configMensalDias.style.display = (tipo === 'mensal' || tipo === 'ambos') ? 'block' : 'none';
+        }
+        if (configMensalSemanas) {
+            configMensalSemanas.style.display = (tipo === 'mensal' || tipo === 'ambos') ? 'block' : 'none';
+        }
+        
+        this.atualizarResumoRodizio();
     }
 
     // ============ BAIXAR BACKUP (VERSÃO CORRIGIDA) ============

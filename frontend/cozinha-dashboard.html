@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 
-            <!-- PWA Meta Tags -->
+    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,7 +14,6 @@
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Cozinha - Monitoramento Inteligente de Refeições</title>
@@ -257,7 +256,7 @@
         .progress-fill.medium { background: #f59e0b; }
         .progress-fill.high { background: #10b981; }
         
-        /* Modal de relatório */
+        /* Modal */
         .modal-custom {
             display: none;
             position: fixed;
@@ -281,6 +280,102 @@
             max-height: 80vh;
             overflow-y: auto;
             padding: 20px;
+        }
+        
+        /* Feedback Stars */
+        .feedback-stars {
+            display: inline-flex;
+            gap: 2px;
+        }
+        .feedback-star {
+            font-size: 12px;
+        }
+        
+        /* Filtros Feedback */
+        .filtros-feedback {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .filtros-feedback .form-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 5px;
+        }
+        .filtros-feedback .form-select, 
+        .filtros-feedback .form-control {
+            font-size: 0.85rem;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        .btn-filtrar {
+            background: #1e3c72;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-filtrar:hover {
+            background: #2a5298;
+            transform: translateY(-1px);
+        }
+        .btn-limpar-filtros {
+            background: #e2e8f0;
+            color: #475569;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-limpar-filtros:hover {
+            background: #cbd5e1;
+        }
+        
+        /* Badge de nota */
+        .nota-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .nota-badge.alta { background: #d1fae5; color: #065f46; }
+        .nota-badge.media { background: #fef3c7; color: #92400e; }
+        .nota-badge.baixa { background: #fee2e2; color: #991b1b; }
+        
+        /* Resumo de filtros ativos */
+        .filtros-ativos {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+        .filtro-tag {
+            background: #e2e8f0;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .filtro-tag i {
+            cursor: pointer;
+            color: #64748b;
+        }
+        .filtro-tag i:hover {
+            color: #dc2626;
         }
         
         @media (max-width: 768px) {
@@ -323,6 +418,9 @@
             </div>
             <div class="dropdown-item" onclick="abrirModalFaltantes()">
                 <i class="fas fa-users-slash"></i> Ver Faltantes do Dia
+            </div>
+            <div class="dropdown-item" onclick="mostrarQRCodeFeedback()">
+                <i class="fas fa-qrcode"></i> QR Code para Alunos
             </div>
             <hr>
             <div class="dropdown-item danger" onclick="logout()">
@@ -493,7 +591,7 @@
         </div>
         
         <!-- Tabela de Análise por Turma -->
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                 <span><i class="fas fa-table me-2"></i> Análise Detalhada por Turma</span>
                 <div>
@@ -519,6 +617,160 @@
                 </table>
             </div>
         </div>
+
+        <!-- ============================================ -->
+        <!-- SEÇÃO: FEEDBACK DOS ALUNOS (COM FILTROS) -->
+        <!-- ============================================ -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                <span><i class="fas fa-star me-2"></i> Avaliações dos Alunos</span>
+                <div>
+                    <button class="btn-refresh me-2" onclick="carregarFeedbacks()">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                    <button class="btn-refresh" onclick="mostrarQRCodeFeedback()" style="background: #10b981;">
+                        <i class="fas fa-qrcode"></i> QR Code para Alunos
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                
+                <!-- FILTROS AVANÇADOS -->
+                <div class="filtros-feedback">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label"><i class="fas fa-filter"></i> Por Refeição</label>
+                            <select id="filtroRefeicaoFeedback" class="form-select" onchange="aplicarFiltrosFeedback()">
+                                <option value="todas">Todas as refeições</option>
+                                <option value="manha">🌅 Lanche da Manhã</option>
+                                <option value="almoco">🍽️ Almoço</option>
+                                <option value="tarde">🌙 Lanche da Tarde</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="fas fa-star"></i> Nota Mínima</label>
+                            <select id="filtroNotaMin" class="form-select" onchange="aplicarFiltrosFeedback()">
+                                <option value="1">1 estrela ou mais</option>
+                                <option value="2">2 estrelas ou mais</option>
+                                <option value="3">3 estrelas ou mais</option>
+                                <option value="4">4 estrelas ou mais</option>
+                                <option value="5">5 estrelas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="fas fa-smile"></i> Opinião</label>
+                            <select id="filtroGostou" class="form-select" onchange="aplicarFiltrosFeedback()">
+                                <option value="todos">Todos</option>
+                                <option value="sim">👍 Adoraram</option>
+                                <option value="mais_ou_menos">😐 Mais ou menos</option>
+                                <option value="nao">👎 Não gostaram</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="fas fa-user-secret"></i> Anonimato</label>
+                            <select id="filtroAnonimo" class="form-select" onchange="aplicarFiltrosFeedback()">
+                                <option value="todos">Todos</option>
+                                <option value="nao">✅ Identificados</option>
+                                <option value="sim">🔒 Anônimos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><i class="fas fa-search"></i> Buscar</label>
+                            <input type="text" id="filtroBuscaFeedback" class="form-control" placeholder="Nome, turma ou comentário..." onkeyup="aplicarFiltrosFeedbackDebounce()">
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12 d-flex justify-content-between align-items-center">
+                            <div class="filtros-ativos" id="filtrosAtivosContainer"></div>
+                            <div>
+                                <button class="btn-limpar-filtros me-2" onclick="limparFiltrosFeedback()">
+                                    <i class="fas fa-eraser"></i> Limpar filtros
+                                </button>
+                                <button class="btn-filtrar" onclick="aplicarFiltrosFeedback()">
+                                    <i class="fas fa-search"></i> Aplicar filtros
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resumo das Avaliações -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="stat-card text-center p-3">
+                            <div class="stat-number" id="totalFeedbacks">-</div>
+                            <div class="stat-label">Total de Avaliações</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center p-3">
+                            <div class="stat-number" id="mediaNotas">-</div>
+                            <div class="stat-label">Média de Notas</div>
+                            <div id="estrelasMedia" class="mt-1"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center p-3">
+                            <div class="stat-number" id="gostaram">-</div>
+                            <div class="stat-label">Aprovação</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center p-3">
+                            <div class="stat-number" id="feedbacksFiltrados">-</div>
+                            <div class="stat-label">Resultados da busca</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico de Distribuição das Notas -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6 class="mb-3"><i class="fas fa-chart-bar"></i> Distribuição das Notas</h6>
+                        <div id="distribuicaoNotas">
+                            <div class="mb-2"><span class="badge bg-danger">★ 1</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar1" class="progress-fill" style="width: 0%; background: #ef4444;"></div></div> <span id="count1">0</span></div>
+                            <div class="mb-2"><span class="badge bg-warning">★ 2</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar2" class="progress-fill" style="width: 0%; background: #f59e0b;"></div></div> <span id="count2">0</span></div>
+                            <div class="mb-2"><span class="badge bg-info">★ 3</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar3" class="progress-fill" style="width: 0%; background: #3b82f6;"></div></div> <span id="count3">0</span></div>
+                            <div class="mb-2"><span class="badge bg-success">★ 4</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar4" class="progress-fill" style="width: 0%; background: #10b981;"></div></div> <span id="count4">0</span></div>
+                            <div class="mb-2"><span class="badge bg-success">★ 5</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar5" class="progress-fill" style="width: 0%; background: #10b981;"></div></div> <span id="count5">0</span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3"><i class="fas fa-smile"></i> Resumo das Opiniões</h6>
+                        <div class="p-3 bg-light rounded">
+                            <div><i class="fas fa-smile-wink text-success"></i> Adoraram: <strong id="gostaramSim">0</strong></div>
+                            <div><i class="fas fa-meh text-warning"></i> Mais ou menos: <strong id="gostaramMaisMenos">0</strong></div>
+                            <div><i class="fas fa-frown text-danger"></i> Não gostaram: <strong id="gostaramNao">0</strong></div>
+                            <hr>
+                            <div><i class="fas fa-star text-warning"></i> Média: <strong id="mediaDetalhada">0</strong>/5</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Lista de Feedbacks Recentes com Filtros -->
+                <h6 class="mb-3">
+                    <i class="fas fa-list"></i> Avaliações 
+                    <span id="feedbacksCount" class="badge bg-secondary">0</span>
+                </h6>
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover">
+                        <thead class="sticky-top bg-white">
+                            <tr>
+                                <th>Aluno</th>
+                                <th>Turma</th>
+                                <th>Refeição</th>
+                                <th>Nota</th>
+                                <th>Comentário</th>
+                                <th>Data</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaFeedbacks">
+                            <tr><td colspan="6" class="text-center">Carregando...<td><tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
     
     <!-- Modal de Faltantes -->
@@ -533,6 +785,17 @@
         </div>
     </div>
     
+    <!-- Modal QR Code -->
+    <div id="modalQRCode" class="modal-custom">
+        <div class="modal-content-custom" style="max-width: 350px; text-align: center;">
+            <h4><i class="fas fa-qrcode"></i> QR Code para Alunos</h4>
+            <div id="qrCodeImage" class="my-3"></div>
+            <p class="text-muted small">Escaneie o QR Code para avaliar a refeição</p>
+            <p class="small"><i class="fas fa-link"></i> <span id="linkFeedback"></span></p>
+            <button class="btn btn-primary w-100" onclick="fecharModalQRCode()">Fechar</button>
+        </div>
+    </div>
+    
     <script>
         // ============================================
         // COZINHA - DASHBOARD INTELIGENTE
@@ -543,39 +806,32 @@
         let dashboardData = {};
         let chartPerfil = null;
         let chartTurmas = null;
+        let todosFeedbacks = [];
+        let feedbacksFiltrados = [];
         
         // Inicialização
         document.addEventListener('DOMContentLoaded', async () => {
             if (!token) { window.location.href = '/login.html'; return; }
             
-            // Carregar dados do usuário
             const userStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
             userData = userStorage;
             
             document.getElementById('userName').textContent = userStorage.nome || 'Usuário';
             document.getElementById('userRole').textContent = 'Cozinha';
             
-            // Verificar perfil
             if (!['cozinha', 'super_admin', 'admin'].includes(userStorage.role)) {
                 alert('Acesso negado. Perfil não autorizado.');
                 window.location.href = '/login.html';
                 return;
             }
             
-            // Carregar foto de perfil
             await carregarFotoPerfil();
-            
-            // Carregar dashboard
             await carregarDashboard();
             
-            // Atualizar relógio
             atualizarRelogio();
             setInterval(atualizarRelogio, 1000);
-            
-            // Atualizar dashboard a cada 30 segundos
             setInterval(carregarDashboard, 30000);
             
-            // Filtro da tabela
             document.getElementById('filtroTurma').addEventListener('input', filtrarTabela);
         });
         
@@ -610,7 +866,6 @@
                 if (data.success) {
                     dashboardData = data;
                     
-                    // Atualizar cards principais
                     document.getElementById('totalPessoas').textContent = data.perfis?.total || 0;
                     document.getElementById('detalhePerfis').innerHTML = `👍 ${data.perfis?.sempre || 0} | ⚠️ ${data.perfis?.as_vezes || 0} | ❌ ${data.perfis?.nunca || 0}`;
                     document.getElementById('pessoasQueComeram').textContent = data.registrosReais?.pessoasUnicas || 0;
@@ -618,22 +873,18 @@
                     document.getElementById('taxaAdesao').textContent = `${data.analiseAdesao?.taxaAdesao || 0}%`;
                     document.getElementById('refeicaoHoje').textContent = data.registrosReais?.total || 0;
                     
-                    // Contagem por refeição
                     document.getElementById('contManha').textContent = data.registrosReais?.manha || 0;
                     document.getElementById('contAlmoco').textContent = data.registrosReais?.almoco || 0;
                     document.getElementById('contTarde').textContent = data.registrosReais?.tarde || 0;
                     
-                    // Previsões
                     document.getElementById('prevManha').textContent = data.previsao?.manha?.pessoas || 0;
                     document.getElementById('prevAlmoco').textContent = data.previsao?.almoco?.pessoas || 0;
                     document.getElementById('prevTarde').textContent = data.previsao?.tarde?.pessoas || 0;
                     
-                    // KG de comida
                     document.getElementById('kgManha').textContent = data.previsao?.manha?.kg || 0;
                     document.getElementById('kgAlmoco').textContent = data.previsao?.almoco?.kg || 0;
                     document.getElementById('kgTarde').textContent = data.previsao?.tarde?.kg || 0;
                     
-                    // Sugestão
                     if (data.sugestaoAtual) {
                         const sugestaoDiv = document.getElementById('sugestaoPreparo');
                         let alertClass = 'alert-info';
@@ -645,14 +896,12 @@
                         sugestaoDiv.innerHTML = `<i class="fas fa-lightbulb me-2"></i> ${data.sugestaoAtual.mensagem}<br><small>${data.sugestaoAtual.acao}</small>`;
                     }
                     
-                    // Refeição atual badge
                     const refeicaoBadge = document.getElementById('refeicaoAtualBadge');
                     if (data.refeicaoAtual === 'manha') refeicaoBadge.innerHTML = '<span class="badge bg-warning">🌅 Lanche da Manhã</span>';
                     else if (data.refeicaoAtual === 'almoco') refeicaoBadge.innerHTML = '<span class="badge bg-danger">🍽️ Almoço</span>';
                     else if (data.refeicaoAtual === 'tarde') refeicaoBadge.innerHTML = '<span class="badge bg-info">🌙 Lanche da Tarde</span>';
                     else refeicaoBadge.innerHTML = '<span class="badge bg-secondary">⏰ Fora do horário</span>';
                     
-                    // Perfis alimentares
                     if (data.perfis) {
                         document.getElementById('perfilSempre').textContent = data.perfis.sempre || 0;
                         document.getElementById('perfilAsVezes').textContent = data.perfis.as_vezes || 0;
@@ -661,7 +910,6 @@
                         atualizarGraficoPerfil(data.perfis);
                     }
                     
-                    // Insights
                     if (data.insights && data.insights.length > 0) {
                         const container = document.getElementById('insightsContainer');
                         container.innerHTML = data.insights.map(insight => `
@@ -679,12 +927,13 @@
                         document.getElementById('insightsContainer').innerHTML = '<div class="text-center text-muted py-3">Nenhum insight no momento</div>';
                     }
                     
-                    // Tabela por turma
                     if (data.analisePorTurma && data.analisePorTurma.length > 0) {
                         window.turmasData = data.analisePorTurma;
                         atualizarTabelaTurmas(data.analisePorTurma);
                         atualizarGraficoTurmas(data.analisePorTurma);
                     }
+                    
+                    await carregarFeedbacks();
                 }
             } catch (error) {
                 console.error('Erro ao carregar dashboard:', error);
@@ -797,8 +1046,205 @@
         }
         
         // ============================================
-        // FUNÇÕES DO MENU
+        // FEEDBACKS - COM FILTROS
         // ============================================
+        
+        let timeoutBusca;
+        
+        function aplicarFiltrosFeedbackDebounce() {
+            clearTimeout(timeoutBusca);
+            timeoutBusca = setTimeout(() => aplicarFiltrosFeedback(), 500);
+        }
+        
+        function aplicarFiltrosFeedback() {
+            const refeicao = document.getElementById('filtroRefeicaoFeedback').value;
+            const notaMin = parseInt(document.getElementById('filtroNotaMin').value);
+            const gostou = document.getElementById('filtroGostou').value;
+            const anonimo = document.getElementById('filtroAnonimo').value;
+            const busca = document.getElementById('filtroBuscaFeedback').value.toLowerCase();
+            
+            feedbacksFiltrados = todosFeedbacks.filter(f => {
+                if (refeicao !== 'todas' && f.tipoRefeicao !== refeicao) return false;
+                if (f.nota < notaMin) return false;
+                if (gostou !== 'todos' && f.gostou !== gostou) return false;
+                if (anonimo !== 'todos') {
+                    const isAnonimo = anonimo === 'sim';
+                    if (f.anonimo !== isAnonimo) return false;
+                }
+                if (busca) {
+                    const nomeMatch = f.alunoNome?.toLowerCase().includes(busca);
+                    const turmaMatch = f.alunoTurma?.toLowerCase().includes(busca);
+                    const comentarioMatch = f.comentario?.toLowerCase().includes(busca);
+                    if (!nomeMatch && !turmaMatch && !comentarioMatch) return false;
+                }
+                return true;
+            });
+            
+            atualizarListaFeedbacks();
+            atualizarFiltrosAtivos();
+            
+            document.getElementById('feedbacksFiltrados').textContent = feedbacksFiltrados.length;
+        }
+        
+        function atualizarListaFeedbacks() {
+            const tbody = document.getElementById('listaFeedbacks');
+            
+            if (feedbacksFiltrados.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado com os filtros aplicados</td></tr>';
+                document.getElementById('feedbacksCount').textContent = '0';
+                return;
+            }
+            
+            document.getElementById('feedbacksCount').textContent = feedbacksFiltrados.length;
+            
+            tbody.innerHTML = feedbacksFiltrados.map(f => {
+                let notaClass = '';
+                if (f.nota >= 4) notaClass = 'alta';
+                else if (f.nota >= 2.5) notaClass = 'media';
+                else notaClass = 'baixa';
+                
+                return `
+                    <tr>
+                        <td>${f.alunoNome}${f.anonimo ? ' <i class="fas fa-user-secret text-muted" title="Anônimo"></i>' : ''}</td>
+                        <td>${f.alunoTurma || '-'}</td>
+                        <td><span class="badge ${f.tipoRefeicao === 'manha' ? 'badge-manha' : f.tipoRefeicao === 'almoco' ? 'badge-almoco' : 'badge-tarde'}">${f.tipoRefeicao === 'manha' ? '🌅 Manhã' : f.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'}</span></td>
+                        <td><span class="nota-badge ${notaClass}">${'★'.repeat(f.nota)}${'☆'.repeat(5-f.nota)}</span></td>
+                        <td><small>${f.comentario ? (f.comentario.length > 60 ? f.comentario.substring(0,60) + '...' : f.comentario) : '-'}</small></td>
+                        <td><small>${new Date(f.createdAt).toLocaleString()}</small></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function atualizarFiltrosAtivos() {
+            const container = document.getElementById('filtrosAtivosContainer');
+            const refeicao = document.getElementById('filtroRefeicaoFeedback').value;
+            const notaMin = document.getElementById('filtroNotaMin').value;
+            const gostou = document.getElementById('filtroGostou').value;
+            const anonimo = document.getElementById('filtroAnonimo').value;
+            const busca = document.getElementById('filtroBuscaFeedback').value;
+            
+            let ativos = [];
+            
+            if (refeicao !== 'todas') {
+                const nomes = { manha: '🌅 Manhã', almoco: '🍽️ Almoço', tarde: '🌙 Tarde' };
+                ativos.push({ label: `Refeição: ${nomes[refeicao]}`, tipo: 'refeicao' });
+            }
+            if (notaMin !== '1') {
+                ativos.push({ label: `Nota ≥ ${notaMin}`, tipo: 'nota' });
+            }
+            if (gostou !== 'todos') {
+                const nomes = { sim: '👍 Adoraram', mais_ou_menos: '😐 Mais ou menos', nao: '👎 Não gostaram' };
+                ativos.push({ label: `Opinião: ${nomes[gostou]}`, tipo: 'gostou' });
+            }
+            if (anonimo !== 'todos') {
+                ativos.push({ label: anonimo === 'sim' ? '🔒 Anônimos' : '✅ Identificados', tipo: 'anonimo' });
+            }
+            if (busca) {
+                ativos.push({ label: `Busca: "${busca}"`, tipo: 'busca' });
+            }
+            
+            if (ativos.length === 0) {
+                container.innerHTML = '<span class="text-muted small">Nenhum filtro ativo</span>';
+                return;
+            }
+            
+            container.innerHTML = ativos.map(a => `
+                <span class="filtro-tag">
+                    ${a.label}
+                    <i class="fas fa-times" onclick="removerFiltro('${a.tipo}')"></i>
+                </span>
+            `).join('');
+        }
+        
+        function removerFiltro(tipo) {
+            if (tipo === 'refeicao') document.getElementById('filtroRefeicaoFeedback').value = 'todas';
+            if (tipo === 'nota') document.getElementById('filtroNotaMin').value = '1';
+            if (tipo === 'gostou') document.getElementById('filtroGostou').value = 'todos';
+            if (tipo === 'anonimo') document.getElementById('filtroAnonimo').value = 'todos';
+            if (tipo === 'busca') document.getElementById('filtroBuscaFeedback').value = '';
+            aplicarFiltrosFeedback();
+        }
+        
+        function limparFiltrosFeedback() {
+            document.getElementById('filtroRefeicaoFeedback').value = 'todas';
+            document.getElementById('filtroNotaMin').value = '1';
+            document.getElementById('filtroGostou').value = 'todos';
+            document.getElementById('filtroAnonimo').value = 'todos';
+            document.getElementById('filtroBuscaFeedback').value = '';
+            aplicarFiltrosFeedback();
+        }
+        
+        async function carregarFeedbacks() {
+            try {
+                const response = await fetch('/api/feedback-cozinha/estatisticas', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    todosFeedbacks = data.ultimosFeedbacks || [];
+                    feedbacksFiltrados = [...todosFeedbacks];
+                    
+                    const stats = data.estatisticas;
+                    document.getElementById('totalFeedbacks').textContent = stats.total || 0;
+                    document.getElementById('mediaNotas').textContent = stats.mediaNotas || 0;
+                    document.getElementById('feedbacksFiltrados').textContent = stats.total || 0;
+                    
+                    const media = parseFloat(stats.mediaNotas) || 0;
+                    document.getElementById('estrelasMedia').innerHTML = gerarEstrelas(media);
+                    
+                    const maxNota = Math.max(...Object.values(stats.distribuicaoNotas), 1);
+                    for (let i = 1; i <= 5; i++) {
+                        const count = stats.distribuicaoNotas[i] || 0;
+                        const percent = (count / maxNota) * 100;
+                        document.getElementById(`bar${i}`).style.width = `${percent}%`;
+                        document.getElementById(`count${i}`).textContent = count;
+                    }
+                    
+                    document.getElementById('gostaramSim').textContent = stats.gostouStats?.sim || 0;
+                    document.getElementById('gostaramMaisMenos').textContent = stats.gostouStats?.mais_ou_menos || 0;
+                    document.getElementById('gostaramNao').textContent = stats.gostouStats?.nao || 0;
+                    
+                    const totalGostou = (stats.gostouStats?.sim || 0) + (stats.gostouStats?.mais_ou_menos || 0);
+                    const aprovacao = stats.total > 0 ? Math.round((totalGostou / stats.total) * 100) : 0;
+                    document.getElementById('gostaram').textContent = `${aprovacao}%`;
+                    document.getElementById('mediaDetalhada').textContent = stats.mediaNotas || 0;
+                    
+                    atualizarListaFeedbacks();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar feedbacks:', error);
+                document.getElementById('listaFeedbacks').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Erro ao carregar feedbacks</td></tr>';
+            }
+        }
+        
+        function gerarEstrelas(nota) {
+            const estrelasCheias = Math.floor(nota);
+            const meiaEstrela = nota % 1 >= 0.5;
+            let html = '';
+            for (let i = 0; i < estrelasCheias; i++) html += '<i class="fas fa-star text-warning"></i>';
+            if (meiaEstrela) html += '<i class="fas fa-star-half-alt text-warning"></i>';
+            for (let i = html.length / 2; i < 5; i++) html += '<i class="far fa-star text-warning"></i>';
+            return html;
+        }
+        
+        // ============================================
+        // QR CODE E OUTRAS FUNÇÕES
+        // ============================================
+        
+        function mostrarQRCodeFeedback() {
+            const url = `${window.location.origin}/feedback-cozinha.html`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+            
+            document.getElementById('qrCodeImage').innerHTML = `<img src="${qrUrl}" alt="QR Code" style="width: 200px;">`;
+            document.getElementById('linkFeedback').textContent = url;
+            document.getElementById('modalQRCode').classList.add('show');
+        }
+        
+        function fecharModalQRCode() {
+            document.getElementById('modalQRCode').classList.remove('show');
+        }
         
         function toggleDropdown() {
             const menu = document.getElementById('dropdownMenu');
@@ -821,17 +1267,10 @@
             }
         }
         
-        // ============================================
-        // EXPORTAR RELATÓRIO PDF (SIMULADO)
-        // ============================================
         function gerarRelatorioPDF() {
             alert('📄 Função de exportar PDF será implementada em breve.\n\nPor enquanto, você pode usar "Ctrl+P" para imprimir esta página.');
-            // Aqui você pode implementar uma biblioteca como jsPDF
         }
         
-        // ============================================
-        // EXPORTAR CSV
-        // ============================================
         function exportarCSV() {
             if (!dashboardData.analisePorTurma || dashboardData.analisePorTurma.length === 0) {
                 alert('Nenhum dado para exportar');
@@ -855,9 +1294,6 @@
             alert('✅ CSV exportado com sucesso!');
         }
         
-        // ============================================
-        // MODAL DE FALTANTES
-        // ============================================
         async function abrirModalFaltantes() {
             const modal = document.getElementById('modalFaltantes');
             const listaDiv = document.getElementById('listaFaltantes');
@@ -900,6 +1336,7 @@
             modal.classList.remove('show');
         }
         
+        // Expor funções globalmente
         window.toggleDropdown = toggleDropdown;
         window.logout = logout;
         window.carregarDashboard = carregarDashboard;
@@ -907,6 +1344,13 @@
         window.exportarCSV = exportarCSV;
         window.abrirModalFaltantes = abrirModalFaltantes;
         window.fecharModalFaltantes = fecharModalFaltantes;
+        window.mostrarQRCodeFeedback = mostrarQRCodeFeedback;
+        window.fecharModalQRCode = fecharModalQRCode;
+        window.carregarFeedbacks = carregarFeedbacks;
+        window.aplicarFiltrosFeedback = aplicarFiltrosFeedback;
+        window.limparFiltrosFeedback = limparFiltrosFeedback;
+        window.removerFiltro = removerFiltro;
+        window.aplicarFiltrosFeedbackDebounce = aplicarFiltrosFeedbackDebounce;
     </script>
     
     <script>

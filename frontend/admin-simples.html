@@ -717,6 +717,14 @@
             display: inline-block;
         }
 
+        .role-badge.gestao_geral {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+        }
+        .role-badge.gestao_geral i {
+            margin-right: 4px;
+        }
+
         .role-badge.setor_pedagogico {
             background: #a855f7;
             color: white;
@@ -2305,13 +2313,17 @@
                         roleBg = '#f3e8ff';
                         roleIcon = '👩‍🏫';
                     } else if (usuario.role === 'coordenacao_patio') {
-                        roleColor = '#d97706';  // laranja escuro
-                        roleBg = '#fef3c7';      // fundo amarelo claro
+                        roleColor = '#d97706';
+                        roleBg = '#fef3c7';
                         roleIcon = '🏃';
                     } else if (usuario.role === 'cozinha') {
-                        roleColor = '#059669';   // verde escuro
-                        roleBg = '#d1fae5';      // fundo verde claro
+                        roleColor = '#059669';
+                        roleBg = '#d1fae5';
                         roleIcon = '🍽️';
+                    } else if (usuario.role === 'gestao_geral') {
+                        roleColor = '#1e3c72';
+                        roleBg = '#e0f2fe';
+                        roleIcon = '📊';
                     } else {
                         roleColor = '#6b7280';
                         roleBg = '#f3f4f6';
@@ -2810,6 +2822,7 @@
                                     <option value="setor_pedagogico">Setor Pedagógico</option>
                                     <option value="coordenacao_patio"> Coordenação de Pátio</option>
                                     <option value="cozinha">Cozinha</option>
+                                    <option value="gestao_geral">Gestao Geral</option>
                                 </select>
                             </div>
                             <div class="filter-actions">
@@ -2890,7 +2903,7 @@
                     
                     // Badge com suporte a todos os perfis
                     let roleBadge = '';
-                    
+
                     if (u.role === 'aluno') {
                         roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
                     } else if (u.role === 'professor') {
@@ -2898,15 +2911,17 @@
                     } else if (u.role === 'admin') {
                         roleBadge = '<span class="role-badge admin"><i class="fas fa-user-shield"></i> Admin</span>';
                     } else if (u.role === 'super_admin') {
-                        roleBadge = '<span class="role-badge" style="background: #ffd966; color: #856404;"><i class="fas fa-crown"></i> Super Admin</span>';
+                        roleBadge = '<span class="role-badge super_admin"><i class="fas fa-crown"></i> Super Admin</span>';
                     } else if (u.role === 'setor_pedagogico') {
                         roleBadge = '<span class="role-badge setor_pedagogico"><i class="fas fa-chalkboard-user"></i> Setor Pedagógico</span>';
                     } else if (u.role === 'coordenacao_patio') {
                         roleBadge = '<span class="role-badge coordenacao_patio"><i class="fas fa-utensils"></i> Coordenação de Pátio</span>';
                     } else if (u.role === 'cozinha') {
                         roleBadge = '<span class="role-badge cozinha"><i class="fas fa-kitchen-set"></i> Cozinha</span>';
+                    } else if (u.role === 'gestao_geral') {
+                        roleBadge = '<span class="role-badge gestao_geral"><i class="fas fa-chart-line"></i> Gestão Geral</span>';
                     } else {
-                        roleBadge = `<span class="role-badge">${u.role || 'aluno'}</span>`;
+                        roleBadge = `<span class="role-badge">${u.role || 'Desconhecido'}</span>`;
                     }
                     
                     return `
@@ -3624,13 +3639,15 @@
                             <div class="form-group">
                                 <label>Perfil</label>
                                 <select id="roleUsuario" class="form-control">
-                                    <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>Aluno</option>
-                                    <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professor</option>
-                                    <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
-                                    <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>Setor Pedagógico</option>
-                                    <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>Coordenação de Pátio</option>
-                                    <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>Cozinha</option>
-                                </select>
+                                <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>Aluno</option>
+                                <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professor</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option>
+                                <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>Setor Pedagógico</option>
+                                <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>Coordenação de Pátio</option>
+                                <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>Cozinha</option>
+                                <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>Gestão Geral</option>
+                            </select>
                             </div>
                             
                             <div class="form-group">
@@ -3686,6 +3703,22 @@
                                     <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>Turismo</option>
                                     <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>Ambiente</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <!-- Campos específicos para Gestão Geral -->
+                        <div id="gestaoGeralFields" class="role-specific" style="${role === 'gestao_geral' ? 'display: block;' : 'display: none;'}">
+                            <div class="form-group">
+                                <label><i class="fas fa-building"></i> Departamento</label>
+                                <input type="text" id="departamentoUsuario" class="form-control" value="${escapeStr(usuario?.departamento || '')}">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-id-card"></i> Matrícula</label>
+                                <input type="text" id="matriculaUsuario" class="form-control" value="${escapeStr(usuario?.matricula || '')}" maxlength="6" placeholder="6 dígitos">
+                            </div>
+                            <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>A Gestão Geral controla o rodízio de refeições por turma.</span>
                             </div>
                         </div>
 
@@ -3750,17 +3783,20 @@
             // ============ TOGGLE CAMPOS POR ROLE ============
             toggleCamposRole() {
                 const role = document.getElementById('roleUsuario')?.value;
+                
                 const alunoFields = document.getElementById('alunoFields');
                 const professorFields = document.getElementById('professorFields');
                 const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
                 const coordenacaoPatioFields = document.getElementById('coordenacaoPatioFields');
                 const cozinhaFields = document.getElementById('cozinhaFields');
+                const gestaoGeralFields = document.getElementById('gestaoGeralFields');
                 
                 if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
                 if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
                 if (setorPedagogicoFields) setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
                 if (coordenacaoPatioFields) coordenacaoPatioFields.style.display = role === 'coordenacao_patio' ? 'block' : 'none';
                 if (cozinhaFields) cozinhaFields.style.display = role === 'cozinha' ? 'block' : 'none';
+                if (gestaoGeralFields) gestaoGeralFields.style.display = role === 'gestao_geral' ? 'block' : 'none';
             }
 
             getRoleLabel(role) {
@@ -3771,7 +3807,8 @@
                     'super_admin': 'Super Administrador',
                     'setor_pedagogico': 'Setor Pedagógico',
                     'coordenacao_patio': 'Coordenação de Pátio',
-                    'cozinha': 'Cozinha'
+                    'cozinha': 'Cozinha',
+                    'gestao_geral': 'Gestão Geral'
                 };
                 return labels[role] || role || 'Desconhecido';
             }
@@ -3783,6 +3820,7 @@
                     'setor_pedagogico': '👩‍🏫 Setor Pedagógico',
                     'coordenacao_patio': '🏃 Coordenação de Pátio - Controle de Refeições',
                     'cozinha': '🍽️ Cozinha - Monitoramento de Refeições',
+                    'gestao_geral': '📊 Gestão Geral - Rodízio de Refeições',
                     'admin': '👑 Área Administrativa',
                     'super_admin': '⭐ Super Administrador'
                 };
@@ -3827,10 +3865,11 @@
                     dados.departamento = document.getElementById('departamentoUsuario')?.value;
                     dados.atribuicoes = document.getElementById('atribuicoesUsuario')?.value;
                 }
-                if (roleSelecionada === 'coordenacao_patio' || roleSelecionada === 'cozinha') {
+                if (roleSelecionada === 'coordenacao_patio' || roleSelecionada === 'cozinha' || roleSelecionada === 'gestao_geral') {
                     dados.departamento = document.getElementById('departamentoUsuario')?.value;
                     dados.matricula = document.getElementById('matriculaUsuario')?.value;
                 }
+
 
                 if (!id) {
                     const senha = document.getElementById('senhaUsuario')?.value;
