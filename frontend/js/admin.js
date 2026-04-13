@@ -17621,6 +17621,19 @@ class AdminPanel {
             this.openModal();
         }
 
+        // ============ EDITAR EIXO ============
+        async editarEixo(eixoId) {
+            console.log('✏️ Editando eixo:', eixoId);
+            
+            const eixo = this.eixos.find(e => e._id === eixoId);
+            if (!eixo) {
+                this.showToast('❌ Eixo não encontrado', 'error');
+                return;
+            }
+            
+            this.abrirModalEixo(eixoId);
+        }
+
         // ============ SALVAR EIXO ============
         async salvarEixo(eixoId = null) {
             try {
@@ -18106,6 +18119,8 @@ class AdminPanel {
             
             this.abrirModalCurso(cursoId);
         }
+
+
 
         // ============ EDITAR TURMA (SIMPLIFICADA) ============
         async editarTurma(turmaId, cursoId = null) {
@@ -29267,7 +29282,7 @@ class AdminPanel {
             
             const modalBody = document.getElementById('modalBody');
             
-            // Gerar checkboxes dos dias do mês (1 a 31) em grupos de 7
+            // Gerar checkboxes dos dias do mês (1 a 31)
             let diasMesHtml = '';
             for (let i = 1; i <= 31; i++) {
                 const isChecked = rodizioData?.diasMes?.includes(i) ? 'checked' : '';
@@ -29348,13 +29363,13 @@ class AdminPanel {
                                     <div class="select-wrapper">
                                         <select id="rodizioTipo" class="form-control" onchange="admin.toggleTipoRodizioGestao()">
                                             <option value="semanal" ${rodizioData?.tipoRodizio === 'semanal' ? 'selected' : ''}>
-                                                <i class="fas fa-calendar-week"></i> 📅 Semanal (dias da semana)
+                                                📅 Semanal (dias da semana)
                                             </option>
                                             <option value="mensal" ${rodizioData?.tipoRodizio === 'mensal' ? 'selected' : ''}>
-                                                <i class="fas fa-calendar-alt"></i> 📆 Mensal (dias do mês)
+                                                📆 Mensal (dias do mês)
                                             </option>
                                             <option value="ambos" ${rodizioData?.tipoRodizio === 'ambos' ? 'selected' : ''}>
-                                                <i class="fas fa-sync-alt"></i> 🔄 Ambos
+                                                🔄 Ambos
                                             </option>
                                         </select>
                                         <i class="fas fa-chevron-down select-arrow"></i>
@@ -29657,7 +29672,6 @@ class AdminPanel {
                         color: #64748b;
                     }
                     
-                    /* Toggle Switch */
                     .status-toggle {
                         display: flex;
                         align-items: center;
@@ -29716,7 +29730,6 @@ class AdminPanel {
                         color: #334155;
                     }
                     
-                    /* Dias da Semana Grid */
                     .dias-semana-grid {
                         display: grid;
                         grid-template-columns: repeat(7, 1fr);
@@ -29765,7 +29778,6 @@ class AdminPanel {
                         color: white;
                     }
                     
-                    /* Dias do Mês Grid */
                     .dias-mes-grid {
                         display: grid;
                         grid-template-columns: repeat(7, 1fr);
@@ -29801,7 +29813,6 @@ class AdminPanel {
                         color: white;
                     }
                     
-                    /* Semanas Grid */
                     .semanas-mes-grid {
                         display: grid;
                         grid-template-columns: repeat(2, 1fr);
@@ -29864,7 +29875,6 @@ class AdminPanel {
                         color: #dc2626;
                     }
                     
-                    /* Resumo */
                     .resumo {
                         background: #f0f9ff;
                         border: 1px solid #bae6fd;
@@ -29882,7 +29892,6 @@ class AdminPanel {
                         margin: 5px 0;
                     }
                     
-                    /* Responsividade */
                     @media (max-width: 768px) {
                         .modal-rodizio-header {
                             flex-direction: column;
@@ -29918,24 +29927,6 @@ class AdminPanel {
             document.getElementById('modalSaveBtn').onclick = () => this.salvarRodizioGestao(turma);
             document.getElementById('modalSaveBtn').style.display = 'inline-block';
             document.getElementById('modalSaveBtn').textContent = 'Salvar Rodízio';
-            document.getElementById('modalSaveBtn').className = 'btn-save-rodizio';
-            
-            // Adicionar estilo do botão salvar
-            const style = document.createElement('style');
-            style.textContent = `
-                .btn-save-rodizio {
-                    background: linear-gradient(135deg, #10b981, #059669) !important;
-                    color: white !important;
-                    padding: 10px 28px !important;
-                    border-radius: 40px !important;
-                    font-weight: 600 !important;
-                }
-                .btn-save-rodizio:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-                }
-            `;
-            document.head.appendChild(style);
             
             // Configurar evento de mudança para atualizar resumo
             setTimeout(() => {
@@ -29967,7 +29958,7 @@ class AdminPanel {
         }
     }
 
-    // ============ MÉTODOS AUXILIARES PARA O MODAL ============
+    // ============ MÉTODOS AUXILIARES ============
 
     atualizarResumoRodizio() {
         const resumoContent = document.getElementById('resumoRodizio');
@@ -30071,6 +30062,122 @@ class AdminPanel {
         }
         
         this.atualizarResumoRodizio();
+    }
+
+    async salvarRodizioGestao(turmaAntiga = null) {
+        try {
+            const turma = document.getElementById('rodizioTurma')?.value;
+            if (!turma) {
+                this.showToast('❌ Selecione uma turma', 'error');
+                return;
+            }
+            
+            const tipoRodizio = document.getElementById('rodizioTipo')?.value;
+            
+            // Coletar dias da semana
+            const diasSemana = [];
+            if (document.getElementById('diaDomingo')?.checked) diasSemana.push(0);
+            if (document.getElementById('diaSegunda')?.checked) diasSemana.push(1);
+            if (document.getElementById('diaTerca')?.checked) diasSemana.push(2);
+            if (document.getElementById('diaQuarta')?.checked) diasSemana.push(3);
+            if (document.getElementById('diaQuinta')?.checked) diasSemana.push(4);
+            if (document.getElementById('diaSexta')?.checked) diasSemana.push(5);
+            if (document.getElementById('diaSabado')?.checked) diasSemana.push(6);
+            
+            // Coletar dias do mês
+            const diasMes = [];
+            for (let i = 1; i <= 31; i++) {
+                const cb = document.getElementById(`diaMes${i}`);
+                if (cb && cb.checked) diasMes.push(i);
+            }
+            
+            // Coletar semanas
+            const semanasMes = [];
+            if (document.getElementById('semana1')?.checked) semanasMes.push(1);
+            if (document.getElementById('semana2')?.checked) semanasMes.push(2);
+            if (document.getElementById('semana3')?.checked) semanasMes.push(3);
+            if (document.getElementById('semana4')?.checked) semanasMes.push(4);
+            
+            const dados = {
+                turma,
+                tipoRodizio,
+                diasSemana,
+                diasMes,
+                semanasMes,
+                horarioInicio: document.getElementById('rodizioHorarioInicio')?.value,
+                horarioFim: document.getElementById('rodizioHorarioFim')?.value,
+                ativo: document.getElementById('rodizioAtivo')?.checked,
+                descricao: document.getElementById('rodizioDescricao')?.value
+            };
+            
+            this.showToast('🔄 Salvando rodízio...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/gestao-geral/rodizios', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Rodízio salvo com sucesso!', 'success');
+                this.closeModal();
+                // Recarregar o módulo de monitoramento
+                if (typeof monitoramentoTempoReal !== 'undefined' && monitoramentoTempoReal) {
+                    await monitoramentoTempoReal.carregarDados();
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao salvar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    async editarRodizioGestao(turma) {
+        this.abrirModalRodizioGestao(turma);
+    }
+
+    async excluirRodizioGestao(turma) {
+        const confirmar = await this.confirmar(
+            '🗑️ Excluir Rodízio',
+            `Tem certeza que deseja excluir o rodízio da turma <strong>${turma}</strong>?`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🔄 Excluindo rodízio...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/gestao-geral/rodizios/${turma}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Rodízio excluído!', 'success');
+                // Recarregar o módulo de monitoramento
+                if (typeof monitoramentoTempoReal !== 'undefined' && monitoramentoTempoReal) {
+                    await monitoramentoTempoReal.carregarDados();
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao excluir');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
     }
 
     // ============ BAIXAR BACKUP (VERSÃO CORRIGIDA) ============

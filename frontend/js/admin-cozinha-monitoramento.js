@@ -11,17 +11,21 @@ class MonitoramentoTempoReal {
     this.graficos = {};
     this.todosFeedbacks = [];
     this.feedbacksFiltrados = [];
+    this.paginaCarregada = false; // Flag para controle
   }
   
   async carregar() {
     console.log('📊 Carregando Monitoramento em Tempo Real...');
-    await this.carregarDados();
-    await this.carregarFeedbacks();
+    
+    // SEMPRE carregar a página completa quando o usuário clica no menu
+    this.paginaCarregada = true;
+    await this.carregarDadosCompleto();
+    await this.carregarFeedbacksCompleto();
     this.iniciarEventosSSE();
     this.iniciarAtualizacaoAutomatica();
   }
   
-  async carregarDados() {
+  async carregarDadosCompleto() {
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch('/api/monitoramento-cozinha/dashboard', {
@@ -45,7 +49,7 @@ class MonitoramentoTempoReal {
     }
   }
   
-  async carregarFeedbacks() {
+  async carregarFeedbacksCompleto() {
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch('/api/feedback-cozinha/estatisticas', {
@@ -61,6 +65,183 @@ class MonitoramentoTempoReal {
     } catch (error) {
       console.error('Erro ao carregar feedbacks:', error);
     }
+  }
+  
+  // Método para atualização em segundo plano (sem recarregar a página)
+  async carregarDados() {
+    // Verificar se a página foi carregada e se o elemento existe
+    if (!this.paginaCarregada) return;
+    
+    const contentArea = document.getElementById('contentArea');
+    const isMonitoramentoAtivo = contentArea && contentArea.querySelector('.monitoramento-dashboard') !== null;
+    
+    if (!isMonitoramentoAtivo) {
+      console.log('⏭️ Seção de monitoramento não está ativa, ignorando atualização');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/monitoramento-cozinha/dashboard', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        this.dados = data;
+        this.atualizarElementosExistentes(data);
+        this.atualizarGraficos(data);
+        this.atualizarTimestamp(data.timestamp);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+    }
+  }
+  
+  // Método para atualização de feedbacks em segundo plano
+  async carregarFeedbacks() {
+    if (!this.paginaCarregada) return;
+    
+    const contentArea = document.getElementById('contentArea');
+    const isMonitoramentoAtivo = contentArea && contentArea.querySelector('.monitoramento-dashboard') !== null;
+    
+    if (!isMonitoramentoAtivo) {
+      console.log('⏭️ Seção de monitoramento não está ativa, ignorando atualização de feedbacks');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/feedback-cozinha/estatisticas', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        this.todosFeedbacks = data.ultimosFeedbacks || [];
+        this.feedbacksFiltrados = [...this.todosFeedbacks];
+        this.atualizarFeedbacksNoDOM(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar feedbacks:', error);
+    }
+  }
+  
+  // NOVO MÉTODO: Atualizar apenas os elementos sem recarregar a página
+  atualizarElementosExistentes(data) {
+    const cozinha = data.cozinha || {};
+    const gestao = data.gestaoGeral || {};
+    const contagem = cozinha.contagemRefeicoes || { manha: 0, almoco: 0, tarde: 0, total: 0, pessoasUnicas: 0 };
+    const perfis = cozinha.perfisAlimentares || { sempre: 0, as_vezes: 0, nunca: 0 };
+    const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
+    const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
+    
+    // Atualizar cards principais
+    const metricValues = document.querySelectorAll('.metric-value');
+    if (metricValues.length >= 4) {
+      if (metricValues[0]) metricValues[0].textContent = cozinha.totalPessoas || 0;
+      if (metricValues[1]) metricValues[1].textContent = contagem.total;
+      if (metricValues[2]) metricValues[2].textContent = `${adesao}%`;
+    }
+    
+    // Atualizar metric-detail
+    const metricDetails = document.querySelectorAll('.metric-detail');
+    if (metricDetails.length >= 1 && metricDetails[0]) {
+      metricDetails[0].textContent = `${contagem.pessoasUnicas} pessoas únicas`;
+    }
+    
+    // Atualizar contagem por período
+    const periodoValues = document.querySelectorAll('.periodo-value');
+    if (periodoValues.length >= 3) {
+      if (periodoValues[0]) periodoValues[0].textContent = contagem.manha;
+      if (periodoValues[1]) periodoValues[1].textContent = contagem.almoco;
+      if (periodoValues[2]) periodoValues[2].textContent = contagem.tarde;
+    }
+    
+    // Atualizar previsão de comida
+    const previsaoValues = document.querySelectorAll('.previsao-value');
+    if (previsaoValues.length >= 4) {
+      if (previsaoValues[0]) previsaoValues[0].textContent = previsao.manha;
+      if (previsaoValues[1]) previsaoValues[1].textContent = previsao.almoco;
+      if (previsaoValues[2]) previsaoValues[2].textContent = previsao.tarde;
+      if (previsaoValues[3]) previsaoValues[3].textContent = previsao.total;
+    }
+    
+    // Atualizar perfil legend
+    const legendValues = document.querySelectorAll('.legend-item strong');
+    if (legendValues.length >= 3) {
+      if (legendValues[0]) legendValues[0].textContent = perfis.sempre;
+      if (legendValues[1]) legendValues[1].textContent = perfis.as_vezes;
+      if (legendValues[2]) legendValues[2].textContent = perfis.nunca;
+    }
+    
+    // Atualizar tabela de turmas
+    const turmasBody = document.querySelector('.data-table tbody');
+    if (turmasBody && cozinha.refeicoesPorTurma) {
+      turmasBody.innerHTML = cozinha.refeicoesPorTurma.map(t => `
+        <tr>
+          <td><strong>${t.turma}</strong></td>
+          <td class="text-center">${t.manha || 0}</td>
+          <td class="text-center">${t.almoco || 0}</td>
+          <td class="text-center">${t.tarde || 0}</td>
+          <td class="text-center"><strong>${t.total || 0}</strong></td>
+          <td class="text-center">${t.alunosQueComeram || 0}</td>
+        </tr>
+      `).join('');
+    }
+    
+    // Atualizar estatísticas de rodízio
+    const statNumbers = document.querySelectorAll('.rodizio-stat .stat-number');
+    if (statNumbers.length >= 3) {
+      if (statNumbers[0]) statNumbers[0].textContent = gestao.totalRodizios || 0;
+      if (statNumbers[1]) statNumbers[1].textContent = gestao.turmasComRodizio || 0;
+      if (statNumbers[2]) statNumbers[2].textContent = gestao.turmasSemRodizio || 0;
+    }
+    
+    // Atualizar info-footer
+    const infoFooter = document.querySelector('.info-footer');
+    if (infoFooter && gestao.hoje) {
+      infoFooter.innerHTML = `
+        <i class="fas fa-calendar-day"></i>
+        Hoje: ${gestao.hoje.data || ''} - ${gestao.hoje.diaSemana || ''} 
+        (Dia ${gestao.hoje.diaMes || ''} do mês, ${gestao.hoje.semanaMes || ''}ª semana)
+      `;
+    }
+    
+    // Atualizar tabela de rodízios
+    const rodizioTableBody = document.querySelector('.compact tbody');
+    if (rodizioTableBody && gestao.rodizios) {
+      rodizioTableBody.innerHTML = gestao.rodizios.map(r => {
+        let diasTexto = '';
+        if (r.tipo === 'semanal') {
+          diasTexto = (r.diasSemana || []).map(d => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d]).join(', ');
+        } else if (r.tipo === 'mensal') {
+          if (r.diasMes?.length) diasTexto = `${r.diasMes.length} dias/mês`;
+          else if (r.semanasMes?.length) diasTexto = `${r.semanasMes.map(s => `${s}ª`).join(', ')} semana(s)`;
+        } else {
+          diasTexto = 'Ambos sistemas';
+        }
+        return `
+          <tr>
+            <td><strong>${r.turma}</strong></td>
+            <td><span class="tipo-badge ${r.tipo}">${r.tipo === 'semanal' ? 'Semanal' : r.tipo === 'mensal' ? 'Mensal' : 'Ambos'}</span></td>
+            <td class="dias-cell">${diasTexto || '-'}</td>
+            <td>${r.horario || '-'}</td>
+            <td><span class="status-badge ${r.podeHoje ? 'active' : 'inactive'}">${r.podeHoje ? '✅ Permitido' : '❌ Não permitido'}</span></td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn-icon" onclick="admin.editarRodizioGestao('${r.turma}')" title="Editar"><i class="fas fa-edit"></i></button>
+                <button class="btn-icon delete" onclick="admin.excluirRodizioGestao('${r.turma}')" title="Excluir"><i class="fas fa-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    console.log('✅ Dados atualizados em segundo plano');
   }
   
   atualizarFeedbacksNoDOM(data) {
@@ -136,7 +317,7 @@ class MonitoramentoTempoReal {
           <td><span class="feedback-nota-badge ${notaClass}">${'★'.repeat(f.nota)}${'☆'.repeat(5-f.nota)}</span></td>
           <td><small>${f.comentario ? (f.comentario.length > 50 ? f.comentario.substring(0,50) + '...' : f.comentario) : '-'}</small></td>
           <td><small>${new Date(f.createdAt).toLocaleString()}</small></td>
-         </tr>
+        </tr>
       `;
     }).join('');
   }
@@ -202,7 +383,7 @@ class MonitoramentoTempoReal {
         <i class="fas fa-exclamation-triangle"></i>
         <h3>Erro ao carregar dados</h3>
         <p>${mensagem}</p>
-        <button class="btn-primary" onclick="monitoramentoTempoReal.carregarDados()">
+        <button class="btn-primary" onclick="monitoramentoTempoReal.carregarDadosCompleto()">
           <i class="fas fa-sync-alt"></i> Tentar novamente
         </button>
       </div>
@@ -220,6 +401,7 @@ class MonitoramentoTempoReal {
           this.atualizarContadorRefeicoes(data.total);
           this.adicionarNotificacao(`📢 Nova refeição registrada! Total: ${data.total}`);
           this.carregarFeedbacks();
+          this.carregarDados();
         }
         if (data.type === 'heartbeat') {
           const statusEl = document.getElementById('statusConexao');
@@ -249,6 +431,10 @@ class MonitoramentoTempoReal {
   }
   
   iniciarAtualizacaoAutomatica() {
+    if (this.atualizacaoTimer) {
+      clearInterval(this.atualizacaoTimer);
+    }
+    
     this.atualizacaoTimer = setInterval(() => {
       this.carregarDados();
       this.carregarFeedbacks();
@@ -280,7 +466,7 @@ class MonitoramentoTempoReal {
             <span class="status-badge online" id="statusConexao">
               <i class="fas fa-circle"></i> Conectado
             </span>
-            <button class="btn-refresh" onclick="monitoramentoTempoReal.carregarDados()">
+            <button class="btn-refresh" onclick="monitoramentoTempoReal.carregarDadosCompleto()">
               <i class="fas fa-sync-alt"></i> Atualizar
             </button>
           </div>
@@ -452,7 +638,7 @@ class MonitoramentoTempoReal {
                       <td class="text-center">${t.tarde || 0}</td>
                       <td class="text-center"><strong>${t.total || 0}</strong></td>
                       <td class="text-center">${t.alunosQueComeram || 0}</td>
-                     </tr>
+                    </tr>
                   `).join('')}
                   ${(cozinha.refeicoesPorTurma || []).length === 0 ? `
                     <tr><td colspan="6" class="text-center empty-state">Nenhum registro hoje</td></tr>
@@ -503,7 +689,7 @@ class MonitoramentoTempoReal {
               <span class="badge bg-success ms-2" id="totalFeedbacksBadge">0</span>
             </div>
             <div>
-              <button class="btn-refresh me-2" onclick="monitoramentoTempoReal.carregarFeedbacks()" style="background: #1e3c72; color: white;">
+              <button class="btn-refresh me-2" onclick="monitoramentoTempoReal.carregarFeedbacksCompleto()" style="background: #1e3c72; color: white;">
                 <i class="fas fa-sync-alt"></i> Atualizar
               </button>
             </div>
