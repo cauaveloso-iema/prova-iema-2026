@@ -21815,7 +21815,7 @@ class AdminPanel {
         }
     }
 
-    // ============ APLICAR CONFIGURAÇÕES NOS CAMPOS DO FORMULÁRIO ============
+    // ============ APLICAR CONFIGURAÇÕES NOS CAMPOS DO FORMULÁRIO (VERSÃO CORRIGIDA) ============
     aplicarConfiguracoesNosCampos(config) {
         try {
             console.log('🔄 Aplicando configurações nos campos...');
@@ -21895,7 +21895,6 @@ class AdminPanel {
                 const doisFatores = document.getElementById('config_2fa');
                 if (doisFatores) doisFatores.checked = config.seguranca.doisFatores || false;
                 
-                // ===== 🔥 CAMPO FACE ID - EXPLICITAMENTE TRATADO =====
                 const exigirFaceIdProvas = document.getElementById('config_exigir_faceid_provas');
                 if (exigirFaceIdProvas) {
                     const valor = config.seguranca.exigirFaceIdProvas !== undefined 
@@ -21967,6 +21966,17 @@ class AdminPanel {
                 
                 const notificarProfessorCancelamento = document.getElementById('config_notificar_professor_cancelamento');
                 if (notificarProfessorCancelamento) notificarProfessorCancelamento.checked = config.provas.notificarProfessorCancelamento !== false;
+                
+                // 🔥 CORREÇÃO: Checkbox de envio de prova - buscar valor DO BANCO
+                const habilitarEnvioProva = document.getElementById('config_habilitar_envio_prova');
+                if (habilitarEnvioProva) {
+                    // O valor vem do config.provas.habilitarEnvioProva
+                    const valor = config.provas.habilitarEnvioProva !== undefined 
+                        ? config.provas.habilitarEnvioProva 
+                        : true; // padrão
+                    habilitarEnvioProva.checked = valor;
+                    console.log('🎯 Checkbox de envio configurado para:', valor);
+                }
             }
             
             // ===== NOTIFICAÇÕES =====
@@ -22126,6 +22136,11 @@ class AdminPanel {
             }
             
             console.log('✅ Configurações aplicadas nos campos com sucesso!');
+            
+            // 🔥 FORÇAR RECARGA DA CONFIGURAÇÃO DE ENVIO DO BANCO (garantia extra)
+            setTimeout(() => {
+                this.carregarConfigEnvioProvas();
+            }, 100);
             
         } catch (error) {
             console.error('❌ Erro ao aplicar configurações nos campos:', error);
@@ -30177,6 +30192,75 @@ class AdminPanel {
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ CARREGAR CONFIGURAÇÃO DE ENVIO DE PROVAS DO BANCO ============
+    async carregarConfigEnvioProvas() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            if (!token) {
+                console.warn('⚠️ Token não encontrado');
+                return true;
+            }
+            
+            const response = await fetch('/api/admin/configuracoes/provas.habilitarEnvioProva', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.configuracao) {
+                const habilitarEnvio = data.configuracao.valor === true;
+                
+                // Atualizar o checkbox se ele existir
+                const checkbox = document.getElementById('config_habilitar_envio_prova');
+                if (checkbox) {
+                    checkbox.checked = habilitarEnvio;
+                    console.log('✅ Configuração de envio carregada do banco:', habilitarEnvio);
+                }
+                
+                // Atualizar no objeto de configurações atual
+                if (this.configAtual) {
+                    if (!this.configAtual.provas) this.configAtual.provas = {};
+                    this.configAtual.provas.habilitarEnvioProva = habilitarEnvio;
+                }
+                
+                return habilitarEnvio;
+            }
+            
+            return true; // padrão
+        } catch (error) {
+            console.error('❌ Erro ao carregar configuração de envio:', error);
+            return true; // padrão em caso de erro
+        }
+    }
+
+    // ============ CARREGAR CONFIGURAÇÃO ESPECÍFICA DO BANCO ============
+    async carregarConfiguracaoEspecifica(chave) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            if (!token) {
+                console.warn('⚠️ Token não encontrado');
+                return null;
+            }
+            
+            const response = await fetch(`/api/admin/configuracoes/${encodeURIComponent(chave)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.configuracao) {
+                return data.configuracao.valor;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error(`❌ Erro ao carregar configuração ${chave}:`, error);
+            return null;
         }
     }
 
