@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Refeicao = require('../models/Refeicao');
+const RodizioRefeicao = require('../models/RodizioRefeicao');
 
 // Middleware de autenticação (igual ao do server.js)
 const authenticateToken = (req, res, next) => {
