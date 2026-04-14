@@ -814,21 +814,31 @@ const FaceID = mongoose.models.FaceID || mongoose.model('FaceID', FaceIDSchema);
 // ============================================
 // MODELO LOCALIZACAO (adicione APÓS os outros modelos)
 // ============================================
+// ============================================
+// MODELO LOCALIZACAO (ATUALIZADO COM CAMPOS PARA REFEIÇÕES)
+// ============================================
 const LocalizacaoSchema = new mongoose.Schema({
     alunoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     provaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Prova' },
-    latitude: { type: Number, required: true },
-    longitude: { type: Number, required: true },
+    latitude: { type: Number },
+    longitude: { type: Number },
     accuracy: { type: Number },
-    timestamp: { type: Date, default: Date.now, index: true }
+    timestamp: { type: Date, default: Date.now, index: true },
+    
+    // 🔥 NOVOS CAMPOS PARA CONTROLE DE REFEIÇÕES
+    tipoRefeicao: { type: String, enum: ['manha', 'almoco', 'tarde', null], default: null },
+    registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    registradoPorNome: { type: String }
 }, { timestamps: true });
 
 // Índices para consultas rápidas
 LocalizacaoSchema.index({ alunoId: 1, timestamp: -1 });
 LocalizacaoSchema.index({ timestamp: -1 });
+LocalizacaoSchema.index({ tipoRefeicao: 1, timestamp: -1 });
+LocalizacaoSchema.index({ alunoId: 1, tipoRefeicao: 1, timestamp: -1 });
 
 const Localizacao = mongoose.models.Localizacao || mongoose.model('Localizacao', LocalizacaoSchema);
-console.log('✅ Modelo Localizacao carregado');
+console.log('✅ Modelo Localizacao atualizado com campos de refeição');
 
 // ============ ROTAS DE PUSH ============
 const pushRoutes = require('./routes/push-routes');
@@ -19902,6 +19912,397 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
         
     } catch (error) {
         console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// ROTAS DA COORDENAÇÃO DE PÁTIO (CONTROLE DE REFEIÇÕES)
+// ============================================================================
+
+// 1. GET - Listar todas as turmas com alunos (para a Coordenação de Pátio)
+app.get('/api/coordenacao-patio/turmas', authenticateToken, async (req, res) => {
+    try {
+        // Verificar permissão
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
+            });
+        }
+
+        console.log(`📋 Coordenação de Pátio ${req.userId} listando turmas`);
+
+        // Buscar todas as turmas ativas
+        const turmas = await Turma.find({ ativa: true })
+            .populate('alunos', 'nome email matricula curso turma fotoPerfil precisaAcessibilidade')
+            .select('nome disciplina codigo eixo')
+            .lean();
+
+        // Extrair nomes únicos das turmas
+        const nomesTurmas = [...new Set(turmas.map(t => t.nome))];
+
+        res.json({
+            success: true,
+            turmas: nomesTurmas,
+            turmasCompletas: turmas
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar turmas:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// 2. GET - Listar alunos por turma
+app.get('/api/coordenacao-patio/alunos', authenticateToken, async (req, res) => {
+    try {
+        // Verificar permissão
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
+            });
+        }
+
+        const { turma } = req.query;
+        
+        console.log(`📋 Coordenação de Pátio ${req.userId} buscando alunos da turma: ${turma}`);
+
+        let query = { role: 'aluno', ativo: true };
+        
+        if (turma) {
+            query.turma = turma;
+        }
+
+        const alunos = await User.find(query)
+            .select('nome email matricula turma curso fotoPerfil precisaAcessibilidade perfilAlimentar refeicoesQueParticipa')
+            .sort({ nome: 1 })
+            .lean();
+
+        // Buscar turmas para o filtro
+        const turmas = await Turma.find({ ativa: true })
+            .select('nome')
+            .distinct('nome')
+            .lean();
+
+        res.json({
+            success: true,
+            alunos: alunos.map(a => ({
+                id: a._id,
+                nome: a.nome,
+                email: a.email,
+                matricula: a.matricula,
+                turma: a.turma,
+                curso: a.curso,
+                fotoPerfil: a.fotoPerfil,
+                precisaAcessibilidade: a.precisaAcessibilidade,
+                perfilAlimentar: a.perfilAlimentar || 'nao_informado',
+                refeicoesQueParticipa: a.refeicoesQueParticipa || []
+            })),
+            turmas: turmas,
+            total: alunos.length
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar alunos:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// 3. GET - Buscar um aluno específico por ID (para validação do QR Code)
+app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) => {
+    try {
+        // Verificar permissão
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
+            });
+        }
+
+        const { id } = req.params;
+        
+        console.log(`🔍 Coordenação de Pátio ${req.userId} buscando aluno: ${id}`);
+
+        const aluno = await User.findById(id)
+            .select('nome email matricula turma curso fotoPerfil precisaAcessibilidade perfilAlimentar refeicoesQueParticipa')
+            .lean();
+
+        if (!aluno || aluno.role !== 'aluno') {
+            return res.status(404).json({
+                success: false,
+                error: 'Aluno não encontrado'
+            });
+        }
+
+        // Verificar horário atual e permissão para refeição
+        const horaAtual = new Date().getHours();
+        const dataHoje = new Date().toISOString().split('T')[0];
+        
+        let tipoRefeicao = null;
+        let mensagemRefeicao = '';
+        let podeRegistrar = false;
+        let jaComeu = false;
+        let horarioPermitido = false;
+        
+        // Determinar qual refeição está disponível
+        if (horaAtual >= 8 && horaAtual <= 10) {
+            tipoRefeicao = 'manha';
+            mensagemRefeicao = '☀️ Horário do Lanche da Manhã (8h - 10h)';
+            horarioPermitido = true;
+        } else if (horaAtual >= 11 && horaAtual <= 13) {
+            tipoRefeicao = 'almoco';
+            mensagemRefeicao = '🍽️ Horário do Almoço (11h - 13h)';
+            horarioPermitido = true;
+        } else if (horaAtual >= 14 && horaAtual <= 16) {
+            tipoRefeicao = 'tarde';
+            mensagemRefeicao = '🌙 Horário do Lanche da Tarde (14h - 16h)';
+            horarioPermitido = true;
+        } else {
+            mensagemRefeicao = '⏰ Fora do horário de refeição';
+        }
+
+        // Verificar se o aluno já comeu hoje
+        if (horarioPermitido && tipoRefeicao) {
+            const registroExistente = await Localizacao.findOne({
+                alunoId: id,
+                tipoRefeicao: tipoRefeicao,
+                timestamp: { $gte: new Date(dataHoje) }
+            });
+            jaComeu = !!registroExistente;
+        }
+
+        // Verificar perfil alimentar do aluno
+        const perfilAlimentar = aluno.perfilAlimentar || 'nao_informado';
+        const refeicoesPermitidas = aluno.refeicoesQueParticipa || [];
+        
+        // Verificar se o aluno participa desta refeição
+        let participa = true;
+        if (perfilAlimentar === 'nunca') {
+            participa = false;
+            mensagemRefeicao = '❌ Aluno não participa das refeições';
+        } else if (perfilAlimentar === 'as_vezes' && !refeicoesPermitidas.includes(tipoRefeicao)) {
+            participa = false;
+            mensagemRefeicao = `⚠️ Aluno não participa do ${tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde'}`;
+        }
+
+        podeRegistrar = horarioPermitido && !jaComeu && participa;
+
+        res.json({
+            success: true,
+            aluno: {
+                id: aluno._id,
+                nome: aluno.nome,
+                email: aluno.email,
+                matricula: aluno.matricula,
+                turma: aluno.turma,
+                curso: aluno.curso,
+                fotoPerfil: aluno.fotoPerfil,
+                precisaAcessibilidade: aluno.precisaAcessibilidade,
+                perfilAlimentar: perfilAlimentar,
+                refeicoesQueParticipa: refeicoesPermitidas
+            },
+            horario: {
+                horaAtual: horaAtual,
+                tipoRefeicao: tipoRefeicao,
+                mensagem: mensagemRefeicao,
+                podeRegistrar: podeRegistrar,
+                jaComeu: jaComeu,
+                horarioPermitido: horarioPermitido,
+                limiteDiario: 1
+            },
+            mensagemRefeicao: mensagemRefeicao
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar aluno:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// 4. POST - Registrar refeição
+app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (req, res) => {
+    try {
+        // Verificar permissão
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
+            });
+        }
+
+        const { alunoId, tipoRefeicao } = req.body;
+        
+        console.log(`🍽️ Coordenação de Pátio ${req.userId} registrando refeição para aluno ${alunoId}, tipo: ${tipoRefeicao}`);
+
+        if (!alunoId || !tipoRefeicao) {
+            return res.status(400).json({
+                success: false,
+                error: 'Dados incompletos'
+            });
+        }
+
+        // Validar tipo de refeição
+        const tiposValidos = ['manha', 'almoco', 'tarde'];
+        if (!tiposValidos.includes(tipoRefeicao)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tipo de refeição inválido'
+            });
+        }
+
+        // Verificar horário
+        const horaAtual = new Date().getHours();
+        let horarioValido = false;
+        
+        if (tipoRefeicao === 'manha' && horaAtual >= 8 && horaAtual <= 10) horarioValido = true;
+        else if (tipoRefeicao === 'almoco' && horaAtual >= 11 && horaAtual <= 13) horarioValido = true;
+        else if (tipoRefeicao === 'tarde' && horaAtual >= 14 && horaAtual <= 16) horarioValido = true;
+
+        if (!horarioValido) {
+            return res.status(400).json({
+                success: false,
+                error: 'Fora do horário permitido para esta refeição'
+            });
+        }
+
+        // Buscar aluno
+        const aluno = await User.findById(alunoId).select('nome turma perfilAlimentar refeicoesQueParticipa');
+        
+        if (!aluno) {
+            return res.status(404).json({
+                success: false,
+                error: 'Aluno não encontrado'
+            });
+        }
+
+        // Verificar perfil alimentar
+        const perfilAlimentar = aluno.perfilAlimentar || 'nao_informado';
+        const refeicoesPermitidas = aluno.refeicoesQueParticipa || [];
+        
+        if (perfilAlimentar === 'nunca') {
+            return res.status(400).json({
+                success: false,
+                error: 'Aluno não participa das refeições'
+            });
+        }
+        
+        if (perfilAlimentar === 'as_vezes' && !refeicoesPermitidas.includes(tipoRefeicao)) {
+            return res.status(400).json({
+                success: false,
+                error: `Aluno não participa do ${tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde'}`
+            });
+        }
+
+        // Verificar se já registrou hoje
+        const dataHoje = new Date().toISOString().split('T')[0];
+        const registroExistente = await Localizacao.findOne({
+            alunoId: alunoId,
+            tipoRefeicao: tipoRefeicao,
+            timestamp: { $gte: new Date(dataHoje) }
+        });
+
+        if (registroExistente) {
+            return res.status(400).json({
+                success: false,
+                error: 'Aluno já registrou esta refeição hoje'
+            });
+        }
+
+        // Registrar refeição (usando a coleção Localizacao com campos extras)
+        const registro = new Localizacao({
+            alunoId: alunoId,
+            tipoRefeicao: tipoRefeicao,
+            timestamp: new Date(),
+            latitude: 0,
+            longitude: 0,
+            accuracy: 0,
+            provaId: null,
+            registradoPor: req.userId,
+            registradoPorNome: req.userNome || 'Coordenação'
+        });
+
+        await registro.save();
+
+        // Opcional: Registrar também no histórico de refeições
+        console.log(`✅ Refeição ${tipoRefeicao} registrada para ${aluno.nome}`);
+
+        res.json({
+            success: true,
+            message: `${aluno.nome} - ${tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde'} registrado com sucesso!`,
+            registro: {
+                id: registro._id,
+                tipo: tipoRefeicao,
+                data: registro.timestamp
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao registrar refeição:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// 5. GET - Buscar registros de hoje (para o contador)
+app.get('/api/coordenacao-patio/registros-hoje', authenticateToken, async (req, res) => {
+    try {
+        // Verificar permissão
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
+            });
+        }
+
+        const dataHoje = new Date().toISOString().split('T')[0];
+        const inicioDia = new Date(dataHoje);
+        const fimDia = new Date(dataHoje);
+        fimDia.setDate(fimDia.getDate() + 1);
+
+        const registros = await Localizacao.find({
+            timestamp: { $gte: inicioDia, $lt: fimDia },
+            tipoRefeicao: { $in: ['manha', 'almoco', 'tarde'] }
+        }).populate('alunoId', 'nome turma').lean();
+
+        const contagem = {
+            manha: registros.filter(r => r.tipoRefeicao === 'manha').length,
+            almoco: registros.filter(r => r.tipoRefeicao === 'almoco').length,
+            tarde: registros.filter(r => r.tipoRefeicao === 'tarde').length,
+            total: registros.length
+        };
+
+        const ultimosRegistros = registros.slice(0, 10).map(r => ({
+            alunoNome: r.alunoId?.nome || 'Aluno',
+            alunoTurma: r.alunoId?.turma || 'N/A',
+            tipoRefeicao: r.tipoRefeicao,
+            horario: r.timestamp
+        }));
+
+        res.json({
+            success: true,
+            contagem: contagem,
+            registros: ultimosRegistros,
+            total: registros.length
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar registros:', error);
         res.status(500).json({
             success: false,
             error: error.message
