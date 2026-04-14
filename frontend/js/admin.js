@@ -463,7 +463,6 @@ class AdminPanel {
         }
     }
 
-    
     // ============================================================================
     // MÓDULO ONESIGNAL ADMIN - COMPLETO (VINCULAR, DESVINCULAR, APAGAR, EDITAR, NOTIFICAR)
     // ============================================================================
@@ -30307,6 +30306,262 @@ class AdminPanel {
             console.error('❌ Erro ao baixar backup:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
+    }
+
+    // ============================================
+    // FUNÇÕES DE EDIÇÃO E EXCLUSÃO - COZINHA
+    // ============================================
+
+    // ============ EDITAR REGISTRO DE REFEIÇÃO ============
+    async editarRegistroRefeicao(registroId) {
+        try {
+            console.log('✏️ Editando registro:', registroId);
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/cozinha/registro/${registroId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar registro');
+            }
+            
+            const registro = data.registro;
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 20px;">
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-utensils" style="color: white; font-size: 24px;"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin: 0;">${registro.alunoNome}</h3>
+                                <p style="margin: 5px 0 0; color: #6b7280;">Turma: ${registro.alunoTurma}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">
+                            <i class="fas fa-utensils"></i> Tipo de Refeição
+                        </label>
+                        <select id="editTipoRefeicao" class="form-control">
+                            <option value="manha" ${registro.tipoRefeicao === 'manha' ? 'selected' : ''}>☀️ Lanche da Manhã (8h-10h)</option>
+                            <option value="almoco" ${registro.tipoRefeicao === 'almoco' ? 'selected' : ''}>🍽️ Almoço (11h-13h)</option>
+                            <option value="tarde" ${registro.tipoRefeicao === 'tarde' ? 'selected' : ''}>🌙 Lanche da Tarde (14h-16h)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">
+                            <i class="fas fa-calendar-alt"></i> Data e Horário
+                        </label>
+                        <input type="datetime-local" id="editHorario" class="form-control" 
+                            value="${this.formatarDataHoraInput(registro.horario)}">
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">
+                            <i class="fas fa-sticky-note"></i> Observação
+                        </label>
+                        <textarea id="editObservacao" class="form-control" rows="2">${registro.observacao || ''}</textarea>
+                    </div>
+                    
+                    <div class="info-card" style="background: #eef2ff; padding: 12px; border-radius: 8px;">
+                        <i class="fas fa-info-circle"></i>
+                        <div style="font-size: 13px; margin-left: 10px;">
+                            <strong>Registrado por:</strong> ${registro.validadoPorNombre || 'Coordenação'}<br>
+                            <strong>Data original:</strong> ${new Date(registro.horario).toLocaleString('pt-BR')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Registro de Refeição';
+            document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoRegistro(registroId);
+            document.getElementById('modalSaveBtn').textContent = '💾 Salvar Alterações';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ SALVAR EDIÇÃO DO REGISTRO ============
+    async salvarEdicaoRegistro(registroId) {
+        try {
+            const novoTipo = document.getElementById('editTipoRefeicao')?.value;
+            const novoHorario = document.getElementById('editHorario')?.value;
+            const novaObservacao = document.getElementById('editObservacao')?.value;
+            
+            if (!novoTipo || !novoHorario) {
+                this.showToast('❌ Tipo de refeição e horário são obrigatórios', 'error');
+                return;
+            }
+            
+            this.showToast('💾 Salvando alterações...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/cozinha/registro/${registroId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    tipoRefeicao: novoTipo,
+                    horario: novoHorario,
+                    observacao: novaObservacao
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Registro atualizado com sucesso!', 'success');
+                this.closeModal();
+                
+                // Recarregar os dados
+                if (monitoramentoTempoReal) {
+                    await monitoramentoTempoReal.carregarRegistrosCompleto();
+                    await monitoramentoTempoReal.carregarDadosCompleto();
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao atualizar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ EXCLUIR REGISTRO DE REFEIÇÃO ============
+    async excluirRegistroRefeicao(registroId, alunoNome, tipoRefeicao) {
+        const tipoTexto = tipoRefeicao === 'manha' ? 'Lanche da Manhã' : 
+                        tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
+        
+        const confirmar = await this.confirmar(
+            '🗑️ Excluir Registro',
+            `Tem certeza que deseja excluir o registro de <strong>${tipoTexto}</strong> do aluno <strong>${alunoNome}</strong>?<br><br>
+            <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span>`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🗑️ Excluindo registro...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/cozinha/registro/${registroId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Registro excluído com sucesso!', 'success');
+                
+                // Recarregar os dados
+                if (monitoramentoTempoReal) {
+                    await monitoramentoTempoReal.carregarRegistrosCompleto();
+                    await monitoramentoTempoReal.carregarDadosCompleto();
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao excluir');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ VER DETALHES DO REGISTRO ============
+    async verDetalhesRegistro(registroId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/cozinha/registro/${registroId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar detalhes');
+            }
+            
+            const r = data.registro;
+            const tipoTexto = r.tipoRefeicao === 'manha' ? 'Lanche da Manhã' : 
+                            r.tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                            <i class="fas fa-utensils" style="font-size: 36px; color: white;"></i>
+                        </div>
+                        <h2 style="margin: 15px 0 5px;">${r.alunoNome}</h2>
+                        <p style="color: #6b7280;">Turma: ${r.alunoTurma}</p>
+                    </div>
+                    
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="font-size: 12px; color: #64748b;">Tipo de Refeição</div>
+                                <div style="font-size: 18px; font-weight: 600;">${tipoTexto}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #64748b;">Data e Horário</div>
+                                <div>${new Date(r.horario).toLocaleString('pt-BR')}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #64748b;">Registrado por</div>
+                                <div>${r.validadoPorNombre || 'Coordenação'}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #64748b;">Data do Registro</div>
+                                <div>${new Date(r.createdAt).toLocaleString('pt-BR')}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${r.observacao ? `
+                        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 8px; margin-top: 15px;">
+                            <div style="font-weight: 600;"><i class="fas fa-sticky-note"></i> Observação:</div>
+                            <p style="margin: 5px 0 0;">${r.observacao}</p>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-info-circle"></i> Detalhes do Registro';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ FORMATAR DATA PARA INPUT ============
+    formatarDataHoraInput(dataISO) {
+        if (!dataISO) return '';
+        const data = new Date(dataISO);
+        const ano = data.getFullYear();
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const dia = String(data.getDate()).padStart(2, '0');
+        const horas = String(data.getHours()).padStart(2, '0');
+        const minutos = String(data.getMinutes()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}T${horas}:${minutos}`;
     }
 
 }

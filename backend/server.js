@@ -20370,6 +20370,130 @@ app.get('/api/coordenacao-patio/registros-hoje', authenticateToken, async (req, 
     }
 });
 
+// ============================================
+// ROTAS DA COZINHA (GET, PUT, DELETE)
+// ============================================
+
+// GET - Buscar registro específico
+app.get('/api/cozinha/registro/:id', authenticateToken, async (req, res) => {
+    try {
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        if (!isAdmin && req.userRole !== 'cozinha') {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado'
+            });
+        }
+        
+        const Refeicao = mongoose.model('Refeicao');
+        const registro = await Refeicao.findById(req.params.id).lean();
+        
+        if (!registro) {
+            return res.status(404).json({
+                success: false,
+                error: 'Registro não encontrado'
+            });
+        }
+        
+        // Buscar dados adicionais do aluno
+        const aluno = await User.findById(registro.alunoId).select('matricula fotoPerfil');
+        
+        res.json({
+            success: true,
+            registro: {
+                ...registro,
+                alunoMatricula: aluno?.matricula || '',
+                fotoPerfil: aluno?.fotoPerfil || null
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// PUT - Atualizar registro de refeição
+app.put('/api/cozinha/registro/:id', authenticateToken, async (req, res) => {
+    try {
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        if (!isAdmin && req.userRole !== 'cozinha') {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado'
+            });
+        }
+        
+        const { tipoRefeicao, horario, observacao } = req.body;
+        const Refeicao = mongoose.model('Refeicao');
+        
+        const registro = await Refeicao.findById(req.params.id);
+        
+        if (!registro) {
+            return res.status(404).json({
+                success: false,
+                error: 'Registro não encontrado'
+            });
+        }
+        
+        // Atualizar campos
+        if (tipoRefeicao) registro.tipoRefeicao = tipoRefeicao;
+        if (horario) registro.horario = new Date(horario);
+        if (observacao !== undefined) registro.observacao = observacao;
+        
+        registro.updatedAt = new Date();
+        await registro.save();
+        
+        // Registrar log da edição
+        console.log(`✏️ Registro ${req.params.id} editado por ${req.userId} (${req.userRole})`);
+        
+        res.json({
+            success: true,
+            message: 'Registro atualizado com sucesso!',
+            registro
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// DELETE - Excluir registro de refeição
+app.delete('/api/cozinha/registro/:id', authenticateToken, async (req, res) => {
+    try {
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        if (!isAdmin && req.userRole !== 'cozinha') {
+            return res.status(403).json({
+                success: false,
+                error: 'Acesso negado'
+            });
+        }
+        
+        const Refeicao = mongoose.model('Refeicao');
+        const registro = await Refeicao.findByIdAndDelete(req.params.id);
+        
+        if (!registro) {
+            return res.status(404).json({
+                success: false,
+                error: 'Registro não encontrado'
+            });
+        }
+        
+        // Registrar log da exclusão
+        console.log(`🗑️ Registro ${req.params.id} excluído por ${req.userId} (${req.userRole})`);
+        
+        res.json({
+            success: true,
+            message: 'Registro excluído com sucesso!'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // ============================================================================
 // VERIFICADOR AUTOMÁTICO DE NOTIFICAÇÕES (A CADA 1 MINUTO)
 // ============================================================================
