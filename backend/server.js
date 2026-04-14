@@ -20019,7 +20019,7 @@ app.get('/api/coordenacao-patio/alunos', authenticateToken, async (req, res) => 
     }
 });
 
-// 3. GET - Buscar um aluno específico por ID (para validação do QR Code)
+// 3. GET - Buscar um aluno específico por ID (para validação do QR Code) - VERSÃO CORRIGIDA
 app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
@@ -20034,20 +20034,40 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
         
         console.log(`🔍 Coordenação de Pátio ${req.userId} buscando aluno: ${id}`);
 
+        // Validar se o ID é válido
+        if (!id || id.length !== 24) {
+            return res.status(400).json({
+                success: false,
+                error: 'ID de usuário inválido'
+            });
+        }
+
+        // Buscar aluno
         const aluno = await User.findById(id)
             .select('nome email matricula turma curso fotoPerfil precisaAcessibilidade perfilAlimentar refeicoesQueParticipa')
             .lean();
 
-        if (!aluno || aluno.role !== 'aluno') {
+        if (!aluno) {
             return res.status(404).json({
                 success: false,
                 error: 'Aluno não encontrado'
             });
         }
 
+        // Verificar se é aluno
+        if (aluno.role !== 'aluno') {
+            return res.status(400).json({
+                success: false,
+                error: 'Este usuário não é um aluno'
+            });
+        }
+
+        console.log(`✅ Aluno encontrado: ${aluno.nome} (${aluno.matricula})`);
+
         // Verificar horário atual e permissão para refeição
         const horaAtual = new Date().getHours();
-        const dataHoje = new Date().toISOString().split('T')[0];
+        const dataHoje = new Date();
+        dataHoje.setHours(0, 0, 0, 0);
         
         let tipoRefeicao = null;
         let mensagemRefeicao = '';
@@ -20074,12 +20094,17 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
 
         // Verificar se o aluno já comeu hoje
         if (horarioPermitido && tipoRefeicao) {
-            const registroExistente = await Localizacao.findOne({
-                alunoId: id,
-                tipoRefeicao: tipoRefeicao,
-                timestamp: { $gte: new Date(dataHoje) }
-            });
-            jaComeu = !!registroExistente;
+            try {
+                const registroExistente = await Localizacao.findOne({
+                    alunoId: id,
+                    tipoRefeicao: tipoRefeicao,
+                    timestamp: { $gte: dataHoje }
+                });
+                jaComeu = !!registroExistente;
+            } catch (err) {
+                console.warn('⚠️ Erro ao verificar registro:', err.message);
+                jaComeu = false;
+            }
         }
 
         // Verificar perfil alimentar do aluno
@@ -20091,12 +20116,25 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
         if (perfilAlimentar === 'nunca') {
             participa = false;
             mensagemRefeicao = '❌ Aluno não participa das refeições';
-        } else if (perfilAlimentar === 'as_vezes' && !refeicoesPermitidas.includes(tipoRefeicao)) {
+        } else if (perfilAlimentar === 'as_vezes' && tipoRefeicao && !refeicoesPermitidas.includes(tipoRefeicao)) {
             participa = false;
-            mensagemRefeicao = `⚠️ Aluno não participa do ${tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde'}`;
+            const nomeRefeicao = tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
+            mensagemRefeicao = `⚠️ Aluno não participa do ${nomeRefeicao}`;
         }
 
         podeRegistrar = horarioPermitido && !jaComeu && participa;
+
+        // Contar refeições do aluno hoje
+        let refeicoesHoje = 0;
+        try {
+            refeicoesHoje = await Localizacao.countDocuments({
+                alunoId: id,
+                timestamp: { $gte: dataHoje },
+                tipoRefeicao: { $in: ['manha', 'almoco', 'tarde'] }
+            });
+        } catch (err) {
+            console.warn('⚠️ Erro ao contar refeições:', err.message);
+        }
 
         res.json({
             success: true,
@@ -20108,7 +20146,7 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
                 turma: aluno.turma,
                 curso: aluno.curso,
                 fotoPerfil: aluno.fotoPerfil,
-                precisaAcessibilidade: aluno.precisaAcessibilidade,
+                precisaAcessibilidade: aluno.precisaAcessibilidade || false,
                 perfilAlimentar: perfilAlimentar,
                 refeicoesQueParticipa: refeicoesPermitidas
             },
@@ -20119,21 +20157,23 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
                 podeRegistrar: podeRegistrar,
                 jaComeu: jaComeu,
                 horarioPermitido: horarioPermitido,
-                limiteDiario: 1
+                limiteDiario: 1,
+                refeicoesHoje: refeicoesHoje
             },
             mensagemRefeicao: mensagemRefeicao
         });
 
     } catch (error) {
         console.error('❌ Erro ao buscar aluno:', error);
+        console.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: 'Erro interno ao buscar aluno: ' + error.message
         });
     }
 });
 
-// 4. POST - Registrar refeição
+// 4. POST - Registrar refeição (VERSÃO CORRIGIDA)
 app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
@@ -20180,7 +20220,7 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
         }
 
         // Buscar aluno
-        const aluno = await User.findById(alunoId).select('nome turma perfilAlimentar refeicoesQueParticipa');
+        const aluno = await User.findById(alunoId).select('nome turma matricula perfilAlimentar refeicoesQueParticipa');
         
         if (!aluno) {
             return res.status(404).json({
@@ -20201,18 +20241,21 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
         }
         
         if (perfilAlimentar === 'as_vezes' && !refeicoesPermitidas.includes(tipoRefeicao)) {
+            const nomeRefeicao = tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
             return res.status(400).json({
                 success: false,
-                error: `Aluno não participa do ${tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde'}`
+                error: `Aluno não participa do ${nomeRefeicao}`
             });
         }
 
         // Verificar se já registrou hoje
-        const dataHoje = new Date().toISOString().split('T')[0];
+        const dataHoje = new Date();
+        dataHoje.setHours(0, 0, 0, 0);
+        
         const registroExistente = await Localizacao.findOne({
             alunoId: alunoId,
             tipoRefeicao: tipoRefeicao,
-            timestamp: { $gte: new Date(dataHoje) }
+            timestamp: { $gte: dataHoje }
         });
 
         if (registroExistente) {
@@ -20222,7 +20265,10 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
             });
         }
 
-        // Registrar refeição (usando a coleção Localizacao com campos extras)
+        // Buscar dados do registrador
+        const registrador = await User.findById(req.userId).select('nome');
+
+        // Registrar refeição
         const registro = new Localizacao({
             alunoId: alunoId,
             tipoRefeicao: tipoRefeicao,
@@ -20232,17 +20278,18 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
             accuracy: 0,
             provaId: null,
             registradoPor: req.userId,
-            registradoPorNome: req.userNome || 'Coordenação'
+            registradoPorNome: registrador?.nome || 'Coordenação'
         });
 
         await registro.save();
 
-        // Opcional: Registrar também no histórico de refeições
-        console.log(`✅ Refeição ${tipoRefeicao} registrada para ${aluno.nome}`);
+        const nomeRefeicao = tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
+        
+        console.log(`✅ Refeição ${nomeRefeicao} registrada para ${aluno.nome} (${aluno.matricula})`);
 
         res.json({
             success: true,
-            message: `${aluno.nome} - ${tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde'} registrado com sucesso!`,
+            message: `${aluno.nome} - ${nomeRefeicao} registrado com sucesso!`,
             registro: {
                 id: registro._id,
                 tipo: tipoRefeicao,
@@ -20252,14 +20299,15 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
 
     } catch (error) {
         console.error('❌ Erro ao registrar refeição:', error);
+        console.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: 'Erro interno ao registrar refeição: ' + error.message
         });
     }
 });
 
-// 5. GET - Buscar registros de hoje (para o contador)
+// 5. GET - Buscar registros de hoje (para o contador) - VERSÃO CORRIGIDA
 app.get('/api/coordenacao-patio/registros-hoje', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
@@ -20270,15 +20318,16 @@ app.get('/api/coordenacao-patio/registros-hoje', authenticateToken, async (req, 
             });
         }
 
-        const dataHoje = new Date().toISOString().split('T')[0];
-        const inicioDia = new Date(dataHoje);
-        const fimDia = new Date(dataHoje);
-        fimDia.setDate(fimDia.getDate() + 1);
+        const dataHoje = new Date();
+        dataHoje.setHours(0, 0, 0, 0);
+        
+        const amanha = new Date(dataHoje);
+        amanha.setDate(amanha.getDate() + 1);
 
         const registros = await Localizacao.find({
-            timestamp: { $gte: inicioDia, $lt: fimDia },
+            timestamp: { $gte: dataHoje, $lt: amanha },
             tipoRefeicao: { $in: ['manha', 'almoco', 'tarde'] }
-        }).populate('alunoId', 'nome turma').lean();
+        }).populate('alunoId', 'nome turma matricula').lean();
 
         const contagem = {
             manha: registros.filter(r => r.tipoRefeicao === 'manha').length,
@@ -20288,10 +20337,13 @@ app.get('/api/coordenacao-patio/registros-hoje', authenticateToken, async (req, 
         };
 
         const ultimosRegistros = registros.slice(0, 10).map(r => ({
+            id: r._id,
             alunoNome: r.alunoId?.nome || 'Aluno',
+            alunoMatricula: r.alunoId?.matricula || 'N/A',
             alunoTurma: r.alunoId?.turma || 'N/A',
             tipoRefeicao: r.tipoRefeicao,
-            horario: r.timestamp
+            horario: r.timestamp,
+            registradoPor: r.registradoPorNome || 'Coordenação'
         }));
 
         res.json({
@@ -20305,7 +20357,7 @@ app.get('/api/coordenacao-patio/registros-hoje', authenticateToken, async (req, 
         console.error('❌ Erro ao buscar registros:', error);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: 'Erro interno ao buscar registros: ' + error.message
         });
     }
 });
