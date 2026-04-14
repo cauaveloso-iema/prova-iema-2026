@@ -20019,7 +20019,6 @@ app.get('/api/coordenacao-patio/alunos', authenticateToken, async (req, res) => 
     }
 });
 
-// 3. GET - Buscar um aluno específico por ID (para validação do QR Code) - VERSÃO CORRIGIDA
 app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
@@ -20034,35 +20033,38 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
         
         console.log(`🔍 Coordenação de Pátio ${req.userId} buscando aluno: ${id}`);
 
-        // Validar se o ID é válido
-        if (!id || id.length !== 24) {
+        // Validar se o ID é válido (24 caracteres hexadecimais)
+        if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+            console.log(`❌ ID inválido: ${id}`);
             return res.status(400).json({
                 success: false,
                 error: 'ID de usuário inválido'
             });
         }
 
-        // Buscar aluno
+        // Buscar aluno - NÃO FILTRAR POR role para dar mensagem mais clara
         const aluno = await User.findById(id)
-            .select('nome email matricula turma curso fotoPerfil precisaAcessibilidade perfilAlimentar refeicoesQueParticipa')
+            .select('nome email matricula turma curso fotoPerfil precisaAcessibilidade perfilAlimentar refeicoesQueParticipa role')
             .lean();
 
         if (!aluno) {
+            console.log(`❌ Usuário com ID ${id} não encontrado no banco`);
             return res.status(404).json({
                 success: false,
-                error: 'Aluno não encontrado'
+                error: 'Usuário não encontrado no sistema'
             });
         }
 
-        // Verificar se é aluno
+        console.log(`✅ Usuário encontrado: ${aluno.nome} (${aluno.role})`);
+
+        // Verificar se é aluno - retornar mensagem amigável se não for
         if (aluno.role !== 'aluno') {
+            console.log(`⚠️ Usuário ${aluno.nome} não é aluno (role: ${aluno.role})`);
             return res.status(400).json({
                 success: false,
-                error: 'Este usuário não é um aluno'
+                error: `Este QR Code pertence a um ${aluno.role === 'professor' ? 'professor' : 'funcionário'}. Apenas alunos podem registrar refeições.`
             });
         }
-
-        console.log(`✅ Aluno encontrado: ${aluno.nome} (${aluno.matricula})`);
 
         // Verificar horário atual e permissão para refeição
         const horaAtual = new Date().getHours();
@@ -20095,12 +20097,15 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
         // Verificar se o aluno já comeu hoje
         if (horarioPermitido && tipoRefeicao) {
             try {
-                const registroExistente = await Localizacao.findOne({
-                    alunoId: id,
-                    tipoRefeicao: tipoRefeicao,
-                    timestamp: { $gte: dataHoje }
-                });
-                jaComeu = !!registroExistente;
+                const Localizacao = mongoose.models.Localizacao;
+                if (Localizacao) {
+                    const registroExistente = await Localizacao.findOne({
+                        alunoId: id,
+                        tipoRefeicao: tipoRefeicao,
+                        timestamp: { $gte: dataHoje }
+                    });
+                    jaComeu = !!registroExistente;
+                }
             } catch (err) {
                 console.warn('⚠️ Erro ao verificar registro:', err.message);
                 jaComeu = false;
@@ -20127,11 +20132,14 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
         // Contar refeições do aluno hoje
         let refeicoesHoje = 0;
         try {
-            refeicoesHoje = await Localizacao.countDocuments({
-                alunoId: id,
-                timestamp: { $gte: dataHoje },
-                tipoRefeicao: { $in: ['manha', 'almoco', 'tarde'] }
-            });
+            const Localizacao = mongoose.models.Localizacao;
+            if (Localizacao) {
+                refeicoesHoje = await Localizacao.countDocuments({
+                    alunoId: id,
+                    timestamp: { $gte: dataHoje },
+                    tipoRefeicao: { $in: ['manha', 'almoco', 'tarde'] }
+                });
+            }
         } catch (err) {
             console.warn('⚠️ Erro ao contar refeições:', err.message);
         }
@@ -20142,9 +20150,9 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
                 id: aluno._id,
                 nome: aluno.nome,
                 email: aluno.email,
-                matricula: aluno.matricula,
-                turma: aluno.turma,
-                curso: aluno.curso,
+                matricula: aluno.matricula || 'Não informada',
+                turma: aluno.turma || 'Não informada',
+                curso: aluno.curso || 'Não informado',
                 fotoPerfil: aluno.fotoPerfil,
                 precisaAcessibilidade: aluno.precisaAcessibilidade || false,
                 perfilAlimentar: perfilAlimentar,
