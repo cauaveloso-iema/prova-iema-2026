@@ -288,7 +288,7 @@ class MonitoramentoTempoReal {
       `).join('');
       
       if (dadosFiltrados.length === 0) {
-        turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada</td>' + '</tr>';
+        turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada<\/td></td>';
       }
     }
   }
@@ -348,7 +348,7 @@ class MonitoramentoTempoReal {
     if (!tbody) return;
     
     if (this.feedbacksFiltrados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado</td>' + '</tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado<\/td></tr>';
       return;
     }
     
@@ -490,7 +490,7 @@ class MonitoramentoTempoReal {
     }, 30000);
   }
   
-  // 🔥 CORRIGIR MÉTODO aplicarFiltrosRegistros() - ADICIONAR FILTRO POR DATA
+  // 🔥 MÉTODO CORRIGIDO - APLICAR FILTROS
   aplicarFiltrosRegistros() {
     if (!this.dados || !this.dados.cozinha || !this.dados.cozinha.ultimosRegistros) {
       return;
@@ -502,12 +502,12 @@ class MonitoramentoTempoReal {
     
     const turma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
     const tipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
-    const data = document.getElementById('filtroRegistroData')?.value || 'hoje';
+    const periodo = document.getElementById('filtroRegistroData')?.value || 'hoje';
     
     // Salvar valores atuais
     this.filtroRegistroTurma = turma;
     this.filtroRegistroRefeicao = tipo;
-    this.filtroRegistroData = data;
+    this.filtroRegistroData = periodo;
     
     // Obter data atual
     const hoje = new Date();
@@ -533,13 +533,13 @@ class MonitoramentoTempoReal {
       const dataRegistro = new Date(r.horario);
       dataRegistro.setHours(0, 0, 0, 0);
       
-      if (data === 'hoje') {
+      if (periodo === 'hoje') {
         return dataRegistro.getTime() === hoje.getTime();
-      } else if (data === 'ontem') {
+      } else if (periodo === 'ontem') {
         return dataRegistro.getTime() === ontem.getTime();
-      } else if (data === 'semana') {
+      } else if (periodo === 'semana') {
         return dataRegistro >= inicioSemana;
-      } else if (data === 'mes') {
+      } else if (periodo === 'mes') {
         return dataRegistro >= inicioMes;
       }
       
@@ -556,7 +556,7 @@ class MonitoramentoTempoReal {
     this.atualizarListaRegistros();
   }
   
-  // 🔥 CORRIGIR MÉTODO atualizarListaRegistros()
+  // 🔥 MÉTODO CORRIGIDO - ATUALIZAR LISTA DE REGISTROS
   atualizarListaRegistros() {
     const container = document.querySelector('.registros-list');
     if (!container) return;
@@ -566,7 +566,7 @@ class MonitoramentoTempoReal {
                       (this.dados?.cozinha?.ultimosRegistros || []));
     
     if (registros.length === 0) {
-      container.innerHTML = '<div class="empty-state">Nenhum registro encontrado</div>';
+      container.innerHTML = '<div class="empty-state">Nenhum registro encontrado com os filtros selecionados</div>';
       return;
     }
     
@@ -612,7 +612,7 @@ class MonitoramentoTempoReal {
     container.innerHTML = html;
   }
   
-  // 🔥 CORRIGIR MÉTODO limparFiltrosRegistros()
+  // 🔥 MÉTODO CORRIGIDO - LIMPAR FILTROS
   limparFiltrosRegistros() {
     const turmaSelect = document.getElementById('filtroRegistroTurma');
     const tipoSelect = document.getElementById('filtroRegistroTipo');
@@ -643,7 +643,7 @@ class MonitoramentoTempoReal {
     }
   }
   
-  // 🔥 NOVO MÉTODO: APLICAR FILTROS NAS REFEIÇÕES POR TURMA
+  // 🔥 MÉTODO PARA APLICAR FILTROS NAS REFEIÇÕES POR TURMA
   aplicarFiltrosRefeicoesTurmas() {
     if (!this.dados || !this.dados.cozinha || !this.dados.cozinha.refeicoesPorTurma) {
       return;
@@ -658,7 +658,7 @@ class MonitoramentoTempoReal {
     this.atualizarTabelaRefeicoesTurmas(this.dados.cozinha.refeicoesPorTurma || []);
   }
   
-  // 🔥 NOVO MÉTODO: LIMPAR FILTROS DAS REFEIÇÕES POR TURMA
+  // 🔥 MÉTODO PARA LIMPAR FILTROS DAS REFEIÇÕES POR TURMA
   limparFiltrosRefeicoesTurmas() {
     const turmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
     const periodoSelect = document.getElementById('filtroTurmasRefeicaoPeriodo');
@@ -1003,7 +1003,7 @@ class MonitoramentoTempoReal {
                     </tr>
                   `).join('')}
                   ${(cozinha.refeicoesPorTurma || []).length === 0 ? `
-                    <tr><td colspan="6" class="text-center empty-state">Nenhum registro hoje</td></tr>
+                    <tr><td colspan="6" class="text-center empty-state">Nenhum registro hoje<\/td></tr>
                   ` : ''}
                 </tbody>
               </table>
