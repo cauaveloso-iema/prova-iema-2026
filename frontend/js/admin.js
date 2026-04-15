@@ -29288,11 +29288,39 @@ class AdminPanel {
             }
             
             // Buscar todas as turmas
-            const turmasResponse = await fetch('/api/admin/turmas?limit=100', {
+            // 🔥 CORREÇÃO: Buscar turmas dos ALUNOS em vez da tabela Turma
+            console.log('🔍 Buscando turmas cadastradas pelos alunos...');
+            const alunosResponse = await fetch('/api/admin/usuarios?role=aluno&limit=500', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const turmasData = await turmasResponse.json();
-            const todasTurmas = turmasData.success ? turmasData.turmas.map(t => t.nome) : [];
+            const alunosData = await alunosResponse.json();
+            
+            // Extrair turmas únicas dos alunos
+            let todasTurmas = [];
+            if (alunosData.success && alunosData.usuarios) {
+                const turmasSet = new Set();
+                alunosData.usuarios.forEach(aluno => {
+                    if (aluno.turma && aluno.turma.trim() !== '') {
+                        turmasSet.add(aluno.turma);
+                    }
+                });
+                todasTurmas = Array.from(turmasSet).sort();
+                console.log(`✅ Encontradas ${todasTurmas.length} turmas nos alunos:`, todasTurmas);
+            } else {
+                console.warn('⚠️ Nenhum aluno encontrado com turma cadastrada');
+            }
+            
+            // Fallback: se não encontrou turmas nos alunos, tentar da tabela Turma
+            if (todasTurmas.length === 0) {
+                console.log('🔄 Fallback: Buscando turmas da tabela Turma...');
+                const turmasResponse = await fetch('/api/admin/turmas?limit=100', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const turmasData = await turmasResponse.json();
+                if (turmasData.success) {
+                    todasTurmas = turmasData.turmas.map(t => t.nome);
+                }
+            }
             
             const modalBody = document.getElementById('modalBody');
             
