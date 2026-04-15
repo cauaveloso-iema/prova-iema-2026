@@ -257,6 +257,74 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
 });
 
 // ============================================
+// 📝 CRUD DE REGISTROS DE REFEIÇÃO (ADMIN)
+// ============================================
+
+// Buscar um registro específico
+router.get('/registro/:id', authenticateToken, verificarAdmin, async (req, res) => {
+  try {
+    const registro = await Refeicao.findById(req.params.id);
+    
+    if (!registro) {
+      return res.status(404).json({ success: false, error: 'Registro não encontrado' });
+    }
+    
+    res.json({ success: true, registro });
+  } catch (error) {
+    console.error('Erro ao buscar registro:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Atualizar registro
+router.put('/registro/:id', authenticateToken, verificarAdmin, async (req, res) => {
+  try {
+    const { tipoRefeicao, horario, observacao } = req.body;
+    
+    const registro = await Refeicao.findById(req.params.id);
+    if (!registro) {
+      return res.status(404).json({ success: false, error: 'Registro não encontrado' });
+    }
+    
+    // Atualizar campos
+    if (tipoRefeicao) registro.tipoRefeicao = tipoRefeicao;
+    if (horario) {
+      registro.horario = new Date(horario);
+      registro.data = new Date(horario).toISOString().split('T')[0];
+    }
+    if (observacao !== undefined) registro.observacao = observacao;
+    
+    registro.updatedAt = new Date();
+    registro.validadoPorNome = req.userNome || 'Administrador';
+    
+    await registro.save();
+    
+    res.json({ success: true, registro });
+  } catch (error) {
+    console.error('Erro ao atualizar registro:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Excluir registro
+router.delete('/registro/:id', authenticateToken, verificarAdmin, async (req, res) => {
+  try {
+    const registro = await Refeicao.findById(req.params.id);
+    
+    if (!registro) {
+      return res.status(404).json({ success: false, error: 'Registro não encontrado' });
+    }
+    
+    await registro.deleteOne();
+    
+    res.json({ success: true, message: 'Registro excluído com sucesso' });
+  } catch (error) {
+    console.error('Erro ao excluir registro:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
 // 📡 EVENTOS SSE (Server-Sent Events) - CORRIGIDO
 // ============================================
 router.get('/eventos', authenticateToken, verificarAdmin, async (req, res) => {

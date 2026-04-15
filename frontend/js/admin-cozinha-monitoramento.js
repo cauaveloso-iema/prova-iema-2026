@@ -657,17 +657,32 @@ class MonitoramentoTempoReal {
           </div>
           <div class="card-body">
             <div class="registros-list">
-              ${(cozinha.ultimosRegistros || []).slice(0, 5).map(r => `
-                <div class="registro-item">
-                  <div class="registro-info">
-                    <div class="registro-nome">${r.alunoNome}</div>
-                    <div class="registro-turma">${r.alunoTurma}</div>
+              ${(cozinha.ultimosRegistros || []).slice(0, 10).map(r => `
+                <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="flex: 1;">
+                    <div class="registro-info">
+                      <div class="registro-nome"><strong>${r.alunoNome}</strong></div>
+                      <div class="registro-turma" style="font-size: 12px; color: #6c757d;">${r.alunoTurma}</div>
+                    </div>
+                    <div class="registro-detalhes" style="margin-top: 5px;">
+                      <span class="refeicao-badge ${r.tipoRefeicao}" style="font-size: 11px;">
+                        ${r.tipoRefeicao === 'manha' ? '🌅 Manhã' : r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'}
+                      </span>
+                      <span class="registro-horario" style="font-size: 11px; margin-left: 8px;">
+                        <i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}
+                      </span>
+                    </div>
                   </div>
-                  <div class="registro-detalhes">
-                    <span class="refeicao-badge ${r.tipoRefeicao}">
-                      ${r.tipoRefeicao === 'manha' ? '🌅 Manhã' : r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'}
-                    </span>
-                    <span class="registro-horario">${new Date(r.horario).toLocaleTimeString()}</span>
+                  <div class="action-buttons" style="display: flex; gap: 5px;">
+                    <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn-icon edit" onclick="admin.editarRegistroRefeicao('${r.id}')" title="Editar registro">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn-icon danger" onclick="admin.excluirRegistroRefeicao('${r.id}', '${r.alunoNome}', '${r.tipoRefeicao}')" title="Excluir">
+                      <i class="fas fa-trash"></i>
+                    </button>
                   </div>
                 </div>
               `).join('')}
