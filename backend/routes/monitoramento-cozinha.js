@@ -325,6 +325,137 @@ router.delete('/registro/:id', authenticateToken, verificarAdmin, async (req, re
 });
 
 // ============================================
+// 🗑️ LIMPEZA AUTOMÁTICA DE REGISTROS ANTIGOS
+// ============================================
+
+// Endpoint para limpar registros antigos (chamado automaticamente)
+router.post('/limpar-registros-antigos', authenticateToken, verificarAdmin, async (req, res) => {
+  try {
+    const { meses = 1 } = req.body; // padrão: 1 mês
+    const dataLimite = new Date();
+    dataLimite.setMonth(dataLimite.getMonth() - meses);
+    
+    const resultado = await Refeicao.deleteMany({
+      data: { $lt: dataLimite.toISOString().split('T')[0] }
+    });
+    
+    console.log(`🗑️ Limpeza automática: ${resultado.deletedCount} registros removidos (mais antigos que ${meses} mês(es))`);
+    
+    res.json({
+      success: true,
+      deletados: resultado.deletedCount,
+      mensagem: `${resultado.deletedCount} registros removidos com sucesso`
+    });
+  } catch (error) {
+    console.error('Erro na limpeza automática:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Endpoint para verificar estatísticas de registros
+router.get('/estatisticas-registros', authenticateToken, verificarAdmin, async (req, res) => {
+  try {
+    const hoje = new Date().toISOString().split('T')[0];
+    const umMesAtras = new Date();
+    umMesAtras.setMonth(umMesAtras.getMonth() - 1);
+    
+    const total = await Refeicao.countDocuments();
+    const mesAtual = await Refeicao.countDocuments({
+      data: { $gte: umMesAtras.toISOString().split('T')[0] }
+    });
+    const mesAnterior = await Refeicao.countDocuments({
+      data: { $lt: umMesAtras.toISOString().split('T')[0] }
+    });
+    
+    res.json({
+      success: true,
+      estatisticas: {
+        total,
+        ultimoMes: mesAtual,
+        anteriores: mesAnterior,
+        ultimaData: await Refeicao.findOne().sort({ data: -1 }).then(r => r?.data)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🤖 LIMPEZA AUTOMÁTICA MENSAL
+// ============================================
+
+const cron = require('node-cron');
+
+// Função para limpar registros antigos
+async function limparRegistrosAntigos(meses = 1) {
+  try {
+    const Refeicao = require('../models/Refeicao');
+    const dataLimite = new Date();
+    dataLimite.setMonth(dataLimite.getMonth() - meses);
+    const dataLimiteStr = dataLimite.toISOString().split('T')[0];
+    
+    const resultado = await Refeicao.deleteMany({
+      data: { $lt: dataLimiteStr }
+    });
+    
+    console.log(`🗑️ [LIMPEZA AUTOMÁTICA] ${new Date().toISOString()}`);
+    console.log(`   📅 Removendo registros anteriores a: ${dataLimiteStr}`);
+    console.log(`   ✅ ${resultado.deletedCount} registros removidos`);
+    
+    return resultado.deletedCount;
+  } catch (error) {
+    console.error('❌ Erro na limpeza automática:', error);
+    return 0;
+  }
+}
+
+// Iniciar a limpeza automática (apenas se não for ambiente de teste)
+if (process.env.NODE_ENV !== 'test') {
+  // Executar no primeiro dia de cada mês às 03:00
+  cron.schedule('0 3 1 * *', async () => {
+    console.log('🔄 Iniciando limpeza automática mensal...');
+    await limparRegistrosAntigos(1);
+  });
+  
+  // Executar também 5 segundos após o servidor iniciar (para limpar registros muito antigos)
+  setTimeout(async () => {
+    console.log('🔄 Verificando registros antigos na inicialização...');
+    await limparRegistrosAntigos(1);
+  }, 5000);
+}
+
+// Endpoint para verificar estatísticas (já existe, mas vamos garantir)
+router.get('/estatisticas-registros', authenticateToken, verificarAdmin, async (req, res) => {
+  try {
+    const Refeicao = require('../models/Refeicao');
+    const hoje = new Date().toISOString().split('T')[0];
+    const umMesAtras = new Date();
+    umMesAtras.setMonth(umMesAtras.getMonth() - 1);
+    
+    const total = await Refeicao.countDocuments();
+    const mesAtual = await Refeicao.countDocuments({
+      data: { $gte: umMesAtras.toISOString().split('T')[0] }
+    });
+    const mesAnterior = await Refeicao.countDocuments({
+      data: { $lt: umMesAtras.toISOString().split('T')[0] }
+    });
+    
+    res.json({
+      success: true,
+      estatisticas: {
+        total,
+        ultimoMes: mesAtual,
+        anteriores: mesAnterior,
+        ultimaData: await Refeicao.findOne().sort({ data: -1 }).then(r => r?.data)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
 // 📡 EVENTOS SSE (Server-Sent Events) - CORRIGIDO
 // ============================================
 router.get('/eventos', authenticateToken, verificarAdmin, async (req, res) => {

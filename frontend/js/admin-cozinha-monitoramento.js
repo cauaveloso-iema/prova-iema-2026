@@ -11,7 +11,12 @@ class MonitoramentoTempoReal {
     this.graficos = {};
     this.todosFeedbacks = [];
     this.feedbacksFiltrados = [];
-    this.paginaCarregada = false; // Flag para controle
+    this.paginaCarregada = false;
+    
+    // 🔥 NOVAS PROPRIEDADES PARA FILTRO DE REGISTROS
+    this.registrosFiltrados = [];
+    this.filtroRegistroTurma = 'todas';
+    this.filtroRegistroRefeicao = 'todas';
   }
   
   async carregar() {
@@ -469,6 +474,10 @@ class MonitoramentoTempoReal {
             <button class="btn-refresh" onclick="monitoramentoTempoReal.carregarDadosCompleto()">
               <i class="fas fa-sync-alt"></i> Atualizar
             </button>
+            <button class="btn-refresh" onclick="admin.abrirModalLimpezaRegistros()" 
+                    style="background: #dc2626; color: white; border: none; margin-left: 10px;">
+              <i class="fas fa-trash-alt"></i> Limpar Registros
+            </button>
           </div>
         </div>
 
@@ -649,15 +658,59 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Últimos Registros -->
+        <!-- Últimos Registros com Filtros -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-history"></i>
             <span>Últimos Registros</span>
           </div>
           <div class="card-body">
+            <!-- BARRA DE FILTROS DOS REGISTROS -->
+            <div class="registros-filtros" style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+              <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 1; min-width: 150px;">
+                  <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
+                    <i class="fas fa-school"></i> Turma
+                  </label>
+                  <select id="filtroRegistroTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
+                          onchange="monitoramentoTempoReal.aplicarFiltrosRegistros()">
+                    <option value="todas">Todas as turmas</option>
+                    ${[...new Set((cozinha.ultimosRegistros || []).map(r => r.alunoTurma))].filter(t => t).map(t => `
+                      <option value="${t}">${t}</option>
+                    `).join('')}
+                  </select>
+                </div>
+                
+                <div style="flex: 1; min-width: 150px;">
+                  <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
+                    <i class="fas fa-utensils"></i> Refeição
+                  </label>
+                  <select id="filtroRegistroTipo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
+                          onchange="monitoramentoTempoReal.aplicarFiltrosRegistros()">
+                    <option value="todas">Todos os tipos</option>
+                    <option value="manha">🌅 Manhã</option>
+                    <option value="almoco">🍽️ Almoço</option>
+                    <option value="tarde">🌙 Tarde</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <button class="btn-filter" onclick="monitoramentoTempoReal.limparFiltrosRegistros()" 
+                          style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-eraser"></i> Limpar
+                  </button>
+                </div>
+                
+                <div style="margin-left: auto;">
+                  <span id="registrosFiltradosCount" style="background: #e9ecef; padding: 5px 12px; border-radius: 20px; font-size: 12px;">
+                    ${(cozinha.ultimosRegistros || []).length} registros
+                  </span>
+                </div>
+              </div>
+            </div>
+            
             <div class="registros-list">
-              ${(cozinha.ultimosRegistros || []).slice(0, 10).map(r => `
+              ${(cozinha.ultimosRegistros || []).slice(0, 50).map(r => `
                 <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
                   <div style="flex: 1;">
                     <div class="registro-info">
@@ -671,23 +724,23 @@ class MonitoramentoTempoReal {
                       <span class="registro-horario" style="font-size: 11px; margin-left: 8px;">
                         <i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}
                       </span>
-                    </div>s
+                    </div>
                   </div>
                   <div class="action-buttons" style="display: flex; gap: 5px;">
-                    <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes" style="background: transparent; border: none; padding: 6px; border-radius: 8px; cursor: pointer; color: #64748b;">
+                    <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes">
                       <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn-icon edit" onclick="admin.editarRegistroRefeicao('${r.id}')" title="Editar registro" style="background: transparent; border: none; padding: 6px; border-radius: 8px; cursor: pointer; color: #64748b;">
+                    <button class="btn-icon edit" onclick="admin.editarRegistroRefeicao('${r.id}')" title="Editar registro">
                       <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn-icon danger" onclick="admin.excluirRegistroRefeicao('${r.id}', '${this.escapeHtml(r.alunoNome)}', '${r.tipoRefeicao}')" title="Excluir" style="background: transparent; border: none; padding: 6px; border-radius: 8px; cursor: pointer; color: #64748b;">
+                    <button class="btn-icon danger" onclick="admin.excluirRegistroRefeicao('${r.id}', '${this.escapeHtml(r.alunoNome)}', '${r.tipoRefeicao}')" title="Excluir">
                       <i class="fas fa-trash"></i>
                     </button>
                   </div>
                 </div>
               `).join('')}
               ${(cozinha.ultimosRegistros || []).length === 0 ? `
-                <div class="empty-state" style="text-align: center; padding: 40px; color: #94a3b8;">Nenhum registro hoje</div>
+                <div class="empty-state">Nenhum registro hoje</div>
               ` : ''}
             </div>
           </div>
@@ -904,7 +957,7 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Gestão de Rodízio -->
+        <!-- Gestão de Rodízio com Filtros -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-calendar-alt"></i>
@@ -914,23 +967,52 @@ class MonitoramentoTempoReal {
             </button>
           </div>
           <div class="card-body">
-            <div class="rodizio-stats">
-              <div class="rodizio-stat">
-                <div class="stat-number">${gestao.totalRodizios || 0}</div>
-                <div class="stat-label">Total de Rodízios</div>
-              </div>
-              <div class="rodizio-stat">
-                <div class="stat-number success">${gestao.turmasComRodizio || 0}</div>
-                <div class="stat-label">Turmas com Rodízio</div>
-              </div>
-              <div class="rodizio-stat">
-                <div class="stat-number danger">${gestao.turmasSemRodizio || 0}</div>
-                <div class="stat-label">Turmas sem Rodízio</div>
+            <!-- BARRA DE FILTROS DO RODÍZIO -->
+            <div class="rodizio-filtros" style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+              <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 1; min-width: 150px;">
+                  <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
+                    <i class="fas fa-school"></i> Turma
+                  </label>
+                  <select id="filtroRodizioTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
+                          onchange="monitoramentoTempoReal.aplicarFiltrosRodizio()">
+                    <option value="todas">Todas as turmas</option>
+                    ${(gestao.rodizios || []).map(r => `
+                      <option value="${r.turma}">${r.turma}</option>
+                    `).join('')}
+                  </select>
+                </div>
+                
+                <div style="flex: 1; min-width: 150px;">
+                  <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
+                    <i class="fas fa-chart-line"></i> Tipo
+                  </label>
+                  <select id="filtroRodizioTipo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
+                          onchange="monitoramentoTempoReal.aplicarFiltrosRodizio()">
+                    <option value="todos">Todos</option>
+                    <option value="semanal">📅 Semanal</option>
+                    <option value="mensal">📆 Mensal</option>
+                    <option value="ambos">🔄 Ambos</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <button class="btn-filter" onclick="monitoramentoTempoReal.limparFiltrosRodizio()" 
+                          style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-eraser"></i> Limpar
+                  </button>
+                </div>
+                
+                <div style="margin-left: auto;">
+                  <span id="rodizioFiltradosCount" style="background: #e9ecef; padding: 5px 12px; border-radius: 20px; font-size: 12px;">
+                    ${(gestao.rodizios || []).length} rodízios
+                  </span>
+                </div>
               </div>
             </div>
             
             <div class="table-responsive">
-              <table class="data-table compact">
+              <table class="data-table compact" id="tabelaRodizio">
                 <thead>
                   <tr>
                     <th>Turma</th>
@@ -953,7 +1035,7 @@ class MonitoramentoTempoReal {
                       diasTexto = 'Ambos sistemas';
                     }
                     return `
-                      <tr>
+                      <tr data-turma="${r.turma}" data-tipo="${r.tipo}">
                         <td><strong>${r.turma}</strong></td>
                         <td><span class="tipo-badge ${r.tipo}">${r.tipo === 'semanal' ? 'Semanal' : r.tipo === 'mensal' ? 'Mensal' : 'Ambos'}</span></td>
                         <td class="dias-cell">${diasTexto || '-'}</td>
@@ -1838,6 +1920,131 @@ class MonitoramentoTempoReal {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  aplicarFiltrosRegistros() {
+    if (!this.dados || !this.dados.cozinha || !this.dados.cozinha.ultimosRegistros) {
+      return;
+    }
+    
+    const registros = this.dados.cozinha.ultimosRegistros;
+    const turma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
+    const tipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
+    
+    this.registrosFiltrados = registros.filter(r => {
+      if (turma !== 'todas' && r.alunoTurma !== turma) return false;
+      if (tipo !== 'todas' && r.tipoRefeicao !== tipo) return false;
+      return true;
+    });
+    
+    // Atualizar a exibição
+    this.atualizarListaRegistros();
+    
+    // Atualizar contador
+    const contador = document.getElementById('registrosFiltradosCount');
+    if (contador) contador.textContent = `${this.registrosFiltrados.length} registros`;
+  }
+
+  atualizarListaRegistros() {
+    const container = document.querySelector('.registros-list');
+    if (!container) return;
+    
+    const registros = this.registrosFiltrados.length > 0 ? this.registrosFiltrados : 
+                      (this.dados?.cozinha?.ultimosRegistros || []);
+    
+    if (registros.length === 0) {
+      container.innerHTML = '<div class="empty-state">Nenhum registro encontrado</div>';
+      return;
+    }
+    
+    let html = '';
+    registros.slice(0, 50).forEach(r => {
+      const tipoTexto = r.tipoRefeicao === 'manha' ? '🌅 Manhã' : 
+                        r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde';
+      
+      html += `
+        <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+          <div style="flex: 1;">
+            <div class="registro-info">
+              <div class="registro-nome"><strong>${this.escapeHtml(r.alunoNome)}</strong></div>
+              <div class="registro-turma" style="font-size: 12px; color: #6c757d;">${this.escapeHtml(r.alunoTurma)}</div>
+            </div>
+            <div class="registro-detalhes" style="margin-top: 5px;">
+              <span class="refeicao-badge ${r.tipoRefeicao}" style="font-size: 11px; padding: 4px 12px; border-radius: 30px;">
+                ${tipoTexto}
+              </span>
+              <span class="registro-horario" style="font-size: 11px; margin-left: 8px;">
+                <i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}
+              </span>
+            </div>
+          </div>
+          <div class="action-buttons" style="display: flex; gap: 5px;">
+            <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes">
+              <i class="fas fa-eye"></i>
+            </button>
+            <button class="btn-icon edit" onclick="admin.editarRegistroRefeicao('${r.id}')" title="Editar registro">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn-icon danger" onclick="admin.excluirRegistroRefeicao('${r.id}', '${this.escapeHtml(r.alunoNome)}', '${r.tipoRefeicao}')" title="Excluir">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    });
+    
+    container.innerHTML = html;
+  }
+
+  limparFiltrosRegistros() {
+    const turmaSelect = document.getElementById('filtroRegistroTurma');
+    const tipoSelect = document.getElementById('filtroRegistroTipo');
+    
+    if (turmaSelect) turmaSelect.value = 'todas';
+    if (tipoSelect) tipoSelect.value = 'todas';
+    
+    this.registrosFiltrados = [];
+    this.atualizarListaRegistros();
+    
+    const contador = document.getElementById('registrosFiltradosCount');
+    if (contador) contador.textContent = `${this.dados?.cozinha?.ultimosRegistros?.length || 0} registros`;
+  }
+
+  aplicarFiltrosRodizio() {
+    const turma = document.getElementById('filtroRodizioTurma')?.value || 'todas';
+    const tipo = document.getElementById('filtroRodizioTipo')?.value || 'todos';
+    
+    const linhas = document.querySelectorAll('#tabelaRodizio tbody tr');
+    
+    let visiveis = 0;
+    linhas.forEach(linha => {
+      const turmaLinha = linha.getAttribute('data-turma') || '';
+      const tipoLinha = linha.getAttribute('data-tipo') || '';
+      
+      let mostrar = true;
+      if (turma !== 'todas' && turmaLinha !== turma) mostrar = false;
+      if (tipo !== 'todos' && tipoLinha !== tipo) mostrar = false;
+      
+      linha.style.display = mostrar ? '' : 'none';
+      if (mostrar) visiveis++;
+    });
+    
+    const contador = document.getElementById('rodizioFiltradosCount');
+    if (contador) contador.textContent = `${visiveis} rodízios`;
+  }
+
+  limparFiltrosRodizio() {
+    const turmaSelect = document.getElementById('filtroRodizioTurma');
+    const tipoSelect = document.getElementById('filtroRodizioTipo');
+    
+    if (turmaSelect) turmaSelect.value = 'todas';
+    if (tipoSelect) tipoSelect.value = 'todos';
+    
+    const linhas = document.querySelectorAll('#tabelaRodizio tbody tr');
+    linhas.forEach(linha => linha.style.display = '');
+    
+    const contador = document.getElementById('rodizioFiltradosCount');
+    if (contador) contador.textContent = `${linhas.length} rodízios`;
   }
   
   atualizarGraficos(data) {

@@ -30584,6 +30584,172 @@ class AdminPanel {
         }
     }
 
+    // ============================================
+    // 🗑️ GERENCIAMENTO DE LIMPEZA DE REGISTROS
+    // ============================================
+
+    async verificarEstatisticasRegistros() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/cozinha-monitoramento/estatisticas-registros', {
+        headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+        console.log('📊 Estatísticas de registros:', data.estatisticas);
+        return data.estatisticas;
+        }
+    } catch (error) {
+        console.error('❌ Erro ao verificar estatísticas:', error);
+        return null;
+    }
+    }
+
+    async executarLimpezaRegistros(meses = 1) {
+    const confirmar = await this.confirmar(
+        '🗑️ Limpeza de Registros Antigos',
+        `Tem certeza que deseja remover registros de refeições com mais de <strong>${meses} mês(es)</strong>?<br><br>
+        <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span><br><br>
+        Recomendamos fazer um backup antes de prosseguir.`
+    );
+    
+    if (!confirmar) return;
+    
+    try {
+        this.showToast('🔄 Executando limpeza...', 'info');
+        
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/cozinha-monitoramento/limpar-registros-antigos', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ meses })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+        this.showToast(`✅ ${data.deletados} registros removidos com sucesso!`, 'success');
+        
+        // Recarregar os dados
+        if (monitoramentoTempoReal) {
+            await monitoramentoTempoReal.carregarDadosCompleto();
+        }
+        } else {
+        throw new Error(data.error || 'Erro na limpeza');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        this.showToast('❌ ' + error.message, 'error');
+    }
+    }
+
+    // Botão para abrir modal de configuração de limpeza
+    abrirModalLimpezaRegistros() {
+    const modalBody = document.getElementById('modalBody');
+    
+    modalBody.innerHTML = `
+        <div style="padding: 20px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <div style="width: 70px; height: 70px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+            <i class="fas fa-trash-alt" style="font-size: 30px; color: #dc2626;"></i>
+            </div>
+            <h3 style="margin: 15px 0 5px;">Limpeza de Registros Antigos</h3>
+            <p style="color: #6b7280;">Remova registros de refeições antigos para otimizar o banco de dados</p>
+        </div>
+        
+        <div id="estatisticasContainer" style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <p style="text-align: center;">Carregando estatísticas...</p>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+            <i class="fas fa-calendar-alt"></i> Período para manter
+            </label>
+            <select id="periodoLimpeza" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
+            <option value="1">Manter apenas 1 mês (recomendado)</option>
+            <option value="2">Manter 2 meses</option>
+            <option value="3">Manter 3 meses</option>
+            <option value="6">Manter 6 meses</option>
+            <option value="12">Manter 1 ano</option>
+            </select>
+            <small style="color: #6c757d;">Registros mais antigos que o período selecionado serão removidos</small>
+        </div>
+        
+        <div class="info-card" style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+            <i class="fas fa-info-circle"></i>
+            <div style="margin-left: 10px;">
+            <strong>💡 Dica:</strong> A limpeza é irreversível. Recomendamos fazer um backup antes de prosseguir.
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-secondary" onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 8px;">
+            Cancelar
+            </button>
+            <button class="btn-primary" onclick="admin.confirmarLimpezaRegistros()" style="flex: 1; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 8px;">
+            <i class="fas fa-trash"></i> Executar Limpeza
+            </button>
+        </div>
+        </div>
+    `;
+    
+    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-trash-alt"></i> Limpeza de Registros';
+    document.getElementById('modalSaveBtn').style.display = 'none';
+    
+    this.openModal();
+    
+    // Carregar estatísticas
+    this.carregarEstatisticasLimpeza();
+    }
+
+    async carregarEstatisticasLimpeza() {
+    const container = document.getElementById('estatisticasContainer');
+    if (!container) return;
+    
+    try {
+        const stats = await this.verificarEstatisticasRegistros();
+        
+        if (stats) {
+        container.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            <div style="text-align: center;">
+                <div style="font-size: 24px; font-weight: bold; color: #1e293b;">${stats.total}</div>
+                <div style="font-size: 12px; color: #64748b;">Total de registros</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 24px; font-weight: bold; color: #10b981;">${stats.ultimoMes}</div>
+                <div style="font-size: 12px; color: #64748b;">Último mês</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 24px; font-weight: bold; color: #f59e0b;">${stats.anteriores}</div>
+                <div style="font-size: 12px; color: #64748b;">Mais antigos</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 12px; font-weight: bold; color: #6b7280;">
+                ${stats.ultimaData ? `Até ${new Date(stats.ultimaData).toLocaleDateString()}` : 'Sem dados'}
+                </div>
+                <div style="font-size: 11px; color: #94a3b8;">Último registro</div>
+            </div>
+            </div>
+        `;
+        }
+    } catch (error) {
+        container.innerHTML = '<p style="text-align: center; color: #dc2626;">Erro ao carregar estatísticas</p>';
+    }
+    }
+
+    async confirmarLimpezaRegistros() {
+    const periodo = document.getElementById('periodoLimpeza')?.value || 1;
+    this.closeModal();
+    await this.executarLimpezaRegistros(parseInt(periodo));
+    }
+
     // ============ FORMATAR DATA PARA INPUT ============
     formatarDataHoraInput(dataISO) {
         if (!dataISO) return '';
@@ -30596,7 +30762,79 @@ class AdminPanel {
         return `${ano}-${mes}-${dia}T${horas}:${minutos}`;
     }
 
+    // Verificar status da limpeza automática
+    async verificarStatusLimpeza() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/admin/ultima-limpeza', {
+        headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+        console.log('📊 Status da limpeza automática:', data.estatisticas);
+        return data.estatisticas;
+        }
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        return null;
+    }
+    }
+
+    // Mostrar informações no modal de limpeza (atualizado)
+    async carregarEstatisticasLimpeza() {
+    const container = document.getElementById('estatisticasContainer');
+    if (!container) return;
+    
+    try {
+        const stats = await this.verificarEstatisticasRegistros();
+        const statusLimpeza = await this.verificarStatusLimpeza();
+        
+        if (stats) {
+        container.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px;">
+            <div style="text-align: center;">
+                <div style="font-size: 24px; font-weight: bold; color: #1e293b;">${stats.total}</div>
+                <div style="font-size: 12px; color: #64748b;">Total de registros</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 24px; font-weight: bold; color: #10b981;">${stats.ultimoMes}</div>
+                <div style="font-size: 12px; color: #64748b;">Último mês</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 24px; font-weight: bold; color: #f59e0b;">${stats.anteriores}</div>
+                <div style="font-size: 12px; color: #64748b;">Mais antigos</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 12px; font-weight: bold; color: #6b7280;">
+                ${stats.ultimaData ? `Até ${new Date(stats.ultimaData).toLocaleDateString()}` : 'Sem dados'}
+                </div>
+                <div style="font-size: 11px; color: #94a3b8;">Último registro</div>
+            </div>
+            </div>
+            
+            <div style="background: #e0e7ff; border-radius: 8px; padding: 12px; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-robot" style="color: #4f46e5;"></i>
+                <div style="flex: 1;">
+                <strong style="font-size: 13px;">🤖 Limpeza Automática</strong>
+                <p style="margin: 5px 0 0; font-size: 11px; color: #3730a3;">
+                    Executa todo dia 1º de cada mês às 03:00, mantendo apenas 1 mês de registros.
+                </p>
+                </div>
+            </div>
+            </div>
+        `;
+        }
+    } catch (error) {
+        container.innerHTML = '<p style="text-align: center; color: #dc2626;">Erro ao carregar estatísticas</p>';
+    }
+    }
+
 }
+
+
 
 // ============================================
 // FUNÇÕES DE FORMATAÇÃO GLOBAIS
