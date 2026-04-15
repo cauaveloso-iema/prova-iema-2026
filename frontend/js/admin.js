@@ -30422,93 +30422,97 @@ class AdminPanel {
 
     // ============ SALVAR EDIÇÃO DO REGISTRO ============
     async salvarEdicaoRegistro(registroId) {
-        try {
-            const novoTipo = document.getElementById('editTipoRefeicao')?.value;
-            const novoHorario = document.getElementById('editHorario')?.value;
-            const novaObservacao = document.getElementById('editObservacao')?.value;
-            
-            if (!novoTipo || !novoHorario) {
-                this.showToast('❌ Tipo de refeição e horário são obrigatórios', 'error');
-                return;
-            }
-            
-            this.showToast('💾 Salvando alterações...', 'info');
-            
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch(`/api/cozinha/registro/${registroId}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    tipoRefeicao: novoTipo,
-                    horario: novoHorario,
-                    observacao: novaObservacao
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                this.showToast('✅ Registro atualizado com sucesso!', 'success');
-                this.closeModal();
-                
-                // Recarregar os dados
-                if (monitoramentoTempoReal) {
-                    await monitoramentoTempoReal.carregarRegistrosCompleto();
-                    await monitoramentoTempoReal.carregarDadosCompleto();
-                }
-            } else {
-                throw new Error(data.error || 'Erro ao atualizar');
-            }
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
+    try {
+        const novoTipo = document.getElementById('editTipoRefeicao')?.value;
+        const novoHorario = document.getElementById('editHorario')?.value;
+        const novaObservacao = document.getElementById('editObservacao')?.value;
+        
+        if (!novoTipo || !novoHorario) {
+        this.showToast('❌ Tipo de refeição e horário são obrigatórios', 'error');
+        return;
         }
+        
+        this.showToast('💾 Salvando alterações...', 'info');
+        
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`/api/cozinha/registro/${registroId}`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            tipoRefeicao: novoTipo,
+            horario: novoHorario,
+            observacao: novaObservacao
+        })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+        this.showToast('✅ Registro atualizado com sucesso!', 'success');
+        this.closeModal();
+        
+        // 🔥 CORREÇÃO: Usar carregarDadosCompleto em vez de carregarRegistrosCompleto
+        if (monitoramentoTempoReal && typeof monitoramentoTempoReal.carregarDadosCompleto === 'function') {
+            await monitoramentoTempoReal.carregarDadosCompleto();
+        } else {
+            // Fallback: recarregar a página
+            location.reload();
+        }
+        } else {
+        throw new Error(data.error || 'Erro ao atualizar');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        this.showToast('❌ ' + error.message, 'error');
+    }
     }
 
     // ============ EXCLUIR REGISTRO DE REFEIÇÃO ============
     async excluirRegistroRefeicao(registroId, alunoNome, tipoRefeicao) {
-        const tipoTexto = tipoRefeicao === 'manha' ? 'Lanche da Manhã' : 
+    const tipoTexto = tipoRefeicao === 'manha' ? 'Lanche da Manhã' : 
                         tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
+    
+    const confirmar = await this.confirmar(
+        '🗑️ Excluir Registro',
+        `Tem certeza que deseja excluir o registro de <strong>${tipoTexto}</strong> do aluno <strong>${alunoNome}</strong>?<br><br>
+        <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span>`
+    );
+    
+    if (!confirmar) return;
+    
+    try {
+        this.showToast('🗑️ Excluindo registro...', 'info');
         
-        const confirmar = await this.confirmar(
-            '🗑️ Excluir Registro',
-            `Tem certeza que deseja excluir o registro de <strong>${tipoTexto}</strong> do aluno <strong>${alunoNome}</strong>?<br><br>
-            <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span>`
-        );
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`/api/cozinha/registro/${registroId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+        });
         
-        if (!confirmar) return;
+        const data = await response.json();
         
-        try {
-            this.showToast('🗑️ Excluindo registro...', 'info');
-            
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch(`/api/cozinha/registro/${registroId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                this.showToast('✅ Registro excluído com sucesso!', 'success');
-                
-                // Recarregar os dados
-                if (monitoramentoTempoReal) {
-                    await monitoramentoTempoReal.carregarRegistrosCompleto();
-                    await monitoramentoTempoReal.carregarDadosCompleto();
-                }
-            } else {
-                throw new Error(data.error || 'Erro ao excluir');
-            }
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
+        if (data.success) {
+        this.showToast('✅ Registro excluído com sucesso!', 'success');
+        
+        // 🔥 CORREÇÃO: Usar carregarDadosCompleto em vez de carregarRegistrosCompleto
+        if (monitoramentoTempoReal && typeof monitoramentoTempoReal.carregarDadosCompleto === 'function') {
+            await monitoramentoTempoReal.carregarDadosCompleto();
+        } else {
+            // Fallback: recarregar a página
+            location.reload();
         }
+        } else {
+        throw new Error(data.error || 'Erro ao excluir');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        this.showToast('❌ ' + error.message, 'error');
+    }
     }
 
     // ============ VER DETALHES DO REGISTRO ============
