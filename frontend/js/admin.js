@@ -30635,9 +30635,8 @@ class AdminPanel {
         if (data.success) {
         this.showToast(`✅ ${data.deletados} registros removidos com sucesso!`, 'success');
         
-        // Recarregar os dados
-        if (monitoramentoTempoReal) {
-            await monitoramentoTempoReal.carregarDadosCompleto();
+        if (window.monitoramentoTempoReal) {
+            await window.monitoramentoTempoReal.carregarDadosCompleto();
         }
         } else {
         throw new Error(data.error || 'Erro na limpeza');
@@ -30649,7 +30648,6 @@ class AdminPanel {
     }
     }
 
-    // Botão para abrir modal de configuração de limpeza
     abrirModalLimpezaRegistros() {
     const modalBody = document.getElementById('modalBody');
     
@@ -30671,7 +30669,7 @@ class AdminPanel {
             <label style="display: block; margin-bottom: 8px; font-weight: 600;">
             <i class="fas fa-calendar-alt"></i> Período para manter
             </label>
-            <select id="periodoLimpeza" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
+            <select id="periodoLimpeza" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
             <option value="1">Manter apenas 1 mês (recomendado)</option>
             <option value="2">Manter 2 meses</option>
             <option value="3">Manter 3 meses</option>
@@ -30681,7 +30679,7 @@ class AdminPanel {
             <small style="color: #6c757d;">Registros mais antigos que o período selecionado serão removidos</small>
         </div>
         
-        <div class="info-card" style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+        <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 20px;">
             <i class="fas fa-info-circle"></i>
             <div style="margin-left: 10px;">
             <strong>💡 Dica:</strong> A limpeza é irreversível. Recomendamos fazer um backup antes de prosseguir.
@@ -30689,10 +30687,10 @@ class AdminPanel {
         </div>
         
         <div style="display: flex; gap: 10px;">
-            <button class="btn-secondary" onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 8px;">
+            <button onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer;">
             Cancelar
             </button>
-            <button class="btn-primary" onclick="admin.confirmarLimpezaRegistros()" style="flex: 1; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 8px;">
+            <button onclick="admin.confirmarLimpezaRegistros()" style="flex: 1; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 8px; cursor: pointer;">
             <i class="fas fa-trash"></i> Executar Limpeza
             </button>
         </div>
@@ -30701,7 +30699,6 @@ class AdminPanel {
     
     document.getElementById('modalTitle').innerHTML = '<i class="fas fa-trash-alt"></i> Limpeza de Registros';
     document.getElementById('modalSaveBtn').style.display = 'none';
-    
     this.openModal();
     
     // Carregar estatísticas
