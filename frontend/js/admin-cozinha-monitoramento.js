@@ -1,7 +1,4 @@
-// ============================================
-// MÓDULO: MONITORAMENTO EM TEMPO REAL
-// DESIGN PROFISSIONAL - ESTILO DASHBOARD MODERNO
-// ============================================
+// frontend/js/admin-cozinha-monitoramento.js
 
 class MonitoramentoTempoReal {
   constructor() {
@@ -13,16 +10,24 @@ class MonitoramentoTempoReal {
     this.feedbacksFiltrados = [];
     this.paginaCarregada = false;
     
-    // 🔥 NOVAS PROPRIEDADES PARA FILTRO DE REGISTROS
+    // 🔥 PROPRIEDADES PARA FILTRO DE REGISTROS
     this.registrosFiltrados = [];
     this.filtroRegistroTurma = 'todas';
     this.filtroRegistroRefeicao = 'todas';
+    
+    // 🔥 PROPRIEDADES PARA FILTRO DE DATA
+    this.filtroRegistroData = 'hoje';
+    this.ultimosRegistrosOriginais = [];
+    
+    // 🔥 PROPRIEDADES PARA FILTRO DAS TURMAS
+    this.filtroTurmasRefeicaoTurma = 'todas';
+    this.filtroTurmasRefeicaoPeriodo = 'todas';
+    this.dadosRefeicoesTurmasFiltrados = [];
   }
   
   async carregar() {
     console.log('📊 Carregando Monitoramento em Tempo Real...');
     
-    // SEMPRE carregar a página completa quando o usuário clica no menu
     this.paginaCarregada = true;
     await this.carregarDadosCompleto();
     await this.carregarFeedbacksCompleto();
@@ -42,9 +47,17 @@ class MonitoramentoTempoReal {
       
       if (data.success) {
         this.dados = data;
+        this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
+        this.registrosFiltrados = [...this.ultimosRegistrosOriginais];
+        
         this.renderizar(data);
         this.atualizarGraficos(data);
         this.atualizarTimestamp(data.timestamp);
+        
+        setTimeout(() => {
+          this.aplicarFiltrosRegistros();
+          this.aplicarFiltrosRefeicoesTurmas();
+        }, 100);
       } else {
         this.renderizarErro(data.error);
       }
@@ -72,9 +85,7 @@ class MonitoramentoTempoReal {
     }
   }
   
-  // Método para atualização em segundo plano (sem recarregar a página)
   async carregarDados() {
-    // Verificar se a página foi carregada e se o elemento existe
     if (!this.paginaCarregada) return;
     
     const contentArea = document.getElementById('contentArea');
@@ -105,7 +116,6 @@ class MonitoramentoTempoReal {
     }
   }
   
-  // Método para atualização de feedbacks em segundo plano
   async carregarFeedbacks() {
     if (!this.paginaCarregada) return;
     
@@ -134,7 +144,6 @@ class MonitoramentoTempoReal {
     }
   }
   
-  // NOVO MÉTODO: Atualizar apenas os elementos sem recarregar a página
   atualizarElementosExistentes(data) {
     const cozinha = data.cozinha || {};
     const gestao = data.gestaoGeral || {};
@@ -143,7 +152,6 @@ class MonitoramentoTempoReal {
     const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
     const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
     
-    // Atualizar cards principais
     const metricValues = document.querySelectorAll('.metric-value');
     if (metricValues.length >= 4) {
       if (metricValues[0]) metricValues[0].textContent = cozinha.totalPessoas || 0;
@@ -151,13 +159,11 @@ class MonitoramentoTempoReal {
       if (metricValues[2]) metricValues[2].textContent = `${adesao}%`;
     }
     
-    // Atualizar metric-detail
     const metricDetails = document.querySelectorAll('.metric-detail');
     if (metricDetails.length >= 1 && metricDetails[0]) {
       metricDetails[0].textContent = `${contagem.pessoasUnicas} pessoas únicas`;
     }
     
-    // Atualizar contagem por período
     const periodoValues = document.querySelectorAll('.periodo-value');
     if (periodoValues.length >= 3) {
       if (periodoValues[0]) periodoValues[0].textContent = contagem.manha;
@@ -165,7 +171,6 @@ class MonitoramentoTempoReal {
       if (periodoValues[2]) periodoValues[2].textContent = contagem.tarde;
     }
     
-    // Atualizar previsão de comida
     const previsaoValues = document.querySelectorAll('.previsao-value');
     if (previsaoValues.length >= 4) {
       if (previsaoValues[0]) previsaoValues[0].textContent = previsao.manha;
@@ -174,7 +179,6 @@ class MonitoramentoTempoReal {
       if (previsaoValues[3]) previsaoValues[3].textContent = previsao.total;
     }
     
-    // Atualizar perfil legend
     const legendValues = document.querySelectorAll('.legend-item strong');
     if (legendValues.length >= 3) {
       if (legendValues[0]) legendValues[0].textContent = perfis.sempre;
@@ -182,22 +186,8 @@ class MonitoramentoTempoReal {
       if (legendValues[2]) legendValues[2].textContent = perfis.nunca;
     }
     
-    // Atualizar tabela de turmas
-    const turmasBody = document.querySelector('.data-table tbody');
-    if (turmasBody && cozinha.refeicoesPorTurma) {
-      turmasBody.innerHTML = cozinha.refeicoesPorTurma.map(t => `
-        <tr>
-          <td><strong>${t.turma}</strong></td>
-          <td class="text-center">${t.manha || 0}</td>
-          <td class="text-center">${t.almoco || 0}</td>
-          <td class="text-center">${t.tarde || 0}</td>
-          <td class="text-center"><strong>${t.total || 0}</strong></td>
-          <td class="text-center">${t.alunosQueComeram || 0}</td>
-        </tr>
-      `).join('');
-    }
+    this.atualizarTabelaRefeicoesTurmas(cozinha.refeicoesPorTurma || []);
     
-    // Atualizar estatísticas de rodízio
     const statNumbers = document.querySelectorAll('.rodizio-stat .stat-number');
     if (statNumbers.length >= 3) {
       if (statNumbers[0]) statNumbers[0].textContent = gestao.totalRodizios || 0;
@@ -205,7 +195,6 @@ class MonitoramentoTempoReal {
       if (statNumbers[2]) statNumbers[2].textContent = gestao.turmasSemRodizio || 0;
     }
     
-    // Atualizar info-footer
     const infoFooter = document.querySelector('.info-footer');
     if (infoFooter && gestao.hoje) {
       infoFooter.innerHTML = `
@@ -215,7 +204,6 @@ class MonitoramentoTempoReal {
       `;
     }
     
-    // Atualizar tabela de rodízios
     const rodizioTableBody = document.querySelector('.compact tbody');
     if (rodizioTableBody && gestao.rodizios) {
       rodizioTableBody.innerHTML = gestao.rodizios.map(r => {
@@ -229,7 +217,7 @@ class MonitoramentoTempoReal {
           diasTexto = 'Ambos sistemas';
         }
         return `
-          <tr>
+          <tr data-turma="${r.turma}" data-tipo="${r.tipo}">
             <td><strong>${r.turma}</strong></td>
             <td><span class="tipo-badge ${r.tipo}">${r.tipo === 'semanal' ? 'Semanal' : r.tipo === 'mensal' ? 'Mensal' : 'Ambos'}</span></td>
             <td class="dias-cell">${diasTexto || '-'}</td>
@@ -247,6 +235,45 @@ class MonitoramentoTempoReal {
     }
     
     console.log('✅ Dados atualizados em segundo plano');
+  }
+  
+  atualizarTabelaRefeicoesTurmas(refeicoesPorTurma) {
+    let dadosFiltrados = [...refeicoesPorTurma];
+    
+    if (this.filtroTurmasRefeicaoTurma !== 'todas') {
+      dadosFiltrados = dadosFiltrados.filter(t => t.turma === this.filtroTurmasRefeicaoTurma);
+    }
+    
+    if (this.filtroTurmasRefeicaoPeriodo !== 'todas') {
+      dadosFiltrados = dadosFiltrados.map(t => ({
+        turma: t.turma,
+        manha: this.filtroTurmasRefeicaoPeriodo === 'manha' ? t.manha : 0,
+        almoco: this.filtroTurmasRefeicaoPeriodo === 'almoco' ? t.almoco : 0,
+        tarde: this.filtroTurmasRefeicaoPeriodo === 'tarde' ? t.tarde : 0,
+        total: t[this.filtroTurmasRefeicaoPeriodo] || 0,
+        alunosQueComeram: t.alunosQueComeram
+      }));
+    }
+    
+    this.dadosRefeicoesTurmasFiltrados = dadosFiltrados;
+    
+    const turmasBody = document.querySelector('.data-table tbody');
+    if (turmasBody) {
+      turmasBody.innerHTML = dadosFiltrados.map(t => `
+        <tr>
+          <td><strong>${t.turma}</strong></td>
+          <td class="text-center">${t.manha || 0}</td>
+          <td class="text-center">${t.almoco || 0}</td>
+          <td class="text-center">${t.tarde || 0}</td>
+          <td class="text-center"><strong>${t.total || 0}</strong></td>
+          <td class="text-center">${t.alunosQueComeram || 0}</td>
+        </tr>
+      `).join('');
+      
+      if (dadosFiltrados.length === 0) {
+        turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada</td>' + '</tr>';
+      }
+    }
   }
   
   atualizarFeedbacksNoDOM(data) {
@@ -304,7 +331,7 @@ class MonitoramentoTempoReal {
     if (!tbody) return;
     
     if (this.feedbacksFiltrados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado</td>' + '</tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado</td>' + '<tr>';
       return;
     }
     
@@ -446,6 +473,517 @@ class MonitoramentoTempoReal {
     }, 30000);
   }
   
+  aplicarFiltrosRegistros() {
+    if (!this.dados || !this.dados.cozinha || !this.dados.cozinha.ultimosRegistros) {
+      return;
+    }
+    
+    const registros = this.ultimosRegistrosOriginais.length > 0 ? 
+                      this.ultimosRegistrosOriginais : 
+                      (this.dados.cozinha.ultimosRegistros || []);
+    
+    const turma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
+    const tipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
+    const data = document.getElementById('filtroRegistroData')?.value || 'hoje';
+    
+    this.filtroRegistroTurma = turma;
+    this.filtroRegistroRefeicao = tipo;
+    this.filtroRegistroData = data;
+    
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    const ontem = new Date(hoje);
+    ontem.setDate(ontem.getDate() - 1);
+    
+    const inicioSemana = new Date(hoje);
+    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+    
+    const inicioMes = new Date(hoje);
+    inicioMes.setDate(1);
+    
+    this.registrosFiltrados = registros.filter(r => {
+      if (turma !== 'todas' && r.alunoTurma !== turma) return false;
+      if (tipo !== 'todas' && r.tipoRefeicao !== tipo) return false;
+      
+      const dataRegistro = new Date(r.horario);
+      dataRegistro.setHours(0, 0, 0, 0);
+      
+      if (data === 'hoje') {
+        return dataRegistro.getTime() === hoje.getTime();
+      } else if (data === 'ontem') {
+        return dataRegistro.getTime() === ontem.getTime();
+      } else if (data === 'semana') {
+        return dataRegistro >= inicioSemana;
+      } else if (data === 'mes') {
+        return dataRegistro >= inicioMes;
+      }
+      
+      return true;
+    });
+    
+    const contador = document.getElementById('registrosFiltradosCount');
+    if (contador) {
+      contador.textContent = `${this.registrosFiltrados.length} registros`;
+    }
+    
+    this.atualizarListaRegistros();
+  }
+  
+  atualizarListaRegistros() {
+    const container = document.querySelector('.registros-list');
+    if (!container) return;
+    
+    const registros = this.registrosFiltrados.length > 0 ? this.registrosFiltrados : 
+                      (this.ultimosRegistrosOriginais.length > 0 ? this.ultimosRegistrosOriginais : 
+                      (this.dados?.cozinha?.ultimosRegistros || []));
+    
+    if (registros.length === 0) {
+      container.innerHTML = '<div class="empty-state">Nenhum registro encontrado</div>';
+      return;
+    }
+    
+    let html = '';
+    registros.slice(0, 50).forEach(r => {
+      const tipoTexto = r.tipoRefeicao === 'manha' ? '🌅 Manhã' : 
+                        r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde';
+      
+      html += `
+        <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+          <div style="flex: 1;">
+            <div class="registro-info">
+              <div class="registro-nome"><strong>${this.escapeHtml(r.alunoNome)}</strong></div>
+              <div class="registro-turma" style="font-size: 12px; color: #6c757d;">${this.escapeHtml(r.alunoTurma)}</div>
+            </div>
+            <div class="registro-detalhes" style="margin-top: 5px;">
+              <span class="refeicao-badge ${r.tipoRefeicao}" style="font-size: 11px; padding: 4px 12px; border-radius: 30px;">
+                ${tipoTexto}
+              </span>
+              <span class="registro-horario" style="font-size: 11px; margin-left: 8px;">
+                <i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}
+              </span>
+              <span class="registro-data" style="font-size: 11px; margin-left: 8px; color: #94a3b8;">
+                <i class="far fa-calendar-alt"></i> ${new Date(r.horario).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+          <div class="action-buttons" style="display: flex; gap: 5px;">
+            <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes">
+              <i class="fas fa-eye"></i>
+            </button>
+            <button class="btn-icon edit" onclick="admin.editarRegistroRefeicao('${r.id}')" title="Editar registro">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn-icon danger" onclick="admin.excluirRegistroRefeicao('${r.id}', '${this.escapeHtml(r.alunoNome)}', '${r.tipoRefeicao}')" title="Excluir">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    });
+    
+    container.innerHTML = html;
+  }
+  
+  limparFiltrosRegistros() {
+    const turmaSelect = document.getElementById('filtroRegistroTurma');
+    const tipoSelect = document.getElementById('filtroRegistroTipo');
+    const dataSelect = document.getElementById('filtroRegistroData');
+    
+    if (turmaSelect) turmaSelect.value = 'todas';
+    if (tipoSelect) tipoSelect.value = 'todas';
+    if (dataSelect) dataSelect.value = 'hoje';
+    
+    this.filtroRegistroTurma = 'todas';
+    this.filtroRegistroRefeicao = 'todas';
+    this.filtroRegistroData = 'hoje';
+    this.registrosFiltrados = [];
+    
+    const registrosOriginais = this.ultimosRegistrosOriginais.length > 0 ? 
+                               this.ultimosRegistrosOriginais : 
+                               (this.dados?.cozinha?.ultimosRegistros || []);
+    
+    this.registrosFiltrados = [...registrosOriginais];
+    
+    this.atualizarListaRegistros();
+    
+    const contador = document.getElementById('registrosFiltradosCount');
+    if (contador) {
+      contador.textContent = `${this.registrosFiltrados.length} registros`;
+    }
+  }
+  
+  aplicarFiltrosRefeicoesTurmas() {
+    if (!this.dados || !this.dados.cozinha || !this.dados.cozinha.refeicoesPorTurma) {
+      return;
+    }
+    
+    const turma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
+    const periodo = document.getElementById('filtroTurmasRefeicaoPeriodo')?.value || 'todas';
+    
+    this.filtroTurmasRefeicaoTurma = turma;
+    this.filtroTurmasRefeicaoPeriodo = periodo;
+    
+    this.atualizarTabelaRefeicoesTurmas(this.dados.cozinha.refeicoesPorTurma || []);
+  }
+  
+  limparFiltrosRefeicoesTurmas() {
+    const turmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
+    const periodoSelect = document.getElementById('filtroTurmasRefeicaoPeriodo');
+    
+    if (turmaSelect) turmaSelect.value = 'todas';
+    if (periodoSelect) periodoSelect.value = 'todas';
+    
+    this.filtroTurmasRefeicaoTurma = 'todas';
+    this.filtroTurmasRefeicaoPeriodo = 'todas';
+    
+    if (this.dados && this.dados.cozinha && this.dados.cozinha.refeicoesPorTurma) {
+      this.atualizarTabelaRefeicoesTurmas(this.dados.cozinha.refeicoesPorTurma);
+    }
+  }
+  
+  aplicarFiltrosRodizio() {
+    const turma = document.getElementById('filtroRodizioTurma')?.value || 'todas';
+    const tipo = document.getElementById('filtroRodizioTipo')?.value || 'todos';
+    
+    const linhas = document.querySelectorAll('#tabelaRodizio tbody tr');
+    
+    let visiveis = 0;
+    linhas.forEach(linha => {
+      const turmaLinha = linha.getAttribute('data-turma') || '';
+      const tipoLinha = linha.getAttribute('data-tipo') || '';
+      
+      let mostrar = true;
+      if (turma !== 'todas' && turmaLinha !== turma) mostrar = false;
+      if (tipo !== 'todos' && tipoLinha !== tipo) mostrar = false;
+      
+      linha.style.display = mostrar ? '' : 'none';
+      if (mostrar) visiveis++;
+    });
+    
+    const contador = document.getElementById('rodizioFiltradosCount');
+    if (contador) contador.textContent = `${visiveis} rodízios`;
+  }
+  
+  limparFiltrosRodizio() {
+    const turmaSelect = document.getElementById('filtroRodizioTurma');
+    const tipoSelect = document.getElementById('filtroRodizioTipo');
+    
+    if (turmaSelect) turmaSelect.value = 'todas';
+    if (tipoSelect) tipoSelect.value = 'todos';
+    
+    const linhas = document.querySelectorAll('#tabelaRodizio tbody tr');
+    linhas.forEach(linha => linha.style.display = '');
+    
+    const contador = document.getElementById('rodizioFiltradosCount');
+    if (contador) contador.textContent = `${linhas.length} rodízios`;
+  }
+  
+  atualizarGraficos(data) {
+    if (this.graficos.perfil) {
+      const perfis = data.cozinha?.perfisAlimentares || {};
+      this.graficos.perfil.data.datasets[0].data = [perfis.sempre || 0, perfis.as_vezes || 0, perfis.nunca || 0];
+      this.graficos.perfil.update();
+    }
+  }
+  
+  atualizarContadorRefeicoes(total) {
+    const el = document.getElementById('totalRefeicoes');
+    if (el) el.textContent = total;
+  }
+  
+  atualizarTimestamp(timestamp) {
+    const el = document.getElementById('ultimaAtualizacao');
+    if (el) el.textContent = new Date(timestamp).toLocaleTimeString('pt-BR');
+  }
+  
+  adicionarNotificacao(mensagem) {
+    const container = document.querySelector('.alertas-grid');
+    if (container) {
+      const notif = document.createElement('div');
+      notif.className = 'alerta-card info';
+      notif.style.animation = 'slideIn 0.3s ease';
+      notif.innerHTML = `
+        <div class="alerta-icon"><i class="fas fa-bell"></i></div>
+        <div class="alerta-content">
+          <div class="alerta-title">🔔 Nova Atualização</div>
+          <div class="alerta-message">${mensagem}</div>
+        </div>
+      `;
+      container.prepend(notif);
+      setTimeout(() => notif.remove(), 5000);
+    }
+  }
+  
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  
+  // ============================================
+  // 🔥 MÉTODOS CORRIGIDOS PARA LIMPEZA DE REGISTROS
+  // ============================================
+  
+  async verificarEstatisticasRegistros() {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/monitoramento-cozinha/estatisticas-registros', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        console.error('❌ Erro na resposta:', response.status);
+        return null;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('📊 Estatísticas de registros:', data.estatisticas);
+        return data.estatisticas;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Erro ao verificar estatísticas:', error);
+      return null;
+    }
+  }
+  
+  async executarLimpezaRegistros(meses = 1) {
+    // Usar o confirm do admin se disponível, senão usar confirm nativo
+    let confirmado = false;
+    
+    if (typeof admin !== 'undefined' && admin.confirmar) {
+      confirmado = await admin.confirmar(
+        '🗑️ Limpeza de Registros Antigos',
+        `Tem certeza que deseja remover registros de refeições com mais de <strong>${meses} mês(es)</strong>?<br><br>
+        <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span><br><br>
+        Recomendamos fazer um backup antes de prosseguir.`
+      );
+    } else {
+      confirmado = confirm(`⚠️ ATENÇÃO!\n\nTem certeza que deseja remover registros de refeições com mais de ${meses} mês(es)?\n\nEsta ação NÃO pode ser desfeita!`);
+    }
+    
+    if (!confirmado) return;
+    
+    try {
+      this.showToastMessage('🔄 Executando limpeza...', 'info');
+      
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/monitoramento-cozinha/limpar-registros-antigos', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ meses })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        this.showToastMessage(`✅ ${data.deletados} registros removidos com sucesso!`, 'success');
+        
+        // Recarregar os dados
+        await this.carregarDadosCompleto();
+      } else {
+        throw new Error(data.error || 'Erro na limpeza');
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro:', error);
+      this.showToastMessage('❌ ' + error.message, 'error');
+    }
+  }
+  
+  showToastMessage(mensagem, tipo = 'info') {
+    // Tentar usar o toast do admin se disponível
+    if (typeof admin !== 'undefined' && admin.showToast) {
+      admin.showToast(mensagem, tipo);
+      return;
+    }
+    
+    // Fallback: criar toast simples
+    const container = document.getElementById('toastContainer');
+    if (!container) {
+      alert(mensagem);
+      return;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${tipo}`;
+    
+    const icones = {
+      success: 'fa-check-circle',
+      error: 'fa-exclamation-circle',
+      info: 'fa-info-circle',
+      warning: 'fa-exclamation-triangle'
+    };
+    
+    toast.innerHTML = `
+      <i class="fas ${icones[tipo] || 'fa-info-circle'}"></i>
+      <span>${mensagem}</span>
+    `;
+    
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: ${tipo === 'success' ? '#10b981' : tipo === 'error' ? '#ef4444' : tipo === 'warning' ? '#f59e0b' : '#3b82f6'};
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 10000;
+      animation: slideIn 0.3s ease;
+      max-width: 400px;
+    `;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.animation = 'slideOut 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+  
+  async abrirModalLimpezaRegistros() {
+    // Verificar se o modal do admin existe
+    const modalBody = document.getElementById('modalBody');
+    if (!modalBody) {
+      console.error('Modal não encontrado');
+      this.showToastMessage('Erro: Modal não encontrado', 'error');
+      return;
+    }
+    
+    modalBody.innerHTML = `
+      <div style="padding: 20px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="width: 70px; height: 70px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+            <i class="fas fa-trash-alt" style="font-size: 30px; color: #dc2626;"></i>
+          </div>
+          <h3 style="margin: 15px 0 5px;">Limpeza de Registros Antigos</h3>
+          <p style="color: #6b7280;">Remova registros de refeições antigos para otimizar o banco de dados</p>
+        </div>
+        
+        <div id="estatisticasContainer" style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+          <p style="text-align: center;">Carregando estatísticas...</p>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+            <i class="fas fa-calendar-alt"></i> Período para manter
+          </label>
+          <select id="periodoLimpeza" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
+            <option value="1">Manter apenas 1 mês (recomendado)</option>
+            <option value="2">Manter 2 meses</option>
+            <option value="3">Manter 3 meses</option>
+            <option value="6">Manter 6 meses</option>
+            <option value="12">Manter 1 ano</option>
+          </select>
+          <small style="color: #6c757d;">Registros mais antigos que o período selecionado serão removidos</small>
+        </div>
+        
+        <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+          <i class="fas fa-info-circle"></i>
+          <div style="margin-left: 10px;">
+            <strong>💡 Dica:</strong> A limpeza é irreversível. Recomendamos fazer um backup antes de prosseguir.
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+          <button onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer;">
+            Cancelar
+          </button>
+          <button onclick="monitoramentoTempoReal.confirmarLimpezaRegistros()" style="flex: 1; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 8px; cursor: pointer;">
+            <i class="fas fa-trash"></i> Executar Limpeza
+          </button>
+        </div>
+      </div>
+    `;
+    
+    // Atualizar título do modal
+    const modalTitle = document.getElementById('modalTitle');
+    if (modalTitle) {
+      modalTitle.innerHTML = '<i class="fas fa-trash-alt"></i> Limpeza de Registros';
+    }
+    
+    // Esconder botão salvar padrão
+    const modalSaveBtn = document.getElementById('modalSaveBtn');
+    if (modalSaveBtn) {
+      modalSaveBtn.style.display = 'none';
+    }
+    
+    // Abrir o modal via admin se disponível
+    if (typeof admin !== 'undefined' && admin.openModal) {
+      admin.openModal();
+    } else {
+      const modal = document.getElementById('modal');
+      if (modal) modal.style.display = 'flex';
+    }
+    
+    // Carregar estatísticas
+    await this.carregarEstatisticasLimpeza();
+  }
+  
+  async carregarEstatisticasLimpeza() {
+    const container = document.getElementById('estatisticasContainer');
+    if (!container) return;
+    
+    try {
+      const stats = await this.verificarEstatisticasRegistros();
+      
+      if (stats) {
+        container.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            <div style="text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #1e293b;">${stats.total}</div>
+              <div style="font-size: 12px; color: #64748b;">Total de registros</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #10b981;">${stats.ultimoMes}</div>
+              <div style="font-size: 12px; color: #64748b;">Último mês</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #f59e0b;">${stats.anteriores}</div>
+              <div style="font-size: 12px; color: #64748b;">Mais antigos</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 12px; font-weight: bold; color: #6b7280;">
+                ${stats.ultimaData ? `Até ${new Date(stats.ultimaData).toLocaleDateString()}` : 'Sem dados'}
+              </div>
+              <div style="font-size: 11px; color: #94a3b8;">Último registro</div>
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = '<p style="text-align: center; color: #dc2626;">Erro ao carregar estatísticas</p>';
+      }
+    } catch (error) {
+      console.error('❌ Erro:', error);
+      container.innerHTML = '<p style="text-align: center; color: #dc2626;">Erro ao carregar estatísticas</p>';
+    }
+  }
+  
+  async confirmarLimpezaRegistros() {
+    const periodo = document.getElementById('periodoLimpeza')?.value || 1;
+    
+    // Fechar modal
+    if (typeof admin !== 'undefined' && admin.closeModal) {
+      admin.closeModal();
+    } else {
+      const modal = document.getElementById('modal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    await this.executarLimpezaRegistros(parseInt(periodo));
+  }
+  
   renderizar(data) {
     const container = document.getElementById('contentArea');
     
@@ -474,7 +1012,7 @@ class MonitoramentoTempoReal {
             <button class="btn-refresh" onclick="monitoramentoTempoReal.carregarDadosCompleto()">
               <i class="fas fa-sync-alt"></i> Atualizar
             </button>
-            <button class="btn-refresh" onclick="admin.abrirModalLimpezaRegistros()" 
+            <button class="btn-refresh" onclick="monitoramentoTempoReal.abrirModalLimpezaRegistros()" 
                     style="background: #dc2626; color: white; border: none; margin-left: 10px;">
               <i class="fas fa-trash-alt"></i> Limpar Registros
             </button>
@@ -618,7 +1156,7 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Refeições por Turma -->
+        <!-- Refeições por Turma com Filtros -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-table"></i>
@@ -626,6 +1164,49 @@ class MonitoramentoTempoReal {
             <span class="card-badge">${(cozinha.refeicoesPorTurma || []).length} turmas</span>
           </div>
           <div class="card-body">
+            <div class="turmas-filtros" style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+              <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 1; min-width: 150px;">
+                  <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
+                    <i class="fas fa-school"></i> Turma
+                  </label>
+                  <select id="filtroTurmasRefeicaoTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
+                          onchange="monitoramentoTempoReal.aplicarFiltrosRefeicoesTurmas()">
+                    <option value="todas">Todas as turmas</option>
+                    ${[...new Set((cozinha.refeicoesPorTurma || []).map(t => t.turma))].filter(t => t).map(t => `
+                      <option value="${t}">${t}</option>
+                    `).join('')}
+                  </select>
+                </div>
+                
+                <div style="flex: 1; min-width: 150px;">
+                  <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
+                    <i class="fas fa-utensils"></i> Período
+                  </label>
+                  <select id="filtroTurmasRefeicaoPeriodo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
+                          onchange="monitoramentoTempoReal.aplicarFiltrosRefeicoesTurmas()">
+                    <option value="todas">Todos os períodos</option>
+                    <option value="manha">🌅 Manhã</option>
+                    <option value="almoco">🍽️ Almoço</option>
+                    <option value="tarde">🌙 Tarde</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <button class="btn-filter" onclick="monitoramentoTempoReal.limparFiltrosRefeicoesTurmas()" 
+                          style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-eraser"></i> Limpar
+                  </button>
+                </div>
+                
+                <div style="margin-left: auto;">
+                  <span id="turmasFiltradosCount" style="background: #e9ecef; padding: 5px 12px; border-radius: 20px; font-size: 12px;">
+                    ${(cozinha.refeicoesPorTurma || []).length} turmas
+                  </span>
+                </div>
+              </div>
+            </div>
+            
             <div class="table-responsive">
               <table class="data-table">
                 <thead>
@@ -665,7 +1246,6 @@ class MonitoramentoTempoReal {
             <span>Últimos Registros</span>
           </div>
           <div class="card-body">
-            <!-- BARRA DE FILTROS DOS REGISTROS -->
             <div class="registros-filtros" style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
               <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
                 <div style="flex: 1; min-width: 150px;">
@@ -691,6 +1271,20 @@ class MonitoramentoTempoReal {
                     <option value="manha">🌅 Manhã</option>
                     <option value="almoco">🍽️ Almoço</option>
                     <option value="tarde">🌙 Tarde</option>
+                  </select>
+                </div>
+                
+                <div style="flex: 1; min-width: 150px;">
+                  <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
+                    <i class="fas fa-calendar-alt"></i> Período
+                  </label>
+                  <select id="filtroRegistroData" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
+                          onchange="monitoramentoTempoReal.aplicarFiltrosRegistros()">
+                    <option value="hoje">📅 Hoje</option>
+                    <option value="ontem">📆 Ontem</option>
+                    <option value="semana">📊 Esta semana</option>
+                    <option value="mes">📈 Este mês</option>
+                    <option value="todos">🗓️ Todos os períodos</option>
                   </select>
                 </div>
                 
@@ -746,25 +1340,14 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- ============================================ -->
-        <!-- SEÇÃO: AVALIAÇÕES DOS ALUNOS (FEEDBACKS) - VERSÃO ESTILIZADA -->
-        <!-- ============================================ -->
+        <!-- Avaliações dos Alunos -->
         <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-            <div>
-              <i class="fas fa-star me-2"></i>
-              <span>Avaliações dos Alunos</span>
-              <span class="badge bg-success ms-2" id="totalFeedbacksBadge">0</span>
-            </div>
-            <div>
-              <button class="btn-refresh me-2" onclick="monitoramentoTempoReal.carregarFeedbacksCompleto()" style="background: #1e3c72; color: white;">
-                <i class="fas fa-sync-alt"></i> Atualizar
-              </button>
-            </div>
+          <div class="card-header">
+            <i class="fas fa-star"></i>
+            <span>Avaliações dos Alunos</span>
+            <span class="card-badge" id="totalFeedbacksBadge">0</span>
           </div>
           <div class="card-body">
-            
-            <!-- Cards de Estatísticas dos Feedbacks -->
             <div class="feedback-stats-grid">
               <div class="feedback-stat-card">
                 <div class="feedback-stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
@@ -782,7 +1365,6 @@ class MonitoramentoTempoReal {
                 <div class="feedback-stat-info">
                   <span class="feedback-stat-value" id="mediaNotas">0</span>
                   <span class="feedback-stat-label">Média de Notas</span>
-                  <div id="estrelasMedia" class="feedback-stars-mini"></div>
                 </div>
               </div>
               <div class="feedback-stat-card">
@@ -804,160 +1386,16 @@ class MonitoramentoTempoReal {
                 </div>
               </div>
             </div>
-
-            <!-- Filtros Estilizados -->
-            <div class="feedback-filters">
-              <div class="feedback-filters-row">
-                <div class="feedback-filter-group">
-                  <label><i class="fas fa-utensils"></i> Refeição</label>
-                  <select id="filtroRefeicaoFeedback" class="feedback-filter-select" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()">
-                    <option value="todas">Todas</option>
-                    <option value="manha">🌅 Manhã</option>
-                    <option value="almoco">🍽️ Almoço</option>
-                    <option value="tarde">🌙 Tarde</option>
-                  </select>
-                </div>
-                <div class="feedback-filter-group">
-                  <label><i class="fas fa-star"></i> Nota Mínima</label>
-                  <select id="filtroNotaMin" class="feedback-filter-select" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()">
-                    <option value="1">1★ ou mais</option>
-                    <option value="2">2★ ou mais</option>
-                    <option value="3">3★ ou mais</option>
-                    <option value="4">4★ ou mais</option>
-                    <option value="5">5★</option>
-                  </select>
-                </div>
-                <div class="feedback-filter-group">
-                  <label><i class="fas fa-smile"></i> Opinião</label>
-                  <select id="filtroGostou" class="feedback-filter-select" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()">
-                    <option value="todos">Todos</option>
-                    <option value="sim">👍 Adoraram</option>
-                    <option value="mais_ou_menos">😐 Mais ou menos</option>
-                    <option value="nao">👎 Não gostaram</option>
-                  </select>
-                </div>
-                <div class="feedback-filter-group">
-                  <label><i class="fas fa-user-secret"></i> Anonimato</label>
-                  <select id="filtroAnonimo" class="feedback-filter-select" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()">
-                    <option value="todos">Todos</option>
-                    <option value="nao">✅ Identificados</option>
-                    <option value="sim">🔒 Anônimos</option>
-                  </select>
-                </div>
-                <div class="feedback-filter-group search">
-                  <label><i class="fas fa-search"></i> Buscar</label>
-                  <input type="text" id="filtroBuscaFeedback" class="feedback-filter-input" placeholder="Nome, turma ou comentário..." onkeyup="monitoramentoTempoReal.aplicarFiltrosFeedback()">
-                </div>
+            
+            <div class="feedback-list-container" style="max-height: 300px; overflow-y: auto;">
+              <div id="listaFeedbacksAdmin" class="feedback-list">
+                <p class="text-center">Carregando avaliações...</p>
               </div>
-              <div class="feedback-filters-actions">
-                <button class="feedback-btn-clear" onclick="monitoramentoTempoReal.limparFiltrosFeedback()">
-                  <i class="fas fa-eraser"></i> Limpar filtros
-                </button>
-                <button class="feedback-btn-apply" onclick="monitoramentoTempoReal.aplicarFiltrosFeedback()">
-                  <i class="fas fa-search"></i> Aplicar
-                </button>
-              </div>
-            </div>
-
-            <!-- Distribuição de Notas e Opiniões -->
-            <div class="feedback-charts">
-              <div class="feedback-chart-card">
-                <div class="feedback-chart-title">
-                  <i class="fas fa-chart-bar"></i> Distribuição das Notas
-                </div>
-                <div class="feedback-rating-bars">
-                  <div class="rating-bar">
-                    <span class="rating-label">★ 1</span>
-                    <div class="rating-bar-bg"><div id="bar1" class="rating-bar-fill" style="width: 0%; background: #ef4444;"></div></div>
-                    <span class="rating-count" id="count1">0</span>
-                  </div>
-                  <div class="rating-bar">
-                    <span class="rating-label">★ 2</span>
-                    <div class="rating-bar-bg"><div id="bar2" class="rating-bar-fill" style="width: 0%; background: #f59e0b;"></div></div>
-                    <span class="rating-count" id="count2">0</span>
-                  </div>
-                  <div class="rating-bar">
-                    <span class="rating-label">★ 3</span>
-                    <div class="rating-bar-bg"><div id="bar3" class="rating-bar-fill" style="width: 0%; background: #3b82f6;"></div></div>
-                    <span class="rating-count" id="count3">0</span>
-                  </div>
-                  <div class="rating-bar">
-                    <span class="rating-label">★ 4</span>
-                    <div class="rating-bar-bg"><div id="bar4" class="rating-bar-fill" style="width: 0%; background: #10b981;"></div></div>
-                    <span class="rating-count" id="count4">0</span>
-                  </div>
-                  <div class="rating-bar">
-                    <span class="rating-label">★ 5</span>
-                    <div class="rating-bar-bg"><div id="bar5" class="rating-bar-fill" style="width: 0%; background: #10b981;"></div></div>
-                    <span class="rating-count" id="count5">0</span>
-                  </div>
-                </div>
-              </div>
-              <div class="feedback-chart-card">
-                <div class="feedback-chart-title">
-                  <i class="fas fa-smile"></i> Resumo das Opiniões
-                </div>
-                <div class="opinion-summary">
-                  <div class="opinion-item">
-                    <div class="opinion-icon"><i class="fas fa-smile-wink"></i></div>
-                    <div class="opinion-info">
-                      <span class="opinion-label">Adoraram</span>
-                      <span class="opinion-value" id="gostaramSim">0</span>
-                    </div>
-                  </div>
-                  <div class="opinion-item">
-                    <div class="opinion-icon"><i class="fas fa-meh"></i></div>
-                    <div class="opinion-info">
-                      <span class="opinion-label">Mais ou menos</span>
-                      <span class="opinion-value" id="gostaramMaisMenos">0</span>
-                    </div>
-                  </div>
-                  <div class="opinion-item">
-                    <div class="opinion-icon"><i class="fas fa-frown"></i></div>
-                    <div class="opinion-info">
-                      <span class="opinion-label">Não gostaram</span>
-                      <span class="opinion-value" id="gostaramNao">0</span>
-                    </div>
-                  </div>
-                  <div class="opinion-divider"></div>
-                  <div class="opinion-item total">
-                    <div class="opinion-icon"><i class="fas fa-star"></i></div>
-                    <div class="opinion-info">
-                      <span class="opinion-label">Média Geral</span>
-                      <span class="opinion-value" id="mediaDetalhada">0/5</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Lista de Feedbacks -->
-            <div class="feedback-list-header">
-              <i class="fas fa-list"></i>
-              <span>Últimas Avaliações</span>
-              <span class="feedback-list-count" id="feedbacksCount">0</span>
-            </div>
-            <div class="feedback-table-container">
-              <table class="feedback-table">
-                <thead>
-                  <tr>
-                    <th>Aluno</th>
-                    <th>Turma</th>
-                    <th>Refeição</th>
-                    <th>Nota</th>
-                    <th>Comentário</th>
-                    <th>Data</th>
-                  </tr>
-                </thead>
-                <tbody id="listaFeedbacksAdmin">
-                  <tr><td colspan="6" class="text-center">Carregando avaliações...</td></tr>
-                </tbody>
-              </table>
             </div>
           </div>
         </div>
 
-        <!-- Gestão de Rodízio com Filtros -->
+        <!-- Gestão de Rodízio -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-calendar-alt"></i>
@@ -967,7 +1405,6 @@ class MonitoramentoTempoReal {
             </button>
           </div>
           <div class="card-body">
-            <!-- BARRA DE FILTROS DO RODÍZIO -->
             <div class="rodizio-filtros" style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
               <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
                 <div style="flex: 1; min-width: 150px;">
@@ -977,9 +1414,7 @@ class MonitoramentoTempoReal {
                   <select id="filtroRodizioTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
                           onchange="monitoramentoTempoReal.aplicarFiltrosRodizio()">
                     <option value="todas">Todas as turmas</option>
-                    ${(gestao.rodizios || []).map(r => `
-                      <option value="${r.turma}">${r.turma}</option>
-                    `).join('')}
+                    ${(gestao.rodizios || []).map(r => `<option value="${r.turma}">${r.turma}</option>`).join('')}
                   </select>
                 </div>
                 
@@ -1067,9 +1502,7 @@ class MonitoramentoTempoReal {
       </div>
 
       <style>
-        /* ============================================ */
-        /* ESTILOS EXISTENTES - MANTIDOS IGUAIS */
-        /* ============================================ */
+        /* Estilos existentes - mantidos iguais */
         .monitoramento-dashboard {
           padding: 24px;
           max-width: 1400px;
@@ -1497,383 +1930,92 @@ class MonitoramentoTempoReal {
           margin-bottom: 20px;
         }
         
-        /* ============================================ */
-        /* ESTILOS ESPECÍFICOS PARA FEEDBACKS (NOVOS) */
-        /* ============================================ */
-        
         .feedback-stats-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: 16px;
-          margin-bottom: 24px;
+          margin-bottom: 20px;
         }
-        
         .feedback-stat-card {
-          background: white;
-          border-radius: 20px;
-          padding: 16px 20px;
+          background: #f8fafc;
+          border-radius: 12px;
+          padding: 15px;
           display: flex;
           align-items: center;
-          gap: 16px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-          border: 1px solid #eef2f6;
-          transition: all 0.3s;
+          gap: 15px;
         }
-        
-        .feedback-stat-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-        }
-        
         .feedback-stat-icon {
-          width: 52px;
-          height: 52px;
-          border-radius: 16px;
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 24px;
+          font-size: 20px;
           color: white;
         }
-        
         .feedback-stat-info {
           flex: 1;
         }
-        
         .feedback-stat-value {
-          display: block;
-          font-size: 28px;
+          font-size: 24px;
           font-weight: 700;
           color: #1e293b;
           line-height: 1.2;
         }
-        
         .feedback-stat-label {
-          font-size: 12px;
+          font-size: 11px;
           color: #64748b;
         }
-        
-        .feedback-stars-mini {
-          margin-top: 4px;
-          font-size: 11px;
-        }
-        
-        .feedback-filters {
-          background: #f8fafc;
-          border-radius: 20px;
-          padding: 20px;
-          margin-bottom: 24px;
-          border: 1px solid #eef2f6;
-        }
-        
-        .feedback-filters-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 16px;
-          margin-bottom: 16px;
-        }
-        
-        .feedback-filter-group {
-          flex: 1;
-          min-width: 140px;
-        }
-        
-        .feedback-filter-group label {
-          display: block;
-          font-size: 11px;
-          font-weight: 600;
-          color: #475569;
-          margin-bottom: 6px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        
-        .feedback-filter-group label i {
-          margin-right: 4px;
-          font-size: 11px;
-        }
-        
-        .feedback-filter-select,
-        .feedback-filter-input {
-          width: 100%;
-          padding: 10px 12px;
-          border: 2px solid #e2e8f0;
+        .feedback-list-container {
+          border: 1px solid #e5e7eb;
           border-radius: 12px;
-          font-size: 13px;
-          background: white;
-          transition: all 0.2s;
         }
-        
-        .feedback-filter-select:focus,
-        .feedback-filter-input:focus {
-          outline: none;
-          border-color: #1e3c72;
-          box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+        .feedback-list {
+          padding: 10px;
         }
-        
-        .feedback-filter-group.search {
-          flex: 1.5;
+        .feedback-item {
+          padding: 10px;
+          border-bottom: 1px solid #f1f5f9;
         }
-        
-        .feedback-filters-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 12px;
-          padding-top: 8px;
+        .feedback-item:last-child {
+          border-bottom: none;
         }
-        
-        .feedback-btn-clear {
-          background: #e2e8f0;
-          border: none;
-          padding: 8px 20px;
-          border-radius: 30px;
-          font-size: 12px;
-          font-weight: 500;
-          color: #475569;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .feedback-btn-clear:hover {
-          background: #cbd5e1;
-          transform: translateY(-1px);
-        }
-        
-        .feedback-btn-apply {
-          background: linear-gradient(135deg, #1e3c72, #2a5298);
-          border: none;
-          padding: 8px 24px;
-          border-radius: 30px;
-          font-size: 12px;
-          font-weight: 500;
-          color: white;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .feedback-btn-apply:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
-        }
-        
-        .feedback-charts {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          margin-bottom: 24px;
-        }
-        
-        .feedback-chart-card {
-          background: #f8fafc;
-          border-radius: 20px;
-          padding: 20px;
-          border: 1px solid #eef2f6;
-        }
-        
-        .feedback-chart-title {
-          font-size: 14px;
-          font-weight: 600;
-          color: #1e293b;
-          margin-bottom: 16px;
-          padding-bottom: 12px;
-          border-bottom: 2px solid #e2e8f0;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        
-        .feedback-chart-title i {
-          color: #1e3c72;
-        }
-        
-        .rating-bar {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-        
-        .rating-label {
-          width: 35px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #475569;
-        }
-        
-        .rating-bar-bg {
-          flex: 1;
-          height: 8px;
-          background: #e2e8f0;
-          border-radius: 10px;
-          overflow: hidden;
-        }
-        
-        .rating-bar-fill {
-          height: 100%;
-          border-radius: 10px;
-          transition: width 0.5s ease;
-        }
-        
-        .rating-count {
-          width: 35px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #1e293b;
-          text-align: right;
-        }
-        
-        .opinion-summary {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-        
-        .opinion-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 12px;
-          background: white;
-          border-radius: 12px;
-          transition: all 0.2s;
-        }
-        
-        .opinion-item:hover {
-          transform: translateX(4px);
-        }
-        
-        .opinion-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 18px;
-        }
-        
-        .opinion-item:first-child .opinion-icon { background: #d1fae5; color: #10b981; }
-        .opinion-item:nth-child(2) .opinion-icon { background: #fef3c7; color: #f59e0b; }
-        .opinion-item:nth-child(3) .opinion-icon { background: #fee2e2; color: #ef4444; }
-        .opinion-item.total .opinion-icon { background: #e0e7ff; color: #1e3c72; }
-        
-        .opinion-info {
-          flex: 1;
+        .feedback-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          margin-bottom: 5px;
         }
-        
-        .opinion-label {
-          font-size: 13px;
-          font-weight: 500;
-          color: #475569;
-        }
-        
-        .opinion-value {
-          font-size: 18px;
-          font-weight: 700;
-          color: #1e293b;
-        }
-        
-        .opinion-divider {
-          height: 1px;
-          background: #e2e8f0;
-          margin: 8px 0;
-        }
-        
-        .feedback-list-header {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 16px;
-          padding-bottom: 12px;
-          border-bottom: 2px solid #eef2f6;
-        }
-        
-        .feedback-list-header i {
-          font-size: 16px;
-          color: #1e3c72;
-        }
-        
-        .feedback-list-header span {
-          font-size: 14px;
+        .feedback-aluno {
           font-weight: 600;
           color: #1e293b;
         }
-        
-        .feedback-list-count {
-          background: #e2e8f0;
-          padding: 2px 10px;
-          border-radius: 30px;
-          font-size: 11px;
-          font-weight: 600;
-          color: #475569;
+        .feedback-nota {
+          color: #f59e0b;
         }
-        
-        .feedback-table-container {
-          overflow-x: auto;
-          border-radius: 16px;
-          border: 1px solid #eef2f6;
-        }
-        
-        .feedback-table {
-          width: 100%;
-          border-collapse: collapse;
+        .feedback-comentario {
           font-size: 13px;
-        }
-        
-        .feedback-table th {
-          padding: 14px 16px;
-          text-align: left;
-          font-weight: 600;
           color: #475569;
-          background: #f8fafc;
-          border-bottom: 1px solid #eef2f6;
+          margin-top: 5px;
         }
-        
-        .feedback-table td {
-          padding: 12px 16px;
-          border-bottom: 1px solid #f1f5f9;
-          color: #334155;
-        }
-        
-        .feedback-table tr:hover td {
-          background: #f8fafc;
-        }
-        
-        .feedback-nota-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          padding: 4px 10px;
-          border-radius: 30px;
-          font-size: 11px;
-          font-weight: 600;
-        }
-        
-        .feedback-nota-badge.alta { background: #d1fae5; color: #065f46; }
-        .feedback-nota-badge.media { background: #fef3c7; color: #92400e; }
-        .feedback-nota-badge.baixa { background: #fee2e2; color: #991b1b; }
         
         @media (max-width: 1024px) {
+          .metrics-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          .two-columns {
+            grid-template-columns: 1fr;
+          }
           .feedback-stats-grid {
             grid-template-columns: repeat(2, 1fr);
           }
-          .feedback-charts {
+        }
+        @media (max-width: 768px) {
+          .metrics-grid {
             grid-template-columns: 1fr;
           }
-        }
-        
-        @media (max-width: 768px) {
           .feedback-stats-grid {
             grid-template-columns: 1fr;
-          }
-          .feedback-filters-row {
-            flex-direction: column;
-          }
-          .feedback-filter-group.search {
-            flex: auto;
           }
         }
       </style>
@@ -1913,174 +2055,6 @@ class MonitoramentoTempoReal {
         }
       }
     });
-  }
-
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  aplicarFiltrosRegistros() {
-    if (!this.dados || !this.dados.cozinha || !this.dados.cozinha.ultimosRegistros) {
-      return;
-    }
-    
-    const registros = this.dados.cozinha.ultimosRegistros;
-    const turma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
-    const tipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
-    
-    this.registrosFiltrados = registros.filter(r => {
-      if (turma !== 'todas' && r.alunoTurma !== turma) return false;
-      if (tipo !== 'todas' && r.tipoRefeicao !== tipo) return false;
-      return true;
-    });
-    
-    // Atualizar a exibição
-    this.atualizarListaRegistros();
-    
-    // Atualizar contador
-    const contador = document.getElementById('registrosFiltradosCount');
-    if (contador) contador.textContent = `${this.registrosFiltrados.length} registros`;
-  }
-
-  atualizarListaRegistros() {
-    const container = document.querySelector('.registros-list');
-    if (!container) return;
-    
-    const registros = this.registrosFiltrados.length > 0 ? this.registrosFiltrados : 
-                      (this.dados?.cozinha?.ultimosRegistros || []);
-    
-    if (registros.length === 0) {
-      container.innerHTML = '<div class="empty-state">Nenhum registro encontrado</div>';
-      return;
-    }
-    
-    let html = '';
-    registros.slice(0, 50).forEach(r => {
-      const tipoTexto = r.tipoRefeicao === 'manha' ? '🌅 Manhã' : 
-                        r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde';
-      
-      html += `
-        <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-          <div style="flex: 1;">
-            <div class="registro-info">
-              <div class="registro-nome"><strong>${this.escapeHtml(r.alunoNome)}</strong></div>
-              <div class="registro-turma" style="font-size: 12px; color: #6c757d;">${this.escapeHtml(r.alunoTurma)}</div>
-            </div>
-            <div class="registro-detalhes" style="margin-top: 5px;">
-              <span class="refeicao-badge ${r.tipoRefeicao}" style="font-size: 11px; padding: 4px 12px; border-radius: 30px;">
-                ${tipoTexto}
-              </span>
-              <span class="registro-horario" style="font-size: 11px; margin-left: 8px;">
-                <i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}
-              </span>
-            </div>
-          </div>
-          <div class="action-buttons" style="display: flex; gap: 5px;">
-            <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes">
-              <i class="fas fa-eye"></i>
-            </button>
-            <button class="btn-icon edit" onclick="admin.editarRegistroRefeicao('${r.id}')" title="Editar registro">
-              <i class="fas fa-edit"></i>
-            </button>
-            <button class="btn-icon danger" onclick="admin.excluirRegistroRefeicao('${r.id}', '${this.escapeHtml(r.alunoNome)}', '${r.tipoRefeicao}')" title="Excluir">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
-        </div>
-      `;
-    });
-    
-    container.innerHTML = html;
-  }
-
-  limparFiltrosRegistros() {
-    const turmaSelect = document.getElementById('filtroRegistroTurma');
-    const tipoSelect = document.getElementById('filtroRegistroTipo');
-    
-    if (turmaSelect) turmaSelect.value = 'todas';
-    if (tipoSelect) tipoSelect.value = 'todas';
-    
-    this.registrosFiltrados = [];
-    this.atualizarListaRegistros();
-    
-    const contador = document.getElementById('registrosFiltradosCount');
-    if (contador) contador.textContent = `${this.dados?.cozinha?.ultimosRegistros?.length || 0} registros`;
-  }
-
-  aplicarFiltrosRodizio() {
-    const turma = document.getElementById('filtroRodizioTurma')?.value || 'todas';
-    const tipo = document.getElementById('filtroRodizioTipo')?.value || 'todos';
-    
-    const linhas = document.querySelectorAll('#tabelaRodizio tbody tr');
-    
-    let visiveis = 0;
-    linhas.forEach(linha => {
-      const turmaLinha = linha.getAttribute('data-turma') || '';
-      const tipoLinha = linha.getAttribute('data-tipo') || '';
-      
-      let mostrar = true;
-      if (turma !== 'todas' && turmaLinha !== turma) mostrar = false;
-      if (tipo !== 'todos' && tipoLinha !== tipo) mostrar = false;
-      
-      linha.style.display = mostrar ? '' : 'none';
-      if (mostrar) visiveis++;
-    });
-    
-    const contador = document.getElementById('rodizioFiltradosCount');
-    if (contador) contador.textContent = `${visiveis} rodízios`;
-  }
-
-  limparFiltrosRodizio() {
-    const turmaSelect = document.getElementById('filtroRodizioTurma');
-    const tipoSelect = document.getElementById('filtroRodizioTipo');
-    
-    if (turmaSelect) turmaSelect.value = 'todas';
-    if (tipoSelect) tipoSelect.value = 'todos';
-    
-    const linhas = document.querySelectorAll('#tabelaRodizio tbody tr');
-    linhas.forEach(linha => linha.style.display = '');
-    
-    const contador = document.getElementById('rodizioFiltradosCount');
-    if (contador) contador.textContent = `${linhas.length} rodízios`;
-  }
-  
-  atualizarGraficos(data) {
-    if (this.graficos.perfil) {
-      const perfis = data.cozinha?.perfisAlimentares || {};
-      this.graficos.perfil.data.datasets[0].data = [perfis.sempre || 0, perfis.as_vezes || 0, perfis.nunca || 0];
-      this.graficos.perfil.update();
-    }
-  }
-  
-  atualizarContadorRefeicoes(total) {
-    const el = document.getElementById('totalRefeicoes');
-    if (el) el.textContent = total;
-  }
-  
-  atualizarTimestamp(timestamp) {
-    const el = document.getElementById('ultimaAtualizacao');
-    if (el) el.textContent = new Date(timestamp).toLocaleTimeString('pt-BR');
-  }
-  
-  adicionarNotificacao(mensagem) {
-    const container = document.querySelector('.alertas-grid');
-    if (container) {
-      const notif = document.createElement('div');
-      notif.className = 'alerta-card info';
-      notif.style.animation = 'slideIn 0.3s ease';
-      notif.innerHTML = `
-        <div class="alerta-icon"><i class="fas fa-bell"></i></div>
-        <div class="alerta-content">
-          <div class="alerta-title">🔔 Nova Atualização</div>
-          <div class="alerta-message">${mensagem}</div>
-        </div>
-      `;
-      container.prepend(notif);
-      setTimeout(() => notif.remove(), 5000);
-    }
   }
   
   parar() {
