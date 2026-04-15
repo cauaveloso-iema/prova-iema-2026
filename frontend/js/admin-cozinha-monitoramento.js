@@ -658,36 +658,36 @@ class MonitoramentoTempoReal {
           <div class="card-body">
             <div class="registros-list">
               ${(cozinha.ultimosRegistros || []).slice(0, 10).map(r => `
-                <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
                   <div style="flex: 1;">
                     <div class="registro-info">
-                      <div class="registro-nome"><strong>${r.alunoNome}</strong></div>
-                      <div class="registro-turma" style="font-size: 12px; color: #6c757d;">${r.alunoTurma}</div>
+                      <div class="registro-nome"><strong>${this.escapeHtml(r.alunoNome)}</strong></div>
+                      <div class="registro-turma" style="font-size: 12px; color: #6c757d;">${this.escapeHtml(r.alunoTurma)}</div>
                     </div>
                     <div class="registro-detalhes" style="margin-top: 5px;">
-                      <span class="refeicao-badge ${r.tipoRefeicao}" style="font-size: 11px;">
+                      <span class="refeicao-badge ${r.tipoRefeicao}" style="font-size: 11px; padding: 4px 12px; border-radius: 30px;">
                         ${r.tipoRefeicao === 'manha' ? '🌅 Manhã' : r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'}
                       </span>
                       <span class="registro-horario" style="font-size: 11px; margin-left: 8px;">
                         <i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}
                       </span>
-                    </div>
+                    </div>s
                   </div>
                   <div class="action-buttons" style="display: flex; gap: 5px;">
-                    <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes">
+                    <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes" style="background: transparent; border: none; padding: 6px; border-radius: 8px; cursor: pointer; color: #64748b;">
                       <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn-icon edit" onclick="admin.editarRegistroRefeicao('${r.id}')" title="Editar registro">
+                    <button class="btn-icon edit" onclick="admin.editarRegistroRefeicao('${r.id}')" title="Editar registro" style="background: transparent; border: none; padding: 6px; border-radius: 8px; cursor: pointer; color: #64748b;">
                       <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn-icon danger" onclick="admin.excluirRegistroRefeicao('${r.id}', '${r.alunoNome}', '${r.tipoRefeicao}')" title="Excluir">
+                    <button class="btn-icon danger" onclick="admin.excluirRegistroRefeicao('${r.id}', '${this.escapeHtml(r.alunoNome)}', '${r.tipoRefeicao}')" title="Excluir" style="background: transparent; border: none; padding: 6px; border-radius: 8px; cursor: pointer; color: #64748b;">
                       <i class="fas fa-trash"></i>
                     </button>
                   </div>
                 </div>
               `).join('')}
               ${(cozinha.ultimosRegistros || []).length === 0 ? `
-                <div class="empty-state">Nenhum registro hoje</div>
+                <div class="empty-state" style="text-align: center; padding: 40px; color: #94a3b8;">Nenhum registro hoje</div>
               ` : ''}
             </div>
           </div>
@@ -1831,6 +1831,13 @@ class MonitoramentoTempoReal {
         }
       }
     });
+  }
+
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
   
   atualizarGraficos(data) {
