@@ -1,4 +1,4 @@
-// frontend/js/admin-cozinha-monitoramento.js - VERSÃO COMPLETAMENTE CORRIGIDA
+// frontend/js/admin-cozinha-monitoramento.js - VERSÃO COMPLETA E FUNCIONAL
 
 class MonitoramentoTempoReal {
   constructor() {
@@ -10,42 +10,100 @@ class MonitoramentoTempoReal {
     this.feedbacksFiltrados = [];
     this.paginaCarregada = false;
     
-    // PROPRIEDADES PARA FILTRO DE REGISTROS
     this.registrosFiltrados = [];
     this.filtroRegistroTurma = 'todas';
     this.filtroRegistroRefeicao = 'todas';
     this.filtroRegistroData = 'hoje';
     this.ultimosRegistrosOriginais = [];
     
-    // PROPRIEDADES PARA FILTRO DAS TURMAS (REFEIÇÕES POR TURMA)
     this.filtroTurmasRefeicaoTurma = 'todas';
     this.filtroTurmasRefeicaoPeriodo = 'todas';
     this.filtroTurmasRefeicaoData = 'hoje';
     this.dadosRefeicoesTurmasFiltrados = [];
     this.refeicoesPorTurmaOriginais = [];
+    
+    this.filtrosAtuais = {
+      registroData: 'hoje',
+      registroTurma: 'todas',
+      registroTipo: 'todas',
+      turmasData: 'hoje',
+      turmasTurma: 'todas',
+      turmasTurno: 'todas'
+    };
   }
   
   async carregar() {
     console.log('📊 Carregando Monitoramento em Tempo Real...');
     this.paginaCarregada = true;
+    this.carregarFiltrosSalvos();
     await this.carregarDadosCompleto();
     await this.carregarFeedbacksCompleto();
     this.iniciarEventosSSE();
     this.iniciarAtualizacaoAutomatica();
   }
   
-  // ============================================
-  // CARREGAR DADOS COM SUPORTE A DATA
-  // ============================================
+  salvarFiltros() {
+    const filtrosParaSalvar = {
+      registroData: this.filtroRegistroData,
+      registroTurma: this.filtroRegistroTurma,
+      registroTipo: this.filtroRegistroRefeicao,
+      turmasData: this.filtroTurmasRefeicaoData,
+      turmasTurma: this.filtroTurmasRefeicaoTurma,
+      turmasTurno: this.filtroTurmasRefeicaoPeriodo,
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem('monitoramento_filtros', JSON.stringify(filtrosParaSalvar));
+  }
+  
+  carregarFiltrosSalvos() {
+    const salvos = localStorage.getItem('monitoramento_filtros');
+    if (salvos) {
+      try {
+        const filtros = JSON.parse(salvos);
+        this.filtroRegistroData = filtros.registroData || 'hoje';
+        this.filtroRegistroTurma = filtros.registroTurma || 'todas';
+        this.filtroRegistroRefeicao = filtros.registroTipo || 'todas';
+        this.filtroTurmasRefeicaoData = filtros.turmasData || 'hoje';
+        this.filtroTurmasRefeicaoTurma = filtros.turmasTurma || 'todas';
+        this.filtroTurmasRefeicaoPeriodo = filtros.turmasTurno || 'todas';
+        console.log('📌 Filtros carregados:', this.filtroRegistroData);
+      } catch(e) {}
+    }
+  }
+  
+  aplicarFiltrosSalvosNosSelects() {
+    const registroDataSelect = document.getElementById('filtroRegistroData');
+    if (registroDataSelect) registroDataSelect.value = this.filtroRegistroData;
+    
+    const registroTurmaSelect = document.getElementById('filtroRegistroTurma');
+    if (registroTurmaSelect) registroTurmaSelect.value = this.filtroRegistroTurma;
+    
+    const registroTipoSelect = document.getElementById('filtroRegistroTipo');
+    if (registroTipoSelect) registroTipoSelect.value = this.filtroRegistroRefeicao;
+    
+    const turmasDataSelect = document.getElementById('filtroTurmasRefeicaoData');
+    if (turmasDataSelect) turmasDataSelect.value = this.filtroTurmasRefeicaoData;
+    
+    const turmasTurmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
+    if (turmasTurmaSelect) turmasTurmaSelect.value = this.filtroTurmasRefeicaoTurma;
+    
+    const turmasTurnoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
+    if (turmasTurnoSelect) turmasTurnoSelect.value = this.filtroTurmasRefeicaoPeriodo;
+  }
   
   async carregarDadosCompleto(dataParam = null) {
     try {
       const token = localStorage.getItem('auth_token');
       
+      let dataParaBuscar = dataParam;
+      if (!dataParaBuscar && this.filtroRegistroData !== 'hoje') {
+        dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
+      }
+      
       let url = '/api/monitoramento-cozinha/dashboard';
-      if (dataParam) {
-        url += `?data=${dataParam}`;
-        console.log(`📅 Carregando dados para data: ${dataParam}`);
+      if (dataParaBuscar) {
+        url += `?data=${dataParaBuscar}`;
+        console.log(`📅 Carregando dados para data: ${dataParaBuscar}`);
       }
       
       const response = await fetch(url, {
@@ -63,13 +121,20 @@ class MonitoramentoTempoReal {
         this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
         this.dadosRefeicoesTurmasFiltrados = [...this.refeicoesPorTurmaOriginais];
         
-        this.renderizar(data);
+        const precisaRenderizar = !document.querySelector('.monitoramento-dashboard');
+        if (precisaRenderizar) {
+          this.renderizar(data);
+        } else {
+          this.atualizarElementosExistentes(data);
+        }
+        
         this.atualizarGraficos(data);
         this.atualizarTimestamp(data.timestamp);
         
         setTimeout(() => {
           this.configurarEventosFiltros();
           this.popularFiltrosTurmas();
+          this.aplicarFiltrosSalvosNosSelects();
           this.aplicarFiltrosRegistros();
           this.aplicarFiltrosRefeicoesTurmas();
         }, 100);
@@ -113,7 +178,18 @@ class MonitoramentoTempoReal {
     
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/monitoramento-cozinha/dashboard', {
+      
+      let dataParaBuscar = null;
+      if (this.filtroRegistroData !== 'hoje') {
+        dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
+      }
+      
+      let url = '/api/monitoramento-cozinha/dashboard';
+      if (dataParaBuscar) {
+        url += `?data=${dataParaBuscar}`;
+      }
+      
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -122,6 +198,11 @@ class MonitoramentoTempoReal {
       
       if (data.success) {
         this.dados = data;
+        this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
+        this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
+        
+        this.aplicarFiltrosRegistros();
+        this.aplicarFiltrosRefeicoesTurmas();
         this.atualizarElementosExistentes(data);
         this.atualizarGraficos(data);
         this.atualizarTimestamp(data.timestamp);
@@ -159,10 +240,6 @@ class MonitoramentoTempoReal {
     }
   }
   
-  // ============================================
-  // POPULAR FILTROS DE TURMA DINAMICAMENTE
-  // ============================================
-  
   popularFiltrosTurmas() {
     console.log('🏫 Populando filtros de turma...');
     
@@ -170,42 +247,28 @@ class MonitoramentoTempoReal {
     const turmasRefeicoes = [...new Set(this.refeicoesPorTurmaOriginais.map(t => t.turma))].filter(t => t);
     const todasTurmas = [...new Set([...turmasRegistros, ...turmasRefeicoes])];
     
-    console.log(`   📋 Turmas encontradas: ${todasTurmas.length} - ${todasTurmas.join(', ')}`);
+    console.log(`   📋 Turmas encontradas: ${todasTurmas.length}`);
     
-    const filtroRegistroTurma = document.getElementById('filtroRegistroTurma');
-    if (filtroRegistroTurma) {
-      const valorAtual = filtroRegistroTurma.value;
-      filtroRegistroTurma.innerHTML = '<option value="todas">Todas as turmas</option>';
-      todasTurmas.forEach(turma => {
-        filtroRegistroTurma.innerHTML += `<option value="${turma}">${turma}</option>`;
-      });
-      filtroRegistroTurma.value = valorAtual;
-    }
+    const atualizarSelect = (selectId, turmas) => {
+      const select = document.getElementById(selectId);
+      if (select) {
+        const valorAtual = select.value;
+        select.innerHTML = '<option value="todas">Todas as turmas</option>';
+        turmas.forEach(turma => {
+          select.innerHTML += `<option value="${turma}">${turma}</option>`;
+        });
+        if (valorAtual !== 'todas' && turmas.includes(valorAtual)) {
+          select.value = valorAtual;
+        } else {
+          select.value = 'todas';
+        }
+      }
+    };
     
-    const filtroTurmasRefeicaoTurma = document.getElementById('filtroTurmasRefeicaoTurma');
-    if (filtroTurmasRefeicaoTurma) {
-      const valorAtual = filtroTurmasRefeicaoTurma.value;
-      filtroTurmasRefeicaoTurma.innerHTML = '<option value="todas">Todas as turmas</option>';
-      todasTurmas.forEach(turma => {
-        filtroTurmasRefeicaoTurma.innerHTML += `<option value="${turma}">${turma}</option>`;
-      });
-      filtroTurmasRefeicaoTurma.value = valorAtual;
-    }
-    
-    const filtroRodizioTurma = document.getElementById('filtroRodizioTurma');
-    if (filtroRodizioTurma) {
-      const valorAtual = filtroRodizioTurma.value;
-      filtroRodizioTurma.innerHTML = '<option value="todas">Todas as turmas</option>';
-      todasTurmas.forEach(turma => {
-        filtroRodizioTurma.innerHTML += `<option value="${turma}">${turma}</option>`;
-      });
-      filtroRodizioTurma.value = valorAtual;
-    }
+    atualizarSelect('filtroRegistroTurma', todasTurmas);
+    atualizarSelect('filtroTurmasRefeicaoTurma', todasTurmas);
+    atualizarSelect('filtroRodizioTurma', todasTurmas);
   }
-  
-  // ============================================
-  // CONVERTER PERÍODO PARA DATA
-  // ============================================
   
   getDataPorPeriodo(periodo) {
     const hoje = new Date();
@@ -229,23 +292,24 @@ class MonitoramentoTempoReal {
     }
   }
   
-  // ============================================
-  // FILTROS DE REGISTROS
-  // ============================================
-  
   async aplicarFiltrosRegistros() {
     console.log('🔄 aplicarFiltrosRegistros - executando');
     
-    const periodo = document.getElementById('filtroRegistroData')?.value || 'hoje';
-    const turma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
-    const tipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
+    this.filtroRegistroData = document.getElementById('filtroRegistroData')?.value || 'hoje';
+    this.filtroRegistroTurma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
+    this.filtroRegistroRefeicao = document.getElementById('filtroRegistroTipo')?.value || 'todas';
+    
+    this.salvarFiltros();
+    
+    const periodo = this.filtroRegistroData;
+    const turma = this.filtroRegistroTurma;
+    const tipo = this.filtroRegistroRefeicao;
     
     if (periodo !== 'hoje' && periodo !== 'todos') {
       const data = this.getDataPorPeriodo(periodo);
       if (data) {
         console.log(`📅 Recarregando dados para período: ${periodo} (${data})`);
         await this.carregarDadosCompleto(data);
-        this.filtrarRegistrosAtuais(turma, tipo, periodo);
         return;
       }
     }
@@ -260,13 +324,9 @@ class MonitoramentoTempoReal {
       console.log('❌ Nenhum registro disponível');
       this.registrosFiltrados = [];
       this.atualizarListaRegistros();
-      const contador = document.getElementById('registrosFiltradosCount');
-      if (contador) contador.textContent = '0 registros';
+      this.atualizarContadorRegistros();
       return;
     }
-    
-    console.log(`📌 Filtrando: Turma=${turma}, Tipo=${tipo}, Período=${periodo}`);
-    console.log(`📊 Total original: ${registros.length}`);
     
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -297,12 +357,13 @@ class MonitoramentoTempoReal {
       return true;
     });
     
-    console.log(`📊 Resultado filtrado: ${this.registrosFiltrados.length}`);
-    
+    this.atualizarListaRegistros();
+    this.atualizarContadorRegistros();
+  }
+  
+  atualizarContadorRegistros() {
     const contador = document.getElementById('registrosFiltradosCount');
     if (contador) contador.textContent = `${this.registrosFiltrados.length} registros`;
-    
-    this.atualizarListaRegistros();
   }
   
   atualizarListaRegistros() {
@@ -360,6 +421,11 @@ class MonitoramentoTempoReal {
   }
   
   limparFiltrosRegistros() {
+    this.filtroRegistroData = 'hoje';
+    this.filtroRegistroTurma = 'todas';
+    this.filtroRegistroRefeicao = 'todas';
+    this.salvarFiltros();
+    
     const turmaSelect = document.getElementById('filtroRegistroTurma');
     const tipoSelect = document.getElementById('filtroRegistroTipo');
     const dataSelect = document.getElementById('filtroRegistroData');
@@ -371,36 +437,34 @@ class MonitoramentoTempoReal {
     this.carregarDadosCompleto();
   }
   
-  // ============================================
-  // FILTROS DE REFEIÇÕES POR TURMA
-  // ============================================
-  
   async aplicarFiltrosRefeicoesTurmas() {
     console.log('🔄 aplicarFiltrosRefeicoesTurmas - executando');
     
-    const turma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
-    const turno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
-    const periodo = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
+    this.filtroTurmasRefeicaoData = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
+    this.filtroTurmasRefeicaoTurma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
+    this.filtroTurmasRefeicaoPeriodo = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
+    
+    this.salvarFiltros();
+    
+    const periodo = this.filtroTurmasRefeicaoData;
+    const turma = this.filtroTurmasRefeicaoTurma;
+    const turno = this.filtroTurmasRefeicaoPeriodo;
     
     if (periodo !== 'hoje' && periodo !== 'todos') {
       const data = this.getDataPorPeriodo(periodo);
       if (data) {
         console.log(`📅 Recarregando dados de turmas para período: ${periodo} (${data})`);
         await this.carregarDadosCompleto(data);
+        return;
       }
     }
     
     if (!this.refeicoesPorTurmaOriginais || this.refeicoesPorTurmaOriginais.length === 0) {
-      console.log('❌ Nenhum dado de turma disponível');
       this.dadosRefeicoesTurmasFiltrados = [];
       this.atualizarTabelaRefeicoesTurmas();
-      const contador = document.getElementById('turmasFiltradosCount');
-      if (contador) contador.textContent = '0 turmas';
+      this.atualizarContadorTurmas();
       return;
     }
-    
-    console.log(`📌 Filtros Turmas: Turma=${turma}, Turno=${turno}, Período=${periodo}`);
-    console.log(`📊 Total original: ${this.refeicoesPorTurmaOriginais.length}`);
     
     let dadosFiltrados = [...this.refeicoesPorTurmaOriginais];
     
@@ -420,14 +484,15 @@ class MonitoramentoTempoReal {
     }
     
     this.dadosRefeicoesTurmasFiltrados = dadosFiltrados;
-    console.log(`📊 Resultado turmas filtradas: ${this.dadosRefeicoesTurmasFiltrados.length}`);
-    
+    this.atualizarTabelaRefeicoesTurmas();
+    this.atualizarContadorTurmas();
+  }
+  
+  atualizarContadorTurmas() {
     const contador = document.getElementById('turmasFiltradosCount');
     if (contador) {
       contador.textContent = `${this.dadosRefeicoesTurmasFiltrados.length} ${this.dadosRefeicoesTurmasFiltrados.length === 1 ? 'turma' : 'turmas'}`;
     }
-    
-    this.atualizarTabelaRefeicoesTurmas();
   }
   
   atualizarTabelaRefeicoesTurmas() {
@@ -460,6 +525,11 @@ class MonitoramentoTempoReal {
   }
   
   limparFiltrosRefeicoesTurmas() {
+    this.filtroTurmasRefeicaoData = 'hoje';
+    this.filtroTurmasRefeicaoTurma = 'todas';
+    this.filtroTurmasRefeicaoPeriodo = 'todas';
+    this.salvarFiltros();
+    
     const turmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
     const turnoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
     const dataSelect = document.getElementById('filtroTurmasRefeicaoData');
@@ -470,10 +540,6 @@ class MonitoramentoTempoReal {
     
     this.carregarDadosCompleto();
   }
-  
-  // ============================================
-  // FILTROS DE RODÍZIO
-  // ============================================
   
   aplicarFiltrosRodizio() {
     const turma = document.getElementById('filtroRodizioTurma')?.value || 'todas';
@@ -511,10 +577,6 @@ class MonitoramentoTempoReal {
     const contador = document.getElementById('rodizioFiltradosCount');
     if (contador) contador.textContent = `${linhas.length} rodízios`;
   }
-  
-  // ============================================
-  // FILTROS DE FEEDBACKS
-  // ============================================
   
   atualizarFeedbacksNoDOM(data) {
     const stats = data.estatisticas;
@@ -647,10 +709,6 @@ class MonitoramentoTempoReal {
     return html;
   }
   
-  // ============================================
-  // CONFIGURAÇÃO DE EVENTOS
-  // ============================================
-  
   configurarEventosFiltros() {
     console.log('🔧 Configurando eventos dos filtros...');
     
@@ -759,10 +817,6 @@ class MonitoramentoTempoReal {
     
     console.log('✅ Todos os eventos configurados');
   }
-  
-  // ============================================
-  // MÉTODOS DE ATUALIZAÇÃO
-  // ============================================
   
   atualizarElementosExistentes(data) {
     const cozinha = data.cozinha || {};
@@ -875,10 +929,6 @@ class MonitoramentoTempoReal {
     if (el) el.textContent = new Date(timestamp).toLocaleTimeString('pt-BR');
   }
   
-  // ============================================
-  // EVENTOS SSE
-  // ============================================
-  
   iniciarEventosSSE() {
     const token = localStorage.getItem('auth_token');
     this.eventSource = new EventSource(`/api/monitoramento-cozinha/eventos?token=${encodeURIComponent(token)}`);
@@ -925,9 +975,10 @@ class MonitoramentoTempoReal {
     }
     
     this.atualizacaoTimer = setInterval(() => {
+      console.log('🔄 Atualização automática (mantendo filtros)...');
       this.carregarDados();
       this.carregarFeedbacks();
-    }, 30000);
+    }, 60000);
   }
   
   adicionarNotificacao(mensagem) {
@@ -948,9 +999,12 @@ class MonitoramentoTempoReal {
     }
   }
   
-  // ============================================
-  // MÉTODOS DE LIMPEZA DE REGISTROS
-  // ============================================
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
   
   async verificarEstatisticasRegistros() {
     try {
@@ -1126,17 +1180,6 @@ class MonitoramentoTempoReal {
     await this.executarLimpezaRegistros(parseInt(periodo));
   }
   
-  // ============================================
-  // MÉTODOS UTILITÁRIOS
-  // ============================================
-  
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-  
   renderizarErro(mensagem) {
     const container = document.getElementById('contentArea');
     if (!container) return;
@@ -1152,10 +1195,6 @@ class MonitoramentoTempoReal {
     `;
   }
   
-  // ============================================
-  // MÉTODO RENDERIZAR (VERSÃO COMPLETA)
-  // ============================================
-  
   renderizar(data) {
     const container = document.getElementById('contentArea');
     
@@ -1170,7 +1209,6 @@ class MonitoramentoTempoReal {
     
     container.innerHTML = `
       <div class="monitoramento-dashboard">
-        <!-- Header com status -->
         <div class="dashboard-header">
           <div class="header-title">
             <i class="fas fa-chart-line"></i>
@@ -1193,7 +1231,6 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Alertas -->
         ${(data.alertas || []).length > 0 ? `
           <div class="alertas-grid">
             ${(data.alertas || []).map(a => `
@@ -1209,7 +1246,6 @@ class MonitoramentoTempoReal {
           </div>
         ` : ''}
 
-        <!-- Cards de Métricas -->
         <div class="metrics-grid">
           <div class="metric-card purple">
             <div class="metric-icon"><i class="fas fa-users"></i></div>
@@ -1243,7 +1279,6 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Refeições por Tipo -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-chart-bar"></i>
@@ -1279,7 +1314,6 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Previsão e Perfil Alimentar -->
         <div class="two-columns">
           <div class="card">
             <div class="card-header">
@@ -1330,7 +1364,6 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Refeições por Turma com Filtros -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-table"></i>
@@ -1418,7 +1451,6 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Últimos Registros com Filtros -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-history"></i>
@@ -1510,7 +1542,6 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Avaliações dos Alunos (Feedbacks) -->
         <div class="card">
           <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
             <div>
@@ -1714,7 +1745,6 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Gestão de Rodízio com Filtros -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-calendar-alt"></i>
@@ -1815,7 +1845,6 @@ class MonitoramentoTempoReal {
       </div>
 
       <style>
-        /* Estilos existentes - mantidos */
         .monitoramento-dashboard {
           padding: 24px;
           max-width: 1400px;
@@ -2223,7 +2252,6 @@ class MonitoramentoTempoReal {
           margin-bottom: 20px;
         }
         
-        /* Estilos para Feedbacks */
         .feedback-stats-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
