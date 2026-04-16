@@ -7,6 +7,7 @@ const RodizioRefeicao = require('../models/RodizioRefeicao');
 
 // Middleware de autenticação
 const authenticateToken = (req, res, next) => {
+  // 🔥 CORREÇÃO: Aceitar token via query string para SSE
   let token = req.headers.authorization?.split(' ')[1];
   
   if (!token && req.query.token) {
@@ -28,6 +29,7 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Verificar permissão de admin
 const verificarAdmin = (req, res, next) => {
   const allowedRoles = ['admin', 'super_admin', 'gestao_geral'];
   
@@ -53,33 +55,15 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
-// 📊 DASHBOARD - COZINHA + GESTÃO GERAL (COM SUPORTE A DATA)
+// 📊 DASHBOARD - COZINHA + GESTÃO GERAL
 // ============================================
 router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => {
   try {
-    // 🔥 CORREÇÃO: Aceitar data como parâmetro da query
-    const { data } = req.query;
-    let dataFiltro = new Date().toISOString().split('T')[0]; // padrão: hoje
-    
-    if (data) {
-      // Validar formato da data (YYYY-MM-DD)
-      const dataRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (dataRegex.test(data)) {
-        dataFiltro = data;
-        console.log(`📅 Dashboard solicitado para data: ${dataFiltro}`);
-      } else {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Formato de data inválido. Use YYYY-MM-DD' 
-        });
-      }
-    }
-    
     const hoje = new Date().toISOString().split('T')[0];
     const agora = new Date();
     const horaAtual = agora.getHours();
     
-    // ========== 1. DADOS DA COZINHA (COM DATA FILTRADA) ==========
+    // ========== 1. DADOS DA COZINHA ==========
     
     const totalPessoas = await User.countDocuments({ ativo: true });
     
@@ -92,15 +76,14 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       })
     };
     
-    // 🔥 CORREÇÃO: Buscar refeições da DATA FILTRADA
-    const refeicoesFiltradas = await Refeicao.find({ data: dataFiltro });
+    const refeicoesHoje = await Refeicao.find({ data: hoje });
     
     const contagemRefeicoes = {
-      manha: refeicoesFiltradas.filter(r => r.tipoRefeicao === 'manha').length,
-      almoco: refeicoesFiltradas.filter(r => r.tipoRefeicao === 'almoco').length,
-      tarde: refeicoesFiltradas.filter(r => r.tipoRefeicao === 'tarde').length,
-      total: refeicoesFiltradas.length,
-      pessoasUnicas: new Set(refeicoesFiltradas.map(r => r.alunoId?.toString()).filter(Boolean)).size
+      manha: refeicoesHoje.filter(r => r.tipoRefeicao === 'manha').length,
+      almoco: refeicoesHoje.filter(r => r.tipoRefeicao === 'almoco').length,
+      tarde: refeicoesHoje.filter(r => r.tipoRefeicao === 'tarde').length,
+      total: refeicoesHoje.length,
+      pessoasUnicas: new Set(refeicoesHoje.map(r => r.alunoId.toString())).size
     };
     
     const perfisAlimentares = {
@@ -128,15 +111,14 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       unidade: 'kg'
     };
     
-    // 🔥 CORREÇÃO: Refeições por turma usando DATA FILTRADA
     const refeicoesPorTurma = {};
-    refeicoesFiltradas.forEach(r => {
+    refeicoesHoje.forEach(r => {
       if (!refeicoesPorTurma[r.alunoTurma]) {
         refeicoesPorTurma[r.alunoTurma] = { manha: 0, almoco: 0, tarde: 0, total: 0, alunos: new Set() };
       }
       refeicoesPorTurma[r.alunoTurma][r.tipoRefeicao]++;
       refeicoesPorTurma[r.alunoTurma].total++;
-      if (r.alunoId) refeicoesPorTurma[r.alunoTurma].alunos.add(r.alunoId.toString());
+      refeicoesPorTurma[r.alunoTurma].alunos.add(r.alunoId.toString());
     });
     
     const turmasArray = Object.entries(refeicoesPorTurma).map(([nome, dados]) => ({
@@ -148,12 +130,11 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       alunosQueComeram: dados.alunos.size
     }));
     
-    // 🔥 CORREÇÃO: Últimos registros da DATA FILTRADA
-    const ultimosRegistros = await Refeicao.find({ data: dataFiltro })
+    const ultimosRegistros = await Refeicao.find({ data: hoje })
       .sort({ horario: -1 })
-      .limit(50); // Aumentado para 50 registros
+      .limit(15);
     
-    // ========== 2. DADOS DA GESTÃO GERAL (RODÍZIO) - Independente da data ==========
+    // ========== 2. DADOS DA GESTÃO GERAL (RODÍZIO) ==========
     
     const rodizios = await RodizioRefeicao.find({ ativo: true }).sort({ turma: 1 });
     const todasTurmas = await User.distinct('turma', { 
@@ -209,7 +190,7 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       alertas.push({
         tipo: 'warning',
         titulo: '⚠️ Baixa adesão às refeições',
-        mensagem: `Apenas ${percentualAdesao.toFixed(1)}% das pessoas comeram na data ${dataFiltro}.`,
+        mensagem: `Apenas ${percentualAdesao.toFixed(1)}% das pessoas comeram hoje.`,
         sugestao: 'Verificar qualidade da comida ou divulgação'
       });
     }
@@ -218,7 +199,7 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       alertas.push({
         tipo: 'info',
         titulo: '📈 Alta demanda no almoço',
-        mensagem: `${contagemRefeicoes.almoco} pessoas almoçaram.`,
+        mensagem: `${contagemRefeicoes.almoco} pessoas já almoçaram.`,
         sugestao: 'Preparar comida extra se necessário'
       });
     }
@@ -232,29 +213,11 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       });
     }
     
-    // 🔥 NOVO: Adicionar informação sobre a data atual vs data filtrada
-    const infoData = {
-      dataAtual: hoje,
-      dataVisualizada: dataFiltro,
-      isHistorico: dataFiltro !== hoje
-    };
-    
-    if (infoData.isHistorico) {
-      alertas.push({
-        tipo: 'info',
-        titulo: '📅 Visualizando dados históricos',
-        mensagem: `Você está visualizando dados de ${new Date(dataFiltro).toLocaleDateString('pt-BR')}`,
-        sugestao: 'Use os filtros para mudar a data ou voltar para hoje'
-      });
-    }
-    
     // ========== 4. RESPOSTA ==========
     res.json({
       success: true,
       timestamp: new Date().toISOString(),
       horaAtual,
-      dataFiltro, // 🔥 NOVO: enviar a data que foi usada no filtro
-      infoData,   // 🔥 NOVO: informações sobre a data
       cozinha: {
         totalPessoas,
         totalPorTipo,
@@ -297,6 +260,7 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
 // 📝 CRUD DE REGISTROS DE REFEIÇÃO (ADMIN)
 // ============================================
 
+// Buscar um registro específico
 router.get('/registro/:id', authenticateToken, verificarAdmin, async (req, res) => {
   try {
     const registro = await Refeicao.findById(req.params.id);
@@ -312,6 +276,7 @@ router.get('/registro/:id', authenticateToken, verificarAdmin, async (req, res) 
   }
 });
 
+// Atualizar registro
 router.put('/registro/:id', authenticateToken, verificarAdmin, async (req, res) => {
   try {
     const { tipoRefeicao, horario, observacao } = req.body;
@@ -321,6 +286,7 @@ router.put('/registro/:id', authenticateToken, verificarAdmin, async (req, res) 
       return res.status(404).json({ success: false, error: 'Registro não encontrado' });
     }
     
+    // Atualizar campos
     if (tipoRefeicao) registro.tipoRefeicao = tipoRefeicao;
     if (horario) {
       registro.horario = new Date(horario);
@@ -340,6 +306,7 @@ router.put('/registro/:id', authenticateToken, verificarAdmin, async (req, res) 
   }
 });
 
+// Excluir registro
 router.delete('/registro/:id', authenticateToken, verificarAdmin, async (req, res) => {
   try {
     const registro = await Refeicao.findById(req.params.id);
@@ -358,59 +325,21 @@ router.delete('/registro/:id', authenticateToken, verificarAdmin, async (req, re
 });
 
 // ============================================
-// 🔍 ENDPOINT PARA BUSCAR REGISTROS POR DATA (NOVO)
-// ============================================
-router.get('/registros-por-data', authenticateToken, verificarAdmin, async (req, res) => {
-  try {
-    const { data, turma, tipo, limite = 100 } = req.query;
-    
-    if (!data) {
-      return res.status(400).json({ success: false, error: 'Parâmetro "data" é obrigatório (formato YYYY-MM-DD)' });
-    }
-    
-    const query = { data };
-    if (turma && turma !== 'todas') query.alunoTurma = turma;
-    if (tipo && tipo !== 'todas') query.tipoRefeicao = tipo;
-    
-    const registros = await Refeicao.find(query)
-      .sort({ horario: -1 })
-      .limit(parseInt(limite));
-    
-    res.json({
-      success: true,
-      data,
-      total: registros.length,
-      registros: registros.map(r => ({
-        id: r._id,
-        alunoNome: r.alunoNome,
-        alunoTurma: r.alunoTurma,
-        tipoRefeicao: r.tipoRefeicao,
-        horario: r.horario,
-        data: r.data
-      }))
-    });
-  } catch (error) {
-    console.error('Erro ao buscar registros por data:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================
 // 🗑️ LIMPEZA AUTOMÁTICA DE REGISTROS ANTIGOS
 // ============================================
 
+// Endpoint para limpar registros antigos (chamado automaticamente)
 router.post('/limpar-registros-antigos', authenticateToken, verificarAdmin, async (req, res) => {
   try {
-    const { meses = 1 } = req.body;
+    const { meses = 1 } = req.body; // padrão: 1 mês
     const dataLimite = new Date();
     dataLimite.setMonth(dataLimite.getMonth() - meses);
-    const dataLimiteStr = dataLimite.toISOString().split('T')[0];
     
     const resultado = await Refeicao.deleteMany({
-      data: { $lt: dataLimiteStr }
+      data: { $lt: dataLimite.toISOString().split('T')[0] }
     });
     
-    console.log(`🗑️ Limpeza: ${resultado.deletedCount} registros removidos (anteriores a ${dataLimiteStr})`);
+    console.log(`🗑️ Limpeza automática: ${resultado.deletedCount} registros removidos (mais antigos que ${meses} mês(es))`);
     
     res.json({
       success: true,
@@ -418,26 +347,25 @@ router.post('/limpar-registros-antigos', authenticateToken, verificarAdmin, asyn
       mensagem: `${resultado.deletedCount} registros removidos com sucesso`
     });
   } catch (error) {
-    console.error('Erro na limpeza:', error);
+    console.error('Erro na limpeza automática:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// Endpoint para verificar estatísticas de registros
 router.get('/estatisticas-registros', authenticateToken, verificarAdmin, async (req, res) => {
   try {
-    const total = await Refeicao.countDocuments();
+    const hoje = new Date().toISOString().split('T')[0];
     const umMesAtras = new Date();
     umMesAtras.setMonth(umMesAtras.getMonth() - 1);
-    const umMesAtrasStr = umMesAtras.toISOString().split('T')[0];
     
+    const total = await Refeicao.countDocuments();
     const mesAtual = await Refeicao.countDocuments({
-      data: { $gte: umMesAtrasStr }
+      data: { $gte: umMesAtras.toISOString().split('T')[0] }
     });
     const mesAnterior = await Refeicao.countDocuments({
-      data: { $lt: umMesAtrasStr }
+      data: { $lt: umMesAtras.toISOString().split('T')[0] }
     });
-    
-    const ultimoRegistro = await Refeicao.findOne().sort({ data: -1 });
     
     res.json({
       success: true,
@@ -445,7 +373,7 @@ router.get('/estatisticas-registros', authenticateToken, verificarAdmin, async (
         total,
         ultimoMes: mesAtual,
         anteriores: mesAnterior,
-        ultimaData: ultimoRegistro?.data || null
+        ultimaData: await Refeicao.findOne().sort({ data: -1 }).then(r => r?.data)
       }
     });
   } catch (error) {
@@ -454,7 +382,81 @@ router.get('/estatisticas-registros', authenticateToken, verificarAdmin, async (
 });
 
 // ============================================
-// 📡 EVENTOS SSE (Server-Sent Events)
+// 🤖 LIMPEZA AUTOMÁTICA MENSAL
+// ============================================
+
+const cron = require('node-cron');
+
+// Função para limpar registros antigos
+async function limparRegistrosAntigos(meses = 1) {
+  try {
+    const Refeicao = require('../models/Refeicao');
+    const dataLimite = new Date();
+    dataLimite.setMonth(dataLimite.getMonth() - meses);
+    const dataLimiteStr = dataLimite.toISOString().split('T')[0];
+    
+    const resultado = await Refeicao.deleteMany({
+      data: { $lt: dataLimiteStr }
+    });
+    
+    console.log(`🗑️ [LIMPEZA AUTOMÁTICA] ${new Date().toISOString()}`);
+    console.log(`   📅 Removendo registros anteriores a: ${dataLimiteStr}`);
+    console.log(`   ✅ ${resultado.deletedCount} registros removidos`);
+    
+    return resultado.deletedCount;
+  } catch (error) {
+    console.error('❌ Erro na limpeza automática:', error);
+    return 0;
+  }
+}
+
+// Iniciar a limpeza automática (apenas se não for ambiente de teste)
+if (process.env.NODE_ENV !== 'test') {
+  // Executar no primeiro dia de cada mês às 03:00
+  cron.schedule('0 3 1 * *', async () => {
+    console.log('🔄 Iniciando limpeza automática mensal...');
+    await limparRegistrosAntigos(1);
+  });
+  
+  // Executar também 5 segundos após o servidor iniciar (para limpar registros muito antigos)
+  setTimeout(async () => {
+    console.log('🔄 Verificando registros antigos na inicialização...');
+    await limparRegistrosAntigos(1);
+  }, 5000);
+}
+
+// Endpoint para verificar estatísticas (já existe, mas vamos garantir)
+router.get('/estatisticas-registros', authenticateToken, verificarAdmin, async (req, res) => {
+  try {
+    const Refeicao = require('../models/Refeicao');
+    const hoje = new Date().toISOString().split('T')[0];
+    const umMesAtras = new Date();
+    umMesAtras.setMonth(umMesAtras.getMonth() - 1);
+    
+    const total = await Refeicao.countDocuments();
+    const mesAtual = await Refeicao.countDocuments({
+      data: { $gte: umMesAtras.toISOString().split('T')[0] }
+    });
+    const mesAnterior = await Refeicao.countDocuments({
+      data: { $lt: umMesAtras.toISOString().split('T')[0] }
+    });
+    
+    res.json({
+      success: true,
+      estatisticas: {
+        total,
+        ultimoMes: mesAtual,
+        anteriores: mesAnterior,
+        ultimaData: await Refeicao.findOne().sort({ data: -1 }).then(r => r?.data)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 📡 EVENTOS SSE (Server-Sent Events) - CORRIGIDO
 // ============================================
 router.get('/eventos', authenticateToken, verificarAdmin, async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -468,6 +470,7 @@ router.get('/eventos', authenticateToken, verificarAdmin, async (req, res) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
   
+  // Enviar heartbeat inicial
   sendEvent({ type: 'heartbeat', timestamp: new Date().toISOString() });
   
   const heartbeat = setInterval(() => {
@@ -482,6 +485,7 @@ router.get('/eventos', authenticateToken, verificarAdmin, async (req, res) => {
       if (novoTotal !== ultimoTotal) {
         ultimoTotal = novoTotal;
         
+        // Buscar também total do almoço para enviar
         const almocoTotal = await Refeicao.countDocuments({ 
           data: hoje, 
           tipoRefeicao: 'almoco' 

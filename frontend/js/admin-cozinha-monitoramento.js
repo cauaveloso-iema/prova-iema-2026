@@ -20,10 +20,9 @@ class MonitoramentoTempoReal {
     // PROPRIEDADES PARA FILTRO DAS TURMAS (REFEIÇÕES POR TURMA)
     this.filtroTurmasRefeicaoTurma = 'todas';
     this.filtroTurmasRefeicaoPeriodo = 'todas';
-    this.filtroTurmasRefeicaoData = 'hoje'; // NOVO: filtro de período/data
+    this.filtroTurmasRefeicaoData = 'hoje';
     this.dadosRefeicoesTurmasFiltrados = [];
     this.refeicoesPorTurmaOriginais = [];
-    this.refeicoesPorTurmaDatasOriginais = []; // NOVO: armazenar dados com data
   }
   
   async carregar() {
@@ -35,10 +34,21 @@ class MonitoramentoTempoReal {
     this.iniciarAtualizacaoAutomatica();
   }
   
-  async carregarDadosCompleto() {
+  // ============================================
+  // CARREGAR DADOS COM SUPORTE A DATA
+  // ============================================
+  
+  async carregarDadosCompleto(dataParam = null) {
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/monitoramento-cozinha/dashboard', {
+      
+      let url = '/api/monitoramento-cozinha/dashboard';
+      if (dataParam) {
+        url += `?data=${dataParam}`;
+        console.log(`📅 Carregando dados para data: ${dataParam}`);
+      }
+      
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -50,7 +60,6 @@ class MonitoramentoTempoReal {
         this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
         this.registrosFiltrados = [...this.ultimosRegistrosOriginais];
         
-        // Salvar dados originais das refeições por turma
         this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
         this.dadosRefeicoesTurmasFiltrados = [...this.refeicoesPorTurmaOriginais];
         
@@ -60,6 +69,7 @@ class MonitoramentoTempoReal {
         
         setTimeout(() => {
           this.configurarEventosFiltros();
+          this.popularFiltrosTurmas();
           this.aplicarFiltrosRegistros();
           this.aplicarFiltrosRefeicoesTurmas();
         }, 100);
@@ -149,243 +159,113 @@ class MonitoramentoTempoReal {
     }
   }
   
-  atualizarElementosExistentes(data) {
-    const cozinha = data.cozinha || {};
-    const gestao = data.gestaoGeral || {};
-    const contagem = cozinha.contagemRefeicoes || { manha: 0, almoco: 0, tarde: 0, total: 0, pessoasUnicas: 0 };
-    const perfis = cozinha.perfisAlimentares || { sempre: 0, as_vezes: 0, nunca: 0 };
-    const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
-    const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
-    
-    const metricValues = document.querySelectorAll('.metric-value');
-    if (metricValues.length >= 4) {
-      if (metricValues[0]) metricValues[0].textContent = cozinha.totalPessoas || 0;
-      if (metricValues[1]) metricValues[1].textContent = contagem.total;
-      if (metricValues[2]) metricValues[2].textContent = `${adesao}%`;
-    }
-    
-    const metricDetails = document.querySelectorAll('.metric-detail');
-    if (metricDetails.length >= 1 && metricDetails[0]) {
-      metricDetails[0].textContent = `${contagem.pessoasUnicas} pessoas únicas`;
-    }
-    
-    const periodoValues = document.querySelectorAll('.periodo-value');
-    if (periodoValues.length >= 3) {
-      if (periodoValues[0]) periodoValues[0].textContent = contagem.manha;
-      if (periodoValues[1]) periodoValues[1].textContent = contagem.almoco;
-      if (periodoValues[2]) periodoValues[2].textContent = contagem.tarde;
-    }
-    
-    const previsaoValues = document.querySelectorAll('.previsao-value');
-    if (previsaoValues.length >= 4) {
-      if (previsaoValues[0]) previsaoValues[0].textContent = previsao.manha;
-      if (previsaoValues[1]) previsaoValues[1].textContent = previsao.almoco;
-      if (previsaoValues[2]) previsaoValues[2].textContent = previsao.tarde;
-      if (previsaoValues[3]) previsaoValues[3].textContent = previsao.total;
-    }
-    
-    const legendValues = document.querySelectorAll('.legend-item strong');
-    if (legendValues.length >= 3) {
-      if (legendValues[0]) legendValues[0].textContent = perfis.sempre;
-      if (legendValues[1]) legendValues[1].textContent = perfis.as_vezes;
-      if (legendValues[2]) legendValues[2].textContent = perfis.nunca;
-    }
-    
-    this.atualizarTabelaRefeicoesTurmas();
-    
-    const statNumbers = document.querySelectorAll('.rodizio-stat .stat-number');
-    if (statNumbers.length >= 3) {
-      if (statNumbers[0]) statNumbers[0].textContent = gestao.totalRodizios || 0;
-      if (statNumbers[1]) statNumbers[1].textContent = gestao.turmasComRodizio || 0;
-      if (statNumbers[2]) statNumbers[2].textContent = gestao.turmasSemRodizio || 0;
-    }
-    
-    const infoFooter = document.querySelector('.info-footer');
-    if (infoFooter && gestao.hoje) {
-      infoFooter.innerHTML = `
-        <i class="fas fa-calendar-day"></i>
-        Hoje: ${gestao.hoje.data || ''} - ${gestao.hoje.diaSemana || ''} 
-        (Dia ${gestao.hoje.diaMes || ''} do mês, ${gestao.hoje.semanaMes || ''}ª semana)
-      `;
-    }
-    
-    const rodizioTableBody = document.querySelector('.compact tbody');
-    if (rodizioTableBody && gestao.rodizios) {
-      rodizioTableBody.innerHTML = gestao.rodizios.map(r => {
-        let diasTexto = '';
-        if (r.tipo === 'semanal') {
-          diasTexto = (r.diasSemana || []).map(d => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d]).join(', ');
-        } else if (r.tipo === 'mensal') {
-          if (r.diasMes?.length) diasTexto = `${r.diasMes.length} dias/mês`;
-          else if (r.semanasMes?.length) diasTexto = `${r.semanasMes.map(s => `${s}ª`).join(', ')} semana(s)`;
-        } else {
-          diasTexto = 'Ambos sistemas';
-        }
-        return `
-          <tr data-turma="${r.turma}" data-tipo="${r.tipo}">
-            <td><strong>${r.turma}</strong></td>
-            <td><span class="tipo-badge ${r.tipo}">${r.tipo === 'semanal' ? 'Semanal' : r.tipo === 'mensal' ? 'Mensal' : 'Ambos'}</span></td>
-            <td class="dias-cell">${diasTexto || '-'}</td>
-            <td>${r.horario || '-'}</td>
-            <td><span class="status-badge ${r.podeHoje ? 'active' : 'inactive'}">${r.podeHoje ? '✅ Permitido' : '❌ Não permitido'}</span></td>
-            <td>
-              <div class="action-buttons">
-                <button class="btn-icon" onclick="admin.editarRodizioGestao('${r.turma}')" title="Editar"><i class="fas fa-edit"></i></button>
-                <button class="btn-icon delete" onclick="admin.excluirRodizioGestao('${r.turma}')" title="Excluir"><i class="fas fa-trash"></i></button>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-    }
-    
-    console.log('✅ Dados atualizados em segundo plano');
-  }
+  // ============================================
+  // POPULAR FILTROS DE TURMA DINAMICAMENTE
+  // ============================================
   
-  configurarEventosFiltros() {
-    console.log('🔧 Configurando eventos dos filtros...');
+  popularFiltrosTurmas() {
+    console.log('🏫 Populando filtros de turma...');
     
-    // Filtros de Registros
-    const tipoSelect = document.getElementById('filtroRegistroTipo');
-    const dataSelect = document.getElementById('filtroRegistroData');
-    const turmaSelect = document.getElementById('filtroRegistroTurma');
+    const turmasRegistros = [...new Set(this.ultimosRegistrosOriginais.map(r => r.alunoTurma))].filter(t => t);
+    const turmasRefeicoes = [...new Set(this.refeicoesPorTurmaOriginais.map(t => t.turma))].filter(t => t);
+    const todasTurmas = [...new Set([...turmasRegistros, ...turmasRefeicoes])];
     
-    const aplicarFiltrosRegistros = () => {
-      console.log('🎯 Evento disparado - aplicando filtros de registros...');
-      this.aplicarFiltrosRegistros();
-    };
+    console.log(`   📋 Turmas encontradas: ${todasTurmas.length} - ${todasTurmas.join(', ')}`);
     
-    if (tipoSelect) {
-      const novoTipo = tipoSelect.cloneNode(true);
-      tipoSelect.parentNode.replaceChild(novoTipo, tipoSelect);
-      novoTipo.addEventListener('change', aplicarFiltrosRegistros);
+    const filtroRegistroTurma = document.getElementById('filtroRegistroTurma');
+    if (filtroRegistroTurma) {
+      const valorAtual = filtroRegistroTurma.value;
+      filtroRegistroTurma.innerHTML = '<option value="todas">Todas as turmas</option>';
+      todasTurmas.forEach(turma => {
+        filtroRegistroTurma.innerHTML += `<option value="${turma}">${turma}</option>`;
+      });
+      filtroRegistroTurma.value = valorAtual;
     }
     
-    if (dataSelect) {
-      const novoData = dataSelect.cloneNode(true);
-      dataSelect.parentNode.replaceChild(novoData, dataSelect);
-      novoData.addEventListener('change', aplicarFiltrosRegistros);
+    const filtroTurmasRefeicaoTurma = document.getElementById('filtroTurmasRefeicaoTurma');
+    if (filtroTurmasRefeicaoTurma) {
+      const valorAtual = filtroTurmasRefeicaoTurma.value;
+      filtroTurmasRefeicaoTurma.innerHTML = '<option value="todas">Todas as turmas</option>';
+      todasTurmas.forEach(turma => {
+        filtroTurmasRefeicaoTurma.innerHTML += `<option value="${turma}">${turma}</option>`;
+      });
+      filtroTurmasRefeicaoTurma.value = valorAtual;
     }
     
-    if (turmaSelect) {
-      const novaTurma = turmaSelect.cloneNode(true);
-      turmaSelect.parentNode.replaceChild(novaTurma, turmaSelect);
-      novaTurma.addEventListener('change', aplicarFiltrosRegistros);
+    const filtroRodizioTurma = document.getElementById('filtroRodizioTurma');
+    if (filtroRodizioTurma) {
+      const valorAtual = filtroRodizioTurma.value;
+      filtroRodizioTurma.innerHTML = '<option value="todas">Todas as turmas</option>';
+      todasTurmas.forEach(turma => {
+        filtroRodizioTurma.innerHTML += `<option value="${turma}">${turma}</option>`;
+      });
+      filtroRodizioTurma.value = valorAtual;
     }
-    
-    // FILTROS DE REFEIÇÕES POR TURMA
-    const turmaRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurma');
-    const turnoRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
-    const dataRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoData'); // NOVO
-    
-    const aplicarFiltrosTurmas = () => {
-      console.log('🎯 Evento disparado - aplicando filtros de refeições por turma...');
-      this.aplicarFiltrosRefeicoesTurmas();
-    };
-    
-    if (turmaRefeicaoSelect) {
-      const novaTurma = turmaRefeicaoSelect.cloneNode(true);
-      turmaRefeicaoSelect.parentNode.replaceChild(novaTurma, turmaRefeicaoSelect);
-      novaTurma.addEventListener('change', aplicarFiltrosTurmas);
-    }
-    
-    if (turnoRefeicaoSelect) {
-      const novoTurno = turnoRefeicaoSelect.cloneNode(true);
-      turnoRefeicaoSelect.parentNode.replaceChild(novoTurno, turnoRefeicaoSelect);
-      novoTurno.addEventListener('change', aplicarFiltrosTurmas);
-    }
-    
-    // NOVO: Evento para filtro de período/data
-    if (dataRefeicaoSelect) {
-      const novoData = dataRefeicaoSelect.cloneNode(true);
-      dataRefeicaoSelect.parentNode.replaceChild(novoData, dataRefeicaoSelect);
-      novoData.addEventListener('change', aplicarFiltrosTurmas);
-    }
-    
-    // FILTROS DE RODÍZIO
-    const rodizioTurmaSelect = document.getElementById('filtroRodizioTurma');
-    const rodizioTipoSelect = document.getElementById('filtroRodizioTipo');
-    
-    const aplicarFiltrosRodizio = () => {
-      console.log('🎯 Evento disparado - aplicando filtros de rodízio...');
-      this.aplicarFiltrosRodizio();
-    };
-    
-    if (rodizioTurmaSelect) {
-      const novaRodizioTurma = rodizioTurmaSelect.cloneNode(true);
-      rodizioTurmaSelect.parentNode.replaceChild(novaRodizioTurma, rodizioTurmaSelect);
-      novaRodizioTurma.addEventListener('change', aplicarFiltrosRodizio);
-    }
-    
-    if (rodizioTipoSelect) {
-      const novoRodizioTipo = rodizioTipoSelect.cloneNode(true);
-      rodizioTipoSelect.parentNode.replaceChild(novoRodizioTipo, rodizioTipoSelect);
-      novoRodizioTipo.addEventListener('change', aplicarFiltrosRodizio);
-    }
-    
-    // FILTROS DE FEEDBACKS
-    const refeicaoFeedbackSelect = document.getElementById('filtroRefeicaoFeedback');
-    const notaMinSelect = document.getElementById('filtroNotaMin');
-    const gostouSelect = document.getElementById('filtroGostou');
-    const anonimoSelect = document.getElementById('filtroAnonimo');
-    const buscaFeedbackInput = document.getElementById('filtroBuscaFeedback');
-    
-    const aplicarFiltrosFeedback = () => {
-      console.log('🎯 Evento disparado - aplicando filtros de feedbacks...');
-      this.aplicarFiltrosFeedback();
-    };
-    
-    if (refeicaoFeedbackSelect) {
-      const novoRefeicao = refeicaoFeedbackSelect.cloneNode(true);
-      refeicaoFeedbackSelect.parentNode.replaceChild(novoRefeicao, refeicaoFeedbackSelect);
-      novoRefeicao.addEventListener('change', aplicarFiltrosFeedback);
-    }
-    
-    if (notaMinSelect) {
-      const novaNotaMin = notaMinSelect.cloneNode(true);
-      notaMinSelect.parentNode.replaceChild(novaNotaMin, notaMinSelect);
-      novaNotaMin.addEventListener('change', aplicarFiltrosFeedback);
-    }
-    
-    if (gostouSelect) {
-      const novoGostou = gostouSelect.cloneNode(true);
-      gostouSelect.parentNode.replaceChild(novoGostou, gostouSelect);
-      novoGostou.addEventListener('change', aplicarFiltrosFeedback);
-    }
-    
-    if (anonimoSelect) {
-      const novoAnonimo = anonimoSelect.cloneNode(true);
-      anonimoSelect.parentNode.replaceChild(novoAnonimo, anonimoSelect);
-      novoAnonimo.addEventListener('change', aplicarFiltrosFeedback);
-    }
-    
-    if (buscaFeedbackInput) {
-      const novoBusca = buscaFeedbackInput.cloneNode(true);
-      buscaFeedbackInput.parentNode.replaceChild(novoBusca, buscaFeedbackInput);
-      novoBusca.addEventListener('input', aplicarFiltrosFeedback);
-    }
-    
-    console.log('✅ Todos os eventos configurados');
   }
   
   // ============================================
-  // FILTROS DE REGISTROS (ÚLTIMOS REGISTROS)
+  // CONVERTER PERÍODO PARA DATA
   // ============================================
   
-  aplicarFiltrosRegistros() {
+  getDataPorPeriodo(periodo) {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    switch(periodo) {
+      case 'ontem':
+        const ontem = new Date(hoje);
+        ontem.setDate(ontem.getDate() - 1);
+        return ontem.toISOString().split('T')[0];
+      case 'semana':
+        const semana = new Date(hoje);
+        semana.setDate(semana.getDate() - 7);
+        return semana.toISOString().split('T')[0];
+      case 'mes':
+        const mes = new Date(hoje);
+        mes.setMonth(mes.getMonth() - 1);
+        return mes.toISOString().split('T')[0];
+      default:
+        return null;
+    }
+  }
+  
+  // ============================================
+  // FILTROS DE REGISTROS
+  // ============================================
+  
+  async aplicarFiltrosRegistros() {
     console.log('🔄 aplicarFiltrosRegistros - executando');
     
+    const periodo = document.getElementById('filtroRegistroData')?.value || 'hoje';
+    const turma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
+    const tipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
+    
+    if (periodo !== 'hoje' && periodo !== 'todos') {
+      const data = this.getDataPorPeriodo(periodo);
+      if (data) {
+        console.log(`📅 Recarregando dados para período: ${periodo} (${data})`);
+        await this.carregarDadosCompleto(data);
+        this.filtrarRegistrosAtuais(turma, tipo, periodo);
+        return;
+      }
+    }
+    
+    this.filtrarRegistrosAtuais(turma, tipo, periodo);
+  }
+  
+  filtrarRegistrosAtuais(turma, tipo, periodo) {
     const registros = this.ultimosRegistrosOriginais;
+    
     if (!registros || registros.length === 0) {
       console.log('❌ Nenhum registro disponível');
+      this.registrosFiltrados = [];
+      this.atualizarListaRegistros();
+      const contador = document.getElementById('registrosFiltradosCount');
+      if (contador) contador.textContent = '0 registros';
       return;
     }
     
-    const turma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
-    const tipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
-    const periodo = document.getElementById('filtroRegistroData')?.value || 'hoje';
-    
-    console.log(`📌 Filtros Registros: Turma=${turma}, Tipo=${tipo}, Período=${periodo}`);
+    console.log(`📌 Filtrando: Turma=${turma}, Tipo=${tipo}, Período=${periodo}`);
     console.log(`📊 Total original: ${registros.length}`);
     
     const hoje = new Date();
@@ -404,6 +284,8 @@ class MonitoramentoTempoReal {
       if (turma !== 'todas' && r.alunoTurma !== turma) return false;
       if (tipo !== 'todas' && r.tipoRefeicao !== tipo) return false;
       
+      if (periodo === 'todos') return true;
+      
       const dataRegistro = new Date(r.horario);
       dataRegistro.setHours(0, 0, 0, 0);
       
@@ -415,7 +297,7 @@ class MonitoramentoTempoReal {
       return true;
     });
     
-    console.log(`📊 Resultado registros filtrados: ${this.registrosFiltrados.length}`);
+    console.log(`📊 Resultado filtrado: ${this.registrosFiltrados.length}`);
     
     const contador = document.getElementById('registrosFiltradosCount');
     if (contador) contador.textContent = `${this.registrosFiltrados.length} registros`;
@@ -424,16 +306,10 @@ class MonitoramentoTempoReal {
   }
   
   atualizarListaRegistros() {
-    console.log('🔄 atualizarListaRegistros - executando');
-    
     const container = document.querySelector('.registros-list');
-    if (!container) {
-      console.log('❌ Container .registros-list não encontrado');
-      return;
-    }
+    if (!container) return;
     
     const registros = this.registrosFiltrados;
-    console.log(`📊 Renderizando ${registros.length} registros`);
     
     if (registros.length === 0) {
       container.innerHTML = '<div class="empty-state">Nenhum registro encontrado com os filtros selecionados</div>';
@@ -480,7 +356,7 @@ class MonitoramentoTempoReal {
     });
     
     container.innerHTML = html;
-    console.log('✅ Tabela de registros atualizada');
+    console.log('✅ Lista de registros atualizada');
   }
   
   limparFiltrosRegistros() {
@@ -492,30 +368,73 @@ class MonitoramentoTempoReal {
     if (tipoSelect) tipoSelect.value = 'todas';
     if (dataSelect) dataSelect.value = 'hoje';
     
-    this.registrosFiltrados = [...this.ultimosRegistrosOriginais];
-    this.atualizarListaRegistros();
-    
-    const contador = document.getElementById('registrosFiltradosCount');
-    if (contador) contador.textContent = `${this.registrosFiltrados.length} registros`;
-    
-    console.log('✅ Filtros de registros limpos');
+    this.carregarDadosCompleto();
   }
   
   // ============================================
-  // FILTROS DE REFEIÇÕES POR TURMA (COM TURNO E PERÍODO)
+  // FILTROS DE REFEIÇÕES POR TURMA
   // ============================================
   
-  atualizarTabelaRefeicoesTurmas() {
-    console.log('🔄 atualizarTabelaRefeicoesTurmas - executando');
+  async aplicarFiltrosRefeicoesTurmas() {
+    console.log('🔄 aplicarFiltrosRefeicoesTurmas - executando');
     
-    const turmasBody = document.querySelector('.data-table tbody');
-    if (!turmasBody) {
-      console.log('❌ Tabela de turmas não encontrada');
+    const turma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
+    const turno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
+    const periodo = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
+    
+    if (periodo !== 'hoje' && periodo !== 'todos') {
+      const data = this.getDataPorPeriodo(periodo);
+      if (data) {
+        console.log(`📅 Recarregando dados de turmas para período: ${periodo} (${data})`);
+        await this.carregarDadosCompleto(data);
+      }
+    }
+    
+    if (!this.refeicoesPorTurmaOriginais || this.refeicoesPorTurmaOriginais.length === 0) {
+      console.log('❌ Nenhum dado de turma disponível');
+      this.dadosRefeicoesTurmasFiltrados = [];
+      this.atualizarTabelaRefeicoesTurmas();
+      const contador = document.getElementById('turmasFiltradosCount');
+      if (contador) contador.textContent = '0 turmas';
       return;
     }
     
+    console.log(`📌 Filtros Turmas: Turma=${turma}, Turno=${turno}, Período=${periodo}`);
+    console.log(`📊 Total original: ${this.refeicoesPorTurmaOriginais.length}`);
+    
+    let dadosFiltrados = [...this.refeicoesPorTurmaOriginais];
+    
+    if (turma !== 'todas') {
+      dadosFiltrados = dadosFiltrados.filter(t => t.turma === turma);
+    }
+    
+    if (turno !== 'todas') {
+      dadosFiltrados = dadosFiltrados.map(t => ({
+        turma: t.turma,
+        manha: turno === 'manha' ? t.manha : 0,
+        almoco: turno === 'almoco' ? t.almoco : 0,
+        tarde: turno === 'tarde' ? t.tarde : 0,
+        total: t[turno] || 0,
+        alunosQueComeram: t.alunosQueComeram
+      }));
+    }
+    
+    this.dadosRefeicoesTurmasFiltrados = dadosFiltrados;
+    console.log(`📊 Resultado turmas filtradas: ${this.dadosRefeicoesTurmasFiltrados.length}`);
+    
+    const contador = document.getElementById('turmasFiltradosCount');
+    if (contador) {
+      contador.textContent = `${this.dadosRefeicoesTurmasFiltrados.length} ${this.dadosRefeicoesTurmasFiltrados.length === 1 ? 'turma' : 'turmas'}`;
+    }
+    
+    this.atualizarTabelaRefeicoesTurmas();
+  }
+  
+  atualizarTabelaRefeicoesTurmas() {
+    const turmasBody = document.querySelector('.data-table tbody');
+    if (!turmasBody) return;
+    
     const dados = this.dadosRefeicoesTurmasFiltrados;
-    console.log(`📊 Renderizando ${dados.length} turmas`);
     
     if (dados.length === 0) {
       turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada com os filtros selecionados</td></tr>';
@@ -540,81 +459,16 @@ class MonitoramentoTempoReal {
     console.log('✅ Tabela de refeições por turma atualizada');
   }
   
-  aplicarFiltrosRefeicoesTurmas() {
-    console.log('🔄 aplicarFiltrosRefeicoesTurmas - executando');
-    
-    if (!this.refeicoesPorTurmaOriginais || this.refeicoesPorTurmaOriginais.length === 0) {
-      console.log('❌ Nenhum dado de turma disponível');
-      return;
-    }
-    
-    const turma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
-    const turno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
-    const periodo = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje'; // NOVO
-    
-    console.log(`📌 Filtros Turmas: Turma=${turma}, Turno=${turno}, Período=${periodo}`);
-    console.log(`📊 Total original: ${this.refeicoesPorTurmaOriginais.length}`);
-    
-    let dadosFiltrados = [...this.refeicoesPorTurmaOriginais];
-    
-    // Filtrar por turma específica
-    if (turma !== 'todas') {
-      dadosFiltrados = dadosFiltrados.filter(t => t.turma === turma);
-    }
-    
-    // Filtrar por turno/período (manha, almoco, tarde)
-    if (turno !== 'todas') {
-      dadosFiltrados = dadosFiltrados.map(t => ({
-        turma: t.turma,
-        manha: turno === 'manha' ? t.manha : 0,
-        almoco: turno === 'almoco' ? t.almoco : 0,
-        tarde: turno === 'tarde' ? t.tarde : 0,
-        total: t[turno] || 0,
-        alunosQueComeram: t.alunosQueComeram
-      }));
-    }
-    
-    // NOVO: Filtrar por período/data (hoje, ontem, semana, mes, todos)
-    if (periodo !== 'todos') {
-      // Como os dados vêm do backend já filtrados pela data atual,
-      // este filtro adicional serve para compatibilidade com a API
-      // Se a API suportar dados históricos, implementar lógica aqui
-      console.log(`📅 Aplicando filtro de período: ${periodo}`);
-      // Mantém os dados como estão - o backend já deve retornar conforme o período
-    }
-    
-    this.dadosRefeicoesTurmasFiltrados = dadosFiltrados;
-    console.log(`📊 Resultado turmas filtradas: ${this.dadosRefeicoesTurmasFiltrados.length}`);
-    
-    // Atualizar contador
-    const contador = document.getElementById('turmasFiltradosCount');
-    if (contador) {
-      contador.textContent = `${this.dadosRefeicoesTurmasFiltrados.length} ${this.dadosRefeicoesTurmasFiltrados.length === 1 ? 'turma' : 'turmas'}`;
-    }
-    
-    this.atualizarTabelaRefeicoesTurmas();
-  }
-  
   limparFiltrosRefeicoesTurmas() {
-    console.log('🧹 limparFiltrosRefeicoesTurmas - executando');
-    
     const turmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
     const turnoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
-    const dataSelect = document.getElementById('filtroTurmasRefeicaoData'); // NOVO
+    const dataSelect = document.getElementById('filtroTurmasRefeicaoData');
     
     if (turmaSelect) turmaSelect.value = 'todas';
     if (turnoSelect) turnoSelect.value = 'todas';
-    if (dataSelect) dataSelect.value = 'hoje'; // NOVO
+    if (dataSelect) dataSelect.value = 'hoje';
     
-    this.dadosRefeicoesTurmasFiltrados = [...this.refeicoesPorTurmaOriginais];
-    this.atualizarTabelaRefeicoesTurmas();
-    
-    const contador = document.getElementById('turmasFiltradosCount');
-    if (contador) {
-      contador.textContent = `${this.dadosRefeicoesTurmasFiltrados.length} ${this.dadosRefeicoesTurmasFiltrados.length === 1 ? 'turma' : 'turmas'}`;
-    }
-    
-    console.log('✅ Filtros de turmas limpos');
+    this.carregarDadosCompleto();
   }
   
   // ============================================
@@ -793,20 +647,237 @@ class MonitoramentoTempoReal {
     return html;
   }
   
-  renderizarErro(mensagem) {
-    const container = document.getElementById('contentArea');
-    if (!container) return;
-    container.innerHTML = `
-      <div class="error-state">
-        <i class="fas fa-exclamation-triangle"></i>
-        <h3>Erro ao carregar dados</h3>
-        <p>${mensagem}</p>
-        <button class="btn-primary" onclick="monitoramentoTempoReal.carregarDadosCompleto()">
-          <i class="fas fa-sync-alt"></i> Tentar novamente
-        </button>
-      </div>
-    `;
+  // ============================================
+  // CONFIGURAÇÃO DE EVENTOS
+  // ============================================
+  
+  configurarEventosFiltros() {
+    console.log('🔧 Configurando eventos dos filtros...');
+    
+    const tipoSelect = document.getElementById('filtroRegistroTipo');
+    const dataSelect = document.getElementById('filtroRegistroData');
+    const turmaSelect = document.getElementById('filtroRegistroTurma');
+    
+    const aplicarFiltrosRegistros = () => this.aplicarFiltrosRegistros();
+    
+    if (tipoSelect) {
+      const novoTipo = tipoSelect.cloneNode(true);
+      tipoSelect.parentNode.replaceChild(novoTipo, tipoSelect);
+      novoTipo.addEventListener('change', aplicarFiltrosRegistros);
+    }
+    
+    if (dataSelect) {
+      const novoData = dataSelect.cloneNode(true);
+      dataSelect.parentNode.replaceChild(novoData, dataSelect);
+      novoData.addEventListener('change', aplicarFiltrosRegistros);
+    }
+    
+    if (turmaSelect) {
+      const novaTurma = turmaSelect.cloneNode(true);
+      turmaSelect.parentNode.replaceChild(novaTurma, turmaSelect);
+      novaTurma.addEventListener('change', aplicarFiltrosRegistros);
+    }
+    
+    const turmaRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurma');
+    const turnoRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
+    const dataRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoData');
+    
+    const aplicarFiltrosTurmas = () => this.aplicarFiltrosRefeicoesTurmas();
+    
+    if (turmaRefeicaoSelect) {
+      const novaTurma = turmaRefeicaoSelect.cloneNode(true);
+      turmaRefeicaoSelect.parentNode.replaceChild(novaTurma, turmaRefeicaoSelect);
+      novaTurma.addEventListener('change', aplicarFiltrosTurmas);
+    }
+    
+    if (turnoRefeicaoSelect) {
+      const novoTurno = turnoRefeicaoSelect.cloneNode(true);
+      turnoRefeicaoSelect.parentNode.replaceChild(novoTurno, turnoRefeicaoSelect);
+      novoTurno.addEventListener('change', aplicarFiltrosTurmas);
+    }
+    
+    if (dataRefeicaoSelect) {
+      const novoData = dataRefeicaoSelect.cloneNode(true);
+      dataRefeicaoSelect.parentNode.replaceChild(novoData, dataRefeicaoSelect);
+      novoData.addEventListener('change', aplicarFiltrosTurmas);
+    }
+    
+    const rodizioTurmaSelect = document.getElementById('filtroRodizioTurma');
+    const rodizioTipoSelect = document.getElementById('filtroRodizioTipo');
+    
+    const aplicarFiltrosRodizio = () => this.aplicarFiltrosRodizio();
+    
+    if (rodizioTurmaSelect) {
+      const novaRodizioTurma = rodizioTurmaSelect.cloneNode(true);
+      rodizioTurmaSelect.parentNode.replaceChild(novaRodizioTurma, rodizioTurmaSelect);
+      novaRodizioTurma.addEventListener('change', aplicarFiltrosRodizio);
+    }
+    
+    if (rodizioTipoSelect) {
+      const novoRodizioTipo = rodizioTipoSelect.cloneNode(true);
+      rodizioTipoSelect.parentNode.replaceChild(novoRodizioTipo, rodizioTipoSelect);
+      novoRodizioTipo.addEventListener('change', aplicarFiltrosRodizio);
+    }
+    
+    const refeicaoFeedbackSelect = document.getElementById('filtroRefeicaoFeedback');
+    const notaMinSelect = document.getElementById('filtroNotaMin');
+    const gostouSelect = document.getElementById('filtroGostou');
+    const anonimoSelect = document.getElementById('filtroAnonimo');
+    const buscaFeedbackInput = document.getElementById('filtroBuscaFeedback');
+    
+    const aplicarFiltrosFeedback = () => this.aplicarFiltrosFeedback();
+    
+    if (refeicaoFeedbackSelect) {
+      const novoRefeicao = refeicaoFeedbackSelect.cloneNode(true);
+      refeicaoFeedbackSelect.parentNode.replaceChild(novoRefeicao, refeicaoFeedbackSelect);
+      novoRefeicao.addEventListener('change', aplicarFiltrosFeedback);
+    }
+    
+    if (notaMinSelect) {
+      const novaNotaMin = notaMinSelect.cloneNode(true);
+      notaMinSelect.parentNode.replaceChild(novaNotaMin, notaMinSelect);
+      novaNotaMin.addEventListener('change', aplicarFiltrosFeedback);
+    }
+    
+    if (gostouSelect) {
+      const novoGostou = gostouSelect.cloneNode(true);
+      gostouSelect.parentNode.replaceChild(novoGostou, gostouSelect);
+      novoGostou.addEventListener('change', aplicarFiltrosFeedback);
+    }
+    
+    if (anonimoSelect) {
+      const novoAnonimo = anonimoSelect.cloneNode(true);
+      anonimoSelect.parentNode.replaceChild(novoAnonimo, anonimoSelect);
+      novoAnonimo.addEventListener('change', aplicarFiltrosFeedback);
+    }
+    
+    if (buscaFeedbackInput) {
+      const novoBusca = buscaFeedbackInput.cloneNode(true);
+      buscaFeedbackInput.parentNode.replaceChild(novoBusca, buscaFeedbackInput);
+      novoBusca.addEventListener('input', aplicarFiltrosFeedback);
+    }
+    
+    console.log('✅ Todos os eventos configurados');
   }
+  
+  // ============================================
+  // MÉTODOS DE ATUALIZAÇÃO
+  // ============================================
+  
+  atualizarElementosExistentes(data) {
+    const cozinha = data.cozinha || {};
+    const gestao = data.gestaoGeral || {};
+    const contagem = cozinha.contagemRefeicoes || { manha: 0, almoco: 0, tarde: 0, total: 0, pessoasUnicas: 0 };
+    const perfis = cozinha.perfisAlimentares || { sempre: 0, as_vezes: 0, nunca: 0 };
+    const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
+    const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
+    
+    const metricValues = document.querySelectorAll('.metric-value');
+    if (metricValues.length >= 4) {
+      if (metricValues[0]) metricValues[0].textContent = cozinha.totalPessoas || 0;
+      if (metricValues[1]) metricValues[1].textContent = contagem.total;
+      if (metricValues[2]) metricValues[2].textContent = `${adesao}%`;
+    }
+    
+    const metricDetails = document.querySelectorAll('.metric-detail');
+    if (metricDetails.length >= 1 && metricDetails[0]) {
+      metricDetails[0].textContent = `${contagem.pessoasUnicas} pessoas únicas`;
+    }
+    
+    const periodoValues = document.querySelectorAll('.periodo-value');
+    if (periodoValues.length >= 3) {
+      if (periodoValues[0]) periodoValues[0].textContent = contagem.manha;
+      if (periodoValues[1]) periodoValues[1].textContent = contagem.almoco;
+      if (periodoValues[2]) periodoValues[2].textContent = contagem.tarde;
+    }
+    
+    const previsaoValues = document.querySelectorAll('.previsao-value');
+    if (previsaoValues.length >= 4) {
+      if (previsaoValues[0]) previsaoValues[0].textContent = previsao.manha;
+      if (previsaoValues[1]) previsaoValues[1].textContent = previsao.almoco;
+      if (previsaoValues[2]) previsaoValues[2].textContent = previsao.tarde;
+      if (previsaoValues[3]) previsaoValues[3].textContent = previsao.total;
+    }
+    
+    const legendValues = document.querySelectorAll('.legend-item strong');
+    if (legendValues.length >= 3) {
+      if (legendValues[0]) legendValues[0].textContent = perfis.sempre;
+      if (legendValues[1]) legendValues[1].textContent = perfis.as_vezes;
+      if (legendValues[2]) legendValues[2].textContent = perfis.nunca;
+    }
+    
+    this.atualizarTabelaRefeicoesTurmas();
+    
+    const statNumbers = document.querySelectorAll('.rodizio-stat .stat-number');
+    if (statNumbers.length >= 3) {
+      if (statNumbers[0]) statNumbers[0].textContent = gestao.totalRodizios || 0;
+      if (statNumbers[1]) statNumbers[1].textContent = gestao.turmasComRodizio || 0;
+      if (statNumbers[2]) statNumbers[2].textContent = gestao.turmasSemRodizio || 0;
+    }
+    
+    const infoFooter = document.querySelector('.info-footer');
+    if (infoFooter && gestao.hoje) {
+      infoFooter.innerHTML = `
+        <i class="fas fa-calendar-day"></i>
+        Hoje: ${gestao.hoje.data || ''} - ${gestao.hoje.diaSemana || ''} 
+        (Dia ${gestao.hoje.diaMes || ''} do mês, ${gestao.hoje.semanaMes || ''}ª semana)
+      `;
+    }
+    
+    const rodizioTableBody = document.querySelector('.compact tbody');
+    if (rodizioTableBody && gestao.rodizios) {
+      rodizioTableBody.innerHTML = gestao.rodizios.map(r => {
+        let diasTexto = '';
+        if (r.tipo === 'semanal') {
+          diasTexto = (r.diasSemana || []).map(d => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d]).join(', ');
+        } else if (r.tipo === 'mensal') {
+          if (r.diasMes?.length) diasTexto = `${r.diasMes.length} dias/mês`;
+          else if (r.semanasMes?.length) diasTexto = `${r.semanasMes.map(s => `${s}ª`).join(', ')} semana(s)`;
+        } else {
+          diasTexto = 'Ambos sistemas';
+        }
+        return `
+          <tr data-turma="${r.turma}" data-tipo="${r.tipo}">
+            <td><strong>${r.turma}</strong></td>
+            <td><span class="tipo-badge ${r.tipo}">${r.tipo === 'semanal' ? 'Semanal' : r.tipo === 'mensal' ? 'Mensal' : 'Ambos'}</span></td>
+            <td class="dias-cell">${diasTexto || '-'}</td>
+            <td>${r.horario || '-'}</td>
+            <td><span class="status-badge ${r.podeHoje ? 'active' : 'inactive'}">${r.podeHoje ? '✅ Permitido' : '❌ Não permitido'}</span></td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn-icon" onclick="admin.editarRodizioGestao('${r.turma}')" title="Editar"><i class="fas fa-edit"></i></button>
+                <button class="btn-icon delete" onclick="admin.excluirRodizioGestao('${r.turma}')" title="Excluir"><i class="fas fa-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    console.log('✅ Dados atualizados em segundo plano');
+  }
+  
+  atualizarGraficos(data) {
+    if (this.graficos.perfil) {
+      const perfis = data.cozinha?.perfisAlimentares || {};
+      this.graficos.perfil.data.datasets[0].data = [perfis.sempre || 0, perfis.as_vezes || 0, perfis.nunca || 0];
+      this.graficos.perfil.update();
+    }
+  }
+  
+  atualizarContadorRefeicoes(total) {
+    const el = document.getElementById('totalRefeicoes');
+    if (el) el.textContent = total;
+  }
+  
+  atualizarTimestamp(timestamp) {
+    const el = document.getElementById('ultimaAtualizacao');
+    if (el) el.textContent = new Date(timestamp).toLocaleTimeString('pt-BR');
+  }
+  
+  // ============================================
+  // EVENTOS SSE
+  // ============================================
   
   iniciarEventosSSE() {
     const token = localStorage.getItem('auth_token');
@@ -859,24 +930,6 @@ class MonitoramentoTempoReal {
     }, 30000);
   }
   
-  atualizarGraficos(data) {
-    if (this.graficos.perfil) {
-      const perfis = data.cozinha?.perfisAlimentares || {};
-      this.graficos.perfil.data.datasets[0].data = [perfis.sempre || 0, perfis.as_vezes || 0, perfis.nunca || 0];
-      this.graficos.perfil.update();
-    }
-  }
-  
-  atualizarContadorRefeicoes(total) {
-    const el = document.getElementById('totalRefeicoes');
-    if (el) el.textContent = total;
-  }
-  
-  atualizarTimestamp(timestamp) {
-    const el = document.getElementById('ultimaAtualizacao');
-    if (el) el.textContent = new Date(timestamp).toLocaleTimeString('pt-BR');
-  }
-  
   adicionarNotificacao(mensagem) {
     const container = document.querySelector('.alertas-grid');
     if (container) {
@@ -893,13 +946,6 @@ class MonitoramentoTempoReal {
       container.prepend(notif);
       setTimeout(() => notif.remove(), 5000);
     }
-  }
-  
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
   
   // ============================================
@@ -1081,7 +1127,33 @@ class MonitoramentoTempoReal {
   }
   
   // ============================================
-  // MÉTODO RENDERIZAR
+  // MÉTODOS UTILITÁRIOS
+  // ============================================
+  
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  
+  renderizarErro(mensagem) {
+    const container = document.getElementById('contentArea');
+    if (!container) return;
+    container.innerHTML = `
+      <div class="error-state">
+        <i class="fas fa-exclamation-triangle"></i>
+        <h3>Erro ao carregar dados</h3>
+        <p>${mensagem}</p>
+        <button class="btn-primary" onclick="monitoramentoTempoReal.carregarDadosCompleto()">
+          <i class="fas fa-sync-alt"></i> Tentar novamente
+        </button>
+      </div>
+    `;
+  }
+  
+  // ============================================
+  // MÉTODO RENDERIZAR (VERSÃO COMPLETA)
   // ============================================
   
   renderizar(data) {
@@ -1094,7 +1166,6 @@ class MonitoramentoTempoReal {
     const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
     const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
     
-    // Obter turmas únicas para os filtros
     const turmasUnicas = [...new Set((cozinha.refeicoesPorTurma || []).map(t => t.turma))].filter(t => t);
     
     container.innerHTML = `
@@ -1259,7 +1330,7 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Refeições por Turma com Filtros (Turno e Período) -->
+        <!-- Refeições por Turma com Filtros -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-table"></i>
@@ -1273,10 +1344,8 @@ class MonitoramentoTempoReal {
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-school"></i> Turma
                   </label>
-                  <select id="filtroTurmasRefeicaoTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRefeicoesTurmas()">
+                  <select id="filtroTurmasRefeicaoTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="todas">Todas as turmas</option>
-                    ${turmasUnicas.map(t => `<option value="${t}">${t}</option>`).join('')}
                   </select>
                 </div>
                 
@@ -1284,8 +1353,7 @@ class MonitoramentoTempoReal {
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-utensils"></i> Turno
                   </label>
-                  <select id="filtroTurmasRefeicaoTurno" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRefeicoesTurmas()">
+                  <select id="filtroTurmasRefeicaoTurno" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="todas">Todos os turnos</option>
                     <option value="manha">🌅 Manhã</option>
                     <option value="almoco">🍽️ Almoço</option>
@@ -1293,13 +1361,11 @@ class MonitoramentoTempoReal {
                   </select>
                 </div>
                 
-                <!-- NOVO: Filtro de Período/Data -->
                 <div style="flex: 1; min-width: 150px;">
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-calendar-alt"></i> Período
                   </label>
-                  <select id="filtroTurmasRefeicaoData" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRefeicoesTurmas()">
+                  <select id="filtroTurmasRefeicaoData" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="hoje">📅 Hoje</option>
                     <option value="ontem">📆 Ontem</option>
                     <option value="semana">📊 Esta semana</option>
@@ -1346,9 +1412,6 @@ class MonitoramentoTempoReal {
                       <td class="text-center">${t.alunosQueComeram || 0}</td>
                     </tr>
                   `).join('')}
-                  ${(cozinha.refeicoesPorTurma || []).length === 0 ? `
-                    <tr><td colspan="6" class="text-center empty-state">Nenhum registro hoje</td></tr>
-                  ` : ''}
                 </tbody>
               </table>
             </div>
@@ -1368,12 +1431,8 @@ class MonitoramentoTempoReal {
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-school"></i> Turma
                   </label>
-                  <select id="filtroRegistroTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRegistros()">
+                  <select id="filtroRegistroTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="todas">Todas as turmas</option>
-                    ${[...new Set((cozinha.ultimosRegistros || []).map(r => r.alunoTurma))].filter(t => t).map(t => `
-                      <option value="${t}">${t}</option>
-                    `).join('')}
                   </select>
                 </div>
                 
@@ -1381,8 +1440,7 @@ class MonitoramentoTempoReal {
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-utensils"></i> Refeição
                   </label>
-                  <select id="filtroRegistroTipo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRegistros()">
+                  <select id="filtroRegistroTipo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="todas">Todos os tipos</option>
                     <option value="manha">🌅 Manhã</option>
                     <option value="almoco">🍽️ Almoço</option>
@@ -1394,8 +1452,7 @@ class MonitoramentoTempoReal {
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-calendar-alt"></i> Período
                   </label>
-                  <select id="filtroRegistroData" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRegistros()">
+                  <select id="filtroRegistroData" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="hoje">📅 Hoje</option>
                     <option value="ontem">📆 Ontem</option>
                     <option value="semana">📊 Esta semana</option>
@@ -1449,16 +1506,11 @@ class MonitoramentoTempoReal {
                   </div>
                 </div>
               `).join('')}
-              ${(cozinha.ultimosRegistros || []).length === 0 ? `
-                <div class="empty-state">Nenhum registro hoje</div>
-              ` : ''}
             </div>
           </div>
         </div>
 
-        <!-- ============================================ -->
-        <!-- SEÇÃO: AVALIAÇÕES DOS ALUNOS (FEEDBACKS) - ESTILO ORIGINAL -->
-        <!-- ============================================ -->
+        <!-- Avaliações dos Alunos (Feedbacks) -->
         <div class="card">
           <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
             <div>
@@ -1473,8 +1525,6 @@ class MonitoramentoTempoReal {
             </div>
           </div>
           <div class="card-body">
-            
-            <!-- Cards de Estatísticas dos Feedbacks -->
             <div class="feedback-stats-grid">
               <div class="feedback-stat-card">
                 <div class="feedback-stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
@@ -1515,12 +1565,11 @@ class MonitoramentoTempoReal {
               </div>
             </div>
 
-            <!-- Filtros Estilizados -->
             <div class="feedback-filters">
               <div class="feedback-filters-row">
                 <div class="feedback-filter-group">
                   <label><i class="fas fa-utensils"></i> Refeição</label>
-                  <select id="filtroRefeicaoFeedback" class="feedback-filter-select" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()">
+                  <select id="filtroRefeicaoFeedback" class="feedback-filter-select">
                     <option value="todas">Todas</option>
                     <option value="manha">🌅 Manhã</option>
                     <option value="almoco">🍽️ Almoço</option>
@@ -1529,7 +1578,7 @@ class MonitoramentoTempoReal {
                 </div>
                 <div class="feedback-filter-group">
                   <label><i class="fas fa-star"></i> Nota Mínima</label>
-                  <select id="filtroNotaMin" class="feedback-filter-select" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()">
+                  <select id="filtroNotaMin" class="feedback-filter-select">
                     <option value="1">1★ ou mais</option>
                     <option value="2">2★ ou mais</option>
                     <option value="3">3★ ou mais</option>
@@ -1539,7 +1588,7 @@ class MonitoramentoTempoReal {
                 </div>
                 <div class="feedback-filter-group">
                   <label><i class="fas fa-smile"></i> Opinião</label>
-                  <select id="filtroGostou" class="feedback-filter-select" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()">
+                  <select id="filtroGostou" class="feedback-filter-select">
                     <option value="todos">Todos</option>
                     <option value="sim">👍 Adoraram</option>
                     <option value="mais_ou_menos">😐 Mais ou menos</option>
@@ -1548,7 +1597,7 @@ class MonitoramentoTempoReal {
                 </div>
                 <div class="feedback-filter-group">
                   <label><i class="fas fa-user-secret"></i> Anonimato</label>
-                  <select id="filtroAnonimo" class="feedback-filter-select" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()">
+                  <select id="filtroAnonimo" class="feedback-filter-select">
                     <option value="todos">Todos</option>
                     <option value="nao">✅ Identificados</option>
                     <option value="sim">🔒 Anônimos</option>
@@ -1556,7 +1605,7 @@ class MonitoramentoTempoReal {
                 </div>
                 <div class="feedback-filter-group search">
                   <label><i class="fas fa-search"></i> Buscar</label>
-                  <input type="text" id="filtroBuscaFeedback" class="feedback-filter-input" placeholder="Nome, turma ou comentário..." onkeyup="monitoramentoTempoReal.aplicarFiltrosFeedback()">
+                  <input type="text" id="filtroBuscaFeedback" class="feedback-filter-input" placeholder="Nome, turma ou comentário...">
                 </div>
               </div>
               <div class="feedback-filters-actions">
@@ -1569,7 +1618,6 @@ class MonitoramentoTempoReal {
               </div>
             </div>
 
-            <!-- Distribuição de Notas e Opiniões -->
             <div class="feedback-charts">
               <div class="feedback-chart-card">
                 <div class="feedback-chart-title">
@@ -1641,7 +1689,6 @@ class MonitoramentoTempoReal {
               </div>
             </div>
 
-            <!-- Lista de Feedbacks -->
             <div class="feedback-list-header">
               <i class="fas fa-list"></i>
               <span>Últimas Avaliações</span>
@@ -1683,10 +1730,8 @@ class MonitoramentoTempoReal {
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-school"></i> Turma
                   </label>
-                  <select id="filtroRodizioTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRodizio()">
+                  <select id="filtroRodizioTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="todas">Todas as turmas</option>
-                    ${turmasUnicas.map(t => `<option value="${t}">${t}</option>`).join('')}
                   </select>
                 </div>
                 
@@ -1694,8 +1739,7 @@ class MonitoramentoTempoReal {
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-chart-line"></i> Tipo
                   </label>
-                  <select id="filtroRodizioTipo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRodizio()">
+                  <select id="filtroRodizioTipo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="todos">Todos</option>
                     <option value="semanal">📅 Semanal</option>
                     <option value="mensal">📆 Mensal</option>
@@ -1757,9 +1801,6 @@ class MonitoramentoTempoReal {
                       </tr>
                     `;
                   }).join('')}
-                  ${(gestao.rodizios || []).length === 0 ? `
-                    <tr><td colspan="6" class="text-center empty-state">Nenhum rodízio configurado</td></tr>
-                  ` : ''}
                 </tbody>
               </table>
             </div>
@@ -1774,9 +1815,7 @@ class MonitoramentoTempoReal {
       </div>
 
       <style>
-        /* ============================================ */
-        /* ESTILOS EXISTENTES - MANTIDOS IGUAIS */
-        /* ============================================ */
+        /* Estilos existentes - mantidos */
         .monitoramento-dashboard {
           padding: 24px;
           max-width: 1400px;
@@ -2090,26 +2129,6 @@ class MonitoramentoTempoReal {
         .refeicao-badge.almoco { background: #fee2e2; color: #dc2626; }
         .refeicao-badge.tarde { background: #d1fae5; color: #059669; }
         .registro-horario { font-size: 12px; color: #64748b; }
-        .rodizio-stats {
-          display: flex;
-          gap: 20px;
-          margin-bottom: 24px;
-        }
-        .rodizio-stat {
-          flex: 1;
-          text-align: center;
-          padding: 16px;
-          background: #f8fafc;
-          border-radius: 16px;
-        }
-        .rodizio-stat .stat-number {
-          font-size: 28px;
-          font-weight: 700;
-          color: #1e293b;
-        }
-        .rodizio-stat .stat-number.success { color: #10b981; }
-        .rodizio-stat .stat-number.danger { color: #ef4444; }
-        .rodizio-stat .stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
         .tipo-badge {
           display: inline-block;
           padding: 4px 12px;
@@ -2204,17 +2223,13 @@ class MonitoramentoTempoReal {
           margin-bottom: 20px;
         }
         
-        /* ============================================ */
-        /* ESTILOS ESPECÍFICOS PARA FEEDBACKS */
-        /* ============================================ */
-        
+        /* Estilos para Feedbacks */
         .feedback-stats-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: 16px;
           margin-bottom: 24px;
         }
-        
         .feedback-stat-card {
           background: white;
           border-radius: 20px;
@@ -2226,12 +2241,10 @@ class MonitoramentoTempoReal {
           border: 1px solid #eef2f6;
           transition: all 0.3s;
         }
-        
         .feedback-stat-card:hover {
           transform: translateY(-2px);
           box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
-        
         .feedback-stat-icon {
           width: 52px;
           height: 52px;
@@ -2242,11 +2255,9 @@ class MonitoramentoTempoReal {
           font-size: 24px;
           color: white;
         }
-        
         .feedback-stat-info {
           flex: 1;
         }
-        
         .feedback-stat-value {
           display: block;
           font-size: 28px;
@@ -2254,17 +2265,14 @@ class MonitoramentoTempoReal {
           color: #1e293b;
           line-height: 1.2;
         }
-        
         .feedback-stat-label {
           font-size: 12px;
           color: #64748b;
         }
-        
         .feedback-stars-mini {
           margin-top: 4px;
           font-size: 11px;
         }
-        
         .feedback-filters {
           background: #f8fafc;
           border-radius: 20px;
@@ -2272,19 +2280,16 @@ class MonitoramentoTempoReal {
           margin-bottom: 24px;
           border: 1px solid #eef2f6;
         }
-        
         .feedback-filters-row {
           display: flex;
           flex-wrap: wrap;
           gap: 16px;
           margin-bottom: 16px;
         }
-        
         .feedback-filter-group {
           flex: 1;
           min-width: 140px;
         }
-        
         .feedback-filter-group label {
           display: block;
           font-size: 11px;
@@ -2294,12 +2299,10 @@ class MonitoramentoTempoReal {
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
-        
         .feedback-filter-group label i {
           margin-right: 4px;
           font-size: 11px;
         }
-        
         .feedback-filter-select,
         .feedback-filter-input {
           width: 100%;
@@ -2310,25 +2313,21 @@ class MonitoramentoTempoReal {
           background: white;
           transition: all 0.2s;
         }
-        
         .feedback-filter-select:focus,
         .feedback-filter-input:focus {
           outline: none;
           border-color: #1e3c72;
           box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
         }
-        
         .feedback-filter-group.search {
           flex: 1.5;
         }
-        
         .feedback-filters-actions {
           display: flex;
           justify-content: flex-end;
           gap: 12px;
           padding-top: 8px;
         }
-        
         .feedback-btn-clear {
           background: #e2e8f0;
           border: none;
@@ -2340,12 +2339,10 @@ class MonitoramentoTempoReal {
           cursor: pointer;
           transition: all 0.2s;
         }
-        
         .feedback-btn-clear:hover {
           background: #cbd5e1;
           transform: translateY(-1px);
         }
-        
         .feedback-btn-apply {
           background: linear-gradient(135deg, #1e3c72, #2a5298);
           border: none;
@@ -2357,26 +2354,22 @@ class MonitoramentoTempoReal {
           cursor: pointer;
           transition: all 0.2s;
         }
-        
         .feedback-btn-apply:hover {
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
         }
-        
         .feedback-charts {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 20px;
           margin-bottom: 24px;
         }
-        
         .feedback-chart-card {
           background: #f8fafc;
           border-radius: 20px;
           padding: 20px;
           border: 1px solid #eef2f6;
         }
-        
         .feedback-chart-title {
           font-size: 14px;
           font-weight: 600;
@@ -2388,25 +2381,21 @@ class MonitoramentoTempoReal {
           align-items: center;
           gap: 8px;
         }
-        
         .feedback-chart-title i {
           color: #1e3c72;
         }
-        
         .rating-bar {
           display: flex;
           align-items: center;
           gap: 12px;
           margin-bottom: 12px;
         }
-        
         .rating-label {
           width: 35px;
           font-size: 12px;
           font-weight: 600;
           color: #475569;
         }
-        
         .rating-bar-bg {
           flex: 1;
           height: 8px;
@@ -2414,13 +2403,11 @@ class MonitoramentoTempoReal {
           border-radius: 10px;
           overflow: hidden;
         }
-        
         .rating-bar-fill {
           height: 100%;
           border-radius: 10px;
           transition: width 0.5s ease;
         }
-        
         .rating-count {
           width: 35px;
           font-size: 12px;
@@ -2428,13 +2415,11 @@ class MonitoramentoTempoReal {
           color: #1e293b;
           text-align: right;
         }
-        
         .opinion-summary {
           display: flex;
           flex-direction: column;
           gap: 12px;
         }
-        
         .opinion-item {
           display: flex;
           align-items: center;
@@ -2444,11 +2429,9 @@ class MonitoramentoTempoReal {
           border-radius: 12px;
           transition: all 0.2s;
         }
-        
         .opinion-item:hover {
           transform: translateX(4px);
         }
-        
         .opinion-icon {
           width: 36px;
           height: 36px;
@@ -2458,37 +2441,31 @@ class MonitoramentoTempoReal {
           justify-content: center;
           font-size: 18px;
         }
-        
         .opinion-item:first-child .opinion-icon { background: #d1fae5; color: #10b981; }
         .opinion-item:nth-child(2) .opinion-icon { background: #fef3c7; color: #f59e0b; }
         .opinion-item:nth-child(3) .opinion-icon { background: #fee2e2; color: #ef4444; }
         .opinion-item.total .opinion-icon { background: #e0e7ff; color: #1e3c72; }
-        
         .opinion-info {
           flex: 1;
           display: flex;
           justify-content: space-between;
           align-items: center;
         }
-        
         .opinion-label {
           font-size: 13px;
           font-weight: 500;
           color: #475569;
         }
-        
         .opinion-value {
           font-size: 18px;
           font-weight: 700;
           color: #1e293b;
         }
-        
         .opinion-divider {
           height: 1px;
           background: #e2e8f0;
           margin: 8px 0;
         }
-        
         .feedback-list-header {
           display: flex;
           align-items: center;
@@ -2497,18 +2474,15 @@ class MonitoramentoTempoReal {
           padding-bottom: 12px;
           border-bottom: 2px solid #eef2f6;
         }
-        
         .feedback-list-header i {
           font-size: 16px;
           color: #1e3c72;
         }
-        
         .feedback-list-header span {
           font-size: 14px;
           font-weight: 600;
           color: #1e293b;
         }
-        
         .feedback-list-count {
           background: #e2e8f0;
           padding: 2px 10px;
@@ -2517,19 +2491,16 @@ class MonitoramentoTempoReal {
           font-weight: 600;
           color: #475569;
         }
-        
         .feedback-table-container {
           overflow-x: auto;
           border-radius: 16px;
           border: 1px solid #eef2f6;
         }
-        
         .feedback-table {
           width: 100%;
           border-collapse: collapse;
           font-size: 13px;
         }
-        
         .feedback-table th {
           padding: 14px 16px;
           text-align: left;
@@ -2538,17 +2509,14 @@ class MonitoramentoTempoReal {
           background: #f8fafc;
           border-bottom: 1px solid #eef2f6;
         }
-        
         .feedback-table td {
           padding: 12px 16px;
           border-bottom: 1px solid #f1f5f9;
           color: #334155;
         }
-        
         .feedback-table tr:hover td {
           background: #f8fafc;
         }
-        
         .feedback-nota-badge {
           display: inline-flex;
           align-items: center;
@@ -2558,7 +2526,6 @@ class MonitoramentoTempoReal {
           font-size: 11px;
           font-weight: 600;
         }
-        
         .feedback-nota-badge.alta { background: #d1fae5; color: #065f46; }
         .feedback-nota-badge.media { background: #fef3c7; color: #92400e; }
         .feedback-nota-badge.baixa { background: #fee2e2; color: #991b1b; }
