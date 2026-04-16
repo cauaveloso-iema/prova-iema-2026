@@ -262,7 +262,7 @@ class MonitoramentoEnfermaria {
                     </div>
                 </div>
 
-                <!-- TABELA DE ATENDIMENTOS -->
+=                <!-- TABELA DE ATENDIMENTOS -->
                 <div class="table-container">
                     <div class="table-header">
                         <h3><i class="fas fa-list"></i> Histórico de Atendimentos</h3>
@@ -278,8 +278,9 @@ class MonitoramentoEnfermaria {
                                     <th>Aluno</th>
                                     <th>Turma</th>
                                     <th>Queixa</th>
-                                    <th>Data/Hora</th>
+                                    <th>Entrada</th>
                                     <th>Status</th>
+                                    <th>Saída</th>
                                     <th>Desfecho</th>
                                     <th>Ações</th>
                                 </tr>
@@ -605,11 +606,18 @@ class MonitoramentoEnfermaria {
             
             return `
                 <tr>
-                    <td><strong>${a.alunoNome || '-'}</strong><br><small>${a.alunoMatricula || ''}</small></td>
+                    <td>
+                        <strong>${a.alunoNome || '-'}</strong>
+                        <br><small style="color: #6b7280;">${a.alunoMatricula || ''}</small>
+                    </td>
                     <td>${a.alunoTurma || '-'}</td>
                     <td title="${a.queixa || ''}">${queixaCurta}</td>
                     <td><strong>${dataEntradaFormatada}</strong></td>
-                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            ${statusText}
+                        </span>
+                    </td>
                     <td><strong>${dataSaidaFormatada}</strong></td>
                     <td>${desfechoText}</td>
                     <td>
