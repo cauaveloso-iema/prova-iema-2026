@@ -1,4 +1,4 @@
-// frontend/js/admin-cozinha-monitoramento.js - VERSÃO CORRIGIDA COM FILTROS OTIMIZADOS
+// frontend/js/admin-cozinha-monitoramento.js - VERSÃO COMPLETA E FUNCIONAL
 
 class MonitoramentoTempoReal {
   constructor() {
@@ -23,9 +23,8 @@ class MonitoramentoTempoReal {
     this.filtroTurmasTurma = 'todas';
     this.filtroTurmasTurno = 'todas';
     
-    // Timeout para debounce dos filtros
-    this.debounceTimer = null;
-    this.DEBOUNCE_DELAY = 300;
+    // Controle de requisições
+    this.carregando = false;
     
     // Cache de dados
     this.cacheDados = new Map();
@@ -112,6 +111,17 @@ class MonitoramentoTempoReal {
   }
   
   async carregarDadosCompleto(dataParam = null, usarCache = true) {
+    // Evita múltiplas requisições simultâneas
+    if (this.carregando) {
+      console.log('⏳ Já carregando, aguarde...');
+      return;
+    }
+    
+    this.carregando = true;
+    
+    // Mostrar loading nos elementos principais
+    this.mostrarLoadingIndicators(true);
+    
     try {
       const token = localStorage.getItem('auth_token');
       
@@ -120,13 +130,14 @@ class MonitoramentoTempoReal {
         dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
       }
       
-      // Para 'todos', não enviamos parâmetro de data
       const cacheKey = dataParaBuscar || (this.filtroRegistroData === 'todos' ? 'todos' : 'hoje');
       
       if (usarCache && this.cacheDados.has(cacheKey)) {
         console.log(`📦 Usando cache para ${cacheKey}`);
         this.dados = this.cacheDados.get(cacheKey);
         this.processarDadosAposCarregamento();
+        this.mostrarLoadingIndicators(false);
+        this.carregando = false;
         return;
       }
       
@@ -159,6 +170,21 @@ class MonitoramentoTempoReal {
     } catch (error) {
       console.error('Erro:', error);
       this.renderizarErro(error.message);
+    } finally {
+      this.mostrarLoadingIndicators(false);
+      this.carregando = false;
+    }
+  }
+  
+  mostrarLoadingIndicators(mostrar) {
+    const registrosContainer = document.querySelector('.registros-list');
+    if (registrosContainer && mostrar) {
+      registrosContainer.innerHTML = '<div class="loading-state" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Carregando registros...</div>';
+    }
+    
+    const turmasBody = document.querySelector('#tabelaRefeicoesTurmas tbody');
+    if (turmasBody && mostrar) {
+      turmasBody.innerHTML = '<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
     }
   }
   
@@ -184,8 +210,8 @@ class MonitoramentoTempoReal {
       this.aplicarFiltrosSalvosNosSelects();
       this.configurarEventosFiltros();
       // Aplicar filtros após carregar os selects
-      this.aplicarFiltrosRegistrosLocal();
-      this.aplicarFiltrosRefeicoesTurmasLocal();
+      this.filtrarRegistrosAtuais(this.filtroRegistroTurma, this.filtroRegistroRefeicao);
+      this.filtrarRefeicoesTurmasAtuais(this.filtroTurmasTurma, this.filtroTurmasTurno);
     }, 100);
   }
   
@@ -215,36 +241,36 @@ class MonitoramentoTempoReal {
     atualizarSelect('filtroRodizioTurma', todasTurmas);
   }
   
-  // ========== FILTROS DE REGISTROS (COM DEBOUNCE) ==========
+  // ========== FILTROS DE REGISTROS ==========
   
   async aplicarFiltrosRegistros() {
-    // Usar debounce para evitar chamadas excessivas
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    
-    this.debounceTimer = setTimeout(() => {
-      this.aplicarFiltrosRegistrosLocal();
-    }, this.DEBOUNCE_DELAY);
-  }
-  
-  async aplicarFiltrosRegistrosLocal() {
     // Capturar valores atuais dos selects
-    this.filtroRegistroData = document.getElementById('filtroRegistroData')?.value || 'hoje';
-    this.filtroRegistroTurma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
-    this.filtroRegistroRefeicao = document.getElementById('filtroRegistroTipo')?.value || 'todas';
+    const novaData = document.getElementById('filtroRegistroData')?.value || 'hoje';
+    const novaTurma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
+    const novoTipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
+    
+    // Verificar se mudou a data
+    const mudouData = novaData !== this.filtroRegistroData;
+    
+    this.filtroRegistroData = novaData;
+    this.filtroRegistroTurma = novaTurma;
+    this.filtroRegistroRefeicao = novoTipo;
     
     this.salvarFiltros();
     
     const periodo = this.filtroRegistroData;
     
-    // Se não for 'todos', recarregar dados da API para a data específica
-    if (periodo !== 'todos') {
-      const dataParaBuscar = periodo !== 'hoje' ? this.getDataPorPeriodo(periodo) : null;
-      await this.carregarDadosCompleto(dataParaBuscar, true);
-      // Após recarregar, os filtros de turma/tipo serão aplicados nos dados carregados
+    try {
+      // Se mudou a data, recarregar da API
+      if (mudouData && periodo !== 'todos') {
+        const dataParaBuscar = periodo !== 'hoje' ? this.getDataPorPeriodo(periodo) : null;
+        await this.carregarDadosCompleto(dataParaBuscar, true);
+      }
+      
+      // Aplicar filtros de turma/tipo nos dados atuais
       this.filtrarRegistrosAtuais(this.filtroRegistroTurma, this.filtroRegistroRefeicao);
-    } else {
-      // Para 'todos', apenas filtra os dados existentes
-      this.filtrarRegistrosAtuais(this.filtroRegistroTurma, this.filtroRegistroRefeicao);
+    } catch (error) {
+      console.error('Erro ao aplicar filtros:', error);
     }
   }
   
@@ -336,28 +362,29 @@ class MonitoramentoTempoReal {
   // ========== FILTROS DE REFEIÇÕES POR TURMA ==========
   
   async aplicarFiltrosRefeicoesTurmas() {
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    const novaData = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
+    const novaTurma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
+    const novoTurno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
     
-    this.debounceTimer = setTimeout(() => {
-      this.aplicarFiltrosRefeicoesTurmasLocal();
-    }, this.DEBOUNCE_DELAY);
-  }
-  
-  async aplicarFiltrosRefeicoesTurmasLocal() {
-    this.filtroTurmasData = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
-    this.filtroTurmasTurma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
-    this.filtroTurmasTurno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
+    const mudouData = novaData !== this.filtroTurmasData;
+    
+    this.filtroTurmasData = novaData;
+    this.filtroTurmasTurma = novaTurma;
+    this.filtroTurmasTurno = novoTurno;
     
     this.salvarFiltros();
     
     const periodo = this.filtroTurmasData;
     
-    if (periodo !== 'todos') {
-      const dataParaBuscar = periodo !== 'hoje' ? this.getDataPorPeriodo(periodo) : null;
-      await this.carregarDadosCompleto(dataParaBuscar, true);
+    try {
+      if (mudouData && periodo !== 'todos') {
+        const dataParaBuscar = periodo !== 'hoje' ? this.getDataPorPeriodo(periodo) : null;
+        await this.carregarDadosCompleto(dataParaBuscar, true);
+      }
+      
       this.filtrarRefeicoesTurmasAtuais(this.filtroTurmasTurma, this.filtroTurmasTurno);
-    } else {
-      this.filtrarRefeicoesTurmasAtuais(this.filtroTurmasTurma, this.filtroTurmasTurno);
+    } catch (error) {
+      console.error('Erro ao aplicar filtros:', error);
     }
   }
   
@@ -374,12 +401,13 @@ class MonitoramentoTempoReal {
       dadosFiltrados = dadosFiltrados.filter(t => t.turma === turma);
     }
     
+    // Se filtrar por turno, mostrar apenas a coluna específica
     if (turno !== 'todas') {
       dadosFiltrados = dadosFiltrados.map(t => ({
         turma: t.turma,
-        manha: t.manha || 0,
-        almoco: t.almoco || 0,
-        tarde: t.tarde || 0,
+        manha: turno === 'manha' ? t.manha : 0,
+        almoco: turno === 'almoco' ? t.almoco : 0,
+        tarde: turno === 'tarde' ? t.tarde : 0,
         total: t[turno] || 0,
         alunosQueComeram: t.alunosQueComeram || 0
       }));
@@ -566,18 +594,15 @@ class MonitoramentoTempoReal {
     const aplicarFiltrosRegistros = () => this.aplicarFiltrosRegistros();
     
     if (tipoSelect) {
-      tipoSelect.removeEventListener('change', aplicarFiltrosRegistros);
-      tipoSelect.addEventListener('change', aplicarFiltrosRegistros);
+      tipoSelect.onchange = aplicarFiltrosRegistros;
     }
     
     if (dataSelect) {
-      dataSelect.removeEventListener('change', aplicarFiltrosRegistros);
-      dataSelect.addEventListener('change', aplicarFiltrosRegistros);
+      dataSelect.onchange = aplicarFiltrosRegistros;
     }
     
     if (turmaSelect) {
-      turmaSelect.removeEventListener('change', aplicarFiltrosRegistros);
-      turmaSelect.addEventListener('change', aplicarFiltrosRegistros);
+      turmaSelect.onchange = aplicarFiltrosRegistros;
     }
     
     // Filtros de Refeições por Turma
@@ -588,18 +613,15 @@ class MonitoramentoTempoReal {
     const aplicarFiltrosTurmas = () => this.aplicarFiltrosRefeicoesTurmas();
     
     if (turmaRefeicaoSelect) {
-      turmaRefeicaoSelect.removeEventListener('change', aplicarFiltrosTurmas);
-      turmaRefeicaoSelect.addEventListener('change', aplicarFiltrosTurmas);
+      turmaRefeicaoSelect.onchange = aplicarFiltrosTurmas;
     }
     
     if (turnoRefeicaoSelect) {
-      turnoRefeicaoSelect.removeEventListener('change', aplicarFiltrosTurmas);
-      turnoRefeicaoSelect.addEventListener('change', aplicarFiltrosTurmas);
+      turnoRefeicaoSelect.onchange = aplicarFiltrosTurmas;
     }
     
     if (dataRefeicaoSelect) {
-      dataRefeicaoSelect.removeEventListener('change', aplicarFiltrosTurmas);
-      dataRefeicaoSelect.addEventListener('change', aplicarFiltrosTurmas);
+      dataRefeicaoSelect.onchange = aplicarFiltrosTurmas;
     }
     
     // Filtros de Rodízio
@@ -609,13 +631,11 @@ class MonitoramentoTempoReal {
     const aplicarFiltrosRodizio = () => this.aplicarFiltrosRodizio();
     
     if (rodizioTurmaSelect) {
-      rodizioTurmaSelect.removeEventListener('change', aplicarFiltrosRodizio);
-      rodizioTurmaSelect.addEventListener('change', aplicarFiltrosRodizio);
+      rodizioTurmaSelect.onchange = aplicarFiltrosRodizio;
     }
     
     if (rodizioTipoSelect) {
-      rodizioTipoSelect.removeEventListener('change', aplicarFiltrosRodizio);
-      rodizioTipoSelect.addEventListener('change', aplicarFiltrosRodizio);
+      rodizioTipoSelect.onchange = aplicarFiltrosRodizio;
     }
     
     // Filtros de Feedback
@@ -628,28 +648,23 @@ class MonitoramentoTempoReal {
     const aplicarFiltrosFeedback = () => this.aplicarFiltrosFeedback();
     
     if (refeicaoFeedbackSelect) {
-      refeicaoFeedbackSelect.removeEventListener('change', aplicarFiltrosFeedback);
-      refeicaoFeedbackSelect.addEventListener('change', aplicarFiltrosFeedback);
+      refeicaoFeedbackSelect.onchange = aplicarFiltrosFeedback;
     }
     
     if (notaMinSelect) {
-      notaMinSelect.removeEventListener('change', aplicarFiltrosFeedback);
-      notaMinSelect.addEventListener('change', aplicarFiltrosFeedback);
+      notaMinSelect.onchange = aplicarFiltrosFeedback;
     }
     
     if (gostouSelect) {
-      gostouSelect.removeEventListener('change', aplicarFiltrosFeedback);
-      gostouSelect.addEventListener('change', aplicarFiltrosFeedback);
+      gostouSelect.onchange = aplicarFiltrosFeedback;
     }
     
     if (anonimoSelect) {
-      anonimoSelect.removeEventListener('change', aplicarFiltrosFeedback);
-      anonimoSelect.addEventListener('change', aplicarFiltrosFeedback);
+      anonimoSelect.onchange = aplicarFiltrosFeedback;
     }
     
     if (buscaFeedbackInput) {
-      buscaFeedbackInput.removeEventListener('input', aplicarFiltrosFeedback);
-      buscaFeedbackInput.addEventListener('input', aplicarFiltrosFeedback);
+      buscaFeedbackInput.oninput = aplicarFiltrosFeedback;
     }
     
     console.log('✅ Todos os eventos configurados');
@@ -685,6 +700,8 @@ class MonitoramentoTempoReal {
       console.log('⏭️ Seção de monitoramento não está ativa, ignorando atualização');
       return;
     }
+    
+    if (this.carregando) return;
     
     try {
       const token = localStorage.getItem('auth_token');
@@ -1205,6 +1222,8 @@ class MonitoramentoTempoReal {
     const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
     const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
     
+    const turmasUnicas = [...new Set((cozinha.refeicoesPorTurma || []).map(t => t.turma))].filter(t => t);
+    
     container.innerHTML = `
       <div class="monitoramento-dashboard">
         <div class="dashboard-header">
@@ -1377,6 +1396,7 @@ class MonitoramentoTempoReal {
                   </label>
                   <select id="filtroTurmasRefeicaoTurma" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;">
                     <option value="todas">Todas as turmas</option>
+                    ${turmasUnicas.map(t => `<option value="${t}">${t}</option>`).join('')}
                   </select>
                 </div>
                 
