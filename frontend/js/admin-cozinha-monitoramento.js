@@ -1,4 +1,4 @@
-// frontend/js/admin-cozinha-monitoramento.js - VERSÃO COMPLETA E FUNCIONAL
+// frontend/js/admin-cozinha-monitoramento.js - VERSÃO COMPLETA E OTIMIZADA
 
 class MonitoramentoTempoReal {
   constructor() {
@@ -21,6 +21,8 @@ class MonitoramentoTempoReal {
     this.filtroTurmasRefeicaoData = 'hoje';
     this.dadosRefeicoesTurmasFiltrados = [];
     this.refeicoesPorTurmaOriginais = [];
+    
+    this.cacheDados = new Map();
     
     this.filtrosAtuais = {
       registroData: 'hoje',
@@ -66,7 +68,6 @@ class MonitoramentoTempoReal {
         this.filtroTurmasRefeicaoData = filtros.turmasData || 'hoje';
         this.filtroTurmasRefeicaoTurma = filtros.turmasTurma || 'todas';
         this.filtroTurmasRefeicaoPeriodo = filtros.turmasTurno || 'todas';
-        console.log('📌 Filtros carregados:', this.filtroRegistroData);
       } catch(e) {}
     }
   }
@@ -91,13 +92,20 @@ class MonitoramentoTempoReal {
     if (turmasTurnoSelect) turmasTurnoSelect.value = this.filtroTurmasRefeicaoPeriodo;
   }
   
-  async carregarDadosCompleto(dataParam = null) {
+  async carregarDadosCompleto(dataParam = null, usarCache = true) {
     try {
       const token = localStorage.getItem('auth_token');
       
       let dataParaBuscar = dataParam;
       if (!dataParaBuscar && this.filtroRegistroData !== 'hoje') {
         dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
+      }
+      
+      const cacheKey = dataParaBuscar || 'hoje';
+      if (usarCache && this.cacheDados.has(cacheKey)) {
+        console.log(`📦 Usando cache para ${cacheKey}`);
+        this.atualizarDadosNaTela(this.cacheDados.get(cacheKey));
+        return;
       }
       
       let url = '/api/monitoramento-cozinha/dashboard';
@@ -114,30 +122,12 @@ class MonitoramentoTempoReal {
       const data = await response.json();
       
       if (data.success) {
-        this.dados = data;
-        this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
-        this.registrosFiltrados = [...this.ultimosRegistrosOriginais];
-        
-        this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
-        this.dadosRefeicoesTurmasFiltrados = [...this.refeicoesPorTurmaOriginais];
-        
-        const precisaRenderizar = !document.querySelector('.monitoramento-dashboard');
-        if (precisaRenderizar) {
-          this.renderizar(data);
-        } else {
-          this.atualizarElementosExistentes(data);
+        this.cacheDados.set(cacheKey, data);
+        if (this.cacheDados.size > 5) {
+          const firstKey = this.cacheDados.keys().next().value;
+          this.cacheDados.delete(firstKey);
         }
-        
-        this.atualizarGraficos(data);
-        this.atualizarTimestamp(data.timestamp);
-        
-        setTimeout(() => {
-          this.configurarEventosFiltros();
-          this.popularFiltrosTurmas();
-          this.aplicarFiltrosSalvosNosSelects();
-          this.aplicarFiltrosRegistros();
-          this.aplicarFiltrosRefeicoesTurmas();
-        }, 100);
+        this.atualizarDadosNaTela(data);
       } else {
         this.renderizarErro(data.error);
       }
@@ -145,6 +135,32 @@ class MonitoramentoTempoReal {
       console.error('Erro:', error);
       this.renderizarErro(error.message);
     }
+  }
+  
+  atualizarDadosNaTela(data) {
+    this.dados = data;
+    this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
+    this.registrosFiltrados = [...this.ultimosRegistrosOriginais];
+    
+    this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
+    this.dadosRefeicoesTurmasFiltrados = [...this.refeicoesPorTurmaOriginais];
+    
+    const precisaRenderizar = !document.querySelector('.monitoramento-dashboard');
+    if (precisaRenderizar) {
+      this.renderizar(data);
+    } else {
+      this.atualizarElementosExistentes(data);
+    }
+    
+    this.atualizarGraficos(data);
+    this.atualizarTimestamp(data.timestamp);
+    
+    setTimeout(() => {
+      this.popularFiltrosTurmas();
+      this.aplicarFiltrosSalvosNosSelects();
+      this.aplicarFiltrosRegistros();
+      this.aplicarFiltrosRefeicoesTurmas();
+    }, 50);
   }
   
   async carregarFeedbacksCompleto() {
@@ -197,7 +213,6 @@ class MonitoramentoTempoReal {
       const data = await response.json();
       
       if (data.success) {
-        this.dados = data;
         this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
         this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
         
@@ -210,6 +225,33 @@ class MonitoramentoTempoReal {
     } catch (error) {
       console.error('Erro ao atualizar dados:', error);
     }
+  }
+  
+  // 🔥 BOTÃO ATUALIZAR - FORÇA RECARGA SEM CACHE
+  async atualizarForcado() {
+    console.log('🔄 Atualização forçada - recarregando dados...');
+    
+    // Limpar cache da data atual
+    const dataAtual = this.filtroRegistroData !== 'hoje' ? 
+      this.getDataPorPeriodo(this.filtroRegistroData) : 'hoje';
+    this.cacheDados.delete(dataAtual);
+    
+    // Mostrar indicador de loading
+    const btnRefresh = document.querySelector('.btn-refresh');
+    if (btnRefresh) {
+      const originalHtml = btnRefresh.innerHTML;
+      btnRefresh.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
+      btnRefresh.disabled = true;
+      
+      await this.carregarDadosCompleto(null, false);
+      
+      btnRefresh.innerHTML = originalHtml;
+      btnRefresh.disabled = false;
+    } else {
+      await this.carregarDadosCompleto(null, false);
+    }
+    
+    this.showToastMessage('✅ Dados atualizados com sucesso!', 'success');
   }
   
   async carregarFeedbacks() {
@@ -241,13 +283,9 @@ class MonitoramentoTempoReal {
   }
   
   popularFiltrosTurmas() {
-    console.log('🏫 Populando filtros de turma...');
-    
     const turmasRegistros = [...new Set(this.ultimosRegistrosOriginais.map(r => r.alunoTurma))].filter(t => t);
     const turmasRefeicoes = [...new Set(this.refeicoesPorTurmaOriginais.map(t => t.turma))].filter(t => t);
     const todasTurmas = [...new Set([...turmasRegistros, ...turmasRefeicoes])];
-    
-    console.log(`   📋 Turmas encontradas: ${todasTurmas.length}`);
     
     const atualizarSelect = (selectId, turmas) => {
       const select = document.getElementById(selectId);
@@ -293,8 +331,6 @@ class MonitoramentoTempoReal {
   }
   
   async aplicarFiltrosRegistros() {
-    console.log('🔄 aplicarFiltrosRegistros - executando');
-    
     this.filtroRegistroData = document.getElementById('filtroRegistroData')?.value || 'hoje';
     this.filtroRegistroTurma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
     this.filtroRegistroRefeicao = document.getElementById('filtroRegistroTipo')?.value || 'todas';
@@ -308,8 +344,7 @@ class MonitoramentoTempoReal {
     if (periodo !== 'hoje' && periodo !== 'todos') {
       const data = this.getDataPorPeriodo(periodo);
       if (data) {
-        console.log(`📅 Recarregando dados para período: ${periodo} (${data})`);
-        await this.carregarDadosCompleto(data);
+        await this.carregarDadosCompleto(data, true);
         return;
       }
     }
@@ -321,7 +356,6 @@ class MonitoramentoTempoReal {
     const registros = this.ultimosRegistrosOriginais;
     
     if (!registros || registros.length === 0) {
-      console.log('❌ Nenhum registro disponível');
       this.registrosFiltrados = [];
       this.atualizarListaRegistros();
       this.atualizarContadorRegistros();
@@ -417,7 +451,6 @@ class MonitoramentoTempoReal {
     });
     
     container.innerHTML = html;
-    console.log('✅ Lista de registros atualizada');
   }
   
   limparFiltrosRegistros() {
@@ -434,12 +467,10 @@ class MonitoramentoTempoReal {
     if (tipoSelect) tipoSelect.value = 'todas';
     if (dataSelect) dataSelect.value = 'hoje';
     
-    this.carregarDadosCompleto();
+    this.carregarDadosCompleto(null, false);
   }
   
   async aplicarFiltrosRefeicoesTurmas() {
-    console.log('🔄 aplicarFiltrosRefeicoesTurmas - executando');
-    
     this.filtroTurmasRefeicaoData = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
     this.filtroTurmasRefeicaoTurma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
     this.filtroTurmasRefeicaoPeriodo = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
@@ -453,8 +484,7 @@ class MonitoramentoTempoReal {
     if (periodo !== 'hoje' && periodo !== 'todos') {
       const data = this.getDataPorPeriodo(periodo);
       if (data) {
-        console.log(`📅 Recarregando dados de turmas para período: ${periodo} (${data})`);
-        await this.carregarDadosCompleto(data);
+        await this.carregarDadosCompleto(data, true);
         return;
       }
     }
@@ -521,7 +551,6 @@ class MonitoramentoTempoReal {
     });
     
     turmasBody.innerHTML = html;
-    console.log('✅ Tabela de refeições por turma atualizada');
   }
   
   limparFiltrosRefeicoesTurmas() {
@@ -538,7 +567,7 @@ class MonitoramentoTempoReal {
     if (turnoSelect) turnoSelect.value = 'todas';
     if (dataSelect) dataSelect.value = 'hoje';
     
-    this.carregarDadosCompleto();
+    this.carregarDadosCompleto(null, false);
   }
   
   aplicarFiltrosRodizio() {
@@ -1055,7 +1084,7 @@ class MonitoramentoTempoReal {
       
       if (data.success) {
         this.showToastMessage(`✅ ${data.deletados} registros removidos!`, 'success');
-        await this.carregarDadosCompleto();
+        await this.carregarDadosCompleto(null, false);
       } else {
         throw new Error(data.error || 'Erro na limpeza');
       }
@@ -1221,7 +1250,7 @@ class MonitoramentoTempoReal {
             <span class="status-badge online" id="statusConexao">
               <i class="fas fa-circle"></i> Conectado
             </span>
-            <button class="btn-refresh" onclick="monitoramentoTempoReal.carregarDadosCompleto()">
+            <button class="btn-refresh" onclick="monitoramentoTempoReal.atualizarForcado()">
               <i class="fas fa-sync-alt"></i> Atualizar
             </button>
             <button class="btn-refresh" onclick="monitoramentoTempoReal.abrirModalLimpezaRegistros()" 
