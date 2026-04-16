@@ -1,4 +1,4 @@
-// frontend/js/admin-cozinha-monitoramento.js - VERSÃO COMPLETA E OTIMIZADA
+// frontend/js/admin-cozinha-monitoramento.js - VERSÃO CORRIGIDA COM FILTROS OTIMIZADOS
 
 class MonitoramentoTempoReal {
   constructor() {
@@ -10,28 +10,25 @@ class MonitoramentoTempoReal {
     this.feedbacksFiltrados = [];
     this.paginaCarregada = false;
     
-    this.registrosFiltrados = [];
-    this.filtroRegistroTurma = 'todas';
-    this.filtroRegistroRefeicao = 'todas';
-    this.filtroRegistroData = 'hoje';
+    // Dados originais (backup para filtros)
     this.ultimosRegistrosOriginais = [];
-    
-    this.filtroTurmasRefeicaoTurma = 'todas';
-    this.filtroTurmasRefeicaoPeriodo = 'todas';
-    this.filtroTurmasRefeicaoData = 'hoje';
-    this.dadosRefeicoesTurmasFiltrados = [];
     this.refeicoesPorTurmaOriginais = [];
     
-    this.cacheDados = new Map();
+    // Estado dos filtros
+    this.filtroRegistroData = 'hoje';
+    this.filtroRegistroTurma = 'todas';
+    this.filtroRegistroRefeicao = 'todas';
     
-    this.filtrosAtuais = {
-      registroData: 'hoje',
-      registroTurma: 'todas',
-      registroTipo: 'todas',
-      turmasData: 'hoje',
-      turmasTurma: 'todas',
-      turmasTurno: 'todas'
-    };
+    this.filtroTurmasData = 'hoje';
+    this.filtroTurmasTurma = 'todas';
+    this.filtroTurmasTurno = 'todas';
+    
+    // Timeout para debounce dos filtros
+    this.debounceTimer = null;
+    this.DEBOUNCE_DELAY = 300;
+    
+    // Cache de dados
+    this.cacheDados = new Map();
   }
   
   async carregar() {
@@ -49,9 +46,9 @@ class MonitoramentoTempoReal {
       registroData: this.filtroRegistroData,
       registroTurma: this.filtroRegistroTurma,
       registroTipo: this.filtroRegistroRefeicao,
-      turmasData: this.filtroTurmasRefeicaoData,
-      turmasTurma: this.filtroTurmasRefeicaoTurma,
-      turmasTurno: this.filtroTurmasRefeicaoPeriodo,
+      turmasData: this.filtroTurmasData,
+      turmasTurma: this.filtroTurmasTurma,
+      turmasTurno: this.filtroTurmasTurno,
       timestamp: new Date().toISOString()
     };
     localStorage.setItem('monitoramento_filtros', JSON.stringify(filtrosParaSalvar));
@@ -65,9 +62,9 @@ class MonitoramentoTempoReal {
         this.filtroRegistroData = filtros.registroData || 'hoje';
         this.filtroRegistroTurma = filtros.registroTurma || 'todas';
         this.filtroRegistroRefeicao = filtros.registroTipo || 'todas';
-        this.filtroTurmasRefeicaoData = filtros.turmasData || 'hoje';
-        this.filtroTurmasRefeicaoTurma = filtros.turmasTurma || 'todas';
-        this.filtroTurmasRefeicaoPeriodo = filtros.turmasTurno || 'todas';
+        this.filtroTurmasData = filtros.turmasData || 'hoje';
+        this.filtroTurmasTurma = filtros.turmasTurma || 'todas';
+        this.filtroTurmasTurno = filtros.turmasTurno || 'todas';
       } catch(e) {}
     }
   }
@@ -83,229 +80,13 @@ class MonitoramentoTempoReal {
     if (registroTipoSelect) registroTipoSelect.value = this.filtroRegistroRefeicao;
     
     const turmasDataSelect = document.getElementById('filtroTurmasRefeicaoData');
-    if (turmasDataSelect) turmasDataSelect.value = this.filtroTurmasRefeicaoData;
+    if (turmasDataSelect) turmasDataSelect.value = this.filtroTurmasData;
     
     const turmasTurmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
-    if (turmasTurmaSelect) turmasTurmaSelect.value = this.filtroTurmasRefeicaoTurma;
+    if (turmasTurmaSelect) turmasTurmaSelect.value = this.filtroTurmasTurma;
     
     const turmasTurnoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
-    if (turmasTurnoSelect) turmasTurnoSelect.value = this.filtroTurmasRefeicaoPeriodo;
-  }
-  
-  async carregarDadosCompleto(dataParam = null, usarCache = true) {
-    try {
-      const token = localStorage.getItem('auth_token');
-      
-      let dataParaBuscar = dataParam;
-      if (!dataParaBuscar && this.filtroRegistroData !== 'hoje') {
-        dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
-      }
-      
-      const cacheKey = dataParaBuscar || 'hoje';
-      if (usarCache && this.cacheDados.has(cacheKey)) {
-        console.log(`📦 Usando cache para ${cacheKey}`);
-        this.atualizarDadosNaTela(this.cacheDados.get(cacheKey));
-        return;
-      }
-      
-      let url = '/api/monitoramento-cozinha/dashboard';
-      if (dataParaBuscar) {
-        url += `?data=${dataParaBuscar}`;
-        console.log(`📅 Carregando dados para data: ${dataParaBuscar}`);
-      }
-      
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        this.cacheDados.set(cacheKey, data);
-        if (this.cacheDados.size > 5) {
-          const firstKey = this.cacheDados.keys().next().value;
-          this.cacheDados.delete(firstKey);
-        }
-        this.atualizarDadosNaTela(data);
-      } else {
-        this.renderizarErro(data.error);
-      }
-    } catch (error) {
-      console.error('Erro:', error);
-      this.renderizarErro(error.message);
-    }
-  }
-  
-  atualizarDadosNaTela(data) {
-    this.dados = data;
-    this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
-    this.registrosFiltrados = [...this.ultimosRegistrosOriginais];
-    
-    this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
-    this.dadosRefeicoesTurmasFiltrados = [...this.refeicoesPorTurmaOriginais];
-    
-    const precisaRenderizar = !document.querySelector('.monitoramento-dashboard');
-    if (precisaRenderizar) {
-      this.renderizar(data);
-    } else {
-      this.atualizarElementosExistentes(data);
-    }
-    
-    this.atualizarGraficos(data);
-    this.atualizarTimestamp(data.timestamp);
-    
-    setTimeout(() => {
-      this.popularFiltrosTurmas();
-      this.aplicarFiltrosSalvosNosSelects();
-      this.aplicarFiltrosRegistros();
-      this.aplicarFiltrosRefeicoesTurmas();
-    }, 50);
-  }
-  
-  async carregarFeedbacksCompleto() {
-    try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/feedback-cozinha/estatisticas', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        this.todosFeedbacks = data.ultimosFeedbacks || [];
-        this.feedbacksFiltrados = [...this.todosFeedbacks];
-        this.atualizarFeedbacksNoDOM(data);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar feedbacks:', error);
-    }
-  }
-  
-  async carregarDados() {
-    if (!this.paginaCarregada) return;
-    
-    const contentArea = document.getElementById('contentArea');
-    const isMonitoramentoAtivo = contentArea && contentArea.querySelector('.monitoramento-dashboard') !== null;
-    
-    if (!isMonitoramentoAtivo) {
-      console.log('⏭️ Seção de monitoramento não está ativa, ignorando atualização');
-      return;
-    }
-    
-    try {
-      const token = localStorage.getItem('auth_token');
-      
-      let dataParaBuscar = null;
-      if (this.filtroRegistroData !== 'hoje') {
-        dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
-      }
-      
-      let url = '/api/monitoramento-cozinha/dashboard';
-      if (dataParaBuscar) {
-        url += `?data=${dataParaBuscar}`;
-      }
-      
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
-        this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
-        
-        this.aplicarFiltrosRegistros();
-        this.aplicarFiltrosRefeicoesTurmas();
-        this.atualizarElementosExistentes(data);
-        this.atualizarGraficos(data);
-        this.atualizarTimestamp(data.timestamp);
-      }
-    } catch (error) {
-      console.error('Erro ao atualizar dados:', error);
-    }
-  }
-  
-  // 🔥 BOTÃO ATUALIZAR - FORÇA RECARGA SEM CACHE
-  async atualizarForcado() {
-    console.log('🔄 Atualização forçada - recarregando dados...');
-    
-    // Limpar cache da data atual
-    const dataAtual = this.filtroRegistroData !== 'hoje' ? 
-      this.getDataPorPeriodo(this.filtroRegistroData) : 'hoje';
-    this.cacheDados.delete(dataAtual);
-    
-    // Mostrar indicador de loading
-    const btnRefresh = document.querySelector('.btn-refresh');
-    if (btnRefresh) {
-      const originalHtml = btnRefresh.innerHTML;
-      btnRefresh.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
-      btnRefresh.disabled = true;
-      
-      await this.carregarDadosCompleto(null, false);
-      
-      btnRefresh.innerHTML = originalHtml;
-      btnRefresh.disabled = false;
-    } else {
-      await this.carregarDadosCompleto(null, false);
-    }
-    
-    this.showToastMessage('✅ Dados atualizados com sucesso!', 'success');
-  }
-  
-  async carregarFeedbacks() {
-    if (!this.paginaCarregada) return;
-    
-    const contentArea = document.getElementById('contentArea');
-    const isMonitoramentoAtivo = contentArea && contentArea.querySelector('.monitoramento-dashboard') !== null;
-    
-    if (!isMonitoramentoAtivo) {
-      console.log('⏭️ Seção de monitoramento não está ativa, ignorando atualização de feedbacks');
-      return;
-    }
-    
-    try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/feedback-cozinha/estatisticas', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        this.todosFeedbacks = data.ultimosFeedbacks || [];
-        this.feedbacksFiltrados = [...this.todosFeedbacks];
-        this.atualizarFeedbacksNoDOM(data);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar feedbacks:', error);
-    }
-  }
-  
-  popularFiltrosTurmas() {
-    const turmasRegistros = [...new Set(this.ultimosRegistrosOriginais.map(r => r.alunoTurma))].filter(t => t);
-    const turmasRefeicoes = [...new Set(this.refeicoesPorTurmaOriginais.map(t => t.turma))].filter(t => t);
-    const todasTurmas = [...new Set([...turmasRegistros, ...turmasRefeicoes])];
-    
-    const atualizarSelect = (selectId, turmas) => {
-      const select = document.getElementById(selectId);
-      if (select) {
-        const valorAtual = select.value;
-        select.innerHTML = '<option value="todas">Todas as turmas</option>';
-        turmas.forEach(turma => {
-          select.innerHTML += `<option value="${turma}">${turma}</option>`;
-        });
-        if (valorAtual !== 'todas' && turmas.includes(valorAtual)) {
-          select.value = valorAtual;
-        } else {
-          select.value = 'todas';
-        }
-      }
-    };
-    
-    atualizarSelect('filtroRegistroTurma', todasTurmas);
-    atualizarSelect('filtroTurmasRefeicaoTurma', todasTurmas);
-    atualizarSelect('filtroRodizioTurma', todasTurmas);
+    if (turmasTurnoSelect) turmasTurnoSelect.value = this.filtroTurmasTurno;
   }
   
   getDataPorPeriodo(periodo) {
@@ -330,7 +111,123 @@ class MonitoramentoTempoReal {
     }
   }
   
+  async carregarDadosCompleto(dataParam = null, usarCache = true) {
+    try {
+      const token = localStorage.getItem('auth_token');
+      
+      let dataParaBuscar = dataParam;
+      if (!dataParaBuscar && this.filtroRegistroData !== 'hoje' && this.filtroRegistroData !== 'todos') {
+        dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
+      }
+      
+      // Para 'todos', não enviamos parâmetro de data
+      const cacheKey = dataParaBuscar || (this.filtroRegistroData === 'todos' ? 'todos' : 'hoje');
+      
+      if (usarCache && this.cacheDados.has(cacheKey)) {
+        console.log(`📦 Usando cache para ${cacheKey}`);
+        this.dados = this.cacheDados.get(cacheKey);
+        this.processarDadosAposCarregamento();
+        return;
+      }
+      
+      let url = '/api/monitoramento-cozinha/dashboard';
+      if (dataParaBuscar && this.filtroRegistroData !== 'todos') {
+        url += `?data=${dataParaBuscar}`;
+        console.log(`📅 Carregando dados para data: ${dataParaBuscar}`);
+      } else {
+        console.log(`📅 Carregando dados para: ${this.filtroRegistroData === 'todos' ? 'todos os períodos' : 'hoje'}`);
+      }
+      
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        this.cacheDados.set(cacheKey, data);
+        if (this.cacheDados.size > 5) {
+          const firstKey = this.cacheDados.keys().next().value;
+          this.cacheDados.delete(firstKey);
+        }
+        this.dados = data;
+        this.processarDadosAposCarregamento();
+      } else {
+        this.renderizarErro(data.error);
+      }
+    } catch (error) {
+      console.error('Erro:', error);
+      this.renderizarErro(error.message);
+    }
+  }
+  
+  processarDadosAposCarregamento() {
+    if (!this.dados) return;
+    
+    // Salvar dados originais (sem filtros)
+    this.ultimosRegistrosOriginais = [...(this.dados.cozinha?.ultimosRegistros || [])];
+    this.refeicoesPorTurmaOriginais = [...(this.dados.cozinha?.refeicoesPorTurma || [])];
+    
+    const precisaRenderizar = !document.querySelector('.monitoramento-dashboard');
+    if (precisaRenderizar) {
+      this.renderizar(this.dados);
+    } else {
+      this.atualizarElementosExistentes(this.dados);
+    }
+    
+    this.atualizarGraficos(this.dados);
+    this.atualizarTimestamp(this.dados.timestamp);
+    
+    setTimeout(() => {
+      this.popularFiltrosTurmas();
+      this.aplicarFiltrosSalvosNosSelects();
+      this.configurarEventosFiltros();
+      // Aplicar filtros após carregar os selects
+      this.aplicarFiltrosRegistrosLocal();
+      this.aplicarFiltrosRefeicoesTurmasLocal();
+    }, 100);
+  }
+  
+  popularFiltrosTurmas() {
+    const turmasRegistros = [...new Set(this.ultimosRegistrosOriginais.map(r => r.alunoTurma))].filter(t => t);
+    const turmasRefeicoes = [...new Set(this.refeicoesPorTurmaOriginais.map(t => t.turma))].filter(t => t);
+    const todasTurmas = [...new Set([...turmasRegistros, ...turmasRefeicoes])].sort();
+    
+    const atualizarSelect = (selectId, turmas) => {
+      const select = document.getElementById(selectId);
+      if (select) {
+        const valorAtual = select.value;
+        select.innerHTML = '<option value="todas">Todas as turmas</option>';
+        turmas.forEach(turma => {
+          select.innerHTML += `<option value="${turma}">${turma}</option>`;
+        });
+        if (valorAtual !== 'todas' && turmas.includes(valorAtual)) {
+          select.value = valorAtual;
+        } else {
+          select.value = 'todas';
+        }
+      }
+    };
+    
+    atualizarSelect('filtroRegistroTurma', todasTurmas);
+    atualizarSelect('filtroTurmasRefeicaoTurma', todasTurmas);
+    atualizarSelect('filtroRodizioTurma', todasTurmas);
+  }
+  
+  // ========== FILTROS DE REGISTROS (COM DEBOUNCE) ==========
+  
   async aplicarFiltrosRegistros() {
+    // Usar debounce para evitar chamadas excessivas
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    
+    this.debounceTimer = setTimeout(() => {
+      this.aplicarFiltrosRegistrosLocal();
+    }, this.DEBOUNCE_DELAY);
+  }
+  
+  async aplicarFiltrosRegistrosLocal() {
+    // Capturar valores atuais dos selects
     this.filtroRegistroData = document.getElementById('filtroRegistroData')?.value || 'hoje';
     this.filtroRegistroTurma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
     this.filtroRegistroRefeicao = document.getElementById('filtroRegistroTipo')?.value || 'todas';
@@ -338,75 +235,48 @@ class MonitoramentoTempoReal {
     this.salvarFiltros();
     
     const periodo = this.filtroRegistroData;
-    const turma = this.filtroRegistroTurma;
-    const tipo = this.filtroRegistroRefeicao;
     
-    if (periodo !== 'hoje' && periodo !== 'todos') {
-      const data = this.getDataPorPeriodo(periodo);
-      if (data) {
-        await this.carregarDadosCompleto(data, true);
-        return;
-      }
+    // Se não for 'todos', recarregar dados da API para a data específica
+    if (periodo !== 'todos') {
+      const dataParaBuscar = periodo !== 'hoje' ? this.getDataPorPeriodo(periodo) : null;
+      await this.carregarDadosCompleto(dataParaBuscar, true);
+      // Após recarregar, os filtros de turma/tipo serão aplicados nos dados carregados
+      this.filtrarRegistrosAtuais(this.filtroRegistroTurma, this.filtroRegistroRefeicao);
+    } else {
+      // Para 'todos', apenas filtra os dados existentes
+      this.filtrarRegistrosAtuais(this.filtroRegistroTurma, this.filtroRegistroRefeicao);
     }
-    
-    this.filtrarRegistrosAtuais(turma, tipo, periodo);
   }
   
-  filtrarRegistrosAtuais(turma, tipo, periodo) {
+  filtrarRegistrosAtuais(turma, tipo) {
     const registros = this.ultimosRegistrosOriginais;
     
     if (!registros || registros.length === 0) {
-      this.registrosFiltrados = [];
-      this.atualizarListaRegistros();
-      this.atualizarContadorRegistros();
+      this.atualizarListaRegistros([]);
+      this.atualizarContadorRegistros(0);
       return;
     }
     
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    
-    const ontem = new Date(hoje);
-    ontem.setDate(ontem.getDate() - 1);
-    
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    
-    const inicioMes = new Date(hoje);
-    inicioMes.setDate(1);
-    
-    this.registrosFiltrados = registros.filter(r => {
+    const registrosFiltrados = registros.filter(r => {
       if (turma !== 'todas' && r.alunoTurma !== turma) return false;
       if (tipo !== 'todas' && r.tipoRefeicao !== tipo) return false;
-      
-      if (periodo === 'todos') return true;
-      
-      const dataRegistro = new Date(r.horario);
-      dataRegistro.setHours(0, 0, 0, 0);
-      
-      if (periodo === 'hoje') return dataRegistro.getTime() === hoje.getTime();
-      if (periodo === 'ontem') return dataRegistro.getTime() === ontem.getTime();
-      if (periodo === 'semana') return dataRegistro >= inicioSemana;
-      if (periodo === 'mes') return dataRegistro >= inicioMes;
-      
       return true;
     });
     
-    this.atualizarListaRegistros();
-    this.atualizarContadorRegistros();
+    this.atualizarListaRegistros(registrosFiltrados);
+    this.atualizarContadorRegistros(registrosFiltrados.length);
   }
   
-  atualizarContadorRegistros() {
+  atualizarContadorRegistros(total) {
     const contador = document.getElementById('registrosFiltradosCount');
-    if (contador) contador.textContent = `${this.registrosFiltrados.length} registros`;
+    if (contador) contador.textContent = `${total} registros`;
   }
   
-  atualizarListaRegistros() {
+  atualizarListaRegistros(registros) {
     const container = document.querySelector('.registros-list');
     if (!container) return;
     
-    const registros = this.registrosFiltrados;
-    
-    if (registros.length === 0) {
+    if (!registros || registros.length === 0) {
       container.innerHTML = '<div class="empty-state">Nenhum registro encontrado com os filtros selecionados</div>';
       return;
     }
@@ -417,25 +287,17 @@ class MonitoramentoTempoReal {
                         r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde';
       
       html += `
-        <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-          <div style="flex: 1;">
-            <div class="registro-info">
-              <div class="registro-nome"><strong>${this.escapeHtml(r.alunoNome)}</strong></div>
-              <div class="registro-turma" style="font-size: 12px; color: #6c757d;">${this.escapeHtml(r.alunoTurma)}</div>
-            </div>
-            <div class="registro-detalhes" style="margin-top: 5px;">
-              <span class="refeicao-badge ${r.tipoRefeicao}" style="font-size: 11px; padding: 4px 12px; border-radius: 30px;">
-                ${tipoTexto}
-              </span>
-              <span class="registro-horario" style="font-size: 11px; margin-left: 8px;">
-                <i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}
-              </span>
-              <span class="registro-data" style="font-size: 11px; margin-left: 8px; color: #94a3b8;">
-                <i class="far fa-calendar-alt"></i> ${new Date(r.horario).toLocaleDateString()}
-              </span>
+        <div class="registro-item">
+          <div class="registro-info">
+            <div class="registro-nome"><strong>${this.escapeHtml(r.alunoNome)}</strong></div>
+            <div class="registro-turma">${this.escapeHtml(r.alunoTurma)}</div>
+            <div class="registro-detalhes">
+              <span class="refeicao-badge ${r.tipoRefeicao}">${tipoTexto}</span>
+              <span class="registro-horario"><i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}</span>
+              <span class="registro-data"><i class="far fa-calendar-alt"></i> ${new Date(r.horario).toLocaleDateString()}</span>
             </div>
           </div>
-          <div class="action-buttons" style="display: flex; gap: 5px;">
+          <div class="action-buttons">
             <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes">
               <i class="fas fa-eye"></i>
             </button>
@@ -467,32 +329,42 @@ class MonitoramentoTempoReal {
     if (tipoSelect) tipoSelect.value = 'todas';
     if (dataSelect) dataSelect.value = 'hoje';
     
+    // Recarregar dados sem cache
     this.carregarDadosCompleto(null, false);
   }
   
+  // ========== FILTROS DE REFEIÇÕES POR TURMA ==========
+  
   async aplicarFiltrosRefeicoesTurmas() {
-    this.filtroTurmasRefeicaoData = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
-    this.filtroTurmasRefeicaoTurma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
-    this.filtroTurmasRefeicaoPeriodo = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    
+    this.debounceTimer = setTimeout(() => {
+      this.aplicarFiltrosRefeicoesTurmasLocal();
+    }, this.DEBOUNCE_DELAY);
+  }
+  
+  async aplicarFiltrosRefeicoesTurmasLocal() {
+    this.filtroTurmasData = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
+    this.filtroTurmasTurma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
+    this.filtroTurmasTurno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
     
     this.salvarFiltros();
     
-    const periodo = this.filtroTurmasRefeicaoData;
-    const turma = this.filtroTurmasRefeicaoTurma;
-    const turno = this.filtroTurmasRefeicaoPeriodo;
+    const periodo = this.filtroTurmasData;
     
-    if (periodo !== 'hoje' && periodo !== 'todos') {
-      const data = this.getDataPorPeriodo(periodo);
-      if (data) {
-        await this.carregarDadosCompleto(data, true);
-        return;
-      }
+    if (periodo !== 'todos') {
+      const dataParaBuscar = periodo !== 'hoje' ? this.getDataPorPeriodo(periodo) : null;
+      await this.carregarDadosCompleto(dataParaBuscar, true);
+      this.filtrarRefeicoesTurmasAtuais(this.filtroTurmasTurma, this.filtroTurmasTurno);
+    } else {
+      this.filtrarRefeicoesTurmasAtuais(this.filtroTurmasTurma, this.filtroTurmasTurno);
     }
-    
+  }
+  
+  filtrarRefeicoesTurmasAtuais(turma, turno) {
     if (!this.refeicoesPorTurmaOriginais || this.refeicoesPorTurmaOriginais.length === 0) {
-      this.dadosRefeicoesTurmasFiltrados = [];
-      this.atualizarTabelaRefeicoesTurmas();
-      this.atualizarContadorTurmas();
+      this.atualizarTabelaRefeicoesTurmas([]);
+      this.atualizarContadorTurmas(0);
       return;
     }
     
@@ -505,33 +377,30 @@ class MonitoramentoTempoReal {
     if (turno !== 'todas') {
       dadosFiltrados = dadosFiltrados.map(t => ({
         turma: t.turma,
-        manha: turno === 'manha' ? t.manha : 0,
-        almoco: turno === 'almoco' ? t.almoco : 0,
-        tarde: turno === 'tarde' ? t.tarde : 0,
+        manha: t.manha || 0,
+        almoco: t.almoco || 0,
+        tarde: t.tarde || 0,
         total: t[turno] || 0,
-        alunosQueComeram: t.alunosQueComeram
+        alunosQueComeram: t.alunosQueComeram || 0
       }));
     }
     
-    this.dadosRefeicoesTurmasFiltrados = dadosFiltrados;
-    this.atualizarTabelaRefeicoesTurmas();
-    this.atualizarContadorTurmas();
+    this.atualizarTabelaRefeicoesTurmas(dadosFiltrados);
+    this.atualizarContadorTurmas(dadosFiltrados.length);
   }
   
-  atualizarContadorTurmas() {
+  atualizarContadorTurmas(total) {
     const contador = document.getElementById('turmasFiltradosCount');
     if (contador) {
-      contador.textContent = `${this.dadosRefeicoesTurmasFiltrados.length} ${this.dadosRefeicoesTurmasFiltrados.length === 1 ? 'turma' : 'turmas'}`;
+      contador.textContent = `${total} ${total === 1 ? 'turma' : 'turmas'}`;
     }
   }
   
-  atualizarTabelaRefeicoesTurmas() {
-    const turmasBody = document.querySelector('.data-table tbody');
+  atualizarTabelaRefeicoesTurmas(dados) {
+    const turmasBody = document.querySelector('#tabelaRefeicoesTurmas tbody');
     if (!turmasBody) return;
     
-    const dados = this.dadosRefeicoesTurmasFiltrados;
-    
-    if (dados.length === 0) {
+    if (!dados || dados.length === 0) {
       turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada com os filtros selecionados</td></tr>';
       return;
     }
@@ -554,9 +423,9 @@ class MonitoramentoTempoReal {
   }
   
   limparFiltrosRefeicoesTurmas() {
-    this.filtroTurmasRefeicaoData = 'hoje';
-    this.filtroTurmasRefeicaoTurma = 'todas';
-    this.filtroTurmasRefeicaoPeriodo = 'todas';
+    this.filtroTurmasData = 'hoje';
+    this.filtroTurmasTurma = 'todas';
+    this.filtroTurmasTurno = 'todas';
     this.salvarFiltros();
     
     const turmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
@@ -569,6 +438,8 @@ class MonitoramentoTempoReal {
     
     this.carregarDadosCompleto(null, false);
   }
+  
+  // ========== FILTROS DE RODIZIO ==========
   
   aplicarFiltrosRodizio() {
     const turma = document.getElementById('filtroRodizioTurma')?.value || 'todas';
@@ -607,83 +478,7 @@ class MonitoramentoTempoReal {
     if (contador) contador.textContent = `${linhas.length} rodízios`;
   }
   
-  atualizarFeedbacksNoDOM(data) {
-    const stats = data.estatisticas;
-    
-    const totalEl = document.getElementById('totalFeedbacks');
-    const mediaEl = document.getElementById('mediaNotas');
-    const gostaramEl = document.getElementById('gostaram');
-    const filtradosEl = document.getElementById('feedbacksFiltrados');
-    const totalBadge = document.getElementById('totalFeedbacksBadge');
-    
-    if (totalEl) totalEl.textContent = stats.total || 0;
-    if (totalBadge) totalBadge.textContent = stats.total || 0;
-    if (mediaEl) mediaEl.textContent = stats.mediaNotas || 0;
-    if (filtradosEl) filtradosEl.textContent = stats.total || 0;
-    
-    const estrelasMedia = document.getElementById('estrelasMedia');
-    if (estrelasMedia) {
-      const media = parseFloat(stats.mediaNotas) || 0;
-      estrelasMedia.innerHTML = this.gerarEstrelasMini(media);
-    }
-    
-    const maxNota = Math.max(...Object.values(stats.distribuicaoNotas), 1);
-    for (let i = 1; i <= 5; i++) {
-      const count = stats.distribuicaoNotas[i] || 0;
-      const percent = (count / maxNota) * 100;
-      const bar = document.getElementById(`bar${i}`);
-      const countSpan = document.getElementById(`count${i}`);
-      if (bar) bar.style.width = `${percent}%`;
-      if (countSpan) countSpan.textContent = count;
-    }
-    
-    const gostaramSim = document.getElementById('gostaramSim');
-    const gostaramMaisMenos = document.getElementById('gostaramMaisMenos');
-    const gostaramNao = document.getElementById('gostaramNao');
-    const mediaDetalhada = document.getElementById('mediaDetalhada');
-    
-    if (gostaramSim) gostaramSim.textContent = stats.gostouStats?.sim || 0;
-    if (gostaramMaisMenos) gostaramMaisMenos.textContent = stats.gostouStats?.mais_ou_menos || 0;
-    if (gostaramNao) gostaramNao.textContent = stats.gostouStats?.nao || 0;
-    if (mediaDetalhada) mediaDetalhada.textContent = `${stats.mediaNotas || 0}/5`;
-    
-    const totalGostou = (stats.gostouStats?.sim || 0) + (stats.gostouStats?.mais_ou_menos || 0);
-    const aprovacao = stats.total > 0 ? Math.round((totalGostou / stats.total) * 100) : 0;
-    if (gostaramEl) gostaramEl.textContent = `${aprovacao}%`;
-    
-    const feedbacksCount = document.getElementById('feedbacksCount');
-    if (feedbacksCount) feedbacksCount.textContent = this.todosFeedbacks.length;
-    
-    this.atualizarListaFeedbacks();
-  }
-  
-  atualizarListaFeedbacks() {
-    const tbody = document.getElementById('listaFeedbacksAdmin');
-    if (!tbody) return;
-    
-    if (this.feedbacksFiltrados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado</td></tr>';
-      return;
-    }
-    
-    tbody.innerHTML = this.feedbacksFiltrados.map(f => {
-      let notaClass = '';
-      if (f.nota >= 4) notaClass = 'alta';
-      else if (f.nota >= 2.5) notaClass = 'media';
-      else notaClass = 'baixa';
-      
-      return `
-        <tr>
-          <td>${f.alunoNome}${f.anonimo ? ' <i class="fas fa-user-secret text-muted" style="font-size: 11px;"></i>' : ''}</td>
-          <td>${f.alunoTurma || '-'}</td>
-          <td><span class="badge ${f.tipoRefeicao === 'manha' ? 'badge-manha' : f.tipoRefeicao === 'almoco' ? 'badge-almoco' : 'badge-tarde'}">${f.tipoRefeicao === 'manha' ? '🌅 Manhã' : f.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'}</span></td>
-          <td><span class="feedback-nota-badge ${notaClass}">${'★'.repeat(f.nota)}${'☆'.repeat(5-f.nota)}</span></td>
-          <td><small>${f.comentario ? (f.comentario.length > 50 ? f.comentario.substring(0,50) + '...' : f.comentario) : '-'}</small></td>
-          <td><small>${new Date(f.createdAt).toLocaleString()}</small></td>
-        </tr>
-      `;
-    }).join('');
-  }
+  // ========== FILTROS DE FEEDBACK ==========
   
   aplicarFiltrosFeedback() {
     const refeicao = document.getElementById('filtroRefeicaoFeedback')?.value || 'todas';
@@ -730,17 +525,40 @@ class MonitoramentoTempoReal {
     this.aplicarFiltrosFeedback();
   }
   
-  gerarEstrelasMini(nota) {
-    const estrelasCheias = Math.floor(nota);
-    let html = '';
-    for (let i = 0; i < estrelasCheias; i++) html += '<i class="fas fa-star text-warning" style="font-size: 10px;"></i>';
-    for (let i = estrelasCheias; i < 5; i++) html += '<i class="far fa-star text-warning" style="font-size: 10px;"></i>';
-    return html;
+  atualizarListaFeedbacks() {
+    const tbody = document.getElementById('listaFeedbacksAdmin');
+    if (!tbody) return;
+    
+    if (this.feedbacksFiltrados.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = this.feedbacksFiltrados.map(f => {
+      let notaClass = '';
+      if (f.nota >= 4) notaClass = 'alta';
+      else if (f.nota >= 2.5) notaClass = 'media';
+      else notaClass = 'baixa';
+      
+      return `
+        <tr>
+          <td>${f.alunoNome}${f.anonimo ? ' <i class="fas fa-user-secret text-muted"></i>' : ''}</td>
+          <td>${f.alunoTurma || '-'}</td>
+          <td><span class="badge ${f.tipoRefeicao === 'manha' ? 'badge-manha' : f.tipoRefeicao === 'almoco' ? 'badge-almoco' : 'badge-tarde'}">${f.tipoRefeicao === 'manha' ? '🌅 Manhã' : f.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'}</span></td>
+          <td><span class="feedback-nota-badge ${notaClass}">${'★'.repeat(f.nota)}${'☆'.repeat(5-f.nota)}</span></td>
+          <td><small>${f.comentario ? (f.comentario.length > 50 ? f.comentario.substring(0,50) + '...' : f.comentario) : '-'}</small></td>
+          <td><small>${new Date(f.createdAt).toLocaleString()}</small></td>
+        </tr>
+      `;
+    }).join('');
   }
+  
+  // ========== CONFIGURAÇÃO DE EVENTOS ==========
   
   configurarEventosFiltros() {
     console.log('🔧 Configurando eventos dos filtros...');
     
+    // Filtros de Registros
     const tipoSelect = document.getElementById('filtroRegistroTipo');
     const dataSelect = document.getElementById('filtroRegistroData');
     const turmaSelect = document.getElementById('filtroRegistroTurma');
@@ -748,23 +566,21 @@ class MonitoramentoTempoReal {
     const aplicarFiltrosRegistros = () => this.aplicarFiltrosRegistros();
     
     if (tipoSelect) {
-      const novoTipo = tipoSelect.cloneNode(true);
-      tipoSelect.parentNode.replaceChild(novoTipo, tipoSelect);
-      novoTipo.addEventListener('change', aplicarFiltrosRegistros);
+      tipoSelect.removeEventListener('change', aplicarFiltrosRegistros);
+      tipoSelect.addEventListener('change', aplicarFiltrosRegistros);
     }
     
     if (dataSelect) {
-      const novoData = dataSelect.cloneNode(true);
-      dataSelect.parentNode.replaceChild(novoData, dataSelect);
-      novoData.addEventListener('change', aplicarFiltrosRegistros);
+      dataSelect.removeEventListener('change', aplicarFiltrosRegistros);
+      dataSelect.addEventListener('change', aplicarFiltrosRegistros);
     }
     
     if (turmaSelect) {
-      const novaTurma = turmaSelect.cloneNode(true);
-      turmaSelect.parentNode.replaceChild(novaTurma, turmaSelect);
-      novaTurma.addEventListener('change', aplicarFiltrosRegistros);
+      turmaSelect.removeEventListener('change', aplicarFiltrosRegistros);
+      turmaSelect.addEventListener('change', aplicarFiltrosRegistros);
     }
     
+    // Filtros de Refeições por Turma
     const turmaRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurma');
     const turnoRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
     const dataRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoData');
@@ -772,40 +588,37 @@ class MonitoramentoTempoReal {
     const aplicarFiltrosTurmas = () => this.aplicarFiltrosRefeicoesTurmas();
     
     if (turmaRefeicaoSelect) {
-      const novaTurma = turmaRefeicaoSelect.cloneNode(true);
-      turmaRefeicaoSelect.parentNode.replaceChild(novaTurma, turmaRefeicaoSelect);
-      novaTurma.addEventListener('change', aplicarFiltrosTurmas);
+      turmaRefeicaoSelect.removeEventListener('change', aplicarFiltrosTurmas);
+      turmaRefeicaoSelect.addEventListener('change', aplicarFiltrosTurmas);
     }
     
     if (turnoRefeicaoSelect) {
-      const novoTurno = turnoRefeicaoSelect.cloneNode(true);
-      turnoRefeicaoSelect.parentNode.replaceChild(novoTurno, turnoRefeicaoSelect);
-      novoTurno.addEventListener('change', aplicarFiltrosTurmas);
+      turnoRefeicaoSelect.removeEventListener('change', aplicarFiltrosTurmas);
+      turnoRefeicaoSelect.addEventListener('change', aplicarFiltrosTurmas);
     }
     
     if (dataRefeicaoSelect) {
-      const novoData = dataRefeicaoSelect.cloneNode(true);
-      dataRefeicaoSelect.parentNode.replaceChild(novoData, dataRefeicaoSelect);
-      novoData.addEventListener('change', aplicarFiltrosTurmas);
+      dataRefeicaoSelect.removeEventListener('change', aplicarFiltrosTurmas);
+      dataRefeicaoSelect.addEventListener('change', aplicarFiltrosTurmas);
     }
     
+    // Filtros de Rodízio
     const rodizioTurmaSelect = document.getElementById('filtroRodizioTurma');
     const rodizioTipoSelect = document.getElementById('filtroRodizioTipo');
     
     const aplicarFiltrosRodizio = () => this.aplicarFiltrosRodizio();
     
     if (rodizioTurmaSelect) {
-      const novaRodizioTurma = rodizioTurmaSelect.cloneNode(true);
-      rodizioTurmaSelect.parentNode.replaceChild(novaRodizioTurma, rodizioTurmaSelect);
-      novaRodizioTurma.addEventListener('change', aplicarFiltrosRodizio);
+      rodizioTurmaSelect.removeEventListener('change', aplicarFiltrosRodizio);
+      rodizioTurmaSelect.addEventListener('change', aplicarFiltrosRodizio);
     }
     
     if (rodizioTipoSelect) {
-      const novoRodizioTipo = rodizioTipoSelect.cloneNode(true);
-      rodizioTipoSelect.parentNode.replaceChild(novoRodizioTipo, rodizioTipoSelect);
-      novoRodizioTipo.addEventListener('change', aplicarFiltrosRodizio);
+      rodizioTipoSelect.removeEventListener('change', aplicarFiltrosRodizio);
+      rodizioTipoSelect.addEventListener('change', aplicarFiltrosRodizio);
     }
     
+    // Filtros de Feedback
     const refeicaoFeedbackSelect = document.getElementById('filtroRefeicaoFeedback');
     const notaMinSelect = document.getElementById('filtroNotaMin');
     const gostouSelect = document.getElementById('filtroGostou');
@@ -815,36 +628,206 @@ class MonitoramentoTempoReal {
     const aplicarFiltrosFeedback = () => this.aplicarFiltrosFeedback();
     
     if (refeicaoFeedbackSelect) {
-      const novoRefeicao = refeicaoFeedbackSelect.cloneNode(true);
-      refeicaoFeedbackSelect.parentNode.replaceChild(novoRefeicao, refeicaoFeedbackSelect);
-      novoRefeicao.addEventListener('change', aplicarFiltrosFeedback);
+      refeicaoFeedbackSelect.removeEventListener('change', aplicarFiltrosFeedback);
+      refeicaoFeedbackSelect.addEventListener('change', aplicarFiltrosFeedback);
     }
     
     if (notaMinSelect) {
-      const novaNotaMin = notaMinSelect.cloneNode(true);
-      notaMinSelect.parentNode.replaceChild(novaNotaMin, notaMinSelect);
-      novaNotaMin.addEventListener('change', aplicarFiltrosFeedback);
+      notaMinSelect.removeEventListener('change', aplicarFiltrosFeedback);
+      notaMinSelect.addEventListener('change', aplicarFiltrosFeedback);
     }
     
     if (gostouSelect) {
-      const novoGostou = gostouSelect.cloneNode(true);
-      gostouSelect.parentNode.replaceChild(novoGostou, gostouSelect);
-      novoGostou.addEventListener('change', aplicarFiltrosFeedback);
+      gostouSelect.removeEventListener('change', aplicarFiltrosFeedback);
+      gostouSelect.addEventListener('change', aplicarFiltrosFeedback);
     }
     
     if (anonimoSelect) {
-      const novoAnonimo = anonimoSelect.cloneNode(true);
-      anonimoSelect.parentNode.replaceChild(novoAnonimo, anonimoSelect);
-      novoAnonimo.addEventListener('change', aplicarFiltrosFeedback);
+      anonimoSelect.removeEventListener('change', aplicarFiltrosFeedback);
+      anonimoSelect.addEventListener('change', aplicarFiltrosFeedback);
     }
     
     if (buscaFeedbackInput) {
-      const novoBusca = buscaFeedbackInput.cloneNode(true);
-      buscaFeedbackInput.parentNode.replaceChild(novoBusca, buscaFeedbackInput);
-      novoBusca.addEventListener('input', aplicarFiltrosFeedback);
+      buscaFeedbackInput.removeEventListener('input', aplicarFiltrosFeedback);
+      buscaFeedbackInput.addEventListener('input', aplicarFiltrosFeedback);
     }
     
     console.log('✅ Todos os eventos configurados');
+  }
+  
+  // ========== ATUALIZAÇÕES E DADOS ==========
+  
+  async carregarFeedbacksCompleto() {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/feedback-cozinha/estatisticas', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        this.todosFeedbacks = data.ultimosFeedbacks || [];
+        this.feedbacksFiltrados = [...this.todosFeedbacks];
+        this.atualizarFeedbacksNoDOM(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar feedbacks:', error);
+    }
+  }
+  
+  async carregarDados() {
+    if (!this.paginaCarregada) return;
+    
+    const contentArea = document.getElementById('contentArea');
+    const isMonitoramentoAtivo = contentArea && contentArea.querySelector('.monitoramento-dashboard') !== null;
+    
+    if (!isMonitoramentoAtivo) {
+      console.log('⏭️ Seção de monitoramento não está ativa, ignorando atualização');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('auth_token');
+      
+      let dataParaBuscar = null;
+      if (this.filtroRegistroData !== 'hoje' && this.filtroRegistroData !== 'todos') {
+        dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
+      }
+      
+      let url = '/api/monitoramento-cozinha/dashboard';
+      if (dataParaBuscar) {
+        url += `?data=${dataParaBuscar}`;
+      }
+      
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        this.dados = data;
+        this.ultimosRegistrosOriginais = [...(data.cozinha?.ultimosRegistros || [])];
+        this.refeicoesPorTurmaOriginais = [...(data.cozinha?.refeicoesPorTurma || [])];
+        
+        this.filtrarRegistrosAtuais(this.filtroRegistroTurma, this.filtroRegistroRefeicao);
+        this.filtrarRefeicoesTurmasAtuais(this.filtroTurmasTurma, this.filtroTurmasTurno);
+        this.atualizarElementosExistentes(data);
+        this.atualizarGraficos(data);
+        this.atualizarTimestamp(data.timestamp);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+    }
+  }
+  
+  async carregarFeedbacks() {
+    if (!this.paginaCarregada) return;
+    
+    const contentArea = document.getElementById('contentArea');
+    const isMonitoramentoAtivo = contentArea && contentArea.querySelector('.monitoramento-dashboard') !== null;
+    
+    if (!isMonitoramentoAtivo) return;
+    
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/feedback-cozinha/estatisticas', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        this.todosFeedbacks = data.ultimosFeedbacks || [];
+        this.feedbacksFiltrados = [...this.todosFeedbacks];
+        this.atualizarFeedbacksNoDOM(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar feedbacks:', error);
+    }
+  }
+  
+  async atualizarForcado() {
+    console.log('🔄 Atualização forçada - recarregando dados...');
+    
+    const dataAtual = this.filtroRegistroData !== 'hoje' && this.filtroRegistroData !== 'todos' ? 
+      this.getDataPorPeriodo(this.filtroRegistroData) : 
+      (this.filtroRegistroData === 'todos' ? 'todos' : 'hoje');
+    this.cacheDados.delete(dataAtual);
+    
+    const btnRefresh = document.querySelector('.btn-refresh');
+    if (btnRefresh) {
+      const originalHtml = btnRefresh.innerHTML;
+      btnRefresh.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
+      btnRefresh.disabled = true;
+      
+      await this.carregarDadosCompleto(null, false);
+      
+      btnRefresh.innerHTML = originalHtml;
+      btnRefresh.disabled = false;
+    } else {
+      await this.carregarDadosCompleto(null, false);
+    }
+    
+    this.showToastMessage('✅ Dados atualizados com sucesso!', 'success');
+  }
+  
+  atualizarFeedbacksNoDOM(data) {
+    const stats = data.estatisticas;
+    
+    const totalEl = document.getElementById('totalFeedbacks');
+    const mediaEl = document.getElementById('mediaNotas');
+    const gostaramEl = document.getElementById('gostaram');
+    const filtradosEl = document.getElementById('feedbacksFiltrados');
+    const totalBadge = document.getElementById('totalFeedbacksBadge');
+    
+    if (totalEl) totalEl.textContent = stats.total || 0;
+    if (totalBadge) totalBadge.textContent = stats.total || 0;
+    if (mediaEl) mediaEl.textContent = stats.mediaNotas || 0;
+    if (filtradosEl) filtradosEl.textContent = stats.total || 0;
+    
+    const estrelasMedia = document.getElementById('estrelasMedia');
+    if (estrelasMedia) {
+      const media = parseFloat(stats.mediaNotas) || 0;
+      estrelasMedia.innerHTML = this.gerarEstrelasMini(media);
+    }
+    
+    const maxNota = Math.max(...Object.values(stats.distribuicaoNotas || {}), 1);
+    for (let i = 1; i <= 5; i++) {
+      const count = (stats.distribuicaoNotas || {})[i] || 0;
+      const percent = (count / maxNota) * 100;
+      const bar = document.getElementById(`bar${i}`);
+      const countSpan = document.getElementById(`count${i}`);
+      if (bar) bar.style.width = `${percent}%`;
+      if (countSpan) countSpan.textContent = count;
+    }
+    
+    const gostaramSim = document.getElementById('gostaramSim');
+    const gostaramMaisMenos = document.getElementById('gostaramMaisMenos');
+    const gostaramNao = document.getElementById('gostaramNao');
+    const mediaDetalhada = document.getElementById('mediaDetalhada');
+    
+    if (gostaramSim) gostaramSim.textContent = stats.gostouStats?.sim || 0;
+    if (gostaramMaisMenos) gostaramMaisMenos.textContent = stats.gostouStats?.mais_ou_menos || 0;
+    if (gostaramNao) gostaramNao.textContent = stats.gostouStats?.nao || 0;
+    if (mediaDetalhada) mediaDetalhada.textContent = `${stats.mediaNotas || 0}/5`;
+    
+    const totalGostou = (stats.gostouStats?.sim || 0) + (stats.gostouStats?.mais_ou_menos || 0);
+    const aprovacao = stats.total > 0 ? Math.round((totalGostou / stats.total) * 100) : 0;
+    if (gostaramEl) gostaramEl.textContent = `${aprovacao}%`;
+    
+    const feedbacksCount = document.getElementById('feedbacksCount');
+    if (feedbacksCount) feedbacksCount.textContent = this.todosFeedbacks.length;
+    
+    this.atualizarListaFeedbacks();
+  }
+  
+  gerarEstrelasMini(nota) {
+    const estrelasCheias = Math.floor(nota);
+    let html = '';
+    for (let i = 0; i < estrelasCheias; i++) html += '<i class="fas fa-star text-warning"></i>';
+    for (let i = estrelasCheias; i < 5; i++) html += '<i class="far fa-star text-warning"></i>';
+    return html;
   }
   
   atualizarElementosExistentes(data) {
@@ -856,7 +839,7 @@ class MonitoramentoTempoReal {
     const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
     
     const metricValues = document.querySelectorAll('.metric-value');
-    if (metricValues.length >= 4) {
+    if (metricValues.length >= 3) {
       if (metricValues[0]) metricValues[0].textContent = cozinha.totalPessoas || 0;
       if (metricValues[1]) metricValues[1].textContent = contagem.total;
       if (metricValues[2]) metricValues[2].textContent = `${adesao}%`;
@@ -889,8 +872,6 @@ class MonitoramentoTempoReal {
       if (legendValues[2]) legendValues[2].textContent = perfis.nunca;
     }
     
-    this.atualizarTabelaRefeicoesTurmas();
-    
     const statNumbers = document.querySelectorAll('.rodizio-stat .stat-number');
     if (statNumbers.length >= 3) {
       if (statNumbers[0]) statNumbers[0].textContent = gestao.totalRodizios || 0;
@@ -907,15 +888,14 @@ class MonitoramentoTempoReal {
       `;
     }
     
-    const rodizioTableBody = document.querySelector('.compact tbody');
+    const rodizioTableBody = document.querySelector('#tabelaRodizio tbody');
     if (rodizioTableBody && gestao.rodizios) {
       rodizioTableBody.innerHTML = gestao.rodizios.map(r => {
         let diasTexto = '';
         if (r.tipo === 'semanal') {
-          diasTexto = (r.diasSemana || []).map(d => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d]).join(', ');
+          diasTexto = (r.diasSemana || []).join(', ');
         } else if (r.tipo === 'mensal') {
-          if (r.diasMes?.length) diasTexto = `${r.diasMes.length} dias/mês`;
-          else if (r.semanasMes?.length) diasTexto = `${r.semanasMes.map(s => `${s}ª`).join(', ')} semana(s)`;
+          diasTexto = `${r.semanasMes?.map(s => `${s}ª`).join(', ') || ''} semana(s)`;
         } else {
           diasTexto = 'Ambos sistemas';
         }
@@ -936,8 +916,6 @@ class MonitoramentoTempoReal {
         `;
       }).join('');
     }
-    
-    console.log('✅ Dados atualizados em segundo plano');
   }
   
   atualizarGraficos(data) {
@@ -946,11 +924,6 @@ class MonitoramentoTempoReal {
       this.graficos.perfil.data.datasets[0].data = [perfis.sempre || 0, perfis.as_vezes || 0, perfis.nunca || 0];
       this.graficos.perfil.update();
     }
-  }
-  
-  atualizarContadorRefeicoes(total) {
-    const el = document.getElementById('totalRefeicoes');
-    if (el) el.textContent = total;
   }
   
   atualizarTimestamp(timestamp) {
@@ -966,8 +939,6 @@ class MonitoramentoTempoReal {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'nova-refeicao') {
-          this.atualizarContadorRefeicoes(data.total);
-          this.adicionarNotificacao(`📢 Nova refeição registrada! Total: ${data.total}`);
           this.carregarFeedbacks();
           this.carregarDados();
         }
@@ -1004,7 +975,7 @@ class MonitoramentoTempoReal {
     }
     
     this.atualizacaoTimer = setInterval(() => {
-      console.log('🔄 Atualização automática (mantendo filtros)...');
+      console.log('🔄 Atualização automática...');
       this.carregarDados();
       this.carregarFeedbacks();
     }, 60000);
@@ -1234,8 +1205,6 @@ class MonitoramentoTempoReal {
     const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
     const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
     
-    const turmasUnicas = [...new Set((cozinha.refeicoesPorTurma || []).map(t => t.turma))].filter(t => t);
-    
     container.innerHTML = `
       <div class="monitoramento-dashboard">
         <div class="dashboard-header">
@@ -1452,7 +1421,7 @@ class MonitoramentoTempoReal {
             </div>
             
             <div class="table-responsive">
-              <table class="data-table">
+              <table class="data-table" id="tabelaRefeicoesTurmas">
                 <thead>
                   <tr>
                     <th>Turma</th>
@@ -1539,22 +1508,19 @@ class MonitoramentoTempoReal {
             
             <div class="registros-list">
               ${(cozinha.ultimosRegistros || []).slice(0, 50).map(r => `
-                <div class="registro-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                  <div style="flex: 1;">
-                    <div class="registro-info">
-                      <div class="registro-nome"><strong>${this.escapeHtml(r.alunoNome)}</strong></div>
-                      <div class="registro-turma" style="font-size: 12px; color: #6c757d;">${this.escapeHtml(r.alunoTurma)}</div>
-                    </div>
-                    <div class="registro-detalhes" style="margin-top: 5px;">
-                      <span class="refeicao-badge ${r.tipoRefeicao}" style="font-size: 11px; padding: 4px 12px; border-radius: 30px;">
+                <div class="registro-item">
+                  <div class="registro-info">
+                    <div class="registro-nome"><strong>${this.escapeHtml(r.alunoNome)}</strong></div>
+                    <div class="registro-turma">${this.escapeHtml(r.alunoTurma)}</div>
+                    <div class="registro-detalhes">
+                      <span class="refeicao-badge ${r.tipoRefeicao}">
                         ${r.tipoRefeicao === 'manha' ? '🌅 Manhã' : r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'}
                       </span>
-                      <span class="registro-horario" style="font-size: 11px; margin-left: 8px;">
-                        <i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}
-                      </span>
+                      <span class="registro-horario"><i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}</span>
+                      <span class="registro-data"><i class="far fa-calendar-alt"></i> ${new Date(r.horario).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <div class="action-buttons" style="display: flex; gap: 5px;">
+                  <div class="action-buttons">
                     <button class="btn-icon" onclick="admin.verDetalhesRegistro('${r.id}')" title="Ver detalhes">
                       <i class="fas fa-eye"></i>
                     </button>
@@ -1837,10 +1803,9 @@ class MonitoramentoTempoReal {
                   ${(gestao.rodizios || []).map(r => {
                     let diasTexto = '';
                     if (r.tipo === 'semanal') {
-                      diasTexto = (r.diasSemana || []).map(d => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d]).join(', ');
+                      diasTexto = (r.diasSemana || []).join(', ');
                     } else if (r.tipo === 'mensal') {
-                      if (r.diasMes?.length) diasTexto = `${r.diasMes.length} dias/mês`;
-                      else if (r.semanasMes?.length) diasTexto = `${r.semanasMes.map(s => `${s}ª`).join(', ')} semana(s)`;
+                      diasTexto = `${r.semanasMes?.map(s => `${s}ª`).join(', ') || ''} semana(s)`;
                     } else {
                       diasTexto = 'Ambos sistemas';
                     }
@@ -2174,9 +2139,13 @@ class MonitoramentoTempoReal {
           border-bottom: 1px solid #f1f5f9;
         }
         .registro-item:last-child { border-bottom: none; }
+        .registro-info {
+          flex: 1;
+        }
         .registro-nome { font-weight: 600; color: #1e293b; }
         .registro-turma { font-size: 12px; color: #94a3b8; margin-top: 2px; }
-        .registro-detalhes { display: flex; align-items: center; gap: 12px; }
+        .registro-detalhes { display: flex; align-items: center; gap: 12px; margin-top: 5px; }
+        .registro-data { font-size: 11px; color: #94a3b8; }
         .refeicao-badge {
           padding: 4px 12px;
           border-radius: 30px;
@@ -2197,15 +2166,6 @@ class MonitoramentoTempoReal {
         .tipo-badge.semanal { background: #dbeafe; color: #1e40af; }
         .tipo-badge.mensal { background: #fef3c7; color: #92400e; }
         .tipo-badge.ambos { background: #e0e7ff; color: #3730a3; }
-        .status-badge {
-          display: inline-block;
-          padding: 4px 12px;
-          border-radius: 30px;
-          font-size: 11px;
-          font-weight: 500;
-        }
-        .status-badge.active { background: #d1fae5; color: #065f46; }
-        .status-badge.inactive { background: #fee2e2; color: #991b1b; }
         .action-buttons {
           display: flex;
           gap: 8px;
