@@ -20,7 +20,7 @@ class MonitoramentoTempoReal {
     // PROPRIEDADES PARA FILTRO DAS TURMAS (REFEIÇÕES POR TURMA)
     this.filtroTurmasRefeicaoTurma = 'todas';
     this.filtroTurmasRefeicaoTurno = 'todas';
-    this.filtroTurmasRefeicaoPeriodo = 'todos';
+    this.filtroTurmasRefeicaoPeriodoData = 'todos';
     this.dadosRefeicoesTurmasFiltrados = [];
     this.refeicoesPorTurmaOriginais = [];
   }
@@ -516,7 +516,7 @@ class MonitoramentoTempoReal {
     console.log(`📊 Renderizando ${dados.length} turmas`);
     
     if (dados.length === 0) {
-      turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada com os filtros selecionados<\/td></tr>';
+      turmasBody.innerHTML = '<td><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada com os filtros selecionados<\/td></tr>';
       return;
     }
     
@@ -553,7 +553,7 @@ class MonitoramentoTempoReal {
     console.log(`📌 Filtros Turmas: Turma=${turma}, Turno=${turno}, Período=${periodo}`);
     console.log(`📊 Total original: ${this.refeicoesPorTurmaOriginais.length}`);
     
-    // Obter datas para filtro de período
+    // Calcular datas para filtro de período
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
     
@@ -585,7 +585,7 @@ class MonitoramentoTempoReal {
       }));
     }
     
-    // Filtrar por período (data)
+    // FILTRAR POR PERÍODO (DATA) - igual ao de Últimos Registros
     if (periodo !== 'todos') {
       const registros = this.ultimosRegistrosOriginais;
       
@@ -1299,7 +1299,7 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Refeições por Turma com Filtros -->
+        <!-- Refeições por Turma com Filtros (Turma, Turno e Período) -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-table"></i>
@@ -1495,14 +1495,25 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Avaliações dos Alunos -->
+        <!-- ============================================ -->
+        <!-- SEÇÃO: AVALIAÇÕES DOS ALUNOS (FEEDBACKS) - ESTILO ORIGINAL -->
+        <!-- ============================================ -->
         <div class="card">
-          <div class="card-header">
-            <i class="fas fa-star"></i>
-            <span>Avaliações dos Alunos</span>
-            <span class="card-badge" id="totalFeedbacksBadge">0</span>
+          <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+              <i class="fas fa-star me-2"></i>
+              <span>Avaliações dos Alunos</span>
+              <span class="badge bg-success ms-2" id="totalFeedbacksBadge">0</span>
+            </div>
+            <div>
+              <button class="btn-refresh me-2" onclick="monitoramentoTempoReal.carregarFeedbacksCompleto()" style="background: #1e3c72; color: white;">
+                <i class="fas fa-sync-alt"></i> Atualizar
+              </button>
+            </div>
           </div>
           <div class="card-body">
+            
+            <!-- Cards de Estatísticas dos Feedbacks -->
             <div class="feedback-stats-grid">
               <div class="feedback-stat-card">
                 <div class="feedback-stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
@@ -1520,6 +1531,7 @@ class MonitoramentoTempoReal {
                 <div class="feedback-stat-info">
                   <span class="feedback-stat-value" id="mediaNotas">0</span>
                   <span class="feedback-stat-label">Média de Notas</span>
+                  <div id="estrelasMedia" class="feedback-stars-mini"></div>
                 </div>
               </div>
               <div class="feedback-stat-card">
@@ -1541,7 +1553,8 @@ class MonitoramentoTempoReal {
                 </div>
               </div>
             </div>
-            
+
+            <!-- Filtros Estilizados -->
             <div class="feedback-filters">
               <div class="feedback-filters-row">
                 <div class="feedback-filter-group">
@@ -1595,15 +1608,105 @@ class MonitoramentoTempoReal {
               </div>
             </div>
 
-            <div class="feedback-list-container" style="max-height: 300px; overflow-y: auto;">
-              <div id="listaFeedbacksAdmin" class="feedback-list">
-                <p class="text-center">Carregando avaliações...</p>
+            <!-- Distribuição de Notas e Opiniões -->
+            <div class="feedback-charts">
+              <div class="feedback-chart-card">
+                <div class="feedback-chart-title">
+                  <i class="fas fa-chart-bar"></i> Distribuição das Notas
+                </div>
+                <div class="feedback-rating-bars">
+                  <div class="rating-bar">
+                    <span class="rating-label">★ 1</span>
+                    <div class="rating-bar-bg"><div id="bar1" class="rating-bar-fill" style="width: 0%; background: #ef4444;"></div></div>
+                    <span class="rating-count" id="count1">0</span>
+                  </div>
+                  <div class="rating-bar">
+                    <span class="rating-label">★ 2</span>
+                    <div class="rating-bar-bg"><div id="bar2" class="rating-bar-fill" style="width: 0%; background: #f59e0b;"></div></div>
+                    <span class="rating-count" id="count2">0</span>
+                  </div>
+                  <div class="rating-bar">
+                    <span class="rating-label">★ 3</span>
+                    <div class="rating-bar-bg"><div id="bar3" class="rating-bar-fill" style="width: 0%; background: #3b82f6;"></div></div>
+                    <span class="rating-count" id="count3">0</span>
+                  </div>
+                  <div class="rating-bar">
+                    <span class="rating-label">★ 4</span>
+                    <div class="rating-bar-bg"><div id="bar4" class="rating-bar-fill" style="width: 0%; background: #10b981;"></div></div>
+                    <span class="rating-count" id="count4">0</span>
+                  </div>
+                  <div class="rating-bar">
+                    <span class="rating-label">★ 5</span>
+                    <div class="rating-bar-bg"><div id="bar5" class="rating-bar-fill" style="width: 0%; background: #10b981;"></div></div>
+                    <span class="rating-count" id="count5">0</span>
+                  </div>
+                </div>
               </div>
+              <div class="feedback-chart-card">
+                <div class="feedback-chart-title">
+                  <i class="fas fa-smile"></i> Resumo das Opiniões
+                </div>
+                <div class="opinion-summary">
+                  <div class="opinion-item">
+                    <div class="opinion-icon"><i class="fas fa-smile-wink"></i></div>
+                    <div class="opinion-info">
+                      <span class="opinion-label">Adoraram</span>
+                      <span class="opinion-value" id="gostaramSim">0</span>
+                    </div>
+                  </div>
+                  <div class="opinion-item">
+                    <div class="opinion-icon"><i class="fas fa-meh"></i></div>
+                    <div class="opinion-info">
+                      <span class="opinion-label">Mais ou menos</span>
+                      <span class="opinion-value" id="gostaramMaisMenos">0</span>
+                    </div>
+                  </div>
+                  <div class="opinion-item">
+                    <div class="opinion-icon"><i class="fas fa-frown"></i></div>
+                    <div class="opinion-info">
+                      <span class="opinion-label">Não gostaram</span>
+                      <span class="opinion-value" id="gostaramNao">0</span>
+                    </div>
+                  </div>
+                  <div class="opinion-divider"></div>
+                  <div class="opinion-item total">
+                    <div class="opinion-icon"><i class="fas fa-star"></i></div>
+                    <div class="opinion-info">
+                      <span class="opinion-label">Média Geral</span>
+                      <span class="opinion-value" id="mediaDetalhada">0/5</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lista de Feedbacks -->
+            <div class="feedback-list-header">
+              <i class="fas fa-list"></i>
+              <span>Últimas Avaliações</span>
+              <span class="feedback-list-count" id="feedbacksCount">0</span>
+            </div>
+            <div class="feedback-table-container">
+              <table class="feedback-table">
+                <thead>
+                  <tr>
+                    <th>Aluno</th>
+                    <th>Turma</th>
+                    <th>Refeição</th>
+                    <th>Nota</th>
+                    <th>Comentário</th>
+                    <th>Data</th>
+                  </tr>
+                </thead>
+                <tbody id="listaFeedbacksAdmin">
+                  <tr><td colspan="6" class="text-center">Carregando avaliações...<\/td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
 
-        <!-- Gestão de Rodízio -->
+        <!-- Gestão de Rodízio com Filtros -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-calendar-alt"></i>
@@ -1694,7 +1797,7 @@ class MonitoramentoTempoReal {
                     `;
                   }).join('')}
                   ${(gestao.rodizios || []).length === 0 ? `
-                    <tr><td colspan="6" class="text-center empty-state">Nenhum rodízio configurado<\/td></tr>
+                    <td><td colspan="6" class="text-center empty-state">Nenhum rodízio configurado<\/td></tr>
                   ` : ''}
                 </tbody>
               </table>
@@ -2140,92 +2243,383 @@ class MonitoramentoTempoReal {
           margin-bottom: 20px;
         }
         
+        /* ============================================ */
+        /* ESTILOS ESPECÍFICOS PARA FEEDBACKS */
+        /* ============================================ */
+        
         .feedback-stats-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: 16px;
-          margin-bottom: 20px;
+          margin-bottom: 24px;
         }
+        
         .feedback-stat-card {
-          background: #f8fafc;
-          border-radius: 12px;
-          padding: 15px;
+          background: white;
+          border-radius: 20px;
+          padding: 16px 20px;
           display: flex;
           align-items: center;
-          gap: 15px;
+          gap: 16px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+          border: 1px solid #eef2f6;
+          transition: all 0.3s;
         }
+        
+        .feedback-stat-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        }
+        
         .feedback-stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
+          width: 52px;
+          height: 52px;
+          border-radius: 16px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 20px;
+          font-size: 24px;
           color: white;
         }
+        
         .feedback-stat-info {
           flex: 1;
         }
+        
         .feedback-stat-value {
-          font-size: 24px;
+          display: block;
+          font-size: 28px;
           font-weight: 700;
           color: #1e293b;
           line-height: 1.2;
         }
+        
         .feedback-stat-label {
-          font-size: 11px;
+          font-size: 12px;
           color: #64748b;
         }
-        .feedback-list-container {
-          border: 1px solid #e5e7eb;
+        
+        .feedback-stars-mini {
+          margin-top: 4px;
+          font-size: 11px;
+        }
+        
+        .feedback-filters {
+          background: #f8fafc;
+          border-radius: 20px;
+          padding: 20px;
+          margin-bottom: 24px;
+          border: 1px solid #eef2f6;
+        }
+        
+        .feedback-filters-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+        
+        .feedback-filter-group {
+          flex: 1;
+          min-width: 140px;
+        }
+        
+        .feedback-filter-group label {
+          display: block;
+          font-size: 11px;
+          font-weight: 600;
+          color: #475569;
+          margin-bottom: 6px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        
+        .feedback-filter-group label i {
+          margin-right: 4px;
+          font-size: 11px;
+        }
+        
+        .feedback-filter-select,
+        .feedback-filter-input {
+          width: 100%;
+          padding: 10px 12px;
+          border: 2px solid #e2e8f0;
           border-radius: 12px;
+          font-size: 13px;
+          background: white;
+          transition: all 0.2s;
         }
-        .feedback-list {
-          padding: 10px;
+        
+        .feedback-filter-select:focus,
+        .feedback-filter-input:focus {
+          outline: none;
+          border-color: #1e3c72;
+          box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
         }
-        .feedback-item {
-          padding: 10px;
-          border-bottom: 1px solid #f1f5f9;
+        
+        .feedback-filter-group.search {
+          flex: 1.5;
         }
-        .feedback-item:last-child {
-          border-bottom: none;
+        
+        .feedback-filters-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          padding-top: 8px;
         }
-        .feedback-header {
+        
+        .feedback-btn-clear {
+          background: #e2e8f0;
+          border: none;
+          padding: 8px 20px;
+          border-radius: 30px;
+          font-size: 12px;
+          font-weight: 500;
+          color: #475569;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .feedback-btn-clear:hover {
+          background: #cbd5e1;
+          transform: translateY(-1px);
+        }
+        
+        .feedback-btn-apply {
+          background: linear-gradient(135deg, #1e3c72, #2a5298);
+          border: none;
+          padding: 8px 24px;
+          border-radius: 30px;
+          font-size: 12px;
+          font-weight: 500;
+          color: white;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .feedback-btn-apply:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
+        }
+        
+        .feedback-charts {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          margin-bottom: 24px;
+        }
+        
+        .feedback-chart-card {
+          background: #f8fafc;
+          border-radius: 20px;
+          padding: 20px;
+          border: 1px solid #eef2f6;
+        }
+        
+        .feedback-chart-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: #1e293b;
+          margin-bottom: 16px;
+          padding-bottom: 12px;
+          border-bottom: 2px solid #e2e8f0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .feedback-chart-title i {
+          color: #1e3c72;
+        }
+        
+        .rating-bar {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        
+        .rating-label {
+          width: 35px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #475569;
+        }
+        
+        .rating-bar-bg {
+          flex: 1;
+          height: 8px;
+          background: #e2e8f0;
+          border-radius: 10px;
+          overflow: hidden;
+        }
+        
+        .rating-bar-fill {
+          height: 100%;
+          border-radius: 10px;
+          transition: width 0.5s ease;
+        }
+        
+        .rating-count {
+          width: 35px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #1e293b;
+          text-align: right;
+        }
+        
+        .opinion-summary {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        
+        .opinion-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 12px;
+          background: white;
+          border-radius: 12px;
+          transition: all 0.2s;
+        }
+        
+        .opinion-item:hover {
+          transform: translateX(4px);
+        }
+        
+        .opinion-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+        }
+        
+        .opinion-item:first-child .opinion-icon { background: #d1fae5; color: #10b981; }
+        .opinion-item:nth-child(2) .opinion-icon { background: #fef3c7; color: #f59e0b; }
+        .opinion-item:nth-child(3) .opinion-icon { background: #fee2e2; color: #ef4444; }
+        .opinion-item.total .opinion-icon { background: #e0e7ff; color: #1e3c72; }
+        
+        .opinion-info {
+          flex: 1;
           display: flex;
           justify-content: space-between;
-          margin-bottom: 5px;
+          align-items: center;
         }
-        .feedback-aluno {
+        
+        .opinion-label {
+          font-size: 13px;
+          font-weight: 500;
+          color: #475569;
+        }
+        
+        .opinion-value {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e293b;
+        }
+        
+        .opinion-divider {
+          height: 1px;
+          background: #e2e8f0;
+          margin: 8px 0;
+        }
+        
+        .feedback-list-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 16px;
+          padding-bottom: 12px;
+          border-bottom: 2px solid #eef2f6;
+        }
+        
+        .feedback-list-header i {
+          font-size: 16px;
+          color: #1e3c72;
+        }
+        
+        .feedback-list-header span {
+          font-size: 14px;
           font-weight: 600;
           color: #1e293b;
         }
-        .feedback-nota {
-          color: #f59e0b;
-        }
-        .feedback-comentario {
-          font-size: 13px;
+        
+        .feedback-list-count {
+          background: #e2e8f0;
+          padding: 2px 10px;
+          border-radius: 30px;
+          font-size: 11px;
+          font-weight: 600;
           color: #475569;
-          margin-top: 5px;
         }
         
+        .feedback-table-container {
+          overflow-x: auto;
+          border-radius: 16px;
+          border: 1px solid #eef2f6;
+        }
+        
+        .feedback-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+        
+        .feedback-table th {
+          padding: 14px 16px;
+          text-align: left;
+          font-weight: 600;
+          color: #475569;
+          background: #f8fafc;
+          border-bottom: 1px solid #eef2f6;
+        }
+        
+        .feedback-table td {
+          padding: 12px 16px;
+          border-bottom: 1px solid #f1f5f9;
+          color: #334155;
+        }
+        
+        .feedback-table tr:hover td {
+          background: #f8fafc;
+        }
+        
+        .feedback-nota-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding: 4px 10px;
+          border-radius: 30px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+        
+        .feedback-nota-badge.alta { background: #d1fae5; color: #065f46; }
+        .feedback-nota-badge.media { background: #fef3c7; color: #92400e; }
+        .feedback-nota-badge.baixa { background: #fee2e2; color: #991b1b; }
+        
         @media (max-width: 1024px) {
-          .metrics-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          .two-columns {
-            grid-template-columns: 1fr;
-          }
           .feedback-stats-grid {
             grid-template-columns: repeat(2, 1fr);
+          }
+          .feedback-charts {
+            grid-template-columns: 1fr;
           }
         }
+        
         @media (max-width: 768px) {
-          .metrics-grid {
-            grid-template-columns: 1fr;
-          }
           .feedback-stats-grid {
             grid-template-columns: 1fr;
+          }
+          .feedback-filters-row {
+            flex-direction: column;
+          }
+          .feedback-filter-group.search {
+            flex: auto;
           }
         }
       </style>
