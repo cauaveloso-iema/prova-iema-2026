@@ -568,7 +568,7 @@ class MonitoramentoEnfermaria {
         if (!atendimentos || atendimentos.length === 0) {
             return `
                 <tr>
-                    <td colspan="7" style="text-align: center; padding: 40px;">
+                    <td colspan="8" style="text-align: center; padding: 40px;">
                         <i class="fas fa-inbox" style="font-size: 48px; color: #d1d5db;"></i>
                         <p style="margin-top: 10px;">Nenhum atendimento encontrado</p>
                     </td>
@@ -577,22 +577,40 @@ class MonitoramentoEnfermaria {
         }
         
         return atendimentos.map(a => {
-            const data = new Date(a.dataEntrada);
-            const dataFormatada = data.toLocaleString('pt-BR');
+            // 🔥 USAR DATA FORMATADA DO BACKEND
+            const dataEntradaFormatada = a.dataEntradaFormatada || (a.dataEntrada ? new Date(a.dataEntrada).toLocaleString('pt-BR') : 'N/A');
+            const dataSaidaFormatada = a.saida?.dataHoraFormatada || (a.saida?.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : '-');
             
             const statusClass = a.status === 'em_atendimento' ? 'status-em_atendimento' : 'status-finalizado';
             const statusText = a.status === 'em_atendimento' ? 'Em andamento' : 'Finalizado';
             
-            const desfechoText = a.saida?.desfechoTexto || '-';
-            const queixaCurta = a.queixa.length > 50 ? a.queixa.substring(0, 50) + '...' : a.queixa;
+            // 🔥 CORREÇÃO: Buscar o desfecho corretamente
+            let desfechoText = '-';
+            if (a.saida?.desfechoTexto) {
+                desfechoText = a.saida.desfechoTexto;
+            } else if (a.saida?.desfecho) {
+                const desfechoMap = {
+                    'retornou_sala': 'Retornou para Sala de Aula',
+                    'encaminhado_gestao': 'Encaminhado para Gestão Geral',
+                    'liberado_responsavel': 'Liberado com o Responsável',
+                    'liberado_coordenador': `Liberado com Coordenador${a.saida?.coordenadorPatioNome ? ` (${a.saida.coordenadorPatioNome})` : ''}`,
+                    'outros': `Outros: ${a.saida?.desfechoOutrosTexto || ''}`
+                };
+                desfechoText = desfechoMap[a.saida.desfecho] || a.saida.desfecho;
+            } else if (a.status === 'em_atendimento') {
+                desfechoText = 'Em andamento';
+            }
+            
+            const queixaCurta = a.queixa ? (a.queixa.length > 50 ? a.queixa.substring(0, 50) + '...' : a.queixa) : '-';
             
             return `
                 <tr>
-                    <td><strong>${a.alunoNome}</strong><br><small>${a.alunoMatricula || ''}</small></td>
+                    <td><strong>${a.alunoNome || '-'}</strong><br><small>${a.alunoMatricula || ''}</small></td>
                     <td>${a.alunoTurma || '-'}</td>
-                    <td title="${a.queixa}">${queixaCurta}</td>
-                    <td>${dataFormatada}</td>
+                    <td title="${a.queixa || ''}">${queixaCurta}</td>
+                    <td><strong>${dataEntradaFormatada}</strong></td>
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td><strong>${dataSaidaFormatada}</strong></td>
                     <td>${desfechoText}</td>
                     <td>
                         <div class="action-buttons">
@@ -615,7 +633,7 @@ class MonitoramentoEnfermaria {
     async editarAtendimento(atendimentoId) {
         try {
             const token = localStorage.getItem('auth_token');
-            const response = await fetch(`/api/enfermaria-monitoramento/atendimento/${atendimentoId}`, {
+            const response = await fetch(`${this.apiBase}/atendimento/${atendimentoId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -625,9 +643,30 @@ class MonitoramentoEnfermaria {
             
             const a = data.atendimento;
             
-            // Formatar data para o input datetime-local
-            const dataEntrada = new Date(a.entrada.dataHora);
-            const dataEntradaFormatada = dataEntrada.toISOString().slice(0, 16);
+            // 🔥 USAR DATAS FORMATADAS DO BACKEND PARA EXIBIÇÃO
+            const dataEntradaExibicao = a.entrada.dataHoraFormatada || new Date(a.entrada.dataHora).toLocaleString('pt-BR');
+            
+            // 🔥 FORMATAR PARA O INPUT DATETIME-LOCAL (YYYY-MM-DDTHH:MM)
+            const formatarParaInput = (dataISO) => {
+                if (!dataISO) return '';
+                const d = new Date(dataISO);
+                // Ajustar para fuso horário local (Brasil)
+                const ano = d.getFullYear();
+                const mes = String(d.getMonth() + 1).padStart(2, '0');
+                const dia = String(d.getDate()).padStart(2, '0');
+                const horas = String(d.getHours()).padStart(2, '0');
+                const minutos = String(d.getMinutes()).padStart(2, '0');
+                return `${ano}-${mes}-${dia}T${horas}:${minutos}`;
+            };
+            
+            const dataEntradaInput = formatarParaInput(a.entrada.dataHora);
+            const dataSaidaInput = a.saida?.dataHora ? formatarParaInput(a.saida.dataHora) : '';
+            
+            // 🔥 TEXTO DO DESFECHO PARA EXIBIÇÃO
+            const desfechoAtual = a.saida?.desfecho || '';
+            const desfechoTexto = a.saida?.desfechoTexto || '';
+            const coordenadorNome = a.saida?.coordenadorPatioNome || '';
+            const desfechoOutrosTexto = a.saida?.desfechoOutrosTexto || '';
             
             const modalBody = document.getElementById('modalBody');
             modalBody.innerHTML = `
@@ -686,8 +725,11 @@ class MonitoramentoEnfermaria {
                             <div class="form-group" style="margin-top: 10px;">
                                 <label style="font-size: 12px;">Data/Hora da Entrada</label>
                                 <input type="datetime-local" id="editDataEntrada" class="form-control" 
-                                    value="${dataEntradaFormatada}"
+                                    value="${dataEntradaInput}"
                                     style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                                <div class="input-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+                                    <i class="fas fa-info-circle"></i> Data e hora atuais: ${dataEntradaExibicao}
+                                </div>
                             </div>
                         </div>
                         
@@ -711,28 +753,29 @@ class MonitoramentoEnfermaria {
                                     <label style="font-size: 12px;">Tipo de Desfecho</label>
                                     <select id="editDesfecho" class="form-control" onchange="monitoramentoEnfermaria.toggleOutrosDesfecho()"
                                         style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                                        <option value="retornou_sala" ${a.saida?.desfecho === 'retornou_sala' ? 'selected' : ''}>Retornou para Sala de Aula</option>
-                                        <option value="encaminhado_gestao" ${a.saida?.desfecho === 'encaminhado_gestao' ? 'selected' : ''}>Encaminhado para Gestão Geral</option>
-                                        <option value="liberado_responsavel" ${a.saida?.desfecho === 'liberado_responsavel' ? 'selected' : ''}>Liberado com o Responsável</option>
-                                        <option value="liberado_coordenador" ${a.saida?.desfecho === 'liberado_coordenador' ? 'selected' : ''}>Liberado com o Coordenador de Pátio</option>
-                                        <option value="outros" ${a.saida?.desfecho === 'outros' ? 'selected' : ''}>Outros</option>
+                                        <option value="retornou_sala" ${desfechoAtual === 'retornou_sala' ? 'selected' : ''}>Retornou para Sala de Aula</option>
+                                        <option value="encaminhado_gestao" ${desfechoAtual === 'encaminhado_gestao' ? 'selected' : ''}>Encaminhado para Gestão Geral</option>
+                                        <option value="liberado_responsavel" ${desfechoAtual === 'liberado_responsavel' ? 'selected' : ''}>Liberado com o Responsável</option>
+                                        <option value="liberado_coordenador" ${desfechoAtual === 'liberado_coordenador' ? 'selected' : ''}>Liberado com o Coordenador de Pátio</option>
+                                        <option value="outros" ${desfechoAtual === 'outros' ? 'selected' : ''}>Outros</option>
                                     </select>
+                                    ${desfechoAtual ? `<div class="input-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;">Desfecho atual: ${desfechoTexto}</div>` : ''}
                                 </div>
                                 
-                                <div id="campoCoordenador" style="display: ${a.saida?.desfecho === 'liberado_coordenador' ? 'block' : 'none'};">
+                                <div id="campoCoordenador" style="display: ${desfechoAtual === 'liberado_coordenador' ? 'block' : 'none'};">
                                     <div class="form-group">
                                         <label style="font-size: 12px;">Nome do Coordenador de Pátio</label>
                                         <input type="text" id="editCoordenadorNome" class="form-control" 
-                                            value="${a.saida?.coordenadorPatioNome || ''}"
+                                            value="${coordenadorNome}"
                                             style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
                                     </div>
                                 </div>
                                 
-                                <div id="campoOutros" style="display: ${a.saida?.desfecho === 'outros' ? 'block' : 'none'};">
+                                <div id="campoOutros" style="display: ${desfechoAtual === 'outros' ? 'block' : 'none'};">
                                     <div class="form-group">
                                         <label style="font-size: 12px;">Descreva o desfecho</label>
                                         <textarea id="editOutrosTexto" class="form-control" rows="2"
-                                            style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">${a.saida?.desfechoOutrosTexto || ''}</textarea>
+                                            style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">${desfechoOutrosTexto}</textarea>
                                     </div>
                                 </div>
                                 
@@ -745,8 +788,11 @@ class MonitoramentoEnfermaria {
                                 <div class="form-group">
                                     <label style="font-size: 12px;">Data/Hora da Saída</label>
                                     <input type="datetime-local" id="editDataSaida" class="form-control" 
-                                        value="${a.saida?.dataHora ? new Date(a.saida.dataHora).toISOString().slice(0, 16) : ''}"
+                                        value="${dataSaidaInput}"
                                         style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                                    <div class="input-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+                                        <i class="fas fa-info-circle"></i> Deixe em branco para usar a data/hora atual
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -826,7 +872,18 @@ class MonitoramentoEnfermaria {
                 const coordenadorNome = document.getElementById('editCoordenadorNome')?.value;
                 const outrosTexto = document.getElementById('editOutrosTexto')?.value;
                 const observacoesSaida = document.getElementById('editObservacoesSaida')?.value;
-                const dataSaida = document.getElementById('editDataSaida')?.value;
+                let dataSaida = document.getElementById('editDataSaida')?.value;
+                
+                // Se não informou data de saída, usar data/hora atual
+                if (!dataSaida) {
+                    const agora = new Date();
+                    const ano = agora.getFullYear();
+                    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+                    const dia = String(agora.getDate()).padStart(2, '0');
+                    const horas = String(agora.getHours()).padStart(2, '0');
+                    const minutos = String(agora.getMinutes()).padStart(2, '0');
+                    dataSaida = `${ano}-${mes}-${dia}T${horas}:${minutos}`;
+                }
                 
                 dados.saida = {
                     desfecho,
@@ -840,7 +897,7 @@ class MonitoramentoEnfermaria {
             console.log('📤 Salvando edição:', dados);
             
             const token = localStorage.getItem('auth_token');
-            const response = await fetch(`/api/enfermaria-monitoramento/atendimento/${atendimentoId}`, {
+            const response = await fetch(`${this.apiBase}/atendimento/${atendimentoId}`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -1108,7 +1165,10 @@ class MonitoramentoEnfermaria {
             if (!data.success) throw new Error(data.error);
             
             const a = data.atendimento;
-            const dataEntrada = new Date(a.entrada.dataHora).toLocaleString('pt-BR');
+            
+            // 🔥 USAR DATAS FORMATADAS DO BACKEND
+            const dataEntrada = a.entrada.dataHoraFormatada || new Date(a.entrada.dataHora).toLocaleString('pt-BR');
+            const dataSaida = a.saida?.dataHoraFormatada || (a.saida?.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : 'Aguardando finalização');
             
             const modalBody = document.getElementById('modalBody');
             modalBody.innerHTML = `
@@ -1121,26 +1181,50 @@ class MonitoramentoEnfermaria {
                         <p style="color: #6b7280;">${a.alunoTurma} • ${a.alunoCurso || ''}</p>
                     </div>
                     
-                    <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-                        <h4 style="margin: 0 0 10px;"><i class="fas fa-stethoscope"></i> Queixa</h4>
-                        <p style="margin: 0;">${a.entrada.queixa}</p>
+                    <!-- CARD DE DATAS E HORÁRIOS -->
+                    <div style="background: #f0f9ff; border-radius: 12px; padding: 15px; margin-bottom: 20px; border: 1px solid #bae6fd;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 11px; color: #0369a1; margin-bottom: 4px;">
+                                    <i class="fas fa-calendar-alt"></i> DATA/HORA ENTRADA
+                                </div>
+                                <div style="font-size: 14px; font-weight: 600; color: #0c4a6e;">${dataEntrada}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 11px; color: #0369a1; margin-bottom: 4px;">
+                                    <i class="fas fa-calendar-check"></i> DATA/HORA SAÍDA
+                                </div>
+                                <div style="font-size: 14px; font-weight: 600; color: ${a.saida ? '#10b981' : '#f59e0b'};">${dataSaida}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- QUEIXA -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #e5e7eb;">
+                        <h4 style="margin: 0 0 10px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-stethoscope" style="color: #0891b2;"></i> Queixa
+                        </h4>
+                        <p style="margin: 0; background: white; padding: 12px; border-radius: 8px;">${a.entrada.queixa}</p>
                         ${a.entrada.observacoes ? `<p style="margin: 10px 0 0; color: #6b7280;"><strong>Obs:</strong> ${a.entrada.observacoes}</p>` : ''}
                         <p style="margin: 10px 0 0; font-size: 12px; color: #6b7280;">
                             <i class="fas fa-user"></i> Registrado por: ${a.entrada.registradoPor}
                         </p>
                     </div>
                     
+                    <!-- DESFECHO -->
                     ${a.saida ? `
-                        <div style="background: #d1fae5; border-radius: 12px; padding: 15px;">
-                            <h4 style="margin: 0 0 10px;"><i class="fas fa-flag-checkered"></i> Desfecho</h4>
+                        <div style="background: #d1fae5; border-radius: 12px; padding: 15px; border: 1px solid #10b981;">
+                            <h4 style="margin: 0 0 10px; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-flag-checkered" style="color: #10b981;"></i> Desfecho
+                            </h4>
                             <p><strong>${a.saida.desfechoTexto}</strong></p>
                             ${a.saida.observacoes ? `<p style="margin: 10px 0 0;">${a.saida.observacoes}</p>` : ''}
                             <p style="margin: 10px 0 0; font-size: 12px; color: #6b7280;">
-                                <i class="fas fa-calendar"></i> ${new Date(a.saida.dataHora).toLocaleString('pt-BR')}
+                                <i class="fas fa-user"></i> Registrado por: ${a.saida.registradoPor}
                             </p>
                         </div>
                     ` : `
-                        <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <div style="background: #fef3c7; border-radius: 12px; padding: 15px; border: 1px solid #f59e0b;">
                             <i class="fas fa-clock"></i> Atendimento em andamento
                         </div>
                     `}

@@ -44,6 +44,37 @@ const verificarEnfermaria = (req, res, next) => {
 };
 
 // ============================================
+// 🔧 FUNÇÃO AUXILIAR PARA FORMATAR DATA LOCAL (BRASIL)
+// ============================================
+const formatarDataLocal = (data) => {
+  if (!data) return null;
+  const d = new Date(data);
+  // Ajustar para horário local (Brasil - UTC-3)
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZone: 'America/Sao_Paulo'
+  });
+};
+
+const formatarDataLocalSimples = (data) => {
+  if (!data) return null;
+  const d = new Date(data);
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Sao_Paulo'
+  });
+};
+
+// ============================================
 // 📊 DASHBOARD - ESTATÍSTICAS DA ENFERMARIA
 // ============================================
 router.get('/dashboard',
@@ -201,6 +232,196 @@ router.get('/dashboard',
 );
 
 // ============================================
+// 📋 LISTAR ATENDIMENTOS (COM FILTROS E HORÁRIOS CORRIGIDOS)
+// ============================================
+router.get('/atendimentos',
+  authenticateToken,
+  verificarEnfermaria,
+  async (req, res) => {
+    try {
+      const { status, tipo, turma, dataInicio, dataFim, search, page = 1, limit = 20 } = req.query;
+      
+      let query = {};
+      
+      if (status && status !== 'todos') query.status = status;
+      if (tipo && tipo !== 'todos') query['saida.desfecho'] = tipo;
+      if (turma && turma !== 'todas') query.alunoTurma = turma;
+      
+      if (dataInicio || dataFim) {
+        query['entrada.dataHora'] = {};
+        if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
+        if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      }
+      
+      if (search && search.trim() !== '') {
+        query.alunoNome = { $regex: search, $options: 'i' };
+      }
+      
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      const [atendimentos, total] = await Promise.all([
+        AtendimentoEnfermaria.find(query)
+          .sort({ 'entrada.dataHora': -1 })
+          .skip(skip)
+          .limit(parseInt(limit)),
+        AtendimentoEnfermaria.countDocuments(query)
+      ]);
+      
+      const turmas = await AtendimentoEnfermaria.distinct('alunoTurma');
+      
+      res.json({
+        success: true,
+        atendimentos: atendimentos.map(a => {
+          // 🔥 FORMATAR HORÁRIOS CORRETAMENTE
+          const dataEntrada = a.entrada.dataHora;
+          const dataEntradaFormatada = formatarDataLocalSimples(dataEntrada);
+          
+          let saidaData = null;
+          let saidaDataFormatada = null;
+          let desfechoTexto = null;
+          
+          if (a.saida) {
+            saidaData = a.saida.dataHora;
+            saidaDataFormatada = formatarDataLocalSimples(saidaData);
+            
+            const desfechoMap = {
+              'retornou_sala': 'Retornou para Sala de Aula',
+              'encaminhado_gestao': 'Encaminhado para Gestão Geral',
+              'liberado_responsavel': 'Liberado com o Responsável',
+              'liberado_coordenador': `Liberado com Coordenador${a.saida.coordenadorPatioNome ? ` (${a.saida.coordenadorPatioNome})` : ''}`,
+              'outros': `Outros: ${a.saida.desfechoOutrosTexto || ''}`
+            };
+            desfechoTexto = desfechoMap[a.saida.desfecho] || a.saida.desfecho;
+          }
+          
+          return {
+            id: a._id,
+            alunoId: a.alunoId,
+            alunoNome: a.alunoNome,
+            alunoMatricula: a.alunoMatricula,
+            alunoTurma: a.alunoTurma,
+            alunoFoto: a.alunoFoto,
+            queixa: a.entrada.queixa,
+            observacoesEntrada: a.entrada.observacoes,
+            dataEntrada: dataEntrada,
+            dataEntradaFormatada: dataEntradaFormatada,
+            registradoPor: a.entrada.registradoPorNome,
+            status: a.status,
+            saida: a.saida ? {
+              dataHora: saidaData,
+              dataHoraFormatada: saidaDataFormatada,
+              desfecho: a.saida.desfecho,
+              desfechoTexto: desfechoTexto,
+              observacoes: a.saida.observacoes,
+              registradoPor: a.saida.registradoPorNome
+            } : null,
+            tempoAtendimento: a.status === 'finalizado' && a.saida?.dataHora 
+              ? Math.round((new Date(a.saida.dataHora) - new Date(a.entrada.dataHora)) / 60000)
+              : null
+          };
+        }),
+        paginacao: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(total / parseInt(limit))
+        },
+        turmasDisponiveis: turmas.filter(t => t && t !== 'Não informada')
+      });
+      
+    } catch (error) {
+      console.error('Erro ao listar atendimentos:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Erro ao listar atendimentos: ' + error.message
+      });
+    }
+  }
+);
+
+// ============================================
+// 🔍 BUSCAR ATENDIMENTO POR ID (COM HORÁRIOS CORRIGIDOS)
+// ============================================
+router.get('/atendimento/:id',
+  authenticateToken,
+  verificarEnfermaria,
+  async (req, res) => {
+    try {
+      const atendimento = await AtendimentoEnfermaria.findById(req.params.id);
+      
+      if (!atendimento) {
+        return res.status(404).json({
+          success: false,
+          error: 'Atendimento não encontrado'
+        });
+      }
+      
+      // 🔥 FORMATAR HORÁRIOS
+      const dataEntradaFormatada = formatarDataLocal(atendimento.entrada.dataHora);
+      
+      let saidaData = null;
+      let saidaDataFormatada = null;
+      let desfechoTexto = null;
+      
+      if (atendimento.saida) {
+        saidaData = atendimento.saida.dataHora;
+        saidaDataFormatada = formatarDataLocal(saidaData);
+        
+        const desfechoMap = {
+          'retornou_sala': 'Retornou para Sala de Aula',
+          'encaminhado_gestao': 'Encaminhado para Gestão Geral',
+          'liberado_responsavel': 'Liberado com o Responsável',
+          'liberado_coordenador': `Liberado com Coordenador${atendimento.saida.coordenadorPatioNome ? ` (${atendimento.saida.coordenadorPatioNome})` : ''}`,
+          'outros': `Outros: ${atendimento.saida.desfechoOutrosTexto || ''}`
+        };
+        desfechoTexto = desfechoMap[atendimento.saida.desfecho] || atendimento.saida.desfecho;
+      }
+      
+      res.json({
+        success: true,
+        atendimento: {
+          id: atendimento._id,
+          alunoId: atendimento.alunoId,
+          alunoNome: atendimento.alunoNome,
+          alunoMatricula: atendimento.alunoMatricula,
+          alunoTurma: atendimento.alunoTurma,
+          alunoCurso: atendimento.alunoCurso,
+          alunoFoto: atendimento.alunoFoto,
+          entrada: {
+            dataHora: atendimento.entrada.dataHora,
+            dataHoraFormatada: dataEntradaFormatada,
+            queixa: atendimento.entrada.queixa,
+            observacoes: atendimento.entrada.observacoes,
+            registradoPor: atendimento.entrada.registradoPorNome,
+            registradoPorId: atendimento.entrada.registradoPor
+          },
+          saida: atendimento.saida ? {
+            dataHora: saidaData,
+            dataHoraFormatada: saidaDataFormatada,
+            desfecho: atendimento.saida.desfecho,
+            desfechoTexto: desfechoTexto,
+            desfechoOutrosTexto: atendimento.saida.desfechoOutrosTexto,
+            coordenadorPatioNome: atendimento.saida.coordenadorPatioNome,
+            observacoes: atendimento.saida.observacoes,
+            registradoPor: atendimento.saida.registradoPorNome
+          } : null,
+          status: atendimento.status,
+          createdAt: atendimento.createdAt,
+          updatedAt: atendimento.updatedAt
+        }
+      });
+      
+    } catch (error) {
+      console.error('Erro ao buscar atendimento:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Erro ao buscar atendimento: ' + error.message
+      });
+    }
+  }
+);
+
+// ============================================
 // ✏️ ATUALIZAR ATENDIMENTO
 // ============================================
 router.put('/atendimento/:id',
@@ -259,166 +480,6 @@ router.put('/atendimento/:id',
       res.status(500).json({
         success: false,
         error: 'Erro ao atualizar atendimento: ' + error.message
-      });
-    }
-  }
-);
-
-// ============================================
-// 📋 LISTAR ATENDIMENTOS (COM FILTROS)
-// ============================================
-router.get('/atendimentos',
-  authenticateToken,
-  verificarEnfermaria,
-  async (req, res) => {
-    try {
-      const { status, tipo, turma, dataInicio, dataFim, search, page = 1, limit = 20 } = req.query;
-      
-      let query = {};
-      
-      // Filtro por status
-      if (status && status !== 'todos') {
-        query.status = status;
-      }
-      
-      // Filtro por tipo de desfecho
-      if (tipo && tipo !== 'todos') {
-        query['saida.desfecho'] = tipo;
-      }
-      
-      // Filtro por turma
-      if (turma && turma !== 'todas') {
-        query.alunoTurma = turma;
-      }
-      
-      // Filtro por período
-      if (dataInicio || dataFim) {
-        query['entrada.dataHora'] = {};
-        if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-        if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
-      }
-      
-      // Filtro por busca (nome do aluno)
-      if (search && search.trim() !== '') {
-        query.alunoNome = { $regex: search, $options: 'i' };
-      }
-      
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-      
-      const [atendimentos, total] = await Promise.all([
-        AtendimentoEnfermaria.find(query)
-          .sort({ 'entrada.dataHora': -1 })
-          .skip(skip)
-          .limit(parseInt(limit)),
-        AtendimentoEnfermaria.countDocuments(query)
-      ]);
-      
-      // Turmas disponíveis para filtro
-      const turmas = await AtendimentoEnfermaria.distinct('alunoTurma');
-      
-      res.json({
-        success: true,
-        atendimentos: atendimentos.map(a => ({
-          id: a._id,
-          alunoId: a.alunoId,
-          alunoNome: a.alunoNome,
-          alunoMatricula: a.alunoMatricula,
-          alunoTurma: a.alunoTurma,
-          alunoFoto: a.alunoFoto,
-          queixa: a.entrada.queixa,
-          observacoesEntrada: a.entrada.observacoes,
-          dataEntrada: a.entrada.dataHora,
-          registradoPor: a.entrada.registradoPorNome,
-          status: a.status,
-          saida: a.saida ? {
-            dataHora: a.saida.dataHora,
-            desfecho: a.saida.desfecho,
-            desfechoTexto: {
-              'retornou_sala': 'Retornou para Sala de Aula',
-              'encaminhado_gestao': 'Encaminhado para Gestão Geral',
-              'liberado_responsavel': 'Liberado com o Responsável',
-              'liberado_coordenador': `Liberado com Coordenador${a.saida.coordenadorPatioNome ? ` (${a.saida.coordenadorPatioNome})` : ''}`,
-              'outros': `Outros: ${a.saida.desfechoOutrosTexto}`
-            }[a.saida.desfecho],
-            observacoes: a.saida.observacoes,
-            registradoPor: a.saida.registradoPorNome
-          } : null,
-          tempoAtendimento: a.status === 'finalizado' && a.saida?.dataHora 
-            ? Math.round((new Date(a.saida.dataHora) - new Date(a.entrada.dataHora)) / 60000)
-            : null
-        })),
-        paginacao: {
-          total,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(total / parseInt(limit))
-        },
-        turmasDisponiveis: turmas.filter(t => t && t !== 'Não informada')
-      });
-      
-    } catch (error) {
-      console.error('Erro ao listar atendimentos:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Erro ao listar atendimentos: ' + error.message
-      });
-    }
-  }
-);
-
-// ============================================
-// 🔍 BUSCAR ATENDIMENTO POR ID
-// ============================================
-router.get('/atendimento/:id',
-  authenticateToken,
-  verificarEnfermaria,
-  async (req, res) => {
-    try {
-      const atendimento = await AtendimentoEnfermaria.findById(req.params.id);
-      
-      if (!atendimento) {
-        return res.status(404).json({
-          success: false,
-          error: 'Atendimento não encontrado'
-        });
-      }
-      
-      res.json({
-        success: true,
-        atendimento: {
-          id: atendimento._id,
-          alunoId: atendimento.alunoId,
-          alunoNome: atendimento.alunoNome,
-          alunoMatricula: atendimento.alunoMatricula,
-          alunoTurma: atendimento.alunoTurma,
-          alunoCurso: atendimento.alunoCurso,
-          alunoFoto: atendimento.alunoFoto,
-          entrada: {
-            dataHora: atendimento.entrada.dataHora,
-            queixa: atendimento.entrada.queixa,
-            observacoes: atendimento.entrada.observacoes,
-            registradoPor: atendimento.entrada.registradoPorNome,
-            registradoPorId: atendimento.entrada.registradoPor
-          },
-          saida: atendimento.saida ? {
-            dataHora: atendimento.saida.dataHora,
-            desfecho: atendimento.saida.desfecho,
-            desfechoOutrosTexto: atendimento.saida.desfechoOutrosTexto,
-            coordenadorPatioNome: atendimento.saida.coordenadorPatioNome,
-            observacoes: atendimento.saida.observacoes,
-            registradoPor: atendimento.saida.registradoPorNome
-          } : null,
-          status: atendimento.status,
-          createdAt: atendimento.createdAt,
-          updatedAt: atendimento.updatedAt
-        }
-      });
-      
-    } catch (error) {
-      console.error('Erro ao buscar atendimento:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Erro ao buscar atendimento: ' + error.message
       });
     }
   }
@@ -484,10 +545,12 @@ router.get('/relatorio/aluno/:alunoId',
         atendimentos: atendimentos.map(a => ({
           id: a._id,
           dataEntrada: a.entrada.dataHora,
+          dataEntradaFormatada: formatarDataLocalSimples(a.entrada.dataHora),
           queixa: a.entrada.queixa,
           observacoesEntrada: a.entrada.observacoes,
           registradoPor: a.entrada.registradoPorNome,
           dataSaida: a.saida?.dataHora || null,
+          dataSaidaFormatada: a.saida?.dataHora ? formatarDataLocalSimples(a.saida.dataHora) : null,
           desfecho: a.saida?.desfecho || 'em_atendimento',
           desfechoTexto: a.saida?.desfecho ? {
             'retornou_sala': 'Retornou para Sala de Aula',
