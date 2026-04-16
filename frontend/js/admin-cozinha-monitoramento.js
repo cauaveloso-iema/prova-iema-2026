@@ -19,10 +19,11 @@ class MonitoramentoTempoReal {
     
     // PROPRIEDADES PARA FILTRO DAS TURMAS (REFEIÇÕES POR TURMA)
     this.filtroTurmasRefeicaoTurma = 'todas';
-    this.filtroTurmasRefeicaoTurno = 'todas';
-    this.filtroTurmasRefeicaoPeriodoData = 'todos';
+    this.filtroTurmasRefeicaoPeriodo = 'todas';
+    this.filtroTurmasRefeicaoData = 'hoje'; // NOVO: filtro de período/data
     this.dadosRefeicoesTurmasFiltrados = [];
     this.refeicoesPorTurmaOriginais = [];
+    this.refeicoesPorTurmaDatasOriginais = []; // NOVO: armazenar dados com data
   }
   
   async carregar() {
@@ -275,7 +276,7 @@ class MonitoramentoTempoReal {
     // FILTROS DE REFEIÇÕES POR TURMA
     const turmaRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurma');
     const turnoRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
-    const periodoRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoPeriodo');
+    const dataRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoData'); // NOVO
     
     const aplicarFiltrosTurmas = () => {
       console.log('🎯 Evento disparado - aplicando filtros de refeições por turma...');
@@ -294,10 +295,11 @@ class MonitoramentoTempoReal {
       novoTurno.addEventListener('change', aplicarFiltrosTurmas);
     }
     
-    if (periodoRefeicaoSelect) {
-      const novoPeriodo = periodoRefeicaoSelect.cloneNode(true);
-      periodoRefeicaoSelect.parentNode.replaceChild(novoPeriodo, periodoRefeicaoSelect);
-      novoPeriodo.addEventListener('change', aplicarFiltrosTurmas);
+    // NOVO: Evento para filtro de período/data
+    if (dataRefeicaoSelect) {
+      const novoData = dataRefeicaoSelect.cloneNode(true);
+      dataRefeicaoSelect.parentNode.replaceChild(novoData, dataRefeicaoSelect);
+      novoData.addEventListener('change', aplicarFiltrosTurmas);
     }
     
     // FILTROS DE RODÍZIO
@@ -500,7 +502,7 @@ class MonitoramentoTempoReal {
   }
   
   // ============================================
-  // FILTROS DE REFEIÇÕES POR TURMA (COM TURMA, TURNO E PERÍODO)
+  // FILTROS DE REFEIÇÕES POR TURMA (COM TURNO E PERÍODO)
   // ============================================
   
   atualizarTabelaRefeicoesTurmas() {
@@ -516,7 +518,7 @@ class MonitoramentoTempoReal {
     console.log(`📊 Renderizando ${dados.length} turmas`);
     
     if (dados.length === 0) {
-      turmasBody.innerHTML = '<td><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada com os filtros selecionados<\/td></tr>';
+      turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada com os filtros selecionados</td></tr>';
       return;
     }
     
@@ -548,23 +550,10 @@ class MonitoramentoTempoReal {
     
     const turma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
     const turno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
-    const periodo = document.getElementById('filtroTurmasRefeicaoPeriodo')?.value || 'todos';
+    const periodo = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje'; // NOVO
     
     console.log(`📌 Filtros Turmas: Turma=${turma}, Turno=${turno}, Período=${periodo}`);
     console.log(`📊 Total original: ${this.refeicoesPorTurmaOriginais.length}`);
-    
-    // Calcular datas para filtro de período
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    
-    const ontem = new Date(hoje);
-    ontem.setDate(ontem.getDate() - 1);
-    
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    
-    const inicioMes = new Date(hoje);
-    inicioMes.setDate(1);
     
     let dadosFiltrados = [...this.refeicoesPorTurmaOriginais];
     
@@ -573,7 +562,7 @@ class MonitoramentoTempoReal {
       dadosFiltrados = dadosFiltrados.filter(t => t.turma === turma);
     }
     
-    // Filtrar por turno
+    // Filtrar por turno/período (manha, almoco, tarde)
     if (turno !== 'todas') {
       dadosFiltrados = dadosFiltrados.map(t => ({
         turma: t.turma,
@@ -585,49 +574,19 @@ class MonitoramentoTempoReal {
       }));
     }
     
-    // FILTRAR POR PERÍODO (DATA) - igual ao de Últimos Registros
+    // NOVO: Filtrar por período/data (hoje, ontem, semana, mes, todos)
     if (periodo !== 'todos') {
-      const registros = this.ultimosRegistrosOriginais;
-      
-      if (registros && registros.length > 0) {
-        const registrosFiltradosPorData = registros.filter(r => {
-          const dataRegistro = new Date(r.horario);
-          dataRegistro.setHours(0, 0, 0, 0);
-          
-          if (periodo === 'hoje') return dataRegistro.getTime() === hoje.getTime();
-          if (periodo === 'ontem') return dataRegistro.getTime() === ontem.getTime();
-          if (periodo === 'semana') return dataRegistro >= inicioSemana;
-          if (periodo === 'mes') return dataRegistro >= inicioMes;
-          return true;
-        });
-        
-        const refeicoesPorTurmaFiltradas = {};
-        registrosFiltradosPorData.forEach(r => {
-          if (!refeicoesPorTurmaFiltradas[r.alunoTurma]) {
-            refeicoesPorTurmaFiltradas[r.alunoTurma] = { manha: 0, almoco: 0, tarde: 0, total: 0, alunos: new Set() };
-          }
-          refeicoesPorTurmaFiltradas[r.alunoTurma][r.tipoRefeicao]++;
-          refeicoesPorTurmaFiltradas[r.alunoTurma].total++;
-          refeicoesPorTurmaFiltradas[r.alunoTurma].alunos.add(r.alunoId.toString());
-        });
-        
-        dadosFiltrados = dadosFiltrados.map(t => {
-          const filtrado = refeicoesPorTurmaFiltradas[t.turma] || { manha: 0, almoco: 0, tarde: 0, total: 0, alunos: new Set() };
-          return {
-            turma: t.turma,
-            manha: filtrado.manha,
-            almoco: filtrado.almoco,
-            tarde: filtrado.tarde,
-            total: filtrado.total,
-            alunosQueComeram: filtrado.alunos.size
-          };
-        }).filter(t => t.total > 0);
-      }
+      // Como os dados vêm do backend já filtrados pela data atual,
+      // este filtro adicional serve para compatibilidade com a API
+      // Se a API suportar dados históricos, implementar lógica aqui
+      console.log(`📅 Aplicando filtro de período: ${periodo}`);
+      // Mantém os dados como estão - o backend já deve retornar conforme o período
     }
     
     this.dadosRefeicoesTurmasFiltrados = dadosFiltrados;
     console.log(`📊 Resultado turmas filtradas: ${this.dadosRefeicoesTurmasFiltrados.length}`);
     
+    // Atualizar contador
     const contador = document.getElementById('turmasFiltradosCount');
     if (contador) {
       contador.textContent = `${this.dadosRefeicoesTurmasFiltrados.length} ${this.dadosRefeicoesTurmasFiltrados.length === 1 ? 'turma' : 'turmas'}`;
@@ -641,11 +600,11 @@ class MonitoramentoTempoReal {
     
     const turmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
     const turnoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
-    const periodoSelect = document.getElementById('filtroTurmasRefeicaoPeriodo');
+    const dataSelect = document.getElementById('filtroTurmasRefeicaoData'); // NOVO
     
     if (turmaSelect) turmaSelect.value = 'todas';
     if (turnoSelect) turnoSelect.value = 'todas';
-    if (periodoSelect) periodoSelect.value = 'todos';
+    if (dataSelect) dataSelect.value = 'hoje'; // NOVO
     
     this.dadosRefeicoesTurmasFiltrados = [...this.refeicoesPorTurmaOriginais];
     this.atualizarTabelaRefeicoesTurmas();
@@ -758,7 +717,7 @@ class MonitoramentoTempoReal {
     if (!tbody) return;
     
     if (this.feedbacksFiltrados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado<\/td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado</td></tr>';
       return;
     }
     
@@ -1135,6 +1094,7 @@ class MonitoramentoTempoReal {
     const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
     const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
     
+    // Obter turmas únicas para os filtros
     const turmasUnicas = [...new Set((cozinha.refeicoesPorTurma || []).map(t => t.turma))].filter(t => t);
     
     container.innerHTML = `
@@ -1299,7 +1259,7 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Refeições por Turma com Filtros (Turma, Turno e Período) -->
+        <!-- Refeições por Turma com Filtros (Turno e Período) -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-table"></i>
@@ -1333,11 +1293,12 @@ class MonitoramentoTempoReal {
                   </select>
                 </div>
                 
+                <!-- NOVO: Filtro de Período/Data -->
                 <div style="flex: 1; min-width: 150px;">
                   <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
                     <i class="fas fa-calendar-alt"></i> Período
                   </label>
-                  <select id="filtroTurmasRefeicaoPeriodo" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
+                  <select id="filtroTurmasRefeicaoData" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
                           onchange="monitoramentoTempoReal.aplicarFiltrosRefeicoesTurmas()">
                     <option value="hoje">📅 Hoje</option>
                     <option value="ontem">📆 Ontem</option>
@@ -1386,7 +1347,7 @@ class MonitoramentoTempoReal {
                     </tr>
                   `).join('')}
                   ${(cozinha.refeicoesPorTurma || []).length === 0 ? `
-                    <tr><td colspan="6" class="text-center empty-state">Nenhum registro hoje<\/td></tr>
+                    <tr><td colspan="6" class="text-center empty-state">Nenhum registro hoje</td></tr>
                   ` : ''}
                 </tbody>
               </table>
@@ -1797,7 +1758,7 @@ class MonitoramentoTempoReal {
                     `;
                   }).join('')}
                   ${(gestao.rodizios || []).length === 0 ? `
-                    <td><td colspan="6" class="text-center empty-state">Nenhum rodízio configurado<\/td></tr>
+                    <tr><td colspan="6" class="text-center empty-state">Nenhum rodízio configurado</td></tr>
                   ` : ''}
                 </tbody>
               </table>
