@@ -872,6 +872,14 @@ app.use('/api/feedback-cozinha', feedbackCozinhaRoutes);
 const gestaoGeralRoutes = require('./routes/gestaoGeral');
 app.use('/api/gestao-geral', gestaoGeralRoutes); 
 
+// Rotas da Enfermaria
+const enfermariaRoutes = require('./routes/enfermaria');
+app.use('/api/enfermaria', enfermariaRoutes);
+
+// Importar rotas da Enfermaria Monitoramento
+const enfermariaMonitoramentoRoutes = require('./routes/enfermaria-monitoramento');
+app.use('/api/enfermaria-monitoramento', enfermariaMonitoramentoRoutes);
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ
 // ============================================================================
@@ -1819,6 +1827,8 @@ app.post('/api/auth/login', async (req, res) => {
             redirectTo = '/cozinha-dashboard.html';
           } else if (user.role === 'gestao_geral') {
             redirectTo = '/gestao-gestal.html';
+          } else if (user.role === 'enfermaria') {
+            redirectTo = '/enfermaria.html';
           } else if (user.role === 'aluno') {
             redirectTo = '/aluno.html';
           } else {
@@ -1951,7 +1961,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
     const perfisCom2FA = ['super_admin'];
     if (exigir2FA) {
-      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral');
+      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria');
     }
     
     if (perfisCom2FA.includes(user.role)) {
@@ -2033,6 +2043,8 @@ app.post('/api/auth/login', async (req, res) => {
       redirectTo = '/cozinha-dashboard.html';
     } else if (user.role === 'gestao_geral') {
       redirectTo = '/gestao-geral.html';
+    } else if (user.role === 'enfermaria') {
+      redirectTo = '/enfermaria.html';
     } else if (user.role === 'aluno') {
       redirectTo = '/aluno.html';
     } else {
@@ -18301,6 +18313,8 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
             dadosEspecificos.atribuicoes = user.atribuicoes;
         } else if (user.role === 'coordenacao_patio') {
             dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'enfermaria') {
+            dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'cozinha') {
             dadosEspecificos.departamento = user.departamento;
         }
@@ -18351,6 +18365,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (req.userRole === 'setor_pedagogico') {
             camposPermitidos.push('departamento', 'atribuicoes');
         } else if (req.userRole === 'coordenacao_patio') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'enfermaria') {
             camposPermitidos.push('departamento');
         } else if (req.userRole === 'gestao_geral') {
             camposPermitidos.push('departamento');
@@ -18475,6 +18491,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
             perfilAtualizado.departamento = user.departamento;
             perfilAtualizado.atribuicoes = user.atribuicoes;
         } else if (user.role === 'coordenacao_patio') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'enfermaria') {
             perfilAtualizado.departamento = user.departamento;
         } else if (user.role === 'gestao_geral') {
             perfilAtualizado.departamento = user.departamento;

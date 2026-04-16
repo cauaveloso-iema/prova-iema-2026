@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#10b981">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Enfermaria">
+
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Enfermaria - Atendimentos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .card {
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 20px;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .user-info-card {
+            background: white;
+            border-radius: 60px;
+            padding: 8px 20px 8px 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #10b981, #059669);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            overflow: hidden;
+        }
+        .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .user-details { text-align: right; }
+        .user-name { font-weight: bold; color: #1f2937; }
+        .user-role { font-size: 0.7rem; color: #6c757d; }
+        .btn-actions { display: flex; gap: 10px; }
+        .btn-icon {
+            background: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #10b981;
+            font-size: 1.1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .btn-icon:hover { transform: scale(1.05); background: #f3f4f6; }
+        .btn-icon.danger { color: #ef4444; }
+        .btn-icon.danger:hover { background: #fee2e2; }
+        
+        .qr-scanner-container {
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+        #qr-reader { width: 100%; }
+        #qr-reader video { width: 100%; height: auto; }
+        
+        .aluno-card {
+            background: linear-gradient(135deg, #f8f9fa, #ffffff);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .aluno-foto {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid #10b981;
+            margin-right: 20px;
+        }
+        .info-aluno { flex: 1; }
+        
+        .form-container {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .btn-primary-custom {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: bold;
+            width: 100%;
+            transition: transform 0.2s;
+        }
+        .btn-primary-custom:hover { transform: translateY(-2px); }
+        .btn-primary-custom:disabled { background: #9ca3af; transform: none; }
+        
+        .badge-status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        .badge-em_atendimento { background: #fef3c7; color: #d97706; }
+        .badge-finalizado { background: #d1fae5; color: #059669; }
+        
+        .loading {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #10b981;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .relatorio-filtros {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            transition: transform 0.2s;
+            height: 100%;
+        }
+        .metric-card:hover { transform: translateY(-5px); }
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #10b981;
+        }
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .aluno-foto { width: 70px; height: 70px; }
+            .header-top { flex-direction: column; gap: 10px; }
+            .user-info-card { width: 100%; justify-content: space-between; }
+            .btn-actions { justify-content: center; }
+            .metric-value { font-size: 1.8rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header-top">
+            <div class="user-info-card">
+                <div class="user-avatar" id="userAvatar">
+                    <i class="fas fa-hospital-user"></i>
+                </div>
+                <div class="user-details">
+                    <div class="user-name" id="userName">Carregando...</div>
+                    <div class="user-role" id="userRole">Enfermaria</div>
+                </div>
+            </div>
+            <div class="btn-actions">
+                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
+                    <i class="fas fa-user-edit"></i>
+                </button>
+                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Título -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-hospital-user me-2"></i>
+                    Enfermaria - Atendimentos
+                </div>
+                <div>
+                    <span id="dataAtual" class="badge bg-light text-dark"></span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Abas -->
+        <div class="card">
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="atendimento-tab" data-bs-toggle="tab" data-bs-target="#atendimento" type="button" role="tab">
+                            <i class="fas fa-stethoscope"></i> Atendimento
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="ativos-tab" data-bs-toggle="tab" data-bs-target="#ativos" type="button" role="tab">
+                            <i class="fas fa-clock"></i> Em Atendimento
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard" type="button" role="tab">
+                            <i class="fas fa-chart-line"></i> Dashboard
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="relatorios-tab" data-bs-toggle="tab" data-bs-target="#relatorios" type="button" role="tab">
+                            <i class="fas fa-file-alt"></i> Relatórios
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content mt-3">
+                    <!-- ABA ATENDIMENTO -->
+                    <div class="tab-pane fade show active" id="atendimento" role="tabpanel">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-qrcode me-2"></i> Escanear QR Code do Aluno
+                                </h5>
+                                <div id="qr-reader-auto" class="qr-scanner-container"></div>
+                                <div class="text-center mt-2">
+                                    <small class="text-muted">Aponte a câmera para o QR Code do aluno</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="alunoInfo" style="display: none;">
+                            <div class="aluno-card">
+                                <div class="d-flex flex-wrap align-items-center">
+                                    <img id="alunoFoto" class="aluno-foto" src="" alt="Foto do Aluno">
+                                    <div class="info-aluno">
+                                        <h3 id="alunoNome" class="mb-1">-</h3>
+                                        <p class="mb-1 text-muted">
+                                            <i class="fas fa-id-card me-1"></i> Matrícula: <span id="alunoMatricula">-</span>
+                                        </p>
+                                        <p class="mb-1 text-muted">
+                                            <i class="fas fa-graduation-cap me-1"></i> Turma: <span id="alunoTurma">-</span>
+                                        </p>
+                                        <p class="mb-0 text-muted">
+                                            <i class="fas fa-book me-1"></i> Curso: <span id="alunoCurso">-</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div id="statusAtendimento" class="mt-3"></div>
+                            </div>
+                        </div>
+                        
+                        <div id="formEntrada" class="form-container" style="display: none;">
+                            <h5><i class="fas fa-notes-medical"></i> Registrar Atendimento</h5>
+                            <div class="mb-3">
+                                <label class="form-label">Queixa / Motivo <span class="text-danger">*</span></label>
+                                <textarea id="queixa" class="form-control" rows="3" placeholder="Descreva o que o aluno está sentindo..."></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Observações adicionais</label>
+                                <textarea id="observacoesEntrada" class="form-control" rows="2" placeholder="Sinais vitais, medicamentos administrados, etc..."></textarea>
+                            </div>
+                            <button class="btn-primary-custom" onclick="registrarEntrada()">
+                                <i class="fas fa-check-circle me-2"></i> Registrar Entrada
+                            </button>
+                        </div>
+                        
+                        <div id="formSaida" class="form-container" style="display: none;">
+                            <h5><i class="fas fa-clipboard-list"></i> Finalizar Atendimento</h5>
+                            <div class="mb-3">
+                                <label class="form-label">Desfecho <span class="text-danger">*</span></label>
+                                <select id="desfecho" class="form-select" onchange="toggleOutrosCampos()">
+                                    <option value="">Selecione...</option>
+                                    <option value="retornou_sala">Retornou para Sala de Aula</option>
+                                    <option value="encaminhado_gestao">Encaminhado para Gestão Geral</option>
+                                    <option value="liberado_responsavel">Liberado com o Responsável</option>
+                                    <option value="liberado_coordenador">Liberado com o Coordenador de Pátio</option>
+                                    <option value="outros">Outros</option>
+                                </select>
+                            </div>
+                            <div id="campoCoordenador" style="display: none;">
+                                <div class="mb-3">
+                                    <label class="form-label">Nome do Coordenador de Pátio</label>
+                                    <input type="text" id="coordenadorPatioNome" class="form-control" placeholder="Nome do coordenador que liberou o aluno">
+                                </div>
+                            </div>
+                            <div id="campoOutros" style="display: none;">
+                                <div class="mb-3">
+                                    <label class="form-label">Descreva o desfecho</label>
+                                    <textarea id="outrosTexto" class="form-control" rows="2" placeholder="Descreva o que aconteceu..."></textarea>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Observações finais</label>
+                                <textarea id="observacoesSaida" class="form-control" rows="2" placeholder="Informações adicionais sobre o desfecho..."></textarea>
+                            </div>
+                            <button class="btn-primary-custom" onclick="registrarSaida()">
+                                <i class="fas fa-check-double me-2"></i> Finalizar Atendimento
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- ABA ATENDIMENTOS ATIVOS -->
+                    <div class="tab-pane fade" id="ativos" role="tabpanel">
+                        <div id="listaAtendimentosAtivos" class="list-group">
+                            <div class="text-center py-3">
+                                <div class="loading"></div>
+                                <p>Carregando atendimentos ativos...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ABA DASHBOARD -->
+                    <div class="tab-pane fade" id="dashboard" role="tabpanel">
+                        <!-- Cards de Métricas -->
+                        <div class="row mb-4">
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card">
+                                    <i class="fas fa-calendar-day fa-2x text-primary mb-2"></i>
+                                    <div class="metric-value" id="totalHoje">0</div>
+                                    <div class="metric-label">Atendimentos Hoje</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card">
+                                    <i class="fas fa-calendar-week fa-2x text-success mb-2"></i>
+                                    <div class="metric-value" id="totalSemana">0</div>
+                                    <div class="metric-label">Esta Semana</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card">
+                                    <i class="fas fa-calendar-alt fa-2x text-info mb-2"></i>
+                                    <div class="metric-value" id="totalMes">0</div>
+                                    <div class="metric-label">Este Mês</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card">
+                                    <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
+                                    <div class="metric-value" id="totalGeral">0</div>
+                                    <div class="metric-label">Total Geral</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Gráficos -->
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-chart-bar"></i> Atendimentos por Dia</h6>
+                                        <canvas id="chartAtendimentos"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-chart-pie"></i> Desfechos</h6>
+                                        <canvas id="chartDesfechos"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-users"></i> Atendimentos por Turma</h6>
+                                        <canvas id="chartTurmas"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-clock"></i> Distribuição por Horário</h6>
+                                        <canvas id="chartHorario"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Queixas Comuns -->
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-notes-medical"></i> Queixas Mais Comuns</h6>
+                                <div id="queixasComuns" class="mt-3">
+                                    <div class="text-center py-3">
+                                        <div class="loading"></div>
+                                        <p>Carregando dados...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ABA RELATÓRIOS -->
+                    <div class="tab-pane fade" id="relatorios" role="tabpanel">
+                        <div class="relatorio-filtros">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Tipo de Relatório</label>
+                                    <select id="tipoRelatorio" class="form-select" onchange="toggleRelatorioFiltros()">
+                                        <option value="geral">Geral (Todas as Turmas)</option>
+                                        <option value="turma">Por Turma</option>
+                                        <option value="aluno">Por Aluno</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4" id="filtroTurmaDiv" style="display: none;">
+                                    <label class="form-label">Turma</label>
+                                    <select id="filtroTurma" class="form-select">
+                                        <option value="">Selecione uma turma...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4" id="filtroAlunoDiv" style="display: none;">
+                                    <label class="form-label">Aluno</label>
+                                    <select id="filtroAluno" class="form-select">
+                                        <option value="">Selecione um aluno...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Data Início</label>
+                                    <input type="date" id="dataInicio" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Data Fim</label>
+                                    <input type="date" id="dataFim" class="form-control">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button class="btn btn-primary w-100" onclick="carregarRelatorio()">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div class="btn-group w-100">
+                                        <button class="btn btn-success" onclick="exportarCSV()">
+                                            <i class="fas fa-file-csv"></i> CSV
+                                        </button>
+                                        <button class="btn btn-danger" onclick="exportarPDF()">
+                                            <i class="fas fa-file-pdf"></i> PDF
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="resultadoRelatorio">
+                            <div class="text-center py-5">
+                                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Selecione os filtros e clique em Buscar</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ============================================
+        // ENFERMARIA - SISTEMA DE ATENDIMENTOS
+        // ============================================
+        
+        let token = localStorage.getItem('auth_token');
+        let scannerAuto = null;
+        let scannerAtivo = false;
+        let currentAluno = null;
+        let currentAtendimento = null;
+        let relatorioData = null;
+        let dashboardCharts = {};
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!token) { window.location.href = '/login.html'; return; }
+            
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            if (userData.role !== 'enfermaria' && userData.role !== 'super_admin' && userData.role !== 'admin') {
+                alert('Acesso negado.');
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            document.getElementById('userName').textContent = userData.nome || 'Usuário';
+            document.getElementById('dataAtual').textContent = new Date().toLocaleDateString('pt-BR');
+            
+            await carregarFotoPerfil();
+            await carregarAtendimentosAtivos();
+            await carregarTurmasParaRelatorio();
+            await carregarDashboard();
+            
+            iniciarScanner();
+            
+            setInterval(() => {
+                if (document.getElementById('ativos').classList.contains('active')) {
+                    carregarAtendimentosAtivos();
+                }
+                if (document.getElementById('dashboard').classList.contains('active')) {
+                    carregarDashboard();
+                }
+            }, 30000);
+            
+            document.getElementById('dashboard-tab').addEventListener('shown.bs.tab', () => {
+                carregarDashboard();
+            });
+        });
+        
+        async function carregarFotoPerfil() {
+            try {
+                const response = await fetch('/api/perfil/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success && data.perfil && data.perfil.fotoPerfil) {
+                    const avatarDiv = document.getElementById('userAvatar');
+                    if (avatarDiv) avatarDiv.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto de perfil">`;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar foto:', error);
+            }
+        }
+        
+        // ============================================
+        // SCANNER QR CODE
+        // ============================================
+        async function iniciarScanner() {
+            const qrContainer = document.getElementById('qr-reader-auto');
+            qrContainer.innerHTML = '<div id="qr-reader-auto-new" style="width: 100%;"></div>';
+            
+            scannerAuto = new Html5Qrcode("qr-reader-auto-new");
+            
+            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+            
+            try {
+                await scannerAuto.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
+                scannerAtivo = true;
+                console.log('✅ Scanner iniciado');
+            } catch (err) {
+                console.error('Erro ao iniciar scanner:', err);
+                qrContainer.innerHTML = `<div class="alert alert-warning m-3">Não foi possível acessar a câmera.</div>`;
+            }
+        }
+        
+        async function pararScanner() {
+            if (scannerAuto && scannerAtivo) {
+                try {
+                    await scannerAuto.stop();
+                    scannerAtivo = false;
+                } catch (e) {}
+            }
+        }
+        
+        async function onScanSuccess(decodedText) {
+            console.log('QR Code escaneado:', decodedText);
+            
+            let alunoId = null;
+            if (decodedText.match(/^[a-f0-9]{24}$/i)) alunoId = decodedText;
+            else if (decodedText.includes('aluno=')) {
+                const match = decodedText.match(/[?&]aluno=([a-f0-9]{24})/i);
+                if (match) alunoId = match[1];
+            } else if (decodedText.includes('id=')) {
+                const match = decodedText.match(/[?&]id=([a-f0-9]{24})/i);
+                if (match) alunoId = match[1];
+            }
+            
+            if (!alunoId) { 
+                alert('QR Code inválido'); 
+                return; 
+            }
+            
+            await pararScanner();
+            await buscarAluno(alunoId);
+        }
+        
+        function onScanError(error) {}
+        
+        // ============================================
+        // BUSCAR ALUNO
+        // ============================================
+        async function buscarAluno(alunoId) {
+            try {
+                const response = await fetch(`/api/enfermaria/aluno/${alunoId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentAluno = data.aluno;
+                    exibirAluno(data);
+                    
+                    if (data.emAtendimento && data.atendimentoAtivo) {
+                        currentAtendimento = data.atendimentoAtivo;
+                        mostrarFormSaida();
+                    } else {
+                        currentAtendimento = null;
+                        mostrarFormEntrada();
+                    }
+                } else {
+                    alert(data.error);
+                    reiniciarScanner();
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao buscar aluno');
+                reiniciarScanner();
+            }
+        }
+        
+        function exibirAluno(data) {
+            const aluno = data.aluno;
+            document.getElementById('alunoFoto').src = aluno.fotoPerfil || 'https://via.placeholder.com/100?text=Aluno';
+            document.getElementById('alunoNome').textContent = aluno.nome;
+            document.getElementById('alunoMatricula').textContent = aluno.matricula || 'Não informada';
+            document.getElementById('alunoTurma').textContent = aluno.turma || 'Não informada';
+            document.getElementById('alunoCurso').textContent = aluno.curso || 'Não informado';
+            
+            const statusDiv = document.getElementById('statusAtendimento');
+            if (data.emAtendimento) {
+                statusDiv.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-clock"></i> Aluno em atendimento desde ${new Date(data.atendimentoAtivo.dataHoraEntrada).toLocaleString()}
+                        <br><strong>Queixa:</strong> ${data.atendimentoAtivo.queixa}
+                    </div>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Aluno não está em atendimento no momento.
+                    </div>
+                `;
+            }
+            
+            document.getElementById('alunoInfo').style.display = 'block';
+        }
+        
+        function mostrarFormEntrada() {
+            document.getElementById('formEntrada').style.display = 'block';
+            document.getElementById('formSaida').style.display = 'none';
+            document.getElementById('queixa').value = '';
+            document.getElementById('observacoesEntrada').value = '';
+        }
+        
+        function mostrarFormSaida() {
+            document.getElementById('formEntrada').style.display = 'none';
+            document.getElementById('formSaida').style.display = 'block';
+            document.getElementById('desfecho').value = '';
+            document.getElementById('coordenadorPatioNome').value = '';
+            document.getElementById('outrosTexto').value = '';
+            document.getElementById('observacoesSaida').value = '';
+            document.getElementById('campoCoordenador').style.display = 'none';
+            document.getElementById('campoOutros').style.display = 'none';
+        }
+        
+        function toggleOutrosCampos() {
+            const desfecho = document.getElementById('desfecho').value;
+            document.getElementById('campoCoordenador').style.display = desfecho === 'liberado_coordenador' ? 'block' : 'none';
+            document.getElementById('campoOutros').style.display = desfecho === 'outros' ? 'block' : 'none';
+        }
+        
+        // ============================================
+        // REGISTRAR ENTRADA
+        // ============================================
+        async function registrarEntrada() {
+            const queixa = document.getElementById('queixa').value.trim();
+            if (!queixa) {
+                alert('Por favor, descreva a queixa do aluno');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/enfermaria/entrada', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        alunoId: currentAluno.id,
+                        queixa: queixa,
+                        observacoes: document.getElementById('observacoesEntrada').value
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ ${data.message}`);
+                    limparTela();
+                    reiniciarScanner();
+                    carregarAtendimentosAtivos();
+                    carregarDashboard();
+                } else {
+                    alert('❌ ' + data.error);
+                    reiniciarScanner();
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao registrar');
+                reiniciarScanner();
+            }
+        }
+        
+        // ============================================
+        // REGISTRAR SAÍDA
+        // ============================================
+        async function registrarSaida() {
+            const desfecho = document.getElementById('desfecho').value;
+            if (!desfecho) {
+                alert('Por favor, selecione o desfecho do atendimento');
+                return;
+            }
+            
+            if (desfecho === 'outros') {
+                const outrosTexto = document.getElementById('outrosTexto').value.trim();
+                if (!outrosTexto) {
+                    alert('Por favor, descreva o desfecho');
+                    return;
+                }
+            }
+            
+            try {
+                const body = {
+                    alunoId: currentAluno.id,
+                    desfecho: desfecho,
+                    desfechoOutrosTexto: document.getElementById('outrosTexto').value,
+                    coordenadorPatioNome: document.getElementById('coordenadorPatioNome').value,
+                    observacoes: document.getElementById('observacoesSaida').value
+                };
+                
+                const response = await fetch('/api/enfermaria/saida', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ ${data.message}`);
+                    limparTela();
+                    reiniciarScanner();
+                    carregarAtendimentosAtivos();
+                    carregarDashboard();
+                } else {
+                    alert('❌ ' + data.error);
+                    reiniciarScanner();
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao registrar');
+                reiniciarScanner();
+            }
+        }
+        
+        function limparTela() {
+            document.getElementById('alunoInfo').style.display = 'none';
+            document.getElementById('formEntrada').style.display = 'none';
+            document.getElementById('formSaida').style.display = 'none';
+            currentAluno = null;
+            currentAtendimento = null;
+        }
+        
+        function reiniciarScanner() {
+            setTimeout(() => {
+                iniciarScanner();
+            }, 1000);
+        }
+        
+        // ============================================
+        // ATENDIMENTOS ATIVOS
+        // ============================================
+        async function carregarAtendimentosAtivos() {
+            try {
+                const response = await fetch('/api/enfermaria/atendimentos-ativos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                const container = document.getElementById('listaAtendimentosAtivos');
+                
+                if (data.success && data.atendimentos.length > 0) {
+                    container.innerHTML = data.atendimentos.map(a => `
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${a.alunoNome}</strong>
+                                    <br>
+                                    <small class="text-muted">Turma: ${a.alunoTurma}</small>
+                                    <br>
+                                    <small class="text-muted">Há ${a.tempoAtendimento} minutos</small>
+                                </div>
+                                <div>
+                                    <span class="badge-status badge-em_atendimento">Em atendimento</span>
+                                    <br>
+                                    <small>${a.queixa.substring(0, 50)}${a.queixa.length > 50 ? '...' : ''}</small>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-check-circle fa-3x mb-3"></i><p>Nenhum atendimento ativo no momento</p></div>';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                document.getElementById('listaAtendimentosAtivos').innerHTML = '<div class="alert alert-danger">Erro ao carregar atendimentos</div>';
+            }
+        }
+        
+        // ============================================
+        // DASHBOARD
+        // ============================================
+        async function carregarDashboard() {
+            try {
+                const response = await fetch('/api/enfermaria/dashboard', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Atualizar cards
+                    document.getElementById('totalHoje').textContent = data.metricas.hoje;
+                    document.getElementById('totalSemana').textContent = data.metricas.semana;
+                    document.getElementById('totalMes').textContent = data.metricas.mes;
+                    document.getElementById('totalGeral').textContent = data.metricas.total;
+                    
+                    // Gráfico de Atendimentos por Dia
+                    if (dashboardCharts.atendimentos) dashboardCharts.atendimentos.destroy();
+                    const ctxAtendimentos = document.getElementById('chartAtendimentos').getContext('2d');
+                    dashboardCharts.atendimentos = new Chart(ctxAtendimentos, {
+                        type: 'bar',
+                        data: {
+                            labels: data.tendencias.ultimos7Dias.map(d => d.dia),
+                            datasets: [{
+                                label: 'Atendimentos',
+                                data: data.tendencias.ultimos7Dias.map(d => d.atendimentos),
+                                backgroundColor: '#10b981',
+                                borderRadius: 8
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true }
+                    });
+                    
+                    // Gráfico de Desfechos
+                    if (dashboardCharts.desfechos) dashboardCharts.desfechos.destroy();
+                    const ctxDesfechos = document.getElementById('chartDesfechos').getContext('2d');
+                    dashboardCharts.desfechos = new Chart(ctxDesfechos, {
+                        type: 'pie',
+                        data: {
+                            labels: data.desfechos.map(d => d.label),
+                            datasets: [{
+                                data: data.desfechos.map(d => d.count),
+                                backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6b7280']
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true }
+                    });
+                    
+                    // Gráfico por Turma
+                    if (dashboardCharts.turmas) dashboardCharts.turmas.destroy();
+                    const ctxTurmas = document.getElementById('chartTurmas').getContext('2d');
+                    dashboardCharts.turmas = new Chart(ctxTurmas, {
+                        type: 'bar',
+                        data: {
+                            labels: data.tendencias.porTurma.map(t => t.turma),
+                            datasets: [{
+                                label: 'Atendimentos',
+                                data: data.tendencias.porTurma.map(t => t.count),
+                                backgroundColor: '#8b5cf6',
+                                borderRadius: 8
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y' }
+                    });
+                    
+                    // Gráfico de Distribuição por Horário
+                    if (dashboardCharts.horario) dashboardCharts.horario.destroy();
+                    const ctxHorario = document.getElementById('chartHorario').getContext('2d');
+                    const horas = Array.from({length: 24}, (_, i) => `${i}:00`);
+                    dashboardCharts.horario = new Chart(ctxHorario, {
+                        type: 'line',
+                        data: {
+                            labels: horas,
+                            datasets: [{
+                                label: 'Atendimentos',
+                                data: data.tendencias.distribuicaoHoraria,
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true }
+                    });
+                    
+                    // Queixas Comuns
+                    const queixasContainer = document.getElementById('queixasComuns');
+                    if (data.tendencias.queixasComuns.length > 0) {
+                        queixasContainer.innerHTML = `
+                            <div class="list-group">
+                                ${data.tendencias.queixasComuns.map(q => `
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span><i class="fas fa-comment-medical text-primary me-2"></i> ${q.queixa}</span>
+                                        <span class="badge bg-primary rounded-pill">${q.count} vezes</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    } else {
+                        queixasContainer.innerHTML = '<div class="text-center text-muted py-3">Nenhuma queixa registrada nos últimos 30 dias</div>';
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dashboard:', error);
+            }
+        }
+        
+        // ============================================
+        // RELATÓRIOS
+        // ============================================
+        async function carregarTurmasParaRelatorio() {
+            try {
+                const response = await fetch('/api/enfermaria/relatorio/geral', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.turmasDisponiveis) {
+                    const turmaSelect = document.getElementById('filtroTurma');
+                    turmaSelect.innerHTML = '<option value="">Selecione uma turma...</option>';
+                    data.turmasDisponiveis.forEach(turma => {
+                        turmaSelect.innerHTML += `<option value="${turma}">${turma}</option>`;
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar turmas:', error);
+            }
+        }
+        
+        function toggleRelatorioFiltros() {
+            const tipo = document.getElementById('tipoRelatorio').value;
+            document.getElementById('filtroTurmaDiv').style.display = tipo === 'turma' ? 'block' : 'none';
+            document.getElementById('filtroAlunoDiv').style.display = tipo === 'aluno' ? 'block' : 'none';
+            
+            if (tipo === 'aluno') {
+                carregarAlunosParaRelatorio();
+            }
+        }
+        
+        async function carregarAlunosParaRelatorio() {
+            try {
+                const response = await fetch('/api/coordenacao-patio/alunos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.alunos) {
+                    const alunoSelect = document.getElementById('filtroAluno');
+                    alunoSelect.innerHTML = '<option value="">Selecione um aluno...</option>';
+                    data.alunos.forEach(aluno => {
+                        alunoSelect.innerHTML += `<option value="${aluno.id}">${aluno.nome} (${aluno.turma || 'Sem turma'})</option>`;
+                    });
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+        
+        async function carregarRelatorio() {
+            const tipo = document.getElementById('tipoRelatorio').value;
+            const dataInicio = document.getElementById('dataInicio').value;
+            const dataFim = document.getElementById('dataFim').value;
+            
+            let url = '';
+            
+            if (tipo === 'geral') {
+                url = `/api/enfermaria/relatorio/geral?`;
+                if (dataInicio) url += `dataInicio=${dataInicio}&`;
+                if (dataFim) url += `dataFim=${dataFim}&`;
+            } else if (tipo === 'turma') {
+                const turma = document.getElementById('filtroTurma').value;
+                if (!turma) { alert('Selecione uma turma'); return; }
+                url = `/api/enfermaria/relatorio/turma/${encodeURIComponent(turma)}?`;
+                if (dataInicio) url += `dataInicio=${dataInicio}&`;
+                if (dataFim) url += `dataFim=${dataFim}&`;
+            } else if (tipo === 'aluno') {
+                const alunoId = document.getElementById('filtroAluno').value;
+                if (!alunoId) { alert('Selecione um aluno'); return; }
+                url = `/api/enfermaria/relatorio/aluno/${alunoId}?`;
+                if (dataInicio) url += `dataInicio=${dataInicio}&`;
+                if (dataFim) url += `dataFim=${dataFim}&`;
+            }
+            
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    relatorioData = data;
+                    exibirRelatorio(data, tipo);
+                } else {
+                    alert('Erro ao carregar relatório');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao carregar relatório');
+            }
+        }
+        
+        function exibirRelatorio(data, tipo) {
+            const container = document.getElementById('resultadoRelatorio');
+            
+            if (tipo === 'geral') {
+                container.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Relatório Geral</h5>
+                            <p>Total de atendimentos: <strong>${data.totalAtendimentos}</strong></p>
+                            <hr>
+                            <h6>Atendimentos por Turma</h6>
+                            ${data.porTurma.map(t => `
+                                <div class="mb-3">
+                                    <strong>${t.turma}</strong>
+                                    <ul>
+                                        <li>Total: ${t.total} atendimentos</li>
+                                        <li>Alunos atendidos: ${t.totalAlunos}</li>
+                                    </ul>
+                                </div>
+                            `).join('')}
+                            <hr>
+                            <h6>Últimos Atendimentos</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead><tr><th>Aluno</th><th>Turma</th><th>Data</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                        ${data.ultimosAtendimentos.map(a => `
+                                            <tr>
+                                                <td>${a.alunoNome}</td>
+                                                <td>${a.alunoTurma}</td>
+                                                <td>${new Date(a.dataEntrada).toLocaleString()}</td>
+                                                <td>${a.status === 'em_atendimento' ? 'Em atendimento' : 'Finalizado'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (tipo === 'turma') {
+                container.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Relatório da Turma: ${data.turma}</h5>
+                            <p>Total de atendimentos: <strong>${data.estatisticas.totalAtendimentos}</strong></p>
+                            <p>Alunos atendidos: <strong>${data.estatisticas.totalAlunosAtendidos}</strong></p>
+                            <hr>
+                            <h6>Desfechos</h6>
+                            <ul>
+                                ${Object.entries(data.estatisticas.desfechos).map(([k, v]) => `<li>${k}: ${v}</li>`).join('')}
+                            </ul>
+                            <hr>
+                            <h6>Atendimentos por Aluno</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead><tr><th>Aluno</th><th>Total</th><th>Desfechos</th></tr></thead>
+                                    <tbody>
+                                        ${data.porAluno.map(a => `
+                                            <tr>
+                                                <td>${a.alunoNome}</td>
+                                                <td>${a.total}</td>
+                                                <td>${Object.entries(a.desfechos).map(([k, v]) => `${k}: ${v}`).join(', ')}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (tipo === 'aluno') {
+                container.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Relatório do Aluno: ${data.aluno.nome}</h5>
+                            <p>Matrícula: ${data.aluno.matricula || 'N/A'} | Turma: ${data.aluno.turma || 'N/A'}</p>
+                            <p>Total de atendimentos: <strong>${data.estatisticas.totalAtendimentos}</strong></p>
+                            <hr>
+                            <h6>Histórico de Atendimentos</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead><tr><th>Data</th><th>Queixa</th><th>Desfecho</th></tr></thead>
+                                    <tbody>
+                                        ${data.atendimentos.map(a => `
+                                            <tr>
+                                                <td>${new Date(a.dataEntrada).toLocaleString()}</td>
+                                                <td>${a.queixa.substring(0, 100)}${a.queixa.length > 100 ? '...' : ''}</td>
+                                                <td>${a.desfechoTexto}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        function exportarCSV() {
+            if (!relatorioData) { alert('Nenhum relatório carregado'); return; }
+            
+            let csvContent = "Data,Aluno,Turma,Queixa,Desfecho\n";
+            
+            if (relatorioData.atendimentos) {
+                relatorioData.atendimentos.forEach(a => {
+                    csvContent += `${new Date(a.dataEntrada).toLocaleString()},${relatorioData.aluno?.nome || a.alunoNome || ''},${relatorioData.aluno?.turma || a.alunoTurma || ''},"${a.queixa.replace(/"/g, '""')}","${a.desfechoTexto.replace(/"/g, '""')}"\n`;
+                });
+            } else if (relatorioData.ultimosAtendimentos) {
+                relatorioData.ultimosAtendimentos.forEach(a => {
+                    csvContent += `${new Date(a.dataEntrada).toLocaleString()},${a.alunoNome},${a.alunoTurma},"${a.queixa?.replace(/"/g, '""') || ''}",${a.status}\n`;
+                });
+            }
+            
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `relatorio_enfermaria_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+        
+        async function exportarPDF() {
+            if (!relatorioData) { alert('Nenhum relatório carregado'); return; }
+            alert('Função de PDF será implementada em breve');
+        }
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair do sistema?')) {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user_data');
+                window.location.href = '/login.html';
+            }
+        }
+        
+        // Funções globais
+        window.toggleOutrosCampos = toggleOutrosCampos;
+        window.registrarEntrada = registrarEntrada;
+        window.registrarSaida = registrarSaida;
+        window.carregarRelatorio = carregarRelatorio;
+        window.exportarCSV = exportarCSV;
+        window.exportarPDF = exportarPDF;
+        window.toggleRelatorioFiltros = toggleRelatorioFiltros;
+        window.logout = logout;
+    </script>
+</body>
+</html>

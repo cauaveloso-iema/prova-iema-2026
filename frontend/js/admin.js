@@ -356,10 +356,12 @@ class AdminPanel {
             eixos: 'Gerenciar Eixos',
             cursos: 'Gerenciar Cursos',
             faceid: 'Gerenciar Face ID',
-            onesignal: '📱 Notificações Push (OneSignal)',  // <-- ADICIONAR ESTA LINHA
+            onesignal: '📱 Notificações Push (OneSignal)',
             'omr-debug': 'OMR Debug - Imagens Processadas',
             monitoramento: 'Monitoramento do Sistema',
-            configuracoes: 'Configurações do Sistema'
+            configuracoes: 'Configurações do Sistema',
+            'cozinha-monitoramento': '🍽️ Cozinha - Monitoramento',
+            'enfermaria-monitoramento': '🏥 Enfermaria - Monitoramento'  // 🔥 NOVO
         };
         
         const pageTitle = document.getElementById('pageTitle');
@@ -445,6 +447,33 @@ class AdminPanel {
                 
                 await monitoramentoTempoReal.carregar();
                 break;
+                
+                case 'enfermaria-monitoramento':
+                    console.log('🏥 Carregando módulo Enfermaria Monitoramento...');
+                    
+                    // Verificar se o módulo foi carregado
+                    if (typeof monitoramentoEnfermaria === 'undefined' || monitoramentoEnfermaria === null) {
+                        console.warn('⚠️ monitoramentoEnfermaria não encontrado, tentando criar...');
+                        if (typeof MonitoramentoEnfermaria !== 'undefined') {
+                            monitoramentoEnfermaria = new MonitoramentoEnfermaria();
+                            window.monitoramentoEnfermaria = monitoramentoEnfermaria;
+                        } else {
+                            contentArea.innerHTML = `
+                                <div class="alert alert-danger m-4">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <strong>Erro:</strong> Módulo de monitoramento da Enfermaria não carregado.
+                                    <br><small>Verifique se o arquivo admin-enfermaria-monitoramento.js foi carregado corretamente.</small>
+                                    <br><button class="btn btn-sm btn-primary mt-2" onclick="location.reload()">
+                                        <i class="fas fa-sync-alt"></i> Recarregar página
+                                    </button>
+                                </div>
+                            `;
+                            return;
+                        }
+                    }
+                    
+                    await monitoramentoEnfermaria.carregar();
+                    break;
             // ============================================
             case 'eixos':
                 await this.loadEixos();
@@ -2664,7 +2693,7 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- Perfil-->
+                        <!-- Perfil -->
                         <div class="filter-group">
                             <label><i class="fas fa-user-tag"></i> Perfil</label>
                             <select id="filterRole" class="filter-select">
@@ -2675,6 +2704,7 @@ class AdminPanel {
                                 <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>🏃 Coordenação de Pátio</option>
                                 <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>🍽️ Cozinha</option>
                                 <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>📊 Gestão Geral</option>
+                                <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>🏥 Enfermaria</option>  <!-- 🔥 NOVO -->
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
                                 <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
                             </select>
@@ -3052,6 +3082,14 @@ class AdminPanel {
                     margin-right: 4px;
                 }
                 
+                .role-badge.enfermaria {
+                    background: linear-gradient(135deg, #0891b2, #06b6d4);
+                    color: white;
+                }
+                .role-badge.enfermaria i {
+                    margin-right: 4px;
+                }
+                
                 /* Status badges */
                 .status-badge {
                     display: inline-block;
@@ -3286,6 +3324,8 @@ class AdminPanel {
                 roleBadge = '<span class="role-badge coordenacao_patio"><i class="fas fa-utensils"></i> Coordenação de Pátio</span>';
             } else if (user.role === 'cozinha') {
                 roleBadge = '<span class="role-badge cozinha"><i class="fas fa-kitchen-set"></i> Cozinha</span>';
+            } else if (user.role === 'enfermaria') {
+                roleBadge = '<span class="role-badge enfermaria"><i class="fas fa-hospital-user"></i> Enfermaria</span>';
             } else if (user.role === 'gestao_geral') {
                 roleBadge = '<span class="role-badge gestao_geral"><i class="fas fa-chart-line"></i> Gestão Geral</span>';
             } else {
@@ -3583,7 +3623,8 @@ class AdminPanel {
             'setor_pedagogico': 'Setor Pedagógico',
             'coordenacao_patio': 'Coordenação de Pátio',
             'cozinha': 'Cozinha',
-            'gestao_geral': 'Gestão Geral'
+            'gestao_geral': 'Gestão Geral',
+            'enfermaria': 'Enfermaria' 
         };
         return labels[role] || role || 'Desconhecido';
     }
@@ -3717,6 +3758,11 @@ class AdminPanel {
                     roleIcon = '📊';
                     roleColor = '#1e3c72';
                     roleBg = '#e0f2fe';
+                    break;
+                case 'enfermaria':  // 🔥 NOVO
+                    roleIcon = '🏥';
+                    roleColor = '#0891b2';
+                    roleBg = '#cffafe';
                     break;
                 default:
                     roleIcon = '👤';
@@ -4210,6 +4256,7 @@ class AdminPanel {
                             <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>Coordenação de Pátio</option>
                             <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>Cozinha</option>
                             <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>Gestão Geral</option>
+                            <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>Enfermaria</option>
                         </select>
                     </div>
                     
@@ -4368,6 +4415,32 @@ class AdminPanel {
                         <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
                     </div>
                 </div>
+
+                <!-- Campos específicos para Enfermaria -->
+                <div id="enfermariaFields" class="role-specific" style="${role === 'enfermaria' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-stethoscope"></i> Especialidade</label>
+                        <input type="text" id="userEspecialidade" class="form-control" value="${escapeStr(usuario?.especialidade || '')}" placeholder="Ex: Enfermagem Geral, Técnico de Enfermagem...">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-badge"></i> COREN</label>
+                        <input type="text" id="userCoren" class="form-control" value="${escapeStr(usuario?.coren || '')}" placeholder="Ex: COREN/MA 123456">
+                    </div>
+                    <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>A Enfermaria gerencia atendimentos de alunos, registrando queixas e desfechos.</span>
+                    </div>
+                </div>
                 
                 <!-- Campos específicos para Cozinha -->
                 <div id="cozinhaFields" class="role-specific" style="${role === 'cozinha' ? 'display: block;' : 'display: none;'}">
@@ -4477,6 +4550,7 @@ class AdminPanel {
         const coordenacaoPatioFields = document.getElementById('coordenacaoPatioFields');
         const cozinhaFields = document.getElementById('cozinhaFields');
         const gestaoGeralFields = document.getElementById('gestaoGeralFields');
+        const enfermariaFields = document.getElementById('enfermariaFields'); // 🔥 NOVO
         
         if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
         if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
@@ -4484,6 +4558,7 @@ class AdminPanel {
         if (coordenacaoPatioFields) coordenacaoPatioFields.style.display = role === 'coordenacao_patio' ? 'block' : 'none';
         if (cozinhaFields) cozinhaFields.style.display = role === 'cozinha' ? 'block' : 'none';
         if (gestaoGeralFields) gestaoGeralFields.style.display = role === 'gestao_geral' ? 'block' : 'none';
+        if (enfermariaFields) enfermariaFields.style.display = role === 'enfermaria' ? 'block' : 'none'; // 🔥 NOVO
     }
 
     gerarSenha() {
@@ -4600,6 +4675,12 @@ class AdminPanel {
             } else if (role === 'cozinha') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'enfermaria') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.especialidade = document.getElementById('userEspecialidade')?.value || undefined;
+                dados.coren = document.getElementById('userCoren')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             
             } else if (role === 'gestao_geral') {
