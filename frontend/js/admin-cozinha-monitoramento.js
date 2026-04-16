@@ -20,10 +20,8 @@ class MonitoramentoTempoReal {
     // PROPRIEDADES PARA FILTRO DAS TURMAS (REFEIÇÕES POR TURMA)
     this.filtroTurmasRefeicaoTurma = 'todas';
     this.filtroTurmasRefeicaoPeriodo = 'todas';
-    this.filtroTurmasRefeicaoData = 'hoje'; // NOVO: filtro de período/data
     this.dadosRefeicoesTurmasFiltrados = [];
     this.refeicoesPorTurmaOriginais = [];
-    this.refeicoesPorTurmaDatasOriginais = []; // NOVO: armazenar dados com data
   }
   
   async carregar() {
@@ -276,7 +274,6 @@ class MonitoramentoTempoReal {
     // FILTROS DE REFEIÇÕES POR TURMA
     const turmaRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurma');
     const turnoRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
-    const dataRefeicaoSelect = document.getElementById('filtroTurmasRefeicaoData'); // NOVO
     
     const aplicarFiltrosTurmas = () => {
       console.log('🎯 Evento disparado - aplicando filtros de refeições por turma...');
@@ -293,13 +290,6 @@ class MonitoramentoTempoReal {
       const novoTurno = turnoRefeicaoSelect.cloneNode(true);
       turnoRefeicaoSelect.parentNode.replaceChild(novoTurno, turnoRefeicaoSelect);
       novoTurno.addEventListener('change', aplicarFiltrosTurmas);
-    }
-    
-    // NOVO: Evento para filtro de período/data
-    if (dataRefeicaoSelect) {
-      const novoData = dataRefeicaoSelect.cloneNode(true);
-      dataRefeicaoSelect.parentNode.replaceChild(novoData, dataRefeicaoSelect);
-      novoData.addEventListener('change', aplicarFiltrosTurmas);
     }
     
     // FILTROS DE RODÍZIO
@@ -502,7 +492,7 @@ class MonitoramentoTempoReal {
   }
   
   // ============================================
-  // FILTROS DE REFEIÇÕES POR TURMA (COM TURNO E PERÍODO)
+  // FILTROS DE REFEIÇÕES POR TURMA (COM TURNO)
   // ============================================
   
   atualizarTabelaRefeicoesTurmas() {
@@ -518,7 +508,7 @@ class MonitoramentoTempoReal {
     console.log(`📊 Renderizando ${dados.length} turmas`);
     
     if (dados.length === 0) {
-      turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada com os filtros selecionados</td></tr>';
+      turmasBody.innerHTML = '<tr><td colspan="6" class="text-center empty-state">Nenhuma turma encontrada com os filtros selecionados<\/td></tr>';
       return;
     }
     
@@ -550,9 +540,8 @@ class MonitoramentoTempoReal {
     
     const turma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
     const turno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
-    const periodo = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje'; // NOVO
     
-    console.log(`📌 Filtros Turmas: Turma=${turma}, Turno=${turno}, Período=${periodo}`);
+    console.log(`📌 Filtros Turmas: Turma=${turma}, Turno=${turno}`);
     console.log(`📊 Total original: ${this.refeicoesPorTurmaOriginais.length}`);
     
     let dadosFiltrados = [...this.refeicoesPorTurmaOriginais];
@@ -562,7 +551,7 @@ class MonitoramentoTempoReal {
       dadosFiltrados = dadosFiltrados.filter(t => t.turma === turma);
     }
     
-    // Filtrar por turno/período (manha, almoco, tarde)
+    // Filtrar por turno/período
     if (turno !== 'todas') {
       dadosFiltrados = dadosFiltrados.map(t => ({
         turma: t.turma,
@@ -572,15 +561,6 @@ class MonitoramentoTempoReal {
         total: t[turno] || 0,
         alunosQueComeram: t.alunosQueComeram
       }));
-    }
-    
-    // NOVO: Filtrar por período/data (hoje, ontem, semana, mes, todos)
-    if (periodo !== 'todos') {
-      // Como os dados vêm do backend já filtrados pela data atual,
-      // este filtro adicional serve para compatibilidade com a API
-      // Se a API suportar dados históricos, implementar lógica aqui
-      console.log(`📅 Aplicando filtro de período: ${periodo}`);
-      // Mantém os dados como estão - o backend já deve retornar conforme o período
     }
     
     this.dadosRefeicoesTurmasFiltrados = dadosFiltrados;
@@ -600,11 +580,9 @@ class MonitoramentoTempoReal {
     
     const turmaSelect = document.getElementById('filtroTurmasRefeicaoTurma');
     const turnoSelect = document.getElementById('filtroTurmasRefeicaoTurno');
-    const dataSelect = document.getElementById('filtroTurmasRefeicaoData'); // NOVO
     
     if (turmaSelect) turmaSelect.value = 'todas';
     if (turnoSelect) turnoSelect.value = 'todas';
-    if (dataSelect) dataSelect.value = 'hoje'; // NOVO
     
     this.dadosRefeicoesTurmasFiltrados = [...this.refeicoesPorTurmaOriginais];
     this.atualizarTabelaRefeicoesTurmas();
@@ -717,7 +695,7 @@ class MonitoramentoTempoReal {
     if (!tbody) return;
     
     if (this.feedbacksFiltrados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado<\/td><tr>';
       return;
     }
     
@@ -1259,7 +1237,7 @@ class MonitoramentoTempoReal {
           </div>
         </div>
 
-        <!-- Refeições por Turma com Filtros (Turno e Período) -->
+        <!-- Refeições por Turma com Filtros (Turno) -->
         <div class="card">
           <div class="card-header">
             <i class="fas fa-table"></i>
@@ -1290,21 +1268,6 @@ class MonitoramentoTempoReal {
                     <option value="manha">🌅 Manhã</option>
                     <option value="almoco">🍽️ Almoço</option>
                     <option value="tarde">🌙 Tarde</option>
-                  </select>
-                </div>
-                
-                <!-- NOVO: Filtro de Período/Data -->
-                <div style="flex: 1; min-width: 150px;">
-                  <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 5px;">
-                    <i class="fas fa-calendar-alt"></i> Período
-                  </label>
-                  <select id="filtroTurmasRefeicaoData" class="filter-select" style="width: 100%; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 8px;" 
-                          onchange="monitoramentoTempoReal.aplicarFiltrosRefeicoesTurmas()">
-                    <option value="hoje">📅 Hoje</option>
-                    <option value="ontem">📆 Ontem</option>
-                    <option value="semana">📊 Esta semana</option>
-                    <option value="mes">📈 Este mês</option>
-                    <option value="todos">🗓️ Todos os períodos</option>
                   </select>
                 </div>
                 
@@ -1347,7 +1310,7 @@ class MonitoramentoTempoReal {
                     </tr>
                   `).join('')}
                   ${(cozinha.refeicoesPorTurma || []).length === 0 ? `
-                    <tr><td colspan="6" class="text-center empty-state">Nenhum registro hoje</td></tr>
+                    <tr><td colspan="6" class="text-center empty-state">Nenhum registro hoje<\/td></tr>
                   ` : ''}
                 </tbody>
               </table>
@@ -1758,7 +1721,7 @@ class MonitoramentoTempoReal {
                     `;
                   }).join('')}
                   ${(gestao.rodizios || []).length === 0 ? `
-                    <tr><td colspan="6" class="text-center empty-state">Nenhum rodízio configurado</td></tr>
+                    <td><td colspan="6" class="text-center empty-state">Nenhum rodízio configurado<\/td></tr>
                   ` : ''}
                 </tbody>
               </table>
