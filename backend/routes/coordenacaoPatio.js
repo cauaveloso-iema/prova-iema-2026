@@ -287,6 +287,25 @@ router.post('/registrar-refeicao',
         });
       }
       
+      // 🔥 NOVA VERIFICAÇÃO: Verificar rodízio para ALMOÇO
+      if (tipoRefeicao === 'almoco' && aluno.turma) {
+        const rodizioCheck = await RodizioRefeicao.turmaPodeAlmocarHoje(aluno.turma);
+        
+        if (!rodizioCheck.pode) {
+          return res.status(400).json({
+            success: false,
+            error: rodizioCheck.motivo,
+            rodizio: {
+              verificado: true,
+              pode: false,
+              mensagem: rodizioCheck.motivo
+            }
+          });
+        }
+        
+        console.log(`🍽️ Rodízio VERIFICADO para turma ${aluno.turma}: ${rodizioCheck.pode ? '✅ APROVADO' : '❌ BLOQUEADO'}`);
+      }
+      
       // Verificar se já registrou esta refeição hoje
       const jaComeu = await Refeicao.alunoJaComeu(alunoId, tipoRefeicao, dataAtual);
       if (jaComeu) {
@@ -337,7 +356,11 @@ router.post('/registrar-refeicao',
           tipo: refeicao.tipoRefeicao,
           horario: refeicao.horario,
           refeicoesHoje: refeicoesHoje + 1
-        }
+        },
+        rodizio: tipoRefeicao === 'almoco' ? {
+          verificado: true,
+          autorizado: true
+        } : undefined
       });
       
     } catch (error) {

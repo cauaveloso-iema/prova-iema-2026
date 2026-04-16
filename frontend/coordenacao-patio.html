@@ -944,62 +944,83 @@
         }
         
         async function registrarRefeicaoAutomatico() {
-            if (!currentAluno) return;
-            
-            const hora = new Date().getHours();
-            let tipoRefeicao = null;
-            if (hora >= 8 && hora <= 10) tipoRefeicao = 'manha';
-            else if (hora >= 11 && hora <= 13) tipoRefeicao = 'almoco';
-            else if (hora >= 14 && hora <= 16) tipoRefeicao = 'tarde';
-            
-            if (!tipoRefeicao) {
-                alert('Fora do horário de refeição');
-                // Reativar scanner do modo atual
-                if (modoAtual === 'automatico') {
-                    await iniciarScannerAutomatico();
-                }
-                return;
+        if (!currentAluno) return;
+        
+        const hora = new Date().getHours();
+        let tipoRefeicao = null;
+        if (hora >= 8 && hora <= 10) tipoRefeicao = 'manha';
+        else if (hora >= 11 && hora <= 13) tipoRefeicao = 'almoco';
+        else if (hora >= 14 && hora <= 16) tipoRefeicao = 'tarde';
+        
+        if (!tipoRefeicao) {
+            alert('Fora do horário de refeição');
+            if (modoAtual === 'automatico') {
+            await iniciarScannerAutomatico();
             }
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/coordenacao-patio/registrar-refeicao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ alunoId: currentAluno.id, tipoRefeicao })
+            });
+            const data = await response.json();
             
-            try {
-                const response = await fetch('/api/coordenacao-patio/registrar-refeicao', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ alunoId: currentAluno.id, tipoRefeicao })
-                });
-                const data = await response.json();
+            if (data.success) {
+            alert(`✅ ${data.message}`);
+            document.getElementById('alunoInfo').style.display = 'none';
+            currentAluno = null;
+            aguardandoLeituraQR = false;
+            alunoSelecionadoParaQR = null;
+            
+            await carregarContadores();
+            
+            // Reativar scanner do modo atual
+            if (modoAtual === 'automatico') {
+                await iniciarScannerAutomatico();
+            } else {
+                document.getElementById('cameraAreaManual').style.display = 'none';
+                document.getElementById('listaAlunosManual').style.display = 'block';
+                await carregarAlunosPorTurma();
+            }
+            } else {
+            // 🔥 Tratamento especial para erro de rodízio
+            if (data.rodizio && !data.rodizio.pode) {
+                alert(`❌ ${data.error}\n\n📋 Motivo: ${data.rodizio.mensagem}`);
                 
-                if (data.success) {
-                    alert(`✅ ${data.message}`);
-                    document.getElementById('alunoInfo').style.display = 'none';
-                    currentAluno = null;
-                    aguardandoLeituraQR = false;
-                    alunoSelecionadoParaQR = null;
-                    
-                    await carregarContadores();
-                    
-                    // Reativar scanner do modo atual
-                    if (modoAtual === 'automatico') {
-                        await iniciarScannerAutomatico();
-                    } else {
-                        // No modo manual, fechar câmera e mostrar lista
-                        document.getElementById('cameraAreaManual').style.display = 'none';
-                        document.getElementById('listaAlunosManual').style.display = 'block';
-                        await carregarAlunosPorTurma();
-                    }
-                } else {
-                    alert('❌ ' + data.error);
-                    if (modoAtual === 'automatico') {
-                        await iniciarScannerAutomatico();
-                    }
+                // Opcional: Destacar visualmente que é por causa do rodízio
+                const horarioDiv = document.getElementById('horarioInfo');
+                if (horarioDiv) {
+                horarioDiv.innerHTML = `
+                    <div class="horario-card" style="background: #fee2e2; border-left-color: #dc2626;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-calendar-alt fa-2x me-3 text-danger"></i>
+                        <div>
+                        <strong>❌ RODÍZIO BLOQUEIA O ALMOÇO</strong>
+                        <br>
+                        <small>${data.rodizio.mensagem}</small>
+                        </div>
+                    </div>
+                    </div>
+                `;
                 }
-            } catch (error) {
-                console.error('Erro:', error);
-                alert('Erro ao registrar');
-                if (modoAtual === 'automatico') {
-                    await iniciarScannerAutomatico();
-                }
+            } else {
+                alert(`❌ ${data.error}`);
             }
+            
+            if (modoAtual === 'automatico') {
+                await iniciarScannerAutomatico();
+            }
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro ao registrar');
+            if (modoAtual === 'automatico') {
+            await iniciarScannerAutomatico();
+            }
+        }
         }
         
         async function registrarRefeicao() {
