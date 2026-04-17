@@ -171,6 +171,42 @@
             </div>
         </div>
     </div>
+
+    <!-- ===== MENU MOBILE FLUTUANTE ===== -->
+    <div class="fab-menu">
+        <button class="fab-button" id="fabMenuBtn">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="sheet-overlay" id="sheetOverlay"></div>
+
+    <div class="bottom-sheet" id="bottomSheet">
+        <div class="bottom-sheet-header">
+            <h3><i class="fas fa-chalkboard-user"></i> Menu</h3>
+            <button class="close-sheet" id="closeSheetBtn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="menu-items">
+            <div class="menu-item" data-section="dashboard">
+                <i class="fas fa-chart-line"></i><span>Dashboard</span>
+            </div>
+            <div class="menu-item" data-section="alunos">
+                <i class="fas fa-users"></i><span>Alunos AEE</span>
+            </div>
+            <div class="menu-item" data-section="provas">
+                <i class="fas fa-file-alt"></i><span>Provas</span>
+            </div>
+            <div class="menu-item" data-section="relatorios">
+                <i class="fas fa-chart-bar"></i><span>Relatórios</span>
+            </div>
+            <div class="menu-item" onclick="window.location.href='editar-perfil.html'">
+                <i class="fas fa-user-edit"></i><span>Editar Perfil</span>
+            </div>
+            <div class="menu-item logout-item" id="logoutMobileBtn">
+                <i class="fas fa-sign-out-alt"></i><span>Sair</span>
+            </div>
+        </div>
+    </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -2502,6 +2538,72 @@
     
     console.log('✅ Sistema de escalonamento mobile ativo!');
     
+})();
+</script>
+
+<script>
+// ========== FUNÇÕES DO MENU MOBILE - SETOR PEDAGÓGICO ==========
+(function() {
+    const fabBtn = document.getElementById('fabMenuBtn');
+    const bottomSheet = document.getElementById('bottomSheet');
+    const sheetOverlay = document.getElementById('sheetOverlay');
+    const closeSheetBtn = document.getElementById('closeSheetBtn');
+
+    function openBottomSheet() {
+        bottomSheet.classList.add('open');
+        sheetOverlay.classList.add('active');
+    }
+
+    function closeBottomSheet() {
+        bottomSheet.classList.remove('open');
+        sheetOverlay.classList.remove('active');
+    }
+
+    if (fabBtn) fabBtn.addEventListener('click', openBottomSheet);
+    if (closeSheetBtn) closeSheetBtn.addEventListener('click', closeBottomSheet);
+    if (sheetOverlay) sheetOverlay.addEventListener('click', closeBottomSheet);
+
+    // Navegação pelo menu mobile
+    document.querySelectorAll('.menu-item[data-section]').forEach(item => {
+        item.addEventListener('click', function() {
+            const section = this.getAttribute('data-section');
+            if (section && typeof setorPedagogico !== 'undefined') {
+                setorPedagogico.navigateTo(section);
+                closeBottomSheet();
+            }
+        });
+    });
+
+    // Logout mobile
+    const logoutMobileBtn = document.getElementById('logoutMobileBtn');
+    if (logoutMobileBtn) {
+        logoutMobileBtn.addEventListener('click', function() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        });
+    }
+})();
+
+// CORREÇÃO - Esconder botão de menu mobile padrão e ajustar FAB
+(function() {
+    function ajustarMenuMobile() {
+        const isMobile = window.innerWidth < 768;
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const fabMenu = document.querySelector('.fab-menu');
+        
+        if (isMobile) {
+            if (mobileMenuBtn) mobileMenuBtn.style.display = 'none';
+            if (fabMenu) fabMenu.style.display = 'block';
+        } else {
+            if (mobileMenuBtn) mobileMenuBtn.style.display = 'flex';
+            if (fabMenu) fabMenu.style.display = 'none';
+        }
+    }
+    
+    ajustarMenuMobile();
+    window.addEventListener('resize', ajustarMenuMobile);
+    window.addEventListener('DOMContentLoaded', ajustarMenuMobile);
+    setTimeout(ajustarMenuMobile, 100);
 })();
 </script>
 

@@ -735,3 +735,171 @@ body {
         margin-bottom: 20px;
     }
 }
+
+/* ============================================
+   MENU MOBILE FLUTUANTE - SETOR PEDAGÓGICO
+   ============================================ */
+
+.fab-menu {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: none;
+}
+
+.fab-button {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    border: none;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    color: white;
+    font-size: 1.5rem;
+}
+
+.fab-button:hover {
+    transform: scale(1.05);
+}
+
+/* Bottom Sheet (menu que sobe) */
+.bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    width: 85%;
+    max-width: 350px;
+    background: white;
+    border-radius: 20px 0 0 0;
+    box-shadow: -5px 0 25px rgba(0,0,0,0.2);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 1001;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.bottom-sheet.open {
+    transform: translateX(0);
+}
+
+.bottom-sheet-header {
+    padding: 20px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.bottom-sheet-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.close-sheet {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: white;
+    padding: 8px;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-sheet:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.menu-items {
+    padding: 10px 0 20px;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.menu-item:hover {
+    background: #f9fafb;
+}
+
+.menu-item i {
+    width: 24px;
+    font-size: 1.2rem;
+    color: #8b5cf6;
+}
+
+.menu-item span {
+    flex: 1;
+    font-size: 1rem;
+    color: #1f2937;
+}
+
+.menu-item.logout-item i {
+    color: #ef4444;
+}
+
+.menu-item.logout-item span {
+    color: #dc2626;
+    font-weight: 500;
+}
+
+.sheet-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    display: none;
+}
+
+.sheet-overlay.active {
+    display: block;
+}
+
+/* Esconde o botão de menu mobile padrão e mostra o FAB no mobile */
+@media (max-width: 768px) {
+    .mobile-menu-btn {
+        display: none !important;
+    }
+    
+    .fab-menu {
+        display: block !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .fab-menu {
+        display: none !important;
+    }
+    .mobile-menu-btn {
+        display: flex !important;
+    }
+}

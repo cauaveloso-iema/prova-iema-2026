@@ -16241,5 +16241,832 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<script>
+// ============================================
+// MOVER BOTÕES PARA O MENU MOBILE (APENAS EM TELAS PEQUENAS)
+// ============================================
+(function() {
+    // Função para verificar se é mobile
+    function isMobile() {
+        return window.innerWidth < 768;
+    }
+    
+    // Função para mover os botões
+    function moverBotoesParaMenuMobile() {
+        const mobile = isMobile();
+        
+        // Selecionar os botões do cabeçalho
+        const btnAdaptar = document.querySelector('button[onclick*="abrirModalUploadAdaptarDocumento"]');
+        const btnBaixarApp = document.querySelector('a[href*="drive.google.com"]');
+        
+        // Selecionar o container do menu mobile
+        const menuContainer = document.querySelector('.professor-mobile-menu-items');
+        
+        if (!menuContainer) {
+            console.log('⚠️ Menu mobile não encontrado');
+            return;
+        }
+        
+        if (mobile) {
+            // ===== MODO MOBILE: Mover botões para o menu =====
+            
+            // Verificar se os botões já estão no menu para não duplicar
+            const jaExisteAdaptar = menuContainer.querySelector('.mobile-menu-item[data-original="adaptar"]');
+            const jaExisteBaixar = menuContainer.querySelector('.mobile-menu-item[data-original="baixar"]');
+            
+            // Mover botão Adaptar Documento
+            if (btnAdaptar && !jaExisteAdaptar) {
+                // Criar clone do botão para o menu
+                const menuItemAdaptar = document.createElement('a');
+                menuItemAdaptar.href = '#';
+                menuItemAdaptar.className = 'mobile-menu-item';
+                menuItemAdaptar.setAttribute('data-original', 'adaptar');
+                menuItemAdaptar.innerHTML = `
+                    <i class="fas fa-universal-access"></i>
+                    <span>Adaptar Documento</span>
+                `;
+                menuItemAdaptar.onclick = function(e) {
+                    e.preventDefault();
+                    if (typeof abrirModalUploadAdaptarDocumento === 'function') {
+                        abrirModalUploadAdaptarDocumento();
+                    }
+                    fecharMenuMobile();
+                };
+                
+                // Inserir antes do logout
+                const logoutBtn = menuContainer.querySelector('.mobile-logout-btn, .logout-item');
+                if (logoutBtn) {
+                    menuContainer.insertBefore(menuItemAdaptar, logoutBtn);
+                } else {
+                    menuContainer.appendChild(menuItemAdaptar);
+                }
+                
+                // Esconder o botão original no cabeçalho
+                btnAdaptar.style.display = 'none';
+                console.log('📱 Botão "Adaptar Documento" movido para o menu mobile');
+            }
+            
+            // Mover botão Baixar App
+            if (btnBaixarApp && !jaExisteBaixar) {
+                // Criar clone do botão para o menu
+                const menuItemBaixar = document.createElement('a');
+                menuItemBaixar.href = btnBaixarApp.href;
+                menuItemBaixar.target = '_blank';
+                menuItemBaixar.className = 'mobile-menu-item';
+                menuItemBaixar.setAttribute('data-original', 'baixar');
+                menuItemBaixar.innerHTML = `
+                    <i class="fas fa-download"></i>
+                    <span>Baixar App</span>
+                `;
+                menuItemBaixar.onclick = function() {
+                    fecharMenuMobile();
+                };
+                
+                // Inserir antes do logout
+                const logoutBtn = menuContainer.querySelector('.mobile-logout-btn, .logout-item');
+                if (logoutBtn) {
+                    menuContainer.insertBefore(menuItemBaixar, logoutBtn);
+                } else {
+                    menuContainer.appendChild(menuItemBaixar);
+                }
+                
+                // Esconder o botão original no cabeçalho
+                btnBaixarApp.style.display = 'none';
+                console.log('📱 Botão "Baixar App" movido para o menu mobile');
+            }
+            
+        } else {
+            // ===== MODO DESKTOP: Mostrar botões no cabeçalho =====
+            
+            if (btnAdaptar) {
+                btnAdaptar.style.display = 'inline-flex';
+            }
+            
+            if (btnBaixarApp) {
+                btnBaixarApp.style.display = 'inline-flex';
+            }
+            
+            // Opcional: remover os itens do menu mobile (se quiser)
+            const menuAdaptar = document.querySelector('.mobile-menu-item[data-original="adaptar"]');
+            const menuBaixar = document.querySelector('.mobile-menu-item[data-original="baixar"]');
+            
+            if (menuAdaptar) menuAdaptar.remove();
+            if (menuBaixar) menuBaixar.remove();
+            
+            console.log('💻 Botões restaurados no cabeçalho (desktop)');
+        }
+    }
+    
+    // Função para fechar o menu mobile (se existir)
+    function fecharMenuMobile() {
+        const mobileSidebar = document.getElementById('professorMobileSidebar');
+        const mobileOverlay = document.getElementById('professorMobileOverlay');
+        
+        if (mobileSidebar) mobileSidebar.classList.remove('active');
+        if (mobileOverlay) mobileOverlay.classList.remove('active');
+        if (document.body) document.body.classList.remove('menu-aberto');
+    }
+    
+    // Executar quando a página carregar
+    document.addEventListener('DOMContentLoaded', function() {
+        // Aguardar um pouco para garantir que os elementos existem
+        setTimeout(moverBotoesParaMenuMobile, 500);
+    });
+    
+    // Executar quando redimensionar a tela
+    window.addEventListener('resize', function() {
+        setTimeout(moverBotoesParaMenuMobile, 200);
+    });
+    
+    // Também executar quando o DOM for completamente carregado
+    window.addEventListener('load', function() {
+        setTimeout(moverBotoesParaMenuMobile, 100);
+    });
+    
+    // Expor função global para fechar menu (caso precise)
+    window.fecharMenuMobile = fecharMenuMobile;
+    
+})();
+</script>
+
+<script>
+// ============================================
+// ORGANIZAÇÃO CRIATIVA DO FORMULÁRIO NO MOBILE
+// ============================================
+(function() {
+    // Verificar se é mobile
+    function isMobile() {
+        return window.innerWidth < 768;
+    }
+    
+    // Aplicar organização apenas em mobile
+    function organizarFormularioMobile() {
+        if (!isMobile()) {
+            restaurarFormularioOriginal();
+            return;
+        }
+        
+        console.log('📱 Organizando formulário de prova para mobile...');
+        
+        const formContainer = document.querySelector('#formNovaProva');
+        if (!formContainer) return;
+        
+        if (formContainer.hasAttribute('data-mobile-organized')) return;
+        formContainer.setAttribute('data-mobile-organized', 'true');
+        
+        // 1. Criar container principal
+        const camposPrincipais = document.createElement('div');
+        camposPrincipais.className = 'mobile-form-sections';
+        camposPrincipais.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        `;
+        
+        // 2. TODAS as seções com TODOS os campos
+        const secoes = [
+            {
+                titulo: '📝 Informações Básicas',
+                icone: 'fa-info-circle',
+                cor: '#4f46e5',
+                campos: [
+                    { id: 'temaProva', label: 'Tema da Prova', tipo: 'textarea' },
+                    { id: 'tituloProva', label: 'Título da Prova', tipo: 'input' },
+                    { id: 'periodoProva', label: 'Período Letivo', tipo: 'select' },
+                    { id: 'tipoProva', label: 'Tipo de Prova', tipo: 'select' }
+                ]
+            },
+            {
+                titulo: '⚙️ Configurações',
+                icone: 'fa-sliders-h',
+                cor: '#10b981',
+                campos: [
+                    { id: 'quantidadeQuestoes', label: 'Quantidade de Questões', tipo: 'select' },
+                    { id: 'dificuldade', label: 'Dificuldade', tipo: 'select' },
+                    { id: 'turmaProva', label: 'Turma', tipo: 'select' }
+                ]
+            },
+            {
+                titulo: '📅 Data e Horário',
+                icone: 'fa-calendar-alt',
+                cor: '#f59e0b',
+                campos: [
+                    { id: 'dataLimite', label: 'Data Limite', tipo: 'date' },
+                    { id: 'horarioInicio', label: 'Horário Início', tipo: 'time' },
+                    { id: 'horarioTermino', label: 'Horário Término', tipo: 'time' }
+                ]
+            },
+            {
+                titulo: '⏱️ Duração da Prova',
+                icone: 'fa-hourglass-half',
+                cor: '#8b5cf6',
+                campos: [
+                    { id: 'duracaoCalculada', label: 'Duração Calculada', tipo: 'custom', isReadonly: true }
+                ]
+            }
+        ];
+        
+        // 3. Criar cada seção
+        secoes.forEach((secao, index) => {
+            const sectionDiv = document.createElement('div');
+            sectionDiv.className = 'mobile-form-section';
+            sectionDiv.style.cssText = `
+                background: white;
+                border-radius: 16px;
+                overflow: hidden;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+                border-left: 4px solid ${secao.cor};
+            `;
+            
+            // Header
+            const header = document.createElement('div');
+            header.style.cssText = `
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 15px;
+                background: ${secao.cor}10;
+                color: ${secao.cor};
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.3s;
+            `;
+            header.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas ${secao.icone}" style="color: ${secao.cor};"></i>
+                    <span>${secao.titulo}</span>
+                    ${secao.titulo === '⏱️ Duração da Prova' ? 
+                        `<span style="background: ${secao.cor}20; color: ${secao.cor}; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem;">Automático</span>` : ''}
+                </div>
+                <i class="fas fa-chevron-down" style="transition: transform 0.3s; color: ${secao.cor};"></i>
+            `;
+            
+            // Body (expansível)
+            const body = document.createElement('div');
+            body.style.cssText = `
+                padding: 0 15px;
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease-out, padding 0.3s;
+                background: white;
+            `;
+            
+            // Montar HTML dos campos
+            let camposHTML = '';
+            secao.campos.forEach(campo => {
+                const elemento = document.getElementById(campo.id);
+                if (elemento) {
+                    if (campo.tipo === 'textarea') {
+                        const clone = elemento.cloneNode(true);
+                        clone.style.width = '100%';
+                        clone.style.minHeight = '80px';
+                        clone.style.padding = '10px';
+                        clone.style.border = '2px solid #e5e7eb';
+                        clone.style.borderRadius = '12px';
+                        clone.style.fontSize = '14px';
+                        camposHTML += `
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;">
+                                    <i class="fas fa-${campo.id === 'temaProva' ? 'lightbulb' : 'heading'}" style="color: ${secao.cor}; margin-right: 5px;"></i>
+                                    ${campo.label}
+                                </label>
+                                ${clone.outerHTML}
+                            </div>
+                        `;
+                    } 
+                    else if (campo.id === 'duracaoCalculada') {
+                        // Campo especial de duração calculada
+                        const duracaoElement = document.getElementById('duracaoCalculada');
+                        if (duracaoElement) {
+                            camposHTML += `
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;">
+                                        <i class="fas fa-hourglass-half" style="color: ${secao.cor}; margin-right: 5px;"></i>
+                                        ${campo.label}
+                                    </label>
+                                    <div id="duracaoCalculadaMobile" style="
+                                        background: ${secao.cor}10;
+                                        padding: 15px;
+                                        border-radius: 12px;
+                                        text-align: center;
+                                        font-weight: bold;
+                                        color: ${secao.cor};
+                                        border: 2px solid ${secao.cor}30;
+                                        font-size: 1.1rem;
+                                    ">
+                                        ${duracaoElement.innerHTML}
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Sincronizar com o original
+                            const observer = new MutationObserver(function() {
+                                const original = document.getElementById('duracaoCalculada');
+                                const mobile = document.getElementById('duracaoCalculadaMobile');
+                                if (original && mobile) {
+                                    mobile.innerHTML = original.innerHTML;
+                                }
+                            });
+                            observer.observe(duracaoElement, { childList: true, subtree: true, characterData: true });
+                        }
+                    }
+                    else {
+                        const clone = elemento.cloneNode(true);
+                        clone.style.width = '100%';
+                        clone.style.padding = '12px';
+                        clone.style.border = '2px solid #e5e7eb';
+                        clone.style.borderRadius = '12px';
+                        clone.style.fontSize = '14px';
+                        camposHTML += `
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;">
+                                    <i class="fas ${campo.id === 'dataLimite' ? 'fa-calendar' : campo.id === 'horarioInicio' || campo.id === 'horarioTermino' ? 'fa-clock' : 'fa-list'}" style="color: ${secao.cor}; margin-right: 5px;"></i>
+                                    ${campo.label}
+                                </label>
+                                ${clone.outerHTML}
+                            </div>
+                        `;
+                    }
+                }
+            });
+            
+            body.innerHTML = camposHTML;
+            
+            // Evento de clique
+            header.addEventListener('click', () => {
+                const isOpen = body.style.maxHeight !== '0px';
+                const icon = header.querySelector('.fa-chevron-down');
+                
+                if (isOpen) {
+                    body.style.maxHeight = '0px';
+                    body.style.padding = '0 15px';
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                } else {
+                    body.style.maxHeight = body.scrollHeight + 'px';
+                    body.style.padding = '15px';
+                    if (icon) icon.style.transform = 'rotate(180deg)';
+                    
+                    // Se for a seção de horários, recalcular duração
+                    if (secao.titulo === '📅 Data e Horário') {
+                        if (typeof calcularDuracao === 'function') {
+                            setTimeout(calcularDuracao, 100);
+                        }
+                    }
+                }
+            });
+            
+            sectionDiv.appendChild(header);
+            sectionDiv.appendChild(body);
+            camposPrincipais.appendChild(sectionDiv);
+        });
+        
+        // 4. Seção de Ações (botões)
+        const botoesDiv = document.createElement('div');
+        botoesDiv.style.cssText = `
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        `;
+        
+        const btnGerar = document.querySelector('#btnGerarProva');
+        if (btnGerar) {
+            const btnClone = btnGerar.cloneNode(true);
+            btnClone.style.cssText = `
+                width: 100%;
+                padding: 14px;
+                font-size: 16px;
+                margin: 0;
+                border-radius: 40px;
+            `;
+            botoesDiv.appendChild(btnClone);
+            btnGerar.style.display = 'none';
+        }
+        
+        camposPrincipais.appendChild(botoesDiv);
+        
+        // 5. Esconder grid original e inserir novo
+        const formGrid = formContainer.querySelector('.form-grid');
+        if (formGrid) {
+            formGrid.style.display = 'none';
+            formGrid.parentNode.insertBefore(camposPrincipais, formGrid.nextSibling);
+        }
+        
+        // 6. Adicionar estilos
+        const style = document.createElement('style');
+        style.textContent = `
+            @media (max-width: 768px) {
+                .mobile-section-header:active {
+                    opacity: 0.9;
+                    transform: scale(0.99);
+                }
+                
+                .mobile-form-section {
+                    animation: fadeInUp 0.4s ease-out;
+                }
+                
+                @keyframes fadeInUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(20px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+                
+                .mobile-section-body .form-control,
+                .mobile-section-body select,
+                .mobile-section-body input,
+                .mobile-section-body textarea {
+                    width: 100% !important;
+                    font-size: 14px;
+                    padding: 10px 12px;
+                    box-sizing: border-box;
+                }
+                
+                .mobile-help-btn {
+                    position: fixed;
+                    bottom: 20px;
+                    left: 20px;
+                    width: 44px;
+                    height: 44px;
+                    background: #4f46e5;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+                    cursor: pointer;
+                    z-index: 1000;
+                    border: 2px solid white;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // 7. Botão de ajuda
+        if (!document.querySelector('.mobile-help-btn')) {
+            const helpBtn = document.createElement('div');
+            helpBtn.className = 'mobile-help-btn';
+            helpBtn.innerHTML = '<i class="fas fa-question"></i>';
+            helpBtn.title = 'Dicas para preencher a prova';
+            helpBtn.onclick = () => {
+                alert('💡 DICAS:\n\n• Clique em cada seção para expandir\n• Preencha todos os campos necessários\n• A duração é calculada automaticamente\n• Após preencher, clique em "Gerar Prova com IA"');
+            };
+            document.body.appendChild(helpBtn);
+        }
+        
+        console.log('✅ Formulário organizado para mobile com todas as seções!');
+    }
+    
+    function restaurarFormularioOriginal() {
+        const formContainer = document.querySelector('#formNovaProva');
+        if (!formContainer) return;
+        
+        formContainer.removeAttribute('data-mobile-organized');
+        
+        const formGrid = formContainer.querySelector('.form-grid');
+        if (formGrid) {
+            formGrid.style.display = '';
+        }
+        
+        const mobileSections = formContainer.querySelector('.mobile-form-sections');
+        if (mobileSections) mobileSections.remove();
+        
+        const btnGerar = document.querySelector('#btnGerarProva');
+        if (btnGerar) btnGerar.style.display = '';
+        
+        const helpBtn = document.querySelector('.mobile-help-btn');
+        if (helpBtn) helpBtn.remove();
+        
+        console.log('💻 Formulário restaurado para desktop');
+    }
+    
+    // Executar
+    document.addEventListener('DOMContentLoaded', () => setTimeout(organizarFormularioMobile, 500));
+    window.addEventListener('resize', () => setTimeout(organizarFormularioMobile, 200));
+    
+    // Observar aba "Nova Prova"
+    const observer = new MutationObserver(() => {
+        const novaProvaTab = document.getElementById('nova-prova');
+        if (novaProvaTab && novaProvaTab.classList.contains('active')) {
+            setTimeout(organizarFormularioMobile, 100);
+        }
+    });
+    const novaProvaTab = document.getElementById('nova-prova');
+    if (novaProvaTab) observer.observe(novaProvaTab, { attributes: true });
+    
+})();
+</script>
+
+<script>
+// ============================================
+// ORGANIZAÇÃO DOS FILTROS - VERSÃO SIMPLES E FUNCIONAL
+// ============================================
+(function() {
+    let filtrosOrganizados = false;
+    
+    function isMobile() {
+        return window.innerWidth < 768;
+    }
+    
+    function organizarFiltrosMobile() {
+        if (!isMobile()) {
+            restaurarFiltrosOriginal();
+            return;
+        }
+        
+        if (filtrosOrganizados) return;
+        
+        console.log('📱 Criando filtros mobile...');
+        
+        // ========== 1. ENCONTRAR O CARD DE FILTROS CORRETO ==========
+        // Procurar o card que contém os filtros (não o hero)
+        let filtrosCard = null;
+        
+        // Tentar diferentes seletores
+        const possiveisCards = document.querySelectorAll('#minhas-provas > div');
+        for (let card of possiveisCards) {
+            if (card.querySelector('#filtroStatus') || 
+                card.querySelector('#filtroDificuldade') ||
+                card.innerHTML.includes('Filtros Inteligentes')) {
+                filtrosCard = card;
+                break;
+            }
+        }
+        
+        // Se não encontrar, criar um novo card
+        if (!filtrosCard) {
+            console.log('⚠️ Card não encontrado, criando novo...');
+            filtrosCard = document.createElement('div');
+            filtrosCard.style.cssText = `
+                background: white;
+                border-radius: 24px;
+                padding: 20px;
+                margin: 20px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            `;
+            
+            const heroSection = document.querySelector('#minhas-provas .provas-hero');
+            if (heroSection) {
+                heroSection.insertAdjacentElement('afterend', filtrosCard);
+            } else {
+                document.querySelector('#minhas-provas').insertBefore(filtrosCard, document.querySelector('#minhas-provas').firstChild);
+            }
+        }
+        
+        // Salvar HTML original
+        if (!window.originalFiltrosHTML) {
+            window.originalFiltrosHTML = filtrosCard.innerHTML;
+        }
+        
+        // ========== 2. PEGAR OS FILTROS ORIGINAIS ==========
+        const filtroStatus = document.getElementById('filtroStatus');
+        const filtroDificuldade = document.getElementById('filtroDificuldade');
+        const filtroTipo = document.getElementById('filtroTipo');
+        const filtroPeriodo = document.getElementById('filtroPeriodoProvas');
+        const filtroTurma = document.getElementById('filtroTurmaProvas');
+        const buscaInput = document.getElementById('buscaProva');
+        
+        // ========== 3. CRIAR INTERFACE MOBILE ==========
+        filtrosCard.innerHTML = '';
+        filtrosCard.style.padding = '16px';
+        
+        // Contador
+        const contador = document.getElementById('resultadosFiltrados');
+        const contadorValor = contador ? contador.textContent : '0';
+        
+        filtrosCard.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e5e7eb;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-filter" style="color: #4f46e5;"></i>
+                    <span style="font-weight: 700;">Filtros</span>
+                    <span id="mobileContadorFiltros" style="background: #4f46e5; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px;">${contadorValor}</span>
+                </div>
+                <button id="refreshFiltrosBtn" style="background: none; border: none; color: #6b7280; cursor: pointer;">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            
+            <!-- Status -->
+            <div class="filtro-mobile-item" data-filtro="status" style="margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+                <div class="filtro-mobile-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; cursor: pointer;">
+                    <div><i class="fas fa-circle" style="color: #3b82f6;"></i> <strong>Status da Prova</strong></div>
+                    <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
+                </div>
+                <div class="filtro-mobile-body" style="padding: 0 12px; max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                    <div id="status-wrapper" style="padding: 12px 0;"></div>
+                </div>
+            </div>
+            
+            <!-- Dificuldade -->
+            <div class="filtro-mobile-item" data-filtro="dificuldade" style="margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+                <div class="filtro-mobile-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; cursor: pointer;">
+                    <div><i class="fas fa-chart-line" style="color: #f59e0b;"></i> <strong>Dificuldade</strong></div>
+                    <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
+                </div>
+                <div class="filtro-mobile-body" style="padding: 0 12px; max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                    <div id="dificuldade-wrapper" style="padding: 12px 0;"></div>
+                </div>
+            </div>
+            
+            <!-- Tipo -->
+            <div class="filtro-mobile-item" data-filtro="tipo" style="margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+                <div class="filtro-mobile-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; cursor: pointer;">
+                    <div><i class="fas fa-file-alt" style="color: #10b981;"></i> <strong>Tipo de Prova</strong></div>
+                    <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
+                </div>
+                <div class="filtro-mobile-body" style="padding: 0 12px; max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                    <div id="tipo-wrapper" style="padding: 12px 0;"></div>
+                </div>
+            </div>
+            
+            <!-- Período -->
+            <div class="filtro-mobile-item" data-filtro="periodo" style="margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+                <div class="filtro-mobile-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; cursor: pointer;">
+                    <div><i class="fas fa-calendar-week" style="color: #8b5cf6;"></i> <strong>Período</strong></div>
+                    <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
+                </div>
+                <div class="filtro-mobile-body" style="padding: 0 12px; max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                    <div id="periodo-wrapper" style="padding: 12px 0;"></div>
+                </div>
+            </div>
+            
+            <!-- Turma -->
+            <div class="filtro-mobile-item" data-filtro="turma" style="margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+                <div class="filtro-mobile-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; cursor: pointer;">
+                    <div><i class="fas fa-school" style="color: #ec4899;"></i> <strong>Turma</strong></div>
+                    <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
+                </div>
+                <div class="filtro-mobile-body" style="padding: 0 12px; max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                    <div id="turma-wrapper" style="padding: 12px 0;"></div>
+                </div>
+            </div>
+            
+            <!-- Busca -->
+            <div class="filtro-mobile-item" data-filtro="busca" style="margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+                <div class="filtro-mobile-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; cursor: pointer;">
+                    <div><i class="fas fa-search" style="color: #6b7280;"></i> <strong>Busca Rápida</strong></div>
+                    <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
+                </div>
+                <div class="filtro-mobile-body" style="padding: 0 12px; max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                    <div id="busca-wrapper" style="padding: 12px 0;"></div>
+                </div>
+            </div>
+            
+            <!-- Ações -->
+            <div style="margin-top: 16px; display: flex; gap: 10px;">
+                <button id="limparFiltrosMobileBtn" style="flex: 1; padding: 12px; background: #f3f4f6; border: none; border-radius: 30px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+                <button id="exportarFiltrosMobileBtn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 30px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-download"></i> Exportar
+                </button>
+            </div>
+        `;
+        
+        // ========== 4. PREENCHER OS WRAPPERS COM OS SELECTS ORIGINAIS ==========
+        if (filtroStatus) document.getElementById('status-wrapper').appendChild(filtroStatus.cloneNode(true));
+        if (filtroDificuldade) document.getElementById('dificuldade-wrapper').appendChild(filtroDificuldade.cloneNode(true));
+        if (filtroTipo) document.getElementById('tipo-wrapper').appendChild(filtroTipo.cloneNode(true));
+        if (filtroPeriodo) document.getElementById('periodo-wrapper').appendChild(filtroPeriodo.cloneNode(true));
+        if (filtroTurma) document.getElementById('turma-wrapper').appendChild(filtroTurma.cloneNode(true));
+        if (buscaInput) {
+            const buscaClone = buscaInput.cloneNode(true);
+            buscaClone.style.width = '100%';
+            buscaClone.style.padding = '10px';
+            buscaClone.style.border = '2px solid #e5e7eb';
+            buscaClone.style.borderRadius = '8px';
+            document.getElementById('busca-wrapper').appendChild(buscaClone);
+        }
+        
+        // ========== 5. ADICIONAR EVENTOS DE CLIQUE NOS HEADERS ==========
+        document.querySelectorAll('.filtro-mobile-item').forEach(item => {
+            const header = item.querySelector('.filtro-mobile-header');
+            const body = item.querySelector('.filtro-mobile-body');
+            const icon = header.querySelector('.fa-chevron-down');
+            
+            header.addEventListener('click', () => {
+                const isOpen = body.style.maxHeight !== '0px';
+                if (isOpen) {
+                    body.style.maxHeight = '0px';
+                    body.style.padding = '0 12px';
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                } else {
+                    body.style.maxHeight = body.scrollHeight + 'px';
+                    body.style.padding = '12px';
+                    if (icon) icon.style.transform = 'rotate(180deg)';
+                }
+            });
+        });
+        
+        // ========== 6. SINCRONIZAR EVENTOS ==========
+        // Para cada select, adicionar evento que atualiza o original
+        const novosSelects = filtrosCard.querySelectorAll('select');
+        novosSelects.forEach(novoSelect => {
+            const nomeOriginal = novoSelect.id;
+            if (nomeOriginal) {
+                const original = document.getElementById(nomeOriginal);
+                if (original) {
+                    novoSelect.value = original.value;
+                    novoSelect.addEventListener('change', function() {
+                        original.value = this.value;
+                        if (typeof aplicarFiltrosProvas === 'function') {
+                            aplicarFiltrosProvas();
+                        }
+                    });
+                }
+            }
+        });
+        
+        // Busca
+        const novaBusca = filtrosCard.querySelector('#buscaProva');
+        if (novaBusca && buscaInput) {
+            novaBusca.value = buscaInput.value;
+            novaBusca.addEventListener('input', function() {
+                buscaInput.value = this.value;
+                if (typeof aplicarFiltrosProvas === 'function') {
+                    aplicarFiltrosProvas();
+                }
+            });
+        }
+        
+        // ========== 7. BOTÕES ==========
+        document.getElementById('limparFiltrosMobileBtn')?.addEventListener('click', () => {
+            if (typeof limparFiltrosProvas === 'function') {
+                limparFiltrosProvas();
+            }
+        });
+        
+        document.getElementById('exportarFiltrosMobileBtn')?.addEventListener('click', () => {
+            if (typeof mostrarOpcoesExportacao === 'function') {
+                mostrarOpcoesExportacao();
+            }
+        });
+        
+        document.getElementById('refreshFiltrosBtn')?.addEventListener('click', () => {
+            if (typeof carregarProvasProfessor === 'function') {
+                carregarProvasProfessor();
+            }
+        });
+        
+        // ========== 8. ATUALIZAR CONTADOR ==========
+        function atualizarContador() {
+            const contadorOriginal = document.getElementById('resultadosFiltrados');
+            const mobileContador = document.getElementById('mobileContadorFiltros');
+            if (contadorOriginal && mobileContador) {
+                mobileContador.textContent = contadorOriginal.textContent;
+            }
+        }
+        
+        const observer = new MutationObserver(atualizarContador);
+        const contadorElement = document.getElementById('resultadosFiltrados');
+        if (contadorElement) {
+            observer.observe(contadorElement, { childList: true, subtree: true, characterData: true });
+        }
+        
+        filtrosOrganizados = true;
+        console.log('✅ Filtros mobile criados com sucesso!');
+    }
+    
+    function restaurarFiltrosOriginal() {
+        if (!isMobile() && window.originalFiltrosHTML) {
+            const aba = document.getElementById('minhas-provas');
+            if (aba) {
+                const card = aba.querySelector('.filtros-card, div[style*="border-radius: 24px"][style*="padding: 20px"]');
+                if (card && window.originalFiltrosHTML) {
+                    card.innerHTML = window.originalFiltrosHTML;
+                    filtrosOrganizados = false;
+                    console.log('💻 Filtros restaurados para desktop');
+                }
+            }
+        }
+    }
+    
+    // Executar
+    document.addEventListener('DOMContentLoaded', () => setTimeout(organizarFiltrosMobile, 1000));
+    window.addEventListener('resize', () => setTimeout(() => {
+        if (isMobile()) {
+            if (!filtrosOrganizados) organizarFiltrosMobile();
+        } else {
+            restaurarFiltrosOriginal();
+        }
+    }, 200));
+    
+    const observerAba = new MutationObserver(() => {
+        const aba = document.getElementById('minhas-provas');
+        if (aba && aba.classList.contains('active')) {
+            setTimeout(organizarFiltrosMobile, 500);
+        }
+    });
+    const aba = document.getElementById('minhas-provas');
+    if (aba) observerAba.observe(aba, { attributes: true });
+    
+})();
+</script>
+
 </body>
 </html>
