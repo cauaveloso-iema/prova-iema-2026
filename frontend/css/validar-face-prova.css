@@ -1,0 +1,253 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+}
+
+.container {
+    width: 100%;
+    max-width: 450px;
+    background: white;
+    border-radius: 25px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.header {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    padding: 20px;
+    text-align: center;
+}
+
+.header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+}
+
+.header p {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.camera-box {
+    width: 100%;
+    height: 400px;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+}
+
+#video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+}
+
+#overlayCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.circle-guide {
+    width: 220px;
+    height: 220px;
+    border: 4px solid rgba(255,255,255,0.5);
+    border-radius: 50%;
+    margin: 0 auto;
+    box-shadow: 0 0 0 500px rgba(0,0,0,0.5);
+    transition: all 0.2s;
+}
+
+.circle-guide.waiting {
+    border-color: #f59e0b;
+    animation: pulse 1.5s infinite;
+}
+
+.circle-guide.good {
+    border-color: #10b981;
+    border-width: 6px;
+    animation: pulseGreen 1.5s infinite;
+}
+
+.circle-guide.error {
+    border-color: #ef4444;
+    border-width: 6px;
+}
+
+.instruction-box {
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 15px;
+    border-radius: 40px;
+    text-align: center;
+    font-size: 1rem;
+    font-weight: bold;
+    backdrop-filter: blur(5px);
+    margin-top: 10px;
+}
+
+.timer-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+    margin-top: 10px;
+    overflow: hidden;
+    display: none;
+}
+
+.timer-fill {
+    height: 100%;
+    background: #10b981;
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+.status-bar {
+    padding: 15px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: center;
+}
+
+.attempt-badge {
+    background: #4f46e5;
+    color: white;
+    padding: 6px 15px;
+    border-radius: 30px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    padding: 15px;
+}
+
+.btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.btn-primary {
+    background: #10b981;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #059669;
+    transform: translateY(-2px);
+}
+
+.btn-outline {
+    background: white;
+    border: 2px solid #e5e7eb;
+    color: #4b5563;
+}
+
+.btn-outline:hover {
+    background: #f3f4f6;
+}
+
+.info-text {
+    font-size: 0.8rem;
+    color: #6b7280;
+    text-align: center;
+    padding: 15px;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5); }
+    70% { box-shadow: 0 0 0 20px rgba(245, 158, 11, 0); }
+}
+
+@keyframes pulseGreen {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+    70% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
+}
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.prova-info-card {
+    background: #f8fafc;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 15px;
+    border-left: 4px solid #4f46e5;
+}
+
+.prova-info-card h3 {
+    margin: 0 0 10px 0;
+    color: #1f2937;
+    font-size: 1rem;
+}
+
+.prova-info-card p {
+    margin: 5px 0;
+    color: #6b7280;
+    font-size: 0.9rem;
+}
+
+/* Estilo para a sequência de ações */
+.action-sequence {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    background: rgba(0,0,0,0.7);
+    padding: 10px;
+    border-radius: 30px;
+    margin: 0 20px;
+    font-size: 0.9rem;
+    color: white;
+}

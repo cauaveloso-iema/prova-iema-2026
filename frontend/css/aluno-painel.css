@@ -1,0 +1,629 @@
+
+.aluno-header {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.aluno-info {
+    flex: 1;
+}
+
+.aluno-info h1 {
+    margin: 0 0 10px 0;
+    font-size: 1.8rem;
+}
+
+.aluno-details {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.btn-entrar-turma {
+    background: white;
+    color: #10b981;
+    border: 2px solid #10b981;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.btn-entrar-turma:hover {
+    background: #10b981;
+    color: white;
+    transform: translateY(-2px);
+}
+
+.prova-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    border-left: 4px solid;
+    transition: transform 0.3s;
+}
+
+.prova-card:hover {
+    transform: translateY(-3px);
+}
+
+.prova-card.pendente {
+    border-left-color: #f59e0b;
+}
+
+.prova-card.concluida {
+    border-left-color: #6b7280;
+}
+
+.prova-card.ativa {
+    border-left-color: #10b981;
+}
+
+.prova-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.prova-titulo {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.prova-status {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.status-pendente {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-concluida {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.status-ativa {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.prova-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+    font-size: 0.9rem;
+    color: #6b7280;
+}
+
+.prova-info-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.prova-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-iniciar-prova {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.3s;
+}
+
+.btn-iniciar-prova:hover {
+    background: #059669;
+}
+
+.btn-ver-resultado {
+    background: #4f46e5;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.3s;
+}
+
+.btn-ver-resultado:hover {
+    background: #3730a3;
+}
+
+.btn-sair-prova {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.3s;
+}
+
+.btn-sair-prova:hover {
+    background: #dc2626;
+}
+
+.turma-card {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border-left: 3px solid #4f46e5;
+}
+
+.turma-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.turma-codigo {
+    background: #f3f4f6;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-weight: 600;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    width: 90%;
+    max-width: 500px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #6b7280;
+}
+
+.btn-logout {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #6b7280;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+.loading {
+    text-align: center;
+    padding: 30px;
+}
+
+.loading i {
+    font-size: 2rem;
+    color: #4f46e5;
+}
+
+/* ===== MINI BANNER DE FACE ID PENDENTE ===== */
+.face-pendente-banner {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 50px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+    animation: slideDownBanner 0.5s ease;
+    border: 1px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(5px);
+}
+
+.face-pendente-banner .banner-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex: 1;
+}
+
+.face-pendente-banner .banner-icon {
+    background: rgba(255,255,255,0.2);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.face-pendente-banner .banner-text {
+    flex: 1;
+}
+
+.face-pendente-banner .banner-text strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 3px;
+}
+
+.face-pendente-banner .banner-text p {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+.face-pendente-banner .banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.face-pendente-banner .btn-cadastrar-agora {
+    background: white;
+    color: #f97316;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 30px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.face-pendente-banner .btn-cadastrar-agora:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.face-pendente-banner .btn-fechar-banner {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 1rem;
+}
+
+.face-pendente-banner .btn-fechar-banner:hover {
+    background: rgba(255,255,255,0.3);
+    transform: scale(1.1);
+}
+
+@keyframes slideDownBanner {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .face-pendente-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        border-radius: 20px;
+    }
+    
+    .face-pendente-banner .banner-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .face-pendente-banner .btn-cadastrar-agora {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+    /* ===== INDICADOR DE PUSH ===== */
+    .push-indicator-container {
+        margin-right: 5px;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .push-indicator {
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 30px;
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: white;
+        font-size: 0.85rem;
+        font-weight: 500;
+        backdrop-filter: blur(5px);
+        transition: all 0.3s;
+        cursor: help;
+    }
+
+    .push-indicator i {
+        font-size: 1rem;
+        color: #ffc107;
+    }
+
+    .push-indicator:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px);
+    }
+
+    .push-indicator i.fa-bell-slash {
+        animation: gentle-shake 3s infinite;
+    }
+
+    @keyframes gentle-shake {
+        0%, 100% { transform: rotate(0); }
+        5% { transform: rotate(5deg); }
+        10% { transform: rotate(-5deg); }
+        15% { transform: rotate(3deg); }
+        20% { transform: rotate(-3deg); }
+        25% { transform: rotate(0); }
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateX(10px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Responsividade */
+    @media (max-width: 768px) {
+        .push-indicator .push-text {
+            display: none;
+        }
+        
+        .push-indicator {
+            padding: 8px 12px;
+        }
+    }
+
+/* ============================================
+   MENU MOBILE FLUTUANTE
+   ============================================ */
+
+/* Botão flutuante (FAB) */
+.fab-menu {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: none;
+}
+
+.fab-button {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10b981, #059669);
+    border: none;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    color: white;
+    font-size: 1.5rem;
+}
+
+.fab-button:hover {
+    transform: scale(1.05);
+}
+
+/* Bottom Sheet (menu que sobe) */
+.bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.2);
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    z-index: 1001;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.bottom-sheet.open {
+    transform: translateY(0);
+}
+
+.bottom-sheet-header {
+    padding: 20px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.bottom-sheet-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #10b981;
+}
+
+.close-sheet {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 0 8px;
+}
+
+.menu-items {
+    padding: 10px 0 20px;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.menu-item:hover {
+    background: #f9fafb;
+}
+
+.menu-item i {
+    width: 24px;
+    font-size: 1.2rem;
+    color: #10b981;
+}
+
+.menu-item span {
+    flex: 1;
+    font-size: 1rem;
+    color: #1f2937;
+}
+
+.menu-item.logout-item i {
+    color: #ef4444;
+}
+
+.menu-item.logout-item span {
+    color: #dc2626;
+    font-weight: 500;
+}
+
+.sheet-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    display: none;
+}
+
+.sheet-overlay.active {
+    display: block;
+}
+
+/* ============================================
+   RESPONSIVIDADE DO MENU MOBILE
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Esconde os botões do header no mobile */
+    .aluno-header > div:last-child {
+        display: none !important;
+    }
+    
+    /* Mostra o menu flutuante no mobile */
+    .fab-menu {
+        display: block !important;
+    }
+}
+
+@media (min-width: 769px) {
+    /* Esconde o menu flutuante no desktop */
+    .fab-menu {
+        display: none !important;
+    }
+}

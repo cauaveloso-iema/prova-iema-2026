@@ -1,0 +1,148 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    max-width: 800px;
+    width: 100%;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.header {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 30px;
+    text-align: center;
+}
+
+.header h1 {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.nota-container {
+    padding: 40px;
+    text-align: center;
+}
+
+.nota-card {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    margin: 20px 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border: 4px solid #e2e8f0;
+    transition: all 0.3s;
+}
+
+.nota-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+}
+
+.nota-valor {
+    font-size: 4rem;
+    font-weight: bold;
+    margin: 20px 0;
+}
+
+.nota-A { color: #10b981; }
+.nota-B { color: #3b82f6; }
+.nota-C { color: #f59e0b; }
+.nota-D { color: #ef4444; }
+
+.nota-conceito {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+    padding: 10px 20px;
+    border-radius: 50px;
+    display: inline-block;
+}
+
+.conceito-A { background: #d1fae5; color: #065f46; }
+.conceito-B { background: #dbeafe; color: #1e40af; }
+.conceito-C { background: #fef3c7; color: #92400e; }
+.conceito-D { background: #fee2e2; color: #991b1b; }
+
+.prova-info {
+    margin: 30px 0;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 15px;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.info-item:last-child {
+    border-bottom: none;
+}
+
+.btn-voltar {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px 30px;
+    background: #4f46e5;
+    color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: 600;
+    margin-top: 20px;
+    transition: all 0.3s;
+}
+
+.btn-voltar:hover {
+    background: #4338ca;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.loading {
+    text-align: center;
+    padding: 60px;
+}
+
+.loading-spinner {
+    font-size: 3rem;
+    color: #4f46e5;
+    margin-bottom: 20px;
+}
+
+.error-message {
+    text-align: center;
+    padding: 40px;
+    color: #7f1d1d;
+}
+
+.sem-nota {
+    text-align: center;
+    padding: 40px;
+    color: #6b7280;
+}
+
+.sem-nota i {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    color: #f59e0b;
+}

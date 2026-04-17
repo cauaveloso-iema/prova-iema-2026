@@ -1,0 +1,255 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+}
+.container { max-width: 1200px; margin: 0 auto; }
+.card {
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+.card-header {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 20px;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+/* Header com foto de perfil e botões */
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.user-info-card {
+    background: white;
+    border-radius: 60px;
+    padding: 8px 20px 8px 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+.user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+    overflow: hidden;
+}
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.user-details {
+    text-align: right;
+}
+.user-name {
+    font-weight: bold;
+    color: #1f2937;
+}
+.user-role {
+    font-size: 0.7rem;
+    color: #6c757d;
+}
+.btn-actions {
+    display: flex;
+    gap: 10px;
+}
+.btn-icon {
+    background: white;
+    border: none;
+    border-radius: 50%;
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #667eea;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.btn-icon:hover {
+    transform: scale(1.05);
+    background: #f3f4f6;
+}
+.btn-icon.danger {
+    color: #ef4444;
+}
+.btn-icon.danger:hover {
+    background: #fee2e2;
+}
+
+.modo-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    background: #f1f5f9;
+    padding: 5px;
+    border-radius: 40px;
+}
+.modo-btn {
+    flex: 1;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 30px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    color: #64748b;
+}
+.modo-btn.active {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.qr-scanner-container {
+    background: #000;
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+}
+#qr-reader { width: 100%; }
+#qr-reader video { width: 100%; height: auto; }
+.aluno-card {
+    background: linear-gradient(135deg, #f8f9fa, #ffffff);
+    border-radius: 16px;
+    padding: 20px;
+    margin-top: 20px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+.aluno-foto {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #667eea;
+    margin-right: 20px;
+}
+.info-aluno { flex: 1; }
+.horario-card {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 15px;
+    border-radius: 12px;
+    margin: 15px 0;
+}
+.horario-card.obrigatorio {
+    background: #fee2e2;
+    border-left-color: #ef4444;
+}
+.horario-card.permitido {
+    background: #d1fae5;
+    border-left-color: #10b981;
+}
+.btn-registrar {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: bold;
+    width: 100%;
+    transition: transform 0.2s;
+}
+.btn-registrar:hover { transform: translateY(-2px); }
+.btn-registrar:disabled {
+    background: #9ca3af;
+    transform: none;
+}
+.contador-card {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+.contador-numero {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #667eea;
+}
+.badge-refeicao {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+.badge-manha { background: #fef3c7; color: #d97706; }
+.badge-almoco { background: #fee2e2; color: #dc2626; }
+.badge-tarde { background: #d1fae5; color: #059669; }
+.turma-group {
+    margin-bottom: 20px;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    overflow: hidden;
+}
+.turma-header {
+    background: #f8fafc;
+    padding: 12px 15px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.turma-header:hover { background: #f1f5f9; }
+.aluno-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    border-top: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.aluno-item:hover { background: #fef9e7; }
+.aluno-item.selecionado {
+    background: #d1fae5;
+    border-left: 4px solid #10b981;
+}
+.btn-selecionar-aluno {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+.loading {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #e5e7eb;
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+@media (max-width: 768px) {
+    body { padding: 10px; }
+    .aluno-foto { width: 70px; height: 70px; }
+    .header-top { flex-direction: column; gap: 10px; }
+    .user-info-card { width: 100%; justify-content: space-between; }
+    .btn-actions { justify-content: center; }
+}
