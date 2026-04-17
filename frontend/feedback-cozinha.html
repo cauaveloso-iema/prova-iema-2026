@@ -36,6 +36,58 @@
 </head>
 <body>
     <div class="container">
+        <!-- Header com informações e botões -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div></div>
+            <div class="btn-actions d-flex gap-2">
+                <!-- LINK DO APP -->
+                <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" target="_blank" class="btn-icon" style="
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    text-decoration: none;
+                    color: white;
+                    transition: all 0.3s;
+                    border: none;
+                    cursor: pointer;
+                " title="Baixar App">
+                    <i class="fas fa-download"></i>
+                </a>
+                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil" style="
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    background: #4f46e5;
+                    color: white;
+                    border: none;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <i class="fas fa-user-edit"></i>
+                </button>
+                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema" style="
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    background: #ef4444;
+                    color: white;
+                    border: none;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+
         <div id="feedbackForm" class="feedback-card">
             <div class="feedback-header">
                 <i class="fas fa-utensils"></i>
