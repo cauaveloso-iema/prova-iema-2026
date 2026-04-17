@@ -27,87 +27,122 @@ const authenticateToken = (req, res, next) => {
 // ============================================
 // 🍽️ ROTA PARA ALUNO VER O RODÍZIO DA SUA TURMA
 // ============================================
+// ============================================
+// 🍽️ ROTA PARA ALUNO VER O RODÍZIO DA SUA TURMA
+// ============================================
 router.get('/meu-rodizio', authenticateToken, async (req, res) => {
     try {
-        const alunoId = req.userId;
+        const usuarioId = req.userId;
+        const usuarioRole = req.userRole;
         
-        // Buscar aluno
-        const aluno = await User.findById(alunoId);
-        if (!aluno || aluno.role !== 'aluno') {
-            return res.status(404).json({
+        // ========== 1. VERIFICAR PERMISSÃO (APENAS ALUNOS) ==========
+        if (usuarioRole !== 'aluno') {
+            return res.status(403).json({
                 success: false,
-                error: 'Aluno não encontrado'
+                error: 'Acesso negado. Apenas alunos podem consultar o rodízio de refeições.',
+                role: usuarioRole
             });
         }
         
+        // ========== 2. BUSCAR DADOS DO ALUNO ==========
+        const aluno = await User.findById(usuarioId).select('nome turma role matricula');
+        
+        if (!aluno) {
+            return res.status(404).json({
+                success: false,
+                error: 'Aluno não encontrado. Verifique seus dados de cadastro.'
+            });
+        }
+        
+        // ========== 3. VERIFICAR SE ALUNO TEM TURMA VINCULADA ==========
         const turma = aluno.turma;
-        if (!turma) {
+        
+        if (!turma || turma.trim() === '') {
             return res.json({
                 success: true,
                 podeAlmocarHoje: false,
-                motivo: 'Você não possui turma vinculada',
+                motivo: 'Você não possui turma vinculada. Entre em contato com a coordenação.',
                 temRodizio: false,
                 horarioInicio: null,
                 horarioFim: null,
-                diasPermitidos: []
+                diasPermitidos: [],
+                sugestao: 'Solicite ao seu professor ou à coordenação que vincule sua turma.'
             });
         }
         
-        // 🔥 USAR O MÉTODO ESTÁTICO DO MODELO
+        console.log(`👨‍🎓 Aluno ${aluno.nome} (${aluno.matricula || 'sem matrícula'}) - Turma: ${turma}`);
+        
+        // ========== 4. BUSCAR CONFIGURAÇÃO DE RODÍZIO PARA A TURMA ==========
         const resultado = await RodizioRefeicao.turmaPodeAlmocarHoje(turma);
         
+        // ========== 5. SE NÃO HÁ CONFIGURAÇÃO DE RODÍZIO ==========
         if (!resultado.config) {
             return res.json({
                 success: true,
+                turma: turma,
                 podeAlmocarHoje: false,
-                motivo: resultado.motivo || 'Nenhuma configuração de rodízio para sua turma',
+                motivo: resultado.motivo || `Nenhuma configuração de rodízio para a turma ${turma}`,
                 temRodizio: false,
                 horarioInicio: null,
                 horarioFim: null,
-                diasPermitidos: []
+                diasPermitidos: [],
+                sugestao: 'A Gestão Geral ainda não configurou o rodízio para sua turma.'
             });
         }
         
+        // ========== 6. EXTRAIR DADOS DO RODÍZIO ==========
         const config = resultado.config;
         const podeHoje = resultado.pode;
         
-        // 🔥 FUNÇÃO PARA VERIFICAR SE PODE ALMOÇAR EM UMA DATA ESPECÍFICA
+        console.log(`📋 Rodízio encontrado para turma ${turma}:`);
+        console.log(`   Tipo: ${config.tipoRodizio}`);
+        console.log(`   Horário: ${config.horarioInicio} - ${config.horarioFim}`);
+        console.log(`   Ativo: ${config.ativo ? 'Sim' : 'Não'}`);
+        
+        // ========== 7. FUNÇÃO PARA VERIFICAR SE PODE ALMOÇAR EM UMA DATA ==========
         function podeAlmocarNaData(config, data) {
-            const diaSemana = data.getDay(); // 0-6 (Domingo a Sábado)
-            const diaMes = data.getDate();
+            const diaSemana = data.getDay(); // 0=Domingo, 1=Segunda, ..., 6=Sábado
+            const diaMes = data.getDate();    // 1-31
             
             // Calcular semana do mês (1-5)
             const primeiraSemana = new Date(data.getFullYear(), data.getMonth(), 1);
-            const semanaMes = Math.ceil((diaMes + primeiraSemana.getDay()) / 7);
+            const diaSemanaPrimeiro = primeiraSemana.getDay();
+            const semanaMes = Math.ceil((diaMes + diaSemanaPrimeiro) / 7);
             
             let pode = false;
+            let motivo = '';
             
+            // Verificar rodízio semanal
             if (config.tipoRodizio === 'semanal' || config.tipoRodizio === 'ambos') {
                 if (config.diasSemana && config.diasSemana.includes(diaSemana)) {
                     pode = true;
+                    motivo = `Dia da semana permitido (${['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][diaSemana]})`;
                 }
             }
             
+            // Verificar rodízio mensal (se ainda não pode)
             if (!pode && (config.tipoRodizio === 'mensal' || config.tipoRodizio === 'ambos')) {
                 if (config.diasMes && config.diasMes.includes(diaMes)) {
                     pode = true;
+                    motivo = `Dia do mês permitido (${diaMes})`;
                 }
-                if (config.semanasMes && config.semanasMes.includes(semanaMes)) {
+                else if (config.semanasMes && config.semanasMes.includes(semanaMes)) {
                     pode = true;
+                    motivo = `Semana do mês permitida (${semanaMes}ª semana)`;
                 }
             }
             
-            return pode;
+            return { pode, motivo };
         }
         
-        // Calcular próximos 14 dias
+        // ========== 8. CALCULAR PRÓXIMOS 14 DIAS ==========
         const hoje = new Date();
         const diasPermitidos = [];
         
         for (let i = 0; i <= 14; i++) {
             const data = new Date();
             data.setDate(hoje.getDate() + i);
-            const pode = podeAlmocarNaData(config, data);
+            const resultadoDia = podeAlmocarNaData(config, data);
             
             diasPermitidos.push({
                 data: data.toISOString(),
@@ -117,14 +152,16 @@ router.get('/meu-rodizio', authenticateToken, async (req, res) => {
                     month: '2-digit' 
                 }),
                 dataSimples: data.toLocaleDateString('pt-BR'),
-                podeAlmocar: pode,
+                podeAlmocar: resultadoDia.pode,
+                motivo: resultadoDia.motivo,
                 diaSemana: data.getDay()
             });
         }
         
-        // Filtrar apenas os dias que pode almoçar (próximos 7)
+        // ========== 9. FILTRAR PRÓXIMOS DIAS QUE PODE ALMOÇAR ==========
         const proximosDias = diasPermitidos.filter(d => d.podeAlmocar).slice(0, 7);
         
+        // ========== 10. MONTAR RESPOSTA ==========
         res.json({
             success: true,
             turma: turma,
@@ -133,16 +170,22 @@ router.get('/meu-rodizio', authenticateToken, async (req, res) => {
             horarioInicio: config.horarioInicio,
             horarioFim: config.horarioFim,
             tipoRodizio: config.tipoRodizio,
-            descricao: config.descricao,
+            descricao: config.descricao || '',
             diasPermitidos: proximosDias,
-            todosDias: diasPermitidos
+            todosDias: diasPermitidos,
+            estatisticas: {
+                diasSemanaPermitidos: config.diasSemana || [],
+                diasMesPermitidos: config.diasMes || [],
+                semanasMesPermitidas: config.semanasMes || []
+            }
         });
         
     } catch (error) {
-        console.error('Erro ao buscar rodízio do aluno:', error);
+        console.error('❌ Erro ao buscar rodízio do aluno:', error);
         res.status(500).json({
             success: false,
-            error: 'Erro ao buscar informações do rodízio: ' + error.message
+            error: 'Erro ao buscar informações do rodízio. Tente novamente mais tarde.',
+            detalhes: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });

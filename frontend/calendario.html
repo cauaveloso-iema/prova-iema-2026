@@ -989,10 +989,27 @@
     <!-- Script do Rodízio -->
     <script>
     // ============================================
-    // CARREGAR RODÍZIO DO ALUNO
+    // CARREGAR RODÍZIO DO ALUNO (APENAS PARA ALUNOS)
     // ============================================
     async function carregarRodizioAluno() {
         const token = localStorage.getItem('auth_token');
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        
+        // 🔥 VERIFICAR SE É ALUNO
+        const isAluno = userData.role === 'aluno';
+        const widget = document.getElementById('rodizioWidget');
+        
+        if (!widget) return;
+        
+        // 🔥 Se NÃO for aluno, ocultar o widget completamente
+        if (!isAluno) {
+            widget.style.display = 'none';
+            console.log('🔒 Widget de rodízio oculto para usuário:', userData.role);
+            return;
+        }
+        
+        // Se for aluno, mostrar o widget
+        widget.style.display = 'block';
         
         if (!token) return;
         
@@ -1054,25 +1071,13 @@
                 container.innerHTML = '<p class="text-muted">Nenhum dia permitido nos próximos dias</p>';
             }
             
-            // Adicionar marcadores no calendário
-            if (window.calendario && data.todosDias) {
-                const diasQuePode = data.todosDias.filter(d => d.podeAlmocar);
-                diasQuePode.forEach(dia => {
-                    const dataStr = dia.data.split('T')[0];
-                    const celulaDia = document.querySelector(`.calendario-dia[data-data="${dataStr}"]`);
-                    if (celulaDia) {
-                        celulaDia.classList.add('dia-almoco');
-                    }
-                });
-            }
-            
         } catch (error) {
             console.error('Erro ao carregar rodízio:', error);
             loadingDiv.style.display = 'none';
             mostrarErroRodizio('Erro ao carregar informações do rodízio');
         }
     }
-    
+
     function mostrarSemRodizio(motivo) {
         const statusDiv = document.getElementById('rodizioStatus');
         statusDiv.innerHTML = `
@@ -1083,17 +1088,18 @@
         `;
         document.getElementById('diasPermitidos').style.display = 'none';
     }
-    
+
     function mostrarErroRodizio(mensagem) {
         const statusDiv = document.getElementById('rodizioStatus');
         statusDiv.innerHTML = `
             <div class="status-badge-rodizio status-negado">
                 <i class="fas fa-exclamation-triangle"></i>
-                <strong>❌ Erro: ${mensagem}</strong>
+                <strong>❌ ${mensagem}</strong>
             </div>
         `;
+        document.getElementById('diasPermitidos').style.display = 'none';
     }
-    
+
     // Carregar ao iniciar a página
     document.addEventListener('DOMContentLoaded', () => {
         carregarRodizioAluno();
