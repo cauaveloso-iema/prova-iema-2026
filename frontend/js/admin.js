@@ -4176,14 +4176,13 @@ class AdminPanel {
 
     // ============ MODAL USUÁRIO ============
 
-    // ============ ABRIR MODAL USUÁRIO (VERSÃO CORRIGIDA) ============
+    // ============ ABRIR MODAL USUÁRIO (VERSÃO CORRIGIDA - CURSOS DO BANCO) ============
     async abrirModalUsuario(usuarioId = null) {
         console.log('🔍 Abrindo modal para usuário ID:', usuarioId);
         
         let usuario = null;
         
         if (usuarioId) {
-            // 🔥 BUSCAR DADOS ATUALIZADOS DO BACKEND
             try {
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
@@ -4205,6 +4204,34 @@ class AdminPanel {
             }
         }
 
+        // 🔥 BUSCAR CURSOS DO BANCO DE DADOS
+        let cursosDoBanco = [];
+        let isLoadingCursos = true;
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            console.log('📚 Buscando cursos do banco...');
+            
+            const response = await fetch('/api/cursos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.cursos) {
+                cursosDoBanco = data.cursos;
+                console.log(`✅ ${cursosDoBanco.length} cursos carregados do banco:`, cursosDoBanco.map(c => c.nome));
+            } else {
+                console.warn('⚠️ Nenhum curso encontrado no banco');
+                cursosDoBanco = [];
+            }
+        } catch (error) {
+            console.error('❌ Erro ao buscar cursos:', error);
+            cursosDoBanco = [];
+        } finally {
+            isLoadingCursos = false;
+        }
+
         // Extrair valores com segurança
         const nome = usuario?.nome || '';
         const email = usuario?.email || '';
@@ -4214,7 +4241,7 @@ class AdminPanel {
         const cpf = usuario?.cpf || '';
         const telefone = usuario?.telefone || '';
         const matricula = usuario?.matricula || '';
-        const curso = usuario?.curso || '';
+        const cursoSelecionado = usuario?.curso || '';
         const turma = usuario?.turma || '';
         const eixo = usuario?.eixo || '';
         const departamento = usuario?.departamento || '';
@@ -4222,12 +4249,35 @@ class AdminPanel {
         const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
         const atribuicoes = usuario?.atribuicoes || '';
         
-        // 🔥 CAMPOS DE PERFIL ALIMENTAR
+        // CAMPOS DE PERFIL ALIMENTAR
         const perfilAlimentar = usuario?.perfilAlimentar || 'nao_informado';
         const refeicoesQueParticipa = usuario?.refeicoesQueParticipa || [];
         
         // Escapar valores
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        
+        // 🔥 GERAR OPÇÕES DE CURSOS DINAMICAMENTE A PARTIR DO BANCO
+        const gerarOpcoesCursos = () => {
+            if (!cursosDoBanco || cursosDoBanco.length === 0) {
+                return '<option value="">Nenhum curso disponível</option>';
+            }
+            
+            let options = '<option value="">Selecione um curso...</option>';
+            
+            // Ordenar cursos por nome
+            const cursosOrdenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
+            
+            cursosOrdenados.forEach(curso => {
+                // Verificar se o curso está ativo
+                const isAtivo = curso.ativo !== false;
+                if (!isAtivo) return; // Pular cursos inativos
+                
+                const selected = cursoSelecionado === curso.nome ? 'selected' : '';
+                options += `<option value="${escapeStr(curso.nome)}" ${selected}>${curso.nome}</option>`;
+            });
+            
+            return options;
+        };
         
         const modalBody = document.getElementById('modalBody');
         
@@ -4291,14 +4341,9 @@ class AdminPanel {
                         <div class="form-group">
                             <label><i class="fas fa-graduation-cap"></i> Curso</label>
                             <select id="userCurso" class="form-control">
-                                <option value="">Selecione...</option>
-                                <option value="TÉCNICO EM EVENTOS" ${curso === 'TÉCNICO EM EVENTOS' ? 'selected' : ''}>TÉCNICO EM EVENTOS</option>
-                                <option value="TÉCNICO EM REDES DE COMPUTADORES" ${curso === 'TÉCNICO EM REDES DE COMPUTADORES' ? 'selected' : ''}>TÉCNICO EM REDES DE COMPUTADORES</option>
-                                <option value="TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS" ${curso === 'TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS' ? 'selected' : ''}>TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS</option>
-                                <option value="TÉCNICO EM MARKETING" ${curso === 'TÉCNICO EM MARKETING' ? 'selected' : ''}>TÉCNICO EM MARKETING</option>
-                                <option value="TÉCNICO EM GASTRONOMIA" ${curso === 'TÉCNICO EM GASTRONOMIA' ? 'selected' : ''}>TÉCNICO EM GASTRONOMIA</option>
-                                <option value="TÉCNICO EM MEIO AMBIENTE" ${curso === 'TÉCNICO EM MEIO AMBIENTE' ? 'selected' : ''}>TÉCNICO EM MEIO AMBIENTE</option>
+                                ${gerarOpcoesCursos()}
                             </select>
+                            ${cursosDoBanco.length === 0 ? '<small style="color: #ef4444;">⚠️ Nenhum curso encontrado no banco. Contate o administrador.</small>' : ''}
                         </div>
                         <div class="form-group">
                             <label><i class="fas fa-users"></i> Turma</label>
@@ -4306,7 +4351,7 @@ class AdminPanel {
                         </div>
                     </div>
                     
-                    <!-- 🔥 SEÇÃO DE PERFIL ALIMENTAR -->
+                    <!-- SEÇÃO DE PERFIL ALIMENTAR -->
                     <div style="margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
                         <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: #334155;">
                             <i class="fas fa-utensils"></i> Preferências Alimentares
