@@ -1,6 +1,9 @@
 // ============================================================================
-// ROTAS DO CALENDÁRIO ACADÊMICO (VERSÃO FINAL)
+// CALENDÁRIO ACADÊMICO - BACKEND (VERSÃO COMPLETA E CORRIGIDA)
+// Alunos podem VISUALIZAR eventos (somente leitura)
+// Professores e Admins podem CRIAR, EDITAR e EXCLUIR
 // ============================================================================
+
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -41,6 +44,18 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+// ============ MIDDLEWARE PARA VERIFICAR PERMISSÃO DE ESCRITA ============
+const verificarPermissaoEscrita = (req, res, next) => {
+    // Apenas professores e admins podem criar/editar/excluir
+    if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'professor') {
+        return res.status(403).json({
+            success: false,
+            error: 'Apenas professores e administradores podem modificar eventos'
+        });
+    }
+    next();
+};
+
 // ============ TESTE - ROTA PÚBLICA ============
 router.get('/teste', (req, res) => {
     res.json({
@@ -50,8 +65,261 @@ router.get('/teste', (req, res) => {
     });
 });
 
+// ============================================
+// ROTAS DE LEITURA (TODOS OS USUÁRIOS AUTENTICADOS)
+// ============================================
+
+// ============ LISTAR EVENTOS ============
+router.get('/eventos', authenticateToken, async (req, res) => {
+    try {
+        const { 
+            mes, 
+            ano, 
+            tipo, 
+            turmaId,
+            professorId,
+            inicio, 
+            fim,
+            limit = 100 
+        } = req.query;
+
+        let query = {};
+
+        // 🔥 REGRAS DE PERMISSÃO:
+        // - Admin/Super Admin: vê TODOS os eventos
+        // - Professor: vê APENAS seus próprios eventos
+        // - Aluno: vê eventos das suas turmas
+        
+        if (req.userRole === 'admin' || req.userRole === 'super_admin') {
+            // Admin pode ver todos ou filtrar por professor
+            if (professorId && professorId !== 'todos' && professorId !== '') {
+                query.usuarioId = professorId;
+            }
+            console.log(`👑 Admin ${req.userId} listando eventos` + (professorId ? ` do professor ${professorId}` : ''));
+            
+        } else if (req.userRole === 'professor') {
+            // Professor vê apenas seus eventos
+            query.usuarioId = req.userId;
+            console.log(`👨‍🏫 Professor ${req.userId} listando seus eventos`);
+            
+        } else if (req.userRole === 'aluno') {
+            // Aluno vê eventos das suas turmas
+            const aluno = await User.findById(req.userId);
+            const turmaAluno = aluno?.turma;
+            
+            if (turmaAluno) {
+                // Buscar turma pelo nome
+                const turma = await Turma.findOne({ nome: turmaAluno });
+                if (turma) {
+                    query.turmaId = turma._id;
+                }
+            }
+            
+            // Se não encontrar turma, buscar por turmaId em eventos
+            if (!query.turmaId) {
+                const turmasDoAluno = await Turma.find({ alunos: req.userId });
+                const turmaIds = turmasDoAluno.map(t => t._id);
+                if (turmaIds.length > 0) {
+                    query.turmaId = { $in: turmaIds };
+                }
+            }
+            
+            console.log(`👨‍🎓 Aluno ${req.userId} listando eventos da turma:`, query.turmaId);
+        }
+
+        // Filtrar por mês/ano
+        if (mes && ano) {
+            const dataInicio = new Date(ano, mes - 1, 1);
+            const dataFim = new Date(ano, mes, 0, 23, 59, 59);
+            query.dataInicio = { $gte: dataInicio, $lte: dataFim };
+        }
+
+        // Filtrar por período personalizado
+        if (inicio && fim) {
+            query.dataInicio = {
+                $gte: new Date(inicio + 'T00:00:00-03:00'),
+                $lte: new Date(fim + 'T23:59:59-03:00')
+            };
+        }
+
+        // Filtrar por tipo
+        if (tipo && tipo !== 'todos') {
+            query.tipo = tipo;
+        }
+
+        // Filtrar por turma
+        if (turmaId && turmaId !== 'todas') {
+            query.turmaId = turmaId;
+        }
+
+        const eventos = await Evento.find(query)
+            .populate('usuarioId', 'nome email')
+            .populate('turmaId', 'nome disciplina')
+            .populate('provaId', 'titulo')
+            .populate('participantes', 'nome email')
+            .sort({ dataInicio: 1 })
+            .limit(parseInt(limit))
+            .lean();
+
+        // Registrar visualizações para monitoramento (apenas admin)
+        if (req.userRole === 'admin' || req.userRole === 'super_admin') {
+            const eventoIds = eventos.map(e => e._id);
+            await Evento.updateMany(
+                { _id: { $in: eventoIds } },
+                { $push: { 'monitoramento.visualizacoes': { usuarioId: req.userId, visualizadoEm: new Date() } } }
+            );
+        }
+
+        // Formatar para o frontend, incluindo permissões
+        const eventosFormatados = eventos.map(e => ({
+            id: e._id,
+            title: e.titulo,
+            start: e.dataInicio,
+            end: e.dataFim || e.dataInicio,
+            allDay: e.diaInteiro,
+            tipo: e.tipo,
+            cor: e.cor,
+            descricao: e.descricao,
+            local: e.local,
+            horarioInicio: e.horarioInicio,
+            horarioFim: e.horarioFim,
+            turma: e.turmaId ? {
+                id: e.turmaId._id,
+                nome: e.turmaId.nome
+            } : null,
+            prova: e.provaId ? {
+                id: e.provaId._id,
+                titulo: e.provaId.titulo
+            } : null,
+            criadoPor: e.usuarioId ? {
+                id: e.usuarioId._id,
+                nome: e.usuarioId.nome,
+                email: e.usuarioId.email
+            } : null,
+            notificacaoAtivada: e.notificacaoAtivada,
+            status: e.status,
+            notificacoes: e.notificacoes,
+            // 🔥 Permissões baseadas no role
+            permissoes: {
+                podeEditar: req.userRole === 'admin' || req.userRole === 'super_admin' || (req.userRole === 'professor' && req.userId === e.usuarioId?._id?.toString()),
+                podeExcluir: req.userRole === 'admin' || req.userRole === 'super_admin' || (req.userRole === 'professor' && req.userId === e.usuarioId?._id?.toString()),
+                podeVisualizar: true
+            }
+        }));
+
+        res.json({
+            success: true,
+            eventos: eventosFormatados,
+            total: eventos.length,
+            role: req.userRole,
+            usuarioId: req.userId,
+            modoLeitura: req.userRole === 'aluno'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar eventos:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao listar eventos: ' + error.message
+        });
+    }
+});
+
+// ============ BUSCAR EVENTO POR ID ============
+router.get('/eventos/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const evento = await Evento.findById(id)
+            .populate('usuarioId', 'nome email')
+            .populate('turmaId', 'nome disciplina')
+            .populate('provaId', 'titulo')
+            .populate('participantes', 'nome email');
+
+        if (!evento) {
+            return res.status(404).json({
+                success: false,
+                error: 'Evento não encontrado'
+            });
+        }
+
+        // 🔥 Alunos só podem ver eventos da sua turma
+        if (req.userRole === 'aluno') {
+            const aluno = await User.findById(req.userId);
+            const turmaAluno = aluno?.turma;
+            
+            if (evento.turmaId) {
+                const turmaEvento = await Turma.findById(evento.turmaId);
+                if (!turmaEvento || turmaEvento.nome !== turmaAluno) {
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Você não tem permissão para ver este evento'
+                    });
+                }
+            }
+        }
+
+        // Professores só podem ver seus próprios eventos (ou eventos das suas turmas)
+        if (req.userRole === 'professor' && evento.usuarioId._id.toString() !== req.userId) {
+            // Verificar se o evento é de uma turma que o professor leciona
+            if (evento.turmaId) {
+                const turma = await Turma.findById(evento.turmaId);
+                if (turma && turma.professorId && turma.professorId.toString() !== req.userId) {
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Você não tem permissão para ver este evento'
+                    });
+                }
+            } else {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Você não tem permissão para ver este evento'
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            evento: {
+                id: evento._id,
+                titulo: evento.titulo,
+                descricao: evento.descricao,
+                tipo: evento.tipo,
+                cor: evento.cor,
+                dataInicio: evento.dataInicio,
+                dataFim: evento.dataFim,
+                horarioInicio: evento.horarioInicio,
+                horarioFim: evento.horarioFim,
+                diaInteiro: evento.diaInteiro,
+                local: evento.local,
+                turma: evento.turmaId,
+                prova: evento.provaId,
+                notificacaoAtivada: evento.notificacaoAtivada,
+                notificacoes: evento.notificacoes,
+                repetir: evento.repetir,
+                repetirAte: evento.repetirAte,
+                participantes: evento.participantes,
+                status: evento.status,
+                criadoPor: evento.usuarioId,
+                createdAt: evento.createdAt
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar evento:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao buscar evento: ' + error.message
+        });
+    }
+});
+
+// ============================================
+// ROTAS DE ESCRITA (APENAS PROFESSORES E ADMINS)
+// ============================================
+
 // ============ CRIAR EVENTO ============
-router.post('/eventos', authenticateToken, async (req, res) => {
+router.post('/eventos', authenticateToken, verificarPermissaoEscrita, async (req, res) => {
     try {
         const {
             titulo,
@@ -174,7 +442,6 @@ router.post('/eventos', authenticateToken, async (req, res) => {
         const valoresPermitidos = [0, 5, 15, 30, 60, 120, 1440];
         
         if (notificacoes && Array.isArray(notificacoes)) {
-            // Filtrar apenas valores válidos
             const notificacoesValidas = notificacoes.filter(n => 
                 valoresPermitidos.includes(n.minutosAntes)
             );
@@ -186,7 +453,6 @@ router.post('/eventos', authenticateToken, async (req, res) => {
                     enviada: false
                 }));
             } else if (notificacaoAtivada) {
-                // Se não houver valores válidos, usar padrão 30min
                 evento.notificacoes = [{
                     minutosAntes: 30,
                     tipo: 'sistema',
@@ -244,207 +510,8 @@ router.post('/eventos', authenticateToken, async (req, res) => {
     }
 });
 
-// ============ LISTAR EVENTOS ============
-router.get('/eventos', authenticateToken, async (req, res) => {
-    try {
-        const { 
-            mes, 
-            ano, 
-            tipo, 
-            turmaId,
-            professorId,
-            inicio, 
-            fim,
-            limit = 100 
-        } = req.query;
-
-        let query = {};
-
-        // 🔥 REGRAS DE PERMISSÃO:
-        // - Admin/Super Admin: vê TODOS os eventos
-        // - Professor: vê APENAS seus próprios eventos
-        // - Aluno: vê eventos das suas turmas
-        
-        if (req.userRole === 'admin' || req.userRole === 'super_admin') {
-            // Admin pode ver todos ou filtrar por professor
-            if (professorId && professorId !== 'todos' && professorId !== '') {
-                query.usuarioId = professorId;
-            }
-            console.log(`👑 Admin ${req.userId} listando eventos` + (professorId ? ` do professor ${professorId}` : ''));
-            
-        } else if (req.userRole === 'professor') {
-            // Professor vê apenas seus eventos
-            query.usuarioId = req.userId;
-            console.log(`👨‍🏫 Professor ${req.userId} listando seus eventos`);
-            
-        } else if (req.userRole === 'aluno') {
-            // Aluno vê eventos das suas turmas
-            const turmas = await Turma.find({ alunos: req.userId });
-            const turmaIds = turmas.map(t => t._id);
-            query.turmaId = { $in: turmaIds };
-            console.log(`👨‍🎓 Aluno ${req.userId} listando eventos das turmas:`, turmaIds);
-        }
-
-        // Filtrar por mês/ano
-        if (mes && ano) {
-            const dataInicio = new Date(ano, mes - 1, 1);
-            const dataFim = new Date(ano, mes, 0, 23, 59, 59);
-            query.dataInicio = { $gte: dataInicio, $lte: dataFim };
-        }
-
-        // Filtrar por período personalizado
-        if (inicio && fim) {
-            query.dataInicio = {
-                $gte: new Date(inicio + 'T00:00:00-03:00'),
-                $lte: new Date(fim + 'T23:59:59-03:00')
-            };
-        }
-
-        // Filtrar por tipo
-        if (tipo && tipo !== 'todos') {
-            query.tipo = tipo;
-        }
-
-        // Filtrar por turma
-        if (turmaId && turmaId !== 'todas') {
-            query.turmaId = turmaId;
-        }
-
-        const eventos = await Evento.find(query)
-            .populate('usuarioId', 'nome email')
-            .populate('turmaId', 'nome disciplina')
-            .populate('provaId', 'titulo')
-            .populate('participantes', 'nome email')
-            .sort({ dataInicio: 1 })
-            .limit(parseInt(limit))
-            .lean();
-
-        // Registrar visualizações para monitoramento (apenas admin)
-        if (req.userRole === 'admin' || req.userRole === 'super_admin') {
-            const eventoIds = eventos.map(e => e._id);
-            await Evento.updateMany(
-                { _id: { $in: eventoIds } },
-                { $push: { 'monitoramento.visualizacoes': { usuarioId: req.userId, visualizadoEm: new Date() } } }
-            );
-        }
-
-        // Formatar para o frontend, incluindo permissões
-        const eventosFormatados = eventos.map(e => ({
-            id: e._id,
-            title: e.titulo,
-            start: e.dataInicio,
-            end: e.dataFim || e.dataInicio,
-            allDay: e.diaInteiro,
-            tipo: e.tipo,
-            cor: e.cor,
-            descricao: e.descricao,
-            local: e.local,
-            horarioInicio: e.horarioInicio,
-            horarioFim: e.horarioFim,
-            turma: e.turmaId ? {
-                id: e.turmaId._id,
-                nome: e.turmaId.nome
-            } : null,
-            prova: e.provaId ? {
-                id: e.provaId._id,
-                titulo: e.provaId.titulo
-            } : null,
-            criadoPor: e.usuarioId ? {
-                id: e.usuarioId._id,
-                nome: e.usuarioId.nome,
-                email: e.usuarioId.email
-            } : null,
-            notificacaoAtivada: e.notificacaoAtivada,
-            status: e.status,
-            notificacoes: e.notificacoes,
-            // 🔥 Permissões baseadas no role
-            permissoes: {
-                podeEditar: req.userRole === 'admin' || req.userRole === 'super_admin' || req.userId === e.usuarioId?._id?.toString(),
-                podeExcluir: req.userRole === 'admin' || req.userRole === 'super_admin' || req.userId === e.usuarioId?._id?.toString(),
-                podeVisualizar: true
-            }
-        }));
-
-        res.json({
-            success: true,
-            eventos: eventosFormatados,
-            total: eventos.length,
-            role: req.userRole,
-            usuarioId: req.userId
-        });
-
-    } catch (error) {
-        console.error('❌ Erro ao listar eventos:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Erro ao listar eventos: ' + error.message
-        });
-    }
-});
-
-// ============ BUSCAR EVENTO POR ID ============
-router.get('/eventos/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const evento = await Evento.findById(id)
-            .populate('usuarioId', 'nome email')
-            .populate('turmaId', 'nome disciplina')
-            .populate('provaId', 'titulo')
-            .populate('participantes', 'nome email');
-
-        if (!evento) {
-            return res.status(404).json({
-                success: false,
-                error: 'Evento não encontrado'
-            });
-        }
-
-        if (req.userRole === 'professor' && evento.usuarioId._id.toString() !== req.userId) {
-            return res.status(403).json({
-                success: false,
-                error: 'Você não tem permissão para ver este evento'
-            });
-        }
-
-        res.json({
-            success: true,
-            evento: {
-                id: evento._id,
-                titulo: evento.titulo,
-                descricao: evento.descricao,
-                tipo: evento.tipo,
-                cor: evento.cor,
-                dataInicio: evento.dataInicio,
-                dataFim: evento.dataFim,
-                horarioInicio: evento.horarioInicio,
-                horarioFim: evento.horarioFim,
-                diaInteiro: evento.diaInteiro,
-                local: evento.local,
-                turma: evento.turmaId,
-                prova: evento.provaId,
-                notificacaoAtivada: evento.notificacaoAtivada,
-                notificacoes: evento.notificacoes,
-                repetir: evento.repetir,
-                repetirAte: evento.repetirAte,
-                participantes: evento.participantes,
-                status: evento.status,
-                criadoPor: evento.usuarioId,
-                createdAt: evento.createdAt
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ Erro ao buscar evento:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Erro ao buscar evento: ' + error.message
-        });
-    }
-});
-
 // ============ ATUALIZAR EVENTO ============
-router.put('/eventos/:id', authenticateToken, async (req, res) => {
+router.put('/eventos/:id', authenticateToken, verificarPermissaoEscrita, async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
@@ -460,6 +527,7 @@ router.put('/eventos/:id', authenticateToken, async (req, res) => {
             });
         }
 
+        // Verificar permissão
         if (req.userRole === 'professor' && evento.usuarioId.toString() !== req.userId) {
             return res.status(403).json({
                 success: false,
@@ -551,7 +619,7 @@ router.put('/eventos/:id', authenticateToken, async (req, res) => {
             evento.notificacaoAtivada = updates.notificacaoAtivada;
         }
         
-        // 🔥 Atualizar notificações - apenas valores válidos
+        // Atualizar notificações
         if (updates.notificacoes !== undefined && Array.isArray(updates.notificacoes)) {
             const notificacoesEnviadas = evento.notificacoes.filter(n => n.enviada === true);
             
@@ -627,7 +695,7 @@ router.put('/eventos/:id', authenticateToken, async (req, res) => {
 });
 
 // ============ EXCLUIR EVENTO ============
-router.delete('/eventos/:id', authenticateToken, async (req, res) => {
+router.delete('/eventos/:id', authenticateToken, verificarPermissaoEscrita, async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -665,6 +733,10 @@ router.delete('/eventos/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// ============================================
+// ROTAS ADMINISTRATIVAS
+// ============================================
+
 // ============ FORÇAR NOTIFICAÇÃO DE UM EVENTO (APENAS ADMIN) ============
 router.post('/eventos/:id/forcar-notificacao', authenticateToken, async (req, res) => {
     try {
@@ -696,7 +768,7 @@ router.post('/notificacoes/verificar', async (req, res) => {
 });
 
 // ============ IMPORTAR PROVAS PARA O CALENDÁRIO ============
-router.post('/importar-provas', authenticateToken, async (req, res) => {
+router.post('/importar-provas', authenticateToken, verificarPermissaoEscrita, async (req, res) => {
     try {
         const { turmaId } = req.body;
 

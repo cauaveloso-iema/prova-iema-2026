@@ -1,5 +1,6 @@
 // ============================================================================
-// CALENDÁRIO ACADÊMICO - FRONTEND (VERSÃO COMPLETA E FUNCIONAL)
+// CALENDÁRIO ACADÊMICO - FRONTEND (VERSÃO CORRIGIDA)
+// Alunos podem VISUALIZAR, professores e admins podem CRIAR/EDITAR/EXCLUIR
 // ============================================================================
 
 class CalendarioAcademico {
@@ -10,16 +11,29 @@ class CalendarioAcademico {
         this.mesAtual = this.dataAtual.getMonth();
         this.anoAtual = this.dataAtual.getFullYear();
         this.usuario = JSON.parse(localStorage.getItem('user_data') || '{}');
+        this.filtros = { tipo: 'todos', professor: 'todos', turma: 'todas' };
         
-        // 🔥 VERIFICAR SE ALUNO ESTÁ TENTANDO ACESSAR
-        if (this.usuario.role === 'aluno') {
-            alert('⛔ Acesso negado! Apenas administradores e professores podem acessar o calendário.');
-            window.location.href = 'aluno.html';
+        // 🔥 CORREÇÃO: Alunos PODEM ver o calendário (modo somente leitura)
+        const isAluno = this.usuario.role === 'aluno';
+        const isProfessor = this.usuario.role === 'professor';
+        const isAdmin = this.usuario.role === 'admin' || this.usuario.role === 'super_admin';
+        
+        if (!isAluno && !isProfessor && !isAdmin) {
+            alert('⛔ Acesso negado! Faça login para acessar o calendário.');
+            window.location.href = 'login.html';
             return;
         }
         
-        console.log('📅 Inicializando Calendário Acadêmico...', this.usuario);
-        console.log('👤 Role do usuário:', this.usuario.role);
+        // Definir permissões
+        this.modoLeitura = isAluno;
+        this.podeCriar = isProfessor || isAdmin;
+        this.podeEditar = isProfessor || isAdmin;
+        this.podeExcluir = isProfessor || isAdmin;
+        
+        console.log('📅 Inicializando Calendário Acadêmico...');
+        console.log('👤 Role:', this.usuario.role);
+        console.log('📖 Modo leitura:', this.modoLeitura);
+        console.log('✏️ Pode criar/editar:', this.podeCriar);
         
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
@@ -31,12 +45,55 @@ class CalendarioAcademico {
     async init() {
         console.log('🚀 Iniciando calendário...');
         
-        // 🔥 CONFIGURAR BOTÃO VOLTAR BASEADO NO ROLE
+        // Configurar interface baseada no role
+        this.configurarInterfacePorRole();
+        
+        // Configurar botão voltar
         this.configurarBotaoVoltar();
         
         await this.carregarDadosIniciais();
         this.renderizarCalendario();
         this.configurarEventListeners();
+    }
+
+    // ============ CONFIGURAR INTERFACE POR ROLE ============
+    configurarInterfacePorRole() {
+        const btnCriar = document.getElementById('btnCriarEvento');
+        const filtroProfessor = document.getElementById('filtroProfessor');
+        
+        if (this.modoLeitura) {
+            // Alunos: esconder botão de criar evento
+            if (btnCriar) {
+                btnCriar.style.display = 'none';
+            }
+            
+            // Alunos: esconder filtro de professor
+            if (filtroProfessor && filtroProfessor.parentElement) {
+                filtroProfessor.parentElement.style.display = 'none';
+            }
+            
+            // Adicionar indicação visual de modo leitura
+            const header = document.querySelector('.calendario-header');
+            if (header) {
+                const badge = document.createElement('div');
+                badge.style.cssText = `
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    background: rgba(0,0,0,0.5);
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: 600;
+                `;
+                badge.innerHTML = '<i class="fas fa-eye"></i> Modo Leitura';
+                header.style.position = 'relative';
+                header.appendChild(badge);
+            }
+        }
+        
+        console.log(`🔧 Interface configurada para ${this.usuario.role}`);
     }
 
     // ============ CONFIGURAR BOTÃO VOLTAR ============
@@ -47,8 +104,8 @@ class CalendarioAcademico {
         if (!btnVoltar) return;
         
         // Remover evento anterior se existir
-        btnVoltar.replaceWith(btnVoltar.cloneNode(true));
-        const novoBtn = document.getElementById('btnVoltarCalendario');
+        const novoBtn = btnVoltar.cloneNode(true);
+        btnVoltar.parentNode.replaceChild(novoBtn, btnVoltar);
         
         // Configurar baseado no role
         if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin') {
@@ -62,7 +119,7 @@ class CalendarioAcademico {
                 window.location.href = 'index.html';
             });
         } else {
-            textoBtn.textContent = 'Voltar';
+            textoBtn.textContent = 'Voltar ao Painel do Aluno';
             novoBtn.addEventListener('click', () => {
                 window.location.href = 'aluno.html';
             });
@@ -104,12 +161,10 @@ class CalendarioAcademico {
                     // Professor vê apenas eventos que ele CRIOU
                     this.eventos = eventosCarregados.filter(e => e.criadoPor?.id === this.usuario.id);
                     console.log(`👨‍🏫 Professor: ${this.eventos.length} eventos encontrados`);
-                    
-                    // Para professor, o filtro de professor deve ficar invisível
-                    const filtroProf = document.getElementById('filtroProfessor');
-                    if (filtroProf && filtroProf.parentElement) {
-                        filtroProf.parentElement.style.display = 'none';
-                    }
+                } else if (this.usuario.role === 'aluno') {
+                    // Aluno vê eventos da sua turma
+                    this.eventos = eventosCarregados;
+                    console.log(`👨‍🎓 Aluno: ${this.eventos.length} eventos encontrados`);
                 } else {
                     // Admin vê todos os eventos
                     this.eventos = eventosCarregados;
@@ -125,7 +180,7 @@ class CalendarioAcademico {
         try {
             const token = localStorage.getItem('auth_token');
             
-            // Só carregar professores se for admin
+            // Só carregar professores se for admin (para filtro)
             if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin') {
                 const response = await fetch('/api/admin/usuarios?role=professor&limit=100', {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -158,7 +213,6 @@ class CalendarioAcademico {
         try {
             const token = localStorage.getItem('auth_token');
             
-            // Usar a rota /api/turmas que funciona para todos
             const response = await fetch('/api/turmas', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -183,7 +237,7 @@ class CalendarioAcademico {
                 
                 // Atualizar select no modal de criação
                 const selectTurmaModal = document.getElementById('eventoTurma');
-                if (selectTurmaModal) {
+                if (selectTurmaModal && this.podeCriar) {
                     selectTurmaModal.innerHTML = '<option value="">Selecione uma turma...</option>';
                     this.turmas.forEach(t => {
                         const option = document.createElement('option');
@@ -237,7 +291,6 @@ class CalendarioAcademico {
             container.appendChild(vazio);
         }
         
-        // Array para armazenar todos os eventos para próximos eventos
         const todosEventos = [];
         
         for (let dia = 1; dia <= diasNoMes; dia++) {
@@ -260,7 +313,6 @@ class CalendarioAcademico {
                 }
             });
             
-            // Adicionar aos eventos futuros
             if (data >= hoje) {
                 eventosDoDia.forEach(e => todosEventos.push(e));
             }
@@ -297,18 +349,18 @@ class CalendarioAcademico {
                 diaEl.appendChild(maisEl);
             }
             
-            // 🔥 Ao clicar no dia (não em um evento), abre para CRIAR novo evento
-            diaEl.addEventListener('click', (e) => {
-                // Verifica se clicou no dia e não em um evento
-                if (!e.target.classList.contains('evento-mini') && !e.target.classList.contains('evento-mais')) {
-                    this.abrirCriadorEvento(dataStr);
-                }
-            });
+            // 🔥 Ao clicar no dia: apenas admins/professores podem criar
+            if (this.podeCriar) {
+                diaEl.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('evento-mini') && !e.target.classList.contains('evento-mais')) {
+                        this.abrirCriadorEvento(dataStr);
+                    }
+                });
+            }
             
             container.appendChild(diaEl);
         }
         
-        // Renderizar próximos eventos
         this.renderizarProximosEventos(todosEventos);
     }
 
@@ -329,7 +381,6 @@ class CalendarioAcademico {
         
         container.innerHTML = proximos.map(e => {
             const data = new Date(e.start);
-            // Escapar aspas para JSON
             const eventoJson = JSON.stringify(e).replace(/"/g, '&quot;');
             return `
                 <div class="evento-item-lista" onclick="calendario.mostrarDetalhesEvento(${eventoJson})">
@@ -341,61 +392,6 @@ class CalendarioAcademico {
                 </div>
             `;
         }).join('');
-    }
-
-    mostrarEventosDoDia(dataStr, eventos) {
-        const container = document.getElementById('eventosDoDia');
-        const lista = document.getElementById('listaEventosDoDia');
-        
-        if (!container || !lista) return;
-        
-        if (eventos.length === 0) {
-            container.style.display = 'none';
-            return;
-        }
-        
-        const dataObj = new Date(dataStr + 'T12:00:00');
-        const dataFormatada = dataObj.toLocaleDateString('pt-BR');
-        
-        lista.innerHTML = eventos.map(e => {
-            const hora = e.horarioInicio ? ` às ${e.horarioInicio}` : '';
-            // Escapar aspas para JSON
-            const eventoJson = JSON.stringify(e).replace(/"/g, '&quot;');
-            return `
-                <div class="evento-item-lista" onclick="calendario.mostrarDetalhesEvento(${eventoJson})">
-                    <div class="cor" style="background: ${e.cor || '#667eea'}"></div>
-                    <div class="info">
-                        <div class="titulo">${e.title || 'Evento'}</div>
-                        <div class="horario">${dataFormatada}${hora}</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-        container.style.display = 'block';
-    }
-
-    aplicarFiltros(eventos) {
-        return eventos.filter(e => {
-            // Filtro por tipo
-            if (this.filtros.tipo !== 'todos' && e.tipo !== this.filtros.tipo) {
-                return false;
-            }
-            
-            // Filtro por professor (só para admin)
-            if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin') {
-                if (this.filtros.professor !== 'todos' && e.criadoPor?.id !== this.filtros.professor) {
-                    return false;
-                }
-            }
-            
-            // Filtro por turma
-            if (this.filtros.turma !== 'todas' && e.turma?.id !== this.filtros.turma) {
-                return false;
-            }
-            
-            return true;
-        });
     }
 
     configurarEventListeners() {
@@ -448,7 +444,7 @@ class CalendarioAcademico {
         }
 
         const btnCriar = document.getElementById('btnCriarEvento');
-        if (btnCriar) {
+        if (btnCriar && this.podeCriar) {
             btnCriar.addEventListener('click', () => {
                 this.abrirCriadorEvento();
             });
@@ -459,11 +455,8 @@ class CalendarioAcademico {
     abrirCriadorEvento(dataStr = null, eventoExistente = null) {
         this.eventoEditando = eventoExistente;
         
-        const podeCriar = this.usuario.role === 'admin' || 
-                          this.usuario.role === 'super_admin' || 
-                          this.usuario.role === 'professor';
-        
-        if (!podeCriar) {
+        // 🔥 Verificar permissão
+        if (!this.podeCriar) {
             alert('Apenas administradores e professores podem criar eventos');
             return;
         }
@@ -488,7 +481,6 @@ class CalendarioAcademico {
             '<i class="fas fa-edit"></i> Editar Evento' : 
             '<i class="fas fa-plus"></i> Criar Novo Evento';
         
-        // Valores padrão
         let dataInicioValue = dataStr || '';
         let dataFimValue = '';
         let horarioInicioValue = '08:00';
@@ -503,56 +495,34 @@ class CalendarioAcademico {
         let notificacaoValue = '30';
         let diaInteiroChecked = false;
         
-        // Se for edição, carregar os valores do evento existente
         if (isEditando && eventoExistente) {
-            console.log('📝 Editando evento:', eventoExistente);
-            
-            // Data de início
             if (eventoExistente.start) {
                 const dataInicio = new Date(eventoExistente.start);
                 dataInicioValue = dataInicio.toISOString().split('T')[0];
             }
-            
-            // Data de fim
             if (eventoExistente.end) {
                 const dataFim = new Date(eventoExistente.end);
                 dataFimValue = dataFim.toISOString().split('T')[0];
             }
-            
-            // Horários
             horarioInicioValue = eventoExistente.horarioInicio || '08:00';
             horarioFimValue = eventoExistente.horarioFim || '09:00';
-            
-            // Título e descrição
             tituloValue = eventoExistente.title || '';
             descricaoValue = eventoExistente.descricao || '';
-            
-            // Tipo e cor
             tipoValue = eventoExistente.tipo || 'personalizado';
             corValue = eventoExistente.cor || '#3b82f6';
-            
-            // Local
             localValue = eventoExistente.local || '';
-            
-            // Turma
             turmaIdValue = eventoExistente.turma?.id || '';
-            
-            // Notificações
             notificarChecked = eventoExistente.notificacaoAtivada !== false;
-            
             if (eventoExistente.notificacoes && eventoExistente.notificacoes.length > 0) {
                 const notificacaoAtiva = eventoExistente.notificacoes.find(n => !n.enviada);
                 if (notificacaoAtiva) {
                     notificacaoValue = notificacaoAtiva.minutosAntes.toString();
                 }
             }
-            
-            // Dia inteiro
             diaInteiroChecked = eventoExistente.allDay || false;
         }
         
-        // Montar opções de turma
-        const turmasOptions = this.turmas.map(t => 
+        const turmasOptions = (this.turmas || []).map(t => 
             `<option value="${t.id}" ${turmaIdValue === t.id ? 'selected' : ''}>${t.nome || 'Sem nome'} - ${t.disciplina || 'Sem disciplina'}</option>`
         ).join('');
         
@@ -560,7 +530,7 @@ class CalendarioAcademico {
             <form id="formEvento">
                 <div class="form-group">
                     <label><i class="fas fa-tag"></i> Título do Evento *</label>
-                    <input type="text" id="eventoTitulo" class="form-control" value="${tituloValue.replace(/'/g, "\\'")}" required>
+                    <input type="text" id="eventoTitulo" class="form-control" value="${this.escapeHtml(tituloValue)}" required>
                 </div>
                 
                 <div class="form-row">
@@ -611,21 +581,21 @@ class CalendarioAcademico {
                 
                 <div class="form-group">
                     <label><i class="fas fa-align-left"></i> Descrição (opcional)</label>
-                    <textarea id="eventoDescricao" class="form-control" rows="3">${descricaoValue.replace(/'/g, "\\'")}</textarea>
+                    <textarea id="eventoDescricao" class="form-control" rows="3">${this.escapeHtml(descricaoValue)}</textarea>
                 </div>
                 
                 <div class="form-group">
                     <label><i class="fas fa-map-marker-alt"></i> Local (opcional)</label>
-                    <input type="text" id="eventoLocal" class="form-control" value="${localValue.replace(/'/g, "\\'")}">
+                    <input type="text" id="eventoLocal" class="form-control" value="${this.escapeHtml(localValue)}">
                 </div>
                 
-                ${(this.usuario.role === 'admin' || this.usuario.role === 'super_admin') ? `
+                ${(this.usuario.role === 'admin' || this.usuario.role === 'super_admin') && this.professores ? `
                 <div class="form-group">
                     <label><i class="fas fa-chalkboard-teacher"></i> Professor Responsável</label>
                     <select id="eventoProfessor" class="form-control">
                         <option value="">Selecione um professor...</option>
                         ${this.professores.map(p => 
-                            `<option value="${p._id || p.id}" ${eventoExistente?.criadoPor?.id === (p._id || p.id) ? 'selected' : ''}>${(p.nome || 'Sem nome').replace(/'/g, "\\'")} - ${p.email || 'Sem email'}</option>`
+                            `<option value="${p._id || p.id}" ${eventoExistente?.criadoPor?.id === (p._id || p.id) ? 'selected' : ''}>${this.escapeHtml(p.nome || 'Sem nome')} - ${p.email || 'Sem email'}</option>`
                         ).join('')}
                     </select>
                     <small class="text-muted">Deixe em branco para criar em seu nome</small>
@@ -719,8 +689,7 @@ class CalendarioAcademico {
                 }]
             };
             
-            // Se for admin e selecionou um professor
-            if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin') {
+            if ((this.usuario.role === 'admin' || this.usuario.role === 'super_admin') && this.professores) {
                 const professorId = document.getElementById('eventoProfessor')?.value;
                 if (professorId) {
                     evento.usuarioId = professorId;
@@ -792,8 +761,7 @@ class CalendarioAcademico {
                 }]
             };
             
-            // Se for admin e selecionou um professor
-            if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin') {
+            if ((this.usuario.role === 'admin' || this.usuario.role === 'super_admin') && this.professores) {
                 const professorId = document.getElementById('eventoProfessor')?.value;
                 if (professorId) {
                     evento.usuarioId = professorId;
@@ -970,17 +938,14 @@ class CalendarioAcademico {
             </div>
         `;
         
-        // Limpar footer
         modalFooter.innerHTML = '';
         
-        // Botão Fechar
         const btnFechar = document.createElement('button');
         btnFechar.className = 'btn-cancel';
         btnFechar.innerHTML = 'Fechar';
         btnFechar.onclick = () => this.fecharModal();
         modalFooter.appendChild(btnFechar);
         
-        // Botão Editar (se tiver permissão)
         if (podeEditar) {
             const btnEditar = document.createElement('button');
             btnEditar.className = 'btn-update';
@@ -1018,6 +983,16 @@ class CalendarioAcademico {
             'personalizado': 'Personalizado'
         };
         return nomes[tipo] || 'Evento';
+    }
+    
+    escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     abrirModal() {

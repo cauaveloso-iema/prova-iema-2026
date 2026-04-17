@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calendário Acadêmico - Sistema de Provas 2026</title>
+    <title>Calendário Acadêmico - Sistema de Provas</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-        <!-- PWA Meta Tags -->
+    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d6efd">
+    <meta name="theme-color" content="#667eea">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+    <meta name="apple-mobile-web-app-title" content="Calendário Academico">
 
-    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
@@ -126,6 +126,141 @@
 
         .btn-voltar i {
             font-size: 14px;
+        }
+
+        /* Widget de Rodízio */
+        .rodizio-widget {
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid #bbf7d0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .rodizio-widget::before {
+            content: '';
+            position: absolute;
+            top: -30px;
+            right: -30px;
+            width: 150px;
+            height: 150px;
+            background: radial-gradient(circle, rgba(16,185,129,0.1) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .rodizio-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .rodizio-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+
+        .rodizio-header h3 {
+            margin: 0;
+            color: #065f46;
+            font-size: 1.2rem;
+        }
+
+        .rodizio-header p {
+            margin: 0;
+            color: #047857;
+            font-size: 0.85rem;
+        }
+
+        .rodizio-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .status-badge-rodizio {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .status-permitido {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-negado {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-info {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .horario-info {
+            background: #e0f2fe;
+            padding: 10px 20px;
+            border-radius: 40px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .dias-permitidos {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #bbf7d0;
+        }
+
+        .dias-permitidos h4 {
+            font-size: 0.85rem;
+            color: #065f46;
+            margin-bottom: 10px;
+        }
+
+        .dias-lista {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .dia-permitido {
+            background: #10b981;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .rodizio-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px;
+            color: #6b7280;
         }
 
         /* Navegação do mês */
@@ -282,6 +417,11 @@
             cursor: default;
         }
 
+        .calendario-dia.dia-almoco {
+            background: #f0fdf4;
+            border-color: #10b981;
+        }
+
         .numero-dia {
             font-weight: 600;
             color: #374151;
@@ -305,6 +445,11 @@
         .evento-mini:hover {
             transform: translateX(3px);
             opacity: 0.9;
+        }
+
+        .evento-mini.almoco-badge {
+            background: #10b981;
+            border-left-color: #059669;
         }
 
         .evento-mais {
@@ -565,10 +710,6 @@
             color: #10b981; 
         }
 
-        .text-muted { 
-            color: #6b7280; 
-        }
-
         /* Eventos do Dia */
         #eventosDoDia {
             margin-top: 25px;
@@ -663,6 +804,15 @@
                 justify-content: center;
             }
 
+            .rodizio-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .rodizio-status {
+                justify-content: center;
+            }
+
             .calendario-grid {
                 grid-template-columns: repeat(7, minmax(40px, 1fr));
                 gap: 5px;
@@ -724,11 +874,40 @@
                     <h1>Calendário Acadêmico</h1>
                     <p>Gerencie eventos, provas e prazos do ano letivo</p>
                 </div>
-                <!-- 🔥 BOTÃO VOLTAR DINÂMICO -->
+                <!-- BOTÃO VOLTAR DINÂMICO -->
                 <button class="btn-voltar" id="btnVoltarCalendario">
                     <i class="fas fa-arrow-left"></i>
                     <span id="textoBotaoVoltar">Voltar ao Painel</span>
                 </button>
+            </div>
+        </div>
+
+        <!-- 🍽️ WIDGET DE RODÍZIO DE REFEIÇÕES -->
+        <div class="rodizio-widget" id="rodizioWidget">
+            <div class="rodizio-header">
+                <div class="rodizio-icon">
+                    <i class="fas fa-utensils"></i>
+                </div>
+                <div>
+                    <h3>Horário do Almoço</h3>
+                    <p>Consulte os dias que sua turma pode almoçar</p>
+                </div>
+            </div>
+            
+            <div id="rodizioLoading" class="rodizio-loading">
+                <div class="spinner-border text-success" style="width: 1.5rem; height: 1.5rem;" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <span>Verificando horário do almoço...</span>
+            </div>
+            
+            <div id="rodizioContent" style="display: none;">
+                <div class="rodizio-status" id="rodizioStatus"></div>
+                
+                <div class="dias-permitidos" id="diasPermitidos">
+                    <h4><i class="fas fa-calendar-week"></i> Próximos dias que você pode almoçar:</h4>
+                    <div class="dias-lista" id="listaDiasPermitidos"></div>
+                </div>
             </div>
         </div>
 
@@ -807,6 +986,120 @@
 
     <script src="js/calendario.js"></script>
 
+    <!-- Script do Rodízio -->
+    <script>
+    // ============================================
+    // CARREGAR RODÍZIO DO ALUNO
+    // ============================================
+    async function carregarRodizioAluno() {
+        const token = localStorage.getItem('auth_token');
+        
+        if (!token) return;
+        
+        const loadingDiv = document.getElementById('rodizioLoading');
+        const contentDiv = document.getElementById('rodizioContent');
+        
+        try {
+            const response = await fetch('/api/rodizio/meu-rodizio', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            loadingDiv.style.display = 'none';
+            contentDiv.style.display = 'block';
+            
+            if (!data.success) {
+                mostrarErroRodizio(data.error);
+                return;
+            }
+            
+            if (!data.temRodizio) {
+                mostrarSemRodizio(data.motivo);
+                return;
+            }
+            
+            // Status de hoje
+            const statusDiv = document.getElementById('rodizioStatus');
+            if (data.podeAlmocarHoje) {
+                statusDiv.innerHTML = `
+                    <div class="status-badge-rodizio status-permitido">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>✅ Você pode almoçar hoje!</strong>
+                        <span class="horario-info ms-2">
+                            <i class="fas fa-clock"></i> ${data.horarioInicio} às ${data.horarioFim}
+                        </span>
+                    </div>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="status-badge-rodizio status-negado">
+                        <i class="fas fa-times-circle"></i>
+                        <strong>❌ Hoje não é dia de almoço para sua turma</strong>
+                    </div>
+                `;
+            }
+            
+            // Próximos dias permitidos
+            const container = document.getElementById('listaDiasPermitidos');
+            
+            if (data.diasPermitidos && data.diasPermitidos.length > 0) {
+                container.innerHTML = data.diasPermitidos.map(dia => `
+                    <span class="dia-permitido">
+                        <i class="fas fa-calendar-check"></i>
+                        ${dia.dataSimples}
+                    </span>
+                `).join('');
+            } else {
+                container.innerHTML = '<p class="text-muted">Nenhum dia permitido nos próximos dias</p>';
+            }
+            
+            // Adicionar marcadores no calendário
+            if (window.calendario && data.todosDias) {
+                const diasQuePode = data.todosDias.filter(d => d.podeAlmocar);
+                diasQuePode.forEach(dia => {
+                    const dataStr = dia.data.split('T')[0];
+                    const celulaDia = document.querySelector(`.calendario-dia[data-data="${dataStr}"]`);
+                    if (celulaDia) {
+                        celulaDia.classList.add('dia-almoco');
+                    }
+                });
+            }
+            
+        } catch (error) {
+            console.error('Erro ao carregar rodízio:', error);
+            loadingDiv.style.display = 'none';
+            mostrarErroRodizio('Erro ao carregar informações do rodízio');
+        }
+    }
+    
+    function mostrarSemRodizio(motivo) {
+        const statusDiv = document.getElementById('rodizioStatus');
+        statusDiv.innerHTML = `
+            <div class="status-badge-rodizio status-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>⚠️ ${motivo || 'Sua turma ainda não tem configuração de rodízio'}</strong>
+            </div>
+        `;
+        document.getElementById('diasPermitidos').style.display = 'none';
+    }
+    
+    function mostrarErroRodizio(mensagem) {
+        const statusDiv = document.getElementById('rodizioStatus');
+        statusDiv.innerHTML = `
+            <div class="status-badge-rodizio status-negado">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>❌ Erro: ${mensagem}</strong>
+            </div>
+        `;
+    }
+    
+    // Carregar ao iniciar a página
+    document.addEventListener('DOMContentLoaded', () => {
+        carregarRodizioAluno();
+    });
+    </script>
+
     <!-- VLibras Oficial (PRIMEIRO) -->
     <script src="js/vlibras-oficial.js"></script>
     
@@ -816,16 +1109,15 @@
     <!-- Chatbot -->
     <script src="js/chatbot-frontend.js"></script>
 
-        <!-- ===== MOBILE OPTIMIZATION ===== -->
+    <!-- ===== MOBILE OPTIMIZATION ===== -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <link rel="stylesheet" href="css/mobile.css">
     <script src="js/toggle-buttons.js"></script>
 
-        <!-- Botões arrastáveis -->
+    <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
 
-        <script>
-
+    <script>
     // ============================================
     // PULL-TO-REFRESH - MENOS SENSÍVEL (CORRIGIDO)
     // ============================================
@@ -833,11 +1125,10 @@
     let touchStartY = 0;
     let touchCurrentY = 0;
     let isPulling = false;
-    const PULL_THRESHOLD = 600; // AUMENTADO para 200px (bem menos sensível)
-    const TOP_TOLERANCE = 100;    // Tolerância maior para considerar "topo"
+    const PULL_THRESHOLD = 600;
+    const TOP_TOLERANCE = 100;
 
     document.addEventListener('touchstart', function(e) {
-        // Só ativa se estiver no topo da página (com tolerância)
         if (window.scrollY <= TOP_TOLERANCE) {
             touchStartY = e.touches[0].clientY;
             isPulling = true;
@@ -850,30 +1141,23 @@
         touchCurrentY = e.touches[0].clientY;
         const pullDistance = touchCurrentY - touchStartY;
         
-        // Só considera movimento para BAIXO
         if (pullDistance > 0) {
-            // NÃO bloqueia o scroll! (removido e.preventDefault)
-            
-            // Mostrar indicador visual apenas se passar de 50px
             if (pullDistance > 50) {
                 mostrarIndicadorPull(pullDistance);
             }
             
-            // Se passou do limite MUITO MAIOR, atualiza
             if (pullDistance > PULL_THRESHOLD) {
-                // Agora sim bloqueia para não dar conflito
                 e.preventDefault();
                 atualizarPagina();
             }
         }
-    }, { passive: true }); // MUDADO para passive: true (não bloqueia)
+    }, { passive: true });
 
     document.addEventListener('touchend', function(e) {
         if (!isPulling) return;
         
         const pullDistance = touchCurrentY - touchStartY;
         
-        // Se não passou do limite, apenas esconde o indicador
         if (pullDistance < PULL_THRESHOLD) {
             esconderIndicadorPull();
         }
@@ -883,22 +1167,15 @@
         touchCurrentY = 0;
     }, { passive: true });
 
-    // Função para atualizar a página
     function atualizarPagina() {
-        // Mostrar mensagem
         mostrarMensagem('Atualizando página...');
-        
-        // Efeito visual
         document.body.style.opacity = '0.7';
         document.body.style.transition = 'opacity 0.3s';
-        
-        // Recarregar a página
         setTimeout(() => {
             location.reload();
         }, 500);
     }
 
-    // Indicador visual simplificado
     function mostrarIndicadorPull(distancia) {
         let indicador = document.getElementById('pull-indicator');
         
@@ -923,7 +1200,6 @@
             document.body.appendChild(indicador);
         }
         
-        // Mostrar conforme a distância
         if (distancia > 50) {
             indicador.style.transform = 'translateY(0)';
         }
@@ -953,107 +1229,87 @@
         `;
         msg.textContent = texto;
         document.body.appendChild(msg);
-        
         setTimeout(() => msg.remove(), 1500);
     }
 
     </script>
 
     <script>
-// ============================================
-// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-// ============================================
+    // ============================================
+    // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
+    // ============================================
 
-(function() {
-    // Só ativar em telas menores que 768px
-    if (window.innerWidth > 768) {
-        console.log('📐 Desktop detectado - escalonamento desativado');
-        return;
-    }
-    
-    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-    
-    // Função para calcular a escala baseada na largura (apenas mobile)
-    function calcularEscalaMobile() {
-        const width = window.innerWidth;
+    (function() {
+        if (window.innerWidth > 768) {
+            console.log('📐 Desktop detectado - escalonamento desativado');
+            return;
+        }
         
-        // Largura de referência para mobile (768px)
-        const baseWidth = 768;
+        console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
         
-        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
-        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+        function calcularEscalaMobile() {
+            const width = window.innerWidth;
+            const baseWidth = 768;
+            let escala = Math.max(0.5, Math.min(1, width / baseWidth));
+            
+            if (width <= 320) escala = 0.55;
+            else if (width <= 360) escala = 0.6;
+            else if (width <= 400) escala = 0.65;
+            else if (width <= 500) escala = 0.75;
+            else if (width <= 600) escala = 0.85;
+            else if (width <= 700) escala = 0.95;
+            else escala = 1;
+            
+            return escala;
+        }
         
-        // Ajustes específicos para faixas de tamanho
-        if (width <= 320) escala = 0.55;
-        else if (width <= 360) escala = 0.6;
-        else if (width <= 400) escala = 0.65;
-        else if (width <= 500) escala = 0.75;
-        else if (width <= 600) escala = 0.85;
-        else if (width <= 700) escala = 0.95;
-        else escala = 1;
+        function aplicarEscalaMobile() {
+            if (window.innerWidth > 768) return;
+            const escala = calcularEscalaMobile();
+            document.documentElement.style.setProperty('--scale-ratio', escala);
+            document.documentElement.style.setProperty('--current-width', window.innerWidth);
+            console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+        }
         
-        return escala;
-    }
-    
-    // Função para aplicar a escala
-    function aplicarEscalaMobile() {
-        // Só aplicar se ainda estiver em mobile
-        if (window.innerWidth > 768) return;
+        aplicarEscalaMobile();
         
-        const escala = calcularEscalaMobile();
+        let timeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                if (window.innerWidth <= 768) {
+                    aplicarEscalaMobile();
+                } else {
+                    document.documentElement.style.setProperty('--scale-ratio', '1');
+                    console.log('📐 Modo desktop - escala resetada');
+                }
+            }, 100);
+        });
         
-        // Atualizar variável CSS
-        document.documentElement.style.setProperty('--scale-ratio', escala);
-        document.documentElement.style.setProperty('--current-width', window.innerWidth);
+        window.addEventListener('orientationchange', function() {
+            setTimeout(() => {
+                if (window.innerWidth <= 768) {
+                    aplicarEscalaMobile();
+                }
+            }, 200);
+        });
         
-        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-    }
-    
-    // Aplicar inicial
-    aplicarEscalaMobile();
-    
-    // Aplicar ao redimensionar (com debounce)
-    let timeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // Verificar se ainda está em mobile
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            } else {
-                // Se passou para desktop, resetar escala
-                document.documentElement.style.setProperty('--scale-ratio', '1');
-                console.log('📐 Modo desktop - escala resetada');
-            }
-        }, 100);
-    });
-    
-    // Também aplicar quando orientação mudar
-    window.addEventListener('orientationchange', function() {
-        setTimeout(() => {
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            }
-        }, 200);
-    });
-    
-    console.log('✅ Sistema de escalonamento mobile ativo!');
-    
-})();
-</script>
+        console.log('✅ Sistema de escalonamento mobile ativo!');
+    })();
+    </script>
 
-<script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker ativo'))
-            .catch(err => console.log('❌ Erro:', err));
-    });
-}
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('✅ Service Worker ativo'))
+                .catch(err => console.log('❌ Erro:', err));
+        });
+    }
 
-window.addEventListener('online', () => console.log('🌐 Online'));
-window.addEventListener('offline', () => console.log('📴 Offline'));
-</script>
+    window.addEventListener('online', () => console.log('🌐 Online'));
+    window.addEventListener('offline', () => console.log('📴 Offline'));
+    </script>
 
 </body>
 </html>

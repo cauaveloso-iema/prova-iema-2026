@@ -880,6 +880,10 @@ app.use('/api/enfermaria', enfermariaRoutes);
 const enfermariaMonitoramentoRoutes = require('./routes/enfermaria-monitoramento');
 app.use('/api/enfermaria-monitoramento', enfermariaMonitoramentoRoutes);
 
+// Importar rotas do rodízio
+const rodizioRefeicaoRoutes = require('./routes/rodizioRefeicao');
+app.use('/api/rodizio', rodizioRefeicaoRoutes);
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ
 // ============================================================================
