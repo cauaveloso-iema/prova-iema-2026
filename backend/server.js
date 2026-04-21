@@ -8470,10 +8470,10 @@ app.get('/api/turmas/:turmaId/resultados', authenticateToken, async (req, res) =
   }
 });
 
-// ============ ROTA PARA GERAR QR CODE ============
+// ============ ROTA PARA GERAR QR CODE (MODIFICADA - TAMBÉM SALVA NO BANCO) ============
 app.post('/api/qrcode/gerar', authenticateToken, async (req, res) => {
     try {
-        const { url } = req.body;
+        const { url, userId, saveToUser = false } = req.body;
         
         if (!url) {
             return res.status(400).json({
@@ -8493,10 +8493,27 @@ app.post('/api/qrcode/gerar', authenticateToken, async (req, res) => {
             }
         });
         
+        // 🔥 SE TIVER userId E saveToUser=true, SALVAR NO BANCO
+        if (userId && saveToUser) {
+            // Verificar se o usuário existe
+            const user = await User.findById(userId);
+            
+            if (user) {
+                user.qrCodeUsuario = qrCodeDataUrl;
+                user.qrCodeUsuarioGeradoEm = new Date();
+                user.qrCodeUsuarioTipo = user.role;
+                await user.save();
+                console.log(`✅ QR Code salvo no banco para ${user.nome} (${user.email})`);
+            } else {
+                console.warn(`⚠️ Usuário ${userId} não encontrado para salvar QR Code`);
+            }
+        }
+        
         res.json({
             success: true,
             qrCode: qrCodeDataUrl,
-            url: url
+            url: url,
+            saved: !!(userId && saveToUser)
         });
         
     } catch (error) {
@@ -19712,83 +19729,6 @@ app.delete('/api/admin/omr/limpar', authenticateToken, isSuperAdmin, async (req,
 
 console.log('✅ Rotas OMR Debug registradas com sucesso!');
 console.log(`📁 Pasta debug_omr: ${OMR_DEBUG_FOLDER}`);
-
-// ============ REGENERAR QR CODE DO USUÁRIO (ADMIN) ============
-app.post('/api/admin/usuarios/:id/regenerar-qrcode', authenticateToken, isSuperAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        console.log(`📱 Admin ${req.userId} regenerando QR Code para usuário ${id}`);
-        
-        const user = await User.findById(id);
-        
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                error: 'Usuário não encontrado'
-            });
-        }
-        
-        // Detectar ambiente
-        const IS_LOCALHOST = process.env.NODE_ENV === 'development' || 
-                            process.env.HOSTNAME?.includes('localhost');
-        const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : (process.env.BASE_URL || 'https://sistema-avaliativo-iemacentro.onrender.com');
-        
-        let usuarioUrl;
-        
-        // 🔥 GERAR QR CODE DIFERENTE PARA CADA ROLE
-        switch(user.role) {
-            case 'aluno':
-                usuarioUrl = `${BASE_URL}/corrigir-prova.html?aluno=${user._id}`;
-                break;
-            case 'professor':
-                usuarioUrl = `${BASE_URL}/identificar-professor.html?id=${user._id}&tipo=professor`;
-                break;
-            case 'admin':
-            case 'super_admin':
-                usuarioUrl = `${BASE_URL}/identificar-admin.html?id=${user._id}&tipo=admin`;
-                break;
-            case 'setor_pedagogico':
-                usuarioUrl = `${BASE_URL}/identificar-setor.html?id=${user._id}&tipo=setor`;
-                break;
-            default:
-                usuarioUrl = `${BASE_URL}/identificar-usuario.html?id=${user._id}&tipo=usuario`;
-        }
-        
-        // Gerar QR Code
-        const QRCode = require('qrcode');
-        const qrCodeDataUrl = await QRCode.toDataURL(usuarioUrl, {
-            errorCorrectionLevel: 'H',
-            margin: 1,
-            width: 200,
-            color: {
-                dark: '#000000',
-                light: '#ffffff'
-            }
-        });
-        
-        // 🔥 SALVAR NO BANCO DO USUÁRIO
-        user.qrCodeUsuario = qrCodeDataUrl;
-        user.qrCodeUsuarioGeradoEm = new Date();
-        user.qrCodeUsuarioTipo = user.role;
-        await user.save();
-        
-        console.log(`✅ QR Code gerado e salvo para ${user.nome} (${user.role})`);
-        
-        res.json({
-            success: true,
-            qrCode: qrCodeDataUrl,
-            message: 'QR Code gerado com sucesso!'
-        });
-        
-    } catch (error) {
-        console.error('❌ Erro ao gerar QR Code:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
 
 // ============ ROTA PARA OBTER QR CODE DO USUÁRIO LOGADO ============
 app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {

@@ -30179,12 +30179,17 @@ class AdminPanel {
 
     // ============ OUTRAS FUNÇÕES ============
     async gerarQRCodesPendentes() {
-        if (this.usuariosSemQR.length === 0) { 
-            this.showToast('ℹ️ Todos os usuários já possuem QR Code', 'info'); 
-            return; 
+        if (this.usuariosSemQR.length === 0) {
+            this.showToast('ℹ️ Todos os usuários já possuem QR Code', 'info');
+            return;
         }
         
-        const confirmar = await this.confirmar('Gerar QR Codes Pendentes', `Deseja gerar QR Codes para <strong>${this.usuariosSemQR.length}</strong> usuário(s)?`);
+        const confirmar = await this.confirmar(
+            '🎯 Gerar QR Codes Pendentes',
+            `Deseja gerar QR Codes para <strong>${this.usuariosSemQR.length}</strong> usuário(s)?<br><br>
+            O sistema irá gerar e salvar os QR Codes no banco de dados.`
+        );
+        
         if (!confirmar) return;
         
         this.showToast(`🔄 Gerando QR Codes para ${this.usuariosSemQR.length} usuários...`, 'info');
@@ -30196,44 +30201,74 @@ class AdminPanel {
             try {
                 const token = localStorage.getItem('auth_token');
                 
-                console.log(`📱 Gerando QR Code para: ${usuario.nome} (${usuario._id})`);
+                // Detectar ambiente
+                const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                    window.location.hostname === '127.0.0.1';
+                const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : window.location.origin;
                 
-                // 🔥 USAR A ROTA QUE VAMOS CRIAR
-                const response = await fetch(`/api/admin/usuarios/${usuario._id}/regenerar-qrcode`, { 
+                // 🔥 CONSTRUIR A URL BASEADA NO PERFIL
+                let usuarioUrl;
+                switch(usuario.role) {
+                    case 'aluno':
+                        usuarioUrl = `${BASE_URL}/corrigir-prova.html?aluno=${usuario._id}`;
+                        break;
+                    case 'professor':
+                        usuarioUrl = `${BASE_URL}/identificar-professor.html?id=${usuario._id}&tipo=professor`;
+                        break;
+                    case 'admin':
+                    case 'super_admin':
+                        usuarioUrl = `${BASE_URL}/identificar-admin.html?id=${usuario._id}&tipo=admin`;
+                        break;
+                    case 'setor_pedagogico':
+                        usuarioUrl = `${BASE_URL}/identificar-setor.html?id=${usuario._id}&tipo=setor`;
+                        break;
+                    default:
+                        usuarioUrl = `${BASE_URL}/identificar-usuario.html?id=${usuario._id}&tipo=usuario`;
+                }
+                
+                console.log(`📱 Gerando QR Code para ${usuario.nome}: ${usuarioUrl}`);
+                
+                // 🔥 CHAMAR A ROTA EXISTENTE COM saveToUser=true
+                const response = await fetch(`/api/qrcode/gerar`, { 
                     method: 'POST', 
                     headers: { 
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
-                    } 
+                    },
+                    body: JSON.stringify({ 
+                        url: usuarioUrl,
+                        userId: usuario._id,
+                        saveToUser: true  // 🔥 DIZ PARA SALVAR NO BANCO
+                    })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
                     // Adicionar à lista local
-                    this.qrCodesUsuarios.push({ 
-                        _id: usuario._id, 
-                        nome: usuario.nome, 
-                        email: usuario.email, 
-                        role: usuario.role, 
-                        matricula: usuario.matricula, 
-                        turma: usuario.turma, 
-                        qrCodeDataUrl: data.qrCode, 
-                        qrCodeGeradoEm: new Date().toISOString(), 
-                        ativo: usuario.ativo 
+                    this.qrCodesUsuarios.push({
+                        _id: usuario._id,
+                        nome: usuario.nome,
+                        email: usuario.email,
+                        role: usuario.role,
+                        matricula: usuario.matricula,
+                        turma: usuario.turma,
+                        qrCodeDataUrl: data.qrCode,
+                        qrCodeGeradoEm: new Date().toISOString(),
+                        ativo: usuario.ativo,
+                        precisaAcessibilidade: usuario.precisaAcessibilidade
                     });
                     sucessos++;
-                    console.log(`✅ QR Code gerado e salvo no banco para: ${usuario.nome}`);
+                    console.log(`✅ QR Code gerado e SALVO para ${usuario.nome}`);
                 } else {
                     console.error(`❌ Erro ao gerar QR para ${usuario.nome}:`, data.error);
                     erros++;
                 }
-            } catch (error) { 
+            } catch (error) {
                 console.error(`❌ Erro ao gerar QR para ${usuario.nome}:`, error);
                 erros++;
             }
             
-            // Pequena pausa para não sobrecarregar o servidor
             await new Promise(resolve => setTimeout(resolve, 100));
         }
         
