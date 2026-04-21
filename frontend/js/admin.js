@@ -361,7 +361,8 @@ class AdminPanel {
             monitoramento: 'Monitoramento do Sistema',
             configuracoes: 'Configurações do Sistema',
             'cozinha-monitoramento': '🍽️ Cozinha - Monitoramento',
-            'enfermaria-monitoramento': '🏥 Enfermaria - Monitoramento'  // 🔥 NOVO
+            'enfermaria-monitoramento': '🏥 Enfermaria - Monitoramento',  // 🔥 NOVO
+            'qrcode-management': '📱 Gerenciamento de QR Codes'
         };
         
         const pageTitle = document.getElementById('pageTitle');
@@ -417,6 +418,9 @@ class AdminPanel {
                 break;
             case 'omr-debug':
                 await this.loadOMRDebug();
+                break;
+            case 'qrcode-management':
+                await this.loadQRCodeManagement();
                 break;
             // ============================================
             // 🔥 ADICIONAR ESTE CASE AQUI 🔥
@@ -28849,332 +28853,1400 @@ class AdminPanel {
         `;
     }
 
-    // ============ BACKUPS E RESTAURAÇÃO ============
+    
+    // ============================================================================
+    // MÓDULO COMPLETO DE GERENCIAMENTO DE QR CODES - ADMIN
+    // COM CARTÃO HORIZONTAL E AJUSTÁVEL PARA IMPRESSÃO
+    // ============================================================================
 
-    async loadBackups() {
+    // ============ CARREGAR GERENCIAMENTO DE QR CODES ============
+    async loadQRCodeManagement() {
         const contentArea = document.getElementById('contentArea');
         
         contentArea.innerHTML = `
-            <div class="backups-container">
-                <!-- HEADER PROFISSIONAL -->
-                <div class="backups-header">
-                    <div class="header-left">
-                        <div class="header-icon">
-                            <i class="fas fa-database"></i>
-                        </div>
-                        <div class="header-text">
-                            <h1>Backups do Sistema</h1>
-                            <p>Gerencie backups e restaure dados quando necessário</p>
-                        </div>
-                    </div>
-                    
-                    <div class="header-actions">
-                        <button class="btn-header btn-refresh" onclick="admin.carregarBackups()" title="Atualizar">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
-                        <button class="btn-header btn-primary" onclick="admin.criarBackup()">
-                            <i class="fas fa-plus-circle"></i>
-                            <span>Novo Backup</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- CARDS DE ESTATÍSTICAS -->
-                <div class="stats-cards" id="statsBackups">
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
-                            <i class="fas fa-database"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-value" id="statTotalBackups">0</span>
-                            <span class="stat-label">Total de Backups</span>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
-                            <i class="fas fa-hdd"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-value" id="statEspacoTotal">0 MB</span>
-                            <span class="stat-label">Espaço Ocupado</span>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-                            <i class="fas fa-calendar-alt"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-value" id="statUltimoBackup">-</span>
-                            <span class="stat-label">Último Backup</span>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
-                            <i class="fas fa-shield-alt"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-value" id="statBackupsSemana">0</span>
-                            <span class="stat-label">Esta Semana</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TABELA DE BACKUPS -->
-                <div class="table-professional">
-                    <div class="table-header">
-                        <div class="table-title">
-                            <i class="fas fa-list"></i>
-                            <h3>Backups Disponíveis</h3>
-                        </div>
-                        <div class="table-info">
-                            <span class="items-counter" id="itemsCounterBackup">0 backups</span>
-                        </div>
-                    </div>
-                    
-                    <div class="table-responsive">
-                        <table class="data-table" id="tabelaBackups">
-                            <thead>
-                                <tr>
-                                    <th>Nome do Arquivo</th>
-                                    <th>Data de Criação</th>
-                                    <th>Tamanho</th>
-                                    <th>Registros</th>
-                                    <th class="actions-header">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabelaBackupsBody">
-                                <tr>
-                                    <td colspan="5" class="loading-row">
-                                        <div class="loading-spinner-small">
-                                            <i class="fas fa-spinner fa-spin"></i>
-                                            <span>Carregando backups...</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- INFORMAÇÕES SOBRE BACKUPS -->
-                <div class="info-cards">
-                    <div class="info-card info-security">
-                        <div class="info-icon">
-                            <i class="fas fa-shield-alt"></i>
-                        </div>
-                        <div class="info-content">
-                            <h4>🔒 Segurança dos Dados</h4>
-                            <p>Os backups são armazenados no servidor e incluem todas as coleções: usuários, turmas, provas, resultados e matrículas autorizadas.</p>
-                        </div>
-                    </div>
-                    
-                    <div class="info-card info-tip">
-                        <div class="info-icon">
-                            <i class="fas fa-lightbulb"></i>
-                        </div>
-                        <div class="info-content">
-                            <h4>💡 Dicas de Backup</h4>
-                            <ul style="margin: 5px 0 0 20px; color: #4b5563;">
-                                <li>Faça backups antes de grandes alterações</li>
-                                <li>Mantenha backups periódicos</li>
-                                <li>Ao restaurar, todos os dados atuais são substituídos</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #8b5cf6; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                <p style="color: #6b7280;">Carregando QR Codes do sistema...</p>
             </div>
-
-            <style>
-                .backups-container {
-                    padding: 24px;
-                    max-width: 1400px;
-                    margin: 0 auto;
-                }
-
-                .backups-header {
-                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                    border-radius: 20px;
-                    padding: 30px;
-                    margin-bottom: 30px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 20px;
-                    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
-                    position: relative;
-                    overflow: hidden;
-                }
-
-                .backups-header::before {
-                    content: '';
-                    position: absolute;
-                    top: -50px;
-                    right: -50px;
-                    width: 200px;
-                    height: 200px;
-                    background: rgba(255,255,255,0.1);
-                    border-radius: 50%;
-                }
-
-                .backups-header::after {
-                    content: '';
-                    position: absolute;
-                    bottom: -80px;
-                    left: -80px;
-                    width: 300px;
-                    height: 300px;
-                    background: rgba(255,255,255,0.05);
-                    border-radius: 50%;
-                }
-
-                /* Estilos reutilizam as classes existentes */
-            </style>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         `;
-        
-        await this.carregarBackups();
-    }
 
-    async carregarBackups() {
         try {
             const token = localStorage.getItem('auth_token');
             
-            const response = await fetch('/api/admin/backups', {
+            const response = await fetch('/api/admin/usuarios?limit=1000', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
             const data = await response.json();
             
-            if (data.success) {
-                this.backups = data.backups || [];
-                this.renderizarTabelaBackups();
-                this.atualizarEstatisticasBackups();
-            } else {
-                throw new Error(data.error || 'Erro ao carregar backups');
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar usuários');
             }
             
-        } catch (error) {
-            console.error('❌ Erro ao carregar backups:', error);
-            this.mostrarErroBackup(error.message);
-        }
-    }
-
-    renderizarTabelaBackups() {
-        const tbody = document.getElementById('tabelaBackupsBody');
-        if (!tbody) return;
-        
-        if (!this.backups || this.backups.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" style="text-align: center; padding: 60px;">
-                        <i class="fas fa-database" style="font-size: 48px; color: #d1d5db; margin-bottom: 15px;"></i>
-                        <h3 style="color: #6b7280; margin-bottom: 5px;">Nenhum backup encontrado</h3>
-                        <p style="color: #9ca3af;">Crie seu primeiro backup clicando em "Novo Backup"</p>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        let html = '';
-        this.backups.forEach((backup, index) => {
-            const data = new Date(backup.data);
-            const dataFormatada = data.toLocaleDateString('pt-BR') + ' ' + 
-                                data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            this.todosUsuarios = data.usuarios || [];
             
-            html += `
-                <tr>
-                    <td>
-                        <strong>${backup.nome}</strong>
-                    </td>
-                    <td>${dataFormatada}</td>
-                    <td>${backup.tamanho}</td>
-                    <td>
-                        <span class="status-badge success">
-                            <i class="fas fa-check-circle"></i> Completo
-                        </span>
-                    </td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn-icon" onclick="admin.baixarBackup('${backup.nome}')" title="Baixar backup">
-                                <i class="fas fa-download"></i>
-                            </button>
-                            <button class="btn-icon warning" onclick="admin.restaurarBackup('${backup.nome}')" title="Restaurar">
-                                <i class="fas fa-undo-alt"></i>
-                            </button>
-                            <button class="btn-icon danger" onclick="admin.excluirBackup('${backup.nome}')" title="Excluir">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
-        
-        tbody.innerHTML = html;
-        document.getElementById('itemsCounterBackup').textContent = `${this.backups.length} backups`;
+            this.qrCodesUsuarios = this.todosUsuarios
+                .filter(u => u.qrCodeUsuario)
+                .map(u => ({
+                    _id: u._id,
+                    nome: u.nome,
+                    email: u.email,
+                    role: u.role,
+                    matricula: u.matricula,
+                    turma: u.turma,
+                    curso: u.curso,
+                    periodo: u.periodo,
+                    qrCodeDataUrl: u.qrCodeUsuario,
+                    qrCodeGeradoEm: u.qrCodeUsuarioGeradoEm,
+                    ativo: u.ativo,
+                    precisaAcessibilidade: u.precisaAcessibilidade,
+                    telefone: u.telefone,
+                    dataNascimento: u.dataNascimento
+                }));
+            
+            this.usuariosSemQR = this.todosUsuarios.filter(u => !u.qrCodeUsuario);
+            this.qrCodesFiltrados = [...this.qrCodesUsuarios];
+            this.paginaAtualQR = 1;
+            this.itensPorPaginaQR = 20;
+            this.viewAtualQR = 'grid';
+            this.filtrosQR = {
+                role: 'todos',
+                status: 'todos',
+                turma: 'todas',
+                search: '',
+                ordenacao: 'nome_asc',
+                acessibilidade: 'todos'
+            };
+            
+            this.turmasDisponiveis = [...new Set(this.qrCodesUsuarios.map(u => u.turma).filter(t => t))];
+            
+            // Configurações de impressão do cartão
+            this.configCartao = {
+                tamanho: 'credito', // credito, padrao, personalizado
+                largura: 85, // mm
+                altura: 54, // mm
+                escala: 1,
+                mostrarLogo: true,
+                mostrarRodape: true
+            };
+            
+            contentArea.innerHTML = this.renderQRCodeManagement();
+            
+            setTimeout(() => {
+                this.renderizarQRCodeManagement();
+                this.configurarEventosQRManagement();
+            }, 100);
+            
+            console.log(`✅ ${this.qrCodesUsuarios.length} QR Codes carregados`);
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            contentArea.innerHTML = this.renderQRCodeError(error.message);
+        }
     }
 
-    atualizarEstatisticasBackups() {
-        if (!this.backups || this.backups.length === 0) {
-            document.getElementById('statTotalBackups').textContent = '0';
-            document.getElementById('statEspacoTotal').textContent = '0 MB';
-            document.getElementById('statUltimoBackup').textContent = '-';
-            document.getElementById('statBackupsSemana').textContent = '0';
+    // ============ RENDERIZAR INTERFACE COMPLETA ============
+    renderQRCodeManagement() {
+        const total = this.qrCodesUsuarios.length;
+        const porRole = this.calcularEstatisticasQR();
+        
+        return `
+            <div class="qrcode-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="qrcode-header">
+                    <div class="header-left">
+                        <div class="header-icon"><i class="fas fa-qrcode"></i></div>
+                        <div class="header-text">
+                            <h1>Gerenciamento de QR Codes</h1>
+                            <p>Gerencie todos os QR Codes do sistema - Cartões horizontais para impressão</p>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.atualizarQRCodeManagement()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-header" style="background: #f59e0b; color: white;" onclick="admin.gerarQRCodesPendentes()">
+                            <i class="fas fa-magic"></i> Pendentes (${this.usuariosSemQR.length})
+                        </button>
+                        <button class="btn-header" style="background: #10b981; color: white;" onclick="admin.abrirMenuDownloadTurmas()">
+                            <i class="fas fa-school"></i> Por Turma
+                        </button>
+                        <button class="btn-header" style="background: #8b5cf6; color: white;" onclick="admin.baixarTodosQRCodesCartao()">
+                            <i class="fas fa-print"></i> Imprimir Todos
+                        </button>
+                        <button class="btn-header" style="background: #3b82f6; color: white;" onclick="admin.baixarFiltradosCartao()">
+                            <i class="fas fa-filter"></i> Baixar Filtrados
+                        </button>
+                        <button class="btn-header" style="background: #ef4444; color: white;" onclick="admin.abrirConfigCartao()">
+                            <i class="fas fa-cog"></i> Configurar Cartão
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE ESTATÍSTICAS -->
+                <div class="stats-grid">
+                    <div class="stat-card primary" onclick="admin.filtrarQRPorRole('todos')">
+                        <div class="stat-icon"><i class="fas fa-qrcode"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Total de QR Codes</span>
+                            <span class="stat-value" id="statTotalQR">${total}</span>
+                        </div>
+                    </div>
+                    <div class="stat-card success" onclick="admin.filtrarQRPorRole('aluno')">
+                        <div class="stat-icon"><i class="fas fa-user-graduate"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Alunos</span>
+                            <span class="stat-value" id="statAlunosQR">${porRole.alunos}</span>
+                        </div>
+                    </div>
+                    <div class="stat-card warning" onclick="admin.filtrarQRPorRole('professor')">
+                        <div class="stat-icon"><i class="fas fa-chalkboard-teacher"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Professores</span>
+                            <span class="stat-value" id="statProfessoresQR">${porRole.professores}</span>
+                        </div>
+                    </div>
+                    <div class="stat-card info" onclick="admin.filtrarQRPorRole('admin')">
+                        <div class="stat-icon"><i class="fas fa-user-shield"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Administradores</span>
+                            <span class="stat-value" id="statAdminsQR">${porRole.admins}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BARRA DE FILTROS AVANÇADA -->
+                <div class="filters-card">
+                    <div class="filters-header">
+                        <div class="filters-title"><i class="fas fa-sliders-h"></i><h3>Filtros Avançados</h3></div>
+                        <span class="filters-badge" id="resultadosBadgeQR">${this.qrCodesFiltrados.length} resultados</span>
+                    </div>
+                    
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label><i class="fas fa-search"></i> Buscar</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="buscaQR" placeholder="Nome, email, matrícula..." autocomplete="off">
+                                <i class="fas fa-search input-icon"></i>
+                                <button class="input-clear" onclick="admin.limparBuscaQR()" style="display: none;" id="clearBuscaQR"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-user-tag"></i> Perfil</label>
+                            <select id="filtroRoleQR" class="filter-select" onchange="admin.filtrarQRPorRole(this.value)">
+                                <option value="todos">Todos os perfis</option>
+                                <option value="aluno">👨‍🎓 Alunos</option>
+                                <option value="professor">👨‍🏫 Professores</option>
+                                <option value="admin">👑 Administradores</option>
+                                <option value="setor_pedagogico">👩‍🏫 Setor Pedagógico</option>
+                                <option value="coordenacao_patio">🏃 Coordenação de Pátio</option>
+                                <option value="cozinha">🍽️ Cozinha</option>
+                                <option value="gestao_geral">📊 Gestão Geral</option>
+                                <option value="enfermaria">🏥 Enfermaria</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-school"></i> Turma</label>
+                            <select id="filtroTurmaQR" class="filter-select" onchange="admin.filtrarQRPorTurma()">
+                                <option value="todas">Todas as turmas</option>
+                                ${this.turmasDisponiveis.map(t => `<option value="${t}">${t}</option>`).join('')}
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-circle"></i> Status</label>
+                            <select id="filtroStatusQR" class="filter-select" onchange="admin.filtrarQRPorStatus()">
+                                <option value="todos">Todos</option>
+                                <option value="ativo">🟢 Ativos</option>
+                                <option value="inativo">🔴 Inativos</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-wheelchair"></i> Acessibilidade</label>
+                            <select id="filtroAcessibilidadeQR" class="filter-select" onchange="admin.filtrarQRPorAcessibilidade()">
+                                <option value="todos">Todos</option>
+                                <option value="sim">✅ Com Acessibilidade</option>
+                                <option value="nao">❌ Sem Acessibilidade</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label><i class="fas fa-sort"></i> Ordenar</label>
+                            <select id="ordenacaoQR" class="filter-select" onchange="admin.ordenarQRCodes()">
+                                <option value="nome_asc">Nome (A-Z)</option>
+                                <option value="nome_desc">Nome (Z-A)</option>
+                                <option value="role_asc">Perfil (A-Z)</option>
+                                <option value="turma_asc">Turma (A-Z)</option>
+                                <option value="data_desc">Mais recentes</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-actions">
+                            <button class="btn-filter" onclick="admin.aplicarFiltrosQR()"><i class="fas fa-filter"></i> Filtrar</button>
+                            <button class="btn-filter btn-clear" onclick="admin.limparFiltrosQR()"><i class="fas fa-eraser"></i> Limpar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VISUALIZAÇÃO -->
+                <div class="view-tabs">
+                    <button class="view-btn ${this.viewAtualQR === 'grid' ? 'active' : ''}" onclick="admin.mudarViewQR('grid')"><i class="fas fa-th"></i> Cards</button>
+                    <button class="view-btn ${this.viewAtualQR === 'list' ? 'active' : ''}" onclick="admin.mudarViewQR('list')"><i class="fas fa-list"></i> Lista</button>
+                    <button class="view-btn ${this.viewAtualQR === 'compact' ? 'active' : ''}" onclick="admin.mudarViewQR('compact')"><i class="fas fa-table"></i> Tabela</button>
+                </div>
+
+                <!-- CONTEÚDO PRINCIPAL -->
+                <div id="qrContentGrid" class="qrcode-grid" style="display: ${this.viewAtualQR === 'grid' ? 'grid' : 'none'}"><div class="loading-grid"><i class="fas fa-spinner fa-spin"></i><span>Carregando...</span></div></div>
+                <div id="qrContentList" class="qrcode-list" style="display: ${this.viewAtualQR === 'list' ? 'block' : 'none'}"></div>
+                <div id="qrContentCompact" class="qrcode-compact" style="display: ${this.viewAtualQR === 'compact' ? 'block' : 'none'}"><div class="table-professional"><div class="table-responsive"><table class="data-table"><thead><tr><th>Usuário</th><th>Perfil</th><th>Matrícula</th><th>Turma</th><th>Ações</th></tr></thead><tbody id="tabelaQRCompact"></tbody></table></div></div></div>
+
+                <!-- PAGINAÇÃO -->
+                <div class="pagination-qr" id="paginacaoQR">
+                    <button class="btn-page" onclick="admin.paginaAnteriorQR()" id="btnAnteriorQR" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+                    <span class="page-info" id="pageInfoQR">Página 1 de 1</span>
+                    <button class="btn-page" onclick="admin.proximaPaginaQR()" id="btnProximaQR" disabled>Próxima <i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            ${this.getQRCodeManagementCSS()}
+        `;
+    }
+
+    // ============ CSS DO MÓDULO ============
+    getQRCodeManagementCSS() {
+        return `
+            <style>
+                .qrcode-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+                .qrcode-header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); border-radius: 20px; padding: 30px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
+                .header-left { display: flex; align-items: center; gap: 20px; }
+                .header-icon { width: 70px; height: 70px; background: rgba(255,255,255,0.15); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; color: white; }
+                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0; }
+                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 5px 0 0; }
+                .btn-header { padding: 12px 24px; border-radius: 40px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.3s; border: none; }
+                .btn-header.btn-refresh { background: rgba(255,255,255,0.15); color: white; }
+                .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+                .stat-card { background: white; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 20px; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .stat-card.primary .stat-icon { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+                .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
+                .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+                .stat-icon { width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; }
+                .stat-content { flex: 1; }
+                .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; }
+                .filters-card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+                .filters-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0; }
+                .filters-title { display: flex; align-items: center; gap: 10px; }
+                .filters-title i { font-size: 18px; color: #8b5cf6; background: #f3e8ff; padding: 8px; border-radius: 10px; }
+                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                .filters-badge { background: #8b5cf6; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+                .filters-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr auto; gap: 15px; }
+                .filter-group { display: flex; flex-direction: column; gap: 5px; }
+                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; }
+                .input-wrapper { position: relative; }
+                .input-wrapper input { width: 100%; padding: 10px 35px 10px 40px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; }
+                .input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; }
+                .input-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #9ca3af; cursor: pointer; }
+                .filter-select { width: 100%; padding: 10px 15px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; background: white; cursor: pointer; }
+                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+                .btn-filter { padding: 10px 20px; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; background: #8b5cf6; color: white; }
+                .btn-filter.btn-clear { background: #6b7280; }
+                .view-tabs { display: flex; gap: 10px; margin-bottom: 20px; background: white; padding: 10px; border-radius: 12px; }
+                .view-btn { padding: 8px 20px; border: none; background: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; color: #6b7280; display: flex; align-items: center; gap: 5px; }
+                .view-btn.active { background: #8b5cf6; color: white; }
+                .qrcode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; min-height: 400px; }
+                .qrcode-card { background: white; border-radius: 16px; overflow: hidden; border: 1px solid #e5e7eb; transition: all 0.3s; position: relative; }
+                .qrcode-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+                .card-badge { position: absolute; top: 12px; right: 12px; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+                .badge-aluno { background: #d1fae5; color: #065f46; }
+                .badge-professor { background: #fef3c7; color: #92400e; }
+                .badge-admin { background: #dbeafe; color: #1e40af; }
+                .qrcode-preview { background: #f8fafc; padding: 25px; text-align: center; border-bottom: 1px solid #e5e7eb; }
+                .qrcode-preview img { width: 150px; height: 150px; margin: 0 auto; border: 2px solid #e5e7eb; border-radius: 16px; padding: 10px; background: white; }
+                .qrcode-info { padding: 16px; }
+                .usuario-nome { font-weight: 600; color: #1f2937; margin-bottom: 8px; font-size: 16px; display: flex; align-items: center; justify-content: space-between; }
+                .usuario-detalhes { font-size: 12px; color: #6b7280; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+                .card-actions { display: flex; gap: 8px; padding: 12px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb; flex-wrap: wrap; }
+                .card-action-btn { flex: 1; padding: 8px; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.2s; }
+                .btn-view-qr { background: #e5e7eb; color: #4b5563; }
+                .btn-download-qr { background: #8b5cf6; color: white; }
+                .btn-cartao-qr { background: #10b981; color: white; }
+                .btn-delete-qr { background: #ef4444; color: white; }
+                .pagination-qr { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+                .btn-page { padding: 8px 20px; border: 1px solid #e5e7eb; background: white; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; color: #4b5563; }
+                .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+                .loading-grid { grid-column: 1 / -1; text-align: center; padding: 60px; color: #6b7280; }
+                .loading-grid i { font-size: 48px; margin-bottom: 15px; display: block; }
+                @media (max-width: 1024px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .filters-grid { grid-template-columns: 1fr; } }
+                @media (max-width: 768px) { .stats-grid { grid-template-columns: 1fr; } .qrcode-grid { grid-template-columns: 1fr; } }
+            </style>
+        `;
+    }
+
+    // ============ GERAR CARTÃO QR CODE HORIZONTAL (PAISAGEM) ============
+    gerarCartaoHorizontal(usuario, config = null) {
+        const configFinal = config || this.configCartao || { tamanho: 'credito', mostrarLogo: true, mostrarRodape: true };
+        
+        // Definir tamanhos baseados no tipo de cartão
+        let larguraMM = 85, alturaMM = 54, escala = 3.78;
+        
+        if (configFinal.tamanho === 'padrao') {
+            larguraMM = 105;
+            alturaMM = 74;
+            escala = 3.78;
+        } else if (configFinal.tamanho === 'personalizado' && configFinal.largura && configFinal.altura) {
+            larguraMM = configFinal.largura;
+            alturaMM = configFinal.altura;
+            escala = 3.78;
+        } else if (configFinal.escala) {
+            escala = configFinal.escala;
+        }
+        
+        const larguraPX = Math.round(larguraMM * escala);
+        const alturaPX = Math.round(alturaMM * escala);
+        
+        const nome = usuario.nome || 'Usuário';
+        const role = usuario.role || 'aluno';
+        const matricula = usuario.matricula || 'Não informada';
+        const email = usuario.email || 'Email não cadastrado';
+        const turma = usuario.turma || '';
+        const curso = usuario.curso || '';
+        const periodo = usuario.periodo || '';
+        const dataAtual = new Date();
+        const dataEmissao = dataAtual.toLocaleDateString('pt-BR');
+        
+        let roleIcon = '';
+        let roleColor = '';
+        let roleBg = '';
+        let infoAdicional = '';
+        let gradienteFundo = '';
+        
+        switch(role) {
+            case 'aluno':
+                roleIcon = '👨‍🎓';
+                roleColor = '#10b981';
+                roleBg = '#d1fae5';
+                gradienteFundo = 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)';
+                infoAdicional = `
+                    <div class="info-item"><span class="label">🎓 Curso:</span><span class="value">${curso || 'Não informado'}</span></div>
+                    <div class="info-item"><span class="label">📅 Período:</span><span class="value">${periodo ? periodo + 'º' : 'Não informado'}</span></div>
+                `;
+                break;
+            case 'professor':
+                roleIcon = '👨‍🏫';
+                roleColor = '#f59e0b';
+                roleBg = '#fef3c7';
+                gradienteFundo = 'linear-gradient(135deg, #fffbeb 0%, #fefce8 100%)';
+                infoAdicional = `<div class="info-item"><span class="label">📚 Eixo:</span><span class="value">${usuario.eixo || 'Não informado'}</span></div>`;
+                break;
+            case 'admin':
+            case 'super_admin':
+                roleIcon = '👑';
+                roleColor = '#8b5cf6';
+                roleBg = '#ede9fe';
+                gradienteFundo = 'linear-gradient(135deg, #f5f3ff 0%, #f3e8ff 100%)';
+                break;
+            default:
+                roleIcon = '👤';
+                roleColor = '#6b7280';
+                roleBg = '#f3f4f6';
+                gradienteFundo = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+        }
+        
+        return `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+                <title>Cartão QR Code - ${nome}</title>
+                <style>
+                    @media print {
+                        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        .no-print { display: none; }
+                        .cartao { page-break-inside: avoid; break-inside: avoid; }
+                    }
+                    
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    
+                    body {
+                        background: #f1f5f9;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        min-height: 100vh;
+                        padding: 20px;
+                        font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                    }
+                    
+                    .cartao-container {
+                        width: ${larguraPX}px;
+                        height: ${alturaPX}px;
+                        margin: 0 auto;
+                    }
+                    
+                    .cartao {
+                        width: 100%;
+                        height: 100%;
+                        background: ${gradienteFundo};
+                        border-radius: 16px;
+                        box-shadow: 0 20px 35px -10px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+                        overflow: hidden;
+                        display: flex;
+                        flex-direction: row;
+                        transition: transform 0.3s;
+                    }
+                    
+                    .cartao:hover { transform: translateY(-3px); }
+                    
+                    /* Lado esquerdo - Informações do usuário */
+                    .cartao-info {
+                        flex: 2;
+                        padding: 14px 18px;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                        position: relative;
+                        z-index: 1;
+                    }
+                    
+                    /* Lado direito - QR Code */
+                    .cartao-qrcode {
+                        flex: 1;
+                        background: rgba(255,255,255,0.9);
+                        backdrop-filter: blur(2px);
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 12px;
+                        border-left: 2px solid ${roleColor}20;
+                        position: relative;
+                        z-index: 1;
+                    }
+                    
+                    /* Header com logo */
+                    .header-logo {
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        margin-bottom: 8px;
+                        padding-bottom: 6px;
+                        border-bottom: 2px solid ${roleColor}30;
+                    }
+                    
+                    .logo-sistema-container {
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    
+                    /* Quadrado azul com a logo */
+                    .logo-quadrado {
+                        width: 32px;
+                        height: 32px;
+                        background: linear-gradient(135deg, #1e3a8a, #1e40af);
+                        border-radius: 8px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+                    }
+                    
+                    .logo-quadrado img {
+                        width: 20px;
+                        height: 20px;
+                        object-fit: contain;
+                    }
+                    
+                    .sistema-nome {
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #1e3a8a;
+                        letter-spacing: 0.5px;
+                    }
+                    
+                    .sistema-nome small {
+                        font-size: 8px;
+                        font-weight: 400;
+                        color: #6b7280;
+                    }
+                    
+                    .instituicao-badge {
+                        text-align: right;
+                    }
+                    
+                    .instituicao-nome {
+                        font-size: 8px;
+                        color: #6b7280;
+                        font-weight: 500;
+                    }
+                    
+                    .titulo-cartao {
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: ${roleColor};
+                        text-transform: uppercase;
+                        letter-spacing: 1.5px;
+                        margin: 4px 0;
+                    }
+                    
+                    /* Nome do usuário - destaque */
+                    .nome-usuario {
+                        font-size: 15px;
+                        font-weight: 800;
+                        color: #1f2937;
+                        margin: 6px 0 4px;
+                        line-height: 1.2;
+                        background: linear-gradient(135deg, #1f2937, ${roleColor});
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        background-clip: text;
+                    }
+                    
+                    /* Informações em grid */
+                    .info-grid {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 5px;
+                        margin: 6px 0;
+                        background: rgba(255,255,255,0.7);
+                        padding: 8px;
+                        border-radius: 10px;
+                    }
+                    
+                    .info-item {
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        font-size: 9px;
+                    }
+                    
+                    .info-item .label {
+                        font-weight: 700;
+                        color: #4b5563;
+                        min-width: 62px;
+                    }
+                    
+                    .info-item .value {
+                        color: #1f2937;
+                        font-weight: 500;
+                    }
+                    
+                    /* Badge de perfil */
+                    .role-badge {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 5px;
+                        background: ${roleBg};
+                        color: ${roleColor};
+                        padding: 4px 10px;
+                        border-radius: 30px;
+                        font-size: 9px;
+                        font-weight: 700;
+                        margin-top: 4px;
+                        width: fit-content;
+                    }
+                    
+                    /* QR Code */
+                    .qrcode-wrapper {
+                        background: white;
+                        padding: 8px;
+                        border-radius: 14px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                    }
+                    
+                    .qrcode-wrapper img {
+                        width: 100%;
+                        height: auto;
+                        max-width: 100px;
+                        display: block;
+                        margin: 0 auto;
+                    }
+                    
+                    .qrcode-label {
+                        font-size: 7px;
+                        color: #9ca3af;
+                        text-align: center;
+                        margin-top: 6px;
+                        font-weight: 500;
+                    }
+                    
+                    /* Footer */
+                    .cartao-footer {
+                        margin-top: 6px;
+                        font-size: 6px;
+                        color: #9ca3af;
+                        border-top: 1px solid #e5e7eb;
+                        padding-top: 5px;
+                        display: flex;
+                        justify-content: space-between;
+                    }
+                    
+                    /* Acessibilidade */
+                    .acessibilidade-badge {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 3px;
+                        background: #dbeafe;
+                        color: #1e40af;
+                        padding: 2px 8px;
+                        border-radius: 20px;
+                        font-size: 7px;
+                        font-weight: 600;
+                        margin-left: 8px;
+                    }
+                    
+                    .btn-print {
+                        display: block;
+                        width: ${larguraPX}px;
+                        margin: 20px auto 0;
+                        padding: 10px;
+                        background: ${roleColor};
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    }
+                    
+                    .btn-print:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+                    
+                    @media print {
+                        body { padding: 0; background: white; }
+                        .btn-print { display: none; }
+                        .cartao { box-shadow: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div>
+                    <div class="cartao-container">
+                        <div class="cartao">
+                            <!-- Lado esquerdo: Informações -->
+                            <div class="cartao-info">
+                                <!-- Header com logo no quadrado azul -->
+                                <div class="header-logo">
+                                    <div class="logo-sistema-container">
+                                        <!-- Quadrado azul com sua logo -->
+                                        <div class="logo-quadrado">
+                                            <img src="/icons/favicon.ico" alt="Logo" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'%3E%3Ctext x=\\'50\\' y=\\'55\\' text-anchor=\\'middle\\' font-size=\\'40\\' fill=\\'white\\'%3E📚%3C/text%3E%3C/svg%3E'">
+                                        </div>
+                                        <div class="sistema-nome">
+                                            SISTEMA DE PROVAS<br>
+                                            <small>2026</small>
+                                        </div>
+                                    </div>
+                                    <div class="instituicao-badge">
+                                        <div class="instituicao-nome">IEMA PLENO</div>
+                                        <div class="instituicao-nome" style="font-size: 7px;">SÃO LUÍS - CENTRO</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="titulo-cartao">CARTÃO DE IDENTIFICAÇÃO</div>
+                                
+                                <div class="nome-usuario">
+                                    ${this.escapeHtml(nome)}
+                                    ${usuario.precisaAcessibilidade ? '<span class="acessibilidade-badge"><i class="fas fa-wheelchair"></i> Acessível</span>' : ''}
+                                </div>
+                                
+                                <div class="info-grid">
+                                    <div class="info-item"><span class="label">📌 MATRÍCULA:</span><span class="value">${matricula}</span></div>
+                                    <div class="info-item"><span class="label">📧 E-MAIL:</span><span class="value">${email.length > 22 ? email.substring(0, 20) + '..' : email}</span></div>
+                                    ${turma ? `<div class="info-item"><span class="label">🏫 TURMA:</span><span class="value">${turma}</span></div>` : ''}
+                                    ${infoAdicional}
+                                    <div class="info-item"><span class="label">📅 EMISSÃO:</span><span class="value">${dataEmissao}</span></div>
+                                </div>
+                                
+                                <div>
+                                    <span class="role-badge">${roleIcon} ${this.getRoleLabelQR(role)}</span>
+                                </div>
+                                
+                                ${configFinal.mostrarRodape ? `
+                                    <div class="cartao-footer">
+                                        <span>✓ Válido para acesso ao sistema</span>
+                                        <span>🔒 Documento digital</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            
+                            <!-- Lado direito: QR Code -->
+                            <div class="cartao-qrcode">
+                                <div class="qrcode-wrapper">
+                                    <img src="${usuario.qrCodeDataUrl}" alt="QR Code de ${nome}">
+                                </div>
+                                <div class="qrcode-label">Escaneie para acesso rápido ao sistema</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn-print no-print" onclick="window.print()">
+                        <i class="fas fa-print"></i> Imprimir Cartão
+                    </button>
+                </div>
+            </body>
+            </html>
+        `;
+    }
+
+    // ============ ABRIR CONFIGURAÇÃO DO CARTÃO ============
+    abrirConfigCartao() {
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 20px;">
+                <h3 style="margin: 0 0 15px;">Configurações do Cartão</h3>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px;">Tamanho do Cartão</label>
+                    <select id="configTamanhoCartao" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px;">
+                        <option value="credito" ${this.configCartao.tamanho === 'credito' ? 'selected' : ''}>💳 Cartão de Crédito (85x54mm)</option>
+                        <option value="padrao" ${this.configCartao.tamanho === 'padrao' ? 'selected' : ''}>📇 Padrão (105x74mm)</option>
+                        <option value="personalizado" ${this.configCartao.tamanho === 'personalizado' ? 'selected' : ''}>⚙️ Personalizado</option>
+                    </select>
+                </div>
+                
+                <div id="configPersonalizado" style="display: ${this.configCartao.tamanho === 'personalizado' ? 'block' : 'none'}; margin-bottom: 15px;">
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label style="display: block; margin-bottom: 5px;">Largura (mm)</label>
+                            <input type="number" id="configLargura" class="form-control" value="${this.configCartao.largura || 85}" min="50" max="150" style="width: 100%; padding: 10px; border-radius: 8px;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="display: block; margin-bottom: 5px;">Altura (mm)</label>
+                            <input type="number" id="configAltura" class="form-control" value="${this.configCartao.altura || 54}" min="30" max="100" style="width: 100%; padding: 10px; border-radius: 8px;">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="checkbox-group" style="margin-bottom: 10px;">
+                    <input type="checkbox" id="configMostrarLogo" ${this.configCartao.mostrarLogo !== false ? 'checked' : ''}>
+                    <label>Mostrar logo do IEMA no cartão</label>
+                </div>
+                
+                <div class="checkbox-group" style="margin-bottom: 15px;">
+                    <input type="checkbox" id="configMostrarRodape" ${this.configCartao.mostrarRodape !== false ? 'checked' : ''}>
+                    <label>Mostrar rodapé com informações do sistema</label>
+                </div>
+                
+                <div style="background: #f0fdf4; padding: 12px; border-radius: 8px; margin-top: 15px;">
+                    <i class="fas fa-info-circle"></i>
+                    <span style="margin-left: 8px;">Os cartões são gerados no formato horizontal (paisagem) e se ajustam automaticamente ao tamanho selecionado.</span>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button onclick="admin.closeModal()" class="btn-secondary" style="flex: 1; padding: 10px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                    <button onclick="admin.salvarConfigCartao()" class="btn-primary" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">Salvar Configurações</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-cog"></i> Configurações do Cartão';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.openModal();
+        
+        // Evento para mostrar/ocultar campos personalizados
+        const tamanhoSelect = document.getElementById('configTamanhoCartao');
+        if (tamanhoSelect) {
+            tamanhoSelect.addEventListener('change', function() {
+                const div = document.getElementById('configPersonalizado');
+                div.style.display = this.value === 'personalizado' ? 'block' : 'none';
+            });
+        }
+    }
+
+    // ============ SALVAR CONFIGURAÇÃO DO CARTÃO ============
+    salvarConfigCartao() {
+        const tamanho = document.getElementById('configTamanhoCartao')?.value;
+        this.configCartao.tamanho = tamanho;
+        
+        if (tamanho === 'personalizado') {
+            this.configCartao.largura = parseInt(document.getElementById('configLargura')?.value) || 85;
+            this.configCartao.altura = parseInt(document.getElementById('configAltura')?.value) || 54;
+        }
+        
+        this.configCartao.mostrarLogo = document.getElementById('configMostrarLogo')?.checked !== false;
+        this.configCartao.mostrarRodape = document.getElementById('configMostrarRodape')?.checked !== false;
+        
+        localStorage.setItem('configCartao', JSON.stringify(this.configCartao));
+        
+        this.showToast('✅ Configurações salvas!', 'success');
+        this.closeModal();
+    }
+
+    // ============ BAIXAR QR CODE EM CARTÃO HORIZONTAL (INDIVIDUAL) ============
+    async baixarQRCodeCartao(usuarioId) {
+        try {
+            const usuario = this.qrCodesUsuarios.find(u => u._id === usuarioId) || 
+                            this.qrCodesFiltrados.find(u => u._id === usuarioId);
+            
+            if (!usuario || !usuario.qrCodeDataUrl) {
+                this.showToast('❌ QR Code não encontrado', 'error');
+                return;
+            }
+            
+            this.showToast('🖨️ Gerando cartão horizontal para impressão...', 'info');
+            
+            let usuarioCompleto = usuario;
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success && data.user) {
+                    usuarioCompleto = { ...usuarioCompleto, ...data.user };
+                }
+            } catch (e) {}
+            
+            const cartaoHtml = this.gerarCartaoHorizontal(usuarioCompleto, this.configCartao);
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(cartaoHtml);
+            printWindow.document.close();
+            
+            printWindow.onload = function() {
+                setTimeout(() => {
+                    printWindow.print();
+                    printWindow.onafterprint = function() {
+                        printWindow.close();
+                    };
+                }, 500);
+            };
+            
+            this.showToast(`✅ Cartão de ${usuario.nome} gerado!`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ BAIXAR CARTÕES POR TURMA ============
+    async baixarCartoesPorTurma(turma) {
+        const alunosDaTurma = this.qrCodesFiltrados.filter(u => u.turma === turma && u.role === 'aluno');
+        
+        if (alunosDaTurma.length === 0) {
+            this.showToast(`❌ Nenhum aluno encontrado na turma ${turma}`, 'error');
             return;
         }
         
-        document.getElementById('statTotalBackups').textContent = this.backups.length;
+        this.showToast(`🖨️ Gerando ${alunosDaTurma.length} cartões para a turma ${turma}...`, 'info');
         
-        // Calcular espaço total
-        let espacoTotal = 0;
-        this.backups.forEach(backup => {
-            const tamanho = parseFloat(backup.tamanho);
-            if (!isNaN(tamanho)) espacoTotal += tamanho;
-        });
-        document.getElementById('statEspacoTotal').textContent = espacoTotal.toFixed(2) + ' MB';
+        let htmlCompleto = '';
         
-        // Último backup
-        const ultimo = new Date(this.backups[0].data);
-        document.getElementById('statUltimoBackup').textContent = 
-            ultimo.toLocaleDateString('pt-BR');
+        for (let i = 0; i < alunosDaTurma.length; i++) {
+            const aluno = alunosDaTurma[i];
+            const cartaoHtml = this.gerarCartaoHorizontal(aluno, this.configCartao);
+            htmlCompleto += cartaoHtml;
+            
+            if (i < alunosDaTurma.length - 1) {
+                htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
+            }
+        }
         
-        // Backups da semana
-        const umaSemana = new Date();
-        umaSemana.setDate(umaSemana.getDate() - 7);
-        const backupsSemana = this.backups.filter(b => new Date(b.data) > umaSemana).length;
-        document.getElementById('statBackupsSemana').textContent = backupsSemana;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(htmlCompleto);
+        printWindow.document.close();
+        
+        printWindow.onload = function() {
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.onafterprint = function() {
+                    printWindow.close();
+                };
+            }, 500);
+        };
+        
+        this.showToast(`✅ ${alunosDaTurma.length} cartões gerados para ${turma}!`, 'success');
     }
 
-    mostrarErroBackup(mensagem) {
-        const tbody = document.getElementById('tabelaBackupsBody');
-        if (tbody) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" style="text-align: center; padding: 60px;">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px;"></i>
-                        <h3 style="color: #7f1d1d; margin-bottom: 5px;">Erro ao carregar backups</h3>
-                        <p style="color: #6b7280;">${mensagem}</p>
-                        <button onclick="admin.carregarBackups()" style="
-                            margin-top: 15px;
-                            padding: 8px 20px;
-                            background: #10b981;
-                            color: white;
-                            border: none;
-                            border-radius: 8px;
-                            cursor: pointer;
-                        ">
-                            <i class="fas fa-sync-alt"></i> Tentar novamente
-                        </button>
-                    </td>
-                </tr>
-            `;
+    // ============ ABRIR MENU DE DOWNLOAD POR TURMAS ============
+    abrirMenuDownloadTurmas() {
+        const turmas = [...new Set(this.qrCodesFiltrados.map(u => u.turma).filter(t => t))];
+        
+        if (turmas.length === 0) {
+            this.showToast('❌ Nenhuma turma encontrada', 'error');
+            return;
+        }
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 20px;">
+                <h3 style="margin: 0 0 15px;">📚 Selecionar Turma para Impressão</h3>
+                <p style="color: #6b7280; margin-bottom: 15px;">Selecione uma turma para gerar os cartões horizontais de todos os alunos:</p>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px;">Turma</label>
+                    <select id="selectTurmaCartao" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px;">
+                        <option value="">Selecione uma turma...</option>
+                        ${turmas.map(t => `<option value="${t}">${t} (${this.qrCodesFiltrados.filter(u => u.turma === t && u.role === 'aluno').length} alunos)</option>`).join('')}
+                    </select>
+                </div>
+                
+                <div class="info-box" style="background: #f0fdf4; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                    <i class="fas fa-info-circle"></i>
+                    <span style="margin-left: 8px;">Os cartões serão gerados no formato horizontal (paisagem) e cada um em uma página separada para impressão.</span>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="admin.closeModal()" class="btn-secondary" style="flex: 1; padding: 10px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                    <button onclick="admin.gerarCartoesPorTurmaSelecionada()" class="btn-primary" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">Gerar Cartões</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-school"></i> Imprimir Cartões por Turma';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.openModal();
+    }
+
+    async gerarCartoesPorTurmaSelecionada() {
+        const turma = document.getElementById('selectTurmaCartao')?.value;
+        
+        if (!turma) {
+            this.showToast('❌ Selecione uma turma', 'error');
+            return;
+        }
+        
+        this.closeModal();
+        await this.baixarCartoesPorTurma(turma);
+    }
+
+    // ============ BAIXAR TODOS OS QR CODES EM CARTÃO ============
+    async baixarTodosQRCodesCartao() {
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum QR Code para exportar', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🖨️ Imprimir Todos os Cartões',
+            `Deseja gerar <strong>${this.qrCodesFiltrados.length}</strong> cartões horizontais?<br><br>
+            Cada cartão será impresso em uma página separada.`
+        );
+        
+        if (!confirmar) return;
+        
+        this.showToast(`🖨️ Gerando ${this.qrCodesFiltrados.length} cartões...`, 'info');
+        
+        let htmlCompleto = '';
+        
+        for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
+            const usuario = this.qrCodesFiltrados[i];
+            const cartaoHtml = this.gerarCartaoHorizontal(usuario, this.configCartao);
+            htmlCompleto += cartaoHtml;
+            
+            if (i < this.qrCodesFiltrados.length - 1) {
+                htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
+            }
+        }
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(htmlCompleto);
+        printWindow.document.close();
+        
+        printWindow.onload = function() {
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.onafterprint = function() {
+                    printWindow.close();
+                };
+            }, 500);
+        };
+        
+        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões gerados!`, 'success');
+    }
+
+    // ============ BAIXAR APENAS OS FILTRADOS ============
+    async baixarFiltradosCartao() {
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum resultado nos filtros atuais', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🖨️ Imprimir Filtrados',
+            `Deseja gerar <strong>${this.qrCodesFiltrados.length}</strong> cartões com os filtros atuais?`
+        );
+        
+        if (!confirmar) return;
+        
+        this.showToast(`🖨️ Gerando ${this.qrCodesFiltrados.length} cartões...`, 'info');
+        
+        let htmlCompleto = '';
+        
+        for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
+            const usuario = this.qrCodesFiltrados[i];
+            const cartaoHtml = this.gerarCartaoHorizontal(usuario, this.configCartao);
+            htmlCompleto += cartaoHtml;
+            
+            if (i < this.qrCodesFiltrados.length - 1) {
+                htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
+            }
+        }
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(htmlCompleto);
+        printWindow.document.close();
+        
+        printWindow.onload = function() {
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.onafterprint = function() {
+                    printWindow.close();
+                };
+            }, 500);
+        };
+        
+        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões gerados!`, 'success');
+    }
+
+    // ============ MÉTODOS AUXILIARES ============
+    calcularEstatisticasQR() {
+        let alunos = 0, professores = 0, admins = 0, outros = 0;
+        this.qrCodesUsuarios.forEach(u => {
+            if (u.role === 'aluno') alunos++;
+            else if (u.role === 'professor') professores++;
+            else if (u.role === 'admin' || u.role === 'super_admin') admins++;
+            else outros++;
+        });
+        return { alunos, professores, admins, outros };
+    }
+
+    getRoleLabelQR(role) {
+        const labels = {
+            'aluno': 'Aluno',
+            'professor': 'Professor',
+            'admin': 'Admin',
+            'super_admin': 'Super Admin',
+            'setor_pedagogico': 'Setor Pedagógico',
+            'coordenacao_patio': 'Coord. Pátio',
+            'cozinha': 'Cozinha',
+            'gestao_geral': 'Gestão Geral',
+            'enfermaria': 'Enfermaria'
+        };
+        return labels[role] || role;
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ============ FILTROS ============
+    aplicarFiltrosQR() {
+        const search = document.getElementById('buscaQR')?.value.toLowerCase() || '';
+        const role = document.getElementById('filtroRoleQR')?.value || 'todos';
+        const turma = document.getElementById('filtroTurmaQR')?.value || 'todas';
+        const status = document.getElementById('filtroStatusQR')?.value || 'todos';
+        const acessibilidade = document.getElementById('filtroAcessibilidadeQR')?.value || 'todos';
+        
+        this.qrCodesFiltrados = this.qrCodesUsuarios.filter(usuario => {
+            const matchSearch = search === '' || 
+                usuario.nome.toLowerCase().includes(search) ||
+                (usuario.email && usuario.email.toLowerCase().includes(search)) ||
+                (usuario.matricula && usuario.matricula.toLowerCase().includes(search));
+            
+            const matchRole = role === 'todos' || usuario.role === role;
+            const matchTurma = turma === 'todas' || usuario.turma === turma;
+            const matchStatus = status === 'todos' || (status === 'ativo' && usuario.ativo === true) || (status === 'inativo' && usuario.ativo === false);
+            const matchAcessibilidade = acessibilidade === 'todos' || (acessibilidade === 'sim' && usuario.precisaAcessibilidade === true) || (acessibilidade === 'nao' && usuario.precisaAcessibilidade !== true);
+            
+            return matchSearch && matchRole && matchTurma && matchStatus && matchAcessibilidade;
+        });
+        
+        this.paginaAtualQR = 1;
+        this.renderizarQRCodeManagement();
+        
+        const badge = document.getElementById('resultadosBadgeQR');
+        if (badge) badge.textContent = `${this.qrCodesFiltrados.length} resultados`;
+    }
+
+    filtrarQRPorRole(role) {
+        const select = document.getElementById('filtroRoleQR');
+        if (select) select.value = role;
+        this.aplicarFiltrosQR();
+    }
+
+    filtrarQRPorTurma() {
+        this.aplicarFiltrosQR();
+    }
+
+    filtrarQRPorStatus() {
+        this.aplicarFiltrosQR();
+    }
+
+    filtrarQRPorAcessibilidade() {
+        this.aplicarFiltrosQR();
+    }
+
+    limparBuscaQR() {
+        const searchInput = document.getElementById('buscaQR');
+        if (searchInput) searchInput.value = '';
+        this.aplicarFiltrosQR();
+    }
+
+    limparFiltrosQR() {
+        const selects = ['filtroRoleQR', 'filtroTurmaQR', 'filtroStatusQR', 'filtroAcessibilidadeQR'];
+        selects.forEach(id => {
+            const select = document.getElementById(id);
+            if (select) select.value = 'todos';
+        });
+        const busca = document.getElementById('buscaQR');
+        if (busca) busca.value = '';
+        this.qrCodesFiltrados = [...this.qrCodesUsuarios];
+        this.paginaAtualQR = 1;
+        this.renderizarQRCodeManagement();
+    }
+
+    ordenarQRCodes() {
+        const ordenacao = document.getElementById('ordenacaoQR')?.value || 'nome_asc';
+        this.qrCodesFiltrados.sort((a, b) => {
+            switch(ordenacao) {
+                case 'nome_asc': return a.nome.localeCompare(b.nome);
+                case 'nome_desc': return b.nome.localeCompare(a.nome);
+                case 'role_asc': return (a.role || '').localeCompare(b.role || '');
+                case 'turma_asc': return (a.turma || '').localeCompare(b.turma || '');
+                case 'data_desc':
+                    const dataA = a.qrCodeGeradoEm ? new Date(a.qrCodeGeradoEm) : new Date(0);
+                    const dataB = b.qrCodeGeradoEm ? new Date(b.qrCodeGeradoEm) : new Date(0);
+                    return dataB - dataA;
+                default: return 0;
+            }
+        });
+        this.paginaAtualQR = 1;
+        this.renderizarQRCodeManagement();
+    }
+
+    mudarViewQR(view) {
+        this.viewAtualQR = view;
+        const grid = document.getElementById('qrContentGrid');
+        const list = document.getElementById('qrContentList');
+        const compact = document.getElementById('qrContentCompact');
+        const btns = document.querySelectorAll('.view-btn');
+        
+        btns.forEach(btn => btn.classList.remove('active'));
+        
+        if (view === 'grid') {
+            if (grid) grid.style.display = 'grid';
+            if (list) list.style.display = 'none';
+            if (compact) compact.style.display = 'none';
+            btns[0]?.classList.add('active');
+        } else if (view === 'list') {
+            if (grid) grid.style.display = 'none';
+            if (list) list.style.display = 'block';
+            if (compact) compact.style.display = 'none';
+            btns[1]?.classList.add('active');
+        } else {
+            if (grid) grid.style.display = 'none';
+            if (list) list.style.display = 'none';
+            if (compact) compact.style.display = 'block';
+            btns[2]?.classList.add('active');
         }
     }
 
+    // ============ PAGINAÇÃO ============
+    atualizarPaginacaoQR() {
+        const total = this.qrCodesFiltrados.length;
+        const totalPaginas = Math.ceil(total / this.itensPorPaginaQR);
+        const btnAnterior = document.getElementById('btnAnteriorQR');
+        const btnProxima = document.getElementById('btnProximaQR');
+        const pageInfo = document.getElementById('pageInfoQR');
+        
+        if (btnAnterior) btnAnterior.disabled = this.paginaAtualQR === 1;
+        if (btnProxima) btnProxima.disabled = this.paginaAtualQR === totalPaginas;
+        if (pageInfo) pageInfo.textContent = `Página ${this.paginaAtualQR} de ${totalPaginas || 1}`;
+    }
+
+    paginaAnteriorQR() {
+        if (this.paginaAtualQR > 1) {
+            this.paginaAtualQR--;
+            this.renderizarQRCodeManagement();
+        }
+    }
+
+    proximaPaginaQR() {
+        const totalPaginas = Math.ceil(this.qrCodesFiltrados.length / this.itensPorPaginaQR);
+        if (this.paginaAtualQR < totalPaginas) {
+            this.paginaAtualQR++;
+            this.renderizarQRCodeManagement();
+        }
+    }
+
+    // ============ RENDERIZAR TABELA ============
+    renderizarQRCodeManagement() {
+        const inicio = (this.paginaAtualQR - 1) * this.itensPorPaginaQR;
+        const fim = inicio + this.itensPorPaginaQR;
+        const paginaItens = this.qrCodesFiltrados.slice(inicio, fim);
+        
+        const gridContainer = document.getElementById('qrContentGrid');
+        if (gridContainer) {
+            if (paginaItens.length === 0) {
+                gridContainer.innerHTML = `<div class="loading-grid"><i class="fas fa-qrcode"></i><span>Nenhum QR Code encontrado</span></div>`;
+            } else {
+                let gridHtml = '';
+                paginaItens.forEach(usuario => {
+                    const roleClass = usuario.role === 'aluno' ? 'badge-aluno' : (usuario.role === 'professor' ? 'badge-professor' : 'badge-admin');
+                    gridHtml += `
+                        <div class="qrcode-card">
+                            <div class="card-badge ${roleClass}">${this.getRoleLabelQR(usuario.role)}</div>
+                            <div class="qrcode-preview"><img src="${usuario.qrCodeDataUrl}" alt="QR Code"></div>
+                            <div class="qrcode-info">
+                                <div class="usuario-nome">${this.escapeHtml(usuario.nome)}</div>
+                                <div class="usuario-detalhes"><i class="fas fa-envelope"></i> ${usuario.email || 'Sem email'}</div>
+                                <div class="usuario-detalhes"><i class="fas fa-id-card"></i> ${usuario.matricula || 'Sem matrícula'}</div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="card-action-btn btn-view-qr" onclick="admin.visualizarQRCodeModal('${usuario._id}')"><i class="fas fa-eye"></i> Ver</button>
+                                <button class="card-action-btn btn-download-qr" onclick="admin.baixarQRCodeUsuario('${usuario._id}')"><i class="fas fa-download"></i> QR</button>
+                                <button class="card-action-btn btn-cartao-qr" onclick="admin.baixarQRCodeCartao('${usuario._id}')"><i class="fas fa-id-card"></i> Cartão</button>
+                                <button class="card-action-btn btn-delete-qr" onclick="admin.excluirQRCodeUsuario('${usuario._id}', '${this.escapeHtml(usuario.nome)}')"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    `;
+                });
+                gridContainer.innerHTML = gridHtml;
+            }
+        }
+        
+        this.atualizarPaginacaoQR();
+    }
+
+    // ============ OUTRAS FUNÇÕES ============
+    async gerarQRCodesPendentes() {
+        if (this.usuariosSemQR.length === 0) {
+            this.showToast('ℹ️ Todos os usuários já possuem QR Code', 'info');
+            return;
+        }
+        
+        const confirmar = await this.confirmar('Gerar QR Codes Pendentes', `Deseja gerar QR Codes para <strong>${this.usuariosSemQR.length}</strong> usuário(s)?`);
+        if (!confirmar) return;
+        
+        this.showToast(`🔄 Gerando QR Codes para ${this.usuariosSemQR.length} usuários...`, 'info');
+        
+        let sucessos = 0;
+        for (const usuario of this.usuariosSemQR) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${usuario._id}/regenerar-qrcode`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    this.qrCodesUsuarios.push({
+                        _id: usuario._id, nome: usuario.nome, email: usuario.email, role: usuario.role,
+                        matricula: usuario.matricula, turma: usuario.turma, qrCodeDataUrl: data.qrCode,
+                        qrCodeGeradoEm: new Date().toISOString(), ativo: usuario.ativo
+                    });
+                    sucessos++;
+                }
+            } catch (error) { console.error(error); }
+        }
+        
+        this.usuariosSemQR = this.usuariosSemQR.filter(u => !this.qrCodesUsuarios.some(q => q._id === u._id));
+        this.qrCodesFiltrados = [...this.qrCodesUsuarios];
+        this.renderizarQRCodeManagement();
+        this.showToast(`✅ ${sucessos} QR Codes gerados!`, 'success');
+    }
+
+    baixarQRCodeUsuario(usuarioId) {
+        const usuario = this.qrCodesUsuarios.find(u => u._id === usuarioId);
+        if (!usuario) { this.showToast('❌ QR Code não encontrado', 'error'); return; }
+        const link = document.createElement('a');
+        link.download = `qrcode-${usuario.nome.replace(/\s/g, '_')}.png`;
+        link.href = usuario.qrCodeDataUrl;
+        link.click();
+        this.showToast(`✅ QR Code de ${usuario.nome} baixado!`, 'success');
+    }
+
+    async excluirQRCodeUsuario(usuarioId, usuarioNome) {
+        const confirmar = await this.confirmar('Excluir QR Code', `Tem certeza que deseja excluir o QR Code de <strong>${usuarioNome}</strong>?`);
+        if (!confirmar) return;
+        try {
+            const token = localStorage.getItem('auth_token');
+            await fetch(`/api/admin/usuarios/${usuarioId}/qrcode`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+            const index = this.qrCodesUsuarios.findIndex(u => u._id === usuarioId);
+            if (index !== -1) this.qrCodesUsuarios.splice(index, 1);
+            this.qrCodesFiltrados = [...this.qrCodesUsuarios];
+            this.renderizarQRCodeManagement();
+            this.showToast(`✅ QR Code de ${usuarioNome} excluído!`, 'success');
+        } catch (error) { this.showToast('❌ ' + error.message, 'error'); }
+    }
+
+    async visualizarQRCodeModal(usuarioId) {
+        const usuario = this.qrCodesUsuarios.find(u => u._id === usuarioId);
+        if (!usuario) { this.showToast('❌ Usuário não encontrado', 'error'); return; }
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <div style="width: 200px; margin: 0 auto;"><img src="${usuario.qrCodeDataUrl}" style="width: 100%;"></div>
+                <h3>${this.escapeHtml(usuario.nome)}</h3>
+                <p>${usuario.email || 'Sem email'} • ${usuario.matricula || 'Sem matrícula'}</p>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button onclick="admin.baixarQRCodeUsuario('${usuario._id}')" class="btn-primary">Baixar QR</button>
+                    <button onclick="admin.baixarQRCodeCartao('${usuario._id}')" class="btn-primary">Baixar Cartão</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-qrcode"></i> QR Code';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.openModal();
+    }
+
+    async atualizarQRCodeManagement() {
+        const btn = document.querySelector('.qrcode-header .btn-refresh i');
+        if (btn) btn.className = 'fas fa-spinner fa-spin';
+        await this.loadQRCodeManagement();
+        if (btn) setTimeout(() => btn.className = 'fas fa-sync-alt', 500);
+    }
+
+    configurarEventosQRManagement() {
+        const busca = document.getElementById('buscaQR');
+        if (busca) {
+            let timeout;
+            busca.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => this.aplicarFiltrosQR(), 300);
+            });
+        }
+    }
+
+    renderQRCodeError(mensagem) {
+        return `<div style="text-align: center; padding: 60px;"><i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545;"></i><h2>Erro</h2><p>${mensagem}</p><button onclick="admin.loadQRCodeManagement()" class="btn-primary">Tentar novamente</button></div>`;
+    }
+
+    async confirmar(titulo, mensagem) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('confirmMessage').innerHTML = mensagem;
+            modal.style.display = 'flex';
+            document.getElementById('confirmBtn').onclick = () => { modal.style.display = 'none'; resolve(true); };
+            document.querySelectorAll('#confirmModal .modal-close, #confirmModal .btn-cancel').forEach(btn => {
+                btn.onclick = () => { modal.style.display = 'none'; resolve(false); };
+            });
+        });
+    }
+
+    showToast(mensagem, tipo) {
+        const toast = document.createElement('div');
+        toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; background: ${tipo === 'success' ? '#10b981' : '#ef4444'}; color: white; padding: 12px 20px; border-radius: 8px; z-index: 10000;`;
+        toast.innerHTML = mensagem;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    openModal() { document.getElementById('modal').style.display = 'flex'; }
+    closeModal() { document.getElementById('modal').style.display = 'none'; }
     // ============ FUNÇÕES DE BACKUP ============
 
     async criarBackup() {

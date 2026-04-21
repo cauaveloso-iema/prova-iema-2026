@@ -42,6 +42,9 @@
     <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/editar-perfil.css">
 
+    <!-- Biblioteca html2canvas para converter cartão em imagem -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 </head>
 <body>
     <div class="perfil-container">
@@ -302,8 +305,11 @@
                             <i class="fas fa-info-circle"></i> Este QR Code é único e identifica você no sistema.
                         </p>
                         <p id="qrCodeInfo" style="color: #6b7280; font-size: 0.85rem;"></p>
-                        <button onclick="baixarQRCode()" class="btn-salvar" style="margin-top: 15px; width: auto; padding: 10px 20px;">
-                            <i class="fas fa-download"></i> Baixar QR Code
+                        <button onclick="baixarCartaoCompleto()" class="btn-salvar" style="margin-top: 15px; width: auto; padding: 10px 20px;">
+                            <i class="fas fa-download"></i> Baixar Cartão Completo (Imprimir)
+                        </button>
+                        <button onclick="baixarQRCode()" class="btn-salvar" style="margin-top: 15px; width: auto; padding: 10px 20px; background: #6b7280;">
+                            <i class="fas fa-qrcode"></i> Apenas QR Code
                         </button>
                     </div>
                 </div>
@@ -324,6 +330,23 @@
     
     <input type="file" id="inputFoto" accept="image/*" style="display: none;" onchange="uploadFotoPerfil(this.files[0])">
     
+    <!-- CARTÃO PARA IMPRESSÃO (OCULTO) -->
+    <div id="cartaoParaImpressao" style="position: fixed; top: -9999px; left: -9999px; width: 400px; background: white; border-radius: 16px; font-family: 'Segoe UI', sans-serif; z-index: -1;">
+        <div style="padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px;">
+            <div style="text-align: center; margin-bottom: 20px; color: white;">
+                <h3 style="margin: 0; font-size: 18px; font-weight: 600;">CARTÃO DE IDENTIFICAÇÃO</h3>
+                <p style="margin: 5px 0 0; font-size: 12px; opacity: 0.9;">Sistema de Provas</p>
+            </div>
+            <div style="background: white; border-radius: 12px; padding: 20px; text-align: center;">
+                <div id="cartaoQRCode" style="display: flex; justify-content: center; margin-bottom: 20px;"></div>
+                <div id="cartaoInfo"></div>
+            </div>
+            <div style="text-align: center; margin-top: 15px; color: white; font-size: 10px; opacity: 0.8;">
+                Emitido em: <span id="cartaoDataEmissao"></span>
+            </div>
+        </div>
+    </div>
+    
     <script>
         // ============================================
         // VARIÁVEIS GLOBAIS
@@ -333,6 +356,7 @@
         let interessesList = [];
         let leitorAtivo = false;
         let synth = window.speechSynthesis;
+        let qrCodeImageData = ''; // Armazenar a imagem do QR Code
         
         // ============================================
         // CARREGAR DADOS DO PERFIL
@@ -658,8 +682,9 @@
         async function uploadFotoPerfil(file) {
             if (!file) return;
             
-            if (file.size > 2 * 1024 * 1024) {
-                mostrarAlerta('A imagem deve ter no máximo 2MB', 'error');
+            // ✅ VERIFICAÇÃO DO LIMITE DE 5MB
+            if (file.size > 5 * 1024 * 1024) {
+                mostrarAlerta('A imagem deve ter no máximo 5MB', 'error');
                 return;
             }
             
@@ -905,6 +930,9 @@
                     const section = document.getElementById('qrCodeSection');
                     const info = document.getElementById('qrCodeInfo');
                     
+                    // Armazenar a imagem do QR Code para usar no cartão
+                    qrCodeImageData = data.qrCode;
+                    
                     if (container && section) {
                         container.innerHTML = `
                             <img src="${data.qrCode}" 
@@ -940,7 +968,7 @@
         }
         
         // ============================================
-        // BAIXAR QR CODE COMO IMAGEM
+        // BAIXAR QR CODE COMO IMAGEM (APENAS QR CODE)
         // ============================================
         function baixarQRCode() {
             const img = document.querySelector('#qrCodeContainer img');
@@ -964,6 +992,179 @@
             setTimeout(() => {
                 btn.innerHTML = originalText;
             }, 2000);
+        }
+        
+        // ============================================
+        // 🔥 NOVA FUNÇÃO: BAIXAR CARTÃO COMPLETO PARA IMPRESSÃO
+        // ============================================
+        async function baixarCartaoCompleto() {
+            try {
+                // Verificar se temos o QR Code
+                if (!qrCodeImageData) {
+                    mostrarAlerta('QR Code não disponível. Aguarde o carregamento.', 'error');
+                    return;
+                }
+                
+                mostrarAlerta('Gerando cartão para impressão...', 'info');
+                
+                // Obter dados atualizados do usuário
+                const userDataStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const token = localStorage.getItem('auth_token');
+                
+                // Buscar dados completos do perfil para ter todas as informações
+                const response = await fetch('/api/perfil/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                const perfil = data.perfil || userDataStorage;
+                
+                // Preparar o cartão
+                const cartao = document.getElementById('cartaoParaImpressao');
+                const cartaoQR = document.getElementById('cartaoQRCode');
+                const cartaoInfo = document.getElementById('cartaoInfo');
+                const dataEmissao = document.getElementById('cartaoDataEmissao');
+                
+                // Inserir QR Code no cartão
+                cartaoQR.innerHTML = `
+                    <img src="${qrCodeImageData}" 
+                         alt="QR Code" 
+                         style="width: 160px; height: 160px; border: 2px solid #e5e7eb; border-radius: 12px; padding: 8px; background: white;">
+                `;
+                
+                // Obter matrícula e outros dados específicos
+                let matricula = perfil.matricula || 'Não informada';
+                let curso = '';
+                let turma = '';
+                let periodo = '';
+                let eixo = '';
+                let departamento = '';
+                let titulacao = '';
+                
+                if (userRole === 'aluno') {
+                    curso = perfil.curso || document.getElementById('curso')?.value || 'Não informado';
+                    turma = perfil.turma || document.getElementById('turma')?.value || 'Não informada';
+                    periodo = perfil.periodo || document.getElementById('periodo')?.value || 'Não informado';
+                    const periodoTexto = periodo === '1' ? '1º Período' : periodo === '2' ? '2º Período' : periodo === '3' ? '3º Período' : periodo === '4' ? '4º Período' : periodo;
+                    
+                    cartaoInfo.innerHTML = `
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">👤 Nome:</span>
+                            <span class="info-value" style="color: #1f2937;">${perfil.nome || 'Não informado'}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🎓 Matrícula:</span>
+                            <span class="info-value" style="color: #1f2937;">${matricula}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">📚 Curso:</span>
+                            <span class="info-value" style="color: #1f2937;">${curso}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">👥 Turma:</span>
+                            <span class="info-value" style="color: #1f2937;">${turma}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">📅 Período:</span>
+                            <span class="info-value" style="color: #1f2937;">${periodoTexto}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🏷️ Tipo:</span>
+                            <span class="info-value" style="color: #1f2937;">
+                                <span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">👨‍🎓 ALUNO</span>
+                            </span>
+                        </div>
+                    `;
+                } else if (userRole === 'professor') {
+                    eixo = perfil.eixo || document.getElementById('eixo')?.value || 'Não informado';
+                    departamento = perfil.departamento || document.getElementById('departamento')?.value || 'Não informado';
+                    titulacao = perfil.titulacao || document.getElementById('titulacao')?.value || 'Não informada';
+                    
+                    const eixoTexto = eixo === 'natureza' ? '🔬 Natureza e Matemática' :
+                                    eixo === 'humanas' ? '🏛️ Humanas' :
+                                    eixo === 'linguagens' ? '🎭 Linguagens' :
+                                    eixo === 'desenvolvimento' ? '💻 Desenvolvimento de Sistemas' :
+                                    eixo === 'gestao' ? '📊 Gestão e Negócios' :
+                                    eixo === 'producao' ? '🎬 Produção Cultural e Design' :
+                                    eixo === 'turismo' ? '✈️ Turismo, Hospitalidade e Lazer' :
+                                    eixo === 'ambiente' ? '🌱 Ambiente e Saúde' : eixo;
+                    
+                    cartaoInfo.innerHTML = `
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">👤 Nome:</span>
+                            <span class="info-value" style="color: #1f2937;">${perfil.nome || 'Não informado'}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🎓 Matrícula:</span>
+                            <span class="info-value" style="color: #1f2937;">${matricula}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">📚 Eixo:</span>
+                            <span class="info-value" style="color: #1f2937;">${eixoTexto}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🏢 Departamento:</span>
+                            <span class="info-value" style="color: #1f2937;">${departamento}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🏷️ Tipo:</span>
+                            <span class="info-value" style="color: #1f2937;">
+                                <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">👨‍🏫 PROFESSOR</span>
+                            </span>
+                        </div>
+                    `;
+                } else {
+                    cartaoInfo.innerHTML = `
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">👤 Nome:</span>
+                            <span class="info-value" style="color: #1f2937;">${perfil.nome || 'Não informado'}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px;">
+                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🏷️ Tipo:</span>
+                            <span class="info-value" style="color: #1f2937;">
+                                <span style="background: #8b5cf6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">👨‍💼 ${userRole.toUpperCase()}</span>
+                            </span>
+                        </div>
+                    `;
+                }
+                
+                // Data de emissão
+                const hoje = new Date();
+                dataEmissao.textContent = hoje.toLocaleDateString('pt-BR') + ' às ' + hoje.toLocaleTimeString('pt-BR');
+                
+                // Mostrar cartão temporariamente para capturar
+                cartao.style.top = '0';
+                cartao.style.left = '0';
+                cartao.style.position = 'fixed';
+                cartao.style.zIndex = '9999';
+                
+                // Aguardar renderização
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Converter para imagem usando html2canvas
+                const canvas = await html2canvas(cartao, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    useCORS: true
+                });
+                
+                // Esconder cartão novamente
+                cartao.style.top = '-9999px';
+                cartao.style.left = '-9999px';
+                
+                // Baixar a imagem
+                const link = document.createElement('a');
+                const nomeArquivo = `cartao-${userRole}-${perfil.nome?.replace(/\s/g, '_') || 'usuario'}-${Date.now()}.png`;
+                link.download = nomeArquivo;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                
+                mostrarAlerta('Cartão gerado com sucesso! Verifique seus downloads.', 'success');
+                
+            } catch (error) {
+                console.error('Erro ao gerar cartão:', error);
+                mostrarAlerta('Erro ao gerar cartão. Tente novamente.', 'error');
+            }
         }
         
         // ============================================
