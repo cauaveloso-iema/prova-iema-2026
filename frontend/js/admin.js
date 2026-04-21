@@ -28853,10 +28853,9 @@ class AdminPanel {
         `;
     }
 
-    
     // ============================================================================
     // MÓDULO COMPLETO DE GERENCIAMENTO DE QR CODES - ADMIN
-    // COM CARTÃO HORIZONTAL E AJUSTÁVEL PARA IMPRESSÃO
+    // COM CARTÃO HORIZONTAL E MODAIS PARA PDF E ZIP
     // ============================================================================
 
     // ============ CARREGAR GERENCIAMENTO DE QR CODES ============
@@ -28921,14 +28920,14 @@ class AdminPanel {
             
             this.turmasDisponiveis = [...new Set(this.qrCodesUsuarios.map(u => u.turma).filter(t => t))];
             
-            // Configurações de impressão do cartão
             this.configCartao = {
-                tamanho: 'credito', // credito, padrao, personalizado
-                largura: 85, // mm
-                altura: 54, // mm
+                tamanho: 'credito',
+                largura: 85,
+                altura: 54,
                 escala: 1,
                 mostrarLogo: true,
-                mostrarRodape: true
+                mostrarRodape: true,
+                margem: 10
             };
             
             contentArea.innerHTML = this.renderQRCodeManagement();
@@ -28953,7 +28952,6 @@ class AdminPanel {
         
         return `
             <div class="qrcode-container">
-                <!-- HEADER PROFISSIONAL -->
                 <div class="qrcode-header">
                     <div class="header-left">
                         <div class="header-icon"><i class="fas fa-qrcode"></i></div>
@@ -28977,15 +28975,20 @@ class AdminPanel {
                             <i class="fas fa-print"></i> Imprimir Todos
                         </button>
                         <button class="btn-header" style="background: #3b82f6; color: white;" onclick="admin.baixarFiltradosCartao()">
-                            <i class="fas fa-filter"></i> Baixar Filtrados
+                            <i class="fas fa-filter"></i> Imprimir Filtrados
                         </button>
-                        <button class="btn-header" style="background: #ef4444; color: white;" onclick="admin.abrirConfigCartao()">
-                            <i class="fas fa-cog"></i> Configurar Cartão
+                        <button class="btn-header" style="background: #ef4444; color: white;" onclick="admin.abrirModalGerarPDF()">
+                            <i class="fas fa-file-pdf"></i> Gerar PDF
+                        </button>
+                        <button class="btn-header" style="background: #6b7280; color: white;" onclick="admin.abrirModalExportarZIP()">
+                            <i class="fas fa-archive"></i> Exportar ZIP
+                        </button>
+                        <button class="btn-header" style="background: #8b5cf6; color: white;" onclick="admin.abrirConfigCartao()">
+                            <i class="fas fa-cog"></i> Configurar
                         </button>
                     </div>
                 </div>
 
-                <!-- CARDS DE ESTATÍSTICAS -->
                 <div class="stats-grid">
                     <div class="stat-card primary" onclick="admin.filtrarQRPorRole('todos')">
                         <div class="stat-icon"><i class="fas fa-qrcode"></i></div>
@@ -29017,7 +29020,6 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- BARRA DE FILTROS AVANÇADA -->
                 <div class="filters-card">
                     <div class="filters-header">
                         <div class="filters-title"><i class="fas fa-sliders-h"></i><h3>Filtros Avançados</h3></div>
@@ -29093,19 +29095,16 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- VISUALIZAÇÃO -->
                 <div class="view-tabs">
                     <button class="view-btn ${this.viewAtualQR === 'grid' ? 'active' : ''}" onclick="admin.mudarViewQR('grid')"><i class="fas fa-th"></i> Cards</button>
                     <button class="view-btn ${this.viewAtualQR === 'list' ? 'active' : ''}" onclick="admin.mudarViewQR('list')"><i class="fas fa-list"></i> Lista</button>
                     <button class="view-btn ${this.viewAtualQR === 'compact' ? 'active' : ''}" onclick="admin.mudarViewQR('compact')"><i class="fas fa-table"></i> Tabela</button>
                 </div>
 
-                <!-- CONTEÚDO PRINCIPAL -->
                 <div id="qrContentGrid" class="qrcode-grid" style="display: ${this.viewAtualQR === 'grid' ? 'grid' : 'none'}"><div class="loading-grid"><i class="fas fa-spinner fa-spin"></i><span>Carregando...</span></div></div>
                 <div id="qrContentList" class="qrcode-list" style="display: ${this.viewAtualQR === 'list' ? 'block' : 'none'}"></div>
                 <div id="qrContentCompact" class="qrcode-compact" style="display: ${this.viewAtualQR === 'compact' ? 'block' : 'none'}"><div class="table-professional"><div class="table-responsive"><table class="data-table"><thead><tr><th>Usuário</th><th>Perfil</th><th>Matrícula</th><th>Turma</th><th>Ações</th></tr></thead><tbody id="tabelaQRCompact"></tbody></table></div></div></div>
 
-                <!-- PAGINAÇÃO -->
                 <div class="pagination-qr" id="paginacaoQR">
                     <button class="btn-page" onclick="admin.paginaAnteriorQR()" id="btnAnteriorQR" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
                     <span class="page-info" id="pageInfoQR">Página 1 de 1</span>
@@ -29189,12 +29188,12 @@ class AdminPanel {
         `;
     }
 
-    // ============ GERAR CARTÃO QR CODE HORIZONTAL (PAISAGEM) ============
+    // ============ GERAR CARTÃO QR CODE HORIZONTAL (COM MARGENS PARA IMPRESSÃO) ============
     gerarCartaoHorizontal(usuario, config = null) {
-        const configFinal = config || this.configCartao || { tamanho: 'credito', mostrarLogo: true, mostrarRodape: true };
+        const configFinal = config || this.configCartao || { tamanho: 'credito', mostrarLogo: true, mostrarRodape: true, margem: 10 };
         
-        // Definir tamanhos baseados no tipo de cartão
         let larguraMM = 85, alturaMM = 54, escala = 3.78;
+        let margemMM = configFinal.margem || 10;
         
         if (configFinal.tamanho === 'padrao') {
             larguraMM = 105;
@@ -29204,12 +29203,12 @@ class AdminPanel {
             larguraMM = configFinal.largura;
             alturaMM = configFinal.altura;
             escala = 3.78;
-        } else if (configFinal.escala) {
-            escala = configFinal.escala;
         }
         
-        const larguraPX = Math.round(larguraMM * escala);
-        const alturaPX = Math.round(alturaMM * escala);
+        const larguraComMargemPX = Math.round((larguraMM + margemMM * 2) * escala);
+        const alturaComMargemPX = Math.round((alturaMM + margemMM * 2) * escala);
+        const larguraCartaoPX = Math.round(larguraMM * escala);
+        const alturaCartaoPX = Math.round(alturaMM * escala);
         
         const nome = usuario.nome || 'Usuário';
         const role = usuario.role || 'aluno';
@@ -29264,300 +29263,101 @@ class AdminPanel {
             <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Cartão QR Code - ${nome}</title>
                 <style>
                     @media print {
+                        @page {
+                            size: ${larguraMM + margemMM * 2}mm ${alturaMM + margemMM * 2}mm;
+                            margin: 0mm;
+                        }
                         body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                         .no-print { display: none; }
-                        .cartao { page-break-inside: avoid; break-inside: avoid; }
+                        .cartao { page-break-inside: avoid; break-inside: avoid; box-shadow: none; }
                     }
-                    
                     * { margin: 0; padding: 0; box-sizing: border-box; }
-                    
                     body {
                         background: #f1f5f9;
                         display: flex;
                         justify-content: center;
                         align-items: center;
                         min-height: 100vh;
-                        padding: 20px;
+                        padding: 0;
+                        margin: 0;
                         font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
                     }
-                    
                     .cartao-container {
-                        width: ${larguraPX}px;
-                        height: ${alturaPX}px;
-                        margin: 0 auto;
+                        width: ${larguraComMargemPX}px;
+                        height: ${alturaComMargemPX}px;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        background: #f1f5f9;
                     }
-                    
                     .cartao {
-                        width: 100%;
-                        height: 100%;
+                        width: ${larguraCartaoPX}px;
+                        height: ${alturaCartaoPX}px;
                         background: ${gradienteFundo};
                         border-radius: 16px;
-                        box-shadow: 0 20px 35px -10px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+                        box-shadow: 0 20px 35px -10px rgba(0,0,0,0.15);
                         overflow: hidden;
                         display: flex;
                         flex-direction: row;
-                        transition: transform 0.3s;
                     }
+                    .cartao-info { flex: 2; padding: 14px 18px; display: flex; flex-direction: column; justify-content: space-between; }
+                    .cartao-qrcode { flex: 1; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; border-left: 2px solid ${roleColor}20; }
+                    .header-logo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid ${roleColor}30; }
+                    .logo-sistema-container { display: flex; align-items: center; gap: 8px; }
+                    .logo-quadrado { width: 32px; height: 32px; background: linear-gradient(135deg, #1e3a8a, #1e40af); border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+                    .logo-quadrado img { width: 20px; height: 20px; object-fit: contain; }
+                    .sistema-nome { font-size: 11px; font-weight: 700; color: #1e3a8a; }
+                    .sistema-nome small { font-size: 8px; font-weight: 400; color: #6b7280; }
+                    .instituicao-badge { text-align: right; }
+                    .instituicao-nome { font-size: 8px; color: #6b7280; font-weight: 500; }
+                    .titulo-cartao { font-size: 10px; font-weight: 700; color: ${roleColor}; text-transform: uppercase; letter-spacing: 1.5px; margin: 4px 0; }
                     
-                    .cartao:hover { transform: translateY(-3px); }
-                    
-                    /* Lado esquerdo - Informações do usuário */
-                    .cartao-info {
-                        flex: 2;
-                        padding: 14px 18px;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: space-between;
-                        position: relative;
-                        z-index: 1;
-                    }
-                    
-                    /* Lado direito - QR Code */
-                    .cartao-qrcode {
-                        flex: 1;
-                        background: rgba(255,255,255,0.9);
-                        backdrop-filter: blur(2px);
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        padding: 12px;
-                        border-left: 2px solid ${roleColor}20;
-                        position: relative;
-                        z-index: 1;
-                    }
-                    
-                    /* Header com logo */
-                    .header-logo {
-                        display: flex;
-                        align-items: center;
-                        justify-content: space-between;
-                        margin-bottom: 8px;
-                        padding-bottom: 6px;
-                        border-bottom: 2px solid ${roleColor}30;
-                    }
-                    
-                    .logo-sistema-container {
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    }
-                    
-                    /* Quadrado azul com a logo */
-                    .logo-quadrado {
-                        width: 32px;
-                        height: 32px;
-                        background: linear-gradient(135deg, #1e3a8a, #1e40af);
-                        border-radius: 8px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-                    }
-                    
-                    .logo-quadrado img {
-                        width: 20px;
-                        height: 20px;
-                        object-fit: contain;
-                    }
-                    
-                    .sistema-nome {
-                        font-size: 11px;
-                        font-weight: 700;
-                        color: #1e3a8a;
-                        letter-spacing: 0.5px;
-                    }
-                    
-                    .sistema-nome small {
-                        font-size: 8px;
-                        font-weight: 400;
-                        color: #6b7280;
-                    }
-                    
-                    .instituicao-badge {
-                        text-align: right;
-                    }
-                    
-                    .instituicao-nome {
-                        font-size: 8px;
-                        color: #6b7280;
-                        font-weight: 500;
-                    }
-                    
-                    .titulo-cartao {
-                        font-size: 10px;
-                        font-weight: 700;
-                        color: ${roleColor};
-                        text-transform: uppercase;
-                        letter-spacing: 1.5px;
-                        margin: 4px 0;
-                    }
-                    
-                    /* Nome do usuário - destaque */
+                    /* Nome do usuário - CORRIGIDO: sem gradiente, texto normal preto */
                     .nome-usuario {
-                        font-size: 15px;
+                        font-size: 16px;
                         font-weight: 800;
                         color: #1f2937;
                         margin: 6px 0 4px;
-                        line-height: 1.2;
-                        background: linear-gradient(135deg, #1f2937, ${roleColor});
-                        -webkit-background-clip: text;
-                        -webkit-text-fill-color: transparent;
-                        background-clip: text;
+                        line-height: 1.3;
                     }
                     
-                    /* Informações em grid */
-                    .info-grid {
-                        display: flex;
-                        flex-direction: column;
-                        gap: 5px;
-                        margin: 6px 0;
-                        background: rgba(255,255,255,0.7);
-                        padding: 8px;
-                        border-radius: 10px;
-                    }
-                    
-                    .info-item {
-                        display: flex;
-                        align-items: center;
-                        gap: 6px;
-                        font-size: 9px;
-                    }
-                    
-                    .info-item .label {
-                        font-weight: 700;
-                        color: #4b5563;
-                        min-width: 62px;
-                    }
-                    
-                    .info-item .value {
-                        color: #1f2937;
-                        font-weight: 500;
-                    }
-                    
-                    /* Badge de perfil */
-                    .role-badge {
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 5px;
-                        background: ${roleBg};
-                        color: ${roleColor};
-                        padding: 4px 10px;
-                        border-radius: 30px;
-                        font-size: 9px;
-                        font-weight: 700;
-                        margin-top: 4px;
-                        width: fit-content;
-                    }
-                    
-                    /* QR Code */
-                    .qrcode-wrapper {
-                        background: white;
-                        padding: 8px;
-                        border-radius: 14px;
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-                    }
-                    
-                    .qrcode-wrapper img {
-                        width: 100%;
-                        height: auto;
-                        max-width: 100px;
-                        display: block;
-                        margin: 0 auto;
-                    }
-                    
-                    .qrcode-label {
-                        font-size: 7px;
-                        color: #9ca3af;
-                        text-align: center;
-                        margin-top: 6px;
-                        font-weight: 500;
-                    }
-                    
-                    /* Footer */
-                    .cartao-footer {
-                        margin-top: 6px;
-                        font-size: 6px;
-                        color: #9ca3af;
-                        border-top: 1px solid #e5e7eb;
-                        padding-top: 5px;
-                        display: flex;
-                        justify-content: space-between;
-                    }
-                    
-                    /* Acessibilidade */
-                    .acessibilidade-badge {
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 3px;
-                        background: #dbeafe;
-                        color: #1e40af;
-                        padding: 2px 8px;
-                        border-radius: 20px;
-                        font-size: 7px;
-                        font-weight: 600;
-                        margin-left: 8px;
-                    }
-                    
-                    .btn-print {
-                        display: block;
-                        width: ${larguraPX}px;
-                        margin: 20px auto 0;
-                        padding: 10px;
-                        background: ${roleColor};
-                        color: white;
-                        border: none;
-                        border-radius: 10px;
-                        font-size: 13px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                    }
-                    
-                    .btn-print:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-                    
-                    @media print {
-                        body { padding: 0; background: white; }
-                        .btn-print { display: none; }
-                        .cartao { box-shadow: none; }
-                    }
+                    .info-grid { display: flex; flex-direction: column; gap: 5px; margin: 6px 0; background: rgba(255,255,255,0.7); padding: 8px; border-radius: 10px; }
+                    .info-item { display: flex; align-items: center; gap: 6px; font-size: 9px; }
+                    .info-item .label { font-weight: 700; color: #4b5563; min-width: 62px; }
+                    .info-item .value { color: #1f2937; font-weight: 500; }
+                    .role-badge { display: inline-flex; align-items: center; gap: 5px; background: ${roleBg}; color: ${roleColor}; padding: 4px 10px; border-radius: 30px; font-size: 9px; font-weight: 700; margin-top: 4px; width: fit-content; }
+                    .qrcode-wrapper { background: white; padding: 8px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+                    .qrcode-wrapper img { width: 100%; height: auto; max-width: 100px; display: block; margin: 0 auto; }
+                    .qrcode-label { font-size: 7px; color: #9ca3af; text-align: center; margin-top: 6px; font-weight: 500; }
+                    .cartao-footer { margin-top: 6px; font-size: 6px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 5px; display: flex; justify-content: space-between; }
+                    .acessibilidade-badge { display: inline-flex; align-items: center; gap: 3px; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 20px; font-size: 7px; font-weight: 600; margin-left: 8px; }
+                    .btn-print { display: block; width: ${larguraCartaoPX}px; margin: 20px auto 0; padding: 10px; background: ${roleColor}; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+                    @media print { body { padding: 0; margin: 0; background: white; } .btn-print { display: none; } .cartao { box-shadow: none; } }
                 </style>
             </head>
             <body>
                 <div>
                     <div class="cartao-container">
                         <div class="cartao">
-                            <!-- Lado esquerdo: Informações -->
                             <div class="cartao-info">
-                                <!-- Header com logo no quadrado azul -->
                                 <div class="header-logo">
                                     <div class="logo-sistema-container">
-                                        <!-- Quadrado azul com sua logo -->
                                         <div class="logo-quadrado">
                                             <img src="/icons/favicon.ico" alt="Logo" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'%3E%3Ctext x=\\'50\\' y=\\'55\\' text-anchor=\\'middle\\' font-size=\\'40\\' fill=\\'white\\'%3E📚%3C/text%3E%3C/svg%3E'">
                                         </div>
-                                        <div class="sistema-nome">
-                                            SISTEMA DE PROVAS<br>
-                                            <small>2026</small>
-                                        </div>
+                                        <div class="sistema-nome">SISTEMA DE PROVAS<br><small>2026</small></div>
                                     </div>
                                     <div class="instituicao-badge">
                                         <div class="instituicao-nome">IEMA PLENO</div>
                                         <div class="instituicao-nome" style="font-size: 7px;">SÃO LUÍS - CENTRO</div>
                                     </div>
                                 </div>
-                                
                                 <div class="titulo-cartao">CARTÃO DE IDENTIFICAÇÃO</div>
-                                
-                                <div class="nome-usuario">
-                                    ${this.escapeHtml(nome)}
-                                    ${usuario.precisaAcessibilidade ? '<span class="acessibilidade-badge"><i class="fas fa-wheelchair"></i> Acessível</span>' : ''}
-                                </div>
-                                
+                                <div class="nome-usuario">${this.escapeHtml(nome)}${usuario.precisaAcessibilidade ? '<span class="acessibilidade-badge"><i class="fas fa-wheelchair"></i> Acessível</span>' : ''}</div>
                                 <div class="info-grid">
                                     <div class="info-item"><span class="label">📌 MATRÍCULA:</span><span class="value">${matricula}</span></div>
                                     <div class="info-item"><span class="label">📧 E-MAIL:</span><span class="value">${email.length > 22 ? email.substring(0, 20) + '..' : email}</span></div>
@@ -29565,36 +29365,483 @@ class AdminPanel {
                                     ${infoAdicional}
                                     <div class="info-item"><span class="label">📅 EMISSÃO:</span><span class="value">${dataEmissao}</span></div>
                                 </div>
-                                
-                                <div>
-                                    <span class="role-badge">${roleIcon} ${this.getRoleLabelQR(role)}</span>
-                                </div>
-                                
-                                ${configFinal.mostrarRodape ? `
-                                    <div class="cartao-footer">
-                                        <span>✓ Válido para acesso ao sistema</span>
-                                        <span>🔒 Documento digital</span>
-                                    </div>
-                                ` : ''}
+                                <div><span class="role-badge">${roleIcon} ${this.getRoleLabelQR(role)}</span></div>
+                                ${configFinal.mostrarRodape ? `<div class="cartao-footer"><span>✓ Válido para acesso ao sistema</span><span>🔒 Documento digital</span></div>` : ''}
                             </div>
-                            
-                            <!-- Lado direito: QR Code -->
                             <div class="cartao-qrcode">
-                                <div class="qrcode-wrapper">
-                                    <img src="${usuario.qrCodeDataUrl}" alt="QR Code de ${nome}">
-                                </div>
+                                <div class="qrcode-wrapper"><img src="${usuario.qrCodeDataUrl}" alt="QR Code de ${nome}"></div>
                                 <div class="qrcode-label">Escaneie para acesso rápido ao sistema</div>
                             </div>
                         </div>
                     </div>
-                    <button class="btn-print no-print" onclick="window.print()">
-                        <i class="fas fa-print"></i> Imprimir Cartão
-                    </button>
+                    <button class="btn-print no-print" onclick="window.print()"><i class="fas fa-print"></i> Imprimir Cartão</button>
                 </div>
             </body>
             </html>
         `;
     }
+
+    // ============ MODAL PARA GERAR PDF ============
+    async abrirModalGerarPDF() {
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum QR Code para exportar', 'error');
+            return;
+        }
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <div style="margin-bottom: 20px;">
+                    <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                        <i class="fas fa-file-pdf" style="font-size: 28px; color: white;"></i>
+                    </div>
+                    <h3 style="margin: 0 0 10px;">Gerar PDF</h3>
+                    <p style="color: #6b7280;">Selecione o formato do PDF para <strong>${this.qrCodesFiltrados.length}</strong> item(ns)</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div onclick="admin.gerarPDFApenasQRCodes()" style="
+                        background: #f3e8ff;
+                        border: 2px solid #8b5cf6;
+                        border-radius: 16px;
+                        padding: 20px;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        text-align: center;
+                    " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 16px rgba(139,92,246,0.2)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                        <i class="fas fa-qrcode" style="font-size: 48px; color: #8b5cf6; margin-bottom: 10px;"></i>
+                        <h4 style="margin: 0 0 5px;">Apenas QR Code</h4>
+                        <p style="font-size: 12px; color: #6b7280; margin: 0;">PDF apenas com os QR Codes</p>
+                    </div>
+                    
+                    <div onclick="admin.gerarPDFCartoes()" style="
+                        background: #ecfdf5;
+                        border: 2px solid #10b981;
+                        border-radius: 16px;
+                        padding: 20px;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        text-align: center;
+                    " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 16px rgba(16,185,129,0.2)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                        <i class="fas fa-id-card" style="font-size: 48px; color: #10b981; margin-bottom: 10px;"></i>
+                        <h4 style="margin: 0 0 5px;">Cartão Completo</h4>
+                        <p style="font-size: 12px; color: #6b7280; margin: 0;">PDF com cartões de identificação</p>
+                    </div>
+                </div>
+                
+                <button onclick="admin.closeModal()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">Cancelar</button>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-file-pdf"></i> Gerar PDF';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.openModal();
+    }
+
+    // ============ MODAL PARA EXPORTAR ZIP ============
+    async abrirModalExportarZIP() {
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum QR Code para exportar', 'error');
+            return;
+        }
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <div style="margin-bottom: 20px;">
+                    <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #6b7280, #4b5563); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                        <i class="fas fa-archive" style="font-size: 28px; color: white;"></i>
+                    </div>
+                    <h3 style="margin: 0 0 10px;">Exportar ZIP</h3>
+                    <p style="color: #6b7280;">Selecione o formato do ZIP para <strong>${this.qrCodesFiltrados.length}</strong> item(ns)</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div onclick="admin.exportarZIPApenasQRCodes()" style="
+                        background: #f3e8ff;
+                        border: 2px solid #8b5cf6;
+                        border-radius: 16px;
+                        padding: 20px;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        text-align: center;
+                    " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 16px rgba(139,92,246,0.2)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                        <i class="fas fa-qrcode" style="font-size: 48px; color: #8b5cf6; margin-bottom: 10px;"></i>
+                        <h4 style="margin: 0 0 5px;">Apenas QR Code</h4>
+                        <p style="font-size: 12px; color: #6b7280; margin: 0;">ZIP apenas com as imagens PNG dos QR Codes</p>
+                    </div>
+                    
+                    <div onclick="admin.exportarZIPCartoes()" style="
+                        background: #ecfdf5;
+                        border: 2px solid #10b981;
+                        border-radius: 16px;
+                        padding: 20px;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        text-align: center;
+                    " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 16px rgba(16,185,129,0.2)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                        <i class="fas fa-id-card" style="font-size: 48px; color: #10b981; margin-bottom: 10px;"></i>
+                        <h4 style="margin: 0 0 5px;">Cartão Completo</h4>
+                        <p style="font-size: 12px; color: #6b7280; margin: 0;">ZIP com os cartões em HTML</p>
+                    </div>
+                </div>
+                
+                <button onclick="admin.closeModal()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">Cancelar</button>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-archive"></i> Exportar ZIP';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.openModal();
+    }
+
+    // ============ GERAR PDF APENAS QR CODES ============
+    async gerarPDFApenasQRCodes() {
+        this.closeModal();
+        
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum QR Code para exportar', 'error');
+            return;
+        }
+        
+        this.showToast(`📄 Gerando PDF com ${this.qrCodesFiltrados.length} QR Codes...`, 'info');
+        
+        let htmlCompleto = `<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>QR Codes - Sistema de Provas</title>
+            <style>
+                @media print {
+                    @page { size: landscape; margin: 0.5cm; }
+                    body { margin: 0; padding: 0; }
+                    .page-break { page-break-after: always; break-after: page; }
+                }
+                body { font-family: Arial, sans-serif; padding: 20px; background: white; }
+                .qrcode-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+                .qrcode-item { text-align: center; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; }
+                .qrcode-item img { width: 150px; height: 150px; margin: 0 auto; }
+                .qrcode-item h4 { margin: 10px 0 5px; font-size: 14px; }
+                .qrcode-item p { margin: 0; font-size: 11px; color: #6b7280; }
+            </style>
+        </head>
+        <body>
+            <div class="qrcode-grid">
+        `;
+        
+        for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
+            const usuario = this.qrCodesFiltrados[i];
+            htmlCompleto += `
+                <div class="qrcode-item">
+                    <img src="${usuario.qrCodeDataUrl}" alt="QR Code">
+                    <h4>${this.escapeHtml(usuario.nome)}</h4>
+                    <p>${usuario.matricula || 'Sem matrícula'}</p>
+                    <p>${usuario.email || ''}</p>
+                </div>
+            `;
+            if ((i + 1) % 8 === 0 && i < this.qrCodesFiltrados.length - 1) {
+                htmlCompleto += `</div><div class="page-break"></div><div class="qrcode-grid">`;
+            }
+        }
+        
+        htmlCompleto += `</div></body></html>`;
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(htmlCompleto);
+        printWindow.document.close();
+        printWindow.onload = function() { setTimeout(() => { printWindow.print(); printWindow.onafterprint = function() { printWindow.close(); }; }, 500); };
+        
+        this.showToast(`✅ ${this.qrCodesFiltrados.length} QR Codes prontos para PDF!`, 'success');
+    }
+
+    // ============ GERAR PDF COM CARTÕES ============
+    async gerarPDFCartoes() {
+        this.closeModal();
+        
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum cartão para exportar', 'error');
+            return;
+        }
+        
+        this.showToast(`📄 Gerando ${this.qrCodesFiltrados.length} cartões em PDF...`, 'info');
+        
+        // Criar uma nova janela
+        const printWindow = window.open('', '_blank');
+        
+        // Obter o CSS do primeiro cartão (todos são iguais)
+        let cssEstilos = '';
+        if (this.qrCodesFiltrados.length > 0) {
+            const primeiroUsuario = this.qrCodesFiltrados[0];
+            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(primeiroUsuario, this.configCartao);
+            const styleMatch = cartaoHtmlCompleto.match(/<style>([\s\S]*?)<\/style>/);
+            if (styleMatch) {
+                cssEstilos = styleMatch[1];
+            }
+        }
+        
+        // Escrever o HTML base com o CSS completo
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Cartões QR Code - Sistema de Provas</title>
+                <style>
+                    /* Estilos dos cartões */
+                    ${cssEstilos}
+                    
+                    /* Estilos adicionais para impressão */
+                    @media print {
+                        @page {
+                            size: landscape;
+                            margin: 0.5cm;
+                        }
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                        .page-break {
+                            page-break-after: always;
+                            break-after: page;
+                        }
+                        .btn-print {
+                            display: none !important;
+                        }
+                        .no-print {
+                            display: none !important;
+                        }
+                    }
+                    body {
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        background: #f1f5f9;
+                        margin: 0;
+                        padding: 20px;
+                    }
+                    .cartoes-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }
+                    /* Garantir que os cartões tenham o tamanho correto */
+                    .cartao-container {
+                        margin: 10px auto;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="cartoes-container">
+        `);
+        
+        printWindow.document.close();
+        
+        // Adicionar cada cartão um por um
+        for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
+            const usuario = this.qrCodesFiltrados[i];
+            
+            // Gerar o HTML completo do cartão
+            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(usuario, this.configCartao);
+            
+            // Criar um elemento temporário para extrair o cartão
+            const tempDiv = printWindow.document.createElement('div');
+            tempDiv.innerHTML = cartaoHtmlCompleto;
+            
+            // Encontrar o cartão-container
+            let cartaoElement = tempDiv.querySelector('.cartao-container');
+            
+            if (cartaoElement) {
+                // Clonar o elemento e adicionar ao documento
+                const clone = cartaoElement.cloneNode(true);
+                printWindow.document.body.querySelector('.cartoes-container').appendChild(clone);
+            } else {
+                // Fallback: criar um cartão usando a função diretamente
+                const fallbackDiv = printWindow.document.createElement('div');
+                fallbackDiv.innerHTML = cartaoHtmlCompleto;
+                const fallbackCartao = fallbackDiv.querySelector('.cartao-container');
+                if (fallbackCartao) {
+                    printWindow.document.body.querySelector('.cartoes-container').appendChild(fallbackCartao.cloneNode(true));
+                } else {
+                    // Último fallback
+                    const simpleDiv = printWindow.document.createElement('div');
+                    simpleDiv.className = 'cartao-container';
+                    simpleDiv.style.cssText = 'width: 350px; height: 220px; background: white; border-radius: 16px; padding: 15px; margin: 10px auto; display: flex; box-shadow: 0 2px 8px rgba(0,0,0,0.1);';
+                    simpleDiv.innerHTML = `
+                        <div style="flex:2;">
+                            <div style="font-weight:bold; color:#1e3a8a;">SISTEMA DE PROVAS<br><small>2026</small></div>
+                            <div style="font-size:10px; color:#666;">IEMA PLENO - SÃO LUÍS CENTRO</div>
+                            <div style="font-size:14px; font-weight:bold; margin:8px 0;">${this.escapeHtml(usuario.nome)}</div>
+                            <div style="font-size:10px;">📌 MATRÍCULA: ${usuario.matricula}</div>
+                            <div style="font-size:10px;">📧 E-MAIL: ${usuario.email || '-'}</div>
+                            <div style="font-size:10px;">📅 EMISSÃO: ${new Date().toLocaleDateString('pt-BR')}</div>
+                            <div style="font-size:10px; margin-top:5px;">🏷️ ${this.getRoleLabelQR(usuario.role)}</div>
+                        </div>
+                        <div style="flex:1; text-align:center;">
+                            <img src="${usuario.qrCodeDataUrl}" style="width:100px; height:100px;">
+                            <div style="font-size:7px;">Escaneie para acesso</div>
+                        </div>
+                    `;
+                    printWindow.document.body.querySelector('.cartoes-container').appendChild(simpleDiv);
+                }
+            }
+            
+            // Adicionar quebra de página (exceto no último)
+            if (i < this.qrCodesFiltrados.length - 1) {
+                const breakDiv = printWindow.document.createElement('div');
+                breakDiv.className = 'page-break';
+                printWindow.document.body.querySelector('.cartoes-container').appendChild(breakDiv);
+            }
+        }
+        
+        // Aguardar um pouco e imprimir
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.onafterprint = function() {
+                printWindow.close();
+            };
+        }, 1500);
+        
+        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões prontos para PDF!`, 'success');
+    }
+
+    // ============ EXPORTAR ZIP COM CARTÕES COMO IMAGENS JPG/PNG ============
+    async exportarZIPCartoes() {
+        this.closeModal();
+        
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum cartão para exportar', 'error');
+            return;
+        }
+        
+        if (typeof JSZip === 'undefined') {
+            this.showToast('❌ Biblioteca JSZip não carregada. Recarregue a página.', 'error');
+            return;
+        }
+        
+        this.showToast(`📦 Preparando ${this.qrCodesFiltrados.length} cartões como imagens...`, 'info');
+        
+        const zip = new JSZip();
+        let count = 0;
+        let erros = 0;
+        
+        for (const usuario of this.qrCodesFiltrados) {
+            try {
+                // Criar um elemento canvas para converter o cartão em imagem
+                const cartaoHtml = this.gerarCartaoHorizontal(usuario, this.configCartao);
+                
+                // Criar um iframe/div temporário para renderizar o cartão
+                const tempDiv = document.createElement('div');
+                tempDiv.style.position = 'absolute';
+                tempDiv.style.top = '-9999px';
+                tempDiv.style.left = '-9999px';
+                tempDiv.innerHTML = cartaoHtml;
+                document.body.appendChild(tempDiv);
+                
+                // Aguardar a renderização
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Encontrar o cartão dentro do tempDiv
+                const cartaoElement = tempDiv.querySelector('.cartao-container');
+                
+                if (cartaoElement) {
+                    // Usar html2canvas para converter em imagem
+                    if (typeof html2canvas === 'undefined') {
+                        this.showToast('❌ Biblioteca html2canvas não carregada. Recarregue a página.', 'error');
+                        document.body.removeChild(tempDiv);
+                        return;
+                    }
+                    
+                    const canvas = await html2canvas(cartaoElement, {
+                        scale: 2,
+                        backgroundColor: '#ffffff',
+                        logging: false,
+                        useCORS: true
+                    });
+                    
+                    // Converter canvas para blob (PNG)
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                    
+                    if (blob) {
+                        const nomeLimpo = usuario.nome.replace(/[^a-zA-Z0-9]/g, '_');
+                        const nomeArquivo = `cartao-${nomeLimpo}-${usuario.matricula || usuario._id}.png`;
+                        zip.file(nomeArquivo, blob);
+                        count++;
+                    } else {
+                        erros++;
+                    }
+                } else {
+                    erros++;
+                }
+                
+                // Remover o elemento temporário
+                document.body.removeChild(tempDiv);
+                
+            } catch (error) {
+                console.error(`Erro ao processar ${usuario.nome}:`, error);
+                erros++;
+            }
+        }
+        
+        if (count === 0) {
+            this.showToast('❌ Nenhum arquivo válido para exportar', 'error');
+            return;
+        }
+        
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cartoes-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showToast(`✅ ${count} cartões exportados como imagens! (${erros} erros)`, 'success');
+    }
+
+    // ============ EXPORTAR ZIP APENAS QR CODES (JÁ ESTÁ CORRETO - PNG) ============
+    async exportarZIPApenasQRCodes() {
+        this.closeModal();
+        
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum QR Code para exportar', 'error');
+            return;
+        }
+        
+        if (typeof JSZip === 'undefined') {
+            this.showToast('❌ Biblioteca JSZip não carregada. Recarregue a página.', 'error');
+            return;
+        }
+        
+        this.showToast(`📦 Preparando ${this.qrCodesFiltrados.length} QR Codes...`, 'info');
+        
+        const zip = new JSZip();
+        let count = 0;
+        
+        for (const usuario of this.qrCodesFiltrados) {
+            try {
+                let base64Data = usuario.qrCodeDataUrl;
+                if (base64Data.includes(',')) base64Data = base64Data.split(',')[1];
+                if (base64Data) {
+                    const nomeLimpo = usuario.nome.replace(/[^a-zA-Z0-9]/g, '_');
+                    zip.file(`qrcode-${nomeLimpo}-${usuario.matricula || usuario._id}.png`, base64Data, { base64: true });
+                    count++;
+                }
+            } catch (error) { console.error(error); }
+        }
+        
+        if (count === 0) { this.showToast('❌ Nenhum arquivo válido', 'error'); return; }
+        
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `qrcodes-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showToast(`✅ ${count} QR Codes exportados!`, 'success');
+    }
+
 
     // ============ ABRIR CONFIGURAÇÃO DO CARTÃO ============
     abrirConfigCartao() {
@@ -29602,7 +29849,6 @@ class AdminPanel {
         modalBody.innerHTML = `
             <div style="padding: 20px;">
                 <h3 style="margin: 0 0 15px;">Configurações do Cartão</h3>
-                
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px;">Tamanho do Cartão</label>
                     <select id="configTamanhoCartao" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px;">
@@ -29611,52 +29857,43 @@ class AdminPanel {
                         <option value="personalizado" ${this.configCartao.tamanho === 'personalizado' ? 'selected' : ''}>⚙️ Personalizado</option>
                     </select>
                 </div>
-                
                 <div id="configPersonalizado" style="display: ${this.configCartao.tamanho === 'personalizado' ? 'block' : 'none'}; margin-bottom: 15px;">
                     <div class="form-row" style="display: flex; gap: 10px;">
-                        <div style="flex: 1;">
-                            <label style="display: block; margin-bottom: 5px;">Largura (mm)</label>
-                            <input type="number" id="configLargura" class="form-control" value="${this.configCartao.largura || 85}" min="50" max="150" style="width: 100%; padding: 10px; border-radius: 8px;">
-                        </div>
-                        <div style="flex: 1;">
-                            <label style="display: block; margin-bottom: 5px;">Altura (mm)</label>
-                            <input type="number" id="configAltura" class="form-control" value="${this.configCartao.altura || 54}" min="30" max="100" style="width: 100%; padding: 10px; border-radius: 8px;">
-                        </div>
+                        <div style="flex: 1;"><label>Largura (mm)</label><input type="number" id="configLargura" class="form-control" value="${this.configCartao.largura || 85}" min="50" max="150"></div>
+                        <div style="flex: 1;"><label>Altura (mm)</label><input type="number" id="configAltura" class="form-control" value="${this.configCartao.altura || 54}" min="30" max="100"></div>
                     </div>
                 </div>
-                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px;">Margem de Impressão (mm)</label>
+                    <input type="number" id="configMargem" class="form-control" value="${this.configCartao.margem || 10}" min="5" max="30">
+                    <small style="color: #6b7280;">Adiciona espaço nas bordas para evitar corte na impressão</small>
+                </div>
                 <div class="checkbox-group" style="margin-bottom: 10px;">
                     <input type="checkbox" id="configMostrarLogo" ${this.configCartao.mostrarLogo !== false ? 'checked' : ''}>
-                    <label>Mostrar logo do IEMA no cartão</label>
+                    <label>Mostrar logo do sistema no cartão</label>
                 </div>
-                
                 <div class="checkbox-group" style="margin-bottom: 15px;">
                     <input type="checkbox" id="configMostrarRodape" ${this.configCartao.mostrarRodape !== false ? 'checked' : ''}>
                     <label>Mostrar rodapé com informações do sistema</label>
                 </div>
-                
                 <div style="background: #f0fdf4; padding: 12px; border-radius: 8px; margin-top: 15px;">
                     <i class="fas fa-info-circle"></i>
-                    <span style="margin-left: 8px;">Os cartões são gerados no formato horizontal (paisagem) e se ajustam automaticamente ao tamanho selecionado.</span>
+                    <span>Os cartões são gerados no formato horizontal (paisagem) e se ajustam automaticamente ao tamanho selecionado.</span>
                 </div>
-                
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button onclick="admin.closeModal()" class="btn-secondary" style="flex: 1; padding: 10px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer;">Cancelar</button>
-                    <button onclick="admin.salvarConfigCartao()" class="btn-primary" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">Salvar Configurações</button>
+                    <button onclick="admin.salvarConfigCartao()" class="btn-primary" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">Salvar</button>
                 </div>
             </div>
         `;
-        
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-cog"></i> Configurações do Cartão';
         document.getElementById('modalSaveBtn').style.display = 'none';
         this.openModal();
         
-        // Evento para mostrar/ocultar campos personalizados
         const tamanhoSelect = document.getElementById('configTamanhoCartao');
         if (tamanhoSelect) {
             tamanhoSelect.addEventListener('change', function() {
-                const div = document.getElementById('configPersonalizado');
-                div.style.display = this.value === 'personalizado' ? 'block' : 'none';
+                document.getElementById('configPersonalizado').style.display = this.value === 'personalizado' ? 'block' : 'none';
             });
         }
     }
@@ -29665,63 +29902,40 @@ class AdminPanel {
     salvarConfigCartao() {
         const tamanho = document.getElementById('configTamanhoCartao')?.value;
         this.configCartao.tamanho = tamanho;
-        
         if (tamanho === 'personalizado') {
             this.configCartao.largura = parseInt(document.getElementById('configLargura')?.value) || 85;
             this.configCartao.altura = parseInt(document.getElementById('configAltura')?.value) || 54;
         }
-        
+        this.configCartao.margem = parseInt(document.getElementById('configMargem')?.value) || 10;
         this.configCartao.mostrarLogo = document.getElementById('configMostrarLogo')?.checked !== false;
         this.configCartao.mostrarRodape = document.getElementById('configMostrarRodape')?.checked !== false;
-        
         localStorage.setItem('configCartao', JSON.stringify(this.configCartao));
-        
         this.showToast('✅ Configurações salvas!', 'success');
         this.closeModal();
     }
 
-    // ============ BAIXAR QR CODE EM CARTÃO HORIZONTAL (INDIVIDUAL) ============
+    // ============ BAIXAR QR CODE EM CARTÃO (INDIVIDUAL) ============
     async baixarQRCodeCartao(usuarioId) {
         try {
-            const usuario = this.qrCodesUsuarios.find(u => u._id === usuarioId) || 
-                            this.qrCodesFiltrados.find(u => u._id === usuarioId);
-            
+            const usuario = this.qrCodesUsuarios.find(u => u._id === usuarioId) || this.qrCodesFiltrados.find(u => u._id === usuarioId);
             if (!usuario || !usuario.qrCodeDataUrl) {
                 this.showToast('❌ QR Code não encontrado', 'error');
                 return;
             }
-            
-            this.showToast('🖨️ Gerando cartão horizontal para impressão...', 'info');
-            
+            this.showToast('🖨️ Gerando cartão...', 'info');
             let usuarioCompleto = usuario;
             try {
                 const token = localStorage.getItem('auth_token');
-                const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const response = await fetch(`/api/admin/usuarios/${usuarioId}`, { headers: { 'Authorization': `Bearer ${token}` } });
                 const data = await response.json();
-                if (data.success && data.user) {
-                    usuarioCompleto = { ...usuarioCompleto, ...data.user };
-                }
+                if (data.success && data.user) usuarioCompleto = { ...usuarioCompleto, ...data.user };
             } catch (e) {}
-            
             const cartaoHtml = this.gerarCartaoHorizontal(usuarioCompleto, this.configCartao);
-            
             const printWindow = window.open('', '_blank');
             printWindow.document.write(cartaoHtml);
             printWindow.document.close();
-            
-            printWindow.onload = function() {
-                setTimeout(() => {
-                    printWindow.print();
-                    printWindow.onafterprint = function() {
-                        printWindow.close();
-                    };
-                }, 500);
-            };
-            
+            printWindow.onload = function() { setTimeout(() => { printWindow.print(); printWindow.onafterprint = function() { printWindow.close(); }; }, 500); };
             this.showToast(`✅ Cartão de ${usuario.nome} gerado!`, 'success');
-            
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
@@ -29731,77 +29945,47 @@ class AdminPanel {
     // ============ BAIXAR CARTÕES POR TURMA ============
     async baixarCartoesPorTurma(turma) {
         const alunosDaTurma = this.qrCodesFiltrados.filter(u => u.turma === turma && u.role === 'aluno');
-        
         if (alunosDaTurma.length === 0) {
             this.showToast(`❌ Nenhum aluno encontrado na turma ${turma}`, 'error');
             return;
         }
-        
-        this.showToast(`🖨️ Gerando ${alunosDaTurma.length} cartões para a turma ${turma}...`, 'info');
-        
+        this.showToast(`🖨️ Gerando ${alunosDaTurma.length} cartões...`, 'info');
         let htmlCompleto = '';
-        
         for (let i = 0; i < alunosDaTurma.length; i++) {
             const aluno = alunosDaTurma[i];
             const cartaoHtml = this.gerarCartaoHorizontal(aluno, this.configCartao);
             htmlCompleto += cartaoHtml;
-            
-            if (i < alunosDaTurma.length - 1) {
-                htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
-            }
+            if (i < alunosDaTurma.length - 1) htmlCompleto += `<div style="page-break-before: always;"></div>`;
         }
-        
         const printWindow = window.open('', '_blank');
         printWindow.document.write(htmlCompleto);
         printWindow.document.close();
-        
-        printWindow.onload = function() {
-            setTimeout(() => {
-                printWindow.print();
-                printWindow.onafterprint = function() {
-                    printWindow.close();
-                };
-            }, 500);
-        };
-        
-        this.showToast(`✅ ${alunosDaTurma.length} cartões gerados para ${turma}!`, 'success');
+        printWindow.onload = function() { setTimeout(() => { printWindow.print(); printWindow.onafterprint = function() { printWindow.close(); }; }, 500); };
+        this.showToast(`✅ ${alunosDaTurma.length} cartões gerados!`, 'success');
     }
 
     // ============ ABRIR MENU DE DOWNLOAD POR TURMAS ============
     abrirMenuDownloadTurmas() {
         const turmas = [...new Set(this.qrCodesFiltrados.map(u => u.turma).filter(t => t))];
-        
         if (turmas.length === 0) {
             this.showToast('❌ Nenhuma turma encontrada', 'error');
             return;
         }
-        
         const modalBody = document.getElementById('modalBody');
         modalBody.innerHTML = `
             <div style="padding: 20px;">
-                <h3 style="margin: 0 0 15px;">📚 Selecionar Turma para Impressão</h3>
-                <p style="color: #6b7280; margin-bottom: 15px;">Selecione uma turma para gerar os cartões horizontais de todos os alunos:</p>
-                
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 5px;">Turma</label>
-                    <select id="selectTurmaCartao" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px;">
-                        <option value="">Selecione uma turma...</option>
-                        ${turmas.map(t => `<option value="${t}">${t} (${this.qrCodesFiltrados.filter(u => u.turma === t && u.role === 'aluno').length} alunos)</option>`).join('')}
-                    </select>
-                </div>
-                
-                <div class="info-box" style="background: #f0fdf4; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
-                    <i class="fas fa-info-circle"></i>
-                    <span style="margin-left: 8px;">Os cartões serão gerados no formato horizontal (paisagem) e cada um em uma página separada para impressão.</span>
-                </div>
-                
+                <h3>📚 Selecionar Turma para Impressão</h3>
+                <p>Selecione uma turma para gerar os cartões de todos os alunos:</p>
+                <select id="selectTurmaCartao" class="form-control" style="width: 100%; padding: 10px; margin: 15px 0;">
+                    <option value="">Selecione uma turma...</option>
+                    ${turmas.map(t => `<option value="${t}">${t} (${this.qrCodesFiltrados.filter(u => u.turma === t && u.role === 'aluno').length} alunos)</option>`).join('')}
+                </select>
                 <div style="display: flex; gap: 10px;">
-                    <button onclick="admin.closeModal()" class="btn-secondary" style="flex: 1; padding: 10px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer;">Cancelar</button>
-                    <button onclick="admin.gerarCartoesPorTurmaSelecionada()" class="btn-primary" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">Gerar Cartões</button>
+                    <button onclick="admin.closeModal()" class="btn-secondary" style="flex:1; padding:10px;">Cancelar</button>
+                    <button onclick="admin.gerarCartoesPorTurmaSelecionada()" class="btn-primary" style="flex:1; padding:10px;">Gerar</button>
                 </div>
             </div>
         `;
-        
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-school"></i> Imprimir Cartões por Turma';
         document.getElementById('modalSaveBtn').style.display = 'none';
         this.openModal();
@@ -29809,12 +29993,7 @@ class AdminPanel {
 
     async gerarCartoesPorTurmaSelecionada() {
         const turma = document.getElementById('selectTurmaCartao')?.value;
-        
-        if (!turma) {
-            this.showToast('❌ Selecione uma turma', 'error');
-            return;
-        }
-        
+        if (!turma) { this.showToast('❌ Selecione uma turma', 'error'); return; }
         this.closeModal();
         await this.baixarCartoesPorTurma(turma);
     }
@@ -29825,87 +30004,25 @@ class AdminPanel {
             this.showToast('❌ Nenhum QR Code para exportar', 'error');
             return;
         }
-        
-        const confirmar = await this.confirmar(
-            '🖨️ Imprimir Todos os Cartões',
-            `Deseja gerar <strong>${this.qrCodesFiltrados.length}</strong> cartões horizontais?<br><br>
-            Cada cartão será impresso em uma página separada.`
-        );
-        
+        const confirmar = await this.confirmar('🖨️ Imprimir Todos', `Deseja gerar <strong>${this.qrCodesFiltrados.length}</strong> cartões?`);
         if (!confirmar) return;
-        
         this.showToast(`🖨️ Gerando ${this.qrCodesFiltrados.length} cartões...`, 'info');
-        
         let htmlCompleto = '';
-        
         for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
             const usuario = this.qrCodesFiltrados[i];
-            const cartaoHtml = this.gerarCartaoHorizontal(usuario, this.configCartao);
-            htmlCompleto += cartaoHtml;
-            
-            if (i < this.qrCodesFiltrados.length - 1) {
-                htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
-            }
+            htmlCompleto += this.gerarCartaoHorizontal(usuario, this.configCartao);
+            if (i < this.qrCodesFiltrados.length - 1) htmlCompleto += `<div style="page-break-before: always;"></div>`;
         }
-        
         const printWindow = window.open('', '_blank');
         printWindow.document.write(htmlCompleto);
         printWindow.document.close();
-        
-        printWindow.onload = function() {
-            setTimeout(() => {
-                printWindow.print();
-                printWindow.onafterprint = function() {
-                    printWindow.close();
-                };
-            }, 500);
-        };
-        
+        printWindow.onload = function() { setTimeout(() => { printWindow.print(); printWindow.onafterprint = function() { printWindow.close(); }; }, 500); };
         this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões gerados!`, 'success');
     }
 
     // ============ BAIXAR APENAS OS FILTRADOS ============
     async baixarFiltradosCartao() {
-        if (this.qrCodesFiltrados.length === 0) {
-            this.showToast('❌ Nenhum resultado nos filtros atuais', 'error');
-            return;
-        }
-        
-        const confirmar = await this.confirmar(
-            '🖨️ Imprimir Filtrados',
-            `Deseja gerar <strong>${this.qrCodesFiltrados.length}</strong> cartões com os filtros atuais?`
-        );
-        
-        if (!confirmar) return;
-        
-        this.showToast(`🖨️ Gerando ${this.qrCodesFiltrados.length} cartões...`, 'info');
-        
-        let htmlCompleto = '';
-        
-        for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
-            const usuario = this.qrCodesFiltrados[i];
-            const cartaoHtml = this.gerarCartaoHorizontal(usuario, this.configCartao);
-            htmlCompleto += cartaoHtml;
-            
-            if (i < this.qrCodesFiltrados.length - 1) {
-                htmlCompleto += `<div style="page-break-before: always; break-before: page;"></div>`;
-            }
-        }
-        
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(htmlCompleto);
-        printWindow.document.close();
-        
-        printWindow.onload = function() {
-            setTimeout(() => {
-                printWindow.print();
-                printWindow.onafterprint = function() {
-                    printWindow.close();
-                };
-            }, 500);
-        };
-        
-        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões gerados!`, 'success');
+        await this.baixarTodosQRCodesCartao();
     }
 
     // ============ MÉTODOS AUXILIARES ============
@@ -29922,15 +30039,9 @@ class AdminPanel {
 
     getRoleLabelQR(role) {
         const labels = {
-            'aluno': 'Aluno',
-            'professor': 'Professor',
-            'admin': 'Admin',
-            'super_admin': 'Super Admin',
-            'setor_pedagogico': 'Setor Pedagógico',
-            'coordenacao_patio': 'Coord. Pátio',
-            'cozinha': 'Cozinha',
-            'gestao_geral': 'Gestão Geral',
-            'enfermaria': 'Enfermaria'
+            'aluno': 'Aluno', 'professor': 'Professor', 'admin': 'Admin', 'super_admin': 'Super Admin',
+            'setor_pedagogico': 'Setor Pedagógico', 'coordenacao_patio': 'Coord. Pátio',
+            'cozinha': 'Cozinha', 'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria'
         };
         return labels[role] || role;
     }
@@ -29951,53 +30062,28 @@ class AdminPanel {
         const acessibilidade = document.getElementById('filtroAcessibilidadeQR')?.value || 'todos';
         
         this.qrCodesFiltrados = this.qrCodesUsuarios.filter(usuario => {
-            const matchSearch = search === '' || 
-                usuario.nome.toLowerCase().includes(search) ||
-                (usuario.email && usuario.email.toLowerCase().includes(search)) ||
-                (usuario.matricula && usuario.matricula.toLowerCase().includes(search));
-            
+            const matchSearch = search === '' || usuario.nome.toLowerCase().includes(search) || (usuario.email && usuario.email.toLowerCase().includes(search)) || (usuario.matricula && usuario.matricula.toLowerCase().includes(search));
             const matchRole = role === 'todos' || usuario.role === role;
             const matchTurma = turma === 'todas' || usuario.turma === turma;
             const matchStatus = status === 'todos' || (status === 'ativo' && usuario.ativo === true) || (status === 'inativo' && usuario.ativo === false);
             const matchAcessibilidade = acessibilidade === 'todos' || (acessibilidade === 'sim' && usuario.precisaAcessibilidade === true) || (acessibilidade === 'nao' && usuario.precisaAcessibilidade !== true);
-            
             return matchSearch && matchRole && matchTurma && matchStatus && matchAcessibilidade;
         });
-        
         this.paginaAtualQR = 1;
         this.renderizarQRCodeManagement();
-        
         const badge = document.getElementById('resultadosBadgeQR');
         if (badge) badge.textContent = `${this.qrCodesFiltrados.length} resultados`;
     }
 
-    filtrarQRPorRole(role) {
-        const select = document.getElementById('filtroRoleQR');
-        if (select) select.value = role;
-        this.aplicarFiltrosQR();
-    }
+    filtrarQRPorRole(role) { const select = document.getElementById('filtroRoleQR'); if (select) select.value = role; this.aplicarFiltrosQR(); }
+    filtrarQRPorTurma() { this.aplicarFiltrosQR(); }
+    filtrarQRPorStatus() { this.aplicarFiltrosQR(); }
+    filtrarQRPorAcessibilidade() { this.aplicarFiltrosQR(); }
 
-    filtrarQRPorTurma() {
-        this.aplicarFiltrosQR();
-    }
-
-    filtrarQRPorStatus() {
-        this.aplicarFiltrosQR();
-    }
-
-    filtrarQRPorAcessibilidade() {
-        this.aplicarFiltrosQR();
-    }
-
-    limparBuscaQR() {
-        const searchInput = document.getElementById('buscaQR');
-        if (searchInput) searchInput.value = '';
-        this.aplicarFiltrosQR();
-    }
+    limparBuscaQR() { const search = document.getElementById('buscaQR'); if (search) search.value = ''; this.aplicarFiltrosQR(); }
 
     limparFiltrosQR() {
-        const selects = ['filtroRoleQR', 'filtroTurmaQR', 'filtroStatusQR', 'filtroAcessibilidadeQR'];
-        selects.forEach(id => {
+        ['filtroRoleQR', 'filtroTurmaQR', 'filtroStatusQR', 'filtroAcessibilidadeQR'].forEach(id => {
             const select = document.getElementById(id);
             if (select) select.value = 'todos';
         });
@@ -30033,25 +30119,10 @@ class AdminPanel {
         const list = document.getElementById('qrContentList');
         const compact = document.getElementById('qrContentCompact');
         const btns = document.querySelectorAll('.view-btn');
-        
         btns.forEach(btn => btn.classList.remove('active'));
-        
-        if (view === 'grid') {
-            if (grid) grid.style.display = 'grid';
-            if (list) list.style.display = 'none';
-            if (compact) compact.style.display = 'none';
-            btns[0]?.classList.add('active');
-        } else if (view === 'list') {
-            if (grid) grid.style.display = 'none';
-            if (list) list.style.display = 'block';
-            if (compact) compact.style.display = 'none';
-            btns[1]?.classList.add('active');
-        } else {
-            if (grid) grid.style.display = 'none';
-            if (list) list.style.display = 'none';
-            if (compact) compact.style.display = 'block';
-            btns[2]?.classList.add('active');
-        }
+        if (view === 'grid') { if (grid) grid.style.display = 'grid'; if (list) list.style.display = 'none'; if (compact) compact.style.display = 'none'; btns[0]?.classList.add('active'); }
+        else if (view === 'list') { if (grid) grid.style.display = 'none'; if (list) list.style.display = 'block'; if (compact) compact.style.display = 'none'; btns[1]?.classList.add('active'); }
+        else { if (grid) grid.style.display = 'none'; if (list) list.style.display = 'none'; if (compact) compact.style.display = 'block'; btns[2]?.classList.add('active'); }
     }
 
     // ============ PAGINAÇÃO ============
@@ -30061,33 +30132,19 @@ class AdminPanel {
         const btnAnterior = document.getElementById('btnAnteriorQR');
         const btnProxima = document.getElementById('btnProximaQR');
         const pageInfo = document.getElementById('pageInfoQR');
-        
         if (btnAnterior) btnAnterior.disabled = this.paginaAtualQR === 1;
         if (btnProxima) btnProxima.disabled = this.paginaAtualQR === totalPaginas;
         if (pageInfo) pageInfo.textContent = `Página ${this.paginaAtualQR} de ${totalPaginas || 1}`;
     }
 
-    paginaAnteriorQR() {
-        if (this.paginaAtualQR > 1) {
-            this.paginaAtualQR--;
-            this.renderizarQRCodeManagement();
-        }
-    }
-
-    proximaPaginaQR() {
-        const totalPaginas = Math.ceil(this.qrCodesFiltrados.length / this.itensPorPaginaQR);
-        if (this.paginaAtualQR < totalPaginas) {
-            this.paginaAtualQR++;
-            this.renderizarQRCodeManagement();
-        }
-    }
+    paginaAnteriorQR() { if (this.paginaAtualQR > 1) { this.paginaAtualQR--; this.renderizarQRCodeManagement(); } }
+    proximaPaginaQR() { const totalPaginas = Math.ceil(this.qrCodesFiltrados.length / this.itensPorPaginaQR); if (this.paginaAtualQR < totalPaginas) { this.paginaAtualQR++; this.renderizarQRCodeManagement(); } }
 
     // ============ RENDERIZAR TABELA ============
     renderizarQRCodeManagement() {
         const inicio = (this.paginaAtualQR - 1) * this.itensPorPaginaQR;
         const fim = inicio + this.itensPorPaginaQR;
         const paginaItens = this.qrCodesFiltrados.slice(inicio, fim);
-        
         const gridContainer = document.getElementById('qrContentGrid');
         if (gridContainer) {
             if (paginaItens.length === 0) {
@@ -30117,42 +30174,27 @@ class AdminPanel {
                 gridContainer.innerHTML = gridHtml;
             }
         }
-        
         this.atualizarPaginacaoQR();
     }
 
     // ============ OUTRAS FUNÇÕES ============
     async gerarQRCodesPendentes() {
-        if (this.usuariosSemQR.length === 0) {
-            this.showToast('ℹ️ Todos os usuários já possuem QR Code', 'info');
-            return;
-        }
-        
+        if (this.usuariosSemQR.length === 0) { this.showToast('ℹ️ Todos os usuários já possuem QR Code', 'info'); return; }
         const confirmar = await this.confirmar('Gerar QR Codes Pendentes', `Deseja gerar QR Codes para <strong>${this.usuariosSemQR.length}</strong> usuário(s)?`);
         if (!confirmar) return;
-        
         this.showToast(`🔄 Gerando QR Codes para ${this.usuariosSemQR.length} usuários...`, 'info');
-        
         let sucessos = 0;
         for (const usuario of this.usuariosSemQR) {
             try {
                 const token = localStorage.getItem('auth_token');
-                const response = await fetch(`/api/admin/usuarios/${usuario._id}/regenerar-qrcode`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const response = await fetch(`/api/admin/usuarios/${usuario._id}/regenerar-qrcode`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
                 const data = await response.json();
                 if (data.success) {
-                    this.qrCodesUsuarios.push({
-                        _id: usuario._id, nome: usuario.nome, email: usuario.email, role: usuario.role,
-                        matricula: usuario.matricula, turma: usuario.turma, qrCodeDataUrl: data.qrCode,
-                        qrCodeGeradoEm: new Date().toISOString(), ativo: usuario.ativo
-                    });
+                    this.qrCodesUsuarios.push({ _id: usuario._id, nome: usuario.nome, email: usuario.email, role: usuario.role, matricula: usuario.matricula, turma: usuario.turma, qrCodeDataUrl: data.qrCode, qrCodeGeradoEm: new Date().toISOString(), ativo: usuario.ativo });
                     sucessos++;
                 }
             } catch (error) { console.error(error); }
         }
-        
         this.usuariosSemQR = this.usuariosSemQR.filter(u => !this.qrCodesUsuarios.some(q => q._id === u._id));
         this.qrCodesFiltrados = [...this.qrCodesUsuarios];
         this.renderizarQRCodeManagement();
@@ -30214,10 +30256,7 @@ class AdminPanel {
         const busca = document.getElementById('buscaQR');
         if (busca) {
             let timeout;
-            busca.addEventListener('input', () => {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => this.aplicarFiltrosQR(), 300);
-            });
+            busca.addEventListener('input', () => { clearTimeout(timeout); timeout = setTimeout(() => this.aplicarFiltrosQR(), 300); });
         }
     }
 
@@ -30247,6 +30286,7 @@ class AdminPanel {
 
     openModal() { document.getElementById('modal').style.display = 'flex'; }
     closeModal() { document.getElementById('modal').style.display = 'none'; }
+
     // ============ FUNÇÕES DE BACKUP ============
 
     async criarBackup() {
