@@ -30179,26 +30179,69 @@ class AdminPanel {
 
     // ============ OUTRAS FUNÇÕES ============
     async gerarQRCodesPendentes() {
-        if (this.usuariosSemQR.length === 0) { this.showToast('ℹ️ Todos os usuários já possuem QR Code', 'info'); return; }
+        if (this.usuariosSemQR.length === 0) { 
+            this.showToast('ℹ️ Todos os usuários já possuem QR Code', 'info'); 
+            return; 
+        }
+        
         const confirmar = await this.confirmar('Gerar QR Codes Pendentes', `Deseja gerar QR Codes para <strong>${this.usuariosSemQR.length}</strong> usuário(s)?`);
         if (!confirmar) return;
+        
         this.showToast(`🔄 Gerando QR Codes para ${this.usuariosSemQR.length} usuários...`, 'info');
+        
         let sucessos = 0;
+        let erros = 0;
+        
         for (const usuario of this.usuariosSemQR) {
             try {
                 const token = localStorage.getItem('auth_token');
-                const response = await fetch(`/api/admin/usuarios/${usuario._id}/regenerar-qrcode`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+                
+                console.log(`📱 Gerando QR Code para: ${usuario.nome} (${usuario._id})`);
+                
+                // 🔥 USAR A ROTA QUE VAMOS CRIAR
+                const response = await fetch(`/api/admin/usuarios/${usuario._id}/regenerar-qrcode`, { 
+                    method: 'POST', 
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    } 
+                });
+                
                 const data = await response.json();
+                
                 if (data.success) {
-                    this.qrCodesUsuarios.push({ _id: usuario._id, nome: usuario.nome, email: usuario.email, role: usuario.role, matricula: usuario.matricula, turma: usuario.turma, qrCodeDataUrl: data.qrCode, qrCodeGeradoEm: new Date().toISOString(), ativo: usuario.ativo });
+                    // Adicionar à lista local
+                    this.qrCodesUsuarios.push({ 
+                        _id: usuario._id, 
+                        nome: usuario.nome, 
+                        email: usuario.email, 
+                        role: usuario.role, 
+                        matricula: usuario.matricula, 
+                        turma: usuario.turma, 
+                        qrCodeDataUrl: data.qrCode, 
+                        qrCodeGeradoEm: new Date().toISOString(), 
+                        ativo: usuario.ativo 
+                    });
                     sucessos++;
+                    console.log(`✅ QR Code gerado e salvo no banco para: ${usuario.nome}`);
+                } else {
+                    console.error(`❌ Erro ao gerar QR para ${usuario.nome}:`, data.error);
+                    erros++;
                 }
-            } catch (error) { console.error(error); }
+            } catch (error) { 
+                console.error(`❌ Erro ao gerar QR para ${usuario.nome}:`, error);
+                erros++;
+            }
+            
+            // Pequena pausa para não sobrecarregar o servidor
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
+        
         this.usuariosSemQR = this.usuariosSemQR.filter(u => !this.qrCodesUsuarios.some(q => q._id === u._id));
         this.qrCodesFiltrados = [...this.qrCodesUsuarios];
         this.renderizarQRCodeManagement();
-        this.showToast(`✅ ${sucessos} QR Codes gerados!`, 'success');
+        
+        this.showToast(`✅ ${sucessos} QR Codes gerados, ${erros} erros`, sucessos > 0 ? 'success' : 'error');
     }
 
     baixarQRCodeUsuario(usuarioId) {
