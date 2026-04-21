@@ -29944,24 +29944,119 @@ class AdminPanel {
 
     // ============ BAIXAR CARTÕES POR TURMA ============
     async baixarCartoesPorTurma(turma) {
+        this.closeModal();
+        
         const alunosDaTurma = this.qrCodesFiltrados.filter(u => u.turma === turma && u.role === 'aluno');
+        
         if (alunosDaTurma.length === 0) {
             this.showToast(`❌ Nenhum aluno encontrado na turma ${turma}`, 'error');
             return;
         }
-        this.showToast(`🖨️ Gerando ${alunosDaTurma.length} cartões...`, 'info');
-        let htmlCompleto = '';
+        
+        this.showToast(`🖨️ Gerando ${alunosDaTurma.length} cartões para a turma ${turma}...`, 'info');
+        
+        const printWindow = window.open('', '_blank');
+        
+        let cssEstilos = '';
+        if (alunosDaTurma.length > 0) {
+            const primeiroAluno = alunosDaTurma[0];
+            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(primeiroAluno, this.configCartao);
+            const styleMatch = cartaoHtmlCompleto.match(/<style>([\s\S]*?)<\/style>/);
+            if (styleMatch) {
+                cssEstilos = styleMatch[1];
+            }
+        }
+        
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Cartões QR Code - Turma ${turma}</title>
+                <style>
+                    /* Estilos dos cartões */
+                    ${cssEstilos}
+                    
+                    @media print {
+                        @page {
+                            size: landscape;
+                            margin: 0.5cm;
+                        }
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                        .page-break {
+                            page-break-after: always;
+                            break-after: page;
+                        }
+                        .btn-print {
+                            display: none !important;
+                        }
+                        .no-print {
+                            display: none !important;
+                        }
+                    }
+                    body {
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        background: #f1f5f9;
+                        margin: 0;
+                        padding: 20px;
+                    }
+                    .cartoes-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }
+                    .cartao-container {
+                        margin: 10px auto;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="cartoes-container">
+        `);
+        
+        printWindow.document.close();
+        
         for (let i = 0; i < alunosDaTurma.length; i++) {
             const aluno = alunosDaTurma[i];
-            const cartaoHtml = this.gerarCartaoHorizontal(aluno, this.configCartao);
-            htmlCompleto += cartaoHtml;
-            if (i < alunosDaTurma.length - 1) htmlCompleto += `<div style="page-break-before: always;"></div>`;
+            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(aluno, this.configCartao);
+            
+            const tempDiv = printWindow.document.createElement('div');
+            tempDiv.innerHTML = cartaoHtmlCompleto;
+            
+            let cartaoElement = tempDiv.querySelector('.cartao-container');
+            
+            if (cartaoElement) {
+                const clone = cartaoElement.cloneNode(true);
+                printWindow.document.body.querySelector('.cartoes-container').appendChild(clone);
+            } else {
+                const fallbackDiv = printWindow.document.createElement('div');
+                fallbackDiv.innerHTML = cartaoHtmlCompleto;
+                const fallbackCartao = fallbackDiv.querySelector('.cartao-container');
+                if (fallbackCartao) {
+                    printWindow.document.body.querySelector('.cartoes-container').appendChild(fallbackCartao.cloneNode(true));
+                }
+            }
+            
+            if (i < alunosDaTurma.length - 1) {
+                const breakDiv = printWindow.document.createElement('div');
+                breakDiv.className = 'page-break';
+                printWindow.document.body.querySelector('.cartoes-container').appendChild(breakDiv);
+            }
         }
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(htmlCompleto);
-        printWindow.document.close();
-        printWindow.onload = function() { setTimeout(() => { printWindow.print(); printWindow.onafterprint = function() { printWindow.close(); }; }, 500); };
-        this.showToast(`✅ ${alunosDaTurma.length} cartões gerados!`, 'success');
+        
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.onafterprint = function() {
+                printWindow.close();
+            };
+        }, 1500);
+        
+        this.showToast(`✅ ${alunosDaTurma.length} cartões gerados para ${turma}!`, 'success');
     }
 
     // ============ ABRIR MENU DE DOWNLOAD POR TURMAS ============
@@ -30000,29 +30095,232 @@ class AdminPanel {
 
     // ============ BAIXAR TODOS OS QR CODES EM CARTÃO ============
     async baixarTodosQRCodesCartao() {
+        this.closeModal();
+        
         if (this.qrCodesFiltrados.length === 0) {
-            this.showToast('❌ Nenhum QR Code para exportar', 'error');
+            this.showToast('❌ Nenhum cartão para exportar', 'error');
             return;
         }
-        const confirmar = await this.confirmar('🖨️ Imprimir Todos', `Deseja gerar <strong>${this.qrCodesFiltrados.length}</strong> cartões?`);
-        if (!confirmar) return;
+        
         this.showToast(`🖨️ Gerando ${this.qrCodesFiltrados.length} cartões...`, 'info');
-        let htmlCompleto = '';
+        
+        const printWindow = window.open('', '_blank');
+        
+        let cssEstilos = '';
+        if (this.qrCodesFiltrados.length > 0) {
+            const primeiroUsuario = this.qrCodesFiltrados[0];
+            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(primeiroUsuario, this.configCartao);
+            const styleMatch = cartaoHtmlCompleto.match(/<style>([\s\S]*?)<\/style>/);
+            if (styleMatch) {
+                cssEstilos = styleMatch[1];
+            }
+        }
+        
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Cartões QR Code - Sistema de Provas</title>
+                <style>
+                    /* Estilos dos cartões */
+                    ${cssEstilos}
+                    
+                    @media print {
+                        @page {
+                            size: landscape;
+                            margin: 0.5cm;
+                        }
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                        .page-break {
+                            page-break-after: always;
+                            break-after: page;
+                        }
+                        .btn-print {
+                            display: none !important;
+                        }
+                        .no-print {
+                            display: none !important;
+                        }
+                    }
+                    body {
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        background: #f1f5f9;
+                        margin: 0;
+                        padding: 20px;
+                    }
+                    .cartoes-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }
+                    .cartao-container {
+                        margin: 10px auto;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="cartoes-container">
+        `);
+        
+        printWindow.document.close();
+        
         for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
             const usuario = this.qrCodesFiltrados[i];
-            htmlCompleto += this.gerarCartaoHorizontal(usuario, this.configCartao);
-            if (i < this.qrCodesFiltrados.length - 1) htmlCompleto += `<div style="page-break-before: always;"></div>`;
+            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(usuario, this.configCartao);
+            
+            const tempDiv = printWindow.document.createElement('div');
+            tempDiv.innerHTML = cartaoHtmlCompleto;
+            
+            let cartaoElement = tempDiv.querySelector('.cartao-container');
+            
+            if (cartaoElement) {
+                const clone = cartaoElement.cloneNode(true);
+                printWindow.document.body.querySelector('.cartoes-container').appendChild(clone);
+            } else {
+                const fallbackDiv = printWindow.document.createElement('div');
+                fallbackDiv.innerHTML = cartaoHtmlCompleto;
+                const fallbackCartao = fallbackDiv.querySelector('.cartao-container');
+                if (fallbackCartao) {
+                    printWindow.document.body.querySelector('.cartoes-container').appendChild(fallbackCartao.cloneNode(true));
+                }
+            }
+            
+            if (i < this.qrCodesFiltrados.length - 1) {
+                const breakDiv = printWindow.document.createElement('div');
+                breakDiv.className = 'page-break';
+                printWindow.document.body.querySelector('.cartoes-container').appendChild(breakDiv);
+            }
         }
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(htmlCompleto);
-        printWindow.document.close();
-        printWindow.onload = function() { setTimeout(() => { printWindow.print(); printWindow.onafterprint = function() { printWindow.close(); }; }, 500); };
+        
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.onafterprint = function() {
+                printWindow.close();
+            };
+        }, 1500);
+        
         this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões gerados!`, 'success');
     }
 
     // ============ BAIXAR APENAS OS FILTRADOS ============
     async baixarFiltradosCartao() {
-        await this.baixarTodosQRCodesCartao();
+        this.closeModal();
+        
+        if (this.qrCodesFiltrados.length === 0) {
+            this.showToast('❌ Nenhum resultado nos filtros atuais', 'error');
+            return;
+        }
+        
+        this.showToast(`🖨️ Gerando ${this.qrCodesFiltrados.length} cartões filtrados...`, 'info');
+        
+        const printWindow = window.open('', '_blank');
+        
+        let cssEstilos = '';
+        if (this.qrCodesFiltrados.length > 0) {
+            const primeiroUsuario = this.qrCodesFiltrados[0];
+            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(primeiroUsuario, this.configCartao);
+            const styleMatch = cartaoHtmlCompleto.match(/<style>([\s\S]*?)<\/style>/);
+            if (styleMatch) {
+                cssEstilos = styleMatch[1];
+            }
+        }
+        
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Cartões QR Code - Filtrados</title>
+                <style>
+                    /* Estilos dos cartões */
+                    ${cssEstilos}
+                    
+                    @media print {
+                        @page {
+                            size: landscape;
+                            margin: 0.5cm;
+                        }
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                        .page-break {
+                            page-break-after: always;
+                            break-after: page;
+                        }
+                        .btn-print {
+                            display: none !important;
+                        }
+                        .no-print {
+                            display: none !important;
+                        }
+                    }
+                    body {
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        background: #f1f5f9;
+                        margin: 0;
+                        padding: 20px;
+                    }
+                    .cartoes-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }
+                    .cartao-container {
+                        margin: 10px auto;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="cartoes-container">
+        `);
+        
+        printWindow.document.close();
+        
+        for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
+            const usuario = this.qrCodesFiltrados[i];
+            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(usuario, this.configCartao);
+            
+            const tempDiv = printWindow.document.createElement('div');
+            tempDiv.innerHTML = cartaoHtmlCompleto;
+            
+            let cartaoElement = tempDiv.querySelector('.cartao-container');
+            
+            if (cartaoElement) {
+                const clone = cartaoElement.cloneNode(true);
+                printWindow.document.body.querySelector('.cartoes-container').appendChild(clone);
+            } else {
+                const fallbackDiv = printWindow.document.createElement('div');
+                fallbackDiv.innerHTML = cartaoHtmlCompleto;
+                const fallbackCartao = fallbackDiv.querySelector('.cartao-container');
+                if (fallbackCartao) {
+                    printWindow.document.body.querySelector('.cartoes-container').appendChild(fallbackCartao.cloneNode(true));
+                }
+            }
+            
+            if (i < this.qrCodesFiltrados.length - 1) {
+                const breakDiv = printWindow.document.createElement('div');
+                breakDiv.className = 'page-break';
+                printWindow.document.body.querySelector('.cartoes-container').appendChild(breakDiv);
+            }
+        }
+        
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.onafterprint = function() {
+                printWindow.close();
+            };
+        }, 1500);
+        
+        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões filtrados gerados!`, 'success');
     }
 
     // ============ MÉTODOS AUXILIARES ============
