@@ -30411,25 +30411,44 @@ class AdminPanel {
         this.renderizarQRCodeManagement();
     }
 
+    // ============ MUDAR VISUALIZAÇÃO ============
     mudarViewQR(view) {
         this.viewAtualQR = view;
+        
         const grid = document.getElementById('qrContentGrid');
         const list = document.getElementById('qrContentList');
         const compact = document.getElementById('qrContentCompact');
         const btns = document.querySelectorAll('.view-btn');
+        
+        // Esconder todos
+        if (grid) grid.style.display = 'none';
+        if (list) list.style.display = 'none';
+        if (compact) compact.style.display = 'none';
+        
+        // Remover active de todos os botões
         btns.forEach(btn => btn.classList.remove('active'));
-        if (view === 'grid') { if (grid) grid.style.display = 'grid'; if (list) list.style.display = 'none'; if (compact) compact.style.display = 'none'; btns[0]?.classList.add('active'); }
-        else if (view === 'list') { if (grid) grid.style.display = 'none'; if (list) list.style.display = 'block'; if (compact) compact.style.display = 'none'; btns[1]?.classList.add('active'); }
-        else { if (grid) grid.style.display = 'none'; if (list) list.style.display = 'none'; if (compact) compact.style.display = 'block'; btns[2]?.classList.add('active'); }
+        
+        // Mostrar a view selecionada e ativar o botão correspondente
+        if (view === 'grid') {
+            if (grid) grid.style.display = 'grid';
+            if (btns[0]) btns[0].classList.add('active');
+        } else if (view === 'list') {
+            if (list) list.style.display = 'block';
+            if (btns[1]) btns[1].classList.add('active');
+        } else if (view === 'compact') {
+            if (compact) compact.style.display = 'block';
+            if (btns[2]) btns[2].classList.add('active');
+        }
     }
 
-    // ============ PAGINAÇÃO ============
+    // ============ ATUALIZAR PAGINAÇÃO ============
     atualizarPaginacaoQR() {
         const total = this.qrCodesFiltrados.length;
         const totalPaginas = Math.ceil(total / this.itensPorPaginaQR);
         const btnAnterior = document.getElementById('btnAnteriorQR');
         const btnProxima = document.getElementById('btnProximaQR');
         const pageInfo = document.getElementById('pageInfoQR');
+        
         if (btnAnterior) btnAnterior.disabled = this.paginaAtualQR === 1;
         if (btnProxima) btnProxima.disabled = this.paginaAtualQR === totalPaginas;
         if (pageInfo) pageInfo.textContent = `Página ${this.paginaAtualQR} de ${totalPaginas || 1}`;
@@ -30443,6 +30462,8 @@ class AdminPanel {
         const inicio = (this.paginaAtualQR - 1) * this.itensPorPaginaQR;
         const fim = inicio + this.itensPorPaginaQR;
         const paginaItens = this.qrCodesFiltrados.slice(inicio, fim);
+        
+        // ========== 1. GRID (CARDS) ==========
         const gridContainer = document.getElementById('qrContentGrid');
         if (gridContainer) {
             if (paginaItens.length === 0) {
@@ -30451,6 +30472,8 @@ class AdminPanel {
                 let gridHtml = '';
                 paginaItens.forEach(usuario => {
                     const roleClass = usuario.role === 'aluno' ? 'badge-aluno' : (usuario.role === 'professor' ? 'badge-professor' : 'badge-admin');
+                    const dataGeracao = usuario.qrCodeGeradoEm ? new Date(usuario.qrCodeGeradoEm).toLocaleDateString('pt-BR') : 'Não informada';
+                    
                     gridHtml += `
                         <div class="qrcode-card">
                             <div class="card-badge ${roleClass}">${this.getRoleLabelQR(usuario.role)}</div>
@@ -30459,6 +30482,7 @@ class AdminPanel {
                                 <div class="usuario-nome">${this.escapeHtml(usuario.nome)}</div>
                                 <div class="usuario-detalhes"><i class="fas fa-envelope"></i> ${usuario.email || 'Sem email'}</div>
                                 <div class="usuario-detalhes"><i class="fas fa-id-card"></i> ${usuario.matricula || 'Sem matrícula'}</div>
+                                <div class="usuario-detalhes"><i class="fas fa-calendar-alt"></i> ${dataGeracao}</div>
                             </div>
                             <div class="card-actions">
                                 <button class="card-action-btn btn-view-qr" onclick="admin.visualizarQRCodeModal('${usuario._id}')"><i class="fas fa-eye"></i> Ver</button>
@@ -30472,6 +30496,77 @@ class AdminPanel {
                 gridContainer.innerHTML = gridHtml;
             }
         }
+        
+        // ========== 2. LISTA ==========
+        const listContainer = document.getElementById('qrContentList');
+        if (listContainer) {
+            if (paginaItens.length === 0) {
+                listContainer.innerHTML = `<div class="loading-grid"><i class="fas fa-qrcode"></i><span>Nenhum QR Code encontrado</span></div>`;
+            } else {
+                let listHtml = '';
+                paginaItens.forEach(usuario => {
+                    const dataGeracao = usuario.qrCodeGeradoEm ? new Date(usuario.qrCodeGeradoEm).toLocaleDateString('pt-BR') : 'Não informada';
+                    const roleClass = usuario.role === 'aluno' ? 'badge-aluno' : (usuario.role === 'professor' ? 'badge-professor' : 'badge-admin');
+                    
+                    listHtml += `
+                        <div class="list-item-qr">
+                            <div class="qrcode-preview-list">
+                                <img src="${usuario.qrCodeDataUrl}" style="width: 60px; height: 60px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            </div>
+                            <div class="list-item-info">
+                                <div><strong>${this.escapeHtml(usuario.nome)}</strong> <span class="role-badge ${roleClass}" style="padding: 2px 8px; border-radius: 12px; font-size: 10px;">${this.getRoleLabelQR(usuario.role)}</span></div>
+                                <div style="font-size: 12px; color: #6b7280;">${usuario.email || 'Sem email'} • Mat: ${usuario.matricula || '-'}</div>
+                                <div style="font-size: 11px; color: #9ca3af;"><i class="fas fa-calendar-alt"></i> ${dataGeracao}</div>
+                            </div>
+                            <div class="list-item-actions">
+                                <button class="btn-icon" onclick="admin.visualizarQRCodeModal('${usuario._id}')" title="Ver QR Code"><i class="fas fa-eye"></i></button>
+                                <button class="btn-icon" onclick="admin.baixarQRCodeUsuario('${usuario._id}')" title="Baixar QR Code"><i class="fas fa-download"></i></button>
+                                <button class="btn-icon" onclick="admin.baixarQRCodeCartao('${usuario._id}')" title="Baixar Cartão"><i class="fas fa-id-card"></i></button>
+                                <button class="btn-icon danger" onclick="admin.excluirQRCodeUsuario('${usuario._id}', '${this.escapeHtml(usuario.nome)}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    `;
+                });
+                listContainer.innerHTML = listHtml;
+            }
+        }
+        
+        // ========== 3. TABELA COMPACTA ==========
+        const compactContainer = document.getElementById('tabelaQRCompact');
+        if (compactContainer) {
+            if (paginaItens.length === 0) {
+                compactContainer.innerHTML = `
+                    <tr><td colspan="6" style="text-align: center; padding: 40px;">Nenhum QR Code encontrado</td></tr>
+                `;
+            } else {
+                let compactHtml = '';
+                paginaItens.forEach(usuario => {
+                    const dataGeracao = usuario.qrCodeGeradoEm ? new Date(usuario.qrCodeGeradoEm).toLocaleDateString('pt-BR') : 'Não informada';
+                    const roleClass = usuario.role === 'aluno' ? 'badge-aluno' : (usuario.role === 'professor' ? 'badge-professor' : 'badge-admin');
+                    const roleLabel = this.getRoleLabelQR(usuario.role);
+                    
+                    compactHtml += `
+                        <tr>
+                            <td><strong>${this.escapeHtml(usuario.nome)}</strong><br><small style="color: #6b7280;">${usuario.email || '-'}</small></td>
+                            <td><span class="role-badge ${roleClass}" style="padding: 2px 8px; border-radius: 12px; font-size: 10px;">${roleLabel}</span></td>
+                            <td>${usuario.matricula || '-'}</td>
+                            <td>${usuario.turma || '-'}</td>
+                            <td>${dataGeracao}</td>
+                            <td>
+                                <div class="action-buttons" style="display: flex; gap: 5px;">
+                                    <button class="btn-icon" onclick="admin.visualizarQRCodeModal('${usuario._id}')" title="Ver"><i class="fas fa-eye"></i></button>
+                                    <button class="btn-icon" onclick="admin.baixarQRCodeUsuario('${usuario._id}')" title="Baixar QR"><i class="fas fa-download"></i></button>
+                                    <button class="btn-icon" onclick="admin.baixarQRCodeCartao('${usuario._id}')" title="Cartão"><i class="fas fa-id-card"></i></button>
+                                    <button class="btn-icon danger" onclick="admin.excluirQRCodeUsuario('${usuario._id}', '${this.escapeHtml(usuario.nome)}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                compactContainer.innerHTML = compactHtml;
+            }
+        }
+        
         this.atualizarPaginacaoQR();
     }
 
