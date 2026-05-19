@@ -2508,12 +2508,12 @@ class AdminPanel {
 
     // ============ USUÁRIOS ============
 
-    // ============ USUÁRIOS - VERSÃO PROFISSIONAL (MESMO ESTILO DAS PROVAS) ============
+    // ============ LOAD USUÁRIOS (VERSÃO CORRIGIDA) ============
     async loadUsuarios() {
         const contentArea = document.getElementById('contentArea');
         
         try {
-            const { role, search, page, limit } = this.filtros.usuarios;
+            const { role, search, status, turma, page, limit } = this.filtros.usuarios;
             
             // MOSTRAR LOADING
             contentArea.innerHTML = `
@@ -2525,20 +2525,56 @@ class AdminPanel {
             `;
 
             // BUSCAR DADOS DO BACKEND
-            console.log('📡 Buscando usuários...');
-            const response = await fetch(
-                `${this.apiBase}/usuarios?role=${role}&search=${search}&page=${page}&limit=${limit}`,
-                { headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` } }
-            );
+            console.log('📡 Buscando usuários com filtros:', { role, search, status, turma, page, limit });
+            
+            const token = localStorage.getItem('auth_token');
+            
+            // CONSTRUIR URL COM TODOS OS PARÂMETROS
+            let url = `${this.apiBase}/usuarios?page=${page}&limit=${limit}`;
+            
+            if (search && search.trim() !== '') {
+                url += `&search=${encodeURIComponent(search.trim())}`;
+            }
+            
+            if (role && role !== 'todos') {
+                url += `&role=${role}`;
+            }
+            
+            // 🔥 ADICIONAR STATUS
+            if (status && status !== 'todos') {
+                url += `&status=${status}`;
+                console.log(`   ✅ Adicionando status=${status} à URL`);
+            }
+            
+            // 🔥 ADICIONAR TURMA
+            if (turma && turma !== 'todas' && turma !== '') {
+                url += `&turma=${encodeURIComponent(turma)}`;
+                console.log(`   ✅ Adicionando turma=${turma} à URL`);
+            }
+            
+            console.log('🔗 URL final:', url);
+            
+            const response = await fetch(url, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
             
             const data = await response.json();
+            console.log('📦 Dados recebidos:', data);
 
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
-            this.usuarios = data.usuarios;
+            // ARMAZENAR DADOS
+            this.usuarios = data.usuarios || [];
 
-            // CALCULAR ESTATÍSTICAS
-            const totalUsuarios = data.pagination?.total || this.usuarios.length;
+            // CALCULAR ESTATÍSTICAS COM OS DADOS FILTRADOS
+            const totalUsuarios = this.usuarios.length;
             const usuariosAtivos = this.usuarios.filter(u => u.ativo === true).length;
             const usuariosInativos = this.usuarios.filter(u => u.ativo === false).length;
             const totalAlunos = this.usuarios.filter(u => u.role === 'aluno').length;
@@ -2546,7 +2582,7 @@ class AdminPanel {
             const totalAdmins = this.usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length;
             const comAcessibilidade = this.usuarios.filter(u => u.precisaAcessibilidade === true).length;
 
-            // RENDERIZAR HTML NO MESMO ESTILO DAS PROVAS
+            // RENDERIZAR HTML
             contentArea.innerHTML = this.renderUsuariosProfissional({
                 role, search, page, limit,
                 usuarios: this.usuarios,
@@ -2576,6 +2612,9 @@ class AdminPanel {
 
     // ============ RENDERIZAR USUÁRIOS (VERSÃO PROFISSIONAL CORRIGIDA) ============
     renderUsuariosProfissional({ role, search, page, limit, usuarios, pagination, total, estatisticas }) {
+        // Obter lista de turmas únicas dos usuários
+        const turmasUnicas = [...new Set(usuarios.filter(u => u.turma && u.turma !== '').map(u => u.turma))].sort();
+        
         return `
             <div class="usuarios-container">
                 <!-- HEADER PROFISSIONAL (AZUL ROYAL) -->
@@ -2594,6 +2633,19 @@ class AdminPanel {
                         <button class="btn-header btn-refresh" onclick="admin.atualizarUsuarios()" title="Atualizar">
                             <i class="fas fa-sync-alt"></i>
                         </button>
+                        
+                        <!-- BOTÃO - GERENCIAR TURMAS -->
+                        <button class="btn-header" onclick="admin.abrirModalGerenciarTurmas()" title="Gerenciar Turmas (Inativar/Excluir alunos por turma)" style="background: #f59e0b; color: white;">
+                            <i class="fas fa-school"></i>
+                            <span>Gerenciar Turmas</span>
+                        </button>
+                        
+                        <!-- BOTÃO - UPLOAD DE ALUNOS -->
+                        <button class="btn-header" onclick="admin.abrirModalUploadUsuarios()" title="Upload de Alunos por Excel" style="background: #10b981; color: white;">
+                            <i class="fas fa-file-excel"></i>
+                            <span>Upload Alunos</span>
+                        </button>
+                        
                         <button class="btn-header btn-primary" onclick="admin.abrirModalUsuario()">
                             <i class="fas fa-plus-circle"></i>
                             <span>Novo Usuário</span>
@@ -2670,7 +2722,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- BARRA DE FILTROS -->
+                <!-- BARRA DE FILTROS COM TURMA -->
                 <div class="filters-card">
                     <div class="filters-header">
                         <div class="filters-title">
@@ -2708,7 +2760,7 @@ class AdminPanel {
                                 <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>🏃 Coordenação de Pátio</option>
                                 <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>🍽️ Cozinha</option>
                                 <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>📊 Gestão Geral</option>
-                                <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>🏥 Enfermaria</option>  <!-- 🔥 NOVO -->
+                                <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>🏥 Enfermaria</option>
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
                                 <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
                             </select>
@@ -2721,6 +2773,15 @@ class AdminPanel {
                                 <option value="todos" ${this.filtros.usuarios.status === 'todos' ? 'selected' : ''}>Todos</option>
                                 <option value="ativo" ${this.filtros.usuarios.status === 'ativo' ? 'selected' : ''}>✅ Ativos</option>
                                 <option value="inativo" ${this.filtros.usuarios.status === 'inativo' ? 'selected' : ''}>⏸️ Inativos</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Turma -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-school"></i> Turma</label>
+                            <select id="filterTurma" class="filter-select" onchange="admin.filtrarPorTurma()">
+                                <option value="todas" ${this.filtros.usuarios.turma === 'todas' ? 'selected' : ''}>Todas as turmas</option>
+                                ${turmasUnicas.map(t => `<option value="${t}" ${this.filtros.usuarios.turma === t ? 'selected' : ''}>${t}</option>`).join('')}
                             </select>
                         </div>
                         
@@ -2770,6 +2831,9 @@ class AdminPanel {
                                     <th onclick="admin.ordenarUsuariosPor('telefone')" class="sortable">
                                         Telefone <i class="fas fa-sort" id="sort-telefone"></i>
                                     </th>
+                                    <th onclick="admin.ordenarUsuariosPor('turma')" class="sortable">
+                                        Turma <i class="fas fa-sort" id="sort-turma"></i>
+                                    </th>
                                     <th onclick="admin.ordenarUsuariosPor('status')" class="sortable">
                                         Status <i class="fas fa-sort" id="sort-status"></i>
                                     </th>
@@ -2793,7 +2857,6 @@ class AdminPanel {
             <style>
                 .usuarios-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
                 
-                /* Header com azul royal (igual às provas) */
                 .usuarios-header {
                     background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
                     border-radius: 20px;
@@ -2865,7 +2928,6 @@ class AdminPanel {
                 }
                 .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
                 
-                /* Stats cards */
                 .stats-grid {
                     display: grid;
                     grid-template-columns: repeat(6, 1fr);
@@ -2904,7 +2966,6 @@ class AdminPanel {
                 .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
                 .stat-detail { font-size: 11px; color: #9ca3af; }
                 
-                /* Filtros */
                 .filters-card {
                     background: white;
                     border-radius: 16px;
@@ -2928,7 +2989,7 @@ class AdminPanel {
                 
                 .filters-grid {
                     display: grid;
-                    grid-template-columns: 2fr 1fr 1fr auto;
+                    grid-template-columns: 2fr 1fr 1fr 1fr auto;
                     gap: 15px;
                 }
                 .filter-group { display: flex; flex-direction: column; gap: 5px; }
@@ -3003,7 +3064,6 @@ class AdminPanel {
                 .btn-filter.btn-clear { background: #6b7280; }
                 .btn-filter.btn-clear:hover { background: #4b5563; }
                 
-                /* Tabela profissional */
                 .table-professional {
                     background: white;
                     border-radius: 16px;
@@ -3047,7 +3107,6 @@ class AdminPanel {
                 }
                 .data-table tr:hover td { background: #f9fafb; }
                 
-                /* Role badges */
                 .role-badge {
                     display: inline-block;
                     padding: 4px 10px;
@@ -3061,40 +3120,11 @@ class AdminPanel {
                 .role-badge.aluno { background: #10b981; color: white; }
                 .role-badge.setor_pedagogico { background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; }
                 .role-badge.setor_pedagogico i { color: white; margin-right: 4px; }
-
-                .role-badge.gestao_geral {
-                    background: linear-gradient(135deg, #1e3c72, #2a5298);
-                    color: white;
-                }
-                .role-badge.gestao_geral i {
-                    margin-right: 4px;
-                }
-
-                .role-badge.coordenacao_patio {
-                    background: linear-gradient(135deg, #f59e0b, #d97706);
-                    color: white;
-                }
-                .role-badge.coordenacao_patio i {
-                    margin-right: 4px;
-                }
-
-                .role-badge.cozinha {
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    color: white;
-                }
-                .role-badge.cozinha i {
-                    margin-right: 4px;
-                }
+                .role-badge.gestao_geral { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; }
+                .role-badge.coordenacao_patio { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+                .role-badge.cozinha { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+                .role-badge.enfermaria { background: linear-gradient(135deg, #0891b2, #06b6d4); color: white; }
                 
-                .role-badge.enfermaria {
-                    background: linear-gradient(135deg, #0891b2, #06b6d4);
-                    color: white;
-                }
-                .role-badge.enfermaria i {
-                    margin-right: 4px;
-                }
-                
-                /* Status badges */
                 .status-badge {
                     display: inline-block;
                     padding: 4px 10px;
@@ -3105,7 +3135,6 @@ class AdminPanel {
                 .status-badge.active { background: #d1fae5; color: #065f46; }
                 .status-badge.inactive { background: #fee2e2; color: #991b1b; }
                 
-                /* Acessibilidade badge */
                 .badge-acessibilidade {
                     display: inline-flex;
                     align-items: center;
@@ -3119,7 +3148,6 @@ class AdminPanel {
                     margin-left: 5px;
                 }
                 
-                /* Action buttons */
                 .action-buttons { display: flex; gap: 5px; }
                 .btn-icon {
                     width: 32px; height: 32px;
@@ -3138,7 +3166,6 @@ class AdminPanel {
                 .btn-icon.success:hover { color: #10b981; }
                 .btn-icon.danger:hover { color: #dc3545; }
                 
-                /* Paginação */
                 .pagination-professional {
                     padding: 16px 20px;
                     border-top: 1px solid #e5e7eb;
@@ -3180,60 +3207,1754 @@ class AdminPanel {
         `;
     }
 
+    // ============================================
+    // 📤 UPLOAD DE ALUNOS - Nome, CPF, Turma, Curso, EIXO
+    // ============================================
+
+    abrirModalUploadUsuarios() {
+        const modalBody = document.getElementById('modalBody');
+        
+        modalBody.innerHTML = `
+            <div class="upload-usuarios-container" style="max-width: 800px; margin: 0 auto;">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                        <i class="fas fa-file-excel" style="font-size: 32px; color: white;"></i>
+                    </div>
+                    <h2 style="margin: 15px 0 5px;">Upload de Alunos</h2>
+                    <p style="color: #6b7280;">Envie uma planilha Excel para cadastrar múltiplos alunos</p>
+                    <p style="color: #10b981; font-size: 13px;"><i class="fas fa-magic"></i> Colunas: Nome, CPF, Turma, Curso, EIXO</p>
+                    <p style="color: #f59e0b; font-size: 12px;"><i class="fas fa-check-double"></i> Alunos já cadastrados (por CPF) serão ignorados</p>
+                </div>
+
+                <div style="background: #e6f7ff; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div style="width: 50px; height: 50px; background: #0d6efd; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-download" style="font-size: 24px; color: white;"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0;">📥 Baixar Modelo de Planilha</h4>
+                            <p style="margin: 5px 0 0; font-size: 13px; color: #6b7280;">Colunas: Nome, CPF, Turma, Curso, EIXO</p>
+                        </div>
+                        <button class="btn-primary" onclick="admin.baixarModeloExcelAlunos()" style="background: #0d6efd; padding: 10px 20px; white-space: nowrap;">
+                            <i class="fas fa-download"></i> Baixar Modelo
+                        </button>
+                    </div>
+                </div>
+
+                <div id="previewPlanilha" style="display: none; background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="margin: 0;"><i class="fas fa-table"></i> Colunas Detectadas</h4>
+                        <span id="colunasDetectadasCount" style="background: #10b981; color: white; padding: 2px 8px; border-radius: 20px; font-size: 12px;">0</span>
+                    </div>
+                    <div id="colunasDetectadas" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;"></div>
+                    <div id="previewDados" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: white; font-size: 12px;"></div>
+                </div>
+
+                <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div id="uploadArea" 
+                        style="border: 2px dashed #cbd5e0; border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s;"
+                        onclick="document.getElementById('excelInput').click()"
+                        ondrop="admin.handleDropExcel(event)"
+                        ondragover="admin.handleDragOverExcel(event)"
+                        ondragleave="admin.handleDragLeaveExcel(event)">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #10b981; margin-bottom: 15px;"></i>
+                        <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
+                        <p style="margin: 0; color: #6b7280;">Arquivos Excel (.xlsx, .xls) - Máximo 10MB</p>
+                    </div>
+                    <input type="file" id="excelInput" style="display: none;" accept=".xlsx,.xls" onchange="admin.handleFileSelectExcel(event)">
+                    
+                    <div id="previewArquivo" style="display: none; margin-top: 20px; padding: 15px; background: #e5e7eb; border-radius: 12px;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <i class="fas fa-file-excel" style="font-size: 40px; color: #10b981;"></i>
+                            <div style="flex: 1;">
+                                <div><strong id="nomeArquivoExcel">-</strong></div>
+                                <div><small id="tamanhoArquivoExcel">-</small></div>
+                            </div>
+                            <button onclick="admin.removerArquivoExcel()" style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #dc2626;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 15px;"><i class="fas fa-cog"></i> Configurações</h4>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="opcaoAtivarUsuarios" checked>
+                            <span>✅ Ativar usuários automaticamente</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="opcaoForcarTrocaSenha" checked>
+                            <span>🔐 Forçar troca de senha no primeiro acesso</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="opcaoNotificarCadastro">
+                            <span>📧 Enviar e-mail de boas-vindas</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="background: #fef3c7; border-radius: 16px; padding: 15px; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 10px;">
+                        <i class="fas fa-info-circle" style="color: #f59e0b;"></i>
+                        <div style="font-size: 13px; color: #92400e;">
+                            <strong>📋 Dados Gerados Automaticamente:</strong>
+                            <ul style="margin: 5px 0 0 20px;">
+                                <li>Email: <strong>CPF@iemasaoluiscentro.net</strong></li>
+                                <li>Senha: <strong>123456</strong></li>
+                                <li>Telefone: <strong>99999999999</strong></li>
+                                <li>Período: <strong>1º (fixo)</strong></li>
+                                <li>QR Code: <strong>Gerado automaticamente</strong></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="progressoUpload" style="display: none; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span><i class="fas fa-spinner fa-spin"></i> Processando...</span>
+                        <span id="progressoPercentual">0%</span>
+                    </div>
+                    <div style="height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                        <div id="progressoBarra" style="height: 100%; background: linear-gradient(90deg, #10b981, #059669); width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                        Cancelar
+                    </button>
+                    <button id="btnProcessarUpload" onclick="admin.processarUploadExcelAlunos()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;" disabled>
+                        <i class="fas fa-upload"></i> Cadastrar Alunos
+                    </button>
+                </div>
+            </div>
+
+            <style>
+                .upload-usuarios-container {
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    padding: 5px;
+                }
+                #uploadArea.drag-over {
+                    border-color: #10b981 !important;
+                    background: #ecfdf5 !important;
+                }
+                .coluna-tag {
+                    background: #e5e7eb;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+                .coluna-tag.detectada {
+                    background: #10b981;
+                    color: white;
+                }
+            </style>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-upload"></i> Upload de Alunos';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        
+        this.arquivoExcel = null;
+        this.dadosExcel = null;
+        this.openModal();
+    }
+
+    // ============ BAIXAR MODELO EXCEL ============
+    baixarModeloExcelAlunos() {
+        const dados = [
+            {
+                'Nome': 'MARIA DA SILVA',
+                'CPF': '12345678901',
+                'Turma': '101',
+                'Curso': 'TÉCNICO EM INFORMÁTICA',
+                'EIXO': 'INFORMAÇÃO E COMUNICAÇÃO'
+            },
+            {
+                'Nome': 'JOAO PEREIRA',
+                'CPF': '98765432109',
+                'Turma': '102',
+                'Curso': 'TÉCNICO EM EVENTOS',
+                'EIXO': 'TURISMO, HOSPITALIDADE E LAZER'
+            }
+        ];
+        
+        const wsData = [
+            ['Nome', 'CPF', 'Turma', 'Curso', 'EIXO'],
+            ...dados.map(d => [d.Nome, d.CPF, d.Turma, d.Curso, d.EIXO])
+        ];
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{wch:35}, {wch:15}, {wch:10}, {wch:35}, {wch:35}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Alunos');
+        
+        const instrucoesData = [
+            ['INSTRUÇÕES PARA PREENCHIMENTO'],
+            [''],
+            ['Colunas Obrigatórias:'],
+            ['Nome - Nome completo do aluno'],
+            ['CPF - CPF do aluno (apenas números, 11 dígitos)'],
+            ['Turma - Código da turma (ex: 101, 102)'],
+            ['Curso - Nome do curso'],
+            ['EIXO - Eixo tecnológico do curso'],
+            [''],
+            ['Dados Gerados Automaticamente:'],
+            ['- Email: CPF@iemasaoluiscentro.net'],
+            ['- Senha: 123456'],
+            ['- Telefone: 99999999999'],
+            ['- Período: 1º (fixo)'],
+            ['- QR Code: Gerado e salvo no sistema']
+        ];
+        
+        const wsInstrucoes = XLSX.utils.aoa_to_sheet(instrucoesData);
+        wsInstrucoes['!cols'] = [{wch:60}];
+        XLSX.utils.book_append_sheet(wb, wsInstrucoes, 'Instruções');
+        
+        XLSX.writeFile(wb, 'modelo_cadastro_alunos.xlsx');
+        this.showToast('✅ Modelo baixado!', 'success');
+    }
+
+    // ============ HANDLE FILE SELECT ============
+    async handleFileSelectExcel(event) {
+        const files = event.target.files;
+        if (files.length > 0) {
+            await this.processarArquivoExcelAlunos(files[0]);
+        }
+    }
+
+    // ============ HANDLE DROP ============
+    async handleDropExcel(event) {
+        event.preventDefault();
+        const area = event.currentTarget;
+        area.classList.remove('drag-over');
+        
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+            await this.processarArquivoExcelAlunos(files[0]);
+        }
+    }
+
+    handleDragOverExcel(event) {
+        event.preventDefault();
+        event.currentTarget.classList.add('drag-over');
+    }
+
+    handleDragLeaveExcel(event) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over');
+    }
+
+    // ============ PROCESSAR ARQUIVO EXCEL ============
+    async processarArquivoExcelAlunos(file) {
+        const extensoes = ['xlsx', 'xls'];
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        if (!extensoes.includes(ext)) {
+            this.showToast('❌ Tipo de arquivo não suportado. Use .xlsx ou .xls', 'error');
+            return;
+        }
+        
+        if (file.size > 10 * 1024 * 1024) {
+            this.showToast('❌ Arquivo muito grande. Máximo 10MB.', 'error');
+            return;
+        }
+        
+        this.arquivoExcel = file;
+        
+        if (typeof XLSX === 'undefined') {
+            this.showToast('🔄 Carregando biblioteca...', 'info');
+            await this.carregarBibliotecaXLSX();
+        }
+        
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const primeiraSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(primeiraSheet);
+            
+            this.dadosExcel = jsonData;
+            
+            document.getElementById('previewArquivo').style.display = 'block';
+            document.getElementById('nomeArquivoExcel').textContent = file.name;
+            document.getElementById('tamanhoArquivoExcel').textContent = `${(file.size / 1024).toFixed(2)} KB`;
+            
+            this.detectarColunasAlunos(jsonData);
+            this.mostrarPreviewDadosAlunos(jsonData);
+            document.getElementById('previewPlanilha').style.display = 'block';
+            
+            const btnProcessar = document.getElementById('btnProcessarUpload');
+            if (btnProcessar) btnProcessar.disabled = false;
+            
+            this.showToast(`✅ Arquivo carregado! ${jsonData.length} alunos encontrados.`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao ler arquivo:', error);
+            this.showToast('❌ Erro ao ler arquivo: ' + error.message, 'error');
+        }
+    }
+
+    // ============ DETECTAR COLUNAS ============
+    detectarColunasAlunos(jsonData) {
+        if (!jsonData || jsonData.length === 0) return;
+        
+        const colunas = Object.keys(jsonData[0]);
+        
+        const mapeamento = {
+            nome: ['nome', 'Nome', 'NOME', 'name', 'NAME', 'aluno', 'Aluno'],
+            cpf: ['cpf', 'CPF', 'Cpf', 'cpf_aluno', 'CPF_ALUNO'],
+            turma: ['turma', 'Turma', 'TURMA', 'class', 'sala', 'Sala'],
+            curso: ['curso', 'Curso', 'CURSO', 'course', 'disciplina'],
+            eixo: ['eixo', 'EIXO', 'Eixo', 'area', 'Area', 'AREA']
+        };
+        
+        const colunasDetectadas = {};
+        
+        for (const [campo, possibilidades] of Object.entries(mapeamento)) {
+            for (const coluna of colunas) {
+                const colunaLower = coluna.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                if (possibilidades.some(p => p.toLowerCase() === colunaLower || colunaLower.includes(p.toLowerCase()))) {
+                    colunasDetectadas[campo] = coluna;
+                    break;
+                }
+            }
+        }
+        
+        this.colunasDetectadas = colunasDetectadas;
+        
+        const container = document.getElementById('colunasDetectadas');
+        const countSpan = document.getElementById('colunasDetectadasCount');
+        
+        if (container) {
+            let html = '';
+            let detectadas = 0;
+            
+            for (const [campo, coluna] of Object.entries(colunasDetectadas)) {
+                detectadas++;
+                const nomeCampo = this.getNomeCampoAluno(campo);
+                html += `<span class="coluna-tag detectada"><i class="fas fa-check"></i> ${coluna} → ${nomeCampo}</span>`;
+            }
+            
+            for (const coluna of colunas) {
+                const foiDetectada = Object.values(colunasDetectadas).includes(coluna);
+                if (!foiDetectada) {
+                    html += `<span class="coluna-tag"><i class="fas fa-question"></i> ${coluna} (não identificada)</span>`;
+                }
+            }
+            
+            container.innerHTML = html;
+            if (countSpan) countSpan.textContent = detectadas;
+        }
+    }
+
+    // ============ MOSTRAR PREVIEW ============
+    mostrarPreviewDadosAlunos(jsonData) {
+        const container = document.getElementById('previewDados');
+        if (!container || !jsonData || jsonData.length === 0) return;
+        
+        const qtdPreview = Math.min(5, jsonData.length);
+        const previewData = jsonData.slice(0, qtdPreview);
+        
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<thead><tr style="background: #f1f5f9;">';
+        const colunas = Object.keys(jsonData[0]);
+        colunas.forEach(col => {
+            html += `<th style="padding: 8px; text-align: left; font-size: 11px; border-bottom: 1px solid #e5e7eb;">${col}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+        
+        previewData.forEach(linha => {
+            html += '<tr>';
+            colunas.forEach(col => {
+                let valor = linha[col] || '';
+                if (valor.length > 30) valor = valor.substring(0, 27) + '...';
+                html += `<td style="padding: 6px; font-size: 11px; border-bottom: 1px solid #f0f0f0;">${valor}</td>`;
+            });
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        
+        if (jsonData.length > 5) {
+            html += `<p style="margin-top: 8px; font-size: 11px; color: #6b7280; text-align: center;">+ ${jsonData.length - 5} registros...</p>`;
+        }
+        
+        container.innerHTML = html;
+    }
+
+    // ============ VERIFICAR SE ALUNO JÁ EXISTE ============
+    async verificarAlunoExistente(cpf) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch(`/api/admin/usuarios?search=${cpf}&role=aluno&limit=5`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            
+            if (data.success && data.usuarios) {
+                const encontrado = data.usuarios.find(u => u.cpf === cpf);
+                if (encontrado) {
+                    return { existe: true, motivo: `CPF ${cpf} já cadastrado`, usuario: encontrado };
+                }
+            }
+            
+            return { existe: false };
+            
+        } catch (error) {
+            console.error('❌ Erro ao verificar existência:', error);
+            return { existe: false };
+        }
+    }
+
+    // ============ GERAR QR CODE PARA O ALUNO ============
+    async gerarQRCodeAluno(usuarioId, usuarioNome) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1';
+            const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : window.location.origin;
+            
+            const usuarioUrl = `${BASE_URL}/corrigir-prova.html?aluno=${usuarioId}`;
+            
+            const response = await fetch(`/api/qrcode/gerar`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: usuarioUrl,
+                    userId: usuarioId,
+                    saveToUser: true
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                console.log(`✅ QR Code gerado para ${usuarioNome}`);
+                return { success: true, qrCode: data.qrCode };
+            } else {
+                console.warn(`⚠️ Erro ao gerar QR Code para ${usuarioNome}:`, data.error);
+                return { success: false, error: data.error };
+            }
+            
+        } catch (error) {
+            console.error(`❌ Erro ao gerar QR Code para ${usuarioNome}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // ============ PROCESSAR UPLOAD ============
+    async processarUploadExcelAlunos() {
+        if (!this.dadosExcel || this.dadosExcel.length === 0) {
+            this.showToast('❌ Nenhum dado para processar', 'error');
+            return;
+        }
+        
+        if (typeof XLSX === 'undefined') {
+            this.showToast('🔄 Carregando biblioteca...', 'info');
+            await this.carregarBibliotecaXLSX();
+        }
+        
+        const opcoes = {
+            ativarUsuarios: document.getElementById('opcaoAtivarUsuarios')?.checked || false,
+            forcarTrocaSenha: document.getElementById('opcaoForcarTrocaSenha')?.checked || false,
+            notificarCadastro: document.getElementById('opcaoNotificarCadastro')?.checked || false
+        };
+        
+        const progressoDiv = document.getElementById('progressoUpload');
+        const progressoBarra = document.getElementById('progressoBarra');
+        const progressoPercentual = document.getElementById('progressoPercentual');
+        
+        progressoDiv.style.display = 'block';
+        progressoBarra.style.width = '5%';
+        progressoPercentual.textContent = '5%';
+        
+        try {
+            const resultados = [];
+            let sucessos = 0;
+            let jaExistentes = 0;
+            let erros = 0;
+            
+            for (let i = 0; i < this.dadosExcel.length; i++) {
+                const linha = this.dadosExcel[i];
+                const resultado = await this.cadastrarAlunoDaPlanilha(linha, opcoes, i + 1);
+                resultados.push(resultado);
+                
+                if (resultado.success) sucessos++;
+                else if (resultado.jaExiste) jaExistentes++;
+                else erros++;
+                
+                const percentual = 5 + ((i + 1) / this.dadosExcel.length) * 90;
+                progressoBarra.style.width = `${percentual}%`;
+                progressoPercentual.textContent = `${Math.round(percentual)}%`;
+            }
+            
+            progressoBarra.style.width = '100%';
+            progressoPercentual.textContent = '100%';
+            
+            this.mostrarResultadoUploadAlunos(sucessos, jaExistentes, erros, resultados);
+            
+            if (sucessos > 0) {
+                await this.loadUsuarios();
+                await this.carregarDadosReais();
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ Erro ao processar: ' + error.message, 'error');
+            progressoDiv.style.display = 'none';
+        }
+    }
+
+    // ============ CADASTRAR ALUNO (APENAS 5 CAMPOS) ============
+    async cadastrarAlunoDaPlanilha(linha, opcoes, linhaNumero) {
+        try {
+            const getValor = (campo) => {
+                const coluna = this.colunasDetectadas?.[campo];
+                if (!coluna) return null;
+                let valor = linha[coluna];
+                if (typeof valor === 'string') valor = valor.trim();
+                if (valor === '' || valor === undefined) return null;
+                return valor;
+            };
+            
+            const nome = getValor('nome');
+            let cpf = getValor('cpf');
+            const turma = getValor('turma');
+            const curso = getValor('curso');
+            const eixo = getValor('eixo'); // Eixo é opcional, não será usado no cadastro
+            
+            // Validações
+            if (!nome) {
+                return { success: false, linha: linhaNumero, erro: 'Nome não encontrado', nome: '-', cpf: '-' };
+            }
+            if (!cpf) {
+                return { success: false, linha: linhaNumero, erro: 'CPF não encontrado', nome: nome, cpf: '-' };
+            }
+            if (!turma) {
+                return { success: false, linha: linhaNumero, erro: 'Turma não encontrada', nome: nome, cpf: cpf };
+            }
+            if (!curso) {
+                return { success: false, linha: linhaNumero, erro: 'Curso não encontrado', nome: nome, cpf: cpf };
+            }
+            
+            // Limpar CPF
+            cpf = cpf.toString().replace(/\D/g, '');
+            if (cpf.length !== 11) {
+                return { success: false, linha: linhaNumero, erro: `CPF inválido - deve ter 11 dígitos: ${cpf}`, nome: nome, cpf: cpf };
+            }
+            
+            // Validar CPF
+            if (!this.validarCPF(cpf)) {
+                return { success: false, linha: linhaNumero, erro: `CPF inválido - dígitos verificadores incorretos: ${cpf}`, nome: nome, cpf: cpf };
+            }
+            
+            // Verificar se já existe
+            const verificar = await this.verificarAlunoExistente(cpf);
+            
+            if (verificar.existe) {
+                return {
+                    success: false,
+                    linha: linhaNumero,
+                    jaExiste: true,
+                    motivo: verificar.motivo,
+                    nome: nome,
+                    cpf: cpf,
+                    turma: turma,
+                    curso: curso
+                };
+            }
+            
+            // Dados padrão
+            const email = `${cpf}@iemasaoluiscentro.net`;
+            const telefone = '99999999999';
+            const senha = '123456';
+            const periodo = '1'; // Período fixo
+            
+            console.log(`📧 Email: ${email}`);
+            console.log(`📱 Telefone: ${telefone}`);
+            console.log(`🔑 Senha: ${senha}`);
+            console.log(`📅 Período: ${periodo}º (fixo)`);
+            console.log(`📚 Eixo: ${eixo || 'Não informado'} (apenas para referência)`);
+            
+            // Preparar dados do usuário
+            const userData = {
+                nome: nome.toUpperCase(),
+                email: email,
+                cpf: cpf,
+                telefone: telefone,
+                role: 'aluno',
+                ativo: opcoes.ativarUsuarios,
+                forcePasswordChange: opcoes.forcarTrocaSenha,
+                password: senha,
+                curso: curso,
+                turma: turma,
+                periodo: periodo,
+                precisaAcessibilidade: false
+            };
+            
+            // Criar usuário
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/usuarios', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(userData)
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao criar usuário');
+            }
+            
+            // Gerar QR Code
+            const qrResult = await this.gerarQRCodeAluno(data.user.id, nome);
+            
+            if (qrResult.success) {
+                console.log(`✅ QR Code gerado para ${nome}`);
+            } else {
+                console.warn(`⚠️ QR Code não gerado para ${nome}: ${qrResult.error}`);
+            }
+            
+            // Enviar email se solicitado
+            if (opcoes.notificarCadastro && data.user) {
+                await this.enviarEmailBoasVindasAluno(email, nome, senha);
+            }
+            
+            return {
+                success: true,
+                linha: linhaNumero,
+                usuario: data.user,
+                nome: nome,
+                cpf: cpf,
+                turma: turma,
+                curso: curso,
+                eixo: eixo,
+                periodo: periodo,
+                email: email,
+                telefone: telefone,
+                senha: senha,
+                qrCodeGerado: qrResult.success,
+                mensagem: 'Aluno cadastrado com sucesso!'
+            };
+            
+        } catch (error) {
+            console.error('❌ Erro no cadastro:', error);
+            return {
+                success: false,
+                linha: linhaNumero,
+                erro: error.message,
+                nome: linha['Nome'] || linha['nome'] || '-',
+                cpf: linha['CPF'] || linha['cpf'] || '-',
+                turma: linha['Turma'] || linha['turma'] || '-',
+                curso: linha['Curso'] || linha['curso'] || '-'
+            };
+        }
+    }
+
+    // ============ VALIDAR CPF ============
+    validarCPF(cpf) {
+        cpf = cpf.replace(/[^\d]+/g, '');
+        if (cpf.length !== 11) return false;
+        if (/^(\d)\1+$/.test(cpf)) return false;
+        
+        let soma = 0;
+        let resto;
+        
+        for (let i = 1; i <= 9; i++) {
+            soma += parseInt(cpf.substring(i - 1, i)) * (11 - i);
+        }
+        resto = (soma * 10) % 11;
+        if ((resto === 10) || (resto === 11)) resto = 0;
+        if (resto !== parseInt(cpf.substring(9, 10))) return false;
+        
+        soma = 0;
+        for (let i = 1; i <= 10; i++) {
+            soma += parseInt(cpf.substring(i - 1, i)) * (12 - i);
+        }
+        resto = (soma * 10) % 11;
+        if ((resto === 10) || (resto === 11)) resto = 0;
+        if (resto !== parseInt(cpf.substring(10, 11))) return false;
+        
+        return true;
+    }
+
+    // ============ MOSTRAR RESULTADO ============
+    mostrarResultadoUploadAlunos(sucessos, jaExistentes, erros, resultados) {
+        const modalBody = document.getElementById('modalBody');
+        
+        let jaExistentesHtml = '';
+        if (jaExistentes > 0) {
+            const existentesLista = resultados.filter(r => r.jaExiste === true);
+            jaExistentesHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #92400e;"><i class="fas fa-exclamation-triangle"></i> Alunos já cadastrados (${jaExistentes})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${existentesLista.map(e => `
+                                <div style="padding: 6px; border-bottom: 1px solid #fde68a;">
+                                    <strong>Linha ${e.linha}:</strong> ${e.nome} - ${e.motivo || e.erro}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        let errosHtml = '';
+        if (erros > 0) {
+            const errosLista = resultados.filter(r => !r.success && !r.jaExiste);
+            errosHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #fee2e2; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #dc2626;"><i class="fas fa-exclamation-circle"></i> Erros (${erros})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${errosLista.map(e => `
+                                <div style="padding: 6px; border-bottom: 1px solid #fecaca;">
+                                    <strong>Linha ${e.linha}:</strong> ${e.nome || '-'} - ${e.erro}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        modalBody.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <div style="width: 80px; height: 80px; background: ${sucessos > 0 ? '#10b981' : '#6b7280'}; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                    <i class="fas ${sucessos > 0 ? 'fa-check' : 'fa-info'}" style="font-size: 40px; color: white;"></i>
+                </div>
+                
+                <h2 style="margin: 0 0 10px;">Processamento Concluído!</h2>
+                
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0;">
+                    <div style="background: #d1fae5; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #065f46;">${sucessos}</div>
+                        <div style="color: #065f46;">Alunos cadastrados</div>
+                    </div>
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #92400e;">${jaExistentes}</div>
+                        <div style="color: #92400e;">Já existiam</div>
+                    </div>
+                    <div style="background: #fee2e2; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #991b1b;">${erros}</div>
+                        <div style="color: #991b1b;">Erros</div>
+                    </div>
+                </div>
+                
+                ${jaExistentesHtml}
+                ${errosHtml}
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                        Fechar
+                    </button>
+                    ${(erros > 0 || jaExistentes > 0) ? `
+                        <button onclick="admin.baixarRelatorioCompletoAlunos(${JSON.stringify(resultados).replace(/"/g, '&quot;')})" style="flex: 1; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                            <i class="fas fa-download"></i> Baixar Relatório
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-chart-bar"></i> Resultado do Upload';
+        this.openModal();
+    }
+
+    // ============ BAIXAR RELATÓRIO ============
+    baixarRelatorioCompletoAlunos(resultados) {
+        if (!resultados || resultados.length === 0) return;
+        
+        const wsData = [['Linha', 'Nome', 'CPF', 'Turma', 'Curso', 'EIXO', 'Email', 'Senha', 'Telefone', 'QR Code', 'Status', 'Mensagem']];
+        
+        resultados.forEach(r => {
+            let status = '';
+            let mensagem = '';
+            let qrCodeStatus = '';
+            
+            if (r.success) {
+                status = '✅ CADASTRADO';
+                mensagem = r.mensagem;
+                qrCodeStatus = r.qrCodeGerado ? '✅ Gerado' : '❌ Falha';
+            } else if (r.jaExiste) {
+                status = '⚠️ JÁ EXISTE';
+                mensagem = r.motivo || r.erro;
+                qrCodeStatus = '-';
+            } else {
+                status = '❌ ERRO';
+                mensagem = r.erro;
+                qrCodeStatus = '-';
+            }
+            
+            wsData.push([
+                r.linha, 
+                r.nome || '-', 
+                r.cpf || '-', 
+                r.turma || '-', 
+                r.curso || '-',
+                r.eixo || '-',
+                r.email || '-',
+                r.senha || '-',
+                r.telefone || '-',
+                qrCodeStatus,
+                status, 
+                mensagem
+            ]);
+        });
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{wch:8}, {wch:35}, {wch:15}, {wch:10}, {wch:35}, {wch:30}, {wch:35}, {wch:12}, {wch:15}, {wch:12}, {wch:18}, {wch:50}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+        
+        XLSX.writeFile(wb, `relatorio_upload_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
+        this.showToast('📥 Relatório baixado!', 'success');
+    }
+
+    // ============ GET NOME DO CAMPO ============
+    getNomeCampoAluno(campo) {
+        const nomes = {
+            nome: 'Nome',
+            cpf: 'CPF',
+            turma: 'Turma',
+            curso: 'Curso',
+            eixo: 'EIXO'
+        };
+        return nomes[campo] || campo;
+    }
+
+    // ============ ENVIAR EMAIL ============
+    async enviarEmailBoasVindasAluno(email, nome, senha) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const mensagemHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .header { background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                        .btn { display: inline-block; padding: 12px 24px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 15px 0; }
+                        .credenciais { background: #f0f4ff; padding: 15px; border-radius: 8px; margin: 15px 0; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>🎉 Bem-vindo ao Sistema de Provas IEMA!</h1>
+                        </div>
+                        <div class="content">
+                            <h2>Olá, ${nome}!</h2>
+                            <p>Seu cadastro foi realizado com sucesso no Sistema de Provas IEMA 2026.</p>
+                            
+                            <div class="credenciais">
+                                <h3>🔐 Suas credenciais de acesso:</h3>
+                                <p><strong>Email:</strong> ${email}</p>
+                                <p><strong>Senha:</strong> ${senha}</p>
+                                <p><strong>Telefone cadastrado:</strong> (99) 99999-9999</p>
+                            </div>
+                            
+                            <p><strong>⚠️ Importante:</strong> Recomendamos atualizar seus dados no primeiro acesso.</p>
+                            
+                            <p><a href="${window.location.origin}" class="btn">Acessar o Sistema</a></p>
+                            
+                            <p>Em caso de dúvidas, entre em contato com a administração.</p>
+                        </div>
+                        <div class="footer">
+                            <p>Sistema de Provas IEMA 2026</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+            
+            await fetch('/api/admin/testar-email-enviar', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    destinatario: email,
+                    assunto: '🎉 Bem-vindo ao Sistema de Provas IEMA',
+                    mensagem: mensagemHtml
+                })
+            });
+            
+            console.log(`✅ Email de boas-vindas enviado para ${email}`);
+            
+        } catch (error) {
+            console.error('❌ Erro ao enviar email:', error);
+        }
+    }
+
+    // ============ CARREGAR BIBLIOTECA XLSX ============
+    async carregarBibliotecaXLSX() {
+        return new Promise((resolve, reject) => {
+            if (typeof XLSX !== 'undefined') {
+                resolve(true);
+                return;
+            }
+            
+            const script = document.createElement('script');
+            script.src = 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
+            script.onload = () => {
+                console.log('✅ Biblioteca XLSX carregada!');
+                resolve(true);
+            };
+            script.onerror = () => {
+                console.error('❌ Erro ao carregar XLSX');
+                reject(new Error('Não foi possível carregar a biblioteca XLSX'));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    // ============ REMOVER ARQUIVO ============
+    removerArquivoExcel() {
+        this.arquivoExcel = null;
+        this.dadosExcel = null;
+        document.getElementById('previewArquivo').style.display = 'none';
+        document.getElementById('previewPlanilha').style.display = 'none';
+        document.getElementById('excelInput').value = '';
+        
+        const btnProcessar = document.getElementById('btnProcessarUpload');
+        if (btnProcessar) {
+            btnProcessar.disabled = true;
+        }
+    }
+
+    // ============================================
+    // 🏫 GERENCIAR TURMAS - INATIVAR/EXCLUIR ALUNOS
+    // ============================================
+
+    abrirModalGerenciarTurmas() {
+        const modalBody = document.getElementById('modalBody');
+        
+        modalBody.innerHTML = `
+            <div class="gerenciar-turmas-container" style="max-width: 750px; margin: 0 auto;">
+                <!-- Cabeçalho -->
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                        <i class="fas fa-school" style="font-size: 32px; color: white;"></i>
+                    </div>
+                    <h2 style="margin: 15px 0 5px;">Gerenciar Turmas</h2>
+                    <p style="color: #6b7280;">Selecione uma turma para inativar ou excluir alunos que concluíram os estudos</p>
+                </div>
+
+                <!-- Seleção de Turma -->
+                <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+                        <i class="fas fa-users"></i> Selecione a Turma
+                    </label>
+                    <div class="select-wrapper" style="position: relative;">
+                        <select id="selectTurmaGerenciar" class="form-control" style="width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #e5e7eb; background: white;" onchange="admin.carregarAlunosPorTurma()">
+                            <option value="">-- Carregando turmas... --</option>
+                        </select>
+                        <i class="fas fa-chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; pointer-events: none;"></i>
+                    </div>
+                </div>
+
+                <!-- Estatísticas da Turma -->
+                <div id="estatisticasTurma" style="display: none; background: #f0fdf4; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 28px; font-weight: bold; color: #10b981;" id="totalAlunosTurma">0</div>
+                            <div style="font-size: 12px; color: #6b7280;">Total de Alunos</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 28px; font-weight: bold; color: #f59e0b;" id="alunosAtivosTurma">0</div>
+                            <div style="font-size: 12px; color: #6b7280;">Ativos</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 28px; font-weight: bold; color: #ef4444;" id="alunosInativosTurma">0</div>
+                            <div style="font-size: 12px; color: #6b7280;">Inativos</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de Alunos -->
+                <div id="listaAlunosTurma" style="display: none; background: white; border-radius: 16px; border: 1px solid #e5e7eb; overflow: hidden; margin-bottom: 20px;">
+                    <!-- Cabeçalho da lista com controles -->
+                    <div style="background: #f8fafc; padding: 15px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fas fa-list" style="color: #f59e0b;"></i>
+                            <h4 style="margin: 0; font-size: 16px; font-weight: 600;">Alunos da Turma</h4>
+                            <span id="selecionadosCount" style="background: #e5e7eb; padding: 2px 10px; border-radius: 30px; font-size: 12px; font-weight: 500;">0 selecionado(s)</span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button onclick="admin.selecionarTodosAlunos()" style="background: #e5e7eb; border: none; padding: 6px 16px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px; transition: all 0.2s;" onmouseover="this.style.background='#d1d5db'" onmouseout="this.style.background='#e5e7eb'">
+                                <i class="fas fa-check-double"></i> Todos
+                            </button>
+                            <button onclick="admin.desselecionarTodosAlunos()" style="background: #e5e7eb; border: none; padding: 6px 16px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px; transition: all 0.2s;" onmouseover="this.style.background='#d1d5db'" onmouseout="this.style.background='#e5e7eb'">
+                                <i class="fas fa-times"></i> Nenhum
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de alunos -->
+                    <div id="alunosListContainer" style="max-height: 350px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                            <i class="fas fa-spinner fa-spin"></i> Carregando alunos...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ações em Massa (para alunos selecionados) -->
+                <div id="acoesMassa" style="display: none; gap: 12px; margin-bottom: 20px;">
+                    <button id="btnInativarSelecionados" onclick="admin.inativarAlunosSelecionados()" style="flex: 1; padding: 14px; background: #f59e0b; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#d97706'" onmouseout="this.style.background='#f59e0b'">
+                        <i class="fas fa-pause-circle"></i> Inativar Selecionados
+                    </button>
+                    <button id="btnExcluirSelecionados" onclick="admin.excluirAlunosSelecionados()" style="flex: 1; padding: 14px; background: #ef4444; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">
+                        <i class="fas fa-trash-alt"></i> Excluir Selecionados
+                    </button>
+                </div>
+
+                <!-- Ações por Turma Completa -->
+                <div id="acoesTurmaCompleta" style="display: none; gap: 12px; margin-bottom: 20px;">
+                    <button onclick="admin.inativarTurmaCompleta()" style="flex: 1; padding: 14px; background: #f59e0b; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#d97706'" onmouseout="this.style.background='#f59e0b'">
+                        <i class="fas fa-pause-circle"></i> Inativar Toda Turma
+                    </button>
+                    <button onclick="admin.excluirTurmaCompleta()" style="flex: 1; padding: 14px; background: #ef4444; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">
+                        <i class="fas fa-trash-alt"></i> Excluir Toda Turma
+                    </button>
+                </div>
+
+                <!-- Informações -->
+                <div style="background: #fef3c7; border-radius: 16px; padding: 15px;">
+                    <div style="display: flex; gap: 10px;">
+                        <i class="fas fa-info-circle" style="color: #f59e0b; font-size: 18px;"></i>
+                        <div style="font-size: 13px; color: #92400e;">
+                            <strong>📋 Importante:</strong>
+                            <ul style="margin: 5px 0 0 20px;">
+                                <li><strong>Inativar</strong> - O aluno não poderá mais acessar o sistema, mas seus dados permanecem salvos.</li>
+                                <li><strong>Excluir</strong> - Remove permanentemente o aluno (apenas se não tiver provas realizadas).</li>
+                                <li><strong>Recomendação:</strong> Utilize "Inativar" para alunos que concluíram os estudos.</li>
+                                <li>Alunos com provas realizadas NÃO podem ser excluídos.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .gerenciar-turmas-container {
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    padding: 5px;
+                }
+                .aluno-item {
+                    display: flex;
+                    align-items: center;
+                    padding: 12px 16px;
+                    border-bottom: 1px solid #e5e7eb;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .aluno-item:hover {
+                    background: #f9fafb;
+                }
+                .aluno-item.selecionado {
+                    background: #eff6ff;
+                    border-left: 3px solid #3b82f6;
+                }
+                .aluno-avatar {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 14px;
+                    margin-right: 12px;
+                    flex-shrink: 0;
+                }
+                .aluno-info {
+                    flex: 1;
+                }
+                .aluno-nome {
+                    font-weight: 600;
+                    color: #1f2937;
+                    font-size: 14px;
+                }
+                .aluno-detalhes {
+                    font-size: 11px;
+                    color: #6b7280;
+                    margin-top: 2px;
+                }
+                .aluno-status {
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 50%;
+                    margin-left: 10px;
+                    flex-shrink: 0;
+                }
+                .status-ativo {
+                    background: #10b981;
+                    box-shadow: 0 0 0 2px #d1fae5;
+                }
+                .status-inativo {
+                    background: #ef4444;
+                    box-shadow: 0 0 0 2px #fee2e2;
+                }
+                .checkbox-aluno {
+                    width: 18px;
+                    height: 18px;
+                    margin-right: 15px;
+                    cursor: pointer;
+                    accent-color: #3b82f6;
+                    flex-shrink: 0;
+                }
+                .select-wrapper select {
+                    appearance: none;
+                    cursor: pointer;
+                }
+                .select-wrapper select:focus {
+                    outline: none;
+                    border-color: #f59e0b;
+                    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+                }
+            </style>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-school"></i> Gerenciar Turmas';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        
+        // Carregar turmas
+        this.carregarTurmasParaGerenciar();
+        
+        this.openModal();
+    }
+
+    // ============ CARREGAR TURMAS PARA GERENCIAR (CORRIGIDO) ============
+    async carregarTurmasParaGerenciar() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar todos os alunos
+            const response = await fetch('/api/admin/usuarios?role=aluno&limit=2000', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.usuarios) {
+                // Extrair turmas únicas dos alunos
+                const turmasSet = new Set();
+                data.usuarios.forEach(aluno => {
+                    if (aluno.turma && aluno.turma.trim() !== '') {
+                        turmasSet.add(aluno.turma);
+                    }
+                });
+                
+                const turmas = Array.from(turmasSet).sort();
+                
+                const select = document.getElementById('selectTurmaGerenciar');
+                if (select) {
+                    if (turmas.length === 0) {
+                        select.innerHTML = '<option value="">Nenhuma turma encontrada</option>';
+                    } else {
+                        let options = '<option value="">Selecione uma turma...</option>';
+                        turmas.forEach(turma => {
+                            options += `<option value="${turma}">${turma}</option>`;
+                        });
+                        select.innerHTML = options;
+                    }
+                }
+                
+                this.turmasDisponiveis = turmas;
+                console.log(`✅ ${turmas.length} turmas carregadas:`, turmas);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar turmas:', error);
+            this.showToast('❌ Erro ao carregar turmas', 'error');
+            
+            const select = document.getElementById('selectTurmaGerenciar');
+            if (select) {
+                select.innerHTML = '<option value="">Erro ao carregar turmas</option>';
+            }
+        }
+    }
+
+    // ============ CARREGAR ALUNOS POR TURMA (CORRIGIDO) ============
+    async carregarAlunosPorTurma() {
+        const turma = document.getElementById('selectTurmaGerenciar')?.value;
+        
+        if (!turma) {
+            document.getElementById('listaAlunosTurma').style.display = 'none';
+            document.getElementById('estatisticasTurma').style.display = 'none';
+            document.getElementById('acoesMassa').style.display = 'none';
+            document.getElementById('acoesTurmaCompleta').style.display = 'none';
+            return;
+        }
+        
+        this.showToast(`🔄 Carregando alunos da turma ${turma}...`, 'info');
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Buscar TODOS os alunos e depois filtrar por turma
+            const response = await fetch('/api/admin/usuarios?role=aluno&limit=2000', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.usuarios) {
+                // Filtrar alunos da turma específica
+                this.alunosDaTurma = data.usuarios.filter(aluno => aluno.turma === turma);
+                this.alunosSelecionados = new Set();
+                
+                if (this.alunosDaTurma.length === 0) {
+                    this.showToast(`⚠️ Nenhum aluno encontrado na turma ${turma}`, 'warning');
+                }
+                
+                this.renderizarListaAlunos();
+                this.atualizarEstatisticasTurma();
+                
+                document.getElementById('listaAlunosTurma').style.display = 'block';
+                document.getElementById('estatisticasTurma').style.display = 'block';
+                document.getElementById('acoesMassa').style.display = 'flex';
+                document.getElementById('acoesTurmaCompleta').style.display = 'flex';
+                
+                console.log(`✅ ${this.alunosDaTurma.length} alunos carregados da turma ${turma}`);
+            } else {
+                throw new Error('Erro ao carregar alunos');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ Erro ao carregar alunos: ' + error.message, 'error');
+            
+            // Mostrar erro na lista
+            const container = document.getElementById('alunosListContainer');
+            if (container) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #dc2626;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+                        <p>Erro ao carregar alunos: ${error.message}</p>
+                        <button onclick="admin.carregarAlunosPorTurma()" style="margin-top: 10px; padding: 8px 16px; background: #f59e0b; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    // ============ RENDERIZAR LISTA DE ALUNOS ============
+    renderizarListaAlunos() {
+        const container = document.getElementById('alunosListContainer');
+        if (!container) return;
+        
+        if (!this.alunosDaTurma || this.alunosDaTurma.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                    <i class="fas fa-users-slash" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+                    <p>Nenhum aluno encontrado nesta turma</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        this.alunosDaTurma.forEach(aluno => {
+            const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const selecionado = this.alunosSelecionados.has(aluno._id);
+            const statusClass = aluno.ativo ? 'status-ativo' : 'status-inativo';
+            const statusText = aluno.ativo ? 'Ativo' : 'Inativo';
+            
+            html += `
+                <div class="aluno-item ${selecionado ? 'selecionado' : ''}" data-id="${aluno._id}" onclick="admin.toggleSelecionarAluno('${aluno._id}')">
+                    <input type="checkbox" class="checkbox-aluno" ${selecionado ? 'checked' : ''} onclick="event.stopPropagation(); admin.toggleSelecionarAluno('${aluno._id}')">
+                    <div class="aluno-avatar">${iniciais}</div>
+                    <div class="aluno-info">
+                        <div class="aluno-nome">${aluno.nome}</div>
+                        <div class="aluno-detalhes">
+                            <i class="fas fa-id-card"></i> ${aluno.matricula || 'Sem matrícula'} &nbsp;|&nbsp;
+                            <i class="fas fa-envelope"></i> ${aluno.email || 'Sem email'}
+                        </div>
+                    </div>
+                    <div class="aluno-status ${statusClass}" title="${statusText}"></div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+        
+        // Atualizar contador de selecionados
+        const selecionadosCount = document.getElementById('selecionadosCount');
+        if (selecionadosCount) {
+            const totalSelecionados = this.alunosSelecionados.size;
+            selecionadosCount.innerHTML = `${totalSelecionados} ${totalSelecionados === 1 ? 'selecionado' : 'selecionados'}`;
+        }
+    }
+
+    // ============ ATUALIZAR ESTATÍSTICAS DA TURMA ============
+    atualizarEstatisticasTurma() {
+        if (!this.alunosDaTurma) return;
+        
+        const total = this.alunosDaTurma.length;
+        const ativos = this.alunosDaTurma.filter(a => a.ativo === true).length;
+        const inativos = total - ativos;
+        
+        const totalEl = document.getElementById('totalAlunosTurma');
+        const ativosEl = document.getElementById('alunosAtivosTurma');
+        const inativosEl = document.getElementById('alunosInativosTurma');
+        
+        if (totalEl) totalEl.textContent = total;
+        if (ativosEl) ativosEl.textContent = ativos;
+        if (inativosEl) inativosEl.textContent = inativos;
+    }
+
+    // ============ TOGGLE SELECIONAR ALUNO ============
+    toggleSelecionarAluno(alunoId) {
+        if (this.alunosSelecionados.has(alunoId)) {
+            this.alunosSelecionados.delete(alunoId);
+        } else {
+            this.alunosSelecionados.add(alunoId);
+        }
+        this.renderizarListaAlunos();
+    }
+
+    // ============ SELECIONAR TODOS OS ALUNOS ============
+    selecionarTodosAlunos() {
+        if (!this.alunosDaTurma) return;
+        this.alunosSelecionados.clear();
+        this.alunosDaTurma.forEach(aluno => {
+            this.alunosSelecionados.add(aluno._id);
+        });
+        this.renderizarListaAlunos();
+    }
+
+    // ============ DESSELECIONAR TODOS OS ALUNOS ============
+    desselecionarTodosAlunos() {
+        this.alunosSelecionados.clear();
+        this.renderizarListaAlunos();
+    }
+
+    // ============ INATIVAR ALUNOS SELECIONADOS ============
+    async inativarAlunosSelecionados() {
+        if (this.alunosSelecionados.size === 0) {
+            this.showToast('❌ Nenhum aluno selecionado', 'error');
+            return;
+        }
+        
+        const nomes = this.alunosDaTurma
+            .filter(a => this.alunosSelecionados.has(a._id))
+            .map(a => a.nome)
+            .join(', ');
+        
+        const confirmar = await this.confirmar(
+            '⏸️ Inativar Alunos',
+            `Tem certeza que deseja INATIVAR ${this.alunosSelecionados.size} aluno(s)?<br><br>
+            <strong>Alunos:</strong> ${nomes}<br><br>
+            <span style="color: #f59e0b;">⚠️ Alunos inativados não poderão mais acessar o sistema.</span><br>
+            <span style="color: #10b981;">✅ Seus dados permanecerão salvos.</span>`
+        );
+        
+        if (!confirmar) return;
+        
+        this.showToast(`🔄 Inativando ${this.alunosSelecionados.size} aluno(s)...`, 'info');
+        
+        let sucessos = 0;
+        let erros = 0;
+        
+        for (const alunoId of this.alunosSelecionados) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${alunoId}/toggle-status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ativo: false })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Atualizar localmente
+                    const aluno = this.alunosDaTurma.find(a => a._id === alunoId);
+                    if (aluno) aluno.ativo = false;
+                    sucessos++;
+                } else {
+                    erros++;
+                }
+            } catch (error) {
+                console.error(`Erro ao inativar aluno:`, error);
+                erros++;
+            }
+        }
+        
+        this.atualizarEstatisticasTurma();
+        this.renderizarListaAlunos();
+        this.alunosSelecionados.clear();
+        
+        this.showToast(`✅ ${sucessos} alunos inativados, ${erros} erros`, sucessos > 0 ? 'success' : 'error');
+        
+        if (sucessos > 0) {
+            await this.loadUsuarios();
+            await this.carregarDadosReais();
+        }
+    }
+
+    // ============ EXCLUIR ALUNOS SELECIONADOS ============
+    async excluirAlunosSelecionados() {
+        if (this.alunosSelecionados.size === 0) {
+            this.showToast('❌ Nenhum aluno selecionado', 'error');
+            return;
+        }
+        
+        const nomes = this.alunosDaTurma
+            .filter(a => this.alunosSelecionados.has(a._id))
+            .map(a => a.nome)
+            .join(', ');
+        
+        const confirmar = await this.confirmar(
+            '🗑️ EXCLUIR Alunos',
+            `<strong style="color: #dc3545;">ATENÇÃO!</strong><br><br>
+            Você está prestes a EXCLUIR PERMANENTEMENTE ${this.alunosSelecionados.size} aluno(s).<br><br>
+            <strong>Alunos:</strong> ${nomes}<br><br>
+            <span style="color: #dc3545;">⚠️ Esta ação NÃO PODE SER DESFEITA!</span><br>
+            <span style="color: #f59e0b;">⚠️ Alunos com provas realizadas NÃO podem ser excluídos.</span><br><br>
+            Recomendamos <strong>INATIVAR</strong> em vez de excluir.`
+        );
+        
+        if (!confirmar) return;
+        
+        this.showToast(`🗑️ Verificando e excluindo ${this.alunosSelecionados.size} aluno(s)...`, 'info');
+        
+        let sucessos = 0;
+        let erros = 0;
+        let pulados = 0;
+        
+        for (const alunoId of this.alunosSelecionados) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Verificar se pode excluir
+                const checkResponse = await fetch(`/api/admin/usuarios/${alunoId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const checkData = await checkResponse.json();
+                
+                if (checkData.user && (checkData.user.temResultados || checkData.user.temProvas)) {
+                    pulados++;
+                    console.log(`⚠️ Aluno ${checkData.user.nome} tem provas, não pode ser excluído`);
+                    continue;
+                }
+                
+                const response = await fetch(`/api/admin/usuarios/${alunoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    sucessos++;
+                } else {
+                    erros++;
+                }
+            } catch (error) {
+                console.error(`Erro ao excluir aluno:`, error);
+                erros++;
+            }
+        }
+        
+        // Recarregar a lista de alunos da turma
+        await this.carregarAlunosPorTurma();
+        this.alunosSelecionados.clear();
+        
+        let mensagem = `✅ ${sucessos} alunos excluídos`;
+        if (pulados > 0) mensagem += `, ${pulados} pulados (possuem provas)`;
+        if (erros > 0) mensagem += `, ${erros} erros`;
+        
+        this.showToast(mensagem, sucessos > 0 ? 'success' : 'error');
+        
+        if (sucessos > 0) {
+            await this.loadUsuarios();
+            await this.carregarDadosReais();
+        }
+    }
+
+    // ============ INATIVAR TURMA COMPLETA ============
+    async inativarTurmaCompleta() {
+        const turma = document.getElementById('selectTurmaGerenciar')?.value;
+        if (!turma) return;
+        
+        const totalAlunos = this.alunosDaTurma?.length || 0;
+        
+        if (totalAlunos === 0) {
+            this.showToast('❌ Nenhum aluno na turma', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '⏸️ Inativar Turma Completa',
+            `Tem certeza que deseja INATIVAR TODOS os ${totalAlunos} alunos da turma <strong>${turma}</strong>?<br><br>
+            <span style="color: #f59e0b;">⚠️ Alunos inativados não poderão mais acessar o sistema.</span><br>
+            <span style="color: #10b981;">✅ Seus dados permanecerão salvos.</span>`
+        );
+        
+        if (!confirmar) return;
+        
+        this.showToast(`🔄 Inativando todos os alunos da turma ${turma}...`, 'info');
+        
+        let sucessos = 0;
+        
+        for (const aluno of this.alunosDaTurma) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${aluno._id}/toggle-status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ativo: false })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    aluno.ativo = false;
+                    sucessos++;
+                }
+            } catch (error) {
+                console.error(`Erro ao inativar ${aluno.nome}:`, error);
+            }
+        }
+        
+        this.atualizarEstatisticasTurma();
+        this.renderizarListaAlunos();
+        
+        this.showToast(`✅ ${sucessos} alunos inativados da turma ${turma}`, 'success');
+        
+        if (sucessos > 0) {
+            await this.loadUsuarios();
+            await this.carregarDadosReais();
+        }
+    }
+
+    // ============ EXCLUIR TURMA COMPLETA ============
+    async excluirTurmaCompleta() {
+        const turma = document.getElementById('selectTurmaGerenciar')?.value;
+        if (!turma) return;
+        
+        const totalAlunos = this.alunosDaTurma?.length || 0;
+        
+        if (totalAlunos === 0) {
+            this.showToast('❌ Nenhum aluno na turma', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🗑️ EXCLUIR Turma Completa',
+            `<strong style="color: #dc3545;">ATENÇÃO!</strong><br><br>
+            Você está prestes a EXCLUIR PERMANENTEMENTE TODOS os ${totalAlunos} alunos da turma <strong>${turma}</strong>.<br><br>
+            <span style="color: #dc3545;">⚠️ Esta ação NÃO PODE SER DESFEITA!</span><br>
+            <span style="color: #f59e0b;">⚠️ Alunos com provas realizadas NÃO podem ser excluídos.</span><br><br>
+            <strong>Recomendamos INATIVAR a turma em vez de excluir.</strong>`
+        );
+        
+        if (!confirmar) return;
+        
+        this.showToast(`🗑️ Verificando e excluindo alunos da turma ${turma}...`, 'info');
+        
+        let sucessos = 0;
+        let pulados = 0;
+        
+        for (const aluno of this.alunosDaTurma) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                // Verificar se pode excluir
+                const checkResponse = await fetch(`/api/admin/usuarios/${aluno._id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const checkData = await checkResponse.json();
+                
+                if (checkData.user && (checkData.user.temResultados || checkData.user.temProvas)) {
+                    pulados++;
+                    continue;
+                }
+                
+                const response = await fetch(`/api/admin/usuarios/${aluno._id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) sucessos++;
+            } catch (error) {
+                console.error(`Erro ao excluir ${aluno.nome}:`, error);
+            }
+        }
+        
+        // Recarregar a lista
+        await this.carregarAlunosPorTurma();
+        
+        let mensagem = `✅ ${sucessos} alunos excluídos da turma ${turma}`;
+        if (pulados > 0) mensagem += `, ${pulados} pulados (possuem provas)`;
+        
+        this.showToast(mensagem, sucessos > 0 ? 'success' : 'error');
+        
+        if (sucessos > 0) {
+            await this.loadUsuarios();
+            await this.carregarDadosReais();
+        }
+    }
+
     // ============ MÉTODOS AUXILIARES PARA USUÁRIOS ============
 
-    // Configurar eventos dos filtros
+    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO CORRIGIDA - SEM DUPLICAÇÃO) ============
     configurarEventosFiltrosUsuarios() {
+        console.log('🔧 Configurando eventos dos filtros...');
+        
         // Busca com debounce
         const searchInput = document.getElementById('searchUsuarios');
         if (searchInput) {
+            // Remover listeners anteriores clonando e substituindo
             const novoSearch = searchInput.cloneNode(true);
             searchInput.parentNode.replaceChild(novoSearch, searchInput);
             
             let timeout;
-            novoSearch.addEventListener('keyup', () => {
+            novoSearch.addEventListener('keyup', (e) => {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
-                    this.aplicarFiltrosUsuarios();
+                    console.log('🔍 Buscando por:', novoSearch.value);
+                    this.filtros.usuarios.search = novoSearch.value;
+                    this.filtros.usuarios.page = 1;
+                    this.loadUsuarios();
                 }, 500);
             });
         }
         
-        // Configurar selects
-        ['filterRole', 'filterStatus'].forEach(id => {
-            const select = document.getElementById(id);
-            if (select) {
-                const novoSelect = select.cloneNode(true);
-                select.parentNode.replaceChild(novoSelect, select);
-                
-                novoSelect.addEventListener('change', () => {
-                    this.aplicarFiltrosUsuarios();
-                });
-            }
-        });
+        // Configurar select de Perfil
+        const roleSelect = document.getElementById('filterRole');
+        if (roleSelect) {
+            const novoRoleSelect = roleSelect.cloneNode(true);
+            roleSelect.parentNode.replaceChild(novoRoleSelect, roleSelect);
+            novoRoleSelect.addEventListener('change', (e) => {
+                const value = e.target.value;
+                console.log('🔄 Perfil alterado:', value);
+                this.filtros.usuarios.role = value;
+                this.filtros.usuarios.page = 1;
+                this.loadUsuarios();
+            });
+        }
+        
+        // 🔥 CORREÇÃO: Configurar select de Status (SEM DISPARAR EVENTO DUPLICADO)
+        const statusSelect = document.getElementById('filterStatus');
+        if (statusSelect) {
+            const novoStatusSelect = statusSelect.cloneNode(true);
+            statusSelect.parentNode.replaceChild(novoStatusSelect, statusSelect);
+            novoStatusSelect.addEventListener('change', (e) => {
+                const value = e.target.value;
+                console.log('🔄 Status alterado para:', value);
+                this.filtros.usuarios.status = value;
+                this.filtros.usuarios.page = 1;
+                this.loadUsuarios();
+            });
+        }
+        
+        // 🔥 CORREÇÃO: Configurar select de Turma (SEM DISPARAR EVENTO DUPLICADO)
+        const turmaSelect = document.getElementById('filterTurma');
+        if (turmaSelect) {
+            const novoTurmaSelect = turmaSelect.cloneNode(true);
+            turmaSelect.parentNode.replaceChild(novoTurmaSelect, turmaSelect);
+            novoTurmaSelect.addEventListener('change', (e) => {
+                const value = e.target.value;
+                console.log('🔄 Turma alterada para:', value);
+                this.filtros.usuarios.turma = value;
+                this.filtros.usuarios.page = 1;
+                this.loadUsuarios();
+            });
+        }
     }
 
-    // Aplicar filtros
+    // ============ APLICAR FILTROS ============
+    // ============ APLICAR FILTROS (VERSÃO SIMPLIFICADA) ============
     aplicarFiltrosUsuarios() {
+        console.log('🔍 Aplicando filtros...');
+        
+        // Apenas atualizar os valores nos filtros
         this.filtros.usuarios.search = document.getElementById('searchUsuarios')?.value || '';
         this.filtros.usuarios.role = document.getElementById('filterRole')?.value || 'todos';
         this.filtros.usuarios.status = document.getElementById('filterStatus')?.value || 'todos';
+        this.filtros.usuarios.turma = document.getElementById('filterTurma')?.value || 'todas';
         this.filtros.usuarios.page = 1;
+        
+        console.log('📋 Filtros aplicados:', this.filtros.usuarios);
+        
+        // Carregar usuários
         this.loadUsuarios();
     }
 
-    // Limpar filtros
+    // ============ LIMPAR FILTROS ============
     limparFiltrosUsuarios() {
-        this.filtros.usuarios = { role: 'todos', status: 'todos', search: '', page: 1, limit: 10 };
+        console.log('🧹 Limpando todos os filtros...');
+        
+        this.filtros.usuarios = { 
+            role: 'todos', 
+            status: 'todos', 
+            turma: 'todas', 
+            search: '', 
+            page: 1, 
+            limit: 10 
+        };
         
         const searchInput = document.getElementById('searchUsuarios');
         const roleSelect = document.getElementById('filterRole');
         const statusSelect = document.getElementById('filterStatus');
+        const turmaSelect = document.getElementById('filterTurma');
         
         if (searchInput) searchInput.value = '';
         if (roleSelect) roleSelect.value = 'todos';
         if (statusSelect) statusSelect.value = 'todos';
+        if (turmaSelect) turmaSelect.value = 'todas';
         
+        this.loadUsuarios();
+    }
+
+    // ============ FILTRAR POR TURMA ============
+    filtrarPorTurma() {
+        const turma = document.getElementById('filterTurma')?.value || 'todas';
+        this.filtros.usuarios.turma = turma;
+        this.filtros.usuarios.page = 1;
         this.loadUsuarios();
     }
 
@@ -4142,18 +5863,6 @@ class AdminPanel {
             console.error('❌ Erro ao editar usuário:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
-    }
-
-    filtrarUsuarios() {
-        this.filtros.usuarios.search = document.getElementById('searchUsuarios')?.value || '';
-        this.filtros.usuarios.role = document.getElementById('filterRole')?.value || 'todos';
-        this.filtros.usuarios.page = 1;
-        this.loadUsuarios();
-    }
-
-    limparFiltrosUsuarios() {
-        this.filtros.usuarios = { role: 'todos', search: '', page: 1, limit: 10 };
-        this.loadUsuarios();
     }
 
     mudarPagina(tipo, page) {

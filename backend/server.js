@@ -10970,31 +10970,50 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
 // ============ LISTAR TODOS OS USUÁRIOS COM FILTROS E PAGINAÇÃO ============
 app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        const { role, search, page = 1, limit = 10 } = req.query;
+        const { role, search, status, turma, page = 1, limit = 10 } = req.query;
         
-        console.log(`📋 Admin ${req.userId} listando usuários - Role: ${role}, Search: ${search}, Page: ${page}`);
+        console.log(`📋 Admin ${req.userId} listando usuários - Role: ${role}, Status: ${status}, Turma: ${turma}, Search: ${search}, Page: ${page}`);
         
         let query = {};
         
-        // Filtrar por role
+        // 🔥 FILTRAR POR ROLE
         if (role && role !== 'todos') {
             query.role = role;
+            console.log(`   🔍 Filtrando por role: ${role}`);
         }
         
-        // Busca por nome, email, matrícula ou CPF
-        if (search) {
+        // 🔥 FILTRAR POR STATUS (ATIVO/INATIVO)
+        if (status && status !== 'todos') {
+            if (status === 'ativo') {
+                query.ativo = true;
+                console.log(`   🔍 Filtrando por status: ATIVO (true)`);
+            } else if (status === 'inativo') {
+                query.ativo = false;
+                console.log(`   🔍 Filtrando por status: INATIVO (false)`);
+            }
+        }
+        
+        //  FILTRAR POR TURMA
+        if (turma && turma !== 'todas' && turma !== '') {
+            query.turma = turma;
+            console.log(`   🔍 Filtrando por turma: ${turma}`);
+        }
+        
+        //  BUSCA POR NOME, EMAIL, MATRÍCULA OU CPF
+        if (search && search.trim() !== '') {
             query.$or = [
                 { nome: { $regex: search, $options: 'i' } },
                 { email: { $regex: search, $options: 'i' } },
                 { matricula: { $regex: search, $options: 'i' } },
                 { cpf: { $regex: search, $options: 'i' } }
             ];
+            console.log(`   🔍 Buscando por: "${search}"`);
         }
+        
+        console.log(`   📝 Query final:`, JSON.stringify(query, null, 2));
         
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
-        // 🔥 CORREÇÃO: Usar select POSITIVO (listar apenas os campos que queremos)
-        // Em vez de excluir campos, vamos INCLUIR explicitamente os que precisamos
         const [usuarios, total] = await Promise.all([
             User.find(query)
                 .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade twoFactorEnabled telefoneVerificado createdAt updatedAt qrCodeUsuario qrCodeUsuarioGeradoEm qrCodeUsuarioTipo')
@@ -11030,7 +11049,6 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
             telefoneVerificado: user.telefoneVerificado || false,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
-            // 🔥 ADICIONAR OS CAMPOS DO QR CODE AQUI
             qrCodeUsuario: user.qrCodeUsuario || null,
             qrCodeUsuarioGeradoEm: user.qrCodeUsuarioGeradoEm || null,
             qrCodeUsuarioTipo: user.qrCodeUsuarioTipo || null
