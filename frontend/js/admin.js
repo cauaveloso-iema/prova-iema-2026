@@ -32097,19 +32097,22 @@ class AdminPanel {
         // Configurações da folha A4 em mm (210mm x 297mm)
         const larguraFolhaMM = 210;
         const alturaFolhaMM = 297;
-        const margemMM = 10; // Margem da folha
+        const margemMM = 3; // ALTERADO: era 10, agora 3mm
+        const espacamentoMM = 0; // ALTERADO: era 5, agora 1mm
         
         // Calcular quantos cartões cabem por linha e coluna
-        const espacamentoMM = 5; // Espaço entre cartões
         const larguraDisponivel = larguraFolhaMM - (margemMM * 2);
         const alturaDisponivel = alturaFolhaMM - (margemMM * 2);
         
-        const cartoesPorLinha = Math.floor((larguraDisponivel + espacamentoMM) / (larguraCartaoMM + espacamentoMM));
-        const cartoesPorColuna = Math.floor((alturaDisponivel + espacamentoMM) / (alturaCartaoMM + espacamentoMM));
+        // FORÇAR 2 colunas e 4 linhas = 8 cartões por página
+        const cartoesPorLinha = 2;
+        const cartoesPorColuna = 4;
         const cartoesPorPagina = cartoesPorLinha * cartoesPorColuna;
         
         console.log(`📐 Configuração de impressão:`);
         console.log(`   Tamanho do cartão: ${larguraCartaoMM}mm x ${alturaCartaoMM}mm`);
+        console.log(`   Margem da folha: ${margemMM}mm`);
+        console.log(`   Espaçamento entre cartões: ${espacamentoMM}mm`);
         console.log(`   Cartões por linha: ${cartoesPorLinha}`);
         console.log(`   Cartões por coluna: ${cartoesPorColuna}`);
         console.log(`   Cartões por página: ${cartoesPorPagina}`);
@@ -32151,8 +32154,8 @@ class AdminPanel {
                             print-color-adjust: exact;
                         }
                         .page-break {
-                            page-break-after: always;
-                            break-after: page;
+                            page-break-before: always;
+                            break-before: page;
                         }
                         .btn-print, .no-print {
                             display: none !important;
@@ -32240,6 +32243,7 @@ class AdminPanel {
                 <div class="info-impressao no-print">
                     📐 Configuração: ${cartoesPorLinha} cartões por linha × ${cartoesPorColuna} cartões por coluna = ${cartoesPorPagina} cartões por página
                     | Tamanho do cartão: ${larguraCartaoMM}mm × ${alturaCartaoMM}mm
+                    | Margem: ${margemMM}mm | Espaço: ${espacamentoMM}mm
                 </div>
                 <button class="btn-print no-print" onclick="window.print()">
                     <i class="fas fa-print"></i> Imprimir Todos os Cartões
@@ -32282,29 +32286,42 @@ class AdminPanel {
             }
         }
         
-        // Adicionar espaços vazios para completar a última página (se necessário)
+        // CORREÇÃO AQUI: Adicionar quebras de página a cada 8 cartões (não entre eles)
+        const grid = printWindow.document.querySelector('#cartoesGrid');
+        const items = Array.from(grid.children);
+        
+        // Remover quebras existentes se houver
+        const existingBreaks = grid.querySelectorAll('.page-break');
+        existingBreaks.forEach(break_ => break_.remove());
+        
+        // Adicionar quebras a cada 8 cartões
+        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
+            const pageBreak = printWindow.document.createElement('div');
+            pageBreak.className = 'page-break';
+            pageBreak.style.pageBreakBefore = 'always';
+            pageBreak.style.breakBefore = 'page';
+            pageBreak.style.width = '100%';
+            pageBreak.style.height = '0';
+            pageBreak.style.margin = '0';
+            pageBreak.style.padding = '0';
+            // Inserir ANTES do cartão que começa a nova página
+            grid.insertBefore(pageBreak, items[i]);
+        }
+        
+        // Adicionar espaços vazios APENAS na última página se necessário
         const totalCartoes = this.qrCodesFiltrados.length;
         const cartoesUltimaPagina = totalCartoes % cartoesPorPagina;
+        
         if (cartoesUltimaPagina > 0 && cartoesUltimaPagina < cartoesPorPagina) {
             const espacosVazios = cartoesPorPagina - cartoesUltimaPagina;
             for (let i = 0; i < espacosVazios; i++) {
                 const emptyDiv = printWindow.document.createElement('div');
                 emptyDiv.className = 'cartao-container';
-                emptyDiv.style.cssText = `width: ${larguraCartaoMM}mm; height: ${alturaCartaoMM}mm; visibility: hidden;`;
-                emptyDiv.innerHTML = `<div class="cartao" style="width: 100%; height: 100%; border: 1px dashed #ccc; background: transparent;"></div>`;
-                printWindow.document.querySelector('#cartoesGrid').appendChild(emptyDiv);
+                emptyDiv.style.visibility = 'hidden';
+                emptyDiv.style.height = 'auto';
+                emptyDiv.innerHTML = `<div class="cartao" style="border: 1px dashed #ccc; background: transparent; min-height: 100px;"></div>`;
+                grid.appendChild(emptyDiv);
             }
-        }
-        
-        // Adicionar quebras de página a cada página cheia
-        const grid = printWindow.document.querySelector('#cartoesGrid');
-        const items = grid.children;
-        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
-            const pageBreak = printWindow.document.createElement('div');
-            pageBreak.className = 'page-break';
-            pageBreak.style.pageBreakAfter = 'always';
-            pageBreak.style.breakAfter = 'page';
-            grid.insertBefore(pageBreak, items[i]);
         }
         
         setTimeout(() => {
