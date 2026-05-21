@@ -9228,7 +9228,7 @@ class AdminPanel {
         
         return `
             <div class="pagination-professional">
-                <div class="pagination-info">Mostrando ${inicio} a ${fim} de ${pagination.total} turmas</div>
+                <div class="pagination-info">Mostrando ${inicio} a ${fim} de ${pagination.total} usuários</div>
                 <div class="pagination-controls">
                     <button class="btn-page" ${paginaAtual === 1 ? 'disabled' : ''} onclick="admin.mudarPagina('${tipo}', ${paginaAtual - 1})"><i class="fas fa-chevron-left"></i></button>
                     ${botoes}
