@@ -31371,10 +31371,8 @@ class AdminPanel {
         
         this.showToast(`📄 Gerando ${this.qrCodesFiltrados.length} cartões em PDF...`, 'info');
         
-        // 🔥 USAR A MESMA CONFIGURAÇÃO DA IMPRESSÃO
         const configCartao = this.configCartao || { tamanho: 'credito', margem: 10 };
         
-        // Tamanho do cartão em mm
         let larguraCartaoMM = 85;
         let alturaCartaoMM = 54;
         
@@ -31386,20 +31384,15 @@ class AdminPanel {
             alturaCartaoMM = configCartao.altura;
         }
         
-        // Configuração da página A4 (Vertical - igual à impressão)
         const larguraPaginaMM = 210;
         const alturaPaginaMM = 297;
-        const margemMM = 10;
-        const espacamentoMM = 5;
+        const margemMM = 3; // Reduzido de 10 para 3
+        const espacamentoMM = 0; // Reduzido de 5 para 0
         
-        // Calcular espaço útil
-        const larguraUtilMM = larguraPaginaMM - (margemMM * 2);
-        const alturaUtilMM = alturaPaginaMM - (margemMM * 2);
-        
-        // Calcular quantos cartões cabem por linha e coluna (MESMA LÓGICA DA IMPRESSÃO)
-        const cartoesPorLinha = Math.floor((larguraUtilMM + espacamentoMM) / (larguraCartaoMM + espacamentoMM));
-        const cartoesPorColuna = Math.floor((alturaUtilMM + espacamentoMM) / (alturaCartaoMM + espacamentoMM));
-        const cartoesPorPagina = Math.max(1, cartoesPorLinha) * Math.max(1, cartoesPorColuna);
+        // FORÇAR 2 colunas e 4 linhas
+        const cartoesPorLinha = 2;
+        const cartoesPorColuna = 4;
+        const cartoesPorPagina = cartoesPorLinha * cartoesPorColuna;
         const totalPaginas = Math.ceil(this.qrCodesFiltrados.length / cartoesPorPagina);
         
         console.log(`📐 Configuração do PDF (igual à impressão):`);
@@ -31409,10 +31402,8 @@ class AdminPanel {
         console.log(`   Cartões por página: ${cartoesPorPagina}`);
         console.log(`   Total de páginas: ${totalPaginas}`);
         
-        // Criar uma nova janela
         const printWindow = window.open('', '_blank');
         
-        // Obter o CSS do primeiro cartão
         let cssEstilos = '';
         if (this.qrCodesFiltrados.length > 0) {
             const primeiroUsuario = this.qrCodesFiltrados[0];
@@ -31423,10 +31414,6 @@ class AdminPanel {
             }
         }
         
-        // Calcular largura percentual para o grid
-        const larguraPercentual = 100 / cartoesPorLinha;
-        
-        // Gerar HTML com layout de grade (MESMO DA IMPRESSÃO)
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
@@ -31573,7 +31560,7 @@ class AdminPanel {
                     </div>
                     <div>
                         <button class="btn-pdf" onclick="window.print()">
-                            <i class="fas fa-print"></i> Salvar como PDF / Imprimir
+                            🖨️ Salvar como PDF / Imprimir
                         </button>
                     </div>
                 </div>
@@ -31602,10 +31589,9 @@ class AdminPanel {
                 if (cartaoElement) {
                     printWindow.document.write(cartaoElement.outerHTML);
                 } else {
-                    // Fallback
                     printWindow.document.write(`
                         <div class="cartao-container">
-                            <div class="cartao" style="border:1px solid #ddd; border-radius:12px; padding:10px; display:flex; height:${alturaCartaoMM}mm;">
+                            <div class="cartao" style="border:1px solid #ddd; border-radius:12px; padding:10px; display:flex;">
                                 <div style="flex:2;">
                                     <strong>${this.escapeHtml(usuario.nome)}</strong><br>
                                     <small>${usuario.matricula || '-'}</small>
@@ -31624,14 +31610,13 @@ class AdminPanel {
             for (let i = 0; i < cartoesFaltando; i++) {
                 printWindow.document.write(`
                     <div class="cartao-container" style="visibility: hidden;">
-                        <div class="cartao" style="border: 1px dashed #ccc; background: transparent; height: ${alturaCartaoMM}mm;"></div>
+                        <div class="cartao" style="border: 1px dashed #ccc; background: transparent; min-height: ${alturaCartaoMM}mm;"></div>
                     </div>
                 `);
             }
             
             printWindow.document.write(`</div>`);
             
-            // Adicionar quebra de página entre páginas (exceto na última)
             if (pagina < totalPaginas - 1) {
                 printWindow.document.write(`<div class="page-break"></div>`);
             }
@@ -31654,7 +31639,6 @@ class AdminPanel {
         
         this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões organizados em ${totalPaginas} página(s)!`, 'success');
     }
-
     // ============ EXPORTAR ZIP COM CARTÕES COMO IMAGENS JPG/PNG ============
     async exportarZIPCartoes() {
         this.closeModal();
@@ -31921,14 +31905,12 @@ class AdminPanel {
         
         const larguraFolhaMM = 210;
         const alturaFolhaMM = 297;
-        const margemMM = 10;
-        const espacamentoMM = 5;
+        const margemMM = 3; // Reduzido de 10 para 3
+        const espacamentoMM = 0; // Reduzido de 5 para 0
         
-        const larguraDisponivel = larguraFolhaMM - (margemMM * 2);
-        const alturaDisponivel = alturaFolhaMM - (margemMM * 2);
-        
-        const cartoesPorLinha = Math.floor((larguraDisponivel + espacamentoMM) / (larguraCartaoMM + espacamentoMM));
-        const cartoesPorColuna = Math.floor((alturaDisponivel + espacamentoMM) / (alturaCartaoMM + espacamentoMM));
+        // FORÇAR 2 colunas e 4 linhas
+        const cartoesPorLinha = 2;
+        const cartoesPorColuna = 4;
         const cartoesPorPagina = cartoesPorLinha * cartoesPorColuna;
         
         const printWindow = window.open('', '_blank');
@@ -31951,14 +31933,29 @@ class AdminPanel {
                 <title>Cartões QR Code - Turma ${turma}</title>
                 <style>
                     ${cssEstilos}
+                    
                     @media print {
-                        @page { size: A4; margin: ${margemMM}mm; }
-                        .page-break { page-break-after: always; }
+                        @page {
+                            size: A4;
+                            margin: ${margemMM}mm;
+                        }
+                        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        .page-break { page-break-before: always; break-before: page; }
+                        .btn-print, .no-print { display: none !important; }
                         .cartoes-grid {
                             display: grid;
                             grid-template-columns: repeat(${cartoesPorLinha}, 1fr);
                             gap: ${espacamentoMM}mm;
                         }
+                        .cartao-container { margin: 0; padding: 0; break-inside: avoid; }
+                        .cartao { border: 1px solid #ddd; box-shadow: none; }
+                    }
+                    
+                    body {
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        background: #e0e0e0;
+                        margin: 0;
+                        padding: 20px;
                     }
                     .cartoes-grid {
                         display: grid;
@@ -31968,6 +31965,7 @@ class AdminPanel {
                         background: white;
                         padding: ${margemMM}mm;
                     }
+                    .cartao-container { margin: 0; padding: 0; break-inside: avoid; }
                     .btn-print {
                         display: block;
                         margin: 20px auto;
@@ -31976,6 +31974,8 @@ class AdminPanel {
                         color: white;
                         border: none;
                         border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
                         cursor: pointer;
                     }
                     .info-impressao {
@@ -31983,9 +31983,14 @@ class AdminPanel {
                         padding: 10px;
                         background: #f3f4f6;
                         margin-bottom: 20px;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        color: #4b5563;
                     }
                     @media print {
+                        body { background: white; padding: 0; }
                         .info-impressao, .btn-print { display: none; }
+                        .cartoes-grid { padding: 0; margin: 0; }
                     }
                 </style>
             </head>
@@ -32009,6 +32014,27 @@ class AdminPanel {
             }
         }
         
+        const grid = printWindow.document.querySelector('#cartoesGrid');
+        const items = Array.from(grid.children);
+        
+        // Remover quebras existentes
+        const existingBreaks = grid.querySelectorAll('.page-break');
+        existingBreaks.forEach(break_ => break_.remove());
+        
+        // Adicionar quebras a cada 8 cartões
+        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
+            const pageBreak = printWindow.document.createElement('div');
+            pageBreak.className = 'page-break';
+            pageBreak.style.pageBreakBefore = 'always';
+            pageBreak.style.breakBefore = 'page';
+            pageBreak.style.width = '100%';
+            pageBreak.style.height = '0';
+            pageBreak.style.margin = '0';
+            pageBreak.style.padding = '0';
+            grid.insertBefore(pageBreak, items[i]);
+        }
+        
+        // Adicionar espaços vazios na última página
         const totalCartoes = alunosDaTurma.length;
         const cartoesUltimaPagina = totalCartoes % cartoesPorPagina;
         if (cartoesUltimaPagina > 0 && cartoesUltimaPagina < cartoesPorPagina) {
@@ -32017,17 +32043,10 @@ class AdminPanel {
                 const emptyDiv = printWindow.document.createElement('div');
                 emptyDiv.className = 'cartao-container';
                 emptyDiv.style.visibility = 'hidden';
-                emptyDiv.innerHTML = `<div class="cartao" style="border:1px dashed #ccc; height:${alturaCartaoMM}mm;"></div>`;
-                printWindow.document.querySelector('#cartoesGrid').appendChild(emptyDiv);
+                emptyDiv.style.height = 'auto';
+                emptyDiv.innerHTML = `<div class="cartao" style="border:1px dashed #ccc; background:transparent; min-height: ${alturaCartaoMM}mm;"></div>`;
+                grid.appendChild(emptyDiv);
             }
-        }
-        
-        const grid = printWindow.document.querySelector('#cartoesGrid');
-        const items = grid.children;
-        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
-            const pageBreak = printWindow.document.createElement('div');
-            pageBreak.className = 'page-break';
-            grid.insertBefore(pageBreak, items[i]);
         }
         
         setTimeout(() => printWindow.focus(), 500);
@@ -32358,14 +32377,12 @@ class AdminPanel {
         
         const larguraFolhaMM = 210;
         const alturaFolhaMM = 297;
-        const margemMM = 10;
-        const espacamentoMM = 5;
+        const margemMM = 3; // Reduzido de 10 para 3
+        const espacamentoMM = 0; // Reduzido de 5 para 0
         
-        const larguraDisponivel = larguraFolhaMM - (margemMM * 2);
-        const alturaDisponivel = alturaFolhaMM - (margemMM * 2);
-        
-        const cartoesPorLinha = Math.floor((larguraDisponivel + espacamentoMM) / (larguraCartaoMM + espacamentoMM));
-        const cartoesPorColuna = Math.floor((alturaDisponivel + espacamentoMM) / (alturaCartaoMM + espacamentoMM));
+        // FORÇAR 2 colunas e 4 linhas
+        const cartoesPorLinha = 2;
+        const cartoesPorColuna = 4;
         const cartoesPorPagina = cartoesPorLinha * cartoesPorColuna;
         
         const printWindow = window.open('', '_blank');
@@ -32395,7 +32412,7 @@ class AdminPanel {
                             margin: ${margemMM}mm;
                         }
                         body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                        .page-break { page-break-after: always; break-after: page; }
+                        .page-break { page-break-before: always; break-before: page; }
                         .btn-print, .no-print { display: none !important; }
                         .cartoes-grid {
                             display: grid;
@@ -32486,6 +32503,27 @@ class AdminPanel {
         }
         
         // Completar última página
+        const grid = printWindow.document.querySelector('#cartoesGrid');
+        const items = Array.from(grid.children);
+        
+        // Remover quebras existentes
+        const existingBreaks = grid.querySelectorAll('.page-break');
+        existingBreaks.forEach(break_ => break_.remove());
+        
+        // Adicionar quebras a cada 8 cartões
+        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
+            const pageBreak = printWindow.document.createElement('div');
+            pageBreak.className = 'page-break';
+            pageBreak.style.pageBreakBefore = 'always';
+            pageBreak.style.breakBefore = 'page';
+            pageBreak.style.width = '100%';
+            pageBreak.style.height = '0';
+            pageBreak.style.margin = '0';
+            pageBreak.style.padding = '0';
+            grid.insertBefore(pageBreak, items[i]);
+        }
+        
+        // Adicionar espaços vazios na última página
         const totalCartoes = this.qrCodesFiltrados.length;
         const cartoesUltimaPagina = totalCartoes % cartoesPorPagina;
         if (cartoesUltimaPagina > 0 && cartoesUltimaPagina < cartoesPorPagina) {
@@ -32493,19 +32531,11 @@ class AdminPanel {
             for (let i = 0; i < espacosVazios; i++) {
                 const emptyDiv = printWindow.document.createElement('div');
                 emptyDiv.className = 'cartao-container';
-                emptyDiv.style.cssText = `visibility: hidden;`;
-                emptyDiv.innerHTML = `<div class="cartao" style="border:1px dashed #ccc; background:transparent; height:${alturaCartaoMM}mm;"></div>`;
-                printWindow.document.querySelector('#cartoesGrid').appendChild(emptyDiv);
+                emptyDiv.style.visibility = 'hidden';
+                emptyDiv.style.height = 'auto';
+                emptyDiv.innerHTML = `<div class="cartao" style="border:1px dashed #ccc; background:transparent; min-height: ${alturaCartaoMM}mm;"></div>`;
+                grid.appendChild(emptyDiv);
             }
-        }
-        
-        const grid = printWindow.document.querySelector('#cartoesGrid');
-        const items = grid.children;
-        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
-            const pageBreak = printWindow.document.createElement('div');
-            pageBreak.className = 'page-break';
-            pageBreak.style.pageBreakAfter = 'always';
-            grid.insertBefore(pageBreak, items[i]);
         }
         
         setTimeout(() => printWindow.focus(), 500);
