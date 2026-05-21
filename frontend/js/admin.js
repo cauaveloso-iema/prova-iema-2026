@@ -2831,9 +2831,7 @@ class AdminPanel {
                                     <th onclick="admin.ordenarUsuariosPor('telefone')" class="sortable">
                                         Telefone <i class="fas fa-sort" id="sort-telefone"></i>
                                     </th>
-                                    <th onclick="admin.ordenarUsuariosPor('turma')" class="sortable">
-                                        Turma <i class="fas fa-sort" id="sort-turma"></i>
-                                    </th>
+                                    <!-- 🔥 COLUNA TURMA REMOVIDA -->
                                     <th onclick="admin.ordenarUsuariosPor('status')" class="sortable">
                                         Status <i class="fas fa-sort" id="sort-status"></i>
                                     </th>
@@ -2849,7 +2847,7 @@ class AdminPanel {
                         </table>
                     </div>
 
-                    <!-- Paginação -->
+                    <!-- Paginação com texto corrigido -->
                     ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'usuarios') : ''}
                 </div>
             </div>
