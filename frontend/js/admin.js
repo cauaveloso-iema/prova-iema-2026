@@ -30895,7 +30895,7 @@ class AdminPanel {
         `;
     }
 
-    // ============ GERAR CARTÃO QR CODE HORIZONTAL (COM MARGENS PARA IMPRESSÃO) ============
+    // ============ GERAR CARTÃO QR CODE HORIZONTAL (COM LOGO DO CHAPÉU) ============
     gerarCartaoHorizontal(usuario, config = null) {
         const configFinal = config || this.configCartao || { tamanho: 'credito', mostrarLogo: true, mostrarRodape: true, margem: 10 };
         
@@ -30926,6 +30926,7 @@ class AdminPanel {
         const periodo = usuario.periodo || '';
         const dataAtual = new Date();
         const dataEmissao = dataAtual.toLocaleDateString('pt-BR');
+        const precisaAcessibilidade = usuario.precisaAcessibilidade === true;
         
         let roleIcon = '';
         let roleColor = '';
@@ -30938,7 +30939,7 @@ class AdminPanel {
                 roleIcon = '👨‍🎓';
                 roleColor = '#10b981';
                 roleBg = '#d1fae5';
-                gradienteFundo = 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)';
+                gradienteFundo = 'white';
                 infoAdicional = `
                     <div class="info-item"><span class="label">🎓 Curso:</span><span class="value">${curso || 'Não informado'}</span></div>
                     <div class="info-item"><span class="label">📅 Período:</span><span class="value">${periodo ? periodo + 'º' : 'Não informado'}</span></div>
@@ -30948,7 +30949,7 @@ class AdminPanel {
                 roleIcon = '👨‍🏫';
                 roleColor = '#f59e0b';
                 roleBg = '#fef3c7';
-                gradienteFundo = 'linear-gradient(135deg, #fffbeb 0%, #fefce8 100%)';
+                gradienteFundo = 'white';
                 infoAdicional = `<div class="info-item"><span class="label">📚 Eixo:</span><span class="value">${usuario.eixo || 'Não informado'}</span></div>`;
                 break;
             case 'admin':
@@ -30956,13 +30957,13 @@ class AdminPanel {
                 roleIcon = '👑';
                 roleColor = '#8b5cf6';
                 roleBg = '#ede9fe';
-                gradienteFundo = 'linear-gradient(135deg, #f5f3ff 0%, #f3e8ff 100%)';
+                gradienteFundo = 'white';
                 break;
             default:
                 roleIcon = '👤';
                 roleColor = '#6b7280';
                 roleBg = '#f3f4f6';
-                gradienteFundo = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+                gradienteFundo = 'white';
         }
         
         return `
@@ -30980,11 +30981,11 @@ class AdminPanel {
                         }
                         body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                         .no-print { display: none; }
-                        .cartao { page-break-inside: avoid; break-inside: avoid; box-shadow: none; }
+                        .cartao { page-break-inside: avoid; break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
                     }
                     * { margin: 0; padding: 0; box-sizing: border-box; }
                     body {
-                        background: #f1f5f9;
+                        background: white;
                         display: flex;
                         justify-content: center;
                         align-items: center;
@@ -30999,49 +31000,138 @@ class AdminPanel {
                         display: flex;
                         justify-content: center;
                         align-items: center;
-                        background: #f1f5f9;
+                        background: white;
                     }
                     .cartao {
                         width: ${larguraCartaoPX}px;
                         height: ${alturaCartaoPX}px;
                         background: ${gradienteFundo};
-                        border-radius: 16px;
-                        box-shadow: 0 20px 35px -10px rgba(0,0,0,0.15);
+                        border-radius: 12px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
                         overflow: hidden;
                         display: flex;
                         flex-direction: row;
+                        border: 1px solid #e5e7eb;
                     }
-                    .cartao-info { flex: 2; padding: 14px 18px; display: flex; flex-direction: column; justify-content: space-between; }
-                    .cartao-qrcode { flex: 1; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; border-left: 2px solid ${roleColor}20; }
-                    .header-logo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid ${roleColor}30; }
-                    .logo-sistema-container { display: flex; align-items: center; gap: 8px; }
-                    .logo-quadrado { width: 32px; height: 32px; background: linear-gradient(135deg, #1e3a8a, #1e40af); border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-                    .logo-quadrado img { width: 20px; height: 20px; object-fit: contain; }
-                    .sistema-nome { font-size: 11px; font-weight: 700; color: #1e3a8a; }
-                    .sistema-nome small { font-size: 8px; font-weight: 400; color: #6b7280; }
+                    .cartao-info { 
+                        flex: 2; 
+                        padding: 10px 12px; 
+                        display: flex; 
+                        flex-direction: column; 
+                        justify-content: space-between;
+                        overflow: hidden;
+                    }
+                    .cartao-qrcode { 
+                        flex: 1.2;
+                        background: rgba(255,255,255,0.98); 
+                        display: flex; 
+                        flex-direction: column; 
+                        align-items: center; 
+                        justify-content: center; 
+                        padding: 10px; 
+                        border-left: 1px solid ${roleColor}30;
+                    }
+                    .header-logo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #e5e7eb; }
+                    .logo-sistema-container { display: flex; align-items: center; gap: 6px; }
+                    
+                    /* 🔥 LOGO DO CHAPÉU RESTAURADA */
+                    .logo-quadrado { 
+                        width: 28px; 
+                        height: 28px; 
+                        background: linear-gradient(135deg, #1e3a8a, #1e40af); 
+                        border-radius: 6px; 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                    }
+                    .logo-quadrado img { 
+                        width: 18px; 
+                        height: 18px; 
+                        object-fit: contain; 
+                    }
+                    
+                    .sistema-nome { font-size: 9px; font-weight: 700; color: #1e3a8a; line-height: 1.2; }
+                    .sistema-nome small { font-size: 7px; font-weight: 400; color: #6b7280; }
                     .instituicao-badge { text-align: right; }
-                    .instituicao-nome { font-size: 8px; color: #6b7280; font-weight: 500; }
-                    .titulo-cartao { font-size: 10px; font-weight: 700; color: ${roleColor}; text-transform: uppercase; letter-spacing: 1.5px; margin: 4px 0; }
+                    .instituicao-nome { font-size: 7px; color: #6b7280; font-weight: 500; }
                     
-                    /* Nome do usuário - CORRIGIDO: sem gradiente, texto normal preto */
-                    .nome-usuario {
-                        font-size: 16px;
-                        font-weight: 800;
-                        color: #1f2937;
-                        margin: 6px 0 4px;
-                        line-height: 1.3;
+                    .titulo-cartao { 
+                        font-size: 9px; 
+                        font-weight: 700; 
+                        color: ${roleColor}; 
+                        text-transform: uppercase; 
+                        letter-spacing: 1px; 
+                        margin: 5px 0 3px;
+                        text-align: center;
                     }
                     
-                    .info-grid { display: flex; flex-direction: column; gap: 5px; margin: 6px 0; background: rgba(255,255,255,0.7); padding: 8px; border-radius: 10px; }
-                    .info-item { display: flex; align-items: center; gap: 6px; font-size: 9px; }
-                    .info-item .label { font-weight: 700; color: #4b5563; min-width: 62px; }
+                    /* Nome em negrito garantido */
+                    .nome-usuario {
+                        font-size: 13px;
+                        font-weight: bold !important;
+                        color: #1f2937 !important;
+                        margin: 3px 0 5px;
+                        line-height: 1.3;
+                        text-align: center;
+                    }
+                    .nome-usuario strong {
+                        font-weight: bold !important;
+                    }
+                    
+                    .info-grid { 
+                        display: flex; 
+                        flex-direction: column; 
+                        gap: 3px; 
+                        margin: 5px 0; 
+                        background: #f9fafb; 
+                        padding: 6px; 
+                        border-radius: 6px; 
+                    }
+                    .info-item { display: flex; align-items: center; gap: 4px; font-size: 7px; margin-bottom: 2px; }
+                    .info-item .label { font-weight: 700; color: #4b5563; min-width: 50px; }
                     .info-item .value { color: #1f2937; font-weight: 500; }
-                    .role-badge { display: inline-flex; align-items: center; gap: 5px; background: ${roleBg}; color: ${roleColor}; padding: 4px 10px; border-radius: 30px; font-size: 9px; font-weight: 700; margin-top: 4px; width: fit-content; }
-                    .qrcode-wrapper { background: white; padding: 8px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-                    .qrcode-wrapper img { width: 100%; height: auto; max-width: 100px; display: block; margin: 0 auto; }
-                    .qrcode-label { font-size: 7px; color: #9ca3af; text-align: center; margin-top: 6px; font-weight: 500; }
-                    .cartao-footer { margin-top: 6px; font-size: 6px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 5px; display: flex; justify-content: space-between; }
-                    .acessibilidade-badge { display: inline-flex; align-items: center; gap: 3px; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 20px; font-size: 7px; font-weight: 600; margin-left: 8px; }
+                    .role-badge { 
+                        display: inline-flex; 
+                        align-items: center; 
+                        gap: 4px; 
+                        background: ${roleBg}; 
+                        color: ${roleColor}; 
+                        padding: 2px 8px; 
+                        border-radius: 20px; 
+                        font-size: 7px; 
+                        font-weight: 700; 
+                        margin-top: 3px; 
+                        width: fit-content;
+                        align-self: center;
+                    }
+                    
+                    .qrcode-wrapper { 
+                        background: white; 
+                        padding: 5px; 
+                        border-radius: 10px; 
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+                        width: 100%;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
+                    .qrcode-wrapper img { 
+                        width: 100%; 
+                        height: auto; 
+                        max-width: 95px;
+                        min-width: 75px;
+                        display: block; 
+                        margin: 0 auto; 
+                    }
+                    .qrcode-label { 
+                        font-size: 6px; 
+                        color: #9ca3af; 
+                        text-align: center; 
+                        margin-top: 5px; 
+                        font-weight: 500;
+                    }
+                    .cartao-footer { margin-top: 4px; font-size: 5px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 3px; display: flex; justify-content: space-between; }
+                    .acessibilidade-badge { display: inline-flex; align-items: center; gap: 3px; background: #dbeafe; color: #1e40af; padding: 1px 5px; border-radius: 15px; font-size: 6px; font-weight: 600; margin-left: 5px; }
                     .btn-print { display: block; width: ${larguraCartaoPX}px; margin: 20px auto 0; padding: 10px; background: ${roleColor}; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
                     @media print { body { padding: 0; margin: 0; background: white; } .btn-print { display: none; } .cartao { box-shadow: none; } }
                 </style>
@@ -31054,17 +31144,21 @@ class AdminPanel {
                                 <div class="header-logo">
                                     <div class="logo-sistema-container">
                                         <div class="logo-quadrado">
-                                            <img src="/icons/favicon.ico" alt="Logo" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'%3E%3Ctext x=\\'50\\' y=\\'55\\' text-anchor=\\'middle\\' font-size=\\'40\\' fill=\\'white\\'%3E📚%3C/text%3E%3C/svg%3E'">
+                                            <img src="/icons/favicon.ico" alt="Logo" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'%3E%3Ctext x=\\'50\\' y=\\'55\\' text-anchor=\\'middle\\' font-size=\\'40\\' fill=\\'white\\'%3E🎓%3C/text%3E%3C/svg%3E'">
                                         </div>
                                         <div class="sistema-nome">SISTEMA DE PROVAS<br><small>2026</small></div>
                                     </div>
                                     <div class="instituicao-badge">
                                         <div class="instituicao-nome">IEMA PLENO</div>
-                                        <div class="instituicao-nome" style="font-size: 7px;">SÃO LUÍS - CENTRO</div>
+                                        <div class="instituicao-nome" style="font-size: 6px;">SÃO LUÍS - CENTRO</div>
                                     </div>
                                 </div>
+                                
                                 <div class="titulo-cartao">CARTÃO DE IDENTIFICAÇÃO</div>
-                                <div class="nome-usuario">${this.escapeHtml(nome)}${usuario.precisaAcessibilidade ? '<span class="acessibilidade-badge"><i class="fas fa-wheelchair"></i> Acessível</span>' : ''}</div>
+                                
+                                <!-- Nome em negrito -->
+                                <div class="nome-usuario"><strong>${this.escapeHtml(nome)}</strong>${precisaAcessibilidade ? '<span class="acessibilidade-badge"><i class="fas fa-wheelchair"></i> Acessível</span>' : ''}</div>
+                                
                                 <div class="info-grid">
                                     <div class="info-item"><span class="label">📌 MATRÍCULA:</span><span class="value">${matricula}</span></div>
                                     <div class="info-item"><span class="label">📧 E-MAIL:</span><span class="value">${email.length > 22 ? email.substring(0, 20) + '..' : email}</span></div>
@@ -31072,11 +31166,17 @@ class AdminPanel {
                                     ${infoAdicional}
                                     <div class="info-item"><span class="label">📅 EMISSÃO:</span><span class="value">${dataEmissao}</span></div>
                                 </div>
-                                <div><span class="role-badge">${roleIcon} ${this.getRoleLabelQR(role)}</span></div>
+                                
+                                <div style="display: flex; justify-content: center;">
+                                    <span class="role-badge">${roleIcon} ${this.getRoleLabelQR(role)}</span>
+                                </div>
+                                
                                 ${configFinal.mostrarRodape ? `<div class="cartao-footer"><span>✓ Válido para acesso ao sistema</span><span>🔒 Documento digital</span></div>` : ''}
                             </div>
                             <div class="cartao-qrcode">
-                                <div class="qrcode-wrapper"><img src="${usuario.qrCodeDataUrl}" alt="QR Code de ${nome}"></div>
+                                <div class="qrcode-wrapper">
+                                    <img src="${usuario.qrCodeDataUrl}" alt="QR Code de ${nome}">
+                                </div>
                                 <div class="qrcode-label">Escaneie para acesso rápido ao sistema</div>
                             </div>
                         </div>
@@ -31087,7 +31187,6 @@ class AdminPanel {
             </html>
         `;
     }
-
     // ============ MODAL PARA GERAR PDF ============
     async abrirModalGerarPDF() {
         if (this.qrCodesFiltrados.length === 0) {
@@ -31261,7 +31360,7 @@ class AdminPanel {
         this.showToast(`✅ ${this.qrCodesFiltrados.length} QR Codes prontos para PDF!`, 'success');
     }
 
-    // ============ GERAR PDF COM CARTÕES ============
+    // ============ GERAR PDF COM CARTÕES (MESMA LÓGICA DA IMPRESSÃO) ============
     async gerarPDFCartoes() {
         this.closeModal();
         
@@ -31272,10 +31371,48 @@ class AdminPanel {
         
         this.showToast(`📄 Gerando ${this.qrCodesFiltrados.length} cartões em PDF...`, 'info');
         
+        // 🔥 USAR A MESMA CONFIGURAÇÃO DA IMPRESSÃO
+        const configCartao = this.configCartao || { tamanho: 'credito', margem: 10 };
+        
+        // Tamanho do cartão em mm
+        let larguraCartaoMM = 85;
+        let alturaCartaoMM = 54;
+        
+        if (configCartao.tamanho === 'padrao') {
+            larguraCartaoMM = 105;
+            alturaCartaoMM = 74;
+        } else if (configCartao.tamanho === 'personalizado' && configCartao.largura && configCartao.altura) {
+            larguraCartaoMM = configCartao.largura;
+            alturaCartaoMM = configCartao.altura;
+        }
+        
+        // Configuração da página A4 (Vertical - igual à impressão)
+        const larguraPaginaMM = 210;
+        const alturaPaginaMM = 297;
+        const margemMM = 10;
+        const espacamentoMM = 5;
+        
+        // Calcular espaço útil
+        const larguraUtilMM = larguraPaginaMM - (margemMM * 2);
+        const alturaUtilMM = alturaPaginaMM - (margemMM * 2);
+        
+        // Calcular quantos cartões cabem por linha e coluna (MESMA LÓGICA DA IMPRESSÃO)
+        const cartoesPorLinha = Math.floor((larguraUtilMM + espacamentoMM) / (larguraCartaoMM + espacamentoMM));
+        const cartoesPorColuna = Math.floor((alturaUtilMM + espacamentoMM) / (alturaCartaoMM + espacamentoMM));
+        const cartoesPorPagina = Math.max(1, cartoesPorLinha) * Math.max(1, cartoesPorColuna);
+        const totalPaginas = Math.ceil(this.qrCodesFiltrados.length / cartoesPorPagina);
+        
+        console.log(`📐 Configuração do PDF (igual à impressão):`);
+        console.log(`   Tamanho do cartão: ${larguraCartaoMM}mm x ${alturaCartaoMM}mm`);
+        console.log(`   Cartões por linha: ${cartoesPorLinha}`);
+        console.log(`   Cartões por coluna: ${cartoesPorColuna}`);
+        console.log(`   Cartões por página: ${cartoesPorPagina}`);
+        console.log(`   Total de páginas: ${totalPaginas}`);
+        
         // Criar uma nova janela
         const printWindow = window.open('', '_blank');
         
-        // Obter o CSS do primeiro cartão (todos são iguais)
+        // Obter o CSS do primeiro cartão
         let cssEstilos = '';
         if (this.qrCodesFiltrados.length > 0) {
             const primeiroUsuario = this.qrCodesFiltrados[0];
@@ -31286,7 +31423,10 @@ class AdminPanel {
             }
         }
         
-        // Escrever o HTML base com o CSS completo
+        // Calcular largura percentual para o grid
+        const larguraPercentual = 100 / cartoesPorLinha;
+        
+        // Gerar HTML com layout de grade (MESMO DA IMPRESSÃO)
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
@@ -31297,11 +31437,11 @@ class AdminPanel {
                     /* Estilos dos cartões */
                     ${cssEstilos}
                     
-                    /* Estilos adicionais para impressão */
+                    /* Estilos para impressão e PDF */
                     @media print {
                         @page {
-                            size: landscape;
-                            margin: 0.5cm;
+                            size: A4;
+                            margin: ${margemMM}mm;
                         }
                         body {
                             margin: 0;
@@ -31313,102 +31453,206 @@ class AdminPanel {
                             page-break-after: always;
                             break-after: page;
                         }
-                        .btn-print {
+                        .btn-print, .no-print {
                             display: none !important;
                         }
-                        .no-print {
-                            display: none !important;
+                        .cartoes-grid {
+                            display: grid;
+                            grid-template-columns: repeat(${cartoesPorLinha}, 1fr);
+                            gap: ${espacamentoMM}mm;
+                            page-break-inside: avoid;
+                        }
+                        .cartao-container {
+                            margin: 0;
+                            padding: 0;
+                            break-inside: avoid;
+                            page-break-inside: avoid;
+                        }
+                        .cartao {
+                            border: 1px solid #ddd;
+                            box-shadow: none;
                         }
                     }
+                    
+                    /* Estilos para tela */
                     body {
                         font-family: 'Segoe UI', Arial, sans-serif;
-                        background: #f1f5f9;
+                        background: #e0e0e0;
                         margin: 0;
                         padding: 20px;
                     }
-                    .cartoes-container {
+                    .info-header {
+                        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                        color: white;
+                        padding: 15px 20px;
+                        border-radius: 12px;
+                        margin-bottom: 20px;
                         display: flex;
-                        flex-direction: column;
+                        justify-content: space-between;
                         align-items: center;
+                        flex-wrap: wrap;
+                        gap: 10px;
                     }
-                    /* Garantir que os cartões tenham o tamanho correto */
+                    .info-header h2 {
+                        margin: 0;
+                        font-size: 18px;
+                    }
+                    .info-header p {
+                        margin: 5px 0 0;
+                        font-size: 13px;
+                        opacity: 0.9;
+                    }
+                    .btn-pdf {
+                        display: inline-block;
+                        padding: 10px 24px;
+                        background: #10b981;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    }
+                    .btn-pdf:hover {
+                        background: #059669;
+                    }
+                    .config-info {
+                        background: #f3f4f6;
+                        padding: 10px 15px;
+                        border-radius: 8px;
+                        margin-bottom: 20px;
+                        font-size: 13px;
+                        color: #4b5563;
+                        text-align: center;
+                    }
+                    .cartoes-grid {
+                        display: grid;
+                        grid-template-columns: repeat(${cartoesPorLinha}, 1fr);
+                        gap: ${espacamentoMM}mm;
+                        justify-content: center;
+                        background: white;
+                        padding: ${margemMM}mm;
+                        margin-bottom: 20px;
+                        border-radius: 8px;
+                    }
                     .cartao-container {
-                        margin: 10px auto;
+                        margin: 0;
+                        padding: 0;
+                        break-inside: avoid;
+                        page-break-inside: avoid;
+                    }
+                    .footer-info {
+                        text-align: center;
+                        margin-top: 20px;
+                        padding: 10px;
+                        font-size: 12px;
+                        color: #6b7280;
+                        border-top: 1px solid #e5e7eb;
+                    }
+                    @media print {
+                        body {
+                            background: white;
+                            padding: 0;
+                        }
+                        .info-header, .config-info, .btn-pdf, .footer-info {
+                            display: none;
+                        }
+                        .cartoes-grid {
+                            padding: 0;
+                            margin: 0;
+                            border-radius: 0;
+                        }
                     }
                 </style>
             </head>
             <body>
-                <div class="cartoes-container">
+                <div class="info-header no-print">
+                    <div>
+                        <h2>📄 Cartões QR Code - Sistema de Provas IEMA</h2>
+                        <p>${this.qrCodesFiltrados.length} cartões | ${cartoesPorLinha}×${cartoesPorColuna} por página | ${totalPaginas} página(s)</p>
+                    </div>
+                    <div>
+                        <button class="btn-pdf" onclick="window.print()">
+                            <i class="fas fa-print"></i> Salvar como PDF / Imprimir
+                        </button>
+                    </div>
+                </div>
+                <div class="config-info no-print">
+                    📐 Configuração: Cartão ${larguraCartaoMM}×${alturaCartaoMM}mm | 
+                    ${cartoesPorLinha} cartões por linha × ${cartoesPorColuna} cartões por coluna = ${cartoesPorPagina} cartões por página
+                </div>
+        `);
+        
+        // Gerar páginas
+        for (let pagina = 0; pagina < totalPaginas; pagina++) {
+            const inicio = pagina * cartoesPorPagina;
+            const fim = Math.min(inicio + cartoesPorPagina, this.qrCodesFiltrados.length);
+            const cartoesPagina = this.qrCodesFiltrados.slice(inicio, fim);
+            
+            printWindow.document.write(`
+                <div class="cartoes-grid">
+            `);
+            
+            for (const usuario of cartoesPagina) {
+                const cartaoHtmlCompleto = this.gerarCartaoHorizontal(usuario, this.configCartao);
+                const tempDiv = printWindow.document.createElement('div');
+                tempDiv.innerHTML = cartaoHtmlCompleto;
+                let cartaoElement = tempDiv.querySelector('.cartao-container');
+                
+                if (cartaoElement) {
+                    printWindow.document.write(cartaoElement.outerHTML);
+                } else {
+                    // Fallback
+                    printWindow.document.write(`
+                        <div class="cartao-container">
+                            <div class="cartao" style="border:1px solid #ddd; border-radius:12px; padding:10px; display:flex; height:${alturaCartaoMM}mm;">
+                                <div style="flex:2;">
+                                    <strong>${this.escapeHtml(usuario.nome)}</strong><br>
+                                    <small>${usuario.matricula || '-'}</small>
+                                </div>
+                                <div style="flex:1;">
+                                    <img src="${usuario.qrCodeDataUrl}" style="width:100%; max-width:80px;">
+                                </div>
+                            </div>
+                        </div>
+                    `);
+                }
+            }
+            
+            // Adicionar espaços vazios para completar a página
+            const cartoesFaltando = cartoesPorPagina - cartoesPagina.length;
+            for (let i = 0; i < cartoesFaltando; i++) {
+                printWindow.document.write(`
+                    <div class="cartao-container" style="visibility: hidden;">
+                        <div class="cartao" style="border: 1px dashed #ccc; background: transparent; height: ${alturaCartaoMM}mm;"></div>
+                    </div>
+                `);
+            }
+            
+            printWindow.document.write(`</div>`);
+            
+            // Adicionar quebra de página entre páginas (exceto na última)
+            if (pagina < totalPaginas - 1) {
+                printWindow.document.write(`<div class="page-break"></div>`);
+            }
+        }
+        
+        printWindow.document.write(`
+                <div class="footer-info no-print">
+                    <p>Documento gerado em ${new Date().toLocaleString('pt-BR')} - Sistema de Provas IEMA 2026</p>
+                    <p>Para salvar como PDF, clique no botão acima e escolha "Salvar como PDF" na janela de impressão.</p>
+                </div>
+            </body>
+            </html>
         `);
         
         printWindow.document.close();
         
-        // Adicionar cada cartão um por um
-        for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
-            const usuario = this.qrCodesFiltrados[i];
-            
-            // Gerar o HTML completo do cartão
-            const cartaoHtmlCompleto = this.gerarCartaoHorizontal(usuario, this.configCartao);
-            
-            // Criar um elemento temporário para extrair o cartão
-            const tempDiv = printWindow.document.createElement('div');
-            tempDiv.innerHTML = cartaoHtmlCompleto;
-            
-            // Encontrar o cartão-container
-            let cartaoElement = tempDiv.querySelector('.cartao-container');
-            
-            if (cartaoElement) {
-                // Clonar o elemento e adicionar ao documento
-                const clone = cartaoElement.cloneNode(true);
-                printWindow.document.body.querySelector('.cartoes-container').appendChild(clone);
-            } else {
-                // Fallback: criar um cartão usando a função diretamente
-                const fallbackDiv = printWindow.document.createElement('div');
-                fallbackDiv.innerHTML = cartaoHtmlCompleto;
-                const fallbackCartao = fallbackDiv.querySelector('.cartao-container');
-                if (fallbackCartao) {
-                    printWindow.document.body.querySelector('.cartoes-container').appendChild(fallbackCartao.cloneNode(true));
-                } else {
-                    // Último fallback
-                    const simpleDiv = printWindow.document.createElement('div');
-                    simpleDiv.className = 'cartao-container';
-                    simpleDiv.style.cssText = 'width: 350px; height: 220px; background: white; border-radius: 16px; padding: 15px; margin: 10px auto; display: flex; box-shadow: 0 2px 8px rgba(0,0,0,0.1);';
-                    simpleDiv.innerHTML = `
-                        <div style="flex:2;">
-                            <div style="font-weight:bold; color:#1e3a8a;">SISTEMA DE PROVAS<br><small>2026</small></div>
-                            <div style="font-size:10px; color:#666;">IEMA PLENO - SÃO LUÍS CENTRO</div>
-                            <div style="font-size:14px; font-weight:bold; margin:8px 0;">${this.escapeHtml(usuario.nome)}</div>
-                            <div style="font-size:10px;">📌 MATRÍCULA: ${usuario.matricula}</div>
-                            <div style="font-size:10px;">📧 E-MAIL: ${usuario.email || '-'}</div>
-                            <div style="font-size:10px;">📅 EMISSÃO: ${new Date().toLocaleDateString('pt-BR')}</div>
-                            <div style="font-size:10px; margin-top:5px;">🏷️ ${this.getRoleLabelQR(usuario.role)}</div>
-                        </div>
-                        <div style="flex:1; text-align:center;">
-                            <img src="${usuario.qrCodeDataUrl}" style="width:100px; height:100px;">
-                            <div style="font-size:7px;">Escaneie para acesso</div>
-                        </div>
-                    `;
-                    printWindow.document.body.querySelector('.cartoes-container').appendChild(simpleDiv);
-                }
-            }
-            
-            // Adicionar quebra de página (exceto no último)
-            if (i < this.qrCodesFiltrados.length - 1) {
-                const breakDiv = printWindow.document.createElement('div');
-                breakDiv.className = 'page-break';
-                printWindow.document.body.querySelector('.cartoes-container').appendChild(breakDiv);
-            }
-        }
-        
-        // Aguardar um pouco e imprimir
         setTimeout(() => {
-            printWindow.print();
-            printWindow.onafterprint = function() {
-                printWindow.close();
-            };
-        }, 1500);
+            printWindow.focus();
+        }, 500);
         
-        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões prontos para PDF!`, 'success');
+        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões organizados em ${totalPaginas} página(s)!`, 'success');
     }
 
     // ============ EXPORTAR ZIP COM CARTÕES COMO IMAGENS JPG/PNG ============
@@ -31662,6 +31906,31 @@ class AdminPanel {
         
         this.showToast(`🖨️ Gerando ${alunosDaTurma.length} cartões para a turma ${turma}...`, 'info');
         
+        const configCartao = this.configCartao || { tamanho: 'credito', margem: 10 };
+        
+        let larguraCartaoMM = 85;
+        let alturaCartaoMM = 54;
+        
+        if (configCartao.tamanho === 'padrao') {
+            larguraCartaoMM = 105;
+            alturaCartaoMM = 74;
+        } else if (configCartao.tamanho === 'personalizado' && configCartao.largura && configCartao.altura) {
+            larguraCartaoMM = configCartao.largura;
+            alturaCartaoMM = configCartao.altura;
+        }
+        
+        const larguraFolhaMM = 210;
+        const alturaFolhaMM = 297;
+        const margemMM = 10;
+        const espacamentoMM = 5;
+        
+        const larguraDisponivel = larguraFolhaMM - (margemMM * 2);
+        const alturaDisponivel = alturaFolhaMM - (margemMM * 2);
+        
+        const cartoesPorLinha = Math.floor((larguraDisponivel + espacamentoMM) / (larguraCartaoMM + espacamentoMM));
+        const cartoesPorColuna = Math.floor((alturaDisponivel + espacamentoMM) / (alturaCartaoMM + espacamentoMM));
+        const cartoesPorPagina = cartoesPorLinha * cartoesPorColuna;
+        
         const printWindow = window.open('', '_blank');
         
         let cssEstilos = '';
@@ -31681,88 +31950,87 @@ class AdminPanel {
                 <meta charset="UTF-8">
                 <title>Cartões QR Code - Turma ${turma}</title>
                 <style>
-                    /* Estilos dos cartões */
                     ${cssEstilos}
-                    
                     @media print {
-                        @page {
-                            size: landscape;
-                            margin: 0.5cm;
-                        }
-                        body {
-                            margin: 0;
-                            padding: 0;
-                            -webkit-print-color-adjust: exact;
-                            print-color-adjust: exact;
-                        }
-                        .page-break {
-                            page-break-after: always;
-                            break-after: page;
-                        }
-                        .btn-print {
-                            display: none !important;
-                        }
-                        .no-print {
-                            display: none !important;
+                        @page { size: A4; margin: ${margemMM}mm; }
+                        .page-break { page-break-after: always; }
+                        .cartoes-grid {
+                            display: grid;
+                            grid-template-columns: repeat(${cartoesPorLinha}, 1fr);
+                            gap: ${espacamentoMM}mm;
                         }
                     }
-                    body {
-                        font-family: 'Segoe UI', Arial, sans-serif;
-                        background: #f1f5f9;
-                        margin: 0;
-                        padding: 20px;
+                    .cartoes-grid {
+                        display: grid;
+                        grid-template-columns: repeat(${cartoesPorLinha}, minmax(${larguraCartaoMM}mm, auto));
+                        gap: ${espacamentoMM}mm;
+                        justify-content: center;
+                        background: white;
+                        padding: ${margemMM}mm;
                     }
-                    .cartoes-container {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
+                    .btn-print {
+                        display: block;
+                        margin: 20px auto;
+                        padding: 12px 30px;
+                        background: #4f46e5;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
                     }
-                    .cartao-container {
-                        margin: 10px auto;
+                    .info-impressao {
+                        text-align: center;
+                        padding: 10px;
+                        background: #f3f4f6;
+                        margin-bottom: 20px;
+                    }
+                    @media print {
+                        .info-impressao, .btn-print { display: none; }
                     }
                 </style>
             </head>
             <body>
-                <div class="cartoes-container">
-        `);
+                <div class="info-impressao no-print">
+                    📐 Turma: ${turma} | ${alunosDaTurma.length} alunos | ${cartoesPorLinha}×${cartoesPorColuna} cartões por página
+                </div>
+                <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir Cartões da Turma ${turma}</button>
+                <div class="cartoes-grid" id="cartoesGrid">
+            `);
         
         printWindow.document.close();
         
-        for (let i = 0; i < alunosDaTurma.length; i++) {
-            const aluno = alunosDaTurma[i];
+        for (const aluno of alunosDaTurma) {
             const cartaoHtmlCompleto = this.gerarCartaoHorizontal(aluno, this.configCartao);
-            
             const tempDiv = printWindow.document.createElement('div');
             tempDiv.innerHTML = cartaoHtmlCompleto;
-            
-            let cartaoElement = tempDiv.querySelector('.cartao-container');
-            
+            const cartaoElement = tempDiv.querySelector('.cartao-container');
             if (cartaoElement) {
-                const clone = cartaoElement.cloneNode(true);
-                printWindow.document.body.querySelector('.cartoes-container').appendChild(clone);
-            } else {
-                const fallbackDiv = printWindow.document.createElement('div');
-                fallbackDiv.innerHTML = cartaoHtmlCompleto;
-                const fallbackCartao = fallbackDiv.querySelector('.cartao-container');
-                if (fallbackCartao) {
-                    printWindow.document.body.querySelector('.cartoes-container').appendChild(fallbackCartao.cloneNode(true));
-                }
-            }
-            
-            if (i < alunosDaTurma.length - 1) {
-                const breakDiv = printWindow.document.createElement('div');
-                breakDiv.className = 'page-break';
-                printWindow.document.body.querySelector('.cartoes-container').appendChild(breakDiv);
+                printWindow.document.querySelector('#cartoesGrid').appendChild(cartaoElement.cloneNode(true));
             }
         }
         
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.onafterprint = function() {
-                printWindow.close();
-            };
-        }, 1500);
+        const totalCartoes = alunosDaTurma.length;
+        const cartoesUltimaPagina = totalCartoes % cartoesPorPagina;
+        if (cartoesUltimaPagina > 0 && cartoesUltimaPagina < cartoesPorPagina) {
+            const espacosVazios = cartoesPorPagina - cartoesUltimaPagina;
+            for (let i = 0; i < espacosVazios; i++) {
+                const emptyDiv = printWindow.document.createElement('div');
+                emptyDiv.className = 'cartao-container';
+                emptyDiv.style.visibility = 'hidden';
+                emptyDiv.innerHTML = `<div class="cartao" style="border:1px dashed #ccc; height:${alturaCartaoMM}mm;"></div>`;
+                printWindow.document.querySelector('#cartoesGrid').appendChild(emptyDiv);
+            }
+        }
         
+        const grid = printWindow.document.querySelector('#cartoesGrid');
+        const items = grid.children;
+        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
+            const pageBreak = printWindow.document.createElement('div');
+            pageBreak.className = 'page-break';
+            grid.insertBefore(pageBreak, items[i]);
+        }
+        
+        setTimeout(() => printWindow.focus(), 500);
         this.showToast(`✅ ${alunosDaTurma.length} cartões gerados para ${turma}!`, 'success');
     }
 
@@ -31800,7 +32068,7 @@ class AdminPanel {
         await this.baixarCartoesPorTurma(turma);
     }
 
-    // ============ BAIXAR TODOS OS QR CODES EM CARTÃO ============
+    // ============ BAIXAR TODOS OS QR CODES EM CARTÃO (MÚLTIPLOS POR PÁGINA) ============
     async baixarTodosQRCodesCartao() {
         this.closeModal();
         
@@ -31811,8 +32079,44 @@ class AdminPanel {
         
         this.showToast(`🖨️ Gerando ${this.qrCodesFiltrados.length} cartões...`, 'info');
         
+        // Configurações de layout
+        const configCartao = this.configCartao || { tamanho: 'credito', margem: 10 };
+        
+        // Definir tamanho dos cartões em mm
+        let larguraCartaoMM = 85;
+        let alturaCartaoMM = 54;
+        
+        if (configCartao.tamanho === 'padrao') {
+            larguraCartaoMM = 105;
+            alturaCartaoMM = 74;
+        } else if (configCartao.tamanho === 'personalizado' && configCartao.largura && configCartao.altura) {
+            larguraCartaoMM = configCartao.largura;
+            alturaCartaoMM = configCartao.altura;
+        }
+        
+        // Configurações da folha A4 em mm (210mm x 297mm)
+        const larguraFolhaMM = 210;
+        const alturaFolhaMM = 297;
+        const margemMM = 10; // Margem da folha
+        
+        // Calcular quantos cartões cabem por linha e coluna
+        const espacamentoMM = 5; // Espaço entre cartões
+        const larguraDisponivel = larguraFolhaMM - (margemMM * 2);
+        const alturaDisponivel = alturaFolhaMM - (margemMM * 2);
+        
+        const cartoesPorLinha = Math.floor((larguraDisponivel + espacamentoMM) / (larguraCartaoMM + espacamentoMM));
+        const cartoesPorColuna = Math.floor((alturaDisponivel + espacamentoMM) / (alturaCartaoMM + espacamentoMM));
+        const cartoesPorPagina = cartoesPorLinha * cartoesPorColuna;
+        
+        console.log(`📐 Configuração de impressão:`);
+        console.log(`   Tamanho do cartão: ${larguraCartaoMM}mm x ${alturaCartaoMM}mm`);
+        console.log(`   Cartões por linha: ${cartoesPorLinha}`);
+        console.log(`   Cartões por coluna: ${cartoesPorColuna}`);
+        console.log(`   Cartões por página: ${cartoesPorPagina}`);
+        
         const printWindow = window.open('', '_blank');
         
+        // Obter CSS do primeiro cartão
         let cssEstilos = '';
         if (this.qrCodesFiltrados.length > 0) {
             const primeiroUsuario = this.qrCodesFiltrados[0];
@@ -31823,6 +32127,7 @@ class AdminPanel {
             }
         }
         
+        // Gerar HTML com layout de grade
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
@@ -31833,10 +32138,11 @@ class AdminPanel {
                     /* Estilos dos cartões */
                     ${cssEstilos}
                     
+                    /* Estilos para impressão em grade */
                     @media print {
                         @page {
-                            size: landscape;
-                            margin: 0.5cm;
+                            size: A4;
+                            margin: ${margemMM}mm;
                         }
                         body {
                             margin: 0;
@@ -31848,35 +32154,102 @@ class AdminPanel {
                             page-break-after: always;
                             break-after: page;
                         }
-                        .btn-print {
+                        .btn-print, .no-print {
                             display: none !important;
                         }
-                        .no-print {
-                            display: none !important;
+                        .cartoes-grid {
+                            display: grid;
+                            grid-template-columns: repeat(${cartoesPorLinha}, 1fr);
+                            gap: ${espacamentoMM}mm;
+                            page-break-inside: avoid;
+                        }
+                        .cartao-container {
+                            margin: 0;
+                            padding: 0;
+                            break-inside: avoid;
+                            page-break-inside: avoid;
+                        }
+                        .cartao {
+                            border: 1px solid #ddd;
+                            box-shadow: none;
                         }
                     }
+                    
+                    /* Estilos para tela */
                     body {
                         font-family: 'Segoe UI', Arial, sans-serif;
-                        background: #f1f5f9;
+                        background: #e0e0e0;
                         margin: 0;
                         padding: 20px;
                     }
-                    .cartoes-container {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
+                    .cartoes-grid {
+                        display: grid;
+                        grid-template-columns: repeat(${cartoesPorLinha}, minmax(${larguraCartaoMM}mm, auto));
+                        gap: ${espacamentoMM}mm;
+                        justify-content: center;
+                        background: white;
+                        padding: ${margemMM}mm;
                     }
                     .cartao-container {
-                        margin: 10px auto;
+                        margin: 0;
+                        padding: 0;
+                        break-inside: avoid;
+                        page-break-inside: avoid;
+                    }
+                    .btn-print {
+                        display: block;
+                        margin: 20px auto;
+                        padding: 12px 30px;
+                        background: #4f46e5;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        text-align: center;
+                    }
+                    .btn-print:hover {
+                        background: #4338ca;
+                    }
+                    .info-impressao {
+                        text-align: center;
+                        padding: 10px;
+                        background: #f3f4f6;
+                        margin-bottom: 20px;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        color: #4b5563;
+                    }
+                    @media print {
+                        body {
+                            background: white;
+                            padding: 0;
+                        }
+                        .info-impressao, .btn-print {
+                            display: none;
+                        }
+                        .cartoes-grid {
+                            padding: 0;
+                            margin: 0;
+                        }
                     }
                 </style>
             </head>
             <body>
-                <div class="cartoes-container">
-        `);
+                <div class="info-impressao no-print">
+                    📐 Configuração: ${cartoesPorLinha} cartões por linha × ${cartoesPorColuna} cartões por coluna = ${cartoesPorPagina} cartões por página
+                    | Tamanho do cartão: ${larguraCartaoMM}mm × ${alturaCartaoMM}mm
+                </div>
+                <button class="btn-print no-print" onclick="window.print()">
+                    <i class="fas fa-print"></i> Imprimir Todos os Cartões
+                </button>
+                <div class="cartoes-grid" id="cartoesGrid">
+            `);
         
         printWindow.document.close();
         
+        // Adicionar cada cartão à grade
         for (let i = 0; i < this.qrCodesFiltrados.length; i++) {
             const usuario = this.qrCodesFiltrados[i];
             const cartaoHtmlCompleto = this.gerarCartaoHorizontal(usuario, this.configCartao);
@@ -31888,34 +32261,60 @@ class AdminPanel {
             
             if (cartaoElement) {
                 const clone = cartaoElement.cloneNode(true);
-                printWindow.document.body.querySelector('.cartoes-container').appendChild(clone);
+                printWindow.document.querySelector('#cartoesGrid').appendChild(clone);
             } else {
+                // Fallback
                 const fallbackDiv = printWindow.document.createElement('div');
-                fallbackDiv.innerHTML = cartaoHtmlCompleto;
-                const fallbackCartao = fallbackDiv.querySelector('.cartao-container');
-                if (fallbackCartao) {
-                    printWindow.document.body.querySelector('.cartoes-container').appendChild(fallbackCartao.cloneNode(true));
-                }
-            }
-            
-            if (i < this.qrCodesFiltrados.length - 1) {
-                const breakDiv = printWindow.document.createElement('div');
-                breakDiv.className = 'page-break';
-                printWindow.document.body.querySelector('.cartoes-container').appendChild(breakDiv);
+                fallbackDiv.className = 'cartao-container';
+                fallbackDiv.style.cssText = `width: ${larguraCartaoMM}mm; margin: 0;`;
+                fallbackDiv.innerHTML = `
+                    <div class="cartao" style="width: 100%; height: auto; border: 1px solid #ddd; border-radius: 12px; padding: 10px; display: flex;">
+                        <div style="flex:2;">
+                            <strong>${this.escapeHtml(usuario.nome)}</strong><br>
+                            <small>${usuario.matricula || 'Sem matrícula'}</small>
+                        </div>
+                        <div style="flex:1;">
+                            <img src="${usuario.qrCodeDataUrl}" style="width: 100%; max-width: 80px;">
+                        </div>
+                    </div>
+                `;
+                printWindow.document.querySelector('#cartoesGrid').appendChild(fallbackDiv);
             }
         }
         
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.onafterprint = function() {
-                printWindow.close();
-            };
-        }, 1500);
+        // Adicionar espaços vazios para completar a última página (se necessário)
+        const totalCartoes = this.qrCodesFiltrados.length;
+        const cartoesUltimaPagina = totalCartoes % cartoesPorPagina;
+        if (cartoesUltimaPagina > 0 && cartoesUltimaPagina < cartoesPorPagina) {
+            const espacosVazios = cartoesPorPagina - cartoesUltimaPagina;
+            for (let i = 0; i < espacosVazios; i++) {
+                const emptyDiv = printWindow.document.createElement('div');
+                emptyDiv.className = 'cartao-container';
+                emptyDiv.style.cssText = `width: ${larguraCartaoMM}mm; height: ${alturaCartaoMM}mm; visibility: hidden;`;
+                emptyDiv.innerHTML = `<div class="cartao" style="width: 100%; height: 100%; border: 1px dashed #ccc; background: transparent;"></div>`;
+                printWindow.document.querySelector('#cartoesGrid').appendChild(emptyDiv);
+            }
+        }
         
-        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões gerados!`, 'success');
+        // Adicionar quebras de página a cada página cheia
+        const grid = printWindow.document.querySelector('#cartoesGrid');
+        const items = grid.children;
+        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
+            const pageBreak = printWindow.document.createElement('div');
+            pageBreak.className = 'page-break';
+            pageBreak.style.pageBreakAfter = 'always';
+            pageBreak.style.breakAfter = 'page';
+            grid.insertBefore(pageBreak, items[i]);
+        }
+        
+        setTimeout(() => {
+            printWindow.focus();
+        }, 500);
+        
+        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões organizados em grade!`, 'success');
     }
 
-    // ============ BAIXAR APENAS OS FILTRADOS ============
+    // ============ BAIXAR APENAS OS FILTRADOS (MÚLTIPLOS POR PÁGINA) ============
     async baixarFiltradosCartao() {
         this.closeModal();
         
@@ -31925,6 +32324,32 @@ class AdminPanel {
         }
         
         this.showToast(`🖨️ Gerando ${this.qrCodesFiltrados.length} cartões filtrados...`, 'info');
+        
+        // Configurações de layout
+        const configCartao = this.configCartao || { tamanho: 'credito', margem: 10 };
+        
+        let larguraCartaoMM = 85;
+        let alturaCartaoMM = 54;
+        
+        if (configCartao.tamanho === 'padrao') {
+            larguraCartaoMM = 105;
+            alturaCartaoMM = 74;
+        } else if (configCartao.tamanho === 'personalizado' && configCartao.largura && configCartao.altura) {
+            larguraCartaoMM = configCartao.largura;
+            alturaCartaoMM = configCartao.altura;
+        }
+        
+        const larguraFolhaMM = 210;
+        const alturaFolhaMM = 297;
+        const margemMM = 10;
+        const espacamentoMM = 5;
+        
+        const larguraDisponivel = larguraFolhaMM - (margemMM * 2);
+        const alturaDisponivel = alturaFolhaMM - (margemMM * 2);
+        
+        const cartoesPorLinha = Math.floor((larguraDisponivel + espacamentoMM) / (larguraCartaoMM + espacamentoMM));
+        const cartoesPorColuna = Math.floor((alturaDisponivel + espacamentoMM) / (alturaCartaoMM + espacamentoMM));
+        const cartoesPorPagina = cartoesPorLinha * cartoesPorColuna;
         
         const printWindow = window.open('', '_blank');
         
@@ -31945,50 +32370,76 @@ class AdminPanel {
                 <meta charset="UTF-8">
                 <title>Cartões QR Code - Filtrados</title>
                 <style>
-                    /* Estilos dos cartões */
                     ${cssEstilos}
                     
                     @media print {
                         @page {
-                            size: landscape;
-                            margin: 0.5cm;
+                            size: A4;
+                            margin: ${margemMM}mm;
                         }
-                        body {
-                            margin: 0;
-                            padding: 0;
-                            -webkit-print-color-adjust: exact;
-                            print-color-adjust: exact;
+                        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        .page-break { page-break-after: always; break-after: page; }
+                        .btn-print, .no-print { display: none !important; }
+                        .cartoes-grid {
+                            display: grid;
+                            grid-template-columns: repeat(${cartoesPorLinha}, 1fr);
+                            gap: ${espacamentoMM}mm;
                         }
-                        .page-break {
-                            page-break-after: always;
-                            break-after: page;
-                        }
-                        .btn-print {
-                            display: none !important;
-                        }
-                        .no-print {
-                            display: none !important;
-                        }
+                        .cartao-container { margin: 0; padding: 0; break-inside: avoid; }
+                        .cartao { border: 1px solid #ddd; box-shadow: none; }
                     }
+                    
                     body {
                         font-family: 'Segoe UI', Arial, sans-serif;
-                        background: #f1f5f9;
+                        background: #e0e0e0;
                         margin: 0;
                         padding: 20px;
                     }
-                    .cartoes-container {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
+                    .cartoes-grid {
+                        display: grid;
+                        grid-template-columns: repeat(${cartoesPorLinha}, minmax(${larguraCartaoMM}mm, auto));
+                        gap: ${espacamentoMM}mm;
+                        justify-content: center;
+                        background: white;
+                        padding: ${margemMM}mm;
                     }
-                    .cartao-container {
-                        margin: 10px auto;
+                    .cartao-container { margin: 0; padding: 0; break-inside: avoid; }
+                    .btn-print {
+                        display: block;
+                        margin: 20px auto;
+                        padding: 12px 30px;
+                        background: #4f46e5;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    }
+                    .info-impressao {
+                        text-align: center;
+                        padding: 10px;
+                        background: #f3f4f6;
+                        margin-bottom: 20px;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        color: #4b5563;
+                    }
+                    @media print {
+                        body { background: white; padding: 0; }
+                        .info-impressao, .btn-print { display: none; }
+                        .cartoes-grid { padding: 0; margin: 0; }
                     }
                 </style>
             </head>
             <body>
-                <div class="cartoes-container">
-        `);
+                <div class="info-impressao no-print">
+                    📐 Configuração: ${cartoesPorLinha} cartões por linha × ${cartoesPorColuna} cartões por coluna = ${cartoesPorPagina} cartões por página
+                    | Filtrados: ${this.qrCodesFiltrados.length} cartões
+                </div>
+                <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir Cartões Filtrados</button>
+                <div class="cartoes-grid" id="cartoesGrid">
+            `);
         
         printWindow.document.close();
         
@@ -32003,31 +32454,46 @@ class AdminPanel {
             
             if (cartaoElement) {
                 const clone = cartaoElement.cloneNode(true);
-                printWindow.document.body.querySelector('.cartoes-container').appendChild(clone);
+                printWindow.document.querySelector('#cartoesGrid').appendChild(clone);
             } else {
                 const fallbackDiv = printWindow.document.createElement('div');
-                fallbackDiv.innerHTML = cartaoHtmlCompleto;
-                const fallbackCartao = fallbackDiv.querySelector('.cartao-container');
-                if (fallbackCartao) {
-                    printWindow.document.body.querySelector('.cartoes-container').appendChild(fallbackCartao.cloneNode(true));
-                }
-            }
-            
-            if (i < this.qrCodesFiltrados.length - 1) {
-                const breakDiv = printWindow.document.createElement('div');
-                breakDiv.className = 'page-break';
-                printWindow.document.body.querySelector('.cartoes-container').appendChild(breakDiv);
+                fallbackDiv.className = 'cartao-container';
+                fallbackDiv.innerHTML = `
+                    <div class="cartao" style="border:1px solid #ddd; border-radius:12px; padding:10px; display:flex;">
+                        <div style="flex:2;"><strong>${this.escapeHtml(usuario.nome)}</strong><br><small>${usuario.matricula || '-'}</small></div>
+                        <div style="flex:1;"><img src="${usuario.qrCodeDataUrl}" style="width:100%; max-width:80px;"></div>
+                    </div>
+                `;
+                printWindow.document.querySelector('#cartoesGrid').appendChild(fallbackDiv);
             }
         }
         
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.onafterprint = function() {
-                printWindow.close();
-            };
-        }, 1500);
+        // Completar última página
+        const totalCartoes = this.qrCodesFiltrados.length;
+        const cartoesUltimaPagina = totalCartoes % cartoesPorPagina;
+        if (cartoesUltimaPagina > 0 && cartoesUltimaPagina < cartoesPorPagina) {
+            const espacosVazios = cartoesPorPagina - cartoesUltimaPagina;
+            for (let i = 0; i < espacosVazios; i++) {
+                const emptyDiv = printWindow.document.createElement('div');
+                emptyDiv.className = 'cartao-container';
+                emptyDiv.style.cssText = `visibility: hidden;`;
+                emptyDiv.innerHTML = `<div class="cartao" style="border:1px dashed #ccc; background:transparent; height:${alturaCartaoMM}mm;"></div>`;
+                printWindow.document.querySelector('#cartoesGrid').appendChild(emptyDiv);
+            }
+        }
         
-        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões filtrados gerados!`, 'success');
+        const grid = printWindow.document.querySelector('#cartoesGrid');
+        const items = grid.children;
+        for (let i = cartoesPorPagina; i < items.length; i += cartoesPorPagina) {
+            const pageBreak = printWindow.document.createElement('div');
+            pageBreak.className = 'page-break';
+            pageBreak.style.pageBreakAfter = 'always';
+            grid.insertBefore(pageBreak, items[i]);
+        }
+        
+        setTimeout(() => printWindow.focus(), 500);
+        
+        this.showToast(`✅ ${this.qrCodesFiltrados.length} cartões organizados em grade!`, 'success');
     }
 
     // ============ MÉTODOS AUXILIARES ============
