@@ -3239,6 +3239,23 @@ class AdminPanel {
                     </div>
                 </div>
 
+                <!-- NOVO BOTÃO: Vincular Emails Institucionais por Turma -->
+                <div style="background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 2px solid #667eea30;">
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-envelope" style="font-size: 24px; color: white;"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0;">📧 Vincular Emails Institucionais</h4>
+                            <p style="margin: 5px 0 0; font-size: 13px; color: #6b7280;">Envie uma planilha com Nome e Email para vincular aos alunos da turma selecionada</p>
+                            <p style="margin: 5px 0 0; font-size: 12px; color: #667eea;"><i class="fas fa-info-circle"></i> O sistema lerá automaticamente as colunas: Member Name (Nome) e Member Email (Email)</p>
+                        </div>
+                        <button class="btn-primary" onclick="admin.abrirModalVincularEmailsPorTurma()" style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 10px 20px; white-space: nowrap;">
+                            <i class="fas fa-link"></i> Vincular Emails
+                        </button>
+                    </div>
+                </div>
+
                 <div id="previewPlanilha" style="display: none; background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h4 style="margin: 0;"><i class="fas fa-table"></i> Colunas Detectadas</h4>
@@ -3309,7 +3326,6 @@ class AdminPanel {
                                 <li>Email: <strong>CPF@iemasaoluiscentro.net</strong></li>
                                 <li>Senha: <strong>123456</strong></li>
                                 <li>Telefone: <strong>99999999999</strong></li>
-                                <li>Período: <strong>1º (fixo)</strong></li>
                                 <li>QR Code: <strong>Gerado automaticamente</strong></li>
                             </ul>
                         </div>
@@ -3413,7 +3429,6 @@ class AdminPanel {
             ['- Email: CPF@iemasaoluiscentro.net'],
             ['- Senha: 123456'],
             ['- Telefone: 99999999999'],
-            ['- Período: 1º (fixo)'],
             ['- QR Code: Gerado e salvo no sistema']
         ];
         
@@ -3423,6 +3438,777 @@ class AdminPanel {
         
         XLSX.writeFile(wb, 'modelo_cadastro_alunos.xlsx');
         this.showToast('✅ Modelo baixado!', 'success');
+    }
+
+    // ============ ABRIR MODAL VINCULAR EMAILS POR TURMA ============
+    abrirModalVincularEmailsPorTurma() {
+        const modalBody = document.getElementById('modalBody');
+        
+        modalBody.innerHTML = `
+            <div class="vincular-emails-container" style="max-width: 800px; margin: 0 auto;">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                        <i class="fas fa-envelope" style="font-size: 32px; color: white;"></i>
+                    </div>
+                    <h2 style="margin: 15px 0 5px;">Vincular Emails Institucionais</h2>
+                    <p style="color: #6b7280;">Selecione uma turma e envie uma planilha com os emails dos alunos</p>
+                    <p style="color: #10b981; font-size: 13px;"><i class="fas fa-magic"></i> O sistema lerá automaticamente as colunas: Member Name (Nome) e Member Email (Email)</p>
+                </div>
+
+                <!-- Seleção de Turma -->
+                <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+                        <i class="fas fa-users"></i> Selecione a Turma
+                    </label>
+                    <div class="select-wrapper" style="position: relative;">
+                        <select id="selectTurmaVincular" class="form-control" style="width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #e5e7eb; background: white;" onchange="admin.carregarAlunosParaVincular()">
+                            <option value="">-- Selecione uma turma --</option>
+                        </select>
+                        <i class="fas fa-chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; pointer-events: none;"></i>
+                    </div>
+                </div>
+
+                <!-- Lista de Alunos da Turma -->
+                <div id="listaAlunosVincular" style="display: none; background: white; border-radius: 16px; border: 1px solid #e5e7eb; overflow: hidden; margin-bottom: 20px;">
+                    <div style="background: #f8fafc; padding: 15px 20px; border-bottom: 1px solid #e5e7eb;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fas fa-list" style="color: #667eea;"></i>
+                            <h4 style="margin: 0; font-size: 16px; font-weight: 600;">Alunos da Turma</h4>
+                            <span id="totalAlunosTurmaVincular" style="background: #e5e7eb; padding: 2px 10px; border-radius: 30px; font-size: 12px;">0 alunos</span>
+                        </div>
+                    </div>
+                    <div id="alunosListContainerVincular" style="max-height: 200px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                            <i class="fas fa-spinner fa-spin"></i> Selecione uma turma...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Download do Modelo -->
+                <div style="background: #e6f7ff; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div style="width: 50px; height: 50px; background: #0d6efd; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-download" style="font-size: 24px; color: white;"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0;">📥 Baixar Modelo de Emails</h4>
+                            <p style="margin: 5px 0 0; font-size: 13px; color: #6b7280;">O modelo segue o padrão: Coluna A = Nome, Coluna B = Email</p>
+                            <p style="margin: 5px 0 0; font-size: 12px; color: #667eea;">Formato: Member Name, Member Email, Member Role, Member Type</p>
+                        </div>
+                        <button class="btn-primary" onclick="admin.baixarModeloExcelEmailsPorTurma()" style="background: #0d6efd; padding: 10px 20px; white-space: nowrap;">
+                            <i class="fas fa-download"></i> Baixar Modelo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Upload da Planilha de Emails -->
+                <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div id="uploadAreaEmails" 
+                        style="border: 2px dashed #cbd5e0; border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s;"
+                        onclick="document.getElementById('excelInputEmails').click()"
+                        ondrop="admin.handleDropExcelEmails(event)"
+                        ondragover="admin.handleDragOverExcelEmails(event)"
+                        ondragleave="admin.handleDragLeaveExcelEmails(event)">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #667eea; margin-bottom: 15px;"></i>
+                        <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
+                        <p style="margin: 0; color: #6b7280;">Arquivo Excel - O sistema lerá automaticamente as colunas A e B</p>
+                        <p style="margin: 5px 0 0; font-size: 12px; color: #667eea;">Aceita arquivos com as colunas: Member Name, Member Email, Member Role, Member Type</p>
+                    </div>
+                    <input type="file" id="excelInputEmails" style="display: none;" accept=".xlsx,.xls" onchange="admin.handleFileSelectExcelEmails(event)">
+                    
+                    <div id="previewArquivoEmails" style="display: none; margin-top: 20px; padding: 15px; background: #e5e7eb; border-radius: 12px;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <i class="fas fa-file-excel" style="font-size: 40px; color: #667eea;"></i>
+                            <div style="flex: 1;">
+                                <div><strong id="nomeArquivoExcelEmails">-</strong></div>
+                                <div><small id="tamanhoArquivoExcelEmails">-</small></div>
+                            </div>
+                            <button onclick="admin.removerArquivoExcelEmails()" style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #dc2626;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview da Planilha -->
+                <div id="previewPlanilhaEmails" style="display: none; background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 15px;"><i class="fas fa-table"></i> Preview da Planilha</h4>
+                    <div id="previewDadosEmails" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: white; font-size: 12px;"></div>
+                </div>
+
+                <!-- Informações -->
+                <div style="background: #fef3c7; border-radius: 16px; padding: 15px; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 10px;">
+                        <i class="fas fa-info-circle" style="color: #f59e0b;"></i>
+                        <div style="font-size: 13px; color: #92400e;">
+                            <strong>📋 Como funciona:</strong>
+                            <ul style="margin: 5px 0 0 20px;">
+                                <li>Selecione uma turma para ver a lista de alunos</li>
+                                <li>Envie uma planilha Excel (formato: Member Name, Member Email)</li>
+                                <li>O sistema vai encontrar cada aluno pelo nome na turma selecionada</li>
+                                <li>O email institucional será vinculado ao aluno encontrado</li>
+                                <li>Alunos não encontrados serão reportados no relatório</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="progressoVincular" style="display: none; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span><i class="fas fa-spinner fa-spin"></i> Processando...</span>
+                        <span id="progressoPercentualVincular">0%</span>
+                    </div>
+                    <div style="height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                        <div id="progressoBarraVincular" style="height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button onclick="admin.abrirModalUploadUsuarios()" style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                        Voltar
+                    </button>
+                    <button id="btnVincularEmails" onclick="admin.processarVincularEmailsPorTurma()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;" disabled>
+                        <i class="fas fa-link"></i> Vincular Emails
+                    </button>
+                </div>
+            </div>
+
+            <style>
+                .vincular-emails-container {
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    padding: 5px;
+                }
+                #uploadAreaEmails.drag-over {
+                    border-color: #667eea !important;
+                    background: #eff6ff !important;
+                }
+                .aluno-item-vincular {
+                    display: flex;
+                    align-items: center;
+                    padding: 10px 15px;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                .aluno-avatar-vincular {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 12px;
+                    margin-right: 12px;
+                }
+                .aluno-info-vincular {
+                    flex: 1;
+                }
+                .aluno-nome-vincular {
+                    font-weight: 600;
+                    font-size: 13px;
+                }
+                .aluno-email-vincular {
+                    font-size: 11px;
+                    color: #6b7280;
+                }
+            </style>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-envelope"></i> Vincular Emails por Turma';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        
+        this.arquivoExcelEmails = null;
+        this.dadosExcelEmails = null;
+        this.alunosDaTurmaParaVincular = [];
+        
+        // Carregar turmas para o select
+        this.carregarTurmasParaVincular();
+        
+        this.openModal();
+    }
+
+    // ============ CARREGAR TURMAS PARA VINCULAR ============
+    async carregarTurmasParaVincular() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch('/api/admin/usuarios?role=aluno&limit=2000', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.usuarios) {
+                const turmasSet = new Set();
+                data.usuarios.forEach(aluno => {
+                    if (aluno.turma && aluno.turma.trim() !== '') {
+                        turmasSet.add(aluno.turma);
+                    }
+                });
+                
+                const turmas = Array.from(turmasSet).sort();
+                
+                const select = document.getElementById('selectTurmaVincular');
+                if (select) {
+                    let options = '<option value="">-- Selecione uma turma --</option>';
+                    turmas.forEach(turma => {
+                        options += `<option value="${turma}">${turma}</option>`;
+                    });
+                    select.innerHTML = options;
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar turmas:', error);
+            this.showToast('❌ Erro ao carregar turmas', 'error');
+        }
+    }
+
+    // ============ CARREGAR ALUNOS PARA VINCULAR ============
+    async carregarAlunosParaVincular() {
+        const turma = document.getElementById('selectTurmaVincular')?.value;
+        
+        if (!turma) {
+            document.getElementById('listaAlunosVincular').style.display = 'none';
+            this.alunosDaTurmaParaVincular = [];
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch('/api/admin/usuarios?role=aluno&limit=2000', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.usuarios) {
+                this.alunosDaTurmaParaVincular = data.usuarios.filter(aluno => aluno.turma === turma);
+                
+                const container = document.getElementById('alunosListContainerVincular');
+                const totalSpan = document.getElementById('totalAlunosTurmaVincular');
+                
+                if (totalSpan) {
+                    totalSpan.textContent = `${this.alunosDaTurmaParaVincular.length} alunos`;
+                }
+                
+                if (container) {
+                    if (this.alunosDaTurmaParaVincular.length === 0) {
+                        container.innerHTML = `
+                            <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                                <i class="fas fa-users-slash"></i>
+                                <p>Nenhum aluno encontrado nesta turma</p>
+                            </div>
+                        `;
+                    } else {
+                        let html = '';
+                        this.alunosDaTurmaParaVincular.forEach(aluno => {
+                            const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                            html += `
+                                <div class="aluno-item-vincular">
+                                    <div class="aluno-avatar-vincular">${iniciais}</div>
+                                    <div class="aluno-info-vincular">
+                                        <div class="aluno-nome-vincular">${aluno.nome}</div>
+                                        <div class="aluno-email-vincular">
+                                            <i class="fas fa-envelope"></i> ${aluno.email || 'Sem email'}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        container.innerHTML = html;
+                    }
+                }
+                
+                document.getElementById('listaAlunosVincular').style.display = 'block';
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar alunos:', error);
+            this.showToast('❌ Erro ao carregar alunos', 'error');
+        }
+    }
+
+    // ============ BAIXAR MODELO EXCEL DE EMAILS POR TURMA ============
+    baixarModeloExcelEmailsPorTurma() {
+        const turma = document.getElementById('selectTurmaVincular')?.value;
+        
+        if (!turma || this.alunosDaTurmaParaVincular.length === 0) {
+            this.showToast('❌ Selecione uma turma com alunos primeiro', 'error');
+            return;
+        }
+        
+        const dados = [
+            ['Member Name', 'Member Email', 'Member Role', 'Member Type'],
+            ...this.alunosDaTurmaParaVincular.map(aluno => [aluno.nome, '', 'MEMBER', 'USER'])
+        ];
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(dados);
+        ws['!cols'] = [{wch:40}, {wch:45}, {wch:12}, {wch:10}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Members');
+        
+        const instrucoesData = [
+            ['INSTRUÇÕES PARA VINCULAR EMAILS'],
+            [''],
+            ['Colunas:'],
+            ['Member Name - Nome do aluno (NÃO ALTERAR)'],
+            ['Member Email - Preencha com o email institucional do aluno'],
+            ['Member Role - Mantenha como MEMBER'],
+            ['Member Type - Mantenha como USER'],
+            [''],
+            ['O sistema irá vincular cada email ao aluno correspondente pelo nome.'],
+            [''],
+            ['Turma selecionada:', turma],
+            [`Total de alunos: ${this.alunosDaTurmaParaVincular.length}`]
+        ];
+        
+        const wsInstrucoes = XLSX.utils.aoa_to_sheet(instrucoesData);
+        wsInstrucoes['!cols'] = [{wch:60}];
+        XLSX.utils.book_append_sheet(wb, wsInstrucoes, 'Instruções');
+        
+        XLSX.writeFile(wb, `modelo_emails_${turma.replace(/\s/g, '_')}.xlsx`);
+        this.showToast('✅ Modelo baixado!', 'success');
+    }
+
+    // ============ HANDLE FILE SELECT EMAILS ============
+    async handleFileSelectExcelEmails(event) {
+        const files = event.target.files;
+        if (files.length > 0) {
+            await this.processarArquivoExcelEmails(files[0]);
+        }
+    }
+
+    // ============ HANDLE DROP EMAILS ============
+    async handleDropExcelEmails(event) {
+        event.preventDefault();
+        const area = event.currentTarget;
+        area.classList.remove('drag-over');
+        
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+            await this.processarArquivoExcelEmails(files[0]);
+        }
+    }
+
+    handleDragOverExcelEmails(event) {
+        event.preventDefault();
+        event.currentTarget.classList.add('drag-over');
+    }
+
+    handleDragLeaveExcelEmails(event) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over');
+    }
+
+    // ============ PROCESSAR ARQUIVO EXCEL EMAILS ============
+    async processarArquivoExcelEmails(file) {
+        const extensoes = ['xlsx', 'xls'];
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        if (!extensoes.includes(ext)) {
+            this.showToast('❌ Tipo de arquivo não suportado. Use .xlsx ou .xls', 'error');
+            return;
+        }
+        
+        if (file.size > 10 * 1024 * 1024) {
+            this.showToast('❌ Arquivo muito grande. Máximo 10MB.', 'error');
+            return;
+        }
+        
+        this.arquivoExcelEmails = file;
+        
+        if (typeof XLSX === 'undefined') {
+            this.showToast('🔄 Carregando biblioteca...', 'info');
+            await this.carregarBibliotecaXLSX();
+        }
+        
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const primeiraSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(primeiraSheet);
+            
+            // Mapear os dados para extrair Nome e Email
+            this.dadosExcelEmails = jsonData.map(row => ({
+                nome: row['Member Name'] || row['Nome'] || row['name'] || Object.values(row)[0] || '',
+                email: row['Member Email'] || row['Email'] || row['email'] || Object.values(row)[1] || ''
+            })).filter(item => item.nome && item.email);
+            
+            document.getElementById('previewArquivoEmails').style.display = 'block';
+            document.getElementById('nomeArquivoExcelEmails').textContent = file.name;
+            document.getElementById('tamanhoArquivoExcelEmails').textContent = `${(file.size / 1024).toFixed(2)} KB`;
+            
+            this.mostrarPreviewDadosEmails(this.dadosExcelEmails);
+            document.getElementById('previewPlanilhaEmails').style.display = 'block';
+            
+            const btnVincular = document.getElementById('btnVincularEmails');
+            if (btnVincular) btnVincular.disabled = false;
+            
+            this.showToast(`✅ Arquivo carregado! ${this.dadosExcelEmails.length} registros encontrados.`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao ler arquivo:', error);
+            this.showToast('❌ Erro ao ler arquivo: ' + error.message, 'error');
+        }
+    }
+
+    // ============ MOSTRAR PREVIEW DADOS EMAILS ============
+    mostrarPreviewDadosEmails(dados) {
+        const container = document.getElementById('previewDadosEmails');
+        if (!container || !dados || dados.length === 0) return;
+        
+        const qtdPreview = Math.min(5, dados.length);
+        const previewData = dados.slice(0, qtdPreview);
+        
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<thead><tr style="background: #f1f5f9;">';
+        html += '<th style="padding: 8px; text-align: left;">Nome do Aluno</th>';
+        html += '<th style="padding: 8px; text-align: left;">Email Institucional</th>';
+        html += '<tr></thead><tbody>';
+        
+        previewData.forEach(item => {
+            html += '<tr>';
+            html += `<td style="padding: 6px; border-bottom: 1px solid #f0f0f0;">${item.nome}</td>`;
+            html += `<td style="padding: 6px; border-bottom: 1px solid #f0f0f0;">${item.email}</td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        
+        if (dados.length > 5) {
+            html += `<p style="margin-top: 8px; font-size: 11px; color: #6b7280; text-align: center;">+ ${dados.length - 5} registros...</p>`;
+        }
+        
+        container.innerHTML = html;
+    }
+
+    // ============ PROCESSAR VINCULAR EMAILS POR TURMA ============
+    async processarVincularEmailsPorTurma() {
+        const turma = document.getElementById('selectTurmaVincular')?.value;
+        
+        if (!turma) {
+            this.showToast('❌ Selecione uma turma', 'error');
+            return;
+        }
+        
+        if (!this.dadosExcelEmails || this.dadosExcelEmails.length === 0) {
+            this.showToast('❌ Nenhum arquivo de emails carregado', 'error');
+            return;
+        }
+        
+        if (this.alunosDaTurmaParaVincular.length === 0) {
+            this.showToast('❌ Nenhum aluno encontrado na turma selecionada', 'error');
+            return;
+        }
+        
+        const progressoDiv = document.getElementById('progressoVincular');
+        const progressoBarra = document.getElementById('progressoBarraVincular');
+        const progressoPercentual = document.getElementById('progressoPercentualVincular');
+        
+        progressoDiv.style.display = 'block';
+        progressoBarra.style.width = '5%';
+        progressoPercentual.textContent = '5%';
+        
+        try {
+            // Criar um mapa de alunos por nome (normalizado para comparação)
+            const alunosMap = new Map();
+            this.alunosDaTurmaParaVincular.forEach(aluno => {
+                const nomeNormalizado = this.normalizarNome(aluno.nome);
+                alunosMap.set(nomeNormalizado, aluno);
+            });
+            
+            const resultados = [];
+            let sucessos = 0;
+            let naoEncontrados = 0;
+            let erros = 0;
+            
+            for (let i = 0; i < this.dadosExcelEmails.length; i++) {
+                const item = this.dadosExcelEmails[i];
+                const resultado = await this.vincularEmailPorNome(item, alunosMap, i + 1);
+                resultados.push(resultado);
+                
+                if (resultado.success) sucessos++;
+                else if (resultado.naoEncontrado) naoEncontrados++;
+                else erros++;
+                
+                const percentual = 5 + ((i + 1) / this.dadosExcelEmails.length) * 90;
+                progressoBarra.style.width = `${percentual}%`;
+                progressoPercentual.textContent = `${Math.round(percentual)}%`;
+            }
+            
+            progressoBarra.style.width = '100%';
+            progressoPercentual.textContent = '100%';
+            
+            this.mostrarResultadoVincularEmailsPorTurma(sucessos, naoEncontrados, erros, resultados, turma);
+            
+            if (sucessos > 0) {
+                await this.loadUsuarios();
+                await this.carregarDadosReais();
+                await this.carregarAlunosParaVincular();
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ Erro ao processar: ' + error.message, 'error');
+            progressoDiv.style.display = 'none';
+        }
+    }
+
+    // ============ NORMALIZAR NOME PARA COMPARAÇÃO ============
+    normalizarNome(nome) {
+        return nome
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^\w\s]/g, '')
+            .trim();
+    }
+
+    // ============ VINCULAR EMAIL POR NOME ============
+    async vincularEmailPorNome(item, alunosMap, linhaNumero) {
+        try {
+            const nomePlanilha = item.nome;
+            const emailPlanilha = item.email;
+            
+            if (!nomePlanilha) {
+                return { success: false, linha: linhaNumero, erro: 'Nome vazio na planilha' };
+            }
+            
+            if (!emailPlanilha) {
+                return { success: false, linha: linhaNumero, erro: 'Email vazio na planilha', nome: nomePlanilha };
+            }
+            
+            if (!this.validarEmail(emailPlanilha)) {
+                return { success: false, linha: linhaNumero, erro: `Email inválido: ${emailPlanilha}`, nome: nomePlanilha };
+            }
+            
+            const nomeNormalizadoPlanilha = this.normalizarNome(nomePlanilha);
+            
+            let alunoEncontrado = null;
+            
+            for (const [chave, aluno] of alunosMap.entries()) {
+                if (chave === nomeNormalizadoPlanilha || 
+                    chave.includes(nomeNormalizadoPlanilha) || 
+                    nomeNormalizadoPlanilha.includes(chave)) {
+                    alunoEncontrado = aluno;
+                    break;
+                }
+            }
+            
+            if (!alunoEncontrado) {
+                return { 
+                    success: false, 
+                    linha: linhaNumero, 
+                    naoEncontrado: true, 
+                    erro: `Aluno não encontrado na turma: ${nomePlanilha}`,
+                    nome: nomePlanilha 
+                };
+            }
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/usuarios/${alunoEncontrado._id}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: emailPlanilha
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao atualizar email');
+            }
+            
+            return {
+                success: true,
+                linha: linhaNumero,
+                nome: alunoEncontrado.nome,
+                email: emailPlanilha,
+                mensagem: 'Email vinculado com sucesso!'
+            };
+            
+        } catch (error) {
+            console.error('❌ Erro ao vincular email:', error);
+            return {
+                success: false,
+                linha: linhaNumero,
+                erro: error.message,
+                nome: item.nome || '-'
+            };
+        }
+    }
+
+    // ============ VALIDAR EMAIL ============
+    validarEmail(email) {
+        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return regex.test(email);
+    }
+
+    // ============ MOSTRAR RESULTADO VINCULAR EMAILS POR TURMA ============
+    mostrarResultadoVincularEmailsPorTurma(sucessos, naoEncontrados, erros, resultados, turma) {
+        const modalBody = document.getElementById('modalBody');
+        
+        let sucessosHtml = '';
+        if (sucessos > 0) {
+            const sucessosLista = resultados.filter(r => r.success === true);
+            sucessosHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #d1fae5; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #065f46;"><i class="fas fa-check-circle"></i> Emails Vinculados (${sucessos})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${sucessosLista.map(s => `
+                                <div style="padding: 6px; border-bottom: 1px solid #a7f3d0;">
+                                    <strong>${s.nome}</strong> → ${s.email}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        let naoEncontradosHtml = '';
+        if (naoEncontrados > 0) {
+            const naoEncontradosLista = resultados.filter(r => r.naoEncontrado === true);
+            naoEncontradosHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #92400e;"><i class="fas fa-exclamation-triangle"></i> Alunos não encontrados (${naoEncontrados})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${naoEncontradosLista.map(e => `
+                                <div style="padding: 6px; border-bottom: 1px solid #fde68a;">
+                                    <strong>Linha ${e.linha}:</strong> ${e.nome} - ${e.erro}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        let errosHtml = '';
+        if (erros > 0) {
+            const errosLista = resultados.filter(r => !r.success && !r.naoEncontrado);
+            errosHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #fee2e2; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #dc2626;"><i class="fas fa-exclamation-circle"></i> Erros (${erros})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${errosLista.map(e => `
+                                <div style="padding: 6px; border-bottom: 1px solid #fecaca;">
+                                    <strong>Linha ${e.linha}:</strong> ${e.nome || '-'} - ${e.erro}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        modalBody.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <div style="width: 80px; height: 80px; background: ${sucessos > 0 ? '#10b981' : '#6b7280'}; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                    <i class="fas ${sucessos > 0 ? 'fa-check' : 'fa-info'}" style="font-size: 40px; color: white;"></i>
+                </div>
+                
+                <h2 style="margin: 0 0 10px;">Processamento Concluído!</h2>
+                <p style="color: #6b7280;">Turma: <strong>${turma}</strong></p>
+                
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0;">
+                    <div style="background: #d1fae5; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #065f46;">${sucessos}</div>
+                        <div style="color: #065f46;">Emails vinculados</div>
+                    </div>
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #92400e;">${naoEncontrados}</div>
+                        <div style="color: #92400e;">Não encontrados</div>
+                    </div>
+                    <div style="background: #fee2e2; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #991b1b;">${erros}</div>
+                        <div style="color: #991b1b;">Erros</div>
+                    </div>
+                </div>
+                
+                ${sucessosHtml}
+                ${naoEncontradosHtml}
+                ${errosHtml}
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button onclick="admin.abrirModalVincularEmailsPorTurma()" style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                        Voltar
+                    </button>
+                    ${(erros > 0 || naoEncontrados > 0) ? `
+                        <button onclick="admin.baixarRelatorioVincularEmailsPorTurma(${JSON.stringify(resultados).replace(/"/g, '&quot;')}, '${turma}')" style="flex: 1; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                            <i class="fas fa-download"></i> Baixar Relatório
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-chart-bar"></i> Resultado da Vinculação';
+        this.openModal();
+    }
+
+    // ============ BAIXAR RELATÓRIO VINCULAR EMAILS POR TURMA ============
+    baixarRelatorioVincularEmailsPorTurma(resultados, turma) {
+        if (!resultados || resultados.length === 0) return;
+        
+        const wsData = [['Linha', 'Nome na Planilha', 'Email Vinculado', 'Status', 'Mensagem']];
+        
+        resultados.forEach(r => {
+            let status = '';
+            let mensagem = '';
+            
+            if (r.success) {
+                status = '✅ VINCULADO';
+                mensagem = r.mensagem;
+            } else if (r.naoEncontrado) {
+                status = '⚠️ NÃO ENCONTRADO';
+                mensagem = r.erro;
+            } else {
+                status = '❌ ERRO';
+                mensagem = r.erro;
+            }
+            
+            wsData.push([
+                r.linha, 
+                r.nome || '-', 
+                r.email || '-', 
+                status, 
+                mensagem
+            ]);
+        });
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{wch:8}, {wch:40}, {wch:40}, {wch:18}, {wch:50}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+        
+        XLSX.writeFile(wb, `relatorio_vincular_emails_${turma.replace(/\s/g, '_')}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
+        this.showToast('📥 Relatório baixado!', 'success');
+    }
+
+    // ============ REMOVER ARQUIVO EMAILS ============
+    removerArquivoExcelEmails() {
+        this.arquivoExcelEmails = null;
+        this.dadosExcelEmails = null;
+        document.getElementById('previewArquivoEmails').style.display = 'none';
+        document.getElementById('previewPlanilhaEmails').style.display = 'none';
+        document.getElementById('excelInputEmails').value = '';
+        
+        const btnVincular = document.getElementById('btnVincularEmails');
+        if (btnVincular) {
+            btnVincular.disabled = true;
+        }
     }
 
     // ============ HANDLE FILE SELECT ============
@@ -3720,7 +4506,7 @@ class AdminPanel {
         }
     }
 
-    // ============ CADASTRAR ALUNO (APENAS 5 CAMPOS) ============
+    // ============ CADASTRAR ALUNO DA PLANILHA ============
     async cadastrarAlunoDaPlanilha(linha, opcoes, linhaNumero) {
         try {
             const getValor = (campo) => {
@@ -3736,9 +4522,8 @@ class AdminPanel {
             let cpf = getValor('cpf');
             const turma = getValor('turma');
             const curso = getValor('curso');
-            const eixo = getValor('eixo'); // Eixo é opcional, não será usado no cadastro
+            const eixo = getValor('eixo');
             
-            // Validações
             if (!nome) {
                 return { success: false, linha: linhaNumero, erro: 'Nome não encontrado', nome: '-', cpf: '-' };
             }
@@ -3752,18 +4537,15 @@ class AdminPanel {
                 return { success: false, linha: linhaNumero, erro: 'Curso não encontrado', nome: nome, cpf: cpf };
             }
             
-            // Limpar CPF
             cpf = cpf.toString().replace(/\D/g, '');
             if (cpf.length !== 11) {
                 return { success: false, linha: linhaNumero, erro: `CPF inválido - deve ter 11 dígitos: ${cpf}`, nome: nome, cpf: cpf };
             }
             
-            // Validar CPF
             if (!this.validarCPF(cpf)) {
                 return { success: false, linha: linhaNumero, erro: `CPF inválido - dígitos verificadores incorretos: ${cpf}`, nome: nome, cpf: cpf };
             }
             
-            // Verificar se já existe
             const verificar = await this.verificarAlunoExistente(cpf);
             
             if (verificar.existe) {
@@ -3779,19 +4561,10 @@ class AdminPanel {
                 };
             }
             
-            // Dados padrão
             const email = `${cpf}@iemasaoluiscentro.net`;
             const telefone = '99999999999';
             const senha = '123456';
-            const periodo = '1'; // Período fixo
             
-            console.log(`📧 Email: ${email}`);
-            console.log(`📱 Telefone: ${telefone}`);
-            console.log(`🔑 Senha: ${senha}`);
-            console.log(`📅 Período: ${periodo}º (fixo)`);
-            console.log(`📚 Eixo: ${eixo || 'Não informado'} (apenas para referência)`);
-            
-            // Preparar dados do usuário
             const userData = {
                 nome: nome.toUpperCase(),
                 email: email,
@@ -3803,11 +4576,9 @@ class AdminPanel {
                 password: senha,
                 curso: curso,
                 turma: turma,
-                periodo: periodo,
                 precisaAcessibilidade: false
             };
             
-            // Criar usuário
             const token = localStorage.getItem('auth_token');
             const response = await fetch('/api/admin/usuarios', {
                 method: 'POST',
@@ -3824,16 +4595,8 @@ class AdminPanel {
                 throw new Error(data.error || 'Erro ao criar usuário');
             }
             
-            // Gerar QR Code
             const qrResult = await this.gerarQRCodeAluno(data.user.id, nome);
             
-            if (qrResult.success) {
-                console.log(`✅ QR Code gerado para ${nome}`);
-            } else {
-                console.warn(`⚠️ QR Code não gerado para ${nome}: ${qrResult.error}`);
-            }
-            
-            // Enviar email se solicitado
             if (opcoes.notificarCadastro && data.user) {
                 await this.enviarEmailBoasVindasAluno(email, nome, senha);
             }
@@ -3847,7 +4610,6 @@ class AdminPanel {
                 turma: turma,
                 curso: curso,
                 eixo: eixo,
-                periodo: periodo,
                 email: email,
                 telefone: telefone,
                 senha: senha,
@@ -3896,7 +4658,7 @@ class AdminPanel {
         return true;
     }
 
-    // ============ MOSTRAR RESULTADO ============
+    // ============ MOSTRAR RESULTADO UPLOAD ============
     mostrarResultadoUploadAlunos(sucessos, jaExistentes, erros, resultados) {
         const modalBody = document.getElementById('modalBody');
         
@@ -3981,7 +4743,7 @@ class AdminPanel {
         this.openModal();
     }
 
-    // ============ BAIXAR RELATÓRIO ============
+    // ============ BAIXAR RELATÓRIO COMPLETO ============
     baixarRelatorioCompletoAlunos(resultados) {
         if (!resultados || resultados.length === 0) return;
         
@@ -4043,7 +4805,7 @@ class AdminPanel {
         return nomes[campo] || campo;
     }
 
-    // ============ ENVIAR EMAIL ============
+    // ============ ENVIAR EMAIL BOAS VINDAS ============
     async enviarEmailBoasVindasAluno(email, nome, senha) {
         try {
             const token = localStorage.getItem('auth_token');
@@ -4164,7 +4926,7 @@ class AdminPanel {
                         <i class="fas fa-school" style="font-size: 32px; color: white;"></i>
                     </div>
                     <h2 style="margin: 15px 0 5px;">Gerenciar Turmas</h2>
-                    <p style="color: #6b7280;">Selecione uma turma para inativar ou excluir alunos que concluíram os estudos</p>
+                    <p style="color: #6b7280;">Selecione uma turma para inativar, excluir ou mover alunos para outra turma</p>
                 </div>
 
                 <!-- Seleção de Turma -->
@@ -4225,6 +4987,68 @@ class AdminPanel {
                     </div>
                 </div>
 
+                <!-- NOVA SEÇÃO: Mover/Editar Turma dos Alunos -->
+                <div id="secaoMoverAlunos" style="display: none; background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 2px solid #667eea30;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                        <i class="fas fa-exchange-alt" style="color: #667eea; font-size: 24px;"></i>
+                        <h3 style="margin: 0; font-size: 18px;">Editar Turma / Mover Alunos</h3>
+                    </div>
+                    
+                    <div style="display: grid; gap: 15px;">
+                        <!-- Opção de mover selecionados ou toda turma -->
+                        <div style="display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="moverOpcao" value="selecionados" checked onchange="admin.atualizarUIMoverAlunos()">
+                                <span>Mover alunos selecionados</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="moverOpcao" value="todos" onchange="admin.atualizarUIMoverAlunos()">
+                                <span>Mover TODOS os alunos da turma</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Select para nova turma -->
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+                                <i class="fas fa-arrow-right"></i> Mover para a Turma:
+                            </label>
+                            <div class="select-wrapper" style="position: relative;">
+                                <select id="selectNovaTurma" class="form-control" style="width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #e5e7eb; background: white;">
+                                    <option value="">-- Selecione a turma de destino --</option>
+                                </select>
+                                <i class="fas fa-chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; pointer-events: none;"></i>
+                            </div>
+                        </div>
+                        
+                        <!-- Botão de mover -->
+                        <button id="btnMoverAlunos" onclick="admin.moverAlunosParaTurma()" style="padding: 14px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                            <i class="fas fa-exchange-alt"></i> Mover Alunos
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Progressão de Ano Rápida -->
+                <div id="secaoProgressaoAno" style="display: none; background: linear-gradient(135deg, #10b98115, #05966915); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 2px solid #10b98130;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                        <i class="fas fa-calendar-alt" style="color: #10b981; font-size: 24px;"></i>
+                        <h3 style="margin: 0; font-size: 18px;">Progressão de Ano Letivo</h3>
+                    </div>
+                    
+                    <div style="display: grid; gap: 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <button onclick="admin.progredirAno('1° Ano', '2° Ano')" style="padding: 12px; background: #10b981; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                                <i class="fas fa-arrow-right"></i> 1° Ano → 2° Ano
+                            </button>
+                            <button onclick="admin.progredirAno('2° Ano', '3° Ano')" style="padding: 12px; background: #10b981; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                                <i class="fas fa-arrow-right"></i> 2° Ano → 3° Ano
+                            </button>
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280; text-align: center;">
+                            <i class="fas fa-info-circle"></i> Move TODOS os alunos da turma selecionada para a nova turma
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Ações em Massa (para alunos selecionados) -->
                 <div id="acoesMassa" style="display: none; gap: 12px; margin-bottom: 20px;">
                     <button id="btnInativarSelecionados" onclick="admin.inativarAlunosSelecionados()" style="flex: 1; padding: 14px; background: #f59e0b; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#d97706'" onmouseout="this.style.background='#f59e0b'">
@@ -4254,6 +5078,8 @@ class AdminPanel {
                             <ul style="margin: 5px 0 0 20px;">
                                 <li><strong>Inativar</strong> - O aluno não poderá mais acessar o sistema, mas seus dados permanecem salvos.</li>
                                 <li><strong>Excluir</strong> - Remove permanentemente o aluno (apenas se não tiver provas realizadas).</li>
+                                <li><strong>Mover/Editar Turma</strong> - Altera a turma do aluno mantendo todos os dados e histórico.</li>
+                                <li><strong>Progressão de Ano</strong> - Função rápida para avançar os alunos de ano (1°→2° ou 2°→3°).</li>
                                 <li><strong>Recomendação:</strong> Utilize "Inativar" para alunos que concluíram os estudos.</li>
                                 <li>Alunos com provas realizadas NÃO podem ser excluídos.</li>
                             </ul>
@@ -4378,6 +5204,8 @@ class AdminPanel {
                 const turmas = Array.from(turmasSet).sort();
                 
                 const select = document.getElementById('selectTurmaGerenciar');
+                const selectDestino = document.getElementById('selectNovaTurma');
+                
                 if (select) {
                     if (turmas.length === 0) {
                         select.innerHTML = '<option value="">Nenhuma turma encontrada</option>';
@@ -4388,6 +5216,16 @@ class AdminPanel {
                         });
                         select.innerHTML = options;
                     }
+                }
+                
+                // Popular o select de turma de destino com as mesmas opções + opção de criar nova
+                if (selectDestino) {
+                    let options = '<option value="">-- Selecione a turma de destino --</option>';
+                    turmas.forEach(turma => {
+                        options += `<option value="${turma}">${turma}</option>`;
+                    });
+                    options += '<option value="__NOVA_TURMA__">➕ Criar nova turma...</option>';
+                    selectDestino.innerHTML = options;
                 }
                 
                 this.turmasDisponiveis = turmas;
@@ -4414,6 +5252,8 @@ class AdminPanel {
             document.getElementById('estatisticasTurma').style.display = 'none';
             document.getElementById('acoesMassa').style.display = 'none';
             document.getElementById('acoesTurmaCompleta').style.display = 'none';
+            document.getElementById('secaoMoverAlunos').style.display = 'none';
+            document.getElementById('secaoProgressaoAno').style.display = 'none';
             return;
         }
         
@@ -4440,11 +5280,14 @@ class AdminPanel {
                 
                 this.renderizarListaAlunos();
                 this.atualizarEstatisticasTurma();
+                this.atualizarUIMoverAlunos();
                 
                 document.getElementById('listaAlunosTurma').style.display = 'block';
                 document.getElementById('estatisticasTurma').style.display = 'block';
                 document.getElementById('acoesMassa').style.display = 'flex';
                 document.getElementById('acoesTurmaCompleta').style.display = 'flex';
+                document.getElementById('secaoMoverAlunos').style.display = 'block';
+                document.getElementById('secaoProgressaoAno').style.display = 'block';
                 
                 console.log(`✅ ${this.alunosDaTurma.length} alunos carregados da turma ${turma}`);
             } else {
@@ -4517,6 +5360,8 @@ class AdminPanel {
             const totalSelecionados = this.alunosSelecionados.size;
             selecionadosCount.innerHTML = `${totalSelecionados} ${totalSelecionados === 1 ? 'selecionado' : 'selecionados'}`;
         }
+        
+        this.atualizarUIMoverAlunos();
     }
 
     // ============ ATUALIZAR ESTATÍSTICAS DA TURMA ============
@@ -4834,6 +5679,260 @@ class AdminPanel {
             await this.loadUsuarios();
             await this.carregarDadosReais();
         }
+    }
+
+    // ============ NOVAS FUNÇÕES: EDITAR TURMA / MOVER ALUNOS ============
+
+    // Atualizar interface de mover alunos
+    atualizarUIMoverAlunos() {
+        const opcao = document.querySelector('input[name="moverOpcao"]:checked')?.value;
+        const btnMover = document.getElementById('btnMoverAlunos');
+        
+        if (opcao === 'selecionados') {
+            const selecionados = this.alunosSelecionados?.size || 0;
+            if (btnMover) {
+                btnMover.innerHTML = `<i class="fas fa-exchange-alt"></i> Mover ${selecionados} aluno(s) selecionado(s)`;
+            }
+        } else {
+            const total = this.alunosDaTurma?.length || 0;
+            if (btnMover) {
+                btnMover.innerHTML = `<i class="fas fa-exchange-alt"></i> Mover TODOS os ${total} alunos da turma`;
+            }
+        }
+    }
+
+    // Mover alunos para outra turma
+    async moverAlunosParaTurma() {
+        const turmaOrigem = document.getElementById('selectTurmaGerenciar')?.value;
+        const novaTurma = document.getElementById('selectNovaTurma')?.value;
+        const opcao = document.querySelector('input[name="moverOpcao"]:checked')?.value;
+        
+        if (!turmaOrigem) {
+            this.showToast('❌ Selecione uma turma de origem', 'error');
+            return;
+        }
+        
+        if (!novaTurma) {
+            this.showToast('❌ Selecione uma turma de destino', 'error');
+            return;
+        }
+        
+        // Verificar se é para criar nova turma
+        let turmaDestino = novaTurma;
+        if (novaTurma === '__NOVA_TURMA__') {
+            const nomeNovaTurma = await this.promptNovaTurma();
+            if (!nomeNovaTurma) return;
+            turmaDestino = nomeNovaTurma;
+        }
+        
+        if (turmaDestino === turmaOrigem) {
+            this.showToast('❌ A turma de destino não pode ser a mesma', 'error');
+            return;
+        }
+        
+        // Determinar quais alunos mover
+        let alunosParaMover = [];
+        if (opcao === 'selecionados') {
+            if (this.alunosSelecionados.size === 0) {
+                this.showToast('❌ Nenhum aluno selecionado', 'error');
+                return;
+            }
+            alunosParaMover = this.alunosDaTurma.filter(a => this.alunosSelecionados.has(a._id));
+        } else {
+            alunosParaMover = [...this.alunosDaTurma];
+        }
+        
+        if (alunosParaMover.length === 0) {
+            this.showToast('❌ Nenhum aluno para mover', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🔄 Mover Alunos',
+            `Confirmar movimentação de ${alunosParaMover.length} aluno(s)<br><br>
+            <strong>De:</strong> ${turmaOrigem}<br>
+            <strong>Para:</strong> ${turmaDestino}<br><br>
+            <span style="color: #f59e0b;">⚠️ Os alunos manterão todos os dados e histórico.</span>`
+        );
+        
+        if (!confirmar) return;
+        
+        this.showToast(`🔄 Movendo ${alunosParaMover.length} aluno(s)...`, 'info');
+        
+        let sucessos = 0;
+        let erros = 0;
+        
+        for (const aluno of alunosParaMover) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${aluno._id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ turma: turmaDestino })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    aluno.turma = turmaDestino;
+                    sucessos++;
+                } else {
+                    erros++;
+                    console.error(`Erro ao mover ${aluno.nome}:`, data.message);
+                }
+            } catch (error) {
+                console.error(`Erro ao mover ${aluno.nome}:`, error);
+                erros++;
+            }
+        }
+        
+        // Recarregar tudo
+        await this.carregarTurmasParaGerenciar();
+        await this.carregarAlunosPorTurma();
+        this.alunosSelecionados.clear();
+        
+        this.showToast(`✅ ${sucessos} alunos movidos para ${turmaDestino}${erros > 0 ? `, ${erros} erros` : ''}`, sucessos > 0 ? 'success' : 'error');
+        
+        if (sucessos > 0) {
+            await this.loadUsuarios();
+            await this.carregarDadosReais();
+        }
+    }
+
+    // Progressão rápida de ano
+    async progredirAno(turmaOrigem, turmaDestino) {
+        const turmaAtual = document.getElementById('selectTurmaGerenciar')?.value;
+        
+        if (!turmaAtual) {
+            this.showToast('❌ Selecione uma turma primeiro', 'error');
+            return;
+        }
+        
+        if (turmaAtual !== turmaOrigem) {
+            this.showToast(`❌ Esta ação só funciona para a turma "${turmaOrigem}". Atualmente você está na turma "${turmaAtual}"`, 'error');
+            return;
+        }
+        
+        const totalAlunos = this.alunosDaTurma?.length || 0;
+        
+        if (totalAlunos === 0) {
+            this.showToast('❌ Nenhum aluno nesta turma', 'error');
+            return;
+        }
+        
+        const confirmar = await this.confirmar(
+            '🎓 Progressão de Ano',
+            `Confirmar progressão de ano letivo?<br><br>
+            <strong>${totalAlunos} alunos</strong> serão movidos de<br>
+            <strong style="color: #10b981;">${turmaOrigem}</strong> para <strong style="color: #3b82f6;">${turmaDestino}</strong><br><br>
+            <span style="color: #f59e0b;">⚠️ Todos os dados e histórico serão mantidos.</span><br>
+            <span style="color: #10b981;">✅ Esta ação é reversível movendo os alunos de volta.</span>`
+        );
+        
+        if (!confirmar) return;
+        
+        // Mover todos os alunos para a nova turma
+        let sucessos = 0;
+        
+        for (const aluno of this.alunosDaTurma) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${aluno._id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ turma: turmaDestino })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    aluno.turma = turmaDestino;
+                    sucessos++;
+                }
+            } catch (error) {
+                console.error(`Erro ao mover ${aluno.nome}:`, error);
+            }
+        }
+        
+        // Recarregar turmas e dados
+        await this.carregarTurmasParaGerenciar();
+        
+        // Selecionar automaticamente a nova turma
+        const selectTurma = document.getElementById('selectTurmaGerenciar');
+        if (selectTurma) {
+            selectTurma.value = turmaDestino;
+            await this.carregarAlunosPorTurma();
+        }
+        
+        this.showToast(`✅ ${sucessos} alunos progrediram de ${turmaOrigem} para ${turmaDestino}! 🎉`, 'success');
+        
+        await this.loadUsuarios();
+        await this.carregarDadosReais();
+    }
+
+    // Prompt para criar nova turma
+    async promptNovaTurma() {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 20px; padding: 30px; max-width: 400px; width: 90%;">
+                    <h3 style="margin: 0 0 20px 0;">➕ Criar Nova Turma</h3>
+                    <input type="text" id="novaTurmaInput" placeholder="Ex: 1° Ano A, 2° Ano B, 3° Ano C..." style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button onclick="this.closest('div').remove()" style="padding: 10px 20px; background: #e5e7eb; border: none; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                        <button id="confirmarNovaTurma" style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">Criar</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            const input = modal.querySelector('#novaTurmaInput');
+            input.focus();
+            
+            const confirmarBtn = modal.querySelector('#confirmarNovaTurma');
+            confirmarBtn.onclick = () => {
+                const nomeTurma = input.value.trim();
+                if (nomeTurma) {
+                    modal.remove();
+                    resolve(nomeTurma);
+                } else {
+                    input.style.borderColor = '#ef4444';
+                    input.placeholder = 'Digite o nome da turma!';
+                }
+            };
+            
+            input.onkeypress = (e) => {
+                if (e.key === 'Enter') {
+                    confirmarBtn.click();
+                }
+            };
+            
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    resolve(null);
+                }
+            };
+        });
     }
 
     // ============ MÉTODOS AUXILIARES PARA USUÁRIOS ============
