@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#f97316">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Protagonismo - Sistema de Provas">
+
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Protagonismo - Sistema de Provas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Acessibilidade -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/push-client.js"></script>
+
+    <link rel="stylesheet" href="css/protagonismo.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header-top">
+            <div class="user-info-card">
+                <div class="user-avatar" id="userAvatar">
+                    <i class="fas fa-star"></i>
+                </div>
+                <div class="user-details">
+                    <div class="user-name" id="userName">Carregando...</div>
+                    <div class="user-role" id="userRole">Protagonismo</div>
+                </div>
+            </div>
+            <div class="btn-actions">
+                <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" 
+                target="_blank" class="btn-icon" 
+                style="background: linear-gradient(135deg, #10b981, #059669); color: white;" 
+                title="Baixar App">
+                    <i class="fas fa-download"></i>
+                </a>
+                <button class="btn-icon" onclick="abrirModalQRCode()" title="Gerar QR Code Público">
+                    <i class="fas fa-qrcode"></i>
+                </button>
+                <button class="btn-icon" onclick="copiarLinkPublico()" title="Copiar Link Público">
+                    <i class="fas fa-link"></i>
+                </button>
+                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
+                    <i class="fas fa-user-edit"></i>
+                </button>
+                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Título -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-star me-2"></i>
+                    Protagonismo - Sistema de Provas
+                </div>
+                <span id="dataAtual" class="badge bg-light text-dark"></span>
+            </div>
+        </div>
+        
+        <!-- Abas Principais -->
+        <div class="card">
+            <div class="card-body">
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" id="aba-dashboard" data-bs-toggle="tab" data-bs-target="#tab-dashboard" type="button">
+                            <i class="fas fa-chart-line"></i> Dashboard
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-clubes" data-bs-toggle="tab" data-bs-target="#tab-clubes" type="button">
+                            <i class="fas fa-users"></i> Clubes
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-inscricoes" data-bs-toggle="tab" data-bs-target="#tab-inscricoes" type="button">
+                            <i class="fas fa-clipboard-list"></i> Inscrições
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-tutoria" data-bs-toggle="tab" data-bs-target="#tab-tutoria" type="button">
+                            <i class="fas fa-chalkboard-teacher"></i> Tutoria
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-candidatos" data-bs-toggle="tab" data-bs-target="#tab-candidatos" type="button">
+                            <i class="fas fa-vote-yea"></i> Candidatos
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-eleicao" data-bs-toggle="tab" data-bs-target="#tab-eleicao" type="button">
+                            <i class="fas fa-trophy"></i> Eleição
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-config" data-bs-toggle="tab" data-bs-target="#tab-config" type="button">
+                            <i class="fas fa-cog"></i> Configurações
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content mt-3">
+                    
+                    <!-- ================================
+                         ABA DASHBOARD
+                    ================================= -->
+                    <div class="tab-pane fade show active" id="tab-dashboard">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <i class="fas fa-users fa-2x"></i>
+                                <div class="stat-number" id="totalClubes">0</div>
+                                <div class="stat-label">Clubes Ativos</div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-user-check fa-2x"></i>
+                                <div class="stat-number" id="totalInscricoes">0</div>
+                                <div class="stat-label">Inscrições</div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-chalkboard-teacher fa-2x"></i>
+                                <div class="stat-number" id="totalTutores">0</div>
+                                <div class="stat-label">Tutores</div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-vote-yea fa-2x"></i>
+                                <div class="stat-number" id="totalCandidatos">0</div>
+                                <div class="stat-label">Candidatos</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="fas fa-chart-bar me-2"></i> Top 5 Clubes Mais Procurados
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="chartTopClubes"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="fas fa-info-circle me-2"></i> Status das Funcionalidades
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="status-item">
+                                            <span>Inscrições em Clubes</span>
+                                            <span id="statusInscricoes" class="status-badge inactive">Fechadas</span>
+                                        </div>
+                                        <div class="status-item">
+                                            <span>Eleição de Líder/Vice</span>
+                                            <span id="statusEleicao" class="status-badge inactive">Fechada</span>
+                                        </div>
+                                        <div class="status-item">
+                                            <span>Tutoria Visível ao Público</span>
+                                            <span id="statusTutoria" class="status-badge inactive">Oculta</span>
+                                        </div>
+                                        <hr>
+                                        <div class="alert alert-info mt-3">
+                                            <i class="fas fa-link me-2"></i>
+                                            <strong>Link Público:</strong>
+                                            <div class="input-group mt-2">
+                                                <input type="text" class="form-control" id="linkPublicoInput" readonly>
+                                                <button class="btn btn-primary" onclick="copiarLinkPublico()">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ================================
+                         ABA CLUBES
+                    ================================= -->
+                    <div class="tab-pane fade" id="tab-clubes">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5><i class="fas fa-users me-2"></i> Gerenciar Clubes</h5>
+                            <button class="btn btn-primary" onclick="abrirModalClube()">
+                                <i class="fas fa-plus"></i> Novo Clube
+                            </button>
+                        </div>
+                        
+                        <div id="listaClubes" class="clubes-grid">
+                            <div class="text-center py-5">
+                                <div class="loading-spinner"></div>
+                                <p>Carregando clubes...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ================================
+                         ABA INSCRIÇÕES
+                    ================================= -->
+                    <div class="tab-pane fade" id="tab-inscricoes">
+                        <h5><i class="fas fa-clipboard-list me-2"></i> Inscrições Recebidas</h5>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Filtrar por Clube</label>
+                                <select id="filtroClubeInscricoes" class="form-select" onchange="carregarInscricoes()">
+                                    <option value="">Todos os clubes</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Filtrar por Turma</label>
+                                <select id="filtroTurmaInscricoes" class="form-select" onchange="carregarInscricoes()">
+                                    <option value="">Todas as turmas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Status</label>
+                                <select id="filtroStatusInscricoes" class="form-select" onchange="carregarInscricoes()">
+                                    <option value="">Todos</option>
+                                    <option value="ativa">Ativas</option>
+                                    <option value="cancelada">Canceladas</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Data Nasc.</th>
+                                        <th>Turma</th>
+                                        <th>Curso</th>
+                                        <th>Clube</th>
+                                        <th>Data Inscrição</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaInscricoes">
+                                    <tr><td colspan="7" class="text-center py-3">Carregando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- ================================
+                         ABA TUTORIA
+                    ================================= -->
+                    <div class="tab-pane fade" id="tab-tutoria">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5><i class="fas fa-chalkboard-teacher me-2"></i> Gerenciar Tutoria</h5>
+                                <small class="text-muted">Limite: 2 tutores por turma</small>
+                            </div>
+                            <button class="btn btn-primary" onclick="abrirModalTutor()">
+                                <i class="fas fa-plus"></i> Novo Tutor
+                            </button>
+                        </div>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Filtrar por Turma</label>
+                                <select id="filtroTurmaTutores" class="form-select" onchange="carregarTutores()">
+                                    <option value="">Todas as turmas</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div id="listaTutores"></div>
+                    </div>
+                    
+                    <!-- ================================
+                         ABA CANDIDATOS
+                    ================================= -->
+                    <div class="tab-pane fade" id="tab-candidatos">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5><i class="fas fa-vote-yea me-2"></i> Candidatos a Líder/Vice</h5>
+                            <button class="btn btn-primary" onclick="abrirModalCandidato()">
+                                <i class="fas fa-plus"></i> Novo Candidato
+                            </button>
+                        </div>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Filtrar por Turma</label>
+                                <select id="filtroTurmaCandidatos" class="form-select" onchange="carregarCandidatos()">
+                                    <option value="">Todas as turmas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Cargo</label>
+                                <select id="filtroCargoCandidatos" class="form-select" onchange="carregarCandidatos()">
+                                    <option value="">Todos</option>
+                                    <option value="lider">Líder</option>
+                                    <option value="vice_lider">Vice-Líder</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div id="listaCandidatos"></div>
+                    </div>
+                    
+                    <!-- ================================
+                         ABA ELEIÇÃO
+                    ================================= -->
+                    <div class="tab-pane fade" id="tab-eleicao">
+                        <h5><i class="fas fa-trophy me-2"></i> Resultados da Eleição</h5>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="stat-card">
+                                    <i class="fas fa-vote-yea fa-2x"></i>
+                                    <div class="stat-number" id="totalVotos">0</div>
+                                    <div class="stat-label">Total de Votos</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="resultadosEleicao"></div>
+                    </div>
+                    
+                    <!-- ================================
+                         ABA CONFIGURAÇÕES
+                    ================================= -->
+                    <div class="tab-pane fade" id="tab-config">
+                        <h5><i class="fas fa-cog me-2"></i> Configurações do Protagonismo</h5>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="fas fa-toggle-on me-2"></i> Controle de Funcionalidades
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="config-item">
+                                            <div>
+                                                <strong>Inscrições em Clubes</strong>
+                                                <p class="text-muted small mb-0">Permite alunos se inscreverem nos clubes</p>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="configInscricoes" 
+                                                       onchange="atualizarConfiguracao()">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="config-item">
+                                            <div>
+                                                <strong>Eleição de Líder/Vice</strong>
+                                                <p class="text-muted small mb-0">Habilita a votação na página pública</p>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="configEleicao" 
+                                                       onchange="atualizarConfiguracao()">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="config-item">
+                                            <div>
+                                                <strong>Tutoria Visível</strong>
+                                                <p class="text-muted small mb-0">Mostra os tutores na página pública</p>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="configTutoria" 
+                                                       onchange="atualizarConfiguracao()">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="fas fa-comment-alt me-2"></i> Aviso para Página Pública
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Mensagem de aviso</label>
+                                            <textarea id="configAviso" class="form-control" rows="4" 
+                                                      placeholder="Ex: As inscrições encerram em 30/11..."></textarea>
+                                        </div>
+                                        
+                                        <button class="btn btn-primary" onclick="atualizarConfiguracao()">
+                                            <i class="fas fa-save"></i> Salvar Aviso
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ================================
+         MODAL CLUBE
+    ================================= -->
+    <div class="modal fade" id="modalClube" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-users"></i> <span id="modalClubeTitulo">Novo Clube</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formClube">
+                        <div class="mb-3">
+                            <label class="form-label">Nome do Clube <span class="text-danger">*</span></label>
+                            <input type="text" id="clubeNome" class="form-control" placeholder="Ex: Clube de Leitura">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Descrição <span class="text-danger">*</span></label>
+                            <textarea id="clubeDescricao" class="form-control" rows="3" 
+                                      placeholder="Descreva as atividades do clube..."></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Líder (Nome)</label>
+                                <input type="text" id="clubeLider" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Vice-Líder (Nome)</label>
+                                <input type="text" id="clubeViceLider" class="form-control">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Vagas <span class="text-danger">*</span></label>
+                                <input type="number" id="clubeVagas" class="form-control" value="30" min="1">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Cor do Clube</label>
+                                <input type="color" id="clubeCor" class="form-control form-control-color" value="#f97316">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Local</label>
+                                <input type="text" id="clubeLocal" class="form-control" placeholder="Ex: Sala 5">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Dia da Semana</label>
+                                <select id="clubeDiaSemana" class="form-select">
+                                    <option value="">Selecione...</option>
+                                    <option value="Segunda-feira">Segunda-feira</option>
+                                    <option value="Terça-feira">Terça-feira</option>
+                                    <option value="Quarta-feira">Quarta-feira</option>
+                                    <option value="Quinta-feira">Quinta-feira</option>
+                                    <option value="Sexta-feira">Sexta-feira</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Horário</label>
+                                <input type="time" id="clubeHorario" class="form-control">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="clubeAtivo" checked>
+                                    <label class="form-check-label">Clube Ativo</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="clubeInscricoesAbertas">
+                                    <label class="form-check-label">Inscrições Abertas</label>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="salvarClube()">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ================================
+         MODAL TUTOR
+    ================================= -->
+    <div class="modal fade" id="modalTutor" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-chalkboard-teacher"></i> <span id="modalTutorTitulo">Novo Tutor</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formTutor">
+                        <div class="mb-3">
+                            <label class="form-label">Nome do Professor <span class="text-danger">*</span></label>
+                            <input type="text" id="tutorNome" class="form-control">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Área/Disciplina <span class="text-danger">*</span></label>
+                            <input type="text" id="tutorArea" class="form-control" placeholder="Ex: Matemática">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Curso <span class="text-danger">*</span></label>
+                            <select id="tutorCurso" class="form-select">
+                                <option value="">Selecione o curso...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Turma <span class="text-danger">*</span></label>
+                            <select id="tutorTurma" class="form-select">
+                                <option value="">Selecione a turma...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Observações</label>
+                            <textarea id="tutorObservacoes" class="form-control" rows="2"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="salvarTutor()">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ================================
+         MODAL CANDIDATO
+    ================================= -->
+    <div class="modal fade" id="modalCandidato" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-vote-yea"></i> Novo Candidato</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formCandidato">
+                        <div class="mb-3">
+                            <label class="form-label">Turma <span class="text-danger">*</span></label>
+                            <select id="candidatoTurma" class="form-select" onchange="carregarAlunosTurma()">
+                                <option value="">Selecione a turma...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Aluno <span class="text-danger">*</span></label>
+                            <select id="candidatoAluno" class="form-select">
+                                <option value="">Selecione a turma primeiro...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cargo <span class="text-danger">*</span></label>
+                            <select id="candidatoCargo" class="form-select">
+                                <option value="">Selecione...</option>
+                                <option value="lider">Líder</option>
+                                <option value="vice_lider">Vice-Líder</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Slogan</label>
+                            <input type="text" id="candidatoSlogan" class="form-control" 
+                                   placeholder="Ex: Juntos somos mais fortes!">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Proposta</label>
+                            <textarea id="candidatoProposta" class="form-control" rows="3" 
+                                      placeholder="O que você pretende fazer se eleito..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="salvarCandidato()">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================
+     MODAL QR CODE
+    ================================= -->
+    <div class="modal fade" id="modalQRCode" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #e11d48, #be123c);">
+                    <h5 class="modal-title">
+                        <i class="fas fa-qrcode me-2"></i> QR Code do Protagonismo
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: brightness(0) invert(1);"></button>
+                </div>
+                <div class="modal-body" style="padding: 30px; text-align: center;">
+                    <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">
+                        Peça para os alunos escanearem este QR Code para acessar a página de inscrição e votação!
+                    </p>
+                    
+                    <div id="qrCodeContainer" style="
+                        background: white;
+                        padding: 20px;
+                        border-radius: 20px;
+                        border: 3px solid #e11d48;
+                        display: inline-block;
+                        margin-bottom: 20px;
+                    ">
+                        <div id="qrCodeLoading" style="
+                            width: 280px; height: 280px;
+                            display: flex; align-items: center; justify-content: center;
+                            flex-direction: column;
+                        ">
+                            <div class="loading-spinner"></div>
+                            <p style="color: #6b7280; margin-top: 15px; font-size: 13px;">Gerando QR Code...</p>
+                        </div>
+                        <img id="qrCodeImg" src="" alt="QR Code" 
+                            style="width: 280px; height: 280px; display: none; border-radius: 8px;">
+                    </div>
+                    
+                    <div style="
+                        background: #f3f4f6;
+                        border-radius: 12px;
+                        padding: 12px 16px;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        max-width: 400px;
+                        margin: 0 auto;
+                        font-size: 12px;
+                        word-break: break-all;
+                    ">
+                        <i class="fas fa-link" style="color: #e11d48;"></i>
+                        <span id="qrCodeUrlTexto" style="color: #4b5563; flex: 1; text-align: left;"></span>
+                    </div>
+                </div>
+                <div class="modal-footer" style="justify-content: center; gap: 10px; padding: 20px;">
+                    <button class="btn-primary-custom" onclick="baixarQRCode()" style="padding: 10px 20px;">
+                        <i class="fas fa-download me-2"></i> Baixar
+                    </button>
+                    <button class="btn-secondary-custom" onclick="imprimirQRCode()" style="padding: 10px 20px;">
+                        <i class="fas fa-print me-2"></i> Imprimir
+                    </button>
+                    <button class="btn-secondary-custom" onclick="copiarLinkDoQR()" style="padding: 10px 20px;">
+                        <i class="fas fa-copy me-2"></i> Copiar Link
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/protagonismo.js"></script>
+
+    <!-- Escalonamento Mobile -->
+    <script>
+        (function() {
+            if (window.innerWidth > 768) return;
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                if (width <= 320) return 0.55;
+                if (width <= 360) return 0.6;
+                if (width <= 400) return 0.65;
+                if (width <= 500) return 0.75;
+                if (width <= 600) return 0.85;
+                if (width <= 700) return 0.95;
+                return 1;
+            }
+            document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
+            let timeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
+                }, 100);
+            });
+        })();
+    </script>
+
+    <!-- Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(reg => reg.unregister());
+            });
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
+    </script>
+</body>
+</html>

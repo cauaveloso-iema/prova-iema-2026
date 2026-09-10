@@ -1669,3 +1669,225 @@ body {
         right: -110px !important;
     }
 }
+
+/* frontend/css/admin-painel.css */
+
+/* ============================================ */
+/* WRAPPER DA SUPERVISÃO (SUPER ADMIN)          */
+/* ============================================ */
+.supervisao-wrapper {
+    animation: fadeInSupervisao 0.3s ease-out;
+}
+
+@keyframes fadeInSupervisao {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.supervisao-wrapper iframe {
+    background: white;
+    border-radius: 0 0 12px 12px;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+    .supervisao-wrapper > div:first-child {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start !important;
+    }
+    
+    .supervisao-wrapper > div:first-child > div:last-child {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+    }
+    
+    .supervisao-wrapper > div:first-child button {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+/* frontend/css/admin-painel.css */
+
+/* ============================================ */
+/* WRAPPER DA GESTÃO GERAL (SUPER ADMIN)        */
+/* ============================================ */
+.gestao-geral-wrapper {
+    animation: fadeInGestaoGeral 0.3s ease-out;
+}
+
+@keyframes fadeInGestaoGeral {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.gestao-geral-wrapper iframe {
+    background: white;
+    border-radius: 0 0 12px 12px;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+    .gestao-geral-wrapper > div:first-child {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start !important;
+    }
+    
+    .gestao-geral-wrapper > div:first-child > div:last-child {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+    }
+    
+    .gestao-geral-wrapper > div:first-child button {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+/* frontend/css/admin-painel.css */
+
+/* ============================================ */
+/* WRAPPER DO ASSISTENTE SOCIAL (SUPER ADMIN)   */
+/* ============================================ */
+.assistente-social-wrapper {
+    animation: fadeInAssistenteSocial 0.3s ease-out;
+}
+
+@keyframes fadeInAssistenteSocial {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.assistente-social-wrapper iframe {
+    background: white;
+    border-radius: 0 0 12px 12px;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+    .assistente-social-wrapper > div:first-child {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start !important;
+    }
+    
+    .assistente-social-wrapper > div:first-child > div:last-child {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+    }
+    
+    .assistente-social-wrapper > div:first-child button {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+/* frontend/css/admin-painel.css */
+
+/* ============================================ */
+/* WRAPPER DO PROTAGONISMO (SUPER ADMIN)        */
+/* ============================================ */
+.protagonismo-wrapper {
+    animation: fadeInProtagonismo 0.3s ease-out;
+}
+
+@keyframes fadeInProtagonismo {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.protagonismo-wrapper iframe {
+    background: white;
+    border-radius: 0 0 12px 12px;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+    .protagonismo-wrapper > div:first-child {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start !important;
+    }
+    
+    .protagonismo-wrapper > div:first-child > div:last-child {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .protagonismo-wrapper > div:first-child button {
+        flex: 1;
+        justify-content: center;
+        min-width: 100px;
+    }
+}
+
+/* frontend/css/admin-painel.css (ou o arquivo de estilos do admin) */
+
+/* ============================================ */
+/* BADGES DE PERFIS - NOVOS PERFIS              */
+/* ============================================ */
+
+/* Supervisão - Azul Escuro */
+.role-badge.supervisao { 
+    background: linear-gradient(135deg, #1e3a8a, #1e40af); 
+    color: white; 
+}
+.role-badge.supervisao i { color: white; }
+
+/* Psicologia - Verde-Água / Teal */
+.role-badge.psicologia { 
+    background: linear-gradient(135deg, #14b8a6, #0d9488); 
+    color: white; 
+}
+.role-badge.psicologia i { color: white; }
+
+/* Assistente Social - Violeta */
+.role-badge.assistente-social { 
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed); 
+    color: white; 
+}
+.role-badge.assistente-social i { color: white; }
+
+/* Protagonismo - Laranja */
+.role-badge.protagonismo { 
+    background: linear-gradient(135deg, #f97316, #ea580c); 
+    color: white; 
+}
+.role-badge.protagonismo i { color: white; }
+
+/* Gestão Geral - Azul Marinho (já deve existir, mas por segurança) */
+.role-badge.gestao_geral { 
+    background: linear-gradient(135deg, #1e3c72, #2a5298); 
+    color: white; 
+}

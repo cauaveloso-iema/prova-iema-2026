@@ -82,7 +82,7 @@ ultimaValidacaoPush: {
 },
 role: {
   type: String,
-  enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria'], // ADICIONADO
+  enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo'], // ADICIONADO
   default: 'aluno'
 },
 
@@ -204,7 +204,7 @@ tokenExpired: { type: Boolean, default: false },
   
   qrCodeUsuarioTipo: {
     type: String,
-    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria', null],
+    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo', null],
     default: null
   },
 

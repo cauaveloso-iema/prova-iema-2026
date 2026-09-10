@@ -26,31 +26,89 @@
       });
     }
     </script>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
     <title>Sistema em Manutenção</title>
 
-    <!-- CSS GLOBAL -->
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
+
+    <!-- CSS EXTERNO -->
     <link rel="stylesheet" href="css/manutencao.css">
+    <link rel="stylesheet" href="css/mobile.css">
 
 </head>
 <body>
+
+    <!-- ============================================================
+    FUNDO ANIMADO - SOFISTICADO
+    ============================================================ -->
+    <div class="background-animated">
+        <!-- Overlay de gradiente -->
+        <div class="bg-overlay"></div>
+
+        <!-- Formas geométricas -->
+        <div class="shape"></div>
+        <div class="shape"></div>
+        <div class="shape"></div>
+        <div class="shape"></div>
+
+        <!-- Estrelas brilhantes -->
+        <div class="sparkles">
+            <div class="sparkle"></div>
+            <div class="sparkle"></div>
+            <div class="sparkle"></div>
+            <div class="sparkle"></div>
+            <div class="sparkle"></div>
+            <div class="sparkle"></div>
+            <div class="sparkle"></div>
+            <div class="sparkle"></div>
+        </div>
+
+        <!-- Engrenagens decorativas girando no fundo -->
+        <div class="gear-decorative"><i class="fas fa-cog"></i></div>
+        <div class="gear-decorative"><i class="fas fa-cog"></i></div>
+        <div class="gear-decorative"><i class="fas fa-cog"></i></div>
+    </div>
+
+    <!-- ============================================================
+    CONTAINER PRINCIPAL
+    ============================================================ -->
     <div class="container">
-        <div class="icon">🔧</div>
-        <h1>Sistema em Manutenção</h1>
-        <p>Estamos realizando melhorias para oferecer uma experiência ainda melhor.</p>
-        
-        <div class="message-box" id="messageBox">
+
+        <!-- ENGRENAGEM GRANDE COM PULSO -->
+        <div class="gear-big">
+            <i class="fas fa-cog"></i>
+        </div>
+
+        <!-- TÍTULO -->
+        <h1>Sistema em <span>Manutenção</span></h1>
+        <p class="subtitle">Estamos realizando melhorias para oferecer uma experiência ainda melhor.</p>
+
+        <!-- STATUS BADGE - ESTÁTICO -->
+        <div class="status-badge">
+            <i class="fas fa-circle"></i>
+            Em andamento
+        </div>
+
+        <!-- MENSAGEM -->
+        <div class="message-box">
             <i class="fas fa-info-circle"></i>
             <span id="mensagemManutencao">O sistema está temporariamente indisponível para manutenção programada.</span>
         </div>
 
+        <!-- TIMER - ESTÁTICO -->
         <div class="timer">
             <i class="far fa-clock"></i>
             <span id="contador">Carregando...</span>
         </div>
 
-        <div style="margin-top: 30px;">
+        <!-- BOTÕES -->
+        <div class="buttons-container">
             <button class="btn" onclick="verificarNovamente()">
                 <i class="fas fa-sync-alt"></i> Verificar novamente
             </button>
@@ -59,33 +117,23 @@
             </button>
         </div>
 
-        <!-- COLE AQUI O LINK DO APP -->
-        <div style="margin-top: 20px;">
-            <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" target="_blank" style="
-                background: linear-gradient(135deg, #10b981, #059669);
-                color: white;
-                padding: 10px 25px;
-                border-radius: 30px;
-                text-decoration: none;
-                font-size: 0.9rem;
-                font-weight: 600;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                border: 2px solid white;
-                box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-                transition: all 0.3s;
-                margin: 5px;
-            ">
+        <!-- DOWNLOAD APP -->
+        <div class="download-app">
+            <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" target="_blank">
                 <i class="fas fa-download"></i> Baixar aplicativo oficial
             </a>
         </div>
 
-        <p style="font-size: 0.9rem; margin-top: 30px; opacity: 0.6;">
+        <!-- FOOTER -->
+        <div class="footer-text">
             <i class="far fa-clock"></i> Última verificação: <span id="ultimaVerificacao">agora</span>
-        </p>
+        </div>
+
     </div>
 
+    <!-- ================================================================
+    JAVASCRIPT - TODAS AS FUNÇÕES ORIGINAIS MANTIDAS
+    ================================================================ -->
     <script>
         // Função para buscar status do sistema
         async function verificarStatus() {
@@ -111,7 +159,7 @@
         function atualizarContador() {
             const contador = document.getElementById('contador');
             const dataLimite = new Date();
-            dataLimite.setHours(dataLimite.getHours() + 2); // Exemplo: previsão de 2 horas
+            dataLimite.setHours(dataLimite.getHours() + 2);
             
             const agora = new Date();
             const diff = dataLimite - agora;
@@ -155,256 +203,182 @@
                 new Date().toLocaleTimeString();
         }, 1000);
     </script>
-    <script src="https://kit.fontawesome.com/your-kit-id.js" crossorigin="anonymous"></script>
 
-            <!-- VLibras Oficial (PRIMEIRO) -->
+    <!-- VLibras Oficial -->
     <script src="js/vlibras-oficial.js"></script>
-    
-    <!-- Sistema de Acessibilidade (SEGUNDO) -->
     <script src="js/acessibilidade.js"></script>
-    
-    <!-- Chatbot -->
     <script src="js/chatbot-frontend.js"></script>
-
-        <!-- ===== MOBILE OPTIMIZATION ===== -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <link rel="stylesheet" href="css/mobile.css">
     <script src="js/toggle-buttons.js"></script>
-
-        <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
 
-        <script>
+    <!-- ============================================================
+    PULL-TO-REFRESH
+    ============================================================ -->
+    <script>
+        let touchStartY = 0;
+        let touchCurrentY = 0;
+        let isPulling = false;
+        const PULL_THRESHOLD = 200;
+        const TOP_TOLERANCE = 100;
 
-    // ============================================
-    // PULL-TO-REFRESH - MENOS SENSÍVEL (CORRIGIDO)
-    // ============================================
+        document.addEventListener('touchstart', function(e) {
+            if (window.scrollY <= TOP_TOLERANCE) {
+                touchStartY = e.touches[0].clientY;
+                isPulling = true;
+            }
+        }, { passive: true });
 
-    let touchStartY = 0;
-    let touchCurrentY = 0;
-    let isPulling = false;
-    const PULL_THRESHOLD = 600; // AUMENTADO para 200px (bem menos sensível)
-    const TOP_TOLERANCE = 100;    // Tolerância maior para considerar "topo"
-
-    document.addEventListener('touchstart', function(e) {
-        // Só ativa se estiver no topo da página (com tolerância)
-        if (window.scrollY <= TOP_TOLERANCE) {
-            touchStartY = e.touches[0].clientY;
-            isPulling = true;
-        }
-    }, { passive: true });
-
-    document.addEventListener('touchmove', function(e) {
-        if (!isPulling) return;
-        
-        touchCurrentY = e.touches[0].clientY;
-        const pullDistance = touchCurrentY - touchStartY;
-        
-        // Só considera movimento para BAIXO
-        if (pullDistance > 0) {
-            // NÃO bloqueia o scroll! (removido e.preventDefault)
-            
-            // Mostrar indicador visual apenas se passar de 50px
+        document.addEventListener('touchmove', function(e) {
+            if (!isPulling) return;
+            touchCurrentY = e.touches[0].clientY;
+            const pullDistance = touchCurrentY - touchStartY;
             if (pullDistance > 50) {
                 mostrarIndicadorPull(pullDistance);
             }
-            
-            // Se passou do limite MUITO MAIOR, atualiza
             if (pullDistance > PULL_THRESHOLD) {
-                // Agora sim bloqueia para não dar conflito
                 e.preventDefault();
                 atualizarPagina();
             }
+        }, { passive: false });
+
+        document.addEventListener('touchend', function(e) {
+            if (!isPulling) return;
+            const pullDistance = touchCurrentY - touchStartY;
+            if (pullDistance < PULL_THRESHOLD) {
+                esconderIndicadorPull();
+            }
+            isPulling = false;
+            touchStartY = 0;
+            touchCurrentY = 0;
+        }, { passive: true });
+
+        function atualizarPagina() {
+            mostrarMensagem('Atualizando página...');
+            document.body.style.opacity = '0.7';
+            document.body.style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                location.reload();
+            }, 500);
         }
-    }, { passive: true }); // MUDADO para passive: true (não bloqueia)
 
-    document.addEventListener('touchend', function(e) {
-        if (!isPulling) return;
-        
-        const pullDistance = touchCurrentY - touchStartY;
-        
-        // Se não passou do limite, apenas esconde o indicador
-        if (pullDistance < PULL_THRESHOLD) {
-            esconderIndicadorPull();
+        function mostrarIndicadorPull(distancia) {
+            let indicador = document.getElementById('pull-indicator');
+            if (!indicador) {
+                indicador = document.createElement('div');
+                indicador.id = 'pull-indicator';
+                indicador.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    background: #4f46e5;
+                    color: white;
+                    text-align: center;
+                    padding: 10px;
+                    font-size: 14px;
+                    z-index: 9999;
+                    transform: translateY(-100%);
+                    transition: transform 0.2s;
+                `;
+                indicador.innerHTML = '↓ Solte para atualizar';
+                document.body.appendChild(indicador);
+            }
+            if (distancia > 50) {
+                indicador.style.transform = 'translateY(0)';
+            }
         }
-        
-        isPulling = false;
-        touchStartY = 0;
-        touchCurrentY = 0;
-    }, { passive: true });
 
-    // Função para atualizar a página
-    function atualizarPagina() {
-        // Mostrar mensagem
-        mostrarMensagem('Atualizando página...');
-        
-        // Efeito visual
-        document.body.style.opacity = '0.7';
-        document.body.style.transition = 'opacity 0.3s';
-        
-        // Recarregar a página
-        setTimeout(() => {
-            location.reload();
-        }, 500);
-    }
+        function esconderIndicadorPull() {
+            const indicador = document.getElementById('pull-indicator');
+            if (indicador) {
+                indicador.style.transform = 'translateY(-100%)';
+            }
+        }
 
-    // Indicador visual simplificado
-    function mostrarIndicadorPull(distancia) {
-        let indicador = document.getElementById('pull-indicator');
-        
-        if (!indicador) {
-            indicador = document.createElement('div');
-            indicador.id = 'pull-indicator';
-            indicador.style.cssText = `
+        function mostrarMensagem(texto) {
+            const msg = document.createElement('div');
+            msg.style.cssText = `
                 position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                background: #4f46e5;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: #10b981;
                 color: white;
-                text-align: center;
-                padding: 10px;
-                font-size: 14px;
-                z-index: 9999;
-                transform: translateY(-100%);
-                transition: transform 0.2s;
+                padding: 15px 30px;
+                border-radius: 10px;
+                font-weight: bold;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             `;
-            indicador.innerHTML = '↓ Solte para atualizar';
-            document.body.appendChild(indicador);
+            msg.textContent = texto;
+            document.body.appendChild(msg);
+            setTimeout(() => msg.remove(), 1500);
         }
-        
-        // Mostrar conforme a distância
-        if (distancia > 50) {
-            indicador.style.transform = 'translateY(0)';
-        }
-    }
+    </script>
 
-    function esconderIndicadorPull() {
-        const indicador = document.getElementById('pull-indicator');
-        if (indicador) {
-            indicador.style.transform = 'translateY(-100%)';
-        }
-    }
+    <!-- ============================================================
+    ESCALONAMENTO MOBILE
+    ============================================================ -->
+    <script>
+        (function() {
+            if (window.innerWidth > 768) return;
+            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
 
-    function mostrarMensagem(texto) {
-        const msg = document.createElement('div');
-        msg.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #10b981;
-            color: white;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-weight: bold;
-            z-index: 10000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        `;
-        msg.textContent = texto;
-        document.body.appendChild(msg);
-        
-        setTimeout(() => msg.remove(), 1500);
-    }
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                if (width <= 320) return 0.55;
+                if (width <= 360) return 0.6;
+                if (width <= 400) return 0.65;
+                if (width <= 500) return 0.75;
+                if (width <= 600) return 0.85;
+                if (width <= 700) return 0.95;
+                return 1;
+            }
 
+            function aplicarEscalaMobile() {
+                if (window.innerWidth > 768) return;
+                const escala = calcularEscalaMobile();
+                document.documentElement.style.setProperty('--scale-ratio', escala);
+                document.documentElement.style.setProperty('--current-width', window.innerWidth);
+                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+            }
+
+            aplicarEscalaMobile();
+
+            let timeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    } else {
+                        document.documentElement.style.setProperty('--scale-ratio', '1');
+                    }
+                }, 100);
+            });
+
+            window.addEventListener('orientationchange', function() {
+                setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    }
+                }, 200);
+            });
+        })();
     </script>
 
     <script>
-// ============================================
-// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-// ============================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
 
-(function() {
-    // Só ativar em telas menores que 768px
-    if (window.innerWidth > 768) {
-        console.log('📐 Desktop detectado - escalonamento desativado');
-        return;
-    }
-    
-    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-    
-    // Função para calcular a escala baseada na largura (apenas mobile)
-    function calcularEscalaMobile() {
-        const width = window.innerWidth;
-        
-        // Largura de referência para mobile (768px)
-        const baseWidth = 768;
-        
-        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
-        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-        
-        // Ajustes específicos para faixas de tamanho
-        if (width <= 320) escala = 0.55;
-        else if (width <= 360) escala = 0.6;
-        else if (width <= 400) escala = 0.65;
-        else if (width <= 500) escala = 0.75;
-        else if (width <= 600) escala = 0.85;
-        else if (width <= 700) escala = 0.95;
-        else escala = 1;
-        
-        return escala;
-    }
-    
-    // Função para aplicar a escala
-    function aplicarEscalaMobile() {
-        // Só aplicar se ainda estiver em mobile
-        if (window.innerWidth > 768) return;
-        
-        const escala = calcularEscalaMobile();
-        
-        // Atualizar variável CSS
-        document.documentElement.style.setProperty('--scale-ratio', escala);
-        document.documentElement.style.setProperty('--current-width', window.innerWidth);
-        
-        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-    }
-    
-    // Aplicar inicial
-    aplicarEscalaMobile();
-    
-    // Aplicar ao redimensionar (com debounce)
-    let timeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // Verificar se ainda está em mobile
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            } else {
-                // Se passou para desktop, resetar escala
-                document.documentElement.style.setProperty('--scale-ratio', '1');
-                console.log('📐 Modo desktop - escala resetada');
-            }
-        }, 100);
-    });
-    
-    // Também aplicar quando orientação mudar
-    window.addEventListener('orientationchange', function() {
-        setTimeout(() => {
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            }
-        }, 200);
-    });
-    
-    console.log('✅ Sistema de escalonamento mobile ativo!');
-    
-})();
-</script>
+        window.addEventListener('online', () => console.log('🌐 Online'));
+        window.addEventListener('offline', () => console.log('📴 Offline'));
+    </script>
 
-<script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker ativo'))
-            .catch(err => console.log('❌ Erro:', err));
-    });
-}
-
-window.addEventListener('online', () => console.log('🌐 Online'));
-window.addEventListener('offline', () => console.log('📴 Offline'));
-</script>
-
-    
 </body>
 </html>

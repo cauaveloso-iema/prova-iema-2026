@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0ea5e9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Supervisão - Sistema de Provas">
+
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Supervisão - Sistema de Provas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Acessibilidade -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/push-client.js"></script>
+
+    <link rel="stylesheet" href="css/supervisao.css">
+
+    <!-- CSS DO AUTOCOMPLETE -->
+    <style>
+        /* ============================================
+           AUTOCOMPLETE DE ALUNO
+           ============================================ */
+        .autocomplete-aluno-wrapper {
+            position: relative;
+        }
+
+        .autocomplete-aluno-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #0ea5e9;
+            border-radius: 10px;
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            margin-top: 4px;
+        }
+
+        .autocomplete-aluno-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .autocomplete-aluno-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        .autocomplete-aluno-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+            transition: background 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .autocomplete-aluno-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-aluno-item:hover,
+        .autocomplete-aluno-item.selected {
+            background: #f0f9ff;
+        }
+
+        .autocomplete-aluno-item .aluno-nome {
+            font-weight: 600;
+            color: #1f2937;
+            flex: 1;
+        }
+
+        .autocomplete-aluno-item .aluno-nome mark {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 0 2px;
+            border-radius: 3px;
+            font-weight: 700;
+        }
+
+        .autocomplete-aluno-item .aluno-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .autocomplete-aluno-item .aluno-turma {
+            background: #e0f2fe;
+            color: #075985;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .autocomplete-aluno-item .aluno-matricula {
+            font-size: 10px;
+            color: #9ca3af;
+        }
+
+        .autocomplete-aluno-empty {
+            padding: 16px;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 13px;
+        }
+
+        .autocomplete-aluno-loading {
+            padding: 16px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .autocomplete-aluno-loading::before {
+            content: '';
+            width: 14px;
+            height: 14px;
+            border: 2px solid #e5e7eb;
+            border-top: 2px solid #0ea5e9;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header-top">
+            <div class="user-info-card">
+                <div class="user-avatar" id="userAvatar">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <div class="user-details">
+                    <div class="user-name" id="userName">Carregando...</div>
+                    <div class="user-role" id="userRole">Supervisão</div>
+                </div>
+            </div>
+            <div class="btn-actions">
+                <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" 
+                   target="_blank" class="btn-icon" style="
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    text-decoration: none;
+                    color: white;
+                    transition: all 0.3s;
+                    border: none;
+                    cursor: pointer;
+                " title="Baixar App">
+                    <i class="fas fa-download"></i>
+                </a>
+                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
+                    <i class="fas fa-user-edit"></i>
+                </button>
+                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Título -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-user-shield me-2"></i>
+                    Supervisão - Sistema de Provas
+                </div>
+                <div>
+                    <span id="dataAtual" class="badge bg-light text-dark"></span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Seletor de Modo -->
+        <div class="card">
+            <div class="card-body">
+                <div class="modo-selector">
+                    <button class="modo-btn active" id="modoAutomaticoBtn">
+                        <i class="fas fa-qrcode"></i> Automático (QR Code)
+                    </button>
+                    <button class="modo-btn" id="modoManualBtn">
+                        <i class="fas fa-users"></i> Manual (Selecionar Aluno)
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Abas -->
+        <div class="card">
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="atendimento-tab" data-bs-toggle="tab" data-bs-target="#atendimento" type="button" role="tab">
+                            <i class="fas fa-clipboard-list"></i> Atendimento
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="ativos-tab" data-bs-toggle="tab" data-bs-target="#ativos" type="button" role="tab">
+                            <i class="fas fa-clock"></i> Em Andamento
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard" type="button" role="tab">
+                            <i class="fas fa-chart-line"></i> Dashboard
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="relatorios-tab" data-bs-toggle="tab" data-bs-target="#relatorios" type="button" role="tab">
+                            <i class="fas fa-file-alt"></i> Relatórios
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content mt-3">
+                    <!-- ABA ATENDIMENTO -->
+                    <div class="tab-pane fade show active" id="atendimento" role="tabpanel">
+                        
+                        <!-- MODO AUTOMÁTICO (QR CODE) -->
+                        <div id="modoAutomatico">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">
+                                        <i class="fas fa-qrcode me-2"></i> Escanear QR Code do Aluno
+                                    </h5>
+                                    <div id="qr-reader-auto" class="qr-scanner-container"></div>
+                                    <div class="text-center mt-2">
+                                        <small class="text-muted">Aponte a câmera para o QR Code do aluno</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- MODO MANUAL (Selecionar Aluno por Turma) -->
+                        <div id="modoManual" style="display: none;">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">
+                                        <i class="fas fa-users me-2"></i> Selecionar Aluno por Turma
+                                    </h5>
+                                    <p class="text-muted mb-3">
+                                        <i class="fas fa-info-circle"></i> 
+                                        Selecione uma turma e clique no aluno para atendê-lo diretamente.
+                                    </p>
+                                    
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Turma</label>
+                                            <select id="filtroTurmaManual" class="form-select">
+                                                <option value="">Selecione uma turma...</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Buscar Aluno</label>
+                                            <input type="text" id="filtroBuscaManual" class="form-control" 
+                                                   placeholder="Digite o nome do aluno...">
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="listaAlunosManual" class="mt-3">
+                                        <div class="text-center py-3">
+                                            <div class="loading"></div>
+                                            <p>Selecione uma turma para ver os alunos</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Info do Aluno -->
+                        <div id="alunoInfo" style="display: none;">
+                            <div class="aluno-card">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                    <div class="d-flex flex-wrap align-items-center">
+                                        <img id="alunoFoto" class="aluno-foto" src="" alt="Foto">
+                                        <div class="info-aluno">
+                                            <h3 id="alunoNome" class="mb-1">-</h3>
+                                            <p class="mb-1 text-muted">
+                                                <i class="fas fa-id-card me-1"></i> Matrícula: <span id="alunoMatricula">-</span>
+                                            </p>
+                                            <p class="mb-1 text-muted">
+                                                <i class="fas fa-graduation-cap me-1"></i> Turma: <span id="alunoTurma">-</span>
+                                            </p>
+                                            <p class="mb-0 text-muted">
+                                                <i class="fas fa-book me-1"></i> Curso: <span id="alunoCurso">-</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="statusAtendimento" class="mt-3"></div>
+                                <div id="historicoRecente" class="mt-3"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Formulário -->
+                        <div id="formRegistro" class="form-container" style="display: none;">
+                            <h5><i class="fas fa-plus-circle"></i> Registrar Ocorrência</h5>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
+                                <div class="tipos-tarefa-grid">
+                                    <div class="tipo-card" data-tipo="advertencia_verbal" onclick="selecionarTipo('advertencia_verbal')">
+                                        <i class="fas fa-comment-dots"></i>
+                                        <span>Advertência Verbal</span>
+                                    </div>
+                                    <div class="tipo-card" data-tipo="advertencia_escrita" onclick="selecionarTipo('advertencia_escrita')">
+                                        <i class="fas fa-file-signature"></i>
+                                        <span>Advertência Escrita</span>
+                                    </div>
+                                    <div class="tipo-card" data-tipo="atendimento_aluno" onclick="selecionarTipo('atendimento_aluno')">
+                                        <i class="fas fa-user-graduate"></i>
+                                        <span>Atendimento Aluno</span>
+                                    </div>
+                                    <div class="tipo-card" data-tipo="atendimento_responsavel" onclick="selecionarTipo('atendimento_responsavel')">
+                                        <i class="fas fa-users"></i>
+                                        <span>Atendimento Responsável</span>
+                                    </div>
+                                    <div class="tipo-card" data-tipo="atendimento_professor" onclick="selecionarTipo('atendimento_professor')">
+                                        <i class="fas fa-chalkboard-teacher"></i>
+                                        <span>Atendimento Professor</span>
+                                    </div>
+                                    <div class="tipo-card" data-tipo="suspensao" onclick="selecionarTipo('suspensao')">
+                                        <i class="fas fa-ban"></i>
+                                        <span>Suspensão</span>
+                                    </div>
+                                    <div class="tipo-card" data-tipo="encaminhamento" onclick="selecionarTipo('encaminhamento')">
+                                        <i class="fas fa-share"></i>
+                                        <span>Encaminhamento</span>
+                                    </div>
+                                    <div class="tipo-card" data-tipo="outros" onclick="selecionarTipo('outros')">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                        <span>Outros</span>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="tipoTarefaSelecionado">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Descrição do Ocorrido <span class="text-danger">*</span></label>
+                                <textarea id="descricao" class="form-control" rows="3" 
+                                          placeholder="Descreva detalhadamente o ocorrido..."></textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Gravidade</label>
+                                    <select id="gravidade" class="form-select">
+                                        <option value="baixa">Baixa</option>
+                                        <option value="media" selected>Média</option>
+                                        <option value="alta">Alta</option>
+                                        <option value="critica">Crítica</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Prioridade</label>
+                                    <select id="prioridade" class="form-select">
+                                        <option value="baixa">Baixa</option>
+                                        <option value="normal" selected>Normal</option>
+                                        <option value="alta">Alta</option>
+                                        <option value="urgente">Urgente</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div id="camposEspecificos"></div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações Adicionais</label>
+                                <textarea id="observacoes" class="form-control" rows="2" 
+                                          placeholder="Informações complementares..."></textarea>
+                            </div>
+                            
+                            <div class="d-flex gap-2">
+                                <button class="btn-primary-custom" onclick="registrarOcorrencia()">
+                                    <i class="fas fa-check-circle me-2"></i> Registrar
+                                </button>
+                                <button class="btn-secondary-custom" onclick="limparTela()">
+                                    <i class="fas fa-times me-2"></i> Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ABA EM ANDAMENTO -->
+                    <div class="tab-pane fade" id="ativos" role="tabpanel">
+                        <div id="listaAtendimentosAtivos" class="list-group">
+                            <div class="text-center py-3">
+                                <div class="loading"></div>
+                                <p>Carregando...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ABA DASHBOARD -->
+                    <div class="tab-pane fade" id="dashboard" role="tabpanel">
+                        <div class="row mb-4">
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card">
+                                    <i class="fas fa-calendar-day fa-2x text-primary mb-2"></i>
+                                    <div class="metric-value" id="totalHoje">0</div>
+                                    <div class="metric-label">Hoje</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card">
+                                    <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+                                    <div class="metric-value" id="totalEmAndamento">0</div>
+                                    <div class="metric-label">Em Andamento</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card">
+                                    <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                    <div class="metric-value" id="totalFinalizadosHoje">0</div>
+                                    <div class="metric-label">Finalizados Hoje</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card">
+                                    <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
+                                    <div class="metric-value" id="totalGeral">0</div>
+                                    <div class="metric-label">Total Geral</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-chart-bar"></i> Por Tipo de Tarefa</h6>
+                                        <canvas id="chartTipos"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-chart-pie"></i> Por Gravidade</h6>
+                                        <canvas id="chartGravidade"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-chart-bar"></i> Atendimentos por Dia</h6>
+                                        <canvas id="chartAtendimentos"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-users"></i> Por Turma</h6>
+                                        <canvas id="chartTurmas"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-exclamation-triangle text-warning"></i> 
+                                    Alunos Reincidentes (2+ ocorrências)
+                                </h6>
+                                <div id="alunosReincidentes" class="mt-3">
+                                    <div class="text-center py-3">Carregando...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ABA RELATÓRIOS -->
+                    <div class="tab-pane fade" id="relatorios" role="tabpanel">
+                        <div class="relatorio-filtros">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Tipo de Relatório</label>
+                                    <select id="tipoRelatorio" class="form-select" onchange="toggleRelatorioFiltros()">
+                                        <option value="geral">Geral</option>
+                                        <option value="turma">Por Turma</option>
+                                        <option value="aluno">Por Aluno</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4" id="filtroTurmaDiv" style="display: none;">
+                                    <label class="form-label">Turma</label>
+                                    <select id="filtroTurma" class="form-select">
+                                        <option value="">Selecione...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4" id="filtroAlunoDiv" style="display: none;">
+                                    <label class="form-label">Aluno</label>
+                                    <div class="autocomplete-aluno-wrapper">
+                                        <input type="text" 
+                                               id="buscaAlunoRelatorio" 
+                                               class="form-control" 
+                                               placeholder="Digite o nome do aluno..."
+                                               autocomplete="off">
+                                        <input type="hidden" id="filtroAluno" value="">
+                                        <div id="autocompleteAlunoList" 
+                                             class="autocomplete-aluno-list" 
+                                             style="display: none;">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted mt-1 d-block" id="alunoSelecionadoInfo"></small>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Data Início</label>
+                                    <input type="date" id="dataInicio" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Data Fim</label>
+                                    <input type="date" id="dataFim" class="form-control">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button class="btn btn-primary w-100" onclick="carregarRelatorio()">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button class="btn btn-success w-100" onclick="exportarCSV()">
+                                        <i class="fas fa-file-csv"></i> CSV
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="resultadoRelatorio" class="mt-4">
+                            <div class="text-center py-5">
+                                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Selecione os filtros e clique em Buscar</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/supervisao.js"></script>
+
+    <!-- Sistema de Escalonamento Mobile -->
+    <script>
+        (function() {
+            if (window.innerWidth > 768) return;
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                if (width <= 320) return 0.55;
+                if (width <= 360) return 0.6;
+                if (width <= 400) return 0.65;
+                if (width <= 500) return 0.75;
+                if (width <= 600) return 0.85;
+                if (width <= 700) return 0.95;
+                return 1;
+            }
+            document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
+            let timeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
+                }, 100);
+            });
+        })();
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(reg => reg.unregister());
+            });
+            
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
+    </script>
+</body>
+</html>

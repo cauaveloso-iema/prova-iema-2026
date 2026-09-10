@@ -1043,3 +1043,82 @@ tr:hover td {
     font-size: 0.7rem;
     font-weight: 600;
 }
+
+/* ============================================ */
+/* BADGES DE PERFIS - NOVOS PERFIS              */
+/* ============================================ */
+
+/* Supervisão - Azul Escuro */
+.role-badge.supervisao { 
+    background: linear-gradient(135deg, #1e3a8a, #1e40af); 
+    color: white; 
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.supervisao i { 
+    color: white; 
+    margin-right: 4px;
+}
+
+/* Psicologia - Verde-Água / Teal */
+.role-badge.psicologia { 
+    background: linear-gradient(135deg, #14b8a6, #0d9488); 
+    color: white; 
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.psicologia i { 
+    color: white; 
+    margin-right: 4px;
+}
+
+/* Assistente Social - Violeta */
+.role-badge.assistente-social { 
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed); 
+    color: white; 
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.assistente-social i { 
+    color: white; 
+    margin-right: 4px;
+}
+
+/* Protagonismo - Laranja */
+.role-badge.protagonismo { 
+    background: linear-gradient(135deg, #f97316, #ea580c); 
+    color: white; 
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.protagonismo i { 
+    color: white; 
+    margin-right: 4px;
+}
+
+/* Super Admin - Roxo */
+.role-badge.super_admin {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.super_admin i {
+    color: white;
+    margin-right: 4px;
+}

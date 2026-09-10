@@ -1,27 +1,21 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-
-        <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d6efd">
+    <meta name="theme-color" content="#1e3c72">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Editar Perfil">
-
-    <!-- 🔥 FAVICON LOCAL -->
+    <meta name="apple-mobile-web-app-title" content="Gestão Geral">
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
-
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Gestão Geral - Controle de Rodízio de Refeições</title>
+    <title>Gestão Geral - Sistema de Provas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
-    <!-- Acessibilidade -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/toggle-buttons.js"></script>
@@ -29,37 +23,50 @@
     <script src="js/chatbot-frontend.js"></script>
     <script src="js/push-client.js"></script>
 
-    <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/gestao-geral.css">
 
+    <!-- CSS DO AUTOCOMPLETE -->
+    <style>
+        .autocomplete-aluno-wrapper { position: relative; }
+        .autocomplete-aluno-list {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: white; border: 2px solid #1e3c72; border-radius: 10px;
+            max-height: 280px; overflow-y: auto; z-index: 1000;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); margin-top: 4px;
+        }
+        .autocomplete-aluno-item {
+            padding: 10px 14px; cursor: pointer;
+            border-bottom: 1px solid #f3f4f6; transition: background 0.15s;
+            display: flex; justify-content: space-between; align-items: center; gap: 10px;
+        }
+        .autocomplete-aluno-item:last-child { border-bottom: none; }
+        .autocomplete-aluno-item:hover, .autocomplete-aluno-item.selected { background: #eff6ff; }
+        .autocomplete-aluno-item .aluno-nome { font-weight: 600; color: #1f2937; flex: 1; }
+        .autocomplete-aluno-item .aluno-nome mark { background: #fef3c7; color: #92400e; padding: 0 2px; border-radius: 3px; font-weight: 700; }
+        .autocomplete-aluno-item .aluno-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+        .autocomplete-aluno-item .aluno-turma { background: #dbeafe; color: #1e40af; font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; white-space: nowrap; }
+        .autocomplete-aluno-item .aluno-matricula { font-size: 10px; color: #9ca3af; }
+        .autocomplete-aluno-empty { padding: 16px; text-align: center; color: #9ca3af; font-size: 13px; }
+        .autocomplete-aluno-loading { padding: 16px; text-align: center; color: #6b7280; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .autocomplete-aluno-loading::before { content: ''; width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top: 2px solid #1e3c72; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header com informações do usuário e botões -->
+        <!-- Header -->
         <div class="header-top">
             <div class="user-info-card">
-                <div class="user-avatar" id="userAvatar">
-                    <i class="fas fa-user-tie"></i>
-                </div>
+                <div class="user-avatar" id="userAvatar"><i class="fas fa-user-tie"></i></div>
                 <div class="user-details">
                     <div class="user-name" id="userName">Carregando...</div>
                     <div class="user-role" id="userRole">Gestão Geral</div>
                 </div>
             </div>
             <div class="btn-actions">
-                <!-- LINK DO APP (antes do Editar Perfil) -->
-                <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" target="_blank" class="btn-icon" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    border-radius: 50%;
-                    width: 40px;
-                    height: 40px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    text-decoration: none;
-                    color: white;
-                    transition: all 0.3s;
-                " title="Baixar App">
+                <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" 
+                   target="_blank" class="btn-icon" 
+                   style="background: linear-gradient(135deg, #10b981, #059669); color: white;" 
+                   title="Baixar App">
                     <i class="fas fa-download"></i>
                 </a>
                 <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
@@ -71,79 +78,432 @@
             </div>
         </div>
         
-        <!-- Título da página -->
+        <!-- Título -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
-                    <i class="fas fa-calendar-alt me-2"></i>
-                    Controle de Rodízio de Refeições - Gestão Geral
+                    <i class="fas fa-user-tie me-2"></i>
+                    Gestão Geral - Sistema de Provas
                 </div>
-                <div>
-                    <span id="dataAtual" class="badge bg-light text-dark"></span>
-                </div>
+                <span id="dataAtual" class="badge bg-light text-dark"></span>
             </div>
         </div>
         
-        <!-- Cards de Estatísticas -->
-        <div class="stats-grid">
-            <div class="stat-card" onclick="carregarRodizios()">
-                <div class="stat-number" id="totalRodizios">0</div>
-                <div class="stat-label">Total de Rodízios</div>
-            </div>
-            <div class="stat-card" onclick="filtrarRodizios('ativos')">
-                <div class="stat-number" id="rodiziosAtivos">0</div>
-                <div class="stat-label">Rodízios Ativos</div>
-            </div>
-            <div class="stat-card" onclick="filtrarRodizios('inativos')">
-                <div class="stat-number" id="rodiziosInativos">0</div>
-                <div class="stat-label">Rodízios Inativos</div>
-            </div>
-            <div class="stat-card" onclick="mostrarTurmasSemRodizio()">
-                <div class="stat-number" id="turmasSemRodizio">0</div>
-                <div class="stat-label">Turmas sem Rodízio</div>
-            </div>
-        </div>
-        
-        <!-- Botão Novo Rodízio -->
+        <!-- Abas Principais -->
         <div class="card">
             <div class="card-body">
-                <button class="btn-primary btn-sm" onclick="abrirModalRodizio()">
-                    <i class="fas fa-plus"></i> Novo Rodízio
-                </button>
-                <button class="btn-success btn-sm ms-2" onclick="carregarRodizios()">
-                    <i class="fas fa-sync-alt"></i> Atualizar
-                </button>
-            </div>
-        </div>
-        
-        <!-- Tabela de Rodízios -->
-        <div class="card">
-            <div class="card-header">
-                <i class="fas fa-list me-2"></i> Rodízios Configurados
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Turma</th>
-                                <th>Tipo</th>
-                                <th>Dias Permitidos</th>
-                                <th>Horário</th>
-                                <th>Status</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabelaRodizios">
-                            <tr><td colspan="6" class="text-center py-5"><div class="loading-spinner"></div> Carregando...</td></tr>
-                        </tbody>
-                    </table>
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" id="aba-rodizios" data-bs-toggle="tab" data-bs-target="#tab-rodizios" type="button">
+                            <i class="fas fa-calendar-alt"></i> Rodízios de Refeições
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-atrasos" data-bs-toggle="tab" data-bs-target="#tab-atrasos" type="button">
+                            <i class="fas fa-clock"></i> Atrasos
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content mt-3">
+                    <!-- ================================
+                         ABA RODÍZIOS
+                    ================================ -->
+                    <div class="tab-pane fade show active" id="tab-rodizios">
+                        <!-- Stats -->
+                        <div class="stats-grid">
+                            <div class="stat-card" onclick="carregarRodizios()">
+                                <div class="stat-number" id="totalRodizios">0</div>
+                                <div class="stat-label">Total de Rodízios</div>
+                            </div>
+                            <div class="stat-card" onclick="filtrarRodizios('ativos')">
+                                <div class="stat-number" id="rodiziosAtivos">0</div>
+                                <div class="stat-label">Rodízios Ativos</div>
+                            </div>
+                            <div class="stat-card" onclick="filtrarRodizios('inativos')">
+                                <div class="stat-number" id="rodiziosInativos">0</div>
+                                <div class="stat-label">Rodízios Inativos</div>
+                            </div>
+                            <div class="stat-card" onclick="mostrarTurmasSemRodizio()">
+                                <div class="stat-number" id="turmasSemRodizio">0</div>
+                                <div class="stat-label">Turmas sem Rodízio</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Botões -->
+                        <div class="card">
+                            <div class="card-body">
+                                <button class="btn-primary btn-sm" onclick="abrirModalRodizio()">
+                                    <i class="fas fa-plus"></i> Novo Rodízio
+                                </button>
+                                <button class="btn-success btn-sm ms-2" onclick="carregarRodizios()">
+                                    <i class="fas fa-sync-alt"></i> Atualizar
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabela -->
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fas fa-list me-2"></i> Rodízios Configurados
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Turma</th>
+                                                <th>Tipo</th>
+                                                <th>Dias Permitidos</th>
+                                                <th>Horário</th>
+                                                <th>Status</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabelaRodizios">
+                                            <tr><td colspan="6" class="text-center py-5">
+                                                <div class="loading-spinner"></div> Carregando...
+                                            </td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ================================
+                         ABA ATRASOS
+                    ================================ -->
+                    <div class="tab-pane fade" id="tab-atrasos">
+                        <!-- Seletor de Modo -->
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="modo-selector">
+                                    <button class="modo-btn active" id="modoAutomaticoBtn">
+                                        <i class="fas fa-qrcode"></i> Automático (QR Code)
+                                    </button>
+                                    <button class="modo-btn" id="modoManualBtn">
+                                        <i class="fas fa-users"></i> Manual (Selecionar Aluno)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sub-abas de atrasos -->
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link active" id="atraso-registrar-tab" data-bs-toggle="tab" data-bs-target="#atraso-registrar" type="button">
+                                    <i class="fas fa-plus-circle"></i> Registrar Atraso
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" id="atraso-dashboard-tab" data-bs-toggle="tab" data-bs-target="#atraso-dashboard" type="button">
+                                    <i class="fas fa-chart-line"></i> Dashboard
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" id="atraso-relatorios-tab" data-bs-toggle="tab" data-bs-target="#atraso-relatorios" type="button">
+                                    <i class="fas fa-file-alt"></i> Relatórios
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content">
+                            <!-- SUB-ABA REGISTRAR ATRASO -->
+                            <div class="tab-pane fade show active" id="atraso-registrar">
+                                <!-- MODO AUTOMÁTICO -->
+                                <div id="modoAutomatico">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h5 class="card-title">
+                                                <i class="fas fa-qrcode me-2"></i> Escanear QR Code do Aluno
+                                            </h5>
+                                            <div id="qr-reader-auto" class="qr-scanner-container"></div>
+                                            <div class="text-center mt-2">
+                                                <small class="text-muted">Aponte a câmera para o QR Code do aluno</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- MODO MANUAL -->
+                                <div id="modoManual" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h5 class="card-title">
+                                                <i class="fas fa-users me-2"></i> Selecionar Aluno por Turma
+                                            </h5>
+                                            <p class="text-muted mb-3">
+                                                <i class="fas fa-info-circle"></i> 
+                                                Selecione uma turma e clique no aluno para registrar o atraso.
+                                            </p>
+                                            
+                                            <div class="row g-3 mb-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Turma</label>
+                                                    <select id="filtroTurmaManual" class="form-select">
+                                                        <option value="">Selecione uma turma...</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Buscar Aluno</label>
+                                                    <input type="text" id="filtroBuscaManual" class="form-control" 
+                                                           placeholder="Digite o nome do aluno...">
+                                                </div>
+                                            </div>
+                                            
+                                            <div id="listaAlunosManual" class="mt-3">
+                                                <div class="text-center py-3">
+                                                    <div class="loading-spinner"></div>
+                                                    <p>Selecione uma turma para ver os alunos</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Info do Aluno -->
+                                <div id="alunoInfo" style="display: none;">
+                                    <div class="aluno-card">
+                                        <div class="d-flex flex-wrap align-items-center">
+                                            <img id="alunoFoto" class="aluno-foto" src="" alt="Foto">
+                                            <div class="info-aluno">
+                                                <h3 id="alunoNome" class="mb-1">-</h3>
+                                                <p class="mb-1 text-muted">
+                                                    <i class="fas fa-id-card me-1"></i> Matrícula: <span id="alunoMatricula">-</span>
+                                                </p>
+                                                <p class="mb-1 text-muted">
+                                                    <i class="fas fa-graduation-cap me-1"></i> Turma: <span id="alunoTurma">-</span>
+                                                </p>
+                                                <p class="mb-0 text-muted">
+                                                    <i class="fas fa-book me-1"></i> Curso: <span id="alunoCurso">-</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div id="statusAluno" class="mt-3"></div>
+                                        <div id="historicoRecente" class="mt-3"></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Formulário de Registro -->
+                                <div id="formRegistro" class="form-container" style="display: none;">
+                                    <h5><i class="fas fa-clock"></i> Registrar Atraso</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Motivo do Atraso <span class="text-danger">*</span></label>
+                                        <div class="tipos-tarefa-grid">
+                                            <div class="tipo-card" data-tipo="onibus" onclick="selecionarMotivo('onibus')">
+                                                <i class="fas fa-bus"></i>
+                                                <span>Ônibus</span>
+                                            </div>
+                                            <div class="tipo-card" data-tipo="transito" onclick="selecionarMotivo('transito')">
+                                                <i class="fas fa-car"></i>
+                                                <span>Trânsito</span>
+                                            </div>
+                                            <div class="tipo-card" data-tipo="problemas_pessoais" onclick="selecionarMotivo('problemas_pessoais')">
+                                                <i class="fas fa-user-injured"></i>
+                                                <span>Problemas Pessoais</span>
+                                            </div>
+                                            <div class="tipo-card" data-tipo="fardamento" onclick="selecionarMotivo('fardamento')">
+                                                <i class="fas fa-tshirt"></i>
+                                                <span>Fardamento</span>
+                                            </div>
+                                            <div class="tipo-card" data-tipo="outros" onclick="selecionarMotivo('outros')">
+                                                <i class="fas fa-ellipsis-h"></i>
+                                                <span>Outros</span>
+                                            </div>
+                                        </div>
+                                        <input type="hidden" id="motivoSelecionado">
+                                    </div>
+                                    
+                                    <div id="campoOutros" style="display: none;">
+                                        <div class="mb-3">
+                                            <label class="form-label">Especifique o Motivo <span class="text-danger">*</span></label>
+                                            <input type="text" id="motivoOutrosTexto" class="form-control" 
+                                                   placeholder="Descreva o motivo do atraso...">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Descrição do Ocorrido <span class="text-danger">*</span></label>
+                                        <textarea id="descricao" class="form-control" rows="3" 
+                                                  placeholder="Descreva detalhadamente o que aconteceu..."></textarea>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Horário Previsto</label>
+                                            <input type="time" id="horarioPrevisto" class="form-control">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Horário de Chegada</label>
+                                            <input type="time" id="horarioChegada" class="form-control">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Observações Adicionais</label>
+                                        <textarea id="observacoes" class="form-control" rows="2" 
+                                                  placeholder="Informações complementares..."></textarea>
+                                    </div>
+                                    
+                                    <div class="d-flex gap-2">
+                                        <button class="btn-primary-custom" onclick="registrarAtraso()">
+                                            <i class="fas fa-check-circle me-2"></i> Registrar Atraso
+                                        </button>
+                                        <button class="btn-secondary-custom" onclick="limparTela()">
+                                            <i class="fas fa-times me-2"></i> Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- SUB-ABA DASHBOARD -->
+                            <div class="tab-pane fade" id="atraso-dashboard">
+                                <div class="row mb-4">
+                                    <div class="col-md-3 mb-3">
+                                        <div class="metric-card">
+                                            <i class="fas fa-calendar-day fa-2x text-primary mb-2"></i>
+                                            <div class="metric-value" id="totalHoje">0</div>
+                                            <div class="metric-label">Hoje</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="metric-card">
+                                            <i class="fas fa-calendar-week fa-2x text-success mb-2"></i>
+                                            <div class="metric-value" id="totalSemana">0</div>
+                                            <div class="metric-label">Esta Semana</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="metric-card">
+                                            <i class="fas fa-calendar-alt fa-2x text-info mb-2"></i>
+                                            <div class="metric-value" id="totalMes">0</div>
+                                            <div class="metric-label">Este Mês</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="metric-card">
+                                            <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
+                                            <div class="metric-value" id="totalGeral">0</div>
+                                            <div class="metric-label">Total Geral</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <h6 class="card-title"><i class="fas fa-chart-pie"></i> Por Motivo</h6>
+                                                <canvas id="chartMotivos"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <h6 class="card-title"><i class="fas fa-chart-bar"></i> Atendimentos por Dia</h6>
+                                                <canvas id="chartAtrasos"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <h6 class="card-title"><i class="fas fa-users"></i> Por Turma</h6>
+                                                <canvas id="chartTurmas"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <i class="fas fa-exclamation-triangle text-warning"></i> 
+                                                    Alunos Reincidentes (3+ atrasos)
+                                                </h6>
+                                                <div id="alunosReincidentes" class="mt-3">
+                                                    <div class="text-center py-3">Carregando...</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- SUB-ABA RELATÓRIOS -->
+                            <div class="tab-pane fade" id="atraso-relatorios">
+                                <div class="relatorio-filtros">
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label">Tipo de Relatório</label>
+                                            <select id="tipoRelatorio" class="form-select" onchange="toggleRelatorioFiltros()">
+                                                <option value="geral">Geral</option>
+                                                <option value="turma">Por Turma</option>
+                                                <option value="aluno">Por Aluno</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4" id="filtroTurmaDiv" style="display: none;">
+                                            <label class="form-label">Turma</label>
+                                            <select id="filtroTurma" class="form-select">
+                                                <option value="">Selecione...</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4" id="filtroAlunoDiv" style="display: none;">
+                                            <label class="form-label">Aluno</label>
+                                            <div class="autocomplete-aluno-wrapper">
+                                                <input type="text" 
+                                                       id="buscaAlunoRelatorio" 
+                                                       class="form-control" 
+                                                       placeholder="Digite o nome do aluno..."
+                                                       autocomplete="off">
+                                                <input type="hidden" id="filtroAluno" value="">
+                                                <div id="autocompleteAlunoList" 
+                                                     class="autocomplete-aluno-list" 
+                                                     style="display: none;">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted mt-1 d-block" id="alunoSelecionadoInfo"></small>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">Data Início</label>
+                                            <input type="date" id="dataInicio" class="form-control">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">Data Fim</label>
+                                            <input type="date" id="dataFim" class="form-control">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label">&nbsp;</label>
+                                            <button class="btn btn-primary w-100" onclick="carregarRelatorio()">
+                                                <i class="fas fa-search"></i> Buscar
+                                            </button>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label">&nbsp;</label>
+                                            <button class="btn btn-success w-100" onclick="exportarCSV()">
+                                                <i class="fas fa-file-csv"></i> CSV
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="resultadoRelatorio" class="mt-4">
+                                    <div class="text-center py-5">
+                                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted">Selecione os filtros e clique em Buscar</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Modal de Edição/Criação de Rodízio -->
+    <!-- Modal Rodízio -->
     <div class="modal fade" id="modalRodizio" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -159,7 +519,6 @@
                                 <option value="">Selecione uma turma...</option>
                             </select>
                         </div>
-                        
                         <div class="mb-3">
                             <label class="form-label">Tipo de Rodízio</label>
                             <select id="rodizioTipo" class="form-select" onchange="toggleTipoRodizio()">
@@ -168,111 +527,60 @@
                                 <option value="ambos">🔄 Ambos</option>
                             </select>
                         </div>
-                        
                         <div id="diasSemanaDiv" class="mb-3">
-                            <label class="form-label">Dias da Semana que podem almoçar</label>
+                            <label class="form-label">Dias da Semana</label>
                             <div class="row">
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="1" id="diaSegunda">
-                                        <label class="form-check-label">Segunda-feira</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="2" id="diaTerca">
-                                        <label class="form-check-label">Terça-feira</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="3" id="diaQuarta">
-                                        <label class="form-check-label">Quarta-feira</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="4" id="diaQuinta">
-                                        <label class="form-check-label">Quinta-feira</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="5" id="diaSexta">
-                                        <label class="form-check-label">Sexta-feira</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="6" id="diaSabado">
-                                        <label class="form-check-label">Sábado</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="0" id="diaDomingo">
-                                        <label class="form-check-label">Domingo</label>
-                                    </div>
-                                </div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="1" id="diaSegunda">
+                                    <label class="form-check-label">Segunda</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="2" id="diaTerca">
+                                    <label class="form-check-label">Terça</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="3" id="diaQuarta">
+                                    <label class="form-check-label">Quarta</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="4" id="diaQuinta">
+                                    <label class="form-check-label">Quinta</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="5" id="diaSexta">
+                                    <label class="form-check-label">Sexta</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="6" id="diaSabado">
+                                    <label class="form-check-label">Sábado</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="0" id="diaDomingo">
+                                    <label class="form-check-label">Domingo</label>
+                                </div></div>
                             </div>
                         </div>
-                        
-                        <div id="diasMesDiv" class="mb-3" style="display: none;">
-                            <label class="form-label">Dias do Mês que podem almoçar</label>
-                            <div class="row">
-                                <div class="col-md-4 mb-2">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="1" id="diaMes1">
-                                        <label class="form-check-label">Dia 1</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-4 mb-2">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="2" id="diaMes2">
-                                        <label class="form-check-label">Dia 2</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-4 mb-2">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="3" id="diaMes3">
-                                        <label class="form-check-label">Dia 3</label>
-                                    </div>
-                                </div>
-                                <!-- Continue até 31 -->
-                            </div>
-                            <small class="text-muted">Selecione os dias específicos do mês</small>
-                        </div>
-                        
                         <div id="semanasMesDiv" class="mb-3" style="display: none;">
-                            <label class="form-label">Semanas do Mês que podem almoçar</label>
+                            <label class="form-label">Semanas do Mês</label>
                             <div class="row">
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="1" id="semana1">
-                                        <label class="form-check-label">1ª Semana</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="2" id="semana2">
-                                        <label class="form-check-label">2ª Semana</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="3" id="semana3">
-                                        <label class="form-check-label">3ª Semana</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" value="4" id="semana4">
-                                        <label class="form-check-label">4ª Semana</label>
-                                    </div>
-                                </div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="1" id="semana1">
+                                    <label class="form-check-label">1ª Semana</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="2" id="semana2">
+                                    <label class="form-check-label">2ª Semana</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="3" id="semana3">
+                                    <label class="form-check-label">3ª Semana</label>
+                                </div></div>
+                                <div class="col-md-3"><div class="form-check">
+                                    <input type="checkbox" class="form-check-input" value="4" id="semana4">
+                                    <label class="form-check-label">4ª Semana</label>
+                                </div></div>
                             </div>
                         </div>
-                        
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">Horário de Início</label>
@@ -283,17 +591,16 @@
                                 <input type="time" id="rodizioHorarioFim" class="form-control" value="13:00">
                             </div>
                         </div>
-                        
                         <div class="mb-3">
                             <div class="form-check">
                                 <input type="checkbox" id="rodizioAtivo" class="form-check-input" checked>
                                 <label class="form-check-label">Rodízio Ativo</label>
                             </div>
                         </div>
-                        
                         <div class="mb-3">
                             <label class="form-label">Descrição (opcional)</label>
-                            <textarea id="rodizioDescricao" class="form-control" rows="2" placeholder="Informações adicionais sobre o rodízio..."></textarea>
+                            <textarea id="rodizioDescricao" class="form-control" rows="2" 
+                                      placeholder="Informações adicionais sobre o rodízio..."></textarea>
                         </div>
                     </form>
                 </div>
@@ -306,447 +613,44 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // ============================================
-        // GESTÃO GERAL - CONTROLE DE RODÍZIO
-        // ============================================
-        
-        let token = localStorage.getItem('auth_token');
-        let userData = {};
-        let modalRodizio = null;
-        let rodizioEditando = null;
-        
-        // Inicialização
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (!token) { window.location.href = '/login.html'; return; }
-            
-            userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-            if (userData.role !== 'gestao_geral' && userData.role !== 'super_admin' && userData.role !== 'admin') {
-                alert('Acesso negado.');
-                window.location.href = '/login.html';
-                return;
-            }
-            
-            document.getElementById('userName').textContent = userData.nome || 'Gestão Geral';
-            document.getElementById('dataAtual').textContent = new Date().toLocaleDateString('pt-BR');
-            
-            await carregarFotoPerfil();
-            await carregarRodizios();
-            
-            modalRodizio = new bootstrap.Modal(document.getElementById('modalRodizio'));
-        });
-        
-        async function carregarFotoPerfil() {
-            try {
-                const response = await fetch('/api/perfil/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
-                
-                if (data.success && data.perfil && data.perfil.fotoPerfil) {
-                    const avatarDiv = document.getElementById('userAvatar');
-                    if (avatarDiv) {
-                        avatarDiv.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto de perfil">`;
-                    }
-                }
-            } catch (error) {
-                console.error('Erro ao carregar foto:', error);
-            }
-        }
-        
-        async function carregarRodizios() {
-            try {
-                const response = await fetch('/api/gestao-geral/rodizios', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    window.rodiziosData = data.rodizios;
-                    window.todasTurmas = data.todasTurmas;
-                    
-                    // Atualizar estatísticas
-                    const ativos = data.rodizios.filter(r => r.ativo).length;
-                    const inativos = data.rodizios.length - ativos;
-                    const turmasComRodizio = new Set(data.rodizios.map(r => r.turma));
-                    const turmasSem = data.todasTurmas.filter(t => !turmasComRodizio.has(t));
-                    
-                    document.getElementById('totalRodizios').textContent = data.rodizios.length;
-                    document.getElementById('rodiziosAtivos').textContent = ativos;
-                    document.getElementById('rodiziosInativos').textContent = inativos;
-                    document.getElementById('turmasSemRodizio').textContent = turmasSem.length;
-                    
-                    // Preencher tabela
-                    renderizarTabela(data.rodizios);
-                }
-            } catch (error) {
-                console.error('Erro:', error);
-                document.getElementById('tabelaRodizios').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Erro ao carregar rodízios</td></tr>';
-            }
-        }
-        
-        function renderizarTabela(rodizios) {
-            const tbody = document.getElementById('tabelaRodizios');
-            
-            if (!rodizios || rodizios.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5">Nenhum rodízio configurado</td></tr>';
-                return;
-            }
-            
-            const diasSemanaNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-            
-            let html = '';
-            rodizios.forEach(r => {
-                let diasTexto = '';
-                if (r.tipoRodizio === 'semanal' || r.tipoRodizio === 'ambos') {
-                    diasTexto = r.diasSemana.map(d => diasSemanaNomes[d]).join(', ');
-                }
-                if (r.tipoRodizio === 'mensal' || r.tipoRodizio === 'ambos') {
-                    if (diasTexto) diasTexto += ' | ';
-                    if (r.diasMes && r.diasMes.length > 0) {
-                        diasTexto += `Dias: ${r.diasMes.join(', ')}`;
-                    }
-                    if (r.semanasMes && r.semanasMes.length > 0) {
-                        if (diasTexto && !diasTexto.includes('Dias:')) diasTexto += ' | ';
-                        diasTexto += `Semanas: ${r.semanasMes.map(s => `${s}ª`).join(', ')}`;
-                    }
-                }
-                
-                html += `
-                    <tr>
-                        <td><strong>${r.turma}</strong></td>
-                        <td>
-                            <span class="badge ${r.tipoRodizio === 'semanal' ? 'bg-info' : r.tipoRodizio === 'mensal' ? 'bg-warning' : 'bg-primary'}">
-                                ${r.tipoRodizio === 'semanal' ? '📅 Semanal' : r.tipoRodizio === 'mensal' ? '📆 Mensal' : '🔄 Ambos'}
-                            </span>
-                        </td>
-                        <td style="max-width: 300px;">${diasTexto || '-'}</td>
-                        <td>${r.horarioInicio} - ${r.horarioFim}</td>
-                        <td>
-                            <span class="status-badge ${r.ativo ? 'status-ativo' : 'status-inativo'}">
-                                ${r.ativo ? 'Ativo' : 'Inativo'}
-                            </span>
-                        </td>
-                        <td>
-                            <button class="btn-warning btn-sm" onclick="editarRodizio('${r.turma}')">
-                                <i class="fas fa-edit"></i> Editar
-                            </button>
-                            <button class="btn-danger btn-sm ms-1" onclick="excluirRodizio('${r.turma}')">
-                                <i class="fas fa-trash"></i> Excluir
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            tbody.innerHTML = html;
-        }
-        
-        async function abrirModalRodizio(turma = null) {
-            rodizioEditando = turma;
-            
-            // Carregar turmas para o select
-            const selectTurma = document.getElementById('rodizioTurma');
-            selectTurma.innerHTML = '<option value="">Selecione uma turma...</option>';
-            
-            if (window.todasTurmas) {
-                window.todasTurmas.forEach(t => {
-                    selectTurma.innerHTML += `<option value="${t}">${t}</option>`;
-                });
-            }
-            
-            // Se estiver editando, carregar dados
-            if (turma) {
-                try {
-                    const response = await fetch(`/api/gestao-geral/rodizios/${turma}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    const data = await response.json();
-                    
-                    if (data.success && data.rodizio) {
-                        const r = data.rodizio;
-                        
-                        selectTurma.value = r.turma;
-                        selectTurma.disabled = true;
-                        
-                        document.getElementById('rodizioTipo').value = r.tipoRodizio;
-                        toggleTipoRodizio();
-                        
-                        // Marcar dias da semana
-                        if (r.diasSemana) {
-                            document.getElementById('diaDomingo').checked = r.diasSemana.includes(0);
-                            document.getElementById('diaSegunda').checked = r.diasSemana.includes(1);
-                            document.getElementById('diaTerca').checked = r.diasSemana.includes(2);
-                            document.getElementById('diaQuarta').checked = r.diasSemana.includes(3);
-                            document.getElementById('diaQuinta').checked = r.diasSemana.includes(4);
-                            document.getElementById('diaSexta').checked = r.diasSemana.includes(5);
-                            document.getElementById('diaSabado').checked = r.diasSemana.includes(6);
-                        }
-                        
-                        // Marcar dias do mês
-                        if (r.diasMes) {
-                            for (let i = 1; i <= 31; i++) {
-                                const cb = document.getElementById(`diaMes${i}`);
-                                if (cb) cb.checked = r.diasMes.includes(i);
-                            }
-                        }
-                        
-                        // Marcar semanas
-                        if (r.semanasMes) {
-                            document.getElementById('semana1').checked = r.semanasMes.includes(1);
-                            document.getElementById('semana2').checked = r.semanasMes.includes(2);
-                            document.getElementById('semana3').checked = r.semanasMes.includes(3);
-                            document.getElementById('semana4').checked = r.semanasMes.includes(4);
-                        }
-                        
-                        document.getElementById('rodizioHorarioInicio').value = r.horarioInicio || '11:00';
-                        document.getElementById('rodizioHorarioFim').value = r.horarioFim || '13:00';
-                        document.getElementById('rodizioAtivo').checked = r.ativo;
-                        document.getElementById('rodizioDescricao').value = r.descricao || '';
-                    }
-                } catch (error) {
-                    console.error('Erro ao carregar rodízio:', error);
-                }
-            } else {
-                selectTurma.disabled = false;
-                // Resetar formulário
-                document.getElementById('rodizioTipo').value = 'semanal';
-                toggleTipoRodizio();
-                document.getElementById('rodizioHorarioInicio').value = '11:00';
-                document.getElementById('rodizioHorarioFim').value = '13:00';
-                document.getElementById('rodizioAtivo').checked = true;
-                document.getElementById('rodizioDescricao').value = '';
-                
-                // Desmarcar todos os dias
-                document.querySelectorAll('#diasSemanaDiv input[type="checkbox"]').forEach(cb => cb.checked = false);
-                document.querySelectorAll('#diasMesDiv input[type="checkbox"]').forEach(cb => cb.checked = false);
-                document.querySelectorAll('#semanasMesDiv input[type="checkbox"]').forEach(cb => cb.checked = false);
-            }
-            
-            modalRodizio.show();
-        }
-        
-        function toggleTipoRodizio() {
-            const tipo = document.getElementById('rodizioTipo').value;
-            
-            document.getElementById('diasSemanaDiv').style.display = (tipo === 'semanal' || tipo === 'ambos') ? 'block' : 'none';
-            document.getElementById('diasMesDiv').style.display = (tipo === 'mensal' || tipo === 'ambos') ? 'block' : 'none';
-            document.getElementById('semanasMesDiv').style.display = (tipo === 'mensal' || tipo === 'ambos') ? 'block' : 'none';
-        }
-        
-        async function salvarRodizio() {
-            const turma = document.getElementById('rodizioTurma').value;
-            if (!turma) {
-                alert('Selecione uma turma');
-                return;
-            }
-            
-            const tipoRodizio = document.getElementById('rodizioTipo').value;
-            
-            // Coletar dias da semana
-            const diasSemana = [];
-            if (document.getElementById('diaDomingo').checked) diasSemana.push(0);
-            if (document.getElementById('diaSegunda').checked) diasSemana.push(1);
-            if (document.getElementById('diaTerca').checked) diasSemana.push(2);
-            if (document.getElementById('diaQuarta').checked) diasSemana.push(3);
-            if (document.getElementById('diaQuinta').checked) diasSemana.push(4);
-            if (document.getElementById('diaSexta').checked) diasSemana.push(5);
-            if (document.getElementById('diaSabado').checked) diasSemana.push(6);
-            
-            // Coletar dias do mês
-            const diasMes = [];
-            for (let i = 1; i <= 31; i++) {
-                const cb = document.getElementById(`diaMes${i}`);
-                if (cb && cb.checked) diasMes.push(i);
-            }
-            
-            // Coletar semanas
-            const semanasMes = [];
-            if (document.getElementById('semana1').checked) semanasMes.push(1);
-            if (document.getElementById('semana2').checked) semanasMes.push(2);
-            if (document.getElementById('semana3').checked) semanasMes.push(3);
-            if (document.getElementById('semana4').checked) semanasMes.push(4);
-            
-            const dados = {
-                turma,
-                tipoRodizio,
-                diasSemana,
-                diasMes,
-                semanasMes,
-                horarioInicio: document.getElementById('rodizioHorarioInicio').value,
-                horarioFim: document.getElementById('rodizioHorarioFim').value,
-                ativo: document.getElementById('rodizioAtivo').checked,
-                descricao: document.getElementById('rodizioDescricao').value
-            };
-            
-            try {
-                const response = await fetch('/api/gestao-geral/rodizios', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(dados)
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Rodízio salvo com sucesso!');
-                    modalRodizio.hide();
-                    await carregarRodizios();
-                } else {
-                    alert('❌ Erro: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Erro:', error);
-                alert('Erro ao salvar rodízio');
-            }
-        }
-        
-        function editarRodizio(turma) {
-            abrirModalRodizio(turma);
-        }
-        
-        async function excluirRodizio(turma) {
-            if (!confirm(`Excluir rodízio da turma ${turma}?`)) return;
-            
-            try {
-                const response = await fetch(`/api/gestao-geral/rodizios/${turma}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Rodízio excluído!');
-                    await carregarRodizios();
-                } else {
-                    alert('❌ Erro: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Erro:', error);
-                alert('Erro ao excluir rodízio');
-            }
-        }
-        
-        function filtrarRodizios(tipo) {
-            if (!window.rodiziosData) return;
-            
-            let filtrados = window.rodiziosData;
-            if (tipo === 'ativos') filtrados = filtrados.filter(r => r.ativo);
-            if (tipo === 'inativos') filtrados = filtrados.filter(r => !r.ativo);
-            
-            renderizarTabela(filtrados);
-        }
-        
-        function mostrarTurmasSemRodizio() {
-            if (!window.todasTurmas || !window.rodiziosData) return;
-            
-            const turmasComRodizio = new Set(window.rodiziosData.map(r => r.turma));
-            const turmasSem = window.todasTurmas.filter(t => !turmasComRodizio.has(t));
-            
-            if (turmasSem.length === 0) {
-                alert('✅ Todas as turmas já possuem rodízio configurado!');
-            } else {
-                alert(`📋 Turmas sem rodízio:\n\n${turmasSem.join('\n')}\n\nTotal: ${turmasSem.length} turmas`);
-            }
-        }
-        
-        function logout() {
-            if (confirm('Tem certeza que deseja sair do sistema?')) {
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('user_data');
-                window.location.href = '/login.html';
-            }
-        }
-        
-        window.abrirModalRodizio = abrirModalRodizio;
-        window.editarRodizio = editarRodizio;
-        window.excluirRodizio = excluirRodizio;
-        window.filtrarRodizios = filtrarRodizios;
-        window.mostrarTurmasSemRodizio = mostrarTurmasSemRodizio;
-        window.carregarRodizios = carregarRodizios;
-        window.salvarRodizio = salvarRodizio;
-        window.toggleTipoRodizio = toggleTipoRodizio;
-        window.logout = logout;
-    </script>
+    <script src="js/gestao-geral-rodizio.js"></script>
+    <script src="js/gestao-geral.js"></script>
 
-        <script>
-        // ============================================
-        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-        // ============================================
+    <script>
         (function() {
-            if (window.innerWidth > 768) {
-                console.log('📐 Desktop detectado - escalonamento desativado');
-                return;
-            }
-            
-            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-            
+            if (window.innerWidth > 768) return;
             function calcularEscalaMobile() {
                 const width = window.innerWidth;
-                const baseWidth = 768;
-                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-                
-                if (width <= 320) escala = 0.55;
-                else if (width <= 360) escala = 0.6;
-                else if (width <= 400) escala = 0.65;
-                else if (width <= 500) escala = 0.75;
-                else if (width <= 600) escala = 0.85;
-                else if (width <= 700) escala = 0.95;
-                else escala = 1;
-                
-                return escala;
+                if (width <= 320) return 0.55;
+                if (width <= 360) return 0.6;
+                if (width <= 400) return 0.65;
+                if (width <= 500) return 0.75;
+                if (width <= 600) return 0.85;
+                if (width <= 700) return 0.95;
+                return 1;
             }
-            
-            function aplicarEscalaMobile() {
-                if (window.innerWidth > 768) return;
-                const escala = calcularEscalaMobile();
-                document.documentElement.style.setProperty('--scale-ratio', escala);
-                document.documentElement.style.setProperty('--current-width', window.innerWidth);
-                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-            }
-            
-            aplicarEscalaMobile();
-            
+            document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
             let timeout;
-            window.addEventListener('resize', function() {
+            window.addEventListener('resize', () => {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
-                    if (window.innerWidth <= 768) {
-                        aplicarEscalaMobile();
-                    } else {
-                        document.documentElement.style.setProperty('--scale-ratio', '1');
-                        console.log('📐 Modo desktop - escala resetada');
-                    }
+                    document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
                 }, 100);
             });
-            
-            window.addEventListener('orientationchange', function() {
-                setTimeout(() => {
-                    if (window.innerWidth <= 768) {
-                        aplicarEscalaMobile();
-                    }
-                }, 200);
-            });
-            
-            console.log('✅ Sistema de escalonamento mobile ativo!');
         })();
     </script>
 
     <script>
         if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(reg => reg.unregister());
+            });
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
                     .then(reg => console.log('✅ Service Worker ativo'))
                     .catch(err => console.log('❌ Erro:', err));
             });
         }
-
-        window.addEventListener('online', () => console.log('🌐 Online'));
-        window.addEventListener('offline', () => console.log('📴 Offline'));
     </script>
 </body>
 </html>

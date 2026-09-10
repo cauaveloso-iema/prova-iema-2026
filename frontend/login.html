@@ -26,294 +26,129 @@
       });
     }
     </script>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Sistema de Provas</title>
-    
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Seu CSS principal -->
-    <link rel="stylesheet" href="css/styles.css">
 
-    <!-- CSS GLOBAL -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+    <title>Login - Sistema de Provas</title>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
+
+    <!-- CSS EXTERNO -->
     <link rel="stylesheet" href="css/login.css">
-    
+    <link rel="stylesheet" href="css/mobile.css">
+
 </head>
 <body>
+
+    <!-- ============================================================
+    FUNDO ANIMADO
+    ============================================================ -->
+    <div class="background-animated">
+        <div class="bg-gradient-1"></div>
+        <div class="bg-gradient-2"></div>
+        <div class="bg-gradient-3"></div>
+    </div>
+
+    <!-- ============================================================
+    PARTÍCULAS
+    ============================================================ -->
+    <div class="particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <!-- ============================================================
+    CONTAINER PRINCIPAL
+    ============================================================ -->
     <div class="login-container">
+
+        <!-- HEADER -->
         <div class="login-header">
-            <h1><i class="fas fa-graduation-cap"></i> Sistema de Provas</h1>
-            <p>Faça login ou cadastre-se para acessar o sistema</p>
-            
-            <!-- LINK PARA BAIXAR O APP - OPÇÃO 2 -->
-            <div style="margin-top: 15px; text-align: center;">
-                <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" target="_blank" style="display: inline-block; background: rgba(255,255,255,0.2); color: white; padding: 8px 20px; border-radius: 30px; text-decoration: none; font-size: 0.9rem; border: 1px solid rgba(255,255,255,0.3);">
-                    <i class="fas fa-download"></i> Baixar App Oficial
-                </a>
+            <div class="icon-wrapper">
+                <i class="fas fa-graduation-cap"></i>
             </div>
+            <h1>Sistema de <span>Provas</span></h1>
+            <p>Entre na sua conta para continuar</p>
         </div>
-        
-        <!-- Tabs -->
-        <div class="tabs">
-            <div class="tab active" onclick="mostrarLogin()">Login</div>
-            <div class="tab" onclick="mostrarCadastro()">Cadastro</div>
-        </div>
-        
-        <!-- Alertas -->
+
+        <!-- ALERTA -->
         <div id="alert" class="alert"></div>
-        
-        <!-- Conteúdo Login -->
+
+        <!-- ============================================================
+        LOGIN
+        ============================================================ -->
         <div id="login-tab" class="tab-content active">
             <form id="loginForm">
-                <div class="form-group login-identifier-field">
+                <div class="form-group">
                     <label for="loginIdentifier">
                         <i class="fas fa-user-circle"></i> Email ou CPF
                     </label>
-                    <input type="text" id="loginIdentifier" class="form-control" required 
-                           placeholder="Digite seu email ou CPF">
-                    <small class="login-type-hint">
-                        Você pode usar seu email cadastrado ou CPF (formato: 000.000.000-00)
-                    </small>
+                    <input type="text" id="loginIdentifier" class="form-control"
+                           placeholder="Digite seu email ou CPF" required
+                           autocomplete="username" />
                 </div>
-                
+
                 <div class="form-group">
-                    <label for="loginPassword"><i class="fas fa-lock"></i> Senha</label>
-                    <input type="password" id="loginPassword" class="form-control" required placeholder="••••••••">
+                    <label for="loginPassword">
+                        <i class="fas fa-lock"></i> Senha
+                    </label>
+                    <input type="password" id="loginPassword" class="form-control"
+                           placeholder="Digite sua senha" required
+                           autocomplete="current-password" />
                 </div>
-                
+
+                <div class="form-options">
+                    <label class="remember">
+                        <input type="checkbox" id="rememberMe" />
+                        <span>Lembrar de mim</span>
+                    </label>
+                    <a href="recuperar-senha.html" class="forgot-link">
+                        Esqueci minha senha
+                    </a>
+                </div>
+
                 <button type="submit" class="btn-login" id="btnLogin">
                     <i class="fas fa-sign-in-alt"></i> Entrar
                 </button>
             </form>
 
-            <div style="text-align: center; margin-top: 15px; margin-bottom: 15px;">
-                <a href="recuperar-senha.html" style="color: #4f46e5; text-decoration: none; font-weight: 600;">
-                    <i class="fas fa-key"></i> Esqueci minha senha
-                </a>
-            </div>
-            
-            
-            <!-- Botão de WhatsApp no lugar do "Continuar como visitante" -->
-            <div class="whatsapp-contact">
-                <a href="https://wa.me/98983086504" target="_blank">
-                    <i class="fab fa-whatsapp"></i> Entre em contato via WhatsApp
-                </a>
+            <!-- DIVISOR -->
+            <div class="divider">ou</div>
+
+            <!-- WHATSAPP -->
+            <a href="https://wa.me/98983086504" target="_blank" class="whatsapp-link">
+                <i class="fab fa-whatsapp"></i> Entrar em contato via WhatsApp
+            </a>
+
+            <!-- CADASTRO -->
+            <div class="register-link">
+                Ainda não possui uma conta? <a href="cadastro-etapas.html">Criar conta</a>
             </div>
         </div>
-        
-        <!-- Conteúdo Cadastro -->
-        <div id="register-tab" class="tab-content">
-            <form id="registerForm">
-                <!-- Seleção de Tipo de Usuário -->
-                <div class="role-selection">
-                    <div class="role-option active" data-role="aluno" onclick="selecionarRole('aluno')">
-                        <i class="fas fa-user-graduate"></i>
-                        <span>Aluno</span>
-                    </div>
-                    <div class="role-option" data-role="professor" onclick="selecionarRole('professor')">
-                        <i class="fas fa-chalkboard-teacher"></i>
-                        <span>Professor</span>
-                    </div>
-                </div>
-                
-                <input type="hidden" id="registerRole" value="aluno">
-                
-                <!-- Campos comuns -->
-                <div class="form-group">
-                    <label for="registerNome"><i class="fas fa-user"></i> Nome Completo</label>
-                    <input type="text" id="registerNome" class="form-control" required placeholder="Seu nome completo">
-                </div>
-                
-                <!-- CAMPO CPF ADICIONADO (OBRIGATÓRIO) -->
-                <div class="form-group cpf-field">
-                    <label for="registerCPF"><i class="fas fa-id-card"></i> CPF <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
-                    <input type="text" id="registerCPF" class="form-control" required 
-                        placeholder="000.000.000-00" 
-                        maxlength="14"
-                        oninput="formatarCPF(this)">
-                    <span id="cpfIcon" class="valid-icon"></span>
-                    <small style="display: block; margin-top: 5px; color: #6b7280;">
-                        Digite apenas números. O formato será aplicado automaticamente.
-                    </small>
-                </div>
 
-                <div class="form-group telefone-field">
-                    <label for="registerTelefone"><i class="fas fa-phone"></i> Telefone <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
-                    <input type="text" id="registerTelefone" class="form-control" required 
-                        placeholder="(11) 99999-9999" 
-                        maxlength="15"
-                        oninput="formatarTelefone(this)">
-                    <span id="telefoneIcon" class="valid-icon"></span>
-                    <small style="display: block; margin-top: 5px; color: #6b7280;">
-                        Digite seu telefone com DDD. Formato: (11) 99999-9999
-                    </small>
-                </div>
-                
-                <div class="form-group">
-                    <label for="registerEmail">
-                        <i class="fas fa-envelope"></i> 
-                        Email Institucional 
-                        <span style="color: #ef4444; font-size: 0.9em;">*</span>
-                    </label>
-                    <input type="email" id="registerEmail" class="form-control" required 
-                        placeholder="seu.nome@iemasaoluiscentro.net"
-                        pattern=".+@iemasaoluiscentro\.net$"
-                        title="Somente emails institucionais (@iemasaoluiscentro.net)">
-                    <small style="display: block; margin-top: 5px; color: #6b7280;">
-                        Use seu email institucional: nome.sobrenome@iemasaoluiscentro.net
-                    </small>
-                </div>
-                
-                <!-- Campos para Aluno -->
-                <div id="alunoFields" class="role-fields active">
-                    <!-- CURSO OBRIGATÓRIO - AGORA VEM DO BANCO -->
-                    <div class="form-group">
-                        <label for="registerCurso"><i class="fas fa-graduation-cap"></i> Curso <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
-                        <select id="registerCurso" class="form-control" required onchange="atualizarTurmasPorCurso()">
-                            <option value="">Carregando cursos...</option>
-                        </select>
-                    </div>
-                    
-                    <!-- TURMA OBRIGATÓRIA - AGORA VEM DO BANCO -->
-                    <div class="form-group">
-                        <label for="registerTurma"><i class="fas fa-users"></i> Turma <span style="color: #ef4444; font-size: 0.9em;">*</span></label>
-                        <select id="registerTurma" class="form-control" required>
-                            <option value="">Primeiro selecione seu curso</option>
-                        </select>
-                        <small style="color: #6b7280; display: block; margin-top: 5px;">
-                            <i class="fas fa-info-circle"></i> Selecione o curso primeiro para ver as turmas disponíveis
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="registerPeriodo"><i class="fas fa-calendar-alt"></i> Período (opcional)</label>
-                        <input type="text" id="registerPeriodo" class="form-control" placeholder="Ex: 3º período">
-                    </div>
-                    
-                    <!-- ========== CAMPO DE ACESSIBILIDADE - SOMENTE PARA ALUNOS ========== -->
-                    <div class="form-group">
-                        <label for="registerAcessibilidade">
-                            <i class="fas fa-universal-access"></i> 
-                            Precisa de acessibilidade para realizar a prova? 
-                            <span style="color: #ef4444; font-size: 0.9em;">*</span>
-                        </label>
-                        <div style="display: flex; gap: 20px; margin-top: 10px;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                               <input type="radio" name="acessibilidade" id="acessibilidadeSim" value="sim">
-                                <span>Sim, preciso de prova adaptada</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="radio" name="acessibilidade" id="acessibilidadeNao" value="nao">
-                                <span>Não, não preciso</span>
-                            </label>
-                        </div>
-                        <small style="display: block; margin-top: 8px; color: #6b7280; font-style: italic;">
-                            <i class="fas fa-info-circle"></i> 
-                            Se você selecionar "Sim", terá acesso a uma versão adaptada da prova com apenas 3 alternativas.
-                        </small>
-                    </div>
-                    
-                    <!-- ========== CAMPO CONDIÇÃO ESPECÍFICA (aparece se selecionar Sim) ========== -->
-                    <div id="condicaoAcessibilidade" style="display: none; margin-top: 10px; margin-bottom: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
-                        <div class="form-group">
-                            <label for="registerCondicao">
-                                <i class="fas fa-wheelchair"></i> 
-                                Por favor, especifique sua necessidade de acessibilidade
-                                <span style="color: #ef4444; font-size: 0.9em;">*</span>
-                            </label>
-                            <select id="registerCondicao" class="form-control">
-                                <option value="">Selecione o tipo de adaptação necessária</option>
-                                <option value="visual">Deficiência Visual (fonte ampliada, contraste)</option>
-                                <option value="auditiva">Deficiência Auditiva (Libras, legendas)</option>
-                                <option value="motora">Deficiência Motora (tempo adicional, interface adaptada)</option>
-                                <option value="intelectual">Deficiência Intelectual/Cognitiva</option>
-                                <option value="dislexia">Dislexia ou outra dificuldade de leitura</option>
-                                <option value="tdah">TDAH (Transtorno de Déficit de Atenção)</option>
-                                <option value="outra">Outra condição</option>
-                            </select>
-                            <small style="display: block; margin-top: 5px; color: #6b7280;">
-                                Esta informação será usada para preparar a melhor adaptação para sua prova.
-                            </small>
-                        </div>
-                        <div id="outraCondicaoField" style="display: none; margin-top: 10px;">
-                            <div class="form-group">
-                                <label for="registerOutraCondicao">Qual condição?</label>
-                                <input type="text" id="registerOutraCondicao" class="form-control" placeholder="Descreva sua necessidade">
-                            </div>
-                        </div>
-                    </div>
-                    <!-- ========== FIM DOS CAMPOS DE ACESSIBILIDADE ========== -->
-                    
-                </div>
-                
-                <!-- Campos para Professor -->
-                <!-- Campos para Professor -->
-                <div id="professorFields" class="role-fields">
-                    <div class="form-group">
-                        <label for="registerEixo"><i class="fas fa-sitemap"></i> Eixo</label>
-                        <select id="registerEixo" class="form-control"></select>
-                            <option value="">Carregando eixos...</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="registerDepartamento"><i class="fas fa-building"></i> Departamento (opcional)</label>
-                        <input type="text" id="registerDepartamento" class="form-control" placeholder="Seu departamento">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="registerTitulacao"><i class="fas fa-award"></i> Titulação (opcional)</label>
-                        <input type="text" id="registerTitulacao" class="form-control" placeholder="Ex: Mestre, Doutor">
-                    </div>
-                </div>
-                
-                <div class="form-group matricula-field" id="matriculaField">
-                    <label for="registerMatricula">
-                        <i class="fas fa-id-card"></i> 
-                        Matrícula 
-                        <span class="required-badge" id="matriculaRequired">*</span>
-                        <span class="hint-text" id="matriculaHint"></span>
-                    </label>
-                    <input type="text" id="registerMatricula" class="form-control" 
-                        placeholder="Digite sua matrícula"
-                        maxlength="6"
-                        oninput="formatarMatricula(this)">
-                    <div id="matriculaDescription" class="hint-text"></div>
-                    <span id="matriculaIcon" class="validation-icon"></span>
-                </div>
-                
-                <div class="form-group">
-                    <label for="registerPassword"><i class="fas fa-lock"></i> Senha</label>
-                    <input type="password" id="registerPassword" class="form-control" required placeholder="Mínimo 6 caracteres">
-                </div>
-                
-                <div class="form-group">
-                    <label for="registerConfirmPassword"><i class="fas fa-lock"></i> Confirmar Senha</label>
-                    <input type="password" id="registerConfirmPassword" class="form-control" required placeholder="Digite a senha novamente">
-                </div>
-                
-                <button type="submit" class="btn-register" id="btnRegister">
-                    <i class="fas fa-user-plus"></i> Criar Conta
-                </button>
-            </form>
-            
-            <!-- Também adicionar na aba de cadastro -->
-            <div class="whatsapp-contact" style="margin-top: 20px;">
-                <a href="https://wa.me/qr/F4U5WMT37EUDB1" target="_blank">
-                    <i class="fab fa-whatsapp"></i> Precisa de ajuda? Entre em contato
-                </a>
-            </div>
+        <!-- RODAPÉ -->
+        <div class="footer">
+            &copy; 2026 Sistema de Provas
         </div>
     </div>
-    
-    <!-- === SEU JAVASCRIPT === -->
+
+    <!-- ================================================================
+    JAVASCRIPT - CORRIGIDO (COM SENHA SALVA)
+    ================================================================ -->
     <script>
-
-        // ============ VARIÁVEIS GLOBAIS ============
-        let cursosDoBanco = [];
-
-        // ============ DETECTAR AMBIENTE ============
+        // ============================================================
+        // VARIÁVEIS GLOBAIS
+        // ============================================================
         const IS_LOCALHOST = window.location.hostname === 'localhost' || 
                             window.location.hostname === '127.0.0.1';
         const IS_RENDER = window.location.hostname.includes('render.com') || 
@@ -333,1427 +168,551 @@
         }
         console.log('🌐 API URL:', API_BASE_URL);
 
-        // ============ CARREGAR CURSOS DO BANCO ============
-        async function carregarCursosDoBanco() {
-            try {
-                console.log('📚 Carregando cursos do banco...');
-                const response = await fetch(`${API_BASE_URL}/cursos`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    cursosDoBanco = data.cursos || [];
-                    console.log(`✅ ${cursosDoBanco.length} cursos carregados`);
-                    
-                    // Preencher select de cursos
-                    const cursoSelect = document.getElementById('registerCurso');
-                    cursoSelect.innerHTML = '<option value="">Selecione seu curso técnico</option>';
-                    
-                    // Ordenar cursos por nome
-                    const cursosOrdenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
-                    
-                    cursosOrdenados.forEach(curso => {
-                        const option = document.createElement('option');
-                        option.value = curso.nome;
-                        option.textContent = curso.nome;
-                        cursoSelect.appendChild(option);
-                    });
-                } else {
-                    console.error('❌ Erro ao carregar cursos:', data.error);
-                    // Fallback para não quebrar o cadastro
-                    document.getElementById('registerCurso').innerHTML = '<option value="">Erro ao carregar cursos</option>';
-                }
-            } catch (error) {
-                console.error('❌ Erro na requisição:', error);
-                document.getElementById('registerCurso').innerHTML = '<option value="">Erro de conexão</option>';
-            }
+        // ============================================================
+        // FUNÇÕES DE FORMATAÇÃO
+        // ============================================================
+        function detectarTipoIdentificador(identificador) {
+            identificador = identificador.trim();
+            if (identificador.includes('@')) return 'email';
+            const apenasNumeros = identificador.replace(/\D/g, '');
+            if (apenasNumeros.length === 11) return 'cpf';
+            if (identificador.match(/[a-zA-Z]/)) return 'email';
+            return 'cpf';
         }
 
-        // ============ ATUALIZAR TURMAS POR CURSO (AGORA USA BANCO) ============
-        function atualizarTurmasPorCurso() {
-            const cursoSelect = document.getElementById('registerCurso');
-            const turmaSelect = document.getElementById('registerTurma');
-            const cursoSelecionado = cursoSelect.value;
-            
-            // Limpar turmas atuais
-            turmaSelect.innerHTML = '';
-            
-            if (!cursoSelecionado) {
-                turmaSelect.innerHTML = '<option value="">Primeiro selecione seu curso</option>';
-                return;
-            }
-            
-            // Buscar o curso selecionado nos dados do banco
-            const curso = cursosDoBanco.find(c => c.nome === cursoSelecionado);
-            
-            if (!curso || !curso.turmas || curso.turmas.length === 0) {
-                turmaSelect.innerHTML = '<option value="">Nenhuma turma disponível</option>';
-                return;
-            }
-            
-            // Adicionar opção padrão
-            turmaSelect.innerHTML = '<option value="">Selecione sua turma</option>';
-            
-            // Adicionar turmas do banco (ordenadas por código)
-            const turmasOrdenadas = [...curso.turmas].sort((a, b) => a.codigo.localeCompare(b.codigo));
-            
-            turmasOrdenadas.forEach(turma => {
-                // Só mostrar turmas ativas
-                if (turma.ativa !== false) {
-                    const option = document.createElement('option');
-                    option.value = turma.codigo;
-                    
-                    // Formatar texto da turma
-                    let texto = `Turma ${turma.codigo}`;
-                    if (turma.periodo) {
-                        texto += ` (${turma.periodo}º período)`;
-                    }
-                    if (turma.vagas) {
-                        texto += ` - ${turma.vagas} vagas`;
-                    }
-                    option.textContent = texto;
-                    
-                    turmaSelect.appendChild(option);
-                }
-            });
-            
-            // Se não houver turmas ativas
-            if (turmaSelect.options.length === 1) {
-                turmaSelect.innerHTML = '<option value="">Nenhuma turma ativa disponível</option>';
-            }
-        }
-
-        // Funções básicas
-        function mostrarLogin() {
-            document.getElementById('register-tab').classList.remove('active');
-            document.getElementById('login-tab').classList.add('active');
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelector('.tab:nth-child(1)').classList.add('active');
-            document.getElementById('alert').style.display = 'none';
-        }
-        
-        function mostrarCadastro() {
-            document.getElementById('login-tab').classList.remove('active');
-            document.getElementById('register-tab').classList.add('active');
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelector('.tab:nth-child(2)').classList.add('active');
-            document.getElementById('alert').style.display = 'none';
-        }
-        
-        // FUNÇÃO CORRIGIDA - Carrega eixos quando professor é selecionado
-        function selecionarRole(role) {
-            // Atualizar botões de seleção
-            document.querySelectorAll('.role-option').forEach(opt => {
-                opt.classList.remove('active');
-            });
-            document.querySelector(`.role-option[data-role="${role}"]`).classList.add('active');
-            
-            // Atualizar campo hidden
-            document.getElementById('registerRole').value = role;
-            
-            // Atualizar campo matrícula
-            atualizarCampoMatricula(role);
-            
-            // Pegar elementos
-            const turmaSelect = document.getElementById('registerTurma');
-            const radioSim = document.getElementById('acessibilidadeSim');
-            const radioNao = document.getElementById('acessibilidadeNao');
-            const eixoSelect = document.getElementById('registerEixo');
-            const cursoSelect = document.getElementById('registerCurso');
-            
-            if (role === 'aluno') {
-                document.getElementById('alunoFields').classList.add('active');
-                document.getElementById('professorFields').classList.remove('active');
-                
-                // ALUNO: campos obrigatórios
-                if (turmaSelect) turmaSelect.setAttribute('required', 'true');
-                if (radioSim) radioSim.setAttribute('required', 'true');
-                if (radioNao) radioNao.setAttribute('required', 'true');
-                
-                // Curso obrigatório para alunos
-                if (cursoSelect) cursoSelect.setAttribute('required', 'true');
-                
-                // Eixo NÃO obrigatório para alunos
-                if (eixoSelect) eixoSelect.removeAttribute('required');
-                
-            } else {
-                document.getElementById('alunoFields').classList.remove('active');
-                document.getElementById('professorFields').classList.add('active');
-                
-                // PROFESSOR: campos NÃO obrigatórios
-                if (turmaSelect) turmaSelect.removeAttribute('required');
-                if (radioSim) radioSim.removeAttribute('required');
-                if (radioNao) radioNao.removeAttribute('required');
-                
-                // ✅ Eixo OBRIGATÓRIO para professores
-                if (eixoSelect) {
-                    eixoSelect.setAttribute('required', 'true');
-                    console.log('📚 Eixo obrigatório ativado para professor');
-                    
-                    // 🔥 CARREGAR EIXOS DO BANCO QUANDO PROFESSOR FOR SELECIONADO
-                    carregarEixosParaProfessor();
-                }
-                
-                // Curso NÃO obrigatório para professores
-                if (cursoSelect) cursoSelect.removeAttribute('required');
-            }
-        }
-
-        // FUNÇÃO PARA FORMATAR TELEFONE
-        function formatarTelefone(input) {
-            // Remove tudo que não é número
-            let telefone = input.value.replace(/\D/g, '');
-            
-            // Limita a 11 dígitos
-            telefone = telefone.substring(0, 11);
-            
-            // Aplica a formatação
-            if (telefone.length > 10) {
-                telefone = telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-            } else if (telefone.length > 6) {
-                telefone = telefone.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
-            } else if (telefone.length > 2) {
-                telefone = telefone.replace(/(\d{2})(\d{0,5})/, '($1) $2');
-            } else if (telefone.length > 0) {
-                telefone = telefone.replace(/^(\d{0,2})/, '($1');
-            }
-            
-            input.value = telefone;
-        }
-
-        // FUNÇÃO PARA VALIDAR TELEFONE
-        function validarTelefone(telefone) {
-            // Remove caracteres não numéricos
-            telefone = telefone.replace(/\D/g, '');
-            
-            // Telefone deve ter 10 ou 11 dígitos (com DDD)
-            return telefone.length >= 10 && telefone.length <= 11;
-        }
-
-        // FUNÇÃO CORRIGIDA - Matrícula OPCIONAL para alunos
-        function atualizarCampoMatricula(role) {
-            const matriculaField = document.getElementById('matriculaField');
-            const matriculaInput = document.getElementById('registerMatricula');
-            const requiredBadge = document.getElementById('matriculaRequired');
-            const hintText = document.getElementById('matriculaHint');
-            const descriptionText = document.getElementById('matriculaDescription');
-            
-            if (!matriculaInput || !requiredBadge) return; // Prevenção de erro
-            
-            if (role === 'professor') {
-                // PROFESSOR: Matrícula OBRIGATÓRIA
-                matriculaInput.required = true;
-                matriculaInput.placeholder = "Digite sua matrícula (6 dígitos)";
-                requiredBadge.style.display = 'inline';
-                requiredBadge.textContent = '*';
-                requiredBadge.style.color = '#ef4444';
-                
-                if (descriptionText) {
-                    descriptionText.style.display = 'block';
-                    descriptionText.innerHTML = `
-                        <span style="color: #666; font-size: 0.9em;">
-                            Matrícula de 6 dígitos obrigatória para professores
-                        </span>
-                    `;
-                }
-                
-            } else {
-                // ALUNO: Matrícula SEMPRE OPCIONAL - NUNCA OBRIGATÓRIA
-                matriculaInput.required = false;
-                matriculaInput.placeholder = "Sua matrícula (opcional)";
-                requiredBadge.style.display = 'none';
-                
-                if (hintText) {
-                    hintText.style.display = 'none';
-                    hintText.textContent = '';
-                }
-                
-                if (descriptionText) {
-                    descriptionText.style.display = 'none';
-                    descriptionText.innerHTML = '';
-                }
-            }
-        }
-
-        // FUNÇÃO PARA FORMATAR MATRÍCULA (6 DÍGITOS)
-        function formatarMatricula(input) {
-            // Remove tudo que não é número
-            let matricula = input.value.replace(/\D/g, '');
-            
-            // Limita a 6 dígitos
-            matricula = matricula.substring(0, 6);
-            
-            input.value = matricula;
-        }
-        
+        // ============================================================
+        // ALERTA
+        // ============================================================
         function mostrarAlerta(mensagem, tipo = 'error') {
             const alerta = document.getElementById('alert');
             alerta.textContent = mensagem;
             alerta.className = `alert alert-${tipo}`;
             alerta.style.display = 'block';
-            
-            // Scroll para o alerta
-            alerta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            alerta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            clearTimeout(window.alertTimeout);
+            window.alertTimeout = setTimeout(() => {
+                alerta.style.display = 'none';
+            }, 4000);
         }
+
+        // ============================================================
+        // 🔥 FUNÇÕES "LEMBRAR DE MIM" - COM SENHA
+        // ============================================================
         
-        // FUNÇÃO PARA FORMATAR CPF
-        function formatarCPF(input) {
-            // Remove tudo que não é número
-            let cpf = input.value.replace(/\D/g, '');
-            
-            // Limita a 11 dígitos
-            cpf = cpf.substring(0, 11);
-            
-            // Aplica a formatação
-            if (cpf.length > 9) {
-                cpf = cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-            } else if (cpf.length > 6) {
-                cpf = cpf.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
-            } else if (cpf.length > 3) {
-                cpf = cpf.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+        /**
+         * Salva o identificador e senha no localStorage
+         * A senha é salva em base64 (codificação simples para evitar caracteres especiais)
+         * NOTA: Isso não é criptografia forte, mas é suficiente para um sistema escolar
+         */
+        function salvarLembrar(identificador, senha) {
+            try {
+                // Salvar identificador
+                localStorage.setItem('remembered_identifier', identificador);
+                
+                // Salvar senha (codificada em base64 para evitar problemas com caracteres especiais)
+                const senhaCodificada = btoa(senha);
+                localStorage.setItem('remembered_password', senhaCodificada);
+                
+                // Marcar como ativo
+                localStorage.setItem('remember_me', 'true');
+                localStorage.setItem('remember_me_timestamp', Date.now().toString());
+                
+                console.log('✅ "Lembrar de mim" salvo (identificador e senha)');
+                return true;
+            } catch (e) {
+                console.error('❌ Erro ao salvar "Lembrar de mim":', e);
+                return false;
             }
-            
-            input.value = cpf;
         }
-        
-        // FUNÇÃO PARA VALIDAR CPF
-        function validarCPF(cpf) {
-            // Remove caracteres não numéricos
-            cpf = cpf.replace(/\D/g, '');
-            
-            // CPF deve ter 11 dígitos
-            if (cpf.length !== 11) return false;
-            
-            // Verifica se todos os dígitos são iguais (CPF inválido)
-            if (/^(\d)\1+$/.test(cpf)) return false;
-            
-            // Validação dos dígitos verificadores
-            let soma = 0;
-            let resto;
-            
-            for (let i = 1; i <= 9; i++) {
-                soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
+
+        /**
+         * Carrega o identificador e senha salvos
+         */
+        function carregarLembrar() {
+            try {
+                const rememberMe = localStorage.getItem('remember_me');
+                const identifier = localStorage.getItem('remembered_identifier');
+                const senhaCodificada = localStorage.getItem('remembered_password');
+                const timestamp = localStorage.getItem('remember_me_timestamp');
+                
+                if (rememberMe === 'true' && identifier) {
+                    // Verificar se ainda é válido (30 dias)
+                    if (timestamp) {
+                        const diasPassados = (Date.now() - parseInt(timestamp)) / (1000 * 60 * 60 * 24);
+                        if (diasPassados > 30) {
+                            console.log('⚠️ "Lembrar de mim" expirado');
+                            limparLembrar();
+                            return false;
+                        }
+                    }
+                    
+                    // Preencher identificador
+                    document.getElementById('loginIdentifier').value = identifier;
+                    
+                    // Preencher senha (decodificar)
+                    if (senhaCodificada) {
+                        try {
+                            const senha = atob(senhaCodificada);
+                            document.getElementById('loginPassword').value = senha;
+                        } catch (e) {
+                            console.error('❌ Erro ao decodificar senha:', e);
+                            // Se falhar, tentar usar a senha como está (legado)
+                            document.getElementById('loginPassword').value = senhaCodificada;
+                        }
+                    }
+                    
+                    document.getElementById('rememberMe').checked = true;
+                    console.log('✅ "Lembrar de mim" carregado (identificador e senha)');
+                    return true;
+                }
+                return false;
+            } catch (e) {
+                console.error('❌ Erro ao carregar "Lembrar de mim":', e);
+                return false;
             }
-            
-            resto = (soma * 10) % 11;
-            if ((resto === 10) || (resto === 11)) resto = 0;
-            if (resto !== parseInt(cpf.substring(9, 10))) return false;
-            
-            soma = 0;
-            for (let i = 1; i <= 10; i++) {
-                soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
-            }
-            
-            resto = (soma * 10) % 11;
-            if ((resto === 10) || (resto === 11)) resto = 0;
-            if (resto !== parseInt(cpf.substring(10, 11))) return false;
-            
-            return true;
         }
-        
-        // FUNÇÃO PARA DETECTAR SE É EMAIL OU CPF
-        function detectarTipoIdentificador(identificador) {
-            identificador = identificador.trim();
-            
-            // Se tem @, é email
-            if (identificador.includes('@')) {
-                return 'email';
+
+        /**
+         * Limpa os dados de "Lembrar de mim"
+         */
+        function limparLembrar() {
+            try {
+                localStorage.removeItem('remembered_identifier');
+                localStorage.removeItem('remembered_password');
+                localStorage.removeItem('remember_me');
+                localStorage.removeItem('remember_me_timestamp');
+                console.log('✅ "Lembrar de mim" removido');
+                return true;
+            } catch (e) {
+                console.error('❌ Erro ao remover "Lembrar de mim":', e);
+                return false;
             }
-            
-            // Se tem apenas números e tem 11 dígitos (com ou sem formatação), é CPF
-            const apenasNumeros = identificador.replace(/\D/g, '');
-            if (apenasNumeros.length === 11) {
-                return 'cpf';
-            }
-            
-            // Se não for claro, tenta adivinhar
-            if (identificador.match(/[a-zA-Z]/)) {
-                return 'email'; // Tem letras, provavelmente email
-            }
-            
-            return 'cpf'; // Caso padrão
         }
-        
-        // ========== FUNÇÃO DE LOGIN COMPLETA E CORRIGIDA ==========
+
+        // ============================================================
+        // 🔥 CONTROLE DE REDIRECIONAMENTO - EVITA LOOP
+        // ============================================================
+        const REDIRECT_KEY = 'login_redirect_count';
+        const REDIRECT_MAX = 3;
+        const REDIRECT_WINDOW = 5000;
+
+        function incrementarRedirectCount() {
+            const now = Date.now();
+            const lastRedirect = parseInt(sessionStorage.getItem('login_redirect_last') || '0');
+            
+            if (now - lastRedirect > REDIRECT_WINDOW) {
+                sessionStorage.setItem(REDIRECT_KEY, '0');
+            }
+            
+            const count = parseInt(sessionStorage.getItem(REDIRECT_KEY) || '0') + 1;
+            sessionStorage.setItem(REDIRECT_KEY, count.toString());
+            sessionStorage.setItem('login_redirect_last', now.toString());
+            return count;
+        }
+
+        function resetarRedirectCount() {
+            sessionStorage.removeItem(REDIRECT_KEY);
+            sessionStorage.removeItem('login_redirect_last');
+        }
+
+        function isEmLoop() {
+            const count = parseInt(sessionStorage.getItem(REDIRECT_KEY) || '0');
+            const lastRedirect = parseInt(sessionStorage.getItem('login_redirect_last') || '0');
+            const now = Date.now();
+            
+            if (now - lastRedirect > REDIRECT_WINDOW) {
+                resetarRedirectCount();
+                return false;
+            }
+            return count >= REDIRECT_MAX;
+        }
+
+        // ============================================================
+        // 🔥 FUNÇÃO DE LOGIN CORRIGIDA
+        // ============================================================
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
             const identificador = document.getElementById('loginIdentifier').value.trim();
             const senha = document.getElementById('loginPassword').value;
-            
+            const rememberMe = document.getElementById('rememberMe').checked;
+
             if (!identificador || !senha) {
-                mostrarAlerta('Preencha todos os campos');
+                mostrarAlerta('Preencha todos os campos', 'error');
                 return;
             }
-            
+
+            resetarRedirectCount();
+
+            // 🔥 SALVAR COM SENHA
+            if (rememberMe) {
+                salvarLembrar(identificador, senha);
+            } else {
+                limparLembrar();
+            }
+
             const btn = document.getElementById('btnLogin');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
             btn.disabled = true;
-            
+
             try {
-                // Detectar se é email ou CPF
                 const tipo = detectarTipoIdentificador(identificador);
-                let dadosLogin = { password: senha };
-                
+                let dadosLogin = { 
+                    password: senha,
+                    rememberMe: rememberMe
+                };
+
                 if (tipo === 'email') {
                     dadosLogin.email = identificador.toLowerCase();
                 } else {
-                    // É CPF - remover formatação e enviar
                     const cpfNumeros = identificador.replace(/\D/g, '');
                     dadosLogin.cpf = cpfNumeros;
                 }
-                
-                console.log('📤 Enviando dados de login:', dadosLogin);
-                
+
+                console.log('📤 Enviando dados de login:', { ...dadosLogin, password: '***' });
+
                 const resposta = await fetch('/api/auth/login', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(dadosLogin)
                 });
-                
+
                 const dados = await resposta.json();
                 console.log('📦 Resposta do servidor:', dados);
-                
-                // ========== CASO 1: PRECISA DE 2FA ==========
+
                 if (dados.requiresTwoFactor) {
                     console.log('🔐 2FA necessário - redirecionando para validação');
-                    
-                    // Salvar token temporário para usar na página de validação
                     sessionStorage.setItem('2fa_token', dados.token);
                     sessionStorage.setItem('2fa_userId', dados.userId);
                     sessionStorage.setItem('2fa_message', dados.message || 'Código 2FA necessário');
-                    
-                    // Mostrar mensagem e redirecionar
+
                     mostrarAlerta('🔐 ' + (dados.message || 'Código 2FA necessário'), 'info');
-                    
+
                     setTimeout(() => {
                         window.location.href = '/validar-2fa.html';
                     }, 1500);
-                    
                     return;
                 }
-                
-                // ========== CASO 2: LOGIN BEM-SUCEDIDO (SEM 2FA) ==========
+
                 if (dados.success) {
                     mostrarAlerta('✅ Login realizado! Redirecionando...', 'success');
-                    
-                    // CORREÇÃO: VERIFICAR E BUSCAR TURMA SE NÃO VIER
-                    if (dados.user.role === 'aluno' && !dados.user.turma) {
-                        console.log('⚠️ Turma não veio no login. Buscando do /me...');
-                        try {
-                            const userResponse = await fetch('/api/auth/me', {
-                                headers: { 'Authorization': `Bearer ${dados.token}` }
-                            });
-                            const userData = await userResponse.json();
-                            if (userData.success && userData.user.turma) {
-                                dados.user.turma = userData.user.turma;
-                                console.log('✅ Turma recuperada:', dados.user.turma);
-                            }
-                        } catch (e) {
-                            console.error('❌ Erro ao buscar /me:', e);
-                        }
-                    }
-                    
-                    // Salvar token e dados do usuário
+
                     localStorage.setItem('auth_token', dados.token);
                     localStorage.setItem('user_data', JSON.stringify(dados.user));
-                    
-                    // 🔥 CORREÇÃO: VERIFICAR SE O REDIRECT TO VEIO DO BACKEND
+
+                    if (rememberMe) {
+                        sessionStorage.setItem('auth_token', dados.token);
+                        sessionStorage.setItem('user_data', JSON.stringify(dados.user));
+                    }
+
                     let destino = dados.redirectTo;
-                    
-                    // Se por algum motivo o redirectTo não veio, usar fallback baseado no role
+
                     if (!destino) {
-                        console.log('⚠️ redirectTo não veio do backend, usando fallback');
-                        if (dados.user.role === 'super_admin') {
-                            destino = '/admin.html';
-                        } else if (dados.user.role === 'admin') {
-                            destino = '/admin-simples.html';
-                        } else if (dados.user.role === 'professor') {
-                            destino = '/index.html';
-                        } else if (dados.user.role === 'setor_pedagogico') {
-                            destino = '/setor-pedagogico.html';
-                        } else if (dados.user.role === 'coordenacao_patio') {
-                            destino = '/coordenacao-patio.html';
-                        } else if (dados.user.role === 'cozinha') {
-                            destino = '/cozinha-dashboard.html';
-                        } else if (dados.user.role === 'gestao_geral') {
-                            destino = '/gestao-geral.html';
-                        } else if (dados.user.role === 'enfermaria') {
-                            destino = '/enfermaria.html';
-                        } else if (dados.user.role === 'aluno') {
-                            destino = '/aluno.html';
-                        } else {
-                            destino = '/login.html';
-                        }
+                        const redirectMap = {
+                            'super_admin': '/admin.html',
+                            'admin': '/admin-simples.html',
+                            'professor': '/index.html',
+                            'setor_pedagogico': '/setor-pedagogico.html',
+                            'coordenacao_patio': '/coordenacao-patio.html',
+                            'cozinha': '/cozinha-dashboard.html',
+                            'gestao_geral': '/gestao-geral.html',
+                            'enfermaria': '/enfermaria.html',
+                            'supervisao': '/supervisao.html',
+                            'psicologia': '/psicologia.html',
+                            'assistente-social': '/assistente-social.html',
+                            'protagonismo': '/protagonismo.html',
+                            'aluno': '/aluno.html'
+                        };
+                        destino = redirectMap[dados.user.role] || '/login.html';
                         console.log('📌 Fallback definido:', destino);
                     }
-                    
+
                     console.log('🔄 Redirecionando para:', destino);
                     console.log('👤 Perfil:', dados.user.role);
-                    console.log('🔐 Precisa trocar senha:', dados.precisaTrocarSenha);
-                    
+
+                    resetarRedirectCount();
+
                     setTimeout(() => {
                         window.location.href = destino;
                     }, 1000);
-                    
+
                 } else {
-                    // ========== CASO 3: ERRO DE LOGIN ==========
-                    mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro no login'));
+                    mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro no login'), 'error');
+                    if (dados.error && dados.error.toLowerCase().includes('credenciais')) {
+                        limparLembrar();
+                        document.getElementById('rememberMe').checked = false;
+                    }
                 }
-                
+
             } catch (erro) {
                 console.error('Erro no login:', erro);
-                mostrarAlerta('❌ Erro de conexão com o servidor');
+                mostrarAlerta('❌ Erro de conexão com o servidor', 'error');
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }
         });
 
-        // Configuração do formulário de cadastro
-        document.getElementById('registerForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+        // ============================================================
+        // 🔥 VERIFICAR LOGIN AUTOMÁTICO
+        // ============================================================
+        function verificarLoginAutomatico() {
+            console.log('🔍 Verificando login automático...');
             
-            // Coletar dados básicos
-            const role = document.getElementById('registerRole').value;
-            const nome = document.getElementById('registerNome').value.trim();
-            const cpf = document.getElementById('registerCPF').value;
-            const telefone = document.getElementById('registerTelefone').value;
-            const email = document.getElementById('registerEmail').value.trim();
-            const curso = document.getElementById('registerCurso').value;
-            const turma = document.getElementById('registerTurma').value;
-            const periodo = document.getElementById('registerPeriodo').value.trim();
-            const matricula = document.getElementById('registerMatricula').value.trim();
-            const senha = document.getElementById('registerPassword').value;
-            const confirmarSenha = document.getElementById('registerConfirmPassword').value;
-            
-            // Validações básicas
-            if (!nome || !cpf || !telefone || !email || !senha || !confirmarSenha) {
-                mostrarAlerta('Preencha todos os campos obrigatórios');
+            if (isEmLoop()) {
+                console.warn('⚠️ LOOP DETECTADO! Parando redirecionamento automático.');
+                resetarRedirectCount();
+                mostrarAlerta('⚠️ Detectamos um loop de redirecionamento. Por favor, faça login novamente.', 'error');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user_data');
+                sessionStorage.removeItem('auth_token');
+                sessionStorage.removeItem('user_data');
                 return;
             }
-            
-            // Validar CPF
-            if (!validarCPF(cpf)) {
-                mostrarAlerta('CPF inválido. Digite um CPF válido');
+
+            const token = localStorage.getItem('auth_token');
+            const userDataRaw = localStorage.getItem('user_data');
+
+            if (!token || !userDataRaw) {
+                console.log('ℹ️ Nenhum token encontrado, exibindo login');
+                // 🔥 CARREGAR "LEMBRAR DE MIM" (IDENTIFICADOR E SENHA)
+                carregarLembrar();
                 return;
             }
-            
-            // VALIDAR TELEFONE
-            if (!validarTelefone(telefone)) {
-                mostrarAlerta('Telefone inválido. Digite um telefone válido com DDD');
-                return;
+
+            try {
+                const userData = JSON.parse(userDataRaw);
+                console.log('👤 Token encontrado para:', userData.nome, '(' + userData.role + ')');
+
+                const count = incrementarRedirectCount();
+                console.log(`🔄 Tentativa de redirecionamento #${count}`);
+
+                fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                .then(response => {
+                    if (response.status === 200) {
+                        console.log('✅ Token válido!');
+                        const destino = obterDestinoPorPerfil(userData.role);
+                        console.log(`🔄 Redirecionando para: ${destino}`);
+                        resetarRedirectCount();
+                        window.location.href = destino;
+                    } else {
+                        console.log('❌ Token inválido, limpando dados');
+                        localStorage.removeItem('auth_token');
+                        localStorage.removeItem('user_data');
+                        sessionStorage.removeItem('auth_token');
+                        sessionStorage.removeItem('user_data');
+                        resetarRedirectCount();
+                        // 🔥 CARREGAR "LEMBRAR DE MIM" MESMO COM TOKEN INVÁLIDO
+                        carregarLembrar();
+                    }
+                })
+                .catch(() => {
+                    console.log('⚠️ Erro ao verificar token');
+                });
+
+            } catch (e) {
+                console.error('❌ Erro ao processar dados:', e);
+                localStorage.removeItem('user_data');
+                resetarRedirectCount();
+                carregarLembrar();
             }
-            
-            // VALIDAÇÃO ESPECÍFICA PARA PROFESSORES
-            if (role === 'professor') {
-                const eixo = document.getElementById('registerEixo').value;
-                
-                if (!eixo) {
-                    mostrarAlerta('Professores devem selecionar um eixo');
-                    return;
-                }
-                
-                if (!matricula || matricula.trim() === '') {
-                    mostrarAlerta('Para cadastro como professor, a matrícula é obrigatória');
-                    return;
-                }
-                
-                const matriculaNumeros = matricula.replace(/\D/g, '');
-                
-                if (matriculaNumeros.length !== 6) {
-                    mostrarAlerta('Matrícula inválida. Deve conter exatamente 6 números');
-                    return;
-                }
-                
-                console.log('🔍 Verificando autorização de professor:');
-                console.log('   Matrícula informada:', matriculaNumeros);
-            }
-            
-            // Validação específica para alunos
-            if (role === 'aluno' && !curso) {
-                mostrarAlerta('Selecione um curso');
-                return;
-            }
-            
-            // VALIDAR TURMA PARA ALUNOS!
-            if (role === 'aluno' && !turma) {
-                mostrarAlerta('Selecione sua turma');
-                return;
-            }
-            
-            if (senha.length < 6) {
-                mostrarAlerta('A senha deve ter no mínimo 6 caracteres');
-                return;
-            }
-            
-            if (senha !== confirmarSenha) {
-                mostrarAlerta('As senhas não coincidem');
-                return;
-            }
-            
-            // Preparar objeto de dados
-            const dadosCadastro = {
-                nome: nome,
-                cpf: cpf.replace(/\D/g, ''),
-                telefone: telefone.replace(/\D/g, ''),
-                email: email,
-                password: senha,
-                role: role,
-                matricula: matricula || undefined
+        }
+
+        function obterDestinoPorPerfil(role) {
+            const redirectMap = {
+                'super_admin': '/admin.html',
+                'admin': '/admin-simples.html',
+                'professor': '/index.html',
+                'setor_pedagogico': '/setor-pedagogico.html',
+                'coordenacao_patio': '/coordenacao-patio.html',
+                'cozinha': '/cozinha-dashboard.html',
+                'gestao_geral': '/gestao-geral.html',
+                'enfermaria': '/enfermaria.html',
+                'supervisao': '/supervisao.html',
+                'psicologia': '/psicologia.html',
+                'assistente-social': '/assistente-social.html',
+                'protagonismo': '/protagonismo.html',
+                'aluno': '/aluno.html'
             };
-            
-            // Adicionar dados específicos por role
-            if (role === 'aluno') {
-                //  USAR A VARIÁVEL turma CAPTURADA ACIMA! 
-                if (!turma) {
-                    mostrarAlerta('Selecione sua turma');
-                    return;
-                }
-                
-                dadosCadastro.curso = curso;
-                dadosCadastro.turma = turma;
-                dadosCadastro.periodo = periodo || undefined;
-                
-                // ACESSIBILIDADE
-                const radioAcessibilidade = document.querySelector('input[name="acessibilidade"]:checked');
-                const precisaAcessibilidade = radioAcessibilidade ? radioAcessibilidade.value === 'sim' : false;
-                
-                console.log(`🎯 ACESSIBILIDADE - precisaAcessibilidade: ${precisaAcessibilidade}`);
-                
-                dadosCadastro.precisaAcessibilidade = precisaAcessibilidade;
-                
-                if (precisaAcessibilidade) {
-                    const condicao = document.getElementById('registerCondicao')?.value;
-                    dadosCadastro.condicaoAcessibilidade = condicao || 'nao_especificada';
-                    
-                    if (condicao === 'outra') {
-                        const outraDescricao = document.getElementById('registerOutraCondicao')?.value.trim();
-                        dadosCadastro.outraCondicao = outraDescricao || 'Não especificada';
-                    }
-                }
-                
-            } else if (role === 'professor') {
-                const eixo = document.getElementById('registerEixo').value;
-                dadosCadastro.eixo = eixo;
-                dadosCadastro.departamento = document.getElementById('registerDepartamento').value.trim() || undefined;
-                dadosCadastro.titulacao = document.getElementById('registerTitulacao').value.trim() || undefined;
-            }
-            
-            // Remover campos undefined
-            Object.keys(dadosCadastro).forEach(key => {
-                if (dadosCadastro[key] === undefined) {
-                    delete dadosCadastro[key];
-                }
-            });
-            
-            console.log('📤 Enviando dados de cadastro:', dadosCadastro);
-            
-            // Mostrar loading
-            const btn = document.getElementById('btnRegister');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando conta...';
-            btn.disabled = true;
-            
-            try {
-                const resposta = await fetch('/api/auth/register', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(dadosCadastro)
-                });
-                
-                const dados = await resposta.json();
-                
-                if (dados.success) {
-                    mostrarAlerta('✅ Conta criada com sucesso! Redirecionando...', 'success');
-                    
-                    localStorage.setItem('auth_token', dados.token);
-                    localStorage.setItem('user_data', JSON.stringify(dados.user));
-                    
-                    // 🔥 CORREÇÃO: REDIRECIONAMENTO COM PERFIL setor_pedagogico
-                    setTimeout(() => {
-                        if (dados.user.role === 'super_admin') {
-                            window.location.href = 'admin.html';
-                        } else if (dados.user.role === 'admin') {
-                            window.location.href = 'admin-simples.html';
-                        } else if (dados.user.role === 'professor') {
-                            window.location.href = 'index.html';
-                        } else if (dados.user.role === 'setor_pedagogico') {
-                            window.location.href = 'setor-pedagogico.html';
-                        } else if (dados.user.role === 'aluno') {
-                            window.location.href = 'capturar-face.html';
-                        } else {
-                            window.location.href = 'index.html';
-                        }
-                    }, 1500);
-                    
-                } else {
-                    mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro ao criar conta'));
-                }
-            } catch (erro) {
-                console.error('Erro no cadastro:', erro);
-                mostrarAlerta('❌ Erro de conexão com o servidor');
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        });
-
-        // ============ CARREGAR EIXOS DO BANCO PARA O SELECT ============
-        async function carregarEixosParaProfessor() {
-            try {
-                console.log('📚 Carregando eixos para cadastro de professor...');
-                
-                const eixoSelect = document.getElementById('registerEixo');
-                if (!eixoSelect) {
-                    console.error('❌ Select de eixo não encontrado');
-                    return;
-                }
-                
-                // Mostrar loading
-                eixoSelect.innerHTML = '<option value="">Carregando eixos...</option>';
-                eixoSelect.disabled = true;
-                
-                // Buscar eixos da API
-                const response = await fetch('/api/eixos');
-                const data = await response.json();
-                
-                if (data.success && data.eixos) {
-                    // Limpar select
-                    eixoSelect.innerHTML = '<option value="">Selecione seu eixo</option>';
-                    
-                    // Ordenar eixos por label
-                    const eixosOrdenados = data.eixos.sort((a, b) => a.label.localeCompare(b.label));
-                    
-                    // Adicionar cada eixo como opção
-                    eixosOrdenados.forEach(eixo => {
-                        if (eixo.ativo !== false) { // Só mostrar eixos ativos
-                            const option = document.createElement('option');
-                            option.value = eixo.nome;
-                            option.textContent = eixo.label;
-                            option.style.borderLeft = `3px solid ${eixo.cor || '#667eea'}`;
-                            eixoSelect.appendChild(option);
-                        }
-                    });
-                    
-                    console.log(`✅ ${data.eixos.length} eixos carregados no select`);
-                } else {
-                    throw new Error(data.error || 'Erro ao carregar eixos');
-                }
-                
-            } catch (error) {
-                console.error('❌ Erro ao carregar eixos:', error);
-                
-                // Fallback para não quebrar o cadastro
-                const eixoSelect = document.getElementById('registerEixo');
-                if (eixoSelect) {
-                    eixoSelect.innerHTML = `
-                        <option value="">Erro ao carregar eixos</option>
-                        <option value="natureza">🌿 Natureza</option>
-                        <option value="humanas">📜 Humanas</option>
-                        <option value="linguagens">📚 Linguagens</option>
-                        <option value="desenvolvimento">💻 Desenvolvimento</option>
-                        <option value="gestao">📊 Gestão</option>
-                        <option value="turismo">✈️ Turismo</option>
-                        <option value="ambiente">🌱 Ambiente</option>
-                    `;
-                }
-            } finally {
-                const eixoSelect = document.getElementById('registerEixo');
-                if (eixoSelect) {
-                    eixoSelect.disabled = false;
-                }
-            }
+            return redirectMap[role] || '/login.html';
         }
 
-        // ========== FUNÇÃO PARA GARANTIR QUE OS CAMPOS DE ACESSIBILIDADE ESTÃO CONFIGURADOS ==========
-        function inicializarCamposAcessibilidade() {
-            console.log('🔧 Inicializando campos de acessibilidade...');
-            
-            const radioSim = document.getElementById('acessibilidadeSim');
-            const radioNao = document.getElementById('acessibilidadeNao');
-            const condicaoDiv = document.getElementById('condicaoAcessibilidade');
-            const selectCondicao = document.getElementById('registerCondicao');
-            const outraCondicaoField = document.getElementById('outraCondicaoField');
-            const registerOutraCondicao = document.getElementById('registerOutraCondicao');
-            
-            if (!radioSim || !radioNao) {
-                console.error('❌ Campos de acessibilidade não encontrados no HTML!');
-                return;
+        // ============================================================
+        // PULL-TO-REFRESH
+        // ============================================================
+        let touchStartY = 0;
+        let touchCurrentY = 0;
+        let isPulling = false;
+        const PULL_THRESHOLD = 200;
+        const TOP_TOLERANCE = 100;
+
+        document.addEventListener('touchstart', function(e) {
+            if (window.scrollY <= TOP_TOLERANCE) {
+                touchStartY = e.touches[0].clientY;
+                isPulling = true;
             }
-            
-            // Remover event listeners antigos e adicionar novos
-            radioSim.removeEventListener('change', handleAcessibilidadeSim);
-            radioNao.removeEventListener('change', handleAcessibilidadeNao);
-            
-            radioSim.addEventListener('change', handleAcessibilidadeSim);
-            radioNao.addEventListener('change', handleAcessibilidadeNao);
-            
-            function handleAcessibilidadeSim() {
-                if (this.checked) {
-                    console.log('✅ Aluno SELECIONOU acessibilidade');
-                    condicaoDiv.style.display = 'block';
-                    selectCondicao.setAttribute('required', 'true');
-                }
-            }
-            
-            function handleAcessibilidadeNao() {
-                if (this.checked) {
-                    console.log('❌ Aluno NÃO selecionou acessibilidade');
-                    condicaoDiv.style.display = 'none';
-                    selectCondicao.removeAttribute('required');
-                    selectCondicao.value = '';
-                    if (registerOutraCondicao) {
-                        registerOutraCondicao.value = '';
-                    }
-                    outraCondicaoField.style.display = 'none';
-                }
-            }
-            
-            // Configurar select de condição
-            if (selectCondicao) {
-                selectCondicao.removeEventListener('change', handleCondicaoChange);
-                selectCondicao.addEventListener('change', handleCondicaoChange);
-                
-                function handleCondicaoChange() {
-                    if (this.value === 'outra') {
-                        outraCondicaoField.style.display = 'block';
-                        if (registerOutraCondicao) {
-                            registerOutraCondicao.setAttribute('required', 'true');
-                        }
-                    } else {
-                        outraCondicaoField.style.display = 'none';
-                        if (registerOutraCondicao) {
-                            registerOutraCondicao.removeAttribute('required');
-                            registerOutraCondicao.value = '';
-                        }
-                    }
-                }
-            }
-            
-            console.log('✅ Campos de acessibilidade inicializados');
-        }
+        }, { passive: true });
 
-        function forcarCarregamentoDadosAluno() {
-            console.log('🔄 Forçando carregamento dos dados do aluno...');
-            
-            const token = localStorage.getItem('auth_token');
-            if (!token) return;
-            
-            fetch(`${API_BASE_URL}/auth/me`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('✅ Dados atualizados do /me:', data.user);
-                    console.log('   📚 Curso:', data.user.curso);
-                    console.log('   🏫 TURMA:', data.user.turma);
-                    
-                    // SALVAR TURMA NO LOCALSTORAGE!
-                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-                    userData.turma = data.user.turma;
-                    userData.curso = data.user.curso;
-                    localStorage.setItem('user_data', JSON.stringify(userData));
-                    
-                    console.log('✅ Turma salva no localStorage:', data.user.turma);
-                    
-                    // Recarregar provas
-                    if (typeof carregarProvasConcluidas === 'function') {
-                        carregarProvasConcluidas();
-                    }
-                }
-            })
-            .catch(err => console.error('❌ Erro ao carregar /me:', err));
-        }
-
-        // CHAMAR ESTA FUNÇÃO AGORA!
-        forcarCarregamentoDadosAluno();
-
-        // Inicialização
-        document.addEventListener('DOMContentLoaded', function() {
-            inicializarCamposAcessibilidade();
-            carregarCursosDoBanco();
-            
-            // 🔥 NOVO: Carregar cursos do banco
-            carregarCursosDoBanco();
-            
-            console.log('🚀 Sistema de login/cadastro carregado!');
-            
-            // Verificar se já está logado
-            const token = localStorage.getItem('auth_token');
-            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-            
-            if (token && userData.role) {
-                console.log('Usuário já autenticado como:', userData.role);
-                
-                // 🔥 REDIRECIONAMENTO CORRETO PARA TODOS OS PERFIS
-                let redirectUrl = '';
-                
-                if (userData.role === 'super_admin') {
-                    redirectUrl = 'admin.html';
-                } else if (userData.role === 'admin') {
-                    redirectUrl = 'admin-simples.html';
-                } else if (userData.role === 'professor') {
-                    redirectUrl = 'index.html';
-                } else if (userData.role === 'setor_pedagogico') {
-                    redirectUrl = 'setor-pedagogico.html';
-                } else if (userData.role === 'aluno') {
-                    redirectUrl = 'aluno.html';
-                } else {
-                    redirectUrl = 'login.html';
-                }
-                
-                console.log('🔄 Redirecionando para:', redirectUrl);
-                window.location.href = redirectUrl;
-                return; // Importante: parar a execução após redirecionar
-            }
-
-            const radioSim = document.getElementById('acessibilidadeSim');
-            const radioNao = document.getElementById('acessibilidadeNao');
-            const condicaoDiv = document.getElementById('condicaoAcessibilidade');
-            const selectCondicao = document.getElementById('registerCondicao');
-            const outraCondicaoField = document.getElementById('outraCondicaoField');
-            const registerOutraCondicao = document.getElementById('registerOutraCondicao');
-
-            if (radioSim && radioNao) {
-                radioSim.addEventListener('change', function() {
-                    if (this.checked) {
-                        condicaoDiv.style.display = 'block';
-                        selectCondicao.setAttribute('required', 'true');
-                    }
-                });
-                
-                radioNao.addEventListener('change', function() {
-                    if (this.checked) {
-                        condicaoDiv.style.display = 'none';
-                        selectCondicao.removeAttribute('required');
-                        // Resetar valores
-                        selectCondicao.value = '';
-                        registerOutraCondicao.value = '';
-                        outraCondicaoField.style.display = 'none';
-                    }
-                });
-            }
-
-            // Mostrar campo "Outra condição" quando selecionado
-            if (selectCondicao) {
-                selectCondicao.addEventListener('change', function() {
-                    if (this.value === 'outra') {
-                        outraCondicaoField.style.display = 'block';
-                        registerOutraCondicao.setAttribute('required', 'true');
-                    } else {
-                        outraCondicaoField.style.display = 'none';
-                        registerOutraCondicao.removeAttribute('required');
-                        registerOutraCondicao.value = '';
-                    }
-                });
-            }
-            
-            // Configurar data mínima para inputs date
-            const hoje = new Date().toISOString().split('T')[0];
-            document.querySelectorAll('input[type="date"]').forEach(input => {
-                input.min = hoje;
-            });
-        });
-
-    </script>
-
-    <!-- VLibras Oficial (PRIMEIRO) -->
-    <script src="js/vlibras-oficial.js"></script>
-    
-    <!-- Sistema de Acessibilidade (SEGUNDO) -->
-    <script src="js/acessibilidade.js"></script>
-    
-    <!-- Chatbot -->
-    <script src="js/chatbot-frontend.js"></script>
-
-        <!-- ===== MOBILE OPTIMIZATION ===== -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <link rel="stylesheet" href="css/mobile.css">
-    <script src="js/toggle-buttons.js"></script>
-
-        <!-- Botões arrastáveis -->
-    <script src="js/draggable.js"></script>
-
-    <script>
-
-    // ============================================
-    // PULL-TO-REFRESH - MENOS SENSÍVEL (CORRIGIDO)
-    // ============================================
-
-    let touchStartY = 0;
-    let touchCurrentY = 0;
-    let isPulling = false;
-    const PULL_THRESHOLD = 600; // AUMENTADO para 200px (bem menos sensível)
-    const TOP_TOLERANCE = 100;    // Tolerância maior para considerar "topo"
-
-    document.addEventListener('touchstart', function(e) {
-        // Só ativa se estiver no topo da página (com tolerância)
-        if (window.scrollY <= TOP_TOLERANCE) {
-            touchStartY = e.touches[0].clientY;
-            isPulling = true;
-        }
-    }, { passive: true });
-
-    document.addEventListener('touchmove', function(e) {
-        if (!isPulling) return;
-        
-        touchCurrentY = e.touches[0].clientY;
-        const pullDistance = touchCurrentY - touchStartY;
-        
-        // Só considera movimento para BAIXO
-        if (pullDistance > 0) {
-            // NÃO bloqueia o scroll! (removido e.preventDefault)
-            
-            // Mostrar indicador visual apenas se passar de 50px
+        document.addEventListener('touchmove', function(e) {
+            if (!isPulling) return;
+            touchCurrentY = e.touches[0].clientY;
+            const pullDistance = touchCurrentY - touchStartY;
             if (pullDistance > 50) {
                 mostrarIndicadorPull(pullDistance);
             }
-            
-            // Se passou do limite MUITO MAIOR, atualiza
             if (pullDistance > PULL_THRESHOLD) {
-                // Agora sim bloqueia para não dar conflito
                 e.preventDefault();
                 atualizarPagina();
             }
+        }, { passive: false });
+
+        document.addEventListener('touchend', function(e) {
+            if (!isPulling) return;
+            const pullDistance = touchCurrentY - touchStartY;
+            if (pullDistance < PULL_THRESHOLD) {
+                esconderIndicadorPull();
+            }
+            isPulling = false;
+            touchStartY = 0;
+            touchCurrentY = 0;
+        }, { passive: true });
+
+        function atualizarPagina() {
+            mostrarMensagem('Atualizando página...');
+            document.body.style.opacity = '0.7';
+            document.body.style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                location.reload();
+            }, 500);
         }
-    }, { passive: true }); // MUDADO para passive: true (não bloqueia)
 
-    document.addEventListener('touchend', function(e) {
-        if (!isPulling) return;
-        
-        const pullDistance = touchCurrentY - touchStartY;
-        
-        // Se não passou do limite, apenas esconde o indicador
-        if (pullDistance < PULL_THRESHOLD) {
-            esconderIndicadorPull();
+        function mostrarIndicadorPull(distancia) {
+            let indicador = document.getElementById('pull-indicator');
+            if (!indicador) {
+                indicador = document.createElement('div');
+                indicador.id = 'pull-indicator';
+                indicador.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    background: #4f46e5;
+                    color: white;
+                    text-align: center;
+                    padding: 10px;
+                    font-size: 14px;
+                    z-index: 9999;
+                    transform: translateY(-100%);
+                    transition: transform 0.2s;
+                `;
+                indicador.innerHTML = '↓ Solte para atualizar';
+                document.body.appendChild(indicador);
+            }
+            if (distancia > 50) {
+                indicador.style.transform = 'translateY(0)';
+            }
         }
-        
-        isPulling = false;
-        touchStartY = 0;
-        touchCurrentY = 0;
-    }, { passive: true });
 
-    // Função para atualizar a página
-    function atualizarPagina() {
-        // Mostrar mensagem
-        mostrarMensagem('Atualizando página...');
-        
-        // Efeito visual
-        document.body.style.opacity = '0.7';
-        document.body.style.transition = 'opacity 0.3s';
-        
-        // Recarregar a página
-        setTimeout(() => {
-            location.reload();
-        }, 500);
-    }
+        function esconderIndicadorPull() {
+            const indicador = document.getElementById('pull-indicator');
+            if (indicador) {
+                indicador.style.transform = 'translateY(-100%)';
+            }
+        }
 
-    // Indicador visual simplificado
-    function mostrarIndicadorPull(distancia) {
-        let indicador = document.getElementById('pull-indicator');
-        
-        if (!indicador) {
-            indicador = document.createElement('div');
-            indicador.id = 'pull-indicator';
-            indicador.style.cssText = `
+        function mostrarMensagem(texto) {
+            const msg = document.createElement('div');
+            msg.style.cssText = `
                 position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                background: #4f46e5;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: #10b981;
                 color: white;
-                text-align: center;
-                padding: 10px;
-                font-size: 14px;
-                z-index: 9999;
-                transform: translateY(-100%);
-                transition: transform 0.2s;
+                padding: 15px 30px;
+                border-radius: 10px;
+                font-weight: bold;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             `;
-            indicador.innerHTML = '↓ Solte para atualizar';
-            document.body.appendChild(indicador);
+            msg.textContent = texto;
+            document.body.appendChild(msg);
+            setTimeout(() => msg.remove(), 1500);
         }
-        
-        // Mostrar conforme a distância
-        if (distancia > 50) {
-            indicador.style.transform = 'translateY(0)';
-        }
-    }
 
-    function esconderIndicadorPull() {
-        const indicador = document.getElementById('pull-indicator');
-        if (indicador) {
-            indicador.style.transform = 'translateY(-100%)';
-        }
-    }
+        // ============================================================
+        // ESCALONAMENTO MOBILE
+        // ============================================================
+        (function() {
+            if (window.innerWidth > 768) return;
+            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
 
-    function mostrarMensagem(texto) {
-        const msg = document.createElement('div');
-        msg.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #10b981;
-            color: white;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-weight: bold;
-            z-index: 10000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        `;
-        msg.textContent = texto;
-        document.body.appendChild(msg);
-        
-        setTimeout(() => msg.remove(), 1500);
-    }
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                if (width <= 320) return 0.55;
+                if (width <= 360) return 0.6;
+                if (width <= 400) return 0.65;
+                if (width <= 500) return 0.75;
+                if (width <= 600) return 0.85;
+                if (width <= 700) return 0.95;
+                return 1;
+            }
 
+            function aplicarEscalaMobile() {
+                if (window.innerWidth > 768) return;
+                const escala = calcularEscalaMobile();
+                document.documentElement.style.setProperty('--scale-ratio', escala);
+                document.documentElement.style.setProperty('--current-width', window.innerWidth);
+                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
+            }
+
+            aplicarEscalaMobile();
+
+            let timeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    } else {
+                        document.documentElement.style.setProperty('--scale-ratio', '1');
+                    }
+                }, 100);
+            });
+
+            window.addEventListener('orientationchange', function() {
+                setTimeout(() => {
+                    if (window.innerWidth <= 768) {
+                        aplicarEscalaMobile();
+                    }
+                }, 200);
+            });
+        })();
+
+        // ============================================================
+        // INICIALIZAÇÃO
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Sistema de Provas - Login carregado!');
+            
+            // 🔥 CARREGAR "LEMBRAR DE MIM" (IDENTIFICADOR E SENHA)
+            carregarLembrar();
+
+            setTimeout(function() {
+                verificarLoginAutomatico();
+            }, 300);
+        });
     </script>
 
-    <script>
-// ============================================
-// NOTIFICAÇÕES PUSH PARA CELULAR
-// ============================================
+    <!-- VLibras Oficial -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
 
-(function() {
-    // Verificar se o navegador suporta
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.log('📱 Push não suportado neste navegador');
-        return;
-    }
-
-    console.log('📱 Push notifications disponível');
-
-    // Verificar status atual
-    if (Notification.permission === 'granted') {
-        console.log('✅ Notificações já permitidas');
-        registrarPushSubscription();
-    } else if (Notification.permission === 'default') {
-        // Nunca perguntou - perguntar após 3 segundos
-        setTimeout(solicitarPermissaoNotificacao, 3000);
-    } else {
-        // Bloqueado - mostrar botão flutuante após 5 segundos
-        setTimeout(mostrarBotaoAtivarNotificacoes, 5000);
-    }
-})();
-
-// Função para solicitar permissão
-async function solicitarPermissaoNotificacao() {
-    try {
-        console.log('📱 Solicitando permissão de notificação...');
-        const permission = await Notification.requestPermission();
-        
-        console.log('📋 Resposta:', permission);
-        
-        if (permission === 'granted') {
-            console.log('✅ Permissão concedida!');
-            await registrarPushSubscription();
-            mostrarNotificacaoBoasVindas();
-        } else {
-            console.log('❌ Permissão negada');
-        }
-    } catch (error) {
-        console.error('❌ Erro ao solicitar permissão:', error);
-    }
-}
-
-// Registrar inscrição push
-async function registrarPushSubscription() {
-    try {
-        // Aguardar service worker estar pronto
-        const registration = await navigator.serviceWorker.ready;
-        
-        // Verificar se já tem inscrição
-        let subscription = await registration.pushManager.getSubscription();
-        
-        if (!subscription) {
-            console.log('🆕 Criando nova inscrição push...');
-            
-            // Chave VAPID pública (você precisa gerar uma)
-            const vapidPublicKey = urlBase64ToUint8Array('BFV6eF6W3rqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQ');
-            
-            subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: vapidPublicKey
-            });
-            
-            console.log('✅ Inscrição criada:', subscription);
-            
-            // Enviar para o servidor
-            await fetch('/api/push/subscribe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                },
-                body: JSON.stringify(subscription)
-            });
-            
-            console.log('✅ Inscrição enviada ao servidor');
-            
-        } else {
-            console.log('✅ Já inscrito em push');
-            
-            // Verificar se a inscrição ainda é válida
-            try {
-                await fetch('/api/push/check-subscription', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                    }
-                });
-            } catch (e) {
-                console.log('⚠️ Erro ao verificar inscrição:', e.message);
-            }
-        }
-    } catch (error) {
-        console.error('❌ Erro ao registrar push:', error);
-    }
-}
-
-// Mostrar notificação de boas-vindas
-function mostrarNotificacaoBoasVindas() {
-    if (Notification.permission === 'granted') {
-        new Notification('📱 Notificações ativadas!', {
-            body: 'Você receberá alertas de provas, resultados e mensagens importantes',
-            icon: '/icons/favicon.ico',
-            badge: '/icons/favicon.ico',
-            vibrate: [200, 100, 200],
-            tag: 'boas-vindas-push',
-            silent: false,
-            requireInteraction: false
-        });
-    }
-}
-
-// Mostrar botão flutuante para quando está bloqueado
-function mostrarBotaoAtivarNotificacoes() {
-    // Verificar se já não existe
-    if (document.getElementById('push-banner')) return;
-    
-    const banner = document.createElement('div');
-    banner.id = 'push-banner';
-    banner.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: white;
-        padding: 20px;
-        border-radius: 16px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        z-index: 10000;
-        animation: slideUp 0.3s ease;
-        max-width: 400px;
-        margin: 0 auto;
-    `;
-    
-    banner.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-            <div style="
-                width: 50px;
-                height: 50px;
-                background: rgba(255,255,255,0.2);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 24px;
-            ">
-                <i class="fas fa-bell-slash"></i>
-            </div>
-            <div style="flex: 1;">
-                <strong style="font-size: 16px;">🔕 Notificações bloqueadas</strong>
-                <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.9;">
-                    Você não está recebendo alertas de provas e resultados
-                </p>
-            </div>
-            <button onclick="this.parentElement.parentElement.remove()" style="
-                background: none;
-                border: none;
-                color: white;
-                font-size: 20px;
-                cursor: pointer;
-                opacity: 0.7;
-            ">×</button>
-        </div>
-        
-        <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-            <p style="margin: 0 0 10px; font-size: 14px;">
-                <i class="fas fa-lock"></i> 
-                <strong>Como ativar no Microsoft Edge:</strong>
-            </p>
-            <ol style="margin: 0; padding-left: 20px; font-size: 13px;">
-                <li>Clique no <strong>cadeado 🔒</strong> ao lado da URL</li>
-                <li>Vá em <strong>"Permissões para este site"</strong></li>
-                <li>Em <strong>"Notificações"</strong>, escolha <strong>"Permitir"</strong></li>
-                <li>Recarregue a página</li>
-            </ol>
-        </div>
-        
-        <button onclick="window.location.reload()" style="
-            width: 100%;
-            padding: 12px;
-            background: white;
-            color: #667eea;
-            border: none;
-            border-radius: 30px;
-            font-weight: bold;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        ">
-            <i class="fas fa-sync-alt"></i>
-            Já permiti - Recarregar
-        </button>
-    `;
-    
-    document.body.appendChild(banner);
-    
-    // Adicionar animação
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideUp {
-            from { transform: translateY(100px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-// Função auxiliar para converter chave VAPID
-function urlBase64ToUint8Array(base64String) {
-    while (base64String.length % 4 !== 0) {
-        base64String += '=';
-    }
-    base64String = base64String.replace(/\-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64String);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-}
-
-// Função para testar (opcional)
-window.testarNotificacao = function() {
-    if (Notification.permission === 'granted') {
-        new Notification('🔔 Teste manual', {
-            body: 'Notificação de teste',
-            icon: '/icons/favicon.ico'
-        });
-        console.log('✅ Notificação enviada');
-    } else {
-        console.log('❌ Sem permissão');
-        solicitarPermissaoNotificacao();
-    }
-};
-</script>
-
-<script>
-// ============================================
-// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-// ============================================
-
-(function() {
-    // Só ativar em telas menores que 768px
-    if (window.innerWidth > 768) {
-        console.log('📐 Desktop detectado - escalonamento desativado');
-        return;
-    }
-    
-    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-    
-    // Função para calcular a escala baseada na largura (apenas mobile)
-    function calcularEscalaMobile() {
-        const width = window.innerWidth;
-        
-        // Largura de referência para mobile (768px)
-        const baseWidth = 768;
-        
-        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
-        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-        
-        // Ajustes específicos para faixas de tamanho
-        if (width <= 320) escala = 0.55;
-        else if (width <= 360) escala = 0.6;
-        else if (width <= 400) escala = 0.65;
-        else if (width <= 500) escala = 0.75;
-        else if (width <= 600) escala = 0.85;
-        else if (width <= 700) escala = 0.95;
-        else escala = 1;
-        
-        return escala;
-    }
-    
-    // Função para aplicar a escala
-    function aplicarEscalaMobile() {
-        // Só aplicar se ainda estiver em mobile
-        if (window.innerWidth > 768) return;
-        
-        const escala = calcularEscalaMobile();
-        
-        // Atualizar variável CSS
-        document.documentElement.style.setProperty('--scale-ratio', escala);
-        document.documentElement.style.setProperty('--current-width', window.innerWidth);
-        
-        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-    }
-    
-    // Aplicar inicial
-    aplicarEscalaMobile();
-    
-    // Aplicar ao redimensionar (com debounce)
-    let timeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // Verificar se ainda está em mobile
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            } else {
-                // Se passou para desktop, resetar escala
-                document.documentElement.style.setProperty('--scale-ratio', '1');
-                console.log('📐 Modo desktop - escala resetada');
-            }
-        }, 100);
-    });
-    
-    // Também aplicar quando orientação mudar
-    window.addEventListener('orientationchange', function() {
-        setTimeout(() => {
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            }
-        }, 200);
-    });
-    
-    console.log('✅ Sistema de escalonamento mobile ativo!');
-    
-})();
-</script>
-
-<script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker ativo'))
-            .catch(err => console.log('❌ Erro:', err));
-    });
-}
-
-window.addEventListener('online', () => console.log('🌐 Online'));
-window.addEventListener('offline', () => console.log('📴 Offline'));
-</script>
-    
 </body>
 </html>

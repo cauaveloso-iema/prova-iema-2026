@@ -884,13 +884,47 @@ app.use('/api/enfermaria-monitoramento', enfermariaMonitoramentoRoutes);
 const rodizioRefeicaoRoutes = require('./routes/rodizioRefeicao');
 app.use('/api/rodizio', rodizioRefeicaoRoutes);
 
+// Importar rotas do supervisao
+const supervisaoRoutes = require('./routes/supervisao');
+app.use('/api/supervisao', supervisaoRoutes);
+
+// Importar rotas da PSCICOLOGIA
+const psicologiaRoutes = require('./routes/psicologia');
+app.use('/api/psicologia', psicologiaRoutes);
+
+// Importar rotas da Assistente Social
+const assistenteSocialRoutes = require('./routes/assistente-social');
+app.use('/api/assistente-social', assistenteSocialRoutes);
+
+//PROTAGONISMO
+
+const protagonismoRoutes = require('./routes/protagonismo');
+const protagonismoPublicoRoutes = require('./routes/protagonismo-publico');
+
+app.use('/api/protagonismo', protagonismoRoutes);
+app.use('/api/protagonismo-publico', protagonismoPublicoRoutes);
+
 // ============================================================================
-// FUNÇÃO PARA TESTAR MODELOS GROQ
+// FUNÇÃO PARA TESTAR MODELOS GROQ ATUALIZADA 09/09/26
 // ============================================================================
-async function testarModelosDisponiveis() {
-  if (!groq) return;
+
+async function testarModelosDisponiveis(groq) {
+  if (!groq) {
+    console.error('❌ Groq não inicializado');
+    return [];
+  }
   
+  // Lista ATUALIZADA com modelos confirmados e funcionais
   const modelosParaTestar = [
+    // Modelos confirmados como disponíveis
+    "allam-2-7b",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-safeguard-20b",
+    "qwen/qwen3.6-27b",
+    "qwen/qwen3.8-27b",
+    
+    // Modelos antigos (para verificar se ainda funcionam)
     "llama-3.2-90b-vision-preview",
     "llama-3.2-11b-vision-preview",
     "llama-3.2-3b-preview",
@@ -904,8 +938,11 @@ async function testarModelosDisponiveis() {
   ];
 
   console.log('🔍 Testando modelos disponíveis na Groq...');
+  console.log('='.repeat(50));
   
   const modelosFuncionais = [];
+  const modelosDescontinuados = [];
+  const modelosErro = [];
   
   for (const modelo of modelosParaTestar) {
     try {
@@ -913,32 +950,76 @@ async function testarModelosDisponiveis() {
       
       const completion = await groq.chat.completions.create({
         model: modelo,
-        messages: [{ role: "user", content: "Teste" }],
-        max_tokens: 1
+        messages: [{ role: "user", content: "Olá, teste rápido" }],
+        max_tokens: 5,
+        temperature: 0.1
       });
       
-      modelosFuncionais.push(modelo);
-      console.log(`  ✅ ${modelo} - Disponível`);
+      if (completion.choices && completion.choices.length > 0) {
+        modelosFuncionais.push(modelo);
+        console.log(`  ✅ ${modelo} - Disponível e funcionando`);
+      } else {
+        modelosErro.push(modelo);
+        console.log(`  ⚠️ ${modelo} - Resposta vazia`);
+      }
       
     } catch (error) {
-      if (error.message.includes('decommissioned')) {
+      const errorMsg = error.message || '';
+      
+      if (errorMsg.includes('decommissioned') || errorMsg.includes('discontinued')) {
+        modelosDescontinuados.push(modelo);
         console.log(`  ❌ ${modelo} - Descontinuado`);
-      } else if (error.message.includes('not found')) {
-        console.log(`  ❌ ${modelo} - Não encontrado`);
+      } else if (errorMsg.includes('not found') || errorMsg.includes('404')) {
+        modelosErro.push(modelo);
+        console.log(`  ❌ ${modelo} - Não encontrado (404)`);
+      } else if (errorMsg.includes('rate limit') || errorMsg.includes('429')) {
+        console.log(`  ⏳ ${modelo} - Rate limit, pulando...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
       } else {
-        console.log(`  ⚠️ ${modelo} - Erro: ${error.message.substring(0, 50)}`);
+        modelosErro.push(modelo);
+        console.log(`  ⚠️ ${modelo} - Erro: ${errorMsg.substring(0, 80)}`);
       }
     }
     
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Aguarda para não estourar limites de rate (30 req/min)
+    await new Promise(resolve => setTimeout(resolve, 250));
   }
   
   console.log('='.repeat(50));
-  console.log('📊 MODELOS DISPONÍVEIS:');
-  modelosFuncionais.forEach(modelo => console.log(`  • ${modelo}`));
+  console.log('📊 RESULTADO DO TESTE DE MODELOS:');
+  console.log('-'.repeat(50));
+  
+  console.log('\n✅ MODELOS FUNCIONAIS:');
+  if (modelosFuncionais.length > 0) {
+    modelosFuncionais.forEach(modelo => console.log(`  • ${modelo}`));
+  } else {
+    console.log('  ⚠️ Nenhum modelo funcional encontrado!');
+  }
+  
+  console.log('\n❌ MODELOS DESCONTINUADOS:');
+  if (modelosDescontinuados.length > 0) {
+    modelosDescontinuados.forEach(modelo => console.log(`  • ${modelo}`));
+  } else {
+    console.log('  Nenhum modelo descontinuado');
+  }
+  
+  console.log('\n⚠️ MODELOS COM ERRO:');
+  if (modelosErro.length > 0) {
+    modelosErro.forEach(modelo => console.log(`  • ${modelo}`));
+  } else {
+    console.log('  Nenhum modelo com erro');
+  }
+  
+  console.log('='.repeat(50));
+  console.log(`📈 Total: ${modelosFuncionais.length} funcionais, ${modelosDescontinuados.length} descontinuados, ${modelosErro.length} com erro`);
   console.log('='.repeat(50));
   
   return modelosFuncionais;
+}
+
+// Exportar para uso em outros módulos
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = testarModelosDisponiveis;
 }
 
 // ============================================================================
@@ -1833,6 +1914,14 @@ app.post('/api/auth/login', async (req, res) => {
             redirectTo = '/gestao-gestal.html';
           } else if (user.role === 'enfermaria') {
             redirectTo = '/enfermaria.html';
+          } else if (user.role === 'supervisao') {
+            redirectTo = '/supervisao.html';
+          } else if (user.role === 'psicologia') {
+            redirectTo = '/psicologia.html';
+          } else if (user.role === 'protagonismo') {
+            redirectTo = '/protagonismo.html';
+          } else if (user.role === 'assistente-social') {
+            redirectTo = '/assistente-social.html';
           } else if (user.role === 'aluno') {
             redirectTo = '/aluno.html';
           } else {
@@ -1965,7 +2054,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
     const perfisCom2FA = ['super_admin'];
     if (exigir2FA) {
-      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria');
+      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria', 'supervisao','psicologia','assistente-social','protagonismo');
     }
     
     if (perfisCom2FA.includes(user.role)) {
@@ -2049,6 +2138,14 @@ app.post('/api/auth/login', async (req, res) => {
       redirectTo = '/gestao-geral.html';
     } else if (user.role === 'enfermaria') {
       redirectTo = '/enfermaria.html';
+    } else if (user.role === 'supervisao') {
+      redirectTo = '/supervisao.html';
+    } else if (user.role === 'psicologia') {
+      redirectTo = '/psicologia.html';
+    } else if (user.role === 'assistente-social') {
+      redirectTo = '/assistente-social.html';
+    } else if (user.role === 'protagonismo') {
+      redirectTo = '/protagonismo.html';
     } else if (user.role === 'aluno') {
       redirectTo = '/aluno.html';
     } else {
@@ -10737,26 +10834,20 @@ app.get('/api/test', (req, res) => {
 const ChatbotBackend = require('./chatbot');
 const chatbot = new ChatbotBackend();
 
-// CORREÇÃO COMPLETA DO ENDPOINT DO CHATBOT:
+// ============================================
+// ROTA DO CHATBOT - CORRIGIDA
+// ============================================
+
 app.post('/api/chatbot/message', authenticateToken, async (req, res) => {
     try {
-        const { message, conversationHistory = [] } = req.body;
-        const userId = req.userId;
+        const { message, sessionId, conversationHistory, context } = req.body;
         
-        // Obter rota de forma segura para Node.js
-        const route = req.headers.referer || 
-                     req.headers.origin || 
-                     req.body.route || 
-                     '/';
-
-        console.log(`💬 Chatbot: Recebida mensagem de ${userId}: ${message.substring(0, 50)}...`);
-        console.log(`📍 Rota detectada: ${route}`);
-
         const result = await chatbot.processMessage({
-            message,
-            route,
-            conversationHistory,
-            userId
+            message: message,
+            route: req.headers.referer || req.headers.origin || req.body.route || '/',
+            conversationHistory: conversationHistory || [],
+            userId: req.userId,
+            context: context || {} // Passar o context
         });
 
         res.json(result);
@@ -10771,24 +10862,19 @@ app.post('/api/chatbot/message', authenticateToken, async (req, res) => {
     }
 });
 
-// CORREÇÃO DA ROTA PÚBLICA TAMBÉM:
+// ============================================
+// ROTA PÚBLICA DO CHATBOT - CORRIGIDA
+// ============================================
+
 app.post('/api/chatbot/public/message', async (req, res) => {
     try {
-        const { message, conversationHistory = [] } = req.body;
+        const { message, sessionId, conversationHistory, context } = req.body;
         
-        // Obter rota de forma segura para Node.js
-        const route = req.headers.referer || 
-                     req.headers.origin || 
-                     req.body.route || 
-                     '/';
-
-        console.log(`💬 Chatbot público: ${message.substring(0, 50)}...`);
-        console.log(`📍 Rota detectada: ${route}`);
-
         const result = await chatbot.processMessage({
-            message,
-            route,
-            conversationHistory
+            message: message,
+            route: req.headers.referer || req.headers.origin || req.body.route || '/',
+            conversationHistory: conversationHistory || [],
+            context: context || {} // Passar o context
         });
 
         res.json(result);
@@ -18354,6 +18440,14 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
             dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'enfermaria') {
             dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'supervisao') {
+            dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'protagonismo') {
+            dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'psicologia') {
+            dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'assistente-social') {
+            dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'cozinha') {
             dadosEspecificos.departamento = user.departamento;
         }
@@ -18406,6 +18500,14 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (req.userRole === 'coordenacao_patio') {
             camposPermitidos.push('departamento');
         } else if (req.userRole === 'enfermaria') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'supervisao') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'protagonismo') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'assistente-social') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'psicologia') {
             camposPermitidos.push('departamento');
         } else if (req.userRole === 'gestao_geral') {
             camposPermitidos.push('departamento');
@@ -18532,6 +18634,14 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (user.role === 'coordenacao_patio') {
             perfilAtualizado.departamento = user.departamento;
         } else if (user.role === 'enfermaria') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'supervisao') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'protagonismo') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'assistente-social') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'psicologia') {
             perfilAtualizado.departamento = user.departamento;
         } else if (user.role === 'gestao_geral') {
             perfilAtualizado.departamento = user.departamento;

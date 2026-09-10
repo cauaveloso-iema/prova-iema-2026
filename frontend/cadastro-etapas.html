@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+
+    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+    
+    <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(registration => {
+            console.log('✅ Service Worker registrado:', registration.scope);
+          })
+          .catch(error => {
+            console.log('❌ Service Worker falhou:', error);
+          });
+      });
+    }
+    </script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+    <title>Cadastro - Sistema de Provas</title>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
+
+    <!-- CSS EXTERNO -->
+    <link rel="stylesheet" href="css/cadastro.css">
+
+</head>
+<body>
+
+    <div class="register-container">
+        <!-- HEADER -->
+        <div class="register-header">
+            <div class="icon-wrapper">
+                <i class="fas fa-graduation-cap"></i>
+            </div>
+            <h1>Cadastro em <span>4 etapas</span></h1>
+            <p>Experiência simples, rápida e personalizada para Alunos e Professores.</p>
+        </div>
+
+        <!-- ALERTA -->
+        <div id="alert" class="alert"></div>
+
+        <!-- STEP INDICATOR -->
+        <div class="step-indicator">
+            <div class="step-dot active" data-step="1"></div>
+            <div class="step-line" data-step="1"></div>
+            <div class="step-dot" data-step="2"></div>
+            <div class="step-line" data-step="2"></div>
+            <div class="step-dot" data-step="3"></div>
+            <div class="step-line" data-step="3"></div>
+            <div class="step-dot" data-step="4"></div>
+        </div>
+
+        <div class="step-label">
+            Etapa <span id="currentStepLabel">1</span> de 4
+        </div>
+
+        <!-- ============================================================
+        STEP 1 - ESCOLHA O TIPO DE CONTA
+        ============================================================ -->
+        <div class="step-content active" data-step="1">
+            <h2 class="step-title">Escolha o tipo de conta</h2>
+            <p class="step-subtitle">Como você vai usar o Sistema de Provas?</p>
+
+            <div class="role-selection">
+                <div class="role-option active" data-role="aluno" onclick="selecionarRole('aluno')">
+                    <i class="fas fa-user-graduate"></i>
+                    <div class="role-title">Sou Aluno</div>
+                    <div class="role-desc">Quero fazer provas e acompanhar meus resultados</div>
+                </div>
+                <div class="role-option" data-role="professor" onclick="selecionarRole('professor')">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                    <div class="role-title">Sou Professor</div>
+                    <div class="role-desc">Quero criar e gerenciar provas e turmas</div>
+                </div>
+            </div>
+
+            <div class="step-buttons">
+                <button class="btn-next" onclick="nextStep()">
+                    Continuar <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        STEP 2 - DADOS PESSOAIS
+        ============================================================ -->
+        <div class="step-content" data-step="2">
+            <h2 class="step-title">Dados pessoais</h2>
+            <p class="step-subtitle">Vamos começar com suas informações básicas.</p>
+
+            <div class="form-group">
+                <label for="registerNome"><i class="fas fa-user"></i> Nome Completo</label>
+                <input type="text" id="registerNome" class="form-control" required placeholder="Seu nome completo">
+            </div>
+
+            <div class="form-group">
+                <label for="registerCPF"><i class="fas fa-id-card"></i> CPF <span class="required-badge">*</span></label>
+                <input type="text" id="registerCPF" class="form-control" required 
+                    placeholder="000.000.000-00" 
+                    maxlength="14"
+                    oninput="formatarCPF(this)">
+                <small>Digite apenas números. O formato será aplicado automaticamente.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="registerTelefone"><i class="fas fa-phone"></i> Telefone <span class="required-badge">*</span></label>
+                <input type="text" id="registerTelefone" class="form-control" required 
+                    placeholder="(11) 99999-9999" 
+                    maxlength="15"
+                    oninput="formatarTelefone(this)">
+                <small>Digite seu telefone com DDD. Formato: (11) 99999-9999</small>
+            </div>
+
+            <div class="form-group">
+                <label for="registerEmail">
+                    <i class="fas fa-envelope"></i> 
+                    Email Institucional 
+                    <span class="required-badge">*</span>
+                </label>
+                <input type="email" id="registerEmail" class="form-control" required 
+                    placeholder="seu.nome@iemasaoluiscentro.net"
+                    pattern=".+@iemasaoluiscentro\.net$"
+                    title="Somente emails institucionais (@iemasaoluiscentro.net)">
+                <small>Use seu email institucional: nome.sobrenome@iemasaoluiscentro.net</small>
+            </div>
+
+            <div class="step-buttons">
+                <button class="btn-prev" onclick="prevStep()">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </button>
+                <button class="btn-next" onclick="nextStep()">
+                    Continuar <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        STEP 3 - DADOS ACADÊMICOS (ALUNO) / PROFISSIONAIS (PROFESSOR)
+        ============================================================ -->
+        <div class="step-content" data-step="3">
+            <h2 class="step-title" id="step3Title">Dados acadêmicos</h2>
+            <p class="step-subtitle" id="step3Subtitle">Agora, suas informações acadêmicas.</p>
+
+            <!-- ==========================================
+                 CAMPOS EXCLUSIVOS PARA ALUNO
+                 ========================================== -->
+            <div id="alunoFields" class="role-fields active">
+                <!-- CURSO - OBRIGATÓRIO -->
+                <div class="form-group">
+                    <label for="registerCurso"><i class="fas fa-graduation-cap"></i> Curso <span class="required-badge">*</span></label>
+                    <select id="registerCurso" class="form-control" required onchange="atualizarTurmasPorCurso()">
+                        <option value="">Carregando cursos...</option>
+                    </select>
+                </div>
+
+                <!-- TURMA - OBRIGATÓRIA -->
+                <div class="form-group">
+                    <label for="registerTurma"><i class="fas fa-users"></i> Turma <span class="required-badge">*</span></label>
+                    <select id="registerTurma" class="form-control" required>
+                        <option value="">Primeiro selecione seu curso</option>
+                    </select>
+                    <small><i class="fas fa-info-circle"></i> Selecione o curso primeiro para ver as turmas disponíveis</small>
+                </div>
+
+                <!-- PERÍODO - OPCIONAL -->
+                <div class="form-group">
+                    <label for="registerPeriodo"><i class="fas fa-calendar-alt"></i> Período (opcional)</label>
+                    <input type="text" id="registerPeriodo" class="form-control" placeholder="Ex: 3º período">
+                </div>
+
+                <!-- ACESSIBILIDADE - SOMENTE PARA ALUNOS -->
+                <div class="form-group">
+                    <label for="registerAcessibilidade">
+                        <i class="fas fa-universal-access"></i> 
+                        Precisa de acessibilidade para realizar a prova? 
+                        <span class="required-badge">*</span>
+                    </label>
+                    <div class="acessibilidade-options">
+                        <label>
+                            <input type="radio" name="acessibilidade" id="acessibilidadeSim" value="sim">
+                            Sim, preciso de prova adaptada
+                        </label>
+                        <label>
+                            <input type="radio" name="acessibilidade" id="acessibilidadeNao" value="nao">
+                            Não, não preciso
+                        </label>
+                    </div>
+                    <small style="font-style: italic;">
+                        <i class="fas fa-info-circle"></i> 
+                        Se você selecionar "Sim", terá acesso a uma versão adaptada da prova com apenas 3 alternativas.
+                    </small>
+                </div>
+
+                <!-- CONDIÇÃO ESPECÍFICA (aparece se selecionar Sim) -->
+                <div id="condicaoAcessibilidade" class="condicao-acessibilidade">
+                    <div class="form-group">
+                        <label for="registerCondicao">
+                            <i class="fas fa-wheelchair"></i> 
+                            Por favor, especifique sua necessidade de acessibilidade
+                            <span class="required-badge">*</span>
+                        </label>
+                        <select id="registerCondicao" class="form-control">
+                            <option value="">Selecione o tipo de adaptação necessária</option>
+                            <option value="visual">Deficiência Visual (fonte ampliada, contraste)</option>
+                            <option value="auditiva">Deficiência Auditiva (Libras, legendas)</option>
+                            <option value="motora">Deficiência Motora (tempo adicional, interface adaptada)</option>
+                            <option value="intelectual">Deficiência Intelectual/Cognitiva</option>
+                            <option value="dislexia">Dislexia ou outra dificuldade de leitura</option>
+                            <option value="tdah">TDAH (Transtorno de Déficit de Atenção)</option>
+                            <option value="outra">Outra condição</option>
+                        </select>
+                        <small>Esta informação será usada para preparar a melhor adaptação para sua prova.</small>
+                    </div>
+                    <div id="outraCondicaoField" style="display: none; margin-top: 10px;">
+                        <div class="form-group">
+                            <label for="registerOutraCondicao">Qual condição?</label>
+                            <input type="text" id="registerOutraCondicao" class="form-control" placeholder="Descreva sua necessidade">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MATRÍCULA - OPCIONAL PARA ALUNO -->
+                <div class="form-group" id="matriculaFieldAluno">
+                    <label for="registerMatriculaAluno">
+                        <i class="fas fa-id-card"></i> 
+                        Matrícula (opcional)
+                    </label>
+                    <input type="text" id="registerMatriculaAluno" class="form-control" 
+                        placeholder="Sua matrícula (opcional)"
+                        maxlength="6"
+                        oninput="formatarMatricula(this)">
+                </div>
+            </div>
+
+            <!-- ==========================================
+                 CAMPOS EXCLUSIVOS PARA PROFESSOR
+                 ========================================== -->
+            <div id="professorFields" class="role-fields" style="display: none;">
+                <!-- EIXO - OBRIGATÓRIO -->
+                <div class="form-group">
+                    <label for="registerEixo"><i class="fas fa-sitemap"></i> Eixo <span class="required-badge">*</span></label>
+                    <select id="registerEixo" class="form-control">
+                        <option value="">Carregando eixos...</option>
+                    </select>
+                </div>
+
+                <!-- DEPARTAMENTO - OPCIONAL -->
+                <div class="form-group">
+                    <label for="registerDepartamento"><i class="fas fa-building"></i> Departamento (opcional)</label>
+                    <input type="text" id="registerDepartamento" class="form-control" placeholder="Seu departamento">
+                </div>
+
+                <!-- TITULAÇÃO - OPCIONAL -->
+                <div class="form-group">
+                    <label for="registerTitulacao"><i class="fas fa-award"></i> Titulação (opcional)</label>
+                    <input type="text" id="registerTitulacao" class="form-control" placeholder="Ex: Mestre, Doutor">
+                </div>
+
+                <!-- MATRÍCULA - OBRIGATÓRIA PARA PROFESSOR -->
+                <div class="form-group" id="matriculaFieldProfessor">
+                    <label for="registerMatriculaProfessor">
+                        <i class="fas fa-id-card"></i> 
+                        Matrícula <span class="required-badge">*</span>
+                    </label>
+                    <input type="text" id="registerMatriculaProfessor" class="form-control" 
+                        placeholder="Digite sua matrícula (6 dígitos)"
+                        maxlength="6"
+                        oninput="formatarMatricula(this)">
+                    <small>Matrícula de 6 dígitos obrigatória para professores</small>
+                </div>
+            </div>
+
+            <div class="step-buttons">
+                <button class="btn-prev" onclick="prevStep()">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </button>
+                <button class="btn-next" onclick="nextStep()">
+                    Continuar <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        STEP 4 - SEGURANÇA (SENHA)
+        ============================================================ -->
+        <div class="step-content" data-step="4">
+            <h2 class="step-title">Segurança</h2>
+            <p class="step-subtitle">Defina sua senha para acessar o sistema.</p>
+
+            <div class="form-group">
+                <label for="registerPassword"><i class="fas fa-lock"></i> Senha</label>
+                <input type="password" id="registerPassword" class="form-control" required placeholder="Mínimo 6 caracteres">
+            </div>
+
+            <div class="form-group">
+                <label for="registerConfirmPassword"><i class="fas fa-lock"></i> Confirmar Senha</label>
+                <input type="password" id="registerConfirmPassword" class="form-control" required placeholder="Digite a senha novamente">
+            </div>
+
+            <div class="password-requirements">
+                <p>Sua senha deve conter:</p>
+                <ul>
+                    <li><i class="fas fa-check" style="color: #16a34a;"></i> Mínimo de 6 caracteres</li>
+                    <li><i class="fas fa-check" style="color: #16a34a;"></i> Letras e números</li>
+                </ul>
+            </div>
+
+            <div class="step-buttons">
+                <button class="btn-prev" onclick="prevStep()">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </button>
+                <button class="btn-submit" id="btnRegister" onclick="enviarCadastro()">
+                    <i class="fas fa-user-plus"></i> Criar Conta
+                </button>
+            </div>
+        </div>
+
+        <!-- WhatsApp na aba de cadastro -->
+        <div style="margin-top: 20px;">
+            <a href="https://wa.me/qr/F4U5WMT37EUDB1" target="_blank" class="whatsapp-link">
+                <i class="fab fa-whatsapp"></i> Precisa de ajuda? Entre em contato
+            </a>
+        </div>
+
+        <!-- Voltar para login -->
+        <div class="register-link" style="text-align: center; margin-top: 16px; font-size: 14px; color: var(--gray-600);">
+            Já possui uma conta? <a href="login.html" style="color: var(--primary); font-weight: 600; text-decoration: none;">Fazer login</a>
+        </div>
+
+    </div>
+
+    <!-- ================================================================
+    JAVASCRIPT - TODAS AS FUNÇÕES DO SEU CÓDIGO ORIGINAL
+    ================================================================ -->
+    <script>
+        // ============================================================
+        // VARIÁVEIS GLOBAIS (COPIADAS DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        let cursosDoBanco = [];
+        let currentStep = 1;
+        const totalSteps = 4;
+        let selectedRole = 'aluno';
+
+        // ============================================================
+        // DETECTAR AMBIENTE (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        const IS_LOCALHOST = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1';
+        const IS_RENDER = window.location.hostname.includes('render.com') || 
+                        window.location.hostname.includes('sistema-avaliativo');
+
+        let API_BASE_URL;
+
+        if (IS_LOCALHOST) {
+            API_BASE_URL = 'http://localhost:3000/api';
+            console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
+        } else if (IS_RENDER) {
+            API_BASE_URL = window.location.origin + '/api';
+            console.log('🚀 Modo: PRODUÇÃO (Render)');
+        } else {
+            API_BASE_URL = '/api';
+            console.log('⚙️ Modo: FALLBACK');
+        }
+        console.log('🌐 API URL:', API_BASE_URL);
+
+        // ============================================================
+        // FUNÇÕES DE FORMATAÇÃO (COPIADAS DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        function formatarCPF(input) {
+            let cpf = input.value.replace(/\D/g, '');
+            cpf = cpf.substring(0, 11);
+            if (cpf.length > 9) {
+                cpf = cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+            } else if (cpf.length > 6) {
+                cpf = cpf.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+            } else if (cpf.length > 3) {
+                cpf = cpf.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+            }
+            input.value = cpf;
+        }
+
+        function formatarTelefone(input) {
+            let telefone = input.value.replace(/\D/g, '');
+            telefone = telefone.substring(0, 11);
+            if (telefone.length > 10) {
+                telefone = telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            } else if (telefone.length > 6) {
+                telefone = telefone.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+            } else if (telefone.length > 2) {
+                telefone = telefone.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+            } else if (telefone.length > 0) {
+                telefone = telefone.replace(/^(\d{0,2})/, '($1');
+            }
+            input.value = telefone;
+        }
+
+        function formatarMatricula(input) {
+            let matricula = input.value.replace(/\D/g, '');
+            matricula = matricula.substring(0, 6);
+            input.value = matricula;
+        }
+
+        function validarCPF(cpf) {
+            cpf = cpf.replace(/\D/g, '');
+            if (cpf.length !== 11) return false;
+            if (/^(\d)\1+$/.test(cpf)) return false;
+            let soma = 0;
+            let resto;
+            for (let i = 1; i <= 9; i++) {
+                soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
+            }
+            resto = (soma * 10) % 11;
+            if ((resto === 10) || (resto === 11)) resto = 0;
+            if (resto !== parseInt(cpf.substring(9, 10))) return false;
+            soma = 0;
+            for (let i = 1; i <= 10; i++) {
+                soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
+            }
+            resto = (soma * 10) % 11;
+            if ((resto === 10) || (resto === 11)) resto = 0;
+            if (resto !== parseInt(cpf.substring(10, 11))) return false;
+            return true;
+        }
+
+        function validarTelefone(telefone) {
+            telefone = telefone.replace(/\D/g, '');
+            return telefone.length >= 10 && telefone.length <= 11;
+        }
+
+        // ============================================================
+        // FUNÇÕES DE NAVEGAÇÃO DOS STEPS
+        // ============================================================
+        function nextStep() {
+            if (currentStep < totalSteps) {
+                if (!validarStepAtual()) {
+                    return;
+                }
+                currentStep++;
+                atualizarStep();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                atualizarStep();
+            }
+        }
+
+        function atualizarStep() {
+            document.querySelectorAll('.step-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.querySelector(`.step-content[data-step="${currentStep}"]`).classList.add('active');
+
+            document.querySelectorAll('.step-dot').forEach((dot, index) => {
+                const step = index + 1;
+                dot.classList.remove('active', 'done');
+                if (step === currentStep) {
+                    dot.classList.add('active');
+                } else if (step < currentStep) {
+                    dot.classList.add('done');
+                }
+            });
+
+            document.querySelectorAll('.step-line').forEach((line, index) => {
+                const step = index + 1;
+                line.classList.remove('done');
+                if (step < currentStep) {
+                    line.classList.add('done');
+                }
+            });
+
+            document.getElementById('currentStepLabel').textContent = currentStep;
+            document.querySelector('.register-container').scrollTop = 0;
+        }
+
+        function validarStepAtual() {
+            if (currentStep === 1) {
+                return true;
+            }
+
+            if (currentStep === 2) {
+                const nome = document.getElementById('registerNome').value.trim();
+                const cpf = document.getElementById('registerCPF').value;
+                const telefone = document.getElementById('registerTelefone').value;
+                const email = document.getElementById('registerEmail').value.trim();
+
+                if (!nome) {
+                    mostrarAlerta('Preencha o nome completo');
+                    return false;
+                }
+                if (!cpf || !validarCPF(cpf)) {
+                    mostrarAlerta('CPF inválido. Digite um CPF válido');
+                    return false;
+                }
+                if (!telefone || !validarTelefone(telefone)) {
+                    mostrarAlerta('Telefone inválido. Digite um telefone válido com DDD');
+                    return false;
+                }
+                if (!email || !email.includes('@')) {
+                    mostrarAlerta('Email inválido. Digite um email válido');
+                    return false;
+                }
+                return true;
+            }
+
+            if (currentStep === 3) {
+                if (selectedRole === 'aluno') {
+                    const curso = document.getElementById('registerCurso').value;
+                    const turma = document.getElementById('registerTurma').value;
+                    if (!curso) {
+                        mostrarAlerta('Selecione um curso');
+                        return false;
+                    }
+                    if (!turma) {
+                        mostrarAlerta('Selecione sua turma');
+                        return false;
+                    }
+                } else {
+                    const eixo = document.getElementById('registerEixo').value;
+                    const matricula = document.getElementById('registerMatriculaProfessor').value.trim();
+                    if (!eixo) {
+                        mostrarAlerta('Professores devem selecionar um eixo');
+                        return false;
+                    }
+                    if (!matricula || matricula.replace(/\D/g, '').length !== 6) {
+                        mostrarAlerta('Matrícula inválida. Deve conter exatamente 6 números');
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            return true;
+        }
+
+        // ============================================================
+        // SELEÇÃO DE ROLE (COPIADA DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        function selecionarRole(role) {
+            selectedRole = role;
+            
+            document.querySelectorAll('.role-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            document.querySelector(`.role-option[data-role="${role}"]`).classList.add('active');
+
+            const alunoFields = document.getElementById('alunoFields');
+            const professorFields = document.getElementById('professorFields');
+
+            if (role === 'aluno') {
+                // Mostrar campos de ALUNO, esconder de PROFESSOR
+                alunoFields.style.display = 'block';
+                alunoFields.classList.add('active');
+                professorFields.style.display = 'none';
+                professorFields.classList.remove('active');
+
+                // Radio de acessibilidade obrigatório
+                document.querySelectorAll('input[name="acessibilidade"]').forEach(r => {
+                    r.setAttribute('required', 'true');
+                });
+
+                document.getElementById('step3Title').textContent = 'Dados acadêmicos';
+                document.getElementById('step3Subtitle').textContent = 'Agora, suas informações acadêmicas.';
+
+            } else {
+                // Mostrar campos de PROFESSOR, esconder de ALUNO
+                alunoFields.style.display = 'none';
+                alunoFields.classList.remove('active');
+                professorFields.style.display = 'block';
+                professorFields.classList.add('active');
+
+                // Radio de acessibilidade NÃO obrigatório
+                document.querySelectorAll('input[name="acessibilidade"]').forEach(r => {
+                    r.removeAttribute('required');
+                });
+
+                // Carregar eixos
+                carregarEixosParaProfessor();
+
+                document.getElementById('step3Title').textContent = 'Informações profissionais';
+                document.getElementById('step3Subtitle').textContent = 'Conte-nos sobre sua área de atuação.';
+            }
+        }
+
+        // ============================================================
+        // CARREGAR CURSOS DO BANCO (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        async function carregarCursosDoBanco() {
+            try {
+                console.log('📚 Carregando cursos do banco...');
+                const response = await fetch(`${API_BASE_URL}/cursos`);
+                const data = await response.json();
+
+                if (data.success) {
+                    cursosDoBanco = data.cursos || [];
+                    console.log(`✅ ${cursosDoBanco.length} cursos carregados`);
+
+                    const cursoSelect = document.getElementById('registerCurso');
+                    if (cursoSelect) {
+                        cursoSelect.innerHTML = '<option value="">Selecione seu curso técnico</option>';
+                        const cursosOrdenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
+                        cursosOrdenados.forEach(curso => {
+                            const option = document.createElement('option');
+                            option.value = curso.nome;
+                            option.textContent = curso.nome;
+                            cursoSelect.appendChild(option);
+                        });
+                    }
+                } else {
+                    console.error('❌ Erro ao carregar cursos:', data.error);
+                    const cursoSelect = document.getElementById('registerCurso');
+                    if (cursoSelect) cursoSelect.innerHTML = '<option value="">Erro ao carregar cursos</option>';
+                }
+            } catch (error) {
+                console.error('❌ Erro na requisição:', error);
+                const cursoSelect = document.getElementById('registerCurso');
+                if (cursoSelect) cursoSelect.innerHTML = '<option value="">Erro de conexão</option>';
+            }
+        }
+
+        // ============================================================
+        // ATUALIZAR TURMAS POR CURSO (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        function atualizarTurmasPorCurso() {
+            const cursoSelect = document.getElementById('registerCurso');
+            const turmaSelect = document.getElementById('registerTurma');
+            const cursoSelecionado = cursoSelect?.value;
+
+            if (!turmaSelect) return;
+            turmaSelect.innerHTML = '';
+
+            if (!cursoSelecionado) {
+                turmaSelect.innerHTML = '<option value="">Primeiro selecione seu curso</option>';
+                return;
+            }
+
+            const curso = cursosDoBanco.find(c => c.nome === cursoSelecionado);
+
+            if (!curso || !curso.turmas || curso.turmas.length === 0) {
+                turmaSelect.innerHTML = '<option value="">Nenhuma turma disponível</option>';
+                return;
+            }
+
+            turmaSelect.innerHTML = '<option value="">Selecione sua turma</option>';
+            const turmasOrdenadas = [...curso.turmas].sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+            turmasOrdenadas.forEach(turma => {
+                if (turma.ativa !== false) {
+                    const option = document.createElement('option');
+                    option.value = turma.codigo;
+                    let texto = `Turma ${turma.codigo}`;
+                    if (turma.periodo) {
+                        texto += ` (${turma.periodo}º período)`;
+                    }
+                    if (turma.vagas) {
+                        texto += ` - ${turma.vagas} vagas`;
+                    }
+                    option.textContent = texto;
+                    turmaSelect.appendChild(option);
+                }
+            });
+
+            if (turmaSelect.options.length === 1) {
+                turmaSelect.innerHTML = '<option value="">Nenhuma turma ativa disponível</option>';
+            }
+        }
+
+        // ============================================================
+        // CARREGAR EIXOS PARA PROFESSOR (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        async function carregarEixosParaProfessor() {
+            try {
+                console.log('📚 Carregando eixos para cadastro de professor...');
+                const eixoSelect = document.getElementById('registerEixo');
+                if (!eixoSelect) return;
+
+                eixoSelect.innerHTML = '<option value="">Carregando eixos...</option>';
+                eixoSelect.disabled = true;
+
+                const response = await fetch('/api/eixos');
+                const data = await response.json();
+
+                if (data.success && data.eixos) {
+                    eixoSelect.innerHTML = '<option value="">Selecione seu eixo</option>';
+                    const eixosOrdenados = data.eixos.sort((a, b) => a.label.localeCompare(b.label));
+                    eixosOrdenados.forEach(eixo => {
+                        if (eixo.ativo !== false) {
+                            const option = document.createElement('option');
+                            option.value = eixo.nome;
+                            option.textContent = eixo.label;
+                            eixoSelect.appendChild(option);
+                        }
+                    });
+                    console.log(`✅ ${data.eixos.length} eixos carregados`);
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar eixos');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar eixos:', error);
+                const eixoSelect = document.getElementById('registerEixo');
+                if (eixoSelect) {
+                    eixoSelect.innerHTML = `
+                        <option value="">Erro ao carregar eixos</option>
+                        <option value="natureza">🌿 Natureza</option>
+                        <option value="humanas">📜 Humanas</option>
+                        <option value="linguagens">📚 Linguagens</option>
+                        <option value="desenvolvimento">💻 Desenvolvimento</option>
+                        <option value="gestao">📊 Gestão</option>
+                        <option value="turismo">✈️ Turismo</option>
+                        <option value="ambiente">🌱 Ambiente</option>
+                    `;
+                }
+            } finally {
+                const eixoSelect = document.getElementById('registerEixo');
+                if (eixoSelect) eixoSelect.disabled = false;
+            }
+        }
+
+        // ============================================================
+        // INICIALIZAR CAMPOS DE ACESSIBILIDADE (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        function inicializarCamposAcessibilidade() {
+            console.log('🔧 Inicializando campos de acessibilidade...');
+
+            const radioSim = document.getElementById('acessibilidadeSim');
+            const radioNao = document.getElementById('acessibilidadeNao');
+            const condicaoDiv = document.getElementById('condicaoAcessibilidade');
+            const selectCondicao = document.getElementById('registerCondicao');
+            const outraCondicaoField = document.getElementById('outraCondicaoField');
+            const registerOutraCondicao = document.getElementById('registerOutraCondicao');
+
+            if (!radioSim || !radioNao) {
+                console.error('❌ Campos de acessibilidade não encontrados!');
+                return;
+            }
+
+            radioSim.removeEventListener('change', handleAcessibilidadeSim);
+            radioNao.removeEventListener('change', handleAcessibilidadeNao);
+
+            radioSim.addEventListener('change', handleAcessibilidadeSim);
+            radioNao.addEventListener('change', handleAcessibilidadeNao);
+
+            function handleAcessibilidadeSim() {
+                if (this.checked) {
+                    console.log('✅ Aluno SELECIONOU acessibilidade');
+                    if (condicaoDiv) {
+                        condicaoDiv.classList.add('visible');
+                        condicaoDiv.style.display = 'block';
+                    }
+                    if (selectCondicao) selectCondicao.setAttribute('required', 'true');
+                }
+            }
+
+            function handleAcessibilidadeNao() {
+                if (this.checked) {
+                    console.log('❌ Aluno NÃO selecionou acessibilidade');
+                    if (condicaoDiv) {
+                        condicaoDiv.classList.remove('visible');
+                        condicaoDiv.style.display = 'none';
+                    }
+                    if (selectCondicao) {
+                        selectCondicao.removeAttribute('required');
+                        selectCondicao.value = '';
+                    }
+                    if (registerOutraCondicao) {
+                        registerOutraCondicao.value = '';
+                    }
+                    if (outraCondicaoField) {
+                        outraCondicaoField.style.display = 'none';
+                    }
+                }
+            }
+
+            if (selectCondicao) {
+                selectCondicao.removeEventListener('change', handleCondicaoChange);
+                selectCondicao.addEventListener('change', handleCondicaoChange);
+
+                function handleCondicaoChange() {
+                    if (this.value === 'outra') {
+                        if (outraCondicaoField) outraCondicaoField.style.display = 'block';
+                        if (registerOutraCondicao) registerOutraCondicao.setAttribute('required', 'true');
+                    } else {
+                        if (outraCondicaoField) outraCondicaoField.style.display = 'none';
+                        if (registerOutraCondicao) {
+                            registerOutraCondicao.removeAttribute('required');
+                            registerOutraCondicao.value = '';
+                        }
+                    }
+                }
+            }
+
+            console.log('✅ Campos de acessibilidade inicializados');
+        }
+
+        // ============================================================
+        // ALERTA (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        function mostrarAlerta(mensagem, tipo = 'error') {
+            const alerta = document.getElementById('alert');
+            if (!alerta) return;
+            alerta.textContent = mensagem;
+            alerta.className = `alert alert-${tipo}`;
+            alerta.style.display = 'block';
+            alerta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            clearTimeout(window.alertTimeout);
+            window.alertTimeout = setTimeout(() => {
+                alerta.style.display = 'none';
+            }, 4000);
+        }
+
+        // ============================================================
+        // ENVIAR CADASTRO (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ============================================================
+        async function enviarCadastro() {
+            const role = selectedRole;
+            const nome = document.getElementById('registerNome').value.trim();
+            const cpf = document.getElementById('registerCPF').value;
+            const telefone = document.getElementById('registerTelefone').value;
+            const email = document.getElementById('registerEmail').value.trim();
+            const senha = document.getElementById('registerPassword').value;
+            const confirmarSenha = document.getElementById('registerConfirmPassword').value;
+
+            // Validações básicas
+            if (!nome || !cpf || !telefone || !email || !senha || !confirmarSenha) {
+                mostrarAlerta('Preencha todos os campos obrigatórios');
+                return;
+            }
+
+            if (!validarCPF(cpf)) {
+                mostrarAlerta('CPF inválido. Digite um CPF válido');
+                return;
+            }
+
+            if (!validarTelefone(telefone)) {
+                mostrarAlerta('Telefone inválido. Digite um telefone válido com DDD');
+                return;
+            }
+
+            if (senha.length < 6) {
+                mostrarAlerta('A senha deve ter no mínimo 6 caracteres');
+                return;
+            }
+
+            if (senha !== confirmarSenha) {
+                mostrarAlerta('As senhas não coincidem');
+                return;
+            }
+
+            // Preparar objeto de dados
+            const dadosCadastro = {
+                nome: nome,
+                cpf: cpf.replace(/\D/g, ''),
+                telefone: telefone.replace(/\D/g, ''),
+                email: email,
+                password: senha,
+                role: role
+            };
+
+            if (role === 'aluno') {
+                const curso = document.getElementById('registerCurso').value;
+                const turma = document.getElementById('registerTurma').value;
+                const periodo = document.getElementById('registerPeriodo').value.trim();
+                const matricula = document.getElementById('registerMatriculaAluno').value.trim();
+
+                if (!curso) {
+                    mostrarAlerta('Selecione um curso');
+                    return;
+                }
+                if (!turma) {
+                    mostrarAlerta('Selecione sua turma');
+                    return;
+                }
+
+                dadosCadastro.curso = curso;
+                dadosCadastro.turma = turma;
+                dadosCadastro.periodo = periodo || undefined;
+                dadosCadastro.matricula = matricula || undefined;
+
+                const radioAcessibilidade = document.querySelector('input[name="acessibilidade"]:checked');
+                const precisaAcessibilidade = radioAcessibilidade ? radioAcessibilidade.value === 'sim' : false;
+                dadosCadastro.precisaAcessibilidade = precisaAcessibilidade;
+
+                if (precisaAcessibilidade) {
+                    const condicao = document.getElementById('registerCondicao')?.value;
+                    dadosCadastro.condicaoAcessibilidade = condicao || 'nao_especificada';
+                    if (condicao === 'outra') {
+                        const outraDescricao = document.getElementById('registerOutraCondicao')?.value.trim();
+                        dadosCadastro.outraCondicao = outraDescricao || 'Não especificada';
+                    }
+                }
+
+            } else {
+                const eixo = document.getElementById('registerEixo').value;
+                const departamento = document.getElementById('registerDepartamento').value.trim();
+                const titulacao = document.getElementById('registerTitulacao').value.trim();
+                const matricula = document.getElementById('registerMatriculaProfessor').value.trim();
+
+                if (!eixo) {
+                    mostrarAlerta('Professores devem selecionar um eixo');
+                    return;
+                }
+                if (!matricula || matricula.replace(/\D/g, '').length !== 6) {
+                    mostrarAlerta('Matrícula inválida. Deve conter exatamente 6 números');
+                    return;
+                }
+
+                dadosCadastro.eixo = eixo;
+                dadosCadastro.matricula = matricula;
+                dadosCadastro.departamento = departamento || undefined;
+                dadosCadastro.titulacao = titulacao || undefined;
+            }
+
+            Object.keys(dadosCadastro).forEach(key => {
+                if (dadosCadastro[key] === undefined) {
+                    delete dadosCadastro[key];
+                }
+            });
+
+            console.log('📤 Enviando dados de cadastro:', dadosCadastro);
+
+            const btn = document.getElementById('btnRegister');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando conta...';
+            btn.disabled = true;
+
+            try {
+                const resposta = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dadosCadastro)
+                });
+
+                const dados = await resposta.json();
+
+                if (dados.success) {
+                    mostrarAlerta('✅ Conta criada com sucesso! Redirecionando...', 'success');
+
+                    localStorage.setItem('auth_token', dados.token);
+                    localStorage.setItem('user_data', JSON.stringify(dados.user));
+
+                    setTimeout(() => {
+                        if (dados.user.role === 'super_admin') {
+                            window.location.href = 'admin.html';
+                        } else if (dados.user.role === 'admin') {
+                            window.location.href = 'admin-simples.html';
+                        } else if (dados.user.role === 'professor') {
+                            window.location.href = 'index.html';
+                        } else if (dados.user.role === 'setor_pedagogico') {
+                            window.location.href = 'setor-pedagogico.html';
+                        } else if (dados.user.role === 'aluno') {
+                            window.location.href = 'capturar-face.html';
+                        } else {
+                            window.location.href = 'index.html';
+                        }
+                    }, 1500);
+
+                } else {
+                    mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro ao criar conta'));
+                }
+            } catch (erro) {
+                console.error('Erro no cadastro:', erro);
+                mostrarAlerta('❌ Erro de conexão com o servidor');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // ============================================================
+        // INICIALIZAÇÃO
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Cadastro em 4 etapas carregado!');
+            inicializarCamposAcessibilidade();
+            carregarCursosDoBanco();
+
+            // Configurar role inicial (ALUNO)
+            selecionarRole('aluno');
+
+            // Configurar data mínima para inputs date
+            const hoje = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('input[type="date"]').forEach(input => {
+                input.min = hoje;
+            });
+        });
+    </script>
+
+        <!-- VLibras Oficial -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+
+
+</body>
+</html>

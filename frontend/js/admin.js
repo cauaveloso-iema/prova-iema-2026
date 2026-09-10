@@ -361,7 +361,12 @@ class AdminPanel {
             monitoramento: 'Monitoramento do Sistema',
             configuracoes: 'Configurações do Sistema',
             'cozinha-monitoramento': '🍽️ Cozinha - Monitoramento',
-            'enfermaria-monitoramento': '🏥 Enfermaria - Monitoramento',  // 🔥 NOVO
+            'enfermaria-monitoramento': '🏥 Enfermaria - Monitoramento',
+            'gestao-geral': 'Painel de Gestão Geral',
+            supervisao: 'Painel de Supervisão',
+            psicologia: 'Painel de Psicologia',
+            'assistente-social': 'Painel do Assistente Social',
+            protagonismo: 'Painel de Protagonismo',
             'qrcode-management': '📱 Gerenciamento de QR Codes'
         };
         
@@ -422,9 +427,6 @@ class AdminPanel {
             case 'qrcode-management':
                 await this.loadQRCodeManagement();
                 break;
-            // ============================================
-            // 🔥 ADICIONAR ESTE CASE AQUI 🔥
-            // ============================================
             case 'cozinha-monitoramento':
                 console.log('🍽️ Carregando módulo Cozinha Monitoramento...');
                 
@@ -478,7 +480,21 @@ class AdminPanel {
                     
                     await monitoramentoEnfermaria.carregar();
                     break;
-            // ============================================
+            case 'gestao-geral':
+                await this.loadGestaoGeral();
+                break;
+            case 'supervisao':
+                await this.loadSupervisao();
+                break;
+            case 'psicologia':
+                await this.loadPsicologia();
+                break;
+            case 'assistente-social':
+                await this.loadAssistenteSocial();
+                break;
+            case 'protagonismo':
+                await this.loadProtagonismo();
+                break;
             case 'eixos':
                 await this.loadEixos();
                 break;
@@ -2763,6 +2779,10 @@ class AdminPanel {
                                 <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>🏥 Enfermaria</option>
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
                                 <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
+                                <option value="supervisao" ${role === 'supervisao' ? 'selected' : ''}>🛡️ Supervisão</option>
+                                <option value="psicologia" ${role === 'psicologia' ? 'selected' : ''}>🧠 Psicologia</option>
+                                <option value="assistente-social" ${role === 'assistente-social' ? 'selected' : ''}>🤝 Assistente Social</option>
+                                <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>⭐ Protagonismo</option>
                             </select>
                         </div>
                         
@@ -6150,6 +6170,14 @@ class AdminPanel {
                 roleBadge = '<span class="role-badge enfermaria"><i class="fas fa-hospital-user"></i> Enfermaria</span>';
             } else if (user.role === 'gestao_geral') {
                 roleBadge = '<span class="role-badge gestao_geral"><i class="fas fa-chart-line"></i> Gestão Geral</span>';
+            } else if (user.role === 'supervisao') {
+                roleBadge = '<span class="role-badge supervisao"><i class="fas fa-shield-alt"></i> Supervisão</span>';
+            } else if (user.role === 'psicologia') {
+                roleBadge = '<span class="role-badge psicologia"><i class="fas fa-brain"></i> Psicologia</span>';
+            } else if (user.role === 'assistente-social') {
+                roleBadge = '<span class="role-badge assistente-social"><i class="fas fa-hands-helping"></i> Assistente Social</span>';
+            } else if (user.role === 'protagonismo') {
+                roleBadge = '<span class="role-badge protagonismo"><i class="fas fa-star"></i> Protagonismo</span>';
             } else {
                 roleBadge = `<span class="role-badge">${user.role || 'Desconhecido'}</span>`;
             }
@@ -6446,7 +6474,11 @@ class AdminPanel {
             'coordenacao_patio': 'Coordenação de Pátio',
             'cozinha': 'Cozinha',
             'gestao_geral': 'Gestão Geral',
-            'enfermaria': 'Enfermaria' 
+            'enfermaria': 'Enfermaria',
+            'supervisao': 'Supervisão',
+            'psicologia': 'Psicologia',
+            'assistente-social': 'Assistente Social',
+            'protagonismo': 'Protagonismo'
         };
         return labels[role] || role || 'Desconhecido';
     }
@@ -6581,11 +6613,31 @@ class AdminPanel {
                     roleColor = '#1e3c72';
                     roleBg = '#e0f2fe';
                     break;
-                case 'enfermaria':  // 🔥 NOVO
+                case 'enfermaria':
                     roleIcon = '🏥';
                     roleColor = '#0891b2';
                     roleBg = '#cffafe';
                     break;
+                    case 'supervisao':
+                        roleIcon = '🛡️';
+                        roleColor = '#1e3a8a';
+                        roleBg = '#dbeafe';
+                        break;
+                    case 'psicologia':
+                        roleIcon = '🧠';
+                        roleColor = '#0d9488';
+                        roleBg = '#ccfbf1';
+                        break;
+                    case 'assistente-social':
+                        roleIcon = '🤝';
+                        roleColor = '#7c3aed';
+                        roleBg = '#ede9fe';
+                        break;
+                    case 'protagonismo':
+                        roleIcon = '⭐';
+                        roleColor = '#ea580c';
+                        roleBg = '#ffedd5';
+                        break;
                 default:
                     roleIcon = '👤';
                     roleColor = '#6b7280';
@@ -7117,6 +7169,10 @@ class AdminPanel {
                             <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>Cozinha</option>
                             <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>Gestão Geral</option>
                             <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>Enfermaria</option>
+                            <option value="supervisao" ${role === 'supervisao' ? 'selected' : ''}>Supervisão</option>
+                            <option value="psicologia" ${role === 'psicologia' ? 'selected' : ''}>Psicologia</option>
+                            <option value="assistente-social" ${role === 'assistente-social' ? 'selected' : ''}>Assistente Social</option>
+                            <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>Protagonismo</option>
                         </select>
                     </div>
                     
@@ -7258,6 +7314,96 @@ class AdminPanel {
                         <span>A Gestão Geral controla o rodízio de refeições por turma.</span>
                     </div>
                 </div>
+
+                <!-- SUPERVISÃO -->
+                <div id="supervisaoFields" class="role-specific" style="${role === 'supervisao' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Supervisão gerencia ocorrências, advertências, suspensões e encaminhamentos de alunos.</span>
+                    </div>
+                </div>
+
+                <!-- PSICOLOGIA -->
+                <div id="psicologiaFields" class="role-specific" style="${role === 'psicologia' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-brain"></i> Especialidade</label>
+                        <input type="text" id="userEspecialidade" class="form-control" 
+                            value="${escapeStr(usuario?.especialidade || '')}" 
+                            placeholder="Ex: Psicologia Clínica, Psicopedagogia...">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-badge"></i> CRP</label>
+                        <input type="text" id="userCrp" class="form-control" 
+                            value="${escapeStr(usuario?.crp || '')}" 
+                            placeholder="Ex: CRP 06/123456">
+                    </div>
+                    <div class="info-card" style="background: #ccfbf1; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Psicologia gerencia escutas, manejo de crises emocionais e ações socioemocionais.</span>
+                    </div>
+                </div>
+
+                <!-- ASSISTENTE SOCIAL -->
+                <div id="assistenteSocialFields" class="role-specific" style="${role === 'assistente-social' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-badge"></i> CRESS</label>
+                        <input type="text" id="userCress" class="form-control" 
+                            value="${escapeStr(usuario?.cress || '')}" 
+                            placeholder="Ex: CRESS 12345">
+                    </div>
+                    <div class="info-card" style="background: #ede9fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Assistente Social gerencia evasão escolar, vulnerabilidades e encaminhamentos.</span>
+                    </div>
+                </div>
+
+                <!-- PROTAGONISMO -->
+                <div id="protagonismoFields" class="role-specific" style="${role === 'protagonismo' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #ffedd5; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Protagonismo gerencia clubes, tutoria, candidatos e eleições de líderes.</span>
+                    </div>
+                </div>
                 
                 <!-- Campos específicos para Coordenação de Pátio -->
                 <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
@@ -7396,24 +7542,36 @@ class AdminPanel {
     }
 
     // ============ TOGGLE CAMPOS POR ROLE ============
+
     toggleCamposRole() {
         const role = document.getElementById('userRole')?.value;
         
+        // Campos existentes
         const alunoFields = document.getElementById('alunoFields');
         const professorFields = document.getElementById('professorFields');
         const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
         const coordenacaoPatioFields = document.getElementById('coordenacaoPatioFields');
         const cozinhaFields = document.getElementById('cozinhaFields');
         const gestaoGeralFields = document.getElementById('gestaoGeralFields');
-        const enfermariaFields = document.getElementById('enfermariaFields'); // 🔥 NOVO
+        const enfermariaFields = document.getElementById('enfermariaFields');
+        const supervisaoFields = document.getElementById('supervisaoFields');
+        const psicologiaFields = document.getElementById('psicologiaFields');
+        const assistenteSocialFields = document.getElementById('assistenteSocialFields');
+        const protagonismoFields = document.getElementById('protagonismoFields');
         
+        // Ocultar todos
         if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
         if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
         if (setorPedagogicoFields) setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
         if (coordenacaoPatioFields) coordenacaoPatioFields.style.display = role === 'coordenacao_patio' ? 'block' : 'none';
         if (cozinhaFields) cozinhaFields.style.display = role === 'cozinha' ? 'block' : 'none';
         if (gestaoGeralFields) gestaoGeralFields.style.display = role === 'gestao_geral' ? 'block' : 'none';
-        if (enfermariaFields) enfermariaFields.style.display = role === 'enfermaria' ? 'block' : 'none'; // 🔥 NOVO
+        if (enfermariaFields) enfermariaFields.style.display = role === 'enfermaria' ? 'block' : 'none';
+        
+        if (supervisaoFields) supervisaoFields.style.display = role === 'supervisao' ? 'block' : 'none';
+        if (psicologiaFields) psicologiaFields.style.display = role === 'psicologia' ? 'block' : 'none';
+        if (assistenteSocialFields) assistenteSocialFields.style.display = role === 'assistente-social' ? 'block' : 'none';
+        if (protagonismoFields) protagonismoFields.style.display = role === 'protagonismo' ? 'block' : 'none';
     }
 
     gerarSenha() {
@@ -7536,6 +7694,25 @@ class AdminPanel {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.especialidade = document.getElementById('userEspecialidade')?.value || undefined;
                 dados.coren = document.getElementById('userCoren')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'supervisao') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'psicologia') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.especialidade = document.getElementById('userEspecialidade')?.value || undefined;
+                dados.crp = document.getElementById('userCrp')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'assistente-social') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.cress = document.getElementById('userCress')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'protagonismo') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             
             } else if (role === 'gestao_geral') {
@@ -31996,14 +32173,14 @@ class AdminPanel {
 
     // ============ GERAR CARTÃO QR CODE HORIZONTAL (COM LOGO DO CHAPÉU) ============
     gerarCartaoHorizontal(usuario, config = null) {
-        const configFinal = config || this.configCartao || { tamanho: 'credito', mostrarLogo: true, mostrarRodape: true, margem: 10 };
+        const configFinal = config || this.configCartao || { tamanho: 'credito', mostrarLogo: true, mostrarRodape: true, margem: 6 };
         
         let larguraMM = 85, alturaMM = 54, escala = 3.78;
-        let margemMM = configFinal.margem || 10;
+        let margemMM = configFinal.margem || 6;
         
         if (configFinal.tamanho === 'padrao') {
-            larguraMM = 105;
-            alturaMM = 74;
+            larguraMM = 85;
+            alturaMM = 54;
             escala = 3.78;
         } else if (configFinal.tamanho === 'personalizado' && configFinal.largura && configFinal.altura) {
             larguraMM = configFinal.largura;
@@ -32019,7 +32196,6 @@ class AdminPanel {
         const nome = usuario.nome || 'Usuário';
         const role = usuario.role || 'aluno';
         const matricula = usuario.matricula || 'Não informada';
-        const email = usuario.email || 'Email não cadastrado';
         const turma = usuario.turma || '';
         const curso = usuario.curso || '';
         const periodo = usuario.periodo || '';
@@ -32027,42 +32203,36 @@ class AdminPanel {
         const dataEmissao = dataAtual.toLocaleDateString('pt-BR');
         const precisaAcessibilidade = usuario.precisaAcessibilidade === true;
         
-        let roleIcon = '';
-        let roleColor = '';
-        let roleBg = '';
-        let infoAdicional = '';
-        let gradienteFundo = '';
+        let cursoExibicao = curso || 'Não informado';
+        if (role === 'aluno' && !curso && periodo) {
+            cursoExibicao = `${periodo}º Período`;
+        }
         
+        const isAluno = role === 'aluno';
+        const temCursoTurma = isAluno && cursoExibicao && turma;
+        
+        let roleIcon = '';
+        let roleLabel = '';
         switch(role) {
-            case 'aluno':
-                roleIcon = '👨‍🎓';
-                roleColor = '#10b981';
-                roleBg = '#d1fae5';
-                gradienteFundo = 'white';
-                infoAdicional = `
-                    <div class="info-item"><span class="label">🎓 Curso:</span><span class="value">${curso || 'Não informado'}</span></div>
-                    <div class="info-item"><span class="label">📅 Período:</span><span class="value">${periodo ? periodo + 'º' : 'Não informado'}</span></div>
-                `;
+            case 'aluno': 
+                roleIcon = '👨‍🎓'; 
+                roleLabel = 'ALUNO';
                 break;
-            case 'professor':
-                roleIcon = '👨‍🏫';
-                roleColor = '#f59e0b';
-                roleBg = '#fef3c7';
-                gradienteFundo = 'white';
-                infoAdicional = `<div class="info-item"><span class="label">📚 Eixo:</span><span class="value">${usuario.eixo || 'Não informado'}</span></div>`;
+            case 'professor': 
+                roleIcon = '👨‍🏫'; 
+                roleLabel = 'PROFESSOR';
                 break;
-            case 'admin':
-            case 'super_admin':
-                roleIcon = '👑';
-                roleColor = '#8b5cf6';
-                roleBg = '#ede9fe';
-                gradienteFundo = 'white';
+            case 'admin': 
+                roleIcon = '👑'; 
+                roleLabel = 'ADMIN';
                 break;
-            default:
-                roleIcon = '👤';
-                roleColor = '#6b7280';
-                roleBg = '#f3f4f6';
-                gradienteFundo = 'white';
+            case 'super_admin': 
+                roleIcon = '👑'; 
+                roleLabel = 'SUPER ADMIN';
+                break;
+            default: 
+                roleIcon = '👤'; 
+                roleLabel = role.toUpperCase();
         }
         
         return `
@@ -32080,9 +32250,10 @@ class AdminPanel {
                         }
                         body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                         .no-print { display: none; }
-                        .cartao { page-break-inside: avoid; break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+                        .student-card { page-break-inside: avoid; break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
                     }
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    
                     body {
                         background: white;
                         display: flex;
@@ -32091,8 +32262,9 @@ class AdminPanel {
                         min-height: 100vh;
                         padding: 0;
                         margin: 0;
-                        font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-family: 'Segoe UI', Arial, sans-serif;
                     }
+                    
                     .cartao-container {
                         width: ${larguraComMargemPX}px;
                         height: ${alturaComMargemPX}px;
@@ -32101,182 +32273,347 @@ class AdminPanel {
                         align-items: center;
                         background: white;
                     }
-                    .cartao {
+                    
+                    .student-card {
                         width: ${larguraCartaoPX}px;
                         height: ${alturaCartaoPX}px;
-                        background: ${gradienteFundo};
-                        border-radius: 12px;
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                        margin: 0 auto;
+                        padding: 4px 8px 3px 8px;
+                        background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+                        border: 1px solid #d9def3;
+                        border-radius: 10px;
+                        box-shadow: 0 4px 12px rgba(35, 55, 120, 0.08);
                         overflow: hidden;
+                        position: relative;
                         display: flex;
-                        flex-direction: row;
-                        border: 1px solid #e5e7eb;
-                    }
-                    .cartao-info { 
-                        flex: 2; 
-                        padding: 10px 12px; 
-                        display: flex; 
-                        flex-direction: column; 
-                        justify-content: space-between;
-                        overflow: hidden;
-                    }
-                    .cartao-qrcode { 
-                        flex: 1.2;
-                        background: rgba(255,255,255,0.98); 
-                        display: flex; 
-                        flex-direction: column; 
-                        align-items: center; 
-                        justify-content: center; 
-                        padding: 10px; 
-                        border-left: 1px solid ${roleColor}30;
-                    }
-                    .header-logo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #e5e7eb; }
-                    .logo-sistema-container { display: flex; align-items: center; gap: 6px; }
-                    
-                    /* 🔥 LOGO DO CHAPÉU RESTAURADA */
-                    .logo-quadrado { 
-                        width: 28px; 
-                        height: 28px; 
-                        background: linear-gradient(135deg, #1e3a8a, #1e40af); 
-                        border-radius: 6px; 
-                        display: flex; 
-                        align-items: center; 
-                        justify-content: center; 
-                    }
-                    .logo-quadrado img { 
-                        width: 18px; 
-                        height: 18px; 
-                        object-fit: contain; 
+                        flex-direction: column;
                     }
                     
-                    .sistema-nome { font-size: 9px; font-weight: 700; color: #1e3a8a; line-height: 1.2; }
-                    .sistema-nome small { font-size: 7px; font-weight: 400; color: #6b7280; }
-                    .instituicao-badge { text-align: right; }
-                    .instituicao-nome { font-size: 7px; color: #6b7280; font-weight: 500; }
-                    
-                    .titulo-cartao { 
-                        font-size: 9px; 
-                        font-weight: 700; 
-                        color: ${roleColor}; 
-                        text-transform: uppercase; 
-                        letter-spacing: 1px; 
-                        margin: 5px 0 3px;
-                        text-align: center;
-                    }
-                    
-                    /* Nome em negrito garantido */
-                    .nome-usuario {
-                        font-size: 13px;
-                        font-weight: bold !important;
-                        color: #1f2937 !important;
-                        margin: 3px 0 5px;
-                        line-height: 1.3;
-                        text-align: center;
-                    }
-                    .nome-usuario strong {
-                        font-weight: bold !important;
-                    }
-                    
-                    .info-grid { 
-                        display: flex; 
-                        flex-direction: column; 
-                        gap: 3px; 
-                        margin: 5px 0; 
-                        background: #f9fafb; 
-                        padding: 6px; 
-                        border-radius: 6px; 
-                    }
-                    .info-item { display: flex; align-items: center; gap: 4px; font-size: 7px; margin-bottom: 2px; }
-                    .info-item .label { font-weight: 700; color: #4b5563; min-width: 50px; }
-                    .info-item .value { color: #1f2937; font-weight: 500; }
-                    .role-badge { 
-                        display: inline-flex; 
-                        align-items: center; 
-                        gap: 4px; 
-                        background: ${roleBg}; 
-                        color: ${roleColor}; 
-                        padding: 2px 8px; 
-                        border-radius: 20px; 
-                        font-size: 7px; 
-                        font-weight: 700; 
-                        margin-top: 3px; 
-                        width: fit-content;
-                        align-self: center;
-                    }
-                    
-                    .qrcode-wrapper { 
-                        background: white; 
-                        padding: 5px; 
-                        border-radius: 10px; 
-                        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+                    .student-card::before {
+                        content: "";
+                        position: absolute;
+                        top: 0;
+                        left: 0;
                         width: 100%;
+                        height: 3px;
+                        background: linear-gradient(90deg, #3949db, #6a5cff, #3949db);
+                    }
+                    
+                    .card-header {
                         display: flex;
-                        justify-content: center;
                         align-items: center;
+                        justify-content: space-between;
+                        padding-top: 1px;
+                        margin-bottom: 0px;
                     }
-                    .qrcode-wrapper img { 
-                        width: 100%; 
-                        height: auto; 
-                        max-width: 95px;
-                        min-width: 75px;
-                        display: block; 
-                        margin: 0 auto; 
+                    
+                    .brand {
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
                     }
-                    .qrcode-label { 
-                        font-size: 6px; 
-                        color: #9ca3af; 
-                        text-align: center; 
-                        margin-top: 5px; 
+                    
+                    .brand-icon {
+                        width: 18px;
+                        height: 18px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 9px;
+                        border-radius: 5px;
+                        background: linear-gradient(135deg, #263b86, #4a59d9);
+                        flex-shrink: 0;
+                        color: white;
+                    }
+                    
+                    .brand-icon img {
+                        width: 12px;
+                        height: 12px;
+                        object-fit: contain;
+                    }
+                    
+                    .brand h2 {
+                        margin: 0;
+                        color: #1f3268;
+                        font-size: 8px;
+                        font-weight: 800;
+                        line-height: 1.1;
+                    }
+                    
+                    .brand span {
+                        display: block;
+                        color: #6d748c;
+                        font-size: 5.5px;
+                        font-weight: 500;
+                        line-height: 1.1;
+                    }
+                    
+                    .instituicao {
+                        text-align: right;
+                        line-height: 1.2;
+                        flex-shrink: 0;
+                    }
+                    
+                    .instituicao .nome {
+                        color: #1f3268;
+                        font-size: 6px;
+                        font-weight: 700;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    }
+                    
+                    .instituicao .local {
+                        color: #6d748c;
+                        font-size: 4.5px;
+                        font-weight: 500;
+                        display: block;
+                    }
+                    
+                    .card-title {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 3px;
+                        margin: 0px 0;
+                    }
+                    
+                    .card-title span {
+                        height: 1px;
+                        flex: 1;
+                        max-width: 40px;
+                        background: #bfc7ec;
+                    }
+                    
+                    .card-title h3 {
+                        margin: 0;
+                        color: #4d5ab3;
+                        font-size: 5.5px;
+                        letter-spacing: 1px;
+                        white-space: nowrap;
+                        font-weight: 700;
+                        text-transform: uppercase;
+                    }
+                    
+                    .student-name {
+                        text-align: center;
+                        color: #182d67;
+                        font-size: 10px;
+                        font-weight: 900;
+                        letter-spacing: 0.2px;
+                        text-transform: uppercase;
+                        margin: 0px 0 1px 0;
+                        line-height: 1.1;
+                    }
+                    
+                    .student-name .acessibilidade-badge {
+                        display: inline-block;
+                        background: #dbeafe;
+                        color: #1e40af;
+                        padding: 0px 3px;
+                        border-radius: 5px;
+                        font-size: 4px;
+                        font-weight: 600;
+                        margin-left: 2px;
+                        vertical-align: middle;
+                        text-transform: none;
+                    }
+                    
+                    .qr-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        flex: 1;
+                        margin: 0px 0;
+                    }
+                    
+                    .qr-box {
+                        padding: 2px;
+                        background: white;
+                        border: 1.5px solid #c9d0f2;
+                        border-radius: 6px;
+                        box-shadow: 0 2px 6px rgba(50, 65, 130, 0.05);
+                    }
+                    
+                    .qr-box img {
+                        display: block;
+                        width: 110px;
+                        height: 110px;
+                        max-width: 100%;
+                        border-radius: 2px;
+                    }
+                    
+                    .qr-container p {
+                        margin-top: 0px;
+                        color: #6c748d;
+                        font-size: 4.5px;
                         font-weight: 500;
                     }
-                    .cartao-footer { margin-top: 4px; font-size: 5px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 3px; display: flex; justify-content: space-between; }
-                    .acessibilidade-badge { display: inline-flex; align-items: center; gap: 3px; background: #dbeafe; color: #1e40af; padding: 1px 5px; border-radius: 15px; font-size: 6px; font-weight: 600; margin-left: 5px; }
-                    .btn-print { display: block; width: ${larguraCartaoPX}px; margin: 20px auto 0; padding: 10px; background: ${roleColor}; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
-                    @media print { body { padding: 0; margin: 0; background: white; } .btn-print { display: none; } .cartao { box-shadow: none; } }
+                    
+                    .student-info {
+                        display: flex;
+                        align-items: stretch;
+                        justify-content: space-between;
+                        margin-top: 1px;
+                        padding: 2px 4px;
+                        background: white;
+                        border: 1px solid #dce1f2;
+                        border-radius: 5px;
+                        box-shadow: 0 2px 6px rgba(30, 45, 100, 0.03);
+                    }
+                    
+                    .info-item {
+                        flex: 1;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        text-align: center;
+                    }
+                    
+                    .info-item span {
+                        color: #73798c;
+                        font-size: 3.5px;
+                        font-weight: 700;
+                        letter-spacing: 0.3px;
+                        text-transform: uppercase;
+                    }
+                    
+                    .info-item strong {
+                        margin-top: 0px;
+                        color: #1d3169;
+                        font-size: 5.5px;
+                        font-weight: 800;
+                    }
+                    
+                    .info-divider {
+                        width: 1px;
+                        margin: 1px 2px;
+                        background: #d8dced;
+                    }
+                    
+                    .card-footer {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-top: 1px;
+                        padding-top: 1px;
+                        border-top: 1px solid #e5e7eb;
+                        font-size: 4px;
+                        color: #94a3b8;
+                    }
+                    
+                    .card-footer .role-badge {
+                        display: flex;
+                        align-items: center;
+                        gap: 2px;
+                        font-weight: 600;
+                        color: #4d5ab3;
+                        font-size: 4px;
+                    }
+                    
+                    .card-footer .status-texto {
+                        font-weight: 600;
+                        color: #10b981;
+                        font-size: 4px;
+                    }
+                    
+                    .btn-print {
+                        display: block;
+                        width: ${larguraCartaoPX}px;
+                        margin: 5px auto 0;
+                        padding: 3px;
+                        background: #3949db;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        font-size: 7px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    }
+                    
+                    @media print {
+                        body { padding: 0; margin: 0; background: white; }
+                        .btn-print { display: none; }
+                        .student-card { box-shadow: none; border: 1px solid #ddd; }
+                    }
                 </style>
             </head>
             <body>
                 <div>
                     <div class="cartao-container">
-                        <div class="cartao">
-                            <div class="cartao-info">
-                                <div class="header-logo">
-                                    <div class="logo-sistema-container">
-                                        <div class="logo-quadrado">
-                                            <img src="/icons/favicon.ico" alt="Logo" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'%3E%3Ctext x=\\'50\\' y=\\'55\\' text-anchor=\\'middle\\' font-size=\\'40\\' fill=\\'white\\'%3E🎓%3C/text%3E%3C/svg%3E'">
-                                        </div>
-                                        <div class="sistema-nome">SISTEMA DE PROVAS<br><small>2026</small></div>
+                        <div class="student-card">
+                            <div class="card-header">
+                                <div class="brand">
+                                    <div class="brand-icon">
+                                        <img src="/icons/favicon.ico" alt="Logo" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'%3E%3Ctext x=\\'50\\' y=\\'55\\' text-anchor=\\'middle\\' font-size=\\'40\\' fill=\\'white\\'%3E🎓%3C/text%3E%3C/svg%3E'">
                                     </div>
-                                    <div class="instituicao-badge">
-                                        <div class="instituicao-nome">IEMA PLENO</div>
-                                        <div class="instituicao-nome" style="font-size: 6px;">SÃO LUÍS - CENTRO</div>
+                                    <div>
+                                        <h2>SISTEMA DE PROVAS</h2>
+                                        <span>2026</span>
                                     </div>
                                 </div>
-                                
-                                <div class="titulo-cartao">CARTÃO DE IDENTIFICAÇÃO</div>
-                                
-                                <!-- Nome em negrito -->
-                                <div class="nome-usuario"><strong>${this.escapeHtml(nome)}</strong>${precisaAcessibilidade ? '<span class="acessibilidade-badge"><i class="fas fa-wheelchair"></i> Acessível</span>' : ''}</div>
-                                
-                                <div class="info-grid">
-                                    <div class="info-item"><span class="label">📌 MATRÍCULA:</span><span class="value">${matricula}</span></div>
-                                    <div class="info-item"><span class="label">📧 E-MAIL:</span><span class="value">${email.length > 22 ? email.substring(0, 20) + '..' : email}</span></div>
-                                    ${turma ? `<div class="info-item"><span class="label">🏫 TURMA:</span><span class="value">${turma}</span></div>` : ''}
-                                    ${infoAdicional}
-                                    <div class="info-item"><span class="label">📅 EMISSÃO:</span><span class="value">${dataEmissao}</span></div>
+                                <div class="instituicao">
+                                    <div class="nome">IEMA PLENO</div>
+                                    <span class="local">SÃO LUÍS - CENTRO</span>
                                 </div>
-                                
-                                <div style="display: flex; justify-content: center;">
-                                    <span class="role-badge">${roleIcon} ${this.getRoleLabelQR(role)}</span>
-                                </div>
-                                
-                                ${configFinal.mostrarRodape ? `<div class="cartao-footer"><span>✓ Válido para acesso ao sistema</span><span>🔒 Documento digital</span></div>` : ''}
                             </div>
-                            <div class="cartao-qrcode">
-                                <div class="qrcode-wrapper">
+                            
+                            <div class="card-title">
+                                <span></span>
+                                <h3>CARTÃO DE IDENTIFICAÇÃO</h3>
+                                <span></span>
+                            </div>
+                            
+                            <div class="student-name">
+                                ${this.escapeHtml(nome)}
+                                ${precisaAcessibilidade ? '<span class="acessibilidade-badge">♿</span>' : ''}
+                            </div>
+                            
+                            <div class="qr-container">
+                                <div class="qr-box">
                                     <img src="${usuario.qrCodeDataUrl}" alt="QR Code de ${nome}">
                                 </div>
-                                <div class="qrcode-label">Escaneie para acesso rápido ao sistema</div>
+                                <p>Escaneie para verificar</p>
+                            </div>
+                            
+                            <div class="student-info">
+                                ${temCursoTurma ? `
+                                <div class="info-item">
+                                    <span>CURSO</span>
+                                    <strong>${cursoExibicao}</strong>
+                                </div>
+                                <div class="info-divider"></div>
+                                <div class="info-item">
+                                    <span>TURMA</span>
+                                    <strong>${turma}</strong>
+                                </div>
+                                <div class="info-divider"></div>
+                                <div class="info-item">
+                                    <span>DATA DE EMISSÃO</span>
+                                    <strong>${dataEmissao}</strong>
+                                </div>
+                                ` : `
+                                <div class="info-item">
+                                    <span>MATRÍCULA</span>
+                                    <strong>${matricula}</strong>
+                                </div>
+                                <div class="info-divider"></div>
+                                <div class="info-item">
+                                    <span>DATA DE EMISSÃO</span>
+                                    <strong>${dataEmissao}</strong>
+                                </div>
+                                <div class="info-divider"></div>
+                                <div class="info-item">
+                                    <span>PERFIL</span>
+                                    <strong>${roleLabel}</strong>
+                                </div>
+                                `}
+                            </div>
+                            
+                            <div class="card-footer">
+                                <span class="role-badge">${roleIcon} ${roleLabel}</span>
+                                <span class="status-texto">● Válido</span>
                             </div>
                         </div>
                     </div>
@@ -36181,6 +36518,840 @@ class AdminPanel {
     } catch (error) {
         container.innerHTML = '<p style="text-align: center; color: #dc2626;">Erro ao carregar estatísticas</p>';
     }
+    }
+
+    // SUPERVISAO
+
+    async loadSupervisao() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Painel de Supervisão.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Renderizar o iframe com a página de supervisão
+        contentArea.innerHTML = `
+            <div class="supervisao-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header da Supervisão -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Supervisão</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Acesso total como Super Admin - Gerencie atendimentos, ocorrências e relatórios
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarSupervisao()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o painel de supervisão"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirSupervisaoNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #0284c7;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe da Supervisão -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="supervisaoIframe"
+                        src="/supervisao.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Painel de Supervisão"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Painel de Supervisão carregado em iframe.');
+    }
+
+    // PSICOLOGIA
+
+    async loadPsicologia() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Painel de Psicologia.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Renderizar o iframe com a página de psicologia
+        contentArea.innerHTML = `
+            <div class="psicologia-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header da Psicologia -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #14b8a6, #0d9488);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(20, 184, 166, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Psicologia</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Acesso total como Super Admin - Gerencie escutas, crises, atividades e acompanhamentos
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarPsicologia()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o painel de psicologia"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirPsicologiaNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #0d9488;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe da Psicologia -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="psicologiaIframe"
+                        src="/psicologia.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Painel de Psicologia"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Painel de Psicologia carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA PSICOLOGIA
+    // ============================================
+    recarregarPsicologia() {
+        const iframe = document.getElementById('psicologiaIframe');
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel de psicologia...', 'info');
+            }
+            console.log('🔄 Iframe de psicologia recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR PSICOLOGIA EM NOVA ABA
+    // ============================================
+    abrirPsicologiaNovaAba() {
+        window.open('/psicologia.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Psicologia aberta em nova aba', 'success');
+        }
+    }
+
+    // ASSISTENTE SOCIAL
+
+    async loadAssistenteSocial() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Painel do Assistente Social.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Renderizar o iframe com a página de assistente social
+        contentArea.innerHTML = `
+            <div class="assistente-social-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header do Assistente Social -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-hands-helping"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel do Assistente Social</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Acesso total como Super Admin - Gerencie evasão, disciplina, vulnerabilidades e encaminhamentos
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarAssistenteSocial()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o painel do assistente social"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirAssistenteSocialNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #7c3aed;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe do Assistente Social -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="assistenteSocialIframe"
+                        src="/assistente-social.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Painel do Assistente Social"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Painel do Assistente Social carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO ASSISTENTE SOCIAL
+    // ============================================
+    recarregarAssistenteSocial() {
+        const iframe = document.getElementById('assistenteSocialIframe');
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel do assistente social...', 'info');
+            }
+            console.log('🔄 Iframe do assistente social recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR ASSISTENTE SOCIAL EM NOVA ABA
+    // ============================================
+    abrirAssistenteSocialNovaAba() {
+        window.open('/assistente-social.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Assistente Social aberto em nova aba', 'success');
+        }
+    }
+
+    // GESTAO GERAL
+
+    async loadGestaoGeral() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Painel de Gestão Geral.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Renderizar o iframe com a página de gestão geral
+        contentArea.innerHTML = `
+            <div class="gestao-geral-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header da Gestão Geral -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #1e3c72, #2a5298);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(30, 60, 114, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Gestão Geral</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Acesso total como Super Admin - Gerencie rodízios de refeições e atrasos
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarGestaoGeral()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o painel de gestão geral"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirGestaoGeralNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #1e3c72;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe da Gestão Geral -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="gestaoGeralIframe"
+                        src="/gestao-geral.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Painel de Gestão Geral"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Painel de Gestão Geral carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA GESTÃO GERAL
+    // ============================================
+    recarregarGestaoGeral() {
+        const iframe = document.getElementById('gestaoGeralIframe');
+        if (iframe) {
+            // Forçar recarregamento completo
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel de gestão geral...', 'info');
+            }
+            console.log('🔄 Iframe de gestão geral recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR GESTÃO GERAL EM NOVA ABA
+    // ============================================
+    abrirGestaoGeralNovaAba() {
+        window.open('/gestao-geral.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Gestão Geral aberta em nova aba', 'success');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA SUPERVISÃO
+    // ============================================
+    recarregarSupervisao() {
+        const iframe = document.getElementById('supervisaoIframe');
+        if (iframe) {
+            // Forçar recarregamento completo
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel de supervisão...', 'info');
+            }
+            console.log('🔄 Iframe de supervisão recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR SUPERVISÃO EM NOVA ABA
+    // ============================================
+    abrirSupervisaoNovaAba() {
+        window.open('/supervisao.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Supervisão aberta em nova aba', 'success');
+        }
+    }
+
+    // PROTAGONISMO
+
+    async loadProtagonismo() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Painel de Protagonismo.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Renderizar o iframe com a página de protagonismo
+        contentArea.innerHTML = `
+            <div class="protagonismo-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header do Protagonismo -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #f97316, #ea580c);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Protagonismo</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Acesso total como Super Admin - Gerencie clubes, tutoria, candidatos e eleições
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarProtagonismo()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o painel de protagonismo"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirProtagonismoNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #ea580c;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                        <button 
+                            onclick="admin.abrirProtagonismoPublico()" 
+                            style="
+                                background: #ef4444;
+                                border: none;
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir página pública (alunos)"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Página Pública
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe do Protagonismo -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="protagonismoIframe"
+                        src="/protagonismo.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Painel de Protagonismo"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Painel de Protagonismo carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO PROTAGONISMO
+    // ============================================
+    recarregarProtagonismo() {
+        const iframe = document.getElementById('protagonismoIframe');
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel de protagonismo...', 'info');
+            }
+            console.log('🔄 Iframe de protagonismo recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR PROTAGONISMO EM NOVA ABA
+    // ============================================
+    abrirProtagonismoNovaAba() {
+        window.open('/protagonismo.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Protagonismo aberto em nova aba', 'success');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR PÁGINA PÚBLICA
+    // ============================================
+    abrirProtagonismoPublico() {
+        window.open('/protagonismo-publico.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('📱 Página pública aberta em nova aba (para alunos)', 'success');
+        }
     }
 
 }

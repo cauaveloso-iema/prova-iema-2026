@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#f97316">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Protagonismo">
+
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Protagonismo - Inscrições e Votação</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Acessibilidade -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/push-client.js"></script>
+
+    <link rel="stylesheet" href="css/protagonismo-publico.css">
+</head>
+<body>
+    <!-- Fundo animado -->
+    <div class="animated-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container-public">
+        
+        <!-- HERO / CABEÇALHO -->
+        <div class="hero-section">
+            <div class="hero-icon">
+                <i class="fas fa-star"></i>
+            </div>
+            <h1>Protagonismo Estudantil</h1>
+            <p>Inscreva-se em clubes e participe das eleições de líderes!</p>
+            
+            <div class="hero-status" id="heroStatus">
+                <span class="status-pill" id="statusInscricoes">
+                    <i class="fas fa-circle"></i> Verificando...
+                </span>
+                <span class="status-pill" id="statusEleicao">
+                    <i class="fas fa-circle"></i> Verificando...
+                </span>
+            </div>
+        </div>
+
+        <!-- AVISO PÚBLICO (se houver) -->
+        <div id="avisoPublicoContainer" style="display: none;">
+            <div class="aviso-card">
+                <i class="fas fa-bullhorn"></i>
+                <span id="avisoPublicoTexto"></span>
+            </div>
+        </div>
+
+        <!-- MENU DE AÇÕES (CARDS GRANDES) -->
+        <div class="action-grid">
+            <button class="action-card" id="cardInscricao" onclick="mostrarSecao('inscricao')">
+                <div class="action-icon inscricao">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h3>Inscrever em Clube</h3>
+                <p>Escolha seu clube favorito</p>
+                <span class="action-arrow"><i class="fas fa-arrow-right"></i></span>
+            </button>
+
+            <button class="action-card" id="cardEleicao" onclick="mostrarSecao('eleicao')">
+                <div class="action-icon eleicao">
+                    <i class="fas fa-vote-yea"></i>
+                </div>
+                <h3>Votar em Líder</h3>
+                <p>Escolha seus representantes</p>
+                <span class="action-arrow"><i class="fas fa-arrow-right"></i></span>
+            </button>
+
+            <button class="action-card" id="cardTutores" onclick="mostrarSecao('tutores')">
+                <div class="action-icon tutores">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+                <h3>Ver Tutores</h3>
+                <p>Conheça seus tutores</p>
+                <span class="action-arrow"><i class="fas fa-arrow-right"></i></span>
+            </button>
+
+            <button class="action-card" id="cardVerificar" onclick="mostrarSecao('verificar')">
+                <div class="action-icon verificar">
+                    <i class="fas fa-search"></i>
+                </div>
+                <h3>Consultar Inscrição</h3>
+                <p>Verifique seu status</p>
+                <span class="action-arrow"><i class="fas fa-arrow-right"></i></span>
+            </button>
+        </div>
+
+        <!-- ============================================
+             SEÇÃO: INSCRIÇÃO EM CLUBE
+             ============================================ -->
+        <section class="section-content" id="secaoInscricao">
+            <div class="section-header">
+                <button class="btn-voltar" onclick="voltarHome()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2><i class="fas fa-users"></i> Inscrever em Clube</h2>
+            </div>
+
+            <!-- Clubes disponíveis -->
+            <div class="clubes-disponiveis-header">
+                <h3>Escolha seu clube favorito</h3>
+                <span class="badge-count" id="countClubesDisponiveis">0 clubes</span>
+            </div>
+            <div class="clubes-disponiveis-grid" id="clubesDisponiveisGrid">
+                <div class="loading-state"><div class="spinner"></div><p>Carregando clubes...</p></div>
+            </div>
+
+            <!-- Formulário de inscrição -->
+            <div class="form-public" id="formInscricaoContainer" style="display: none;">
+                <div class="form-header">
+                    <h3><i class="fas fa-clipboard-list"></i> Preencha seus dados</h3>
+                    <div class="clube-escolhido" id="clubeEscolhidoInfo"></div>
+                </div>
+
+                <form id="formInscricao" onsubmit="event.preventDefault(); enviarInscricao();">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Nome Completo *</label>
+                        <input type="text" id="inscricaoNome" class="form-input" 
+                               placeholder="Digite seu nome completo" required minlength="5">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Data de Nascimento *</label>
+                        <input type="date" id="inscricaoDataNasc" class="form-input" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-graduation-cap"></i> Curso *</label>
+                            <select id="inscricaoCurso" class="form-input" required onchange="carregarTurmasPorCurso()">
+                                <option value="">Selecione seu curso...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fas fa-users-class"></i> Turma *</label>
+                            <select id="inscricaoTurma" class="form-input" required disabled>
+                                <option value="">Selecione o curso primeiro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Matrícula (opcional)</label>
+                        <input type="text" id="inscricaoMatricula" class="form-input" 
+                               placeholder="Digite sua matrícula">
+                    </div>
+
+                    <div class="alert-warning-box" id="alertaVagas" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span id="alertaVagasTexto"></span>
+                    </div>
+
+                    <button type="submit" class="btn-submit" id="btnEnviarInscricao">
+                        <i class="fas fa-paper-plane"></i> Confirmar Inscrição
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- ============================================
+             SEÇÃO: VOTAÇÃO (ELEIÇÃO)
+             ============================================ -->
+        <section class="section-content" id="secaoEleicao">
+            <div class="section-header">
+                <button class="btn-voltar" onclick="voltarHome()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2><i class="fas fa-vote-yea"></i> Votar em Líder e Vice-Líder</h2>
+            </div>
+
+            <div class="form-public">
+                <div class="form-header">
+                    <h3><i class="fas fa-user-check"></i> Identifique-se para votar</h3>
+                    <p class="text-muted">Seus dados são usados apenas para validar seu voto</p>
+                </div>
+
+                <form id="formIdentificacao" onsubmit="event.preventDefault(); carregarCandidatosParaVotar();">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Nome Completo *</label>
+                        <input type="text" id="votoNome" class="form-input" 
+                               placeholder="Digite seu nome completo" required minlength="5">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Data de Nascimento *</label>
+                        <input type="date" id="votoDataNasc" class="form-input" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-users-class"></i> Sua Turma *</label>
+                        <select id="votoTurma" class="form-input" required>
+                            <option value="">Selecione sua turma...</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn-submit">
+                        <i class="fas fa-sign-in-alt"></i> Acessar Votação
+                    </button>
+                </form>
+            </div>
+
+            <!-- Candidatos (aparece após identificar) -->
+            <div id="candidatosVotacaoContainer" style="display: none;">
+                <div class="voto-progress">
+                    <div class="progress-step" id="stepLider">
+                        <span class="step-number">1</span>
+                        <span class="step-label">Votar em Líder</span>
+                    </div>
+                    <div class="progress-step" id="stepVice">
+                        <span class="step-number">2</span>
+                        <span class="step-label">Votar em Vice</span>
+                    </div>
+                    <div class="progress-step" id="stepConfirmar">
+                        <span class="step-number">3</span>
+                        <span class="step-label">Confirmar</span>
+                    </div>
+                </div>
+
+                <div class="candidatos-section">
+                    <h3><i class="fas fa-crown"></i> Candidatos a Líder</h3>
+                    <div class="candidatos-voto-grid" id="candidatosLiderGrid">
+                        <p class="text-muted">Carregando...</p>
+                    </div>
+                </div>
+
+                <div class="candidatos-section">
+                    <h3><i class="fas fa-user-tie"></i> Candidatos a Vice-Líder</h3>
+                    <div class="candidatos-voto-grid" id="candidatosViceGrid">
+                        <p class="text-muted">Carregando...</p>
+                    </div>
+                </div>
+
+                <div class="voto-resumo" id="votoResumo">
+                    <h4><i class="fas fa-check-circle"></i> Resumo do seu voto</h4>
+                    <div class="voto-resumo-item">
+                        <span>Líder:</span>
+                        <strong id="resumoLider">Não escolhido</strong>
+                    </div>
+                    <div class="voto-resumo-item">
+                        <span>Vice-Líder:</span>
+                        <strong id="resumoVice">Não escolhido</strong>
+                    </div>
+                </div>
+
+                <button class="btn-submit btn-confirmar-voto" id="btnConfirmarVoto" 
+                        onclick="confirmarVoto()" disabled>
+                    <i class="fas fa-check-double"></i> Confirmar Voto
+                </button>
+            </div>
+        </section>
+
+        <!-- ============================================
+             SEÇÃO: TUTORES
+             ============================================ -->
+        <section class="section-content" id="secaoTutores">
+            <div class="section-header">
+                <button class="btn-voltar" onclick="voltarHome()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2><i class="fas fa-chalkboard-teacher"></i> Nossos Tutores</h2>
+            </div>
+
+            <div id="listaTutoresPublica">
+                <div class="loading-state"><div class="spinner"></div><p>Carregando tutores...</p></div>
+            </div>
+        </section>
+
+        <!-- ============================================
+             SEÇÃO: VERIFICAR INSCRIÇÃO
+             ============================================ -->
+        <section class="section-content" id="secaoVerificar">
+            <div class="section-header">
+                <button class="btn-voltar" onclick="voltarHome()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2><i class="fas fa-search"></i> Consultar Inscrição</h2>
+            </div>
+
+            <div class="form-public">
+                <div class="form-header">
+                    <h3><i class="fas fa-user-check"></i> Digite seus dados</h3>
+                    <p class="text-muted">Vamos verificar se você já está inscrito</p>
+                </div>
+
+                <form onsubmit="event.preventDefault(); verificarInscricao();">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Nome Completo *</label>
+                        <input type="text" id="verificarNome" class="form-input" required minlength="5">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Data de Nascimento *</label>
+                        <input type="date" id="verificarDataNasc" class="form-input" required>
+                    </div>
+
+                    <button type="submit" class="btn-submit">
+                        <i class="fas fa-search"></i> Consultar
+                    </button>
+                </form>
+            </div>
+
+            <div id="resultadoVerificacao" style="display: none;"></div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer class="footer-public">
+            <p><i class="fas fa-star"></i> Protagonismo Estudantil • 2026</p>
+            <p><i class="fas fa-graduation-cap"></i> Sistema de Provas • 2026</p>
+        </footer>
+    </div>
+
+    <!-- MODAL DE SUCESSO -->
+    <div class="modal-public" id="modalSucesso">
+        <div class="modal-content-public">
+            <div class="modal-icon sucesso">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h2 id="modalTitulo">Sucesso!</h2>
+            <p id="modalMensagem"></p>
+            <div id="modalDetalhes" class="modal-detalhes"></div>
+            <button class="btn-submit" onclick="fecharModalSucesso()">
+                <i class="fas fa-check"></i> Entendi
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL DE ERRO -->
+    <div class="modal-public" id="modalErro">
+        <div class="modal-content-public">
+            <div class="modal-icon erro">
+                <i class="fas fa-times-circle"></i>
+            </div>
+            <h2 id="modalErroTitulo">Ops!</h2>
+            <p id="modalErroMensagem"></p>
+            <button class="btn-submit btn-erro" onclick="fecharModalErro()">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+
+        <!-- Escalonamento Mobile -->
+    <script>
+        (function() {
+            if (window.innerWidth > 768) return;
+            function calcularEscalaMobile() {
+                const width = window.innerWidth;
+                if (width <= 320) return 0.55;
+                if (width <= 360) return 0.6;
+                if (width <= 400) return 0.65;
+                if (width <= 500) return 0.75;
+                if (width <= 600) return 0.85;
+                if (width <= 700) return 0.95;
+                return 1;
+            }
+            document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
+            let timeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
+                }, 100);
+            });
+        })();
+    </script>
+
+    <!-- Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(reg => reg.unregister());
+            });
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker ativo'))
+                    .catch(err => console.log('❌ Erro:', err));
+            });
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/protagonismo-publico.js"></script>
+</body>
+</html>

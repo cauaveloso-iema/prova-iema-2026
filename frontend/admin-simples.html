@@ -1292,6 +1292,22 @@
                         roleColor = '#0891b2';
                         roleBg = '#cffafe';
                         roleIcon = '🏥';
+                    } else if (usuario.role === 'supervisao') {
+                        roleColor = '#1e3a8a';
+                        roleBg = '#dbeafe';
+                        roleIcon = '🛡️';
+                    } else if (usuario.role === 'psicologia') {
+                        roleColor = '#0d9488';
+                        roleBg = '#ccfbf1';
+                        roleIcon = '🧠';
+                    } else if (usuario.role === 'assistente-social') {
+                        roleColor = '#7c3aed';
+                        roleBg = '#ede9fe';
+                        roleIcon = '🤝';
+                    } else if (usuario.role === 'protagonismo') {
+                        roleColor = '#ea580c';
+                        roleBg = '#ffedd5';
+                        roleIcon = '⭐';
                     } else {
                         roleColor = '#6b7280';
                         roleBg = '#f3f4f6';
@@ -1791,6 +1807,10 @@
                                     <option value="cozinha">Cozinha</option>
                                     <option value="gestao_geral">Gestão Geral</option>
                                     <option value="enfermaria">Enfermaria</option>  
+                                    <option value="supervisao">Supervisão</option>
+                                    <option value="psicologia">Psicologia</option>
+                                    <option value="assistente-social">Assistente Social</option>
+                                    <option value="protagonismo">Protagonismo</option>
                                     <option value="admin">Admins</option>
                                 </select>
                             </div>
@@ -1891,6 +1911,14 @@
                         roleBadge = '<span class="role-badge gestao_geral"><i class="fas fa-chart-line"></i> Gestão Geral</span>';
                     } else if (u.role === 'enfermaria') {
                         roleBadge = '<span class="role-badge enfermaria"><i class="fas fa-hospital-user"></i> Enfermaria</span>';
+                    } else if (u.role === 'supervisao') {
+                        roleBadge = '<span class="role-badge supervisao"><i class="fas fa-shield-alt"></i> Supervisão</span>';
+                    } else if (u.role === 'psicologia') {
+                        roleBadge = '<span class="role-badge psicologia"><i class="fas fa-brain"></i> Psicologia</span>';
+                    } else if (u.role === 'assistente-social') {
+                        roleBadge = '<span class="role-badge assistente-social"><i class="fas fa-hands-helping"></i> Assistente Social</span>';
+                    } else if (u.role === 'protagonismo') {
+                        roleBadge = '<span class="role-badge protagonismo"><i class="fas fa-star"></i> Protagonismo</span>';
                     } else {
                         roleBadge = `<span class="role-badge">${u.role || 'Desconhecido'}</span>`;
                     }
@@ -2331,6 +2359,28 @@
                     this.abrirModalUsuario(usuario);
                 }
             }
+
+            // ============================================
+            // 🔧 GERAR SENHA ALEATÓRIA
+            // ============================================
+            gerarSenha() {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+                let senha = '';
+                for (let i = 0; i < 10; i++) {
+                    senha += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return senha;
+            }
+
+            // ============================================
+            // 🔧 GERAR NOVA SENHA (para o botão de refresh)
+            // ============================================
+            gerarNovaSenha() {
+                const input = document.getElementById('senhaUsuario');
+                if (input) {
+                    input.value = this.gerarSenha();
+                }
+            }
             
             // ============================================
             // 📱 VISUALIZAR QR CODE DO USUÁRIO - CORRIGIDO
@@ -2619,6 +2669,10 @@
                                     <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>Cozinha</option>
                                     <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>Gestão Geral</option>
                                     <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>Enfermaria</option>
+                                    <option value="supervisao" ${role === 'supervisao' ? 'selected' : ''}>Supervisão</option>
+                                    <option value="psicologia" ${role === 'psicologia' ? 'selected' : ''}>Psicologia</option>
+                                    <option value="assistente-social" ${role === 'assistente-social' ? 'selected' : ''}>Assistente Social</option>
+                                    <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>Protagonismo</option>
                                 </select>
                             </div>
                             
@@ -2691,6 +2745,96 @@
                             <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
                                 <i class="fas fa-info-circle"></i>
                                 <span>A Gestão Geral controla o rodízio de refeições por turma.</span>
+                            </div>
+                        </div>
+
+                        <!-- SUPERVISÃO -->
+                        <div id="supervisaoFields" class="role-specific" style="${role === 'supervisao' ? 'display: block;' : 'display: none;'}">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-building"></i> Departamento</label>
+                                    <input type="text" id="departamentoSupervisao" class="form-control" value="${escapeStr(usuario?.departamento || '')}">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-id-card"></i> Matrícula</label>
+                                    <input type="text" id="matriculaSupervisao" class="form-control" value="${escapeStr(usuario?.matricula || '')}" maxlength="6" placeholder="6 dígitos">
+                                </div>
+                            </div>
+                            <div class="info-card" style="background: #dbeafe; margin-top: 10px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Supervisão gerencia ocorrências, advertências, suspensões e encaminhamentos.</span>
+                            </div>
+                        </div>
+
+                        <!-- PSICOLOGIA -->
+                        <div id="psicologiaFields" class="role-specific" style="${role === 'psicologia' ? 'display: block;' : 'display: none;'}">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-building"></i> Departamento</label>
+                                    <input type="text" id="departamentoPsicologia" class="form-control" value="${escapeStr(usuario?.departamento || '')}">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-id-card"></i> Matrícula</label>
+                                    <input type="text" id="matriculaPsicologia" class="form-control" value="${escapeStr(usuario?.matricula || '')}" maxlength="6" placeholder="6 dígitos">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-brain"></i> Especialidade</label>
+                                <input type="text" id="especialidadePsicologia" class="form-control" 
+                                    value="${escapeStr(usuario?.especialidade || '')}" 
+                                    placeholder="Ex: Psicologia Clínica, Psicopedagogia...">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-id-badge"></i> CRP</label>
+                                <input type="text" id="crpPsicologia" class="form-control" 
+                                    value="${escapeStr(usuario?.crp || '')}" 
+                                    placeholder="Ex: CRP 06/123456">
+                            </div>
+                            <div class="info-card" style="background: #ccfbf1; margin-top: 10px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Psicologia gerencia escutas, crises emocionais e ações socioemocionais.</span>
+                            </div>
+                        </div>
+
+                        <!-- ASSISTENTE SOCIAL -->
+                        <div id="assistenteSocialFields" class="role-specific" style="${role === 'assistente-social' ? 'display: block;' : 'display: none;'}">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-building"></i> Departamento</label>
+                                    <input type="text" id="departamentoAssistente" class="form-control" value="${escapeStr(usuario?.departamento || '')}">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-id-card"></i> Matrícula</label>
+                                    <input type="text" id="matriculaAssistente" class="form-control" value="${escapeStr(usuario?.matricula || '')}" maxlength="6" placeholder="6 dígitos">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-id-badge"></i> CRESS</label>
+                                <input type="text" id="cressAssistente" class="form-control" 
+                                    value="${escapeStr(usuario?.cress || '')}" 
+                                    placeholder="Ex: CRESS 12345">
+                            </div>
+                            <div class="info-card" style="background: #ede9fe; margin-top: 10px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Assistente Social gerencia evasão escolar, vulnerabilidades e encaminhamentos.</span>
+                            </div>
+                        </div>
+
+                        <!-- PROTAGONISMO -->
+                        <div id="protagonismoFields" class="role-specific" style="${role === 'protagonismo' ? 'display: block;' : 'display: none;'}">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-building"></i> Departamento</label>
+                                    <input type="text" id="departamentoProtagonismo" class="form-control" value="${escapeStr(usuario?.departamento || '')}">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-id-card"></i> Matrícula</label>
+                                    <input type="text" id="matriculaProtagonismo" class="form-control" value="${escapeStr(usuario?.matricula || '')}" maxlength="6" placeholder="6 dígitos">
+                                </div>
+                            </div>
+                            <div class="info-card" style="background: #ffedd5; margin-top: 10px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Protagonismo gerencia clubes, tutoria, candidatos e eleições de líderes.</span>
                             </div>
                         </div>
 
@@ -2779,16 +2923,22 @@
             }
 
             // ============ TOGGLE CAMPOS POR ROLE ============
+
             toggleCamposRole() {
                 const role = document.getElementById('roleUsuario')?.value;
                 
+                // Campos existentes
                 const alunoFields = document.getElementById('alunoFields');
                 const professorFields = document.getElementById('professorFields');
                 const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
                 const coordenacaoPatioFields = document.getElementById('coordenacaoPatioFields');
                 const cozinhaFields = document.getElementById('cozinhaFields');
                 const gestaoGeralFields = document.getElementById('gestaoGeralFields');
-                const enfermariaFields = document.getElementById('enfermariaFields');  // 🔥 NOVO
+                const enfermariaFields = document.getElementById('enfermariaFields');
+                const supervisaoFields = document.getElementById('supervisaoFields');
+                const psicologiaFields = document.getElementById('psicologiaFields');
+                const assistenteSocialFields = document.getElementById('assistenteSocialFields');
+                const protagonismoFields = document.getElementById('protagonismoFields');
                 
                 if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
                 if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
@@ -2796,7 +2946,11 @@
                 if (coordenacaoPatioFields) coordenacaoPatioFields.style.display = role === 'coordenacao_patio' ? 'block' : 'none';
                 if (cozinhaFields) cozinhaFields.style.display = role === 'cozinha' ? 'block' : 'none';
                 if (gestaoGeralFields) gestaoGeralFields.style.display = role === 'gestao_geral' ? 'block' : 'none';
-                if (enfermariaFields) enfermariaFields.style.display = role === 'enfermaria' ? 'block' : 'none';  // 🔥 NOVO
+                if (enfermariaFields) enfermariaFields.style.display = role === 'enfermaria' ? 'block' : 'none';
+                if (supervisaoFields) supervisaoFields.style.display = role === 'supervisao' ? 'block' : 'none';
+                if (psicologiaFields) psicologiaFields.style.display = role === 'psicologia' ? 'block' : 'none';
+                if (assistenteSocialFields) assistenteSocialFields.style.display = role === 'assistente-social' ? 'block' : 'none';
+                if (protagonismoFields) protagonismoFields.style.display = role === 'protagonismo' ? 'block' : 'none';
             }
 
             getRoleLabel(role) {
@@ -2809,10 +2963,15 @@
                     'coordenacao_patio': 'Coordenação de Pátio',
                     'cozinha': 'Cozinha',
                     'gestao_geral': 'Gestão Geral',
-                    'enfermaria': 'Enfermaria'  
+                    'enfermaria': 'Enfermaria',
+                    'supervisao': 'Supervisão',
+                    'psicologia': 'Psicologia',
+                    'assistente-social': 'Assistente Social',
+                    'protagonismo': 'Protagonismo'
                 };
                 return labels[role] || role || 'Desconhecido';
             }
+
 
             getDestinoLabel(role) {
                 const labels = {
@@ -2822,7 +2981,11 @@
                     'coordenacao_patio': '🏃 Coordenação de Pátio - Controle de Refeições',
                     'cozinha': '🍽️ Cozinha - Monitoramento de Refeições',
                     'gestao_geral': '📊 Gestão Geral - Rodízio de Refeições',
-                    'enfermaria': '🏥 Enfermaria - Atendimentos',  
+                    'enfermaria': '🏥 Enfermaria - Atendimentos',
+                    'supervisao': '🛡️ Supervisão - Ocorrências e Advertências',
+                    'psicologia': '🧠 Psicologia - Escutas e Crises',
+                    'assistente-social': '🤝 Assistente Social - Evasão e Vulnerabilidades',
+                    'protagonismo': '⭐ Protagonismo - Clubes e Eleições',
                     'admin': '👑 Área Administrativa',
                     'super_admin': '⭐ Super Administrador'
                 };
@@ -2878,6 +3041,36 @@
                     dados.especialidade = document.getElementById('especialidadeUsuario')?.value;
                     dados.coren = document.getElementById('corenUsuario')?.value;
                     dados.matricula = document.getElementById('matriculaUsuario')?.value;
+                }
+
+                if (roleSelecionada === 'enfermaria') {
+                    dados.departamento = document.getElementById('departamentoUsuario')?.value;
+                    dados.especialidade = document.getElementById('especialidadeUsuario')?.value;
+                    dados.coren = document.getElementById('corenUsuario')?.value;
+                    dados.matricula = document.getElementById('matriculaUsuario')?.value;
+                }
+
+                if (roleSelecionada === 'supervisao') {
+                    dados.departamento = document.getElementById('departamentoSupervisao')?.value;
+                    dados.matricula = document.getElementById('matriculaSupervisao')?.value;
+                }
+
+                if (roleSelecionada === 'psicologia') {
+                    dados.departamento = document.getElementById('departamentoPsicologia')?.value;
+                    dados.especialidade = document.getElementById('especialidadePsicologia')?.value;
+                    dados.crp = document.getElementById('crpPsicologia')?.value;
+                    dados.matricula = document.getElementById('matriculaPsicologia')?.value;
+                }
+
+                if (roleSelecionada === 'assistente-social') {
+                    dados.departamento = document.getElementById('departamentoAssistente')?.value;
+                    dados.cress = document.getElementById('cressAssistente')?.value;
+                    dados.matricula = document.getElementById('matriculaAssistente')?.value;
+                }
+
+                if (roleSelecionada === 'protagonismo') {
+                    dados.departamento = document.getElementById('departamentoProtagonismo')?.value;
+                    dados.matricula = document.getElementById('matriculaProtagonismo')?.value;
                 }
 
                 if (!id) {

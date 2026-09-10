@@ -1,184 +1,446 @@
+/* ============================================================
+   RESET E BASE
+   ============================================================ */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #dbeafe;
+    --primary-50: #eff6ff;
+    --gray-50: #f8fafc;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1e293b;
+    --gray-900: #0f172a;
+    --white: #ffffff;
+    --success: #16a34a;
+    --shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+    --shadow-focus: 0 0 0 4px rgba(37, 99, 235, 0.10);
+    --radius: 12px;
+    --radius-lg: 20px;
+}
+
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 20px;
+    margin: 0;
+    position: relative;
+    overflow: hidden;
+    background: #0f172a;
 }
 
+/* ============================================================
+   FUNDO ANIMADO COM GRADIENTES MÓVEIS
+   ============================================================ */
+.background-animated {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+    overflow: hidden;
+}
+
+.bg-gradient-1 {
+    position: absolute;
+    top: -50%;
+    left: -20%;
+    width: 80%;
+    height: 80%;
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.15), transparent 70%);
+    border-radius: 50%;
+    animation: floatGradient1 20s ease-in-out infinite;
+}
+
+.bg-gradient-2 {
+    position: absolute;
+    bottom: -40%;
+    right: -10%;
+    width: 70%;
+    height: 70%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.10), transparent 70%);
+    border-radius: 50%;
+    animation: floatGradient2 25s ease-in-out infinite;
+}
+
+.bg-gradient-3 {
+    position: absolute;
+    top: 20%;
+    right: 20%;
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.08), transparent 70%);
+    border-radius: 50%;
+    animation: floatGradient3 18s ease-in-out infinite;
+}
+
+@keyframes floatGradient1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -20px) scale(1.1); }
+    66% { transform: translate(-20px, 30px) scale(0.9); }
+}
+
+@keyframes floatGradient2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-30px, 20px) scale(1.2); }
+}
+
+@keyframes floatGradient3 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(20px, -30px) scale(1.15); }
+}
+
+/* ============================================================
+   PARTÍCULAS FLUTUANTES
+   ============================================================ */
+.particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.particle {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    animation: floatParticle linear infinite;
+}
+
+.particle:nth-child(1) { width: 80px; height: 80px; top: 10%; left: 5%; animation-duration: 25s; animation-delay: 0s; }
+.particle:nth-child(2) { width: 120px; height: 120px; top: 70%; right: 8%; animation-duration: 30s; animation-delay: 2s; }
+.particle:nth-child(3) { width: 60px; height: 60px; top: 40%; left: 15%; animation-duration: 20s; animation-delay: 4s; }
+.particle:nth-child(4) { width: 100px; height: 100px; bottom: 20%; right: 20%; animation-duration: 28s; animation-delay: 1s; }
+.particle:nth-child(5) { width: 50px; height: 50px; top: 15%; right: 30%; animation-duration: 22s; animation-delay: 3s; }
+.particle:nth-child(6) { width: 90px; height: 90px; bottom: 40%; left: 25%; animation-duration: 26s; animation-delay: 5s; }
+.particle:nth-child(7) { width: 70px; height: 70px; top: 60%; right: 40%; animation-duration: 24s; animation-delay: 2s; }
+.particle:nth-child(8) { width: 110px; height: 110px; top: 25%; left: 60%; animation-duration: 32s; animation-delay: 0s; }
+
+@keyframes floatParticle {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    25% { transform: translate(30px, -40px) rotate(90deg); }
+    50% { transform: translate(-20px, 30px) rotate(180deg); }
+    75% { transform: translate(40px, 20px) rotate(270deg); }
+    100% { transform: translate(0, 0) rotate(360deg); }
+}
+
+/* ============================================================
+   CONTAINER
+   ============================================================ */
 .container {
     width: 100%;
     max-width: 500px;
-    background: white;
-    border-radius: 15px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    overflow: hidden;
-    animation: slideUp 0.5s ease-out;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius-lg);
+    box-shadow: 
+        0 25px 60px rgba(0, 0, 0, 0.3),
+        inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    position: relative;
+    z-index: 1;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    animation: fadeInUp 0.8s ease;
+    max-height: 98vh;
+    overflow-y: auto;
+    padding: 0;
 }
 
-@keyframes slideUp {
+.container::-webkit-scrollbar {
+    width: 4px;
+}
+.container::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 4px;
+}
+.container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.container::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(99, 102, 241, 0.10));
+    border-radius: var(--radius-lg);
+    z-index: -1;
+    filter: blur(4px);
+}
+
+@keyframes fadeInUp {
     from {
         opacity: 0;
-        transform: translateY(30px);
+        transform: translateY(30px) scale(0.95);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
+/* ============================================================
+   HEADER
+   ============================================================ */
 .header {
-    background: linear-gradient(135deg, #4f46e5, #7c3aed);
-    color: white;
-    padding: 30px;
     text-align: center;
+    padding: 30px 30px 24px;
+    background: linear-gradient(135deg, var(--primary), #6366f1);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    color: var(--white);
 }
 
 .header h1 {
-    margin-bottom: 10px;
-    font-size: 1.8rem;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+}
+
+.header h1 i {
+    margin-right: 10px;
 }
 
 .header p {
+    font-size: 14px;
     opacity: 0.9;
 }
 
 .header .badge {
     display: inline-block;
     background: rgba(255,255,255,0.2);
-    padding: 5px 15px;
+    padding: 4px 14px;
     border-radius: 30px;
     margin-top: 10px;
-    font-size: 0.8rem;
+    font-size: 12px;
     font-weight: 600;
 }
 
+/* ============================================================
+   CONTENT
+   ============================================================ */
 .content {
-    padding: 30px;
+    padding: 24px 30px 30px;
 }
 
+/* ============================================================
+   ALERTAS
+   ============================================================ */
 .alert {
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
     display: none;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    animation: slideDown 0.4s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-15px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .alert-success {
-    background: #d1fae5;
-    border: 1px solid #a7f3d0;
-    color: #065f46;
+    background: #f0fdf4;
+    border: 2px solid #86efac;
+    color: var(--success);
 }
 
 .alert-error {
-    background: #fee2e2;
-    border: 1px solid #fecaca;
-    color: #7f1d1d;
+    background: #fef2f2;
+    border: 2px solid #fca5a5;
+    color: #dc2626;
 }
 
 .alert-info {
-    background: #dbeafe;
-    border: 1px solid #bfdbfe;
-    color: #1e40af;
+    background: #eff6ff;
+    border: 2px solid #93c5fd;
+    color: #2563eb;
 }
 
+/* ============================================================
+   FORMULÁRIO
+   ============================================================ */
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 8px;
-    color: #4b5563;
+    font-size: 13px;
     font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 6px;
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
+.form-group label i {
+    color: var(--gray-400);
+    font-size: 14px;
+}
+
 .form-control {
     width: 100%;
-    padding: 12px 15px;
-    border: 2px solid #e5e7eb;
-    border-radius: 8px;
-    font-size: 16px;
-    transition: all 0.3s;
-}
-
-.form-control:focus {
+    padding: 11px 14px;
+    background: var(--gray-50);
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--gray-800);
     outline: none;
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    /* SEM transition */
 }
 
+.form-control::placeholder {
+    color: var(--gray-400);
+}
+
+/* SEM mudança de cor no focus para evitar sensação de movimento */
+.form-control:focus {
+    border-color: var(--gray-200);
+    background: var(--gray-50);
+    box-shadow: none;
+}
+
+.form-control:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ============================================================
+   REQUISITOS DE SENHA
+   ============================================================ */
 .password-requirements {
-    background: #f9fafb;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 20px 0;
+    background: var(--gray-50);
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    margin: 16px 0;
 }
 
 .requirement {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
-    color: #6b7280;
+    margin-bottom: 6px;
+    color: var(--gray-500);
+    font-size: 13px;
+}
+
+.requirement:last-child {
+    margin-bottom: 0;
 }
 
 .requirement.valid {
-    color: #10b981;
+    color: var(--success);
 }
 
 .requirement i {
-    width: 20px;
+    width: 18px;
+    font-size: 14px;
 }
 
+/* ============================================================
+   INFO BOX
+   ============================================================ */
 .info-box {
-    background: #eef2ff;
-    border-left: 4px solid #4f46e5;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 20px 0;
-    font-size: 0.9rem;
-    color: #1e40af;
+    background: var(--primary-50);
+    border-left: 4px solid var(--primary);
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    margin: 16px 0;
+    font-size: 13px;
+    color: var(--primary-dark);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
 }
 
 .info-box i {
-    font-size: 1.2rem;
+    font-size: 16px;
+    margin-top: 2px;
 }
 
+/* ============================================================
+   USER INFO
+   ============================================================ */
+.user-info {
+    background: var(--gray-50);
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    border-left: 4px solid var(--primary);
+}
+
+.user-info p {
+    margin: 4px 0;
+    color: var(--gray-600);
+    font-size: 14px;
+}
+
+.user-info strong {
+    color: var(--gray-800);
+}
+
+/* ============================================================
+   BOTÕES
+   ============================================================ */
 .btn-primary {
     width: 100%;
-    padding: 14px;
-    background: linear-gradient(135deg, #4f46e5, #7c3aed);
-    color: white;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--primary), #6366f1);
     border: none;
-    border-radius: 8px;
-    font-size: 16px;
+    border-radius: var(--radius);
+    color: var(--white);
+    font-size: 15px;
     font-weight: 600;
+    font-family: inherit;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    transition: all 0.3s;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.20);
 }
 
 .btn-primary:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    box-shadow: 0 8px 28px rgba(37, 99, 235, 0.30);
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
 }
 
 .btn-primary:disabled {
@@ -188,35 +450,29 @@ body {
 
 .btn-secondary {
     width: 100%;
-    padding: 12px;
-    background: #6b7280;
-    color: white;
+    padding: 11px;
+    background: var(--gray-100);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius);
+    color: var(--gray-700);
     font-size: 14px;
     font-weight: 600;
+    font-family: inherit;
     cursor: pointer;
     margin-top: 10px;
-    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .btn-secondary:hover {
-    background: #4b5563;
+    background: var(--gray-200);
 }
 
-.user-info {
-    background: #f3f4f6;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    border-left: 4px solid #4f46e5;
-}
-
-.user-info p {
-    margin: 5px 0;
-    color: #4b5563;
-}
-
+/* ============================================================
+   LOADING SPINNER
+   ============================================================ */
 .loading-spinner {
     display: inline-block;
     width: 20px;
@@ -229,4 +485,96 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   RESPONSIVO
+   ============================================================ */
+@media (max-width: 480px) {
+    .container {
+        border-radius: 16px;
+        max-height: 100vh;
+    }
+
+    .header {
+        padding: 24px 20px 18px;
+    }
+
+    .header h1 {
+        font-size: 20px;
+    }
+
+    .content {
+        padding: 16px 16px 20px;
+    }
+
+    .form-control {
+        font-size: 13px;
+        padding: 10px 12px;
+    }
+
+    .btn-primary {
+        font-size: 14px;
+        padding: 11px;
+    }
+
+    .btn-secondary {
+        font-size: 13px;
+        padding: 10px;
+    }
+
+    .info-box {
+        font-size: 12px;
+        padding: 10px 12px;
+    }
+
+    .user-info {
+        font-size: 13px;
+        padding: 12px 14px;
+    }
+
+    .password-requirements {
+        padding: 12px 14px;
+    }
+
+    .requirement {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 360px) {
+    .container {
+        border-radius: 12px;
+    }
+
+    .header {
+        padding: 18px 14px 14px;
+    }
+
+    .header h1 {
+        font-size: 17px;
+    }
+
+    .content {
+        padding: 12px 12px 16px;
+    }
+
+    .particle {
+        display: none;
+    }
+
+    .form-control {
+        font-size: 12px;
+        padding: 8px 10px;
+    }
+
+    .btn-primary {
+        font-size: 13px;
+        padding: 10px;
+    }
+
+    .btn-secondary {
+        font-size: 12px;
+        padding: 9px;
+    }
 }

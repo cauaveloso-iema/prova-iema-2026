@@ -56,6 +56,81 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
+// 📚 LISTAR TURMAS DISPONÍVEIS (MODO MANUAL)
+// ============================================
+router.get('/turmas',
+  authenticateToken,
+  verificarEnfermaria,
+  async (req, res) => {
+    try {
+      const turmas = await User.distinct('turma', { 
+        role: 'aluno', 
+        ativo: true, 
+        turma: { $nin: [null, '', 'Não informada'] } 
+      });
+      
+      res.json({ 
+        success: true, 
+        turmas: turmas.sort() 
+      });
+    } catch (error) {
+      console.error('Erro ao listar turmas:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Erro ao listar turmas: ' + error.message 
+      });
+    }
+  }
+);
+
+// ============================================
+// 📋 LISTAR ALUNOS POR TURMA (MODO MANUAL)
+// ============================================
+router.get('/alunos-por-turma',
+  authenticateToken,
+  verificarEnfermaria,
+  async (req, res) => {
+    try {
+      const { turma } = req.query;
+      
+      if (!turma) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Turma é obrigatória' 
+        });
+      }
+      
+      const alunos = await User.find({ 
+        role: 'aluno', 
+        ativo: true, 
+        turma 
+      })
+      .select('nome matricula turma curso fotoPerfil')
+      .sort({ nome: 1 });
+      
+      res.json({
+        success: true,
+        total: alunos.length,
+        alunos: alunos.map(a => ({
+          id: a._id,
+          nome: a.nome,
+          matricula: a.matricula,
+          turma: a.turma,
+          curso: a.curso,
+          fotoPerfil: a.fotoPerfil
+        }))
+      });
+    } catch (error) {
+      console.error('Erro ao listar alunos por turma:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Erro ao listar alunos: ' + error.message 
+      });
+    }
+  }
+);
+
+// ============================================
 // 📋 BUSCAR DADOS DO ALUNO POR QR CODE
 // ============================================
 router.get('/aluno/:id', 
@@ -276,8 +351,6 @@ router.post('/saida',
 // ============================================
 // 📊 DASHBOARD - ESTATÍSTICAS
 // ============================================
-
-// Dashboard principal
 router.get('/dashboard',
   authenticateToken,
   verificarEnfermaria,
@@ -289,7 +362,6 @@ router.get('/dashboard',
       inicioSemana.setDate(hoje.getDate() - hoje.getDay());
       const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
       
-      // Atendimentos de hoje
       const atendimentosHoje = await AtendimentoEnfermaria.countDocuments({
         'entrada.dataHora': {
           $gte: new Date(hojeStr),
@@ -297,20 +369,16 @@ router.get('/dashboard',
         }
       });
       
-      // Atendimentos da semana
       const atendimentosSemana = await AtendimentoEnfermaria.countDocuments({
         'entrada.dataHora': { $gte: inicioSemana }
       });
       
-      // Atendimentos do mês
       const atendimentosMes = await AtendimentoEnfermaria.countDocuments({
         'entrada.dataHora': { $gte: inicioMes }
       });
       
-      // Total de atendimentos
       const totalAtendimentos = await AtendimentoEnfermaria.countDocuments();
       
-      // Desfechos (últimos 30 dias)
       const ultimos30Dias = new Date();
       ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
       
@@ -320,7 +388,6 @@ router.get('/dashboard',
         { $sort: { count: -1 } }
       ]);
       
-      // Atendimentos por dia (últimos 7 dias)
       const ultimos7Dias = [];
       for (let i = 6; i >= 0; i--) {
         const data = new Date();
@@ -341,7 +408,6 @@ router.get('/dashboard',
         });
       }
       
-      // Atendimentos por turma (últimos 30 dias)
       const porTurma = await AtendimentoEnfermaria.aggregate([
         { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
         { $group: { _id: '$alunoTurma', count: { $sum: 1 } } },
@@ -349,7 +415,6 @@ router.get('/dashboard',
         { $limit: 5 }
       ]);
       
-      // Queixas mais comuns
       const queixas = await AtendimentoEnfermaria.aggregate([
         { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
         { $group: { _id: '$entrada.queixa', count: { $sum: 1 } } },
@@ -357,7 +422,6 @@ router.get('/dashboard',
         { $limit: 5 }
       ]);
       
-      // Atendimentos por hora do dia
       const porHora = await AtendimentoEnfermaria.aggregate([
         { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
         { $group: { _id: { $hour: '$entrada.dataHora' }, count: { $sum: 1 } } },
@@ -367,7 +431,6 @@ router.get('/dashboard',
       const horasDistribuicao = Array(24).fill(0);
       porHora.forEach(h => { horasDistribuicao[h._id] = h.count; });
       
-      // Média de tempo de atendimento (minutos)
       const tempoMedio = await AtendimentoEnfermaria.aggregate([
         { $match: { 'saida.dataHora': { $exists: true } } },
         { $project: { tempo: { $subtract: ['$saida.dataHora', '$entrada.dataHora'] } } },
@@ -420,9 +483,8 @@ router.get('/dashboard',
 );
 
 // ============================================
-// 📊 RELATÓRIOS
+// 📊 RELATÓRIO POR ALUNO
 // ============================================
-
 router.get('/relatorio/aluno/:alunoId',
   authenticateToken,
   verificarEnfermaria,
@@ -508,6 +570,9 @@ router.get('/relatorio/aluno/:alunoId',
   }
 );
 
+// ============================================
+// 📊 RELATÓRIO POR TURMA
+// ============================================
 router.get('/relatorio/turma/:turma',
   authenticateToken,
   verificarEnfermaria,
@@ -592,6 +657,9 @@ router.get('/relatorio/turma/:turma',
   }
 );
 
+// ============================================
+// 📊 RELATÓRIO GERAL
+// ============================================
 router.get('/relatorio/geral',
   authenticateToken,
   verificarEnfermaria,
