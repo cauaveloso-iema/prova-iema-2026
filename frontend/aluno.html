@@ -1253,9 +1253,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         'Authorization': `Bearer ${token}`
                     }
                 });
-                
                 if (userResponse.status === 401) {
-                    localStorage.clear();
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user_data');
+                    sessionStorage.removeItem('auth_token');
+                    sessionStorage.removeItem('user_data');
                     window.location.href = 'login.html';
                     return;
                 }
@@ -5061,7 +5063,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }  
         // Logout
         function logout() {
-            localStorage.clear();
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            sessionStorage.removeItem('auth_token');
+            sessionStorage.removeItem('user_data');
             window.location.href = 'login.html';
         }
         

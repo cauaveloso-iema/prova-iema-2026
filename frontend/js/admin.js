@@ -356,18 +356,19 @@ class AdminPanel {
             eixos: 'Gerenciar Eixos',
             cursos: 'Gerenciar Cursos',
             faceid: 'Gerenciar Face ID',
-            onesignal: '📱 Notificações Push (OneSignal)',
+            onesignal: 'Notificações Push (OneSignal)',
             'omr-debug': 'OMR Debug - Imagens Processadas',
             monitoramento: 'Monitoramento do Sistema',
             configuracoes: 'Configurações do Sistema',
-            'cozinha-monitoramento': '🍽️ Cozinha - Monitoramento',
-            'enfermaria-monitoramento': '🏥 Enfermaria - Monitoramento',
+            'cozinha-monitoramento': 'Cozinha - Monitoramento',
+            'enfermaria-monitoramento': 'Enfermaria - Monitoramento',
             'gestao-geral': 'Painel de Gestão Geral',
             supervisao: 'Painel de Supervisão',
             psicologia: 'Painel de Psicologia',
             'assistente-social': 'Painel do Assistente Social',
             protagonismo: 'Painel de Protagonismo',
-            'qrcode-management': '📱 Gerenciamento de QR Codes'
+            'permissoes-especiais': 'Permissões Especiais',
+            'qrcode-management': 'Gerenciamento de QR Codes'
         };
         
         const pageTitle = document.getElementById('pageTitle');
@@ -426,6 +427,9 @@ class AdminPanel {
                 break;
             case 'qrcode-management':
                 await this.loadQRCodeManagement();
+                break;
+            case 'permissoes-especiais':
+                await this.loadPermissoesEspeciais();
                 break;
             case 'cozinha-monitoramento':
                 console.log('🍽️ Carregando módulo Cozinha Monitoramento...');
@@ -37351,6 +37355,512 @@ class AdminPanel {
         window.open('/protagonismo-publico.html', '_blank');
         if (typeof this.showToast === 'function') {
             this.showToast('📱 Página pública aberta em nova aba (para alunos)', 'success');
+        }
+    }
+
+    // ============================================================================
+    // MÓDULO: PERMISSÕES ESPECIAIS (Módulos com emails autorizados)
+    // ============================================================================
+
+    // ============ CARREGAR PERMISSÕES ESPECIAIS ============
+    async loadPermissoesEspeciais() {
+        const contentArea = document.getElementById('contentArea');
+        
+        contentArea.innerHTML = `
+            <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #8b5cf6; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                <p style="color: #6b7280;">Carregando permissões especiais...</p>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/permissoes-modulos/modulos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar permissões');
+            }
+            
+            this.modulosPermissoes = data.modulos || [];
+            
+            contentArea.innerHTML = this.renderPermissoesEspeciais();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            contentArea.innerHTML = `
+                <div style="text-align: center; padding: 60px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545;"></i>
+                    <h3>Erro ao carregar permissões</h3>
+                    <p>${error.message}</p>
+                    <button class="btn-primary" onclick="admin.loadPermissoesEspeciais()">
+                        <i class="fas fa-sync-alt"></i> Tentar novamente
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // ============ RENDERIZAR INTERFACE ============
+    renderPermissoesEspeciais() {
+        return `
+            <div class="permissoes-container">
+                <!-- HEADER PROFISSIONAL -->
+                <div class="permissoes-header">
+                    <div class="header-left">
+                        <div class="header-icon">
+                            <i class="fas fa-user-lock"></i>
+                        </div>
+                        <div class="header-text">
+                            <h1>Permissões Especiais</h1>
+                            <p>Gerencie quem pode acessar funcionalidades específicas de cada setor</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn-header btn-refresh" onclick="admin.loadPermissoesEspeciais()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- AVISO -->
+                <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px 20px; border-radius: 12px; margin-bottom: 25px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-info-circle" style="color: #3b82f6; font-size: 20px;"></i>
+                        <div>
+                            <strong style="color: #1e40af;">Como funciona</strong>
+                            <p style="margin: 3px 0 0; font-size: 13px; color: #1e40af;">
+                                Adicione emails de usuários que devem ter acesso a funcionalidades específicas.
+                                Essas permissões são verificadas automaticamente quando o usuário faz login.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LISTA DE MÓDULOS -->
+                <div class="modulos-grid">
+                    ${this.modulosPermissoes.map(modulo => `
+                        <div class="modulo-card" data-modulo="${modulo.modulo}">
+                            <div class="modulo-header">
+                                <div class="modulo-icon">
+                                    <i class="fas fa-key"></i>
+                                </div>
+                                <div class="modulo-info">
+                                    <h3>${modulo.nomeAmigavel}</h3>
+                                    <p>${modulo.descricao}</p>
+                                </div>
+                                <div class="modulo-badge">
+                                    ${modulo.totalEmails} ${modulo.totalEmails === 1 ? 'usuário' : 'usuários'}
+                                </div>
+                            </div>
+                            
+                            <!-- Lista de emails -->
+                            <div class="emails-list" id="emails-${modulo.modulo}">
+                                ${modulo.emailsAutorizados.length === 0 ? `
+                                    <div class="empty-emails">
+                                        <i class="fas fa-user-slash"></i>
+                                        <span>Nenhum email autorizado</span>
+                                    </div>
+                                ` : `
+                                    ${modulo.emailsAutorizados.map(email => `
+                                        <div class="email-item">
+                                            <div class="email-icon">
+                                                <i class="fas fa-envelope"></i>
+                                            </div>
+                                            <div class="email-text">${email}</div>
+                                            <button class="btn-remove-email" 
+                                                    onclick="admin.removerEmailPermissao('${modulo.modulo}', '${email}')"
+                                                    title="Remover email">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                `}
+                            </div>
+                            
+                            <!-- Adicionar email -->
+                            <div class="add-email-form">
+                                <input type="email" 
+                                    id="new-email-${modulo.modulo}" 
+                                    class="form-control" 
+                                    placeholder="Digite o email do usuário..."
+                                    onkeypress="if(event.key === 'Enter') admin.adicionarEmailPermissao('${modulo.modulo}')">
+                                <button class="btn-add-email" onclick="admin.adicionarEmailPermissao('${modulo.modulo}')">
+                                    <i class="fas fa-plus"></i> Adicionar
+                                </button>
+                            </div>
+                            
+                            <!-- Info de modificação -->
+                            ${modulo.ultimaModificacaoNome ? `
+                                <div class="modulo-footer">
+                                    <i class="fas fa-history"></i>
+                                    Última modificação por <strong>${modulo.ultimaModificacaoNome}</strong>
+                                    ${modulo.updatedAt ? ` em ${new Date(modulo.updatedAt).toLocaleDateString('pt-BR')}` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <style>
+                .permissoes-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+                
+                .permissoes-header {
+                    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 25px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+                    position: relative;
+                    overflow: hidden;
+                }
+                
+                .permissoes-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -50px;
+                    right: -50px;
+                    width: 200px;
+                    height: 200px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 50%;
+                }
+                
+                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
+                .header-icon {
+                    width: 70px; height: 70px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.2);
+                }
+                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
+                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
+                
+                .btn-header {
+                    padding: 12px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                    border: none;
+                    position: relative;
+                    z-index: 2;
+                    background: rgba(255,255,255,0.15);
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.3);
+                }
+                .btn-header.btn-refresh { padding: 12px; }
+                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
+                
+                .modulos-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+                    gap: 25px;
+                }
+                
+                .modulo-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 25px;
+                    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+                    border: 1px solid #e5e7eb;
+                    transition: all 0.3s;
+                }
+                
+                .modulo-card:hover {
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+                    transform: translateY(-2px);
+                }
+                
+                .modulo-header {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 15px;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #f3f4f6;
+                }
+                
+                .modulo-icon {
+                    width: 50px;
+                    height: 50px;
+                    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 22px;
+                    flex-shrink: 0;
+                }
+                
+                .modulo-info {
+                    flex: 1;
+                    min-width: 0;
+                }
+                
+                .modulo-info h3 {
+                    margin: 0 0 5px;
+                    font-size: 16px;
+                    color: #1f2937;
+                    font-weight: 600;
+                }
+                
+                .modulo-info p {
+                    margin: 0;
+                    font-size: 12px;
+                    color: #6b7280;
+                    line-height: 1.4;
+                }
+                
+                .modulo-badge {
+                    padding: 4px 12px;
+                    background: #dbeafe;
+                    color: #1e40af;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    white-space: nowrap;
+                    flex-shrink: 0;
+                }
+                
+                .emails-list {
+                    min-height: 60px;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    margin-bottom: 15px;
+                    padding-right: 5px;
+                }
+                
+                .emails-list::-webkit-scrollbar { width: 6px; }
+                .emails-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+                
+                .email-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px 12px;
+                    background: #f9fafb;
+                    border-radius: 10px;
+                    margin-bottom: 8px;
+                    transition: all 0.2s;
+                }
+                
+                .email-item:hover {
+                    background: #f3f4f6;
+                }
+                
+                .email-icon {
+                    width: 32px;
+                    height: 32px;
+                    background: #e0e7ff;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #4f46e5;
+                    font-size: 14px;
+                    flex-shrink: 0;
+                }
+                
+                .email-text {
+                    flex: 1;
+                    font-size: 13px;
+                    color: #1f2937;
+                    word-break: break-all;
+                    font-family: 'Courier New', monospace;
+                }
+                
+                .btn-remove-email {
+                    width: 28px;
+                    height: 28px;
+                    border: none;
+                    border-radius: 6px;
+                    background: #fee2e2;
+                    color: #dc2626;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s;
+                    flex-shrink: 0;
+                }
+                
+                .btn-remove-email:hover {
+                    background: #ef4444;
+                    color: white;
+                    transform: scale(1.1);
+                }
+                
+                .empty-emails {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    padding: 20px;
+                    color: #9ca3af;
+                    font-size: 13px;
+                    background: #f9fafb;
+                    border-radius: 10px;
+                    border: 1px dashed #d1d5db;
+                }
+                
+                .empty-emails i { font-size: 18px; }
+                
+                .add-email-form {
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: 12px;
+                }
+                
+                .add-email-form .form-control {
+                    flex: 1;
+                    padding: 10px 14px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 10px;
+                    font-size: 13px;
+                    transition: all 0.3s;
+                }
+                
+                .add-email-form .form-control:focus {
+                    outline: none;
+                    border-color: #8b5cf6;
+                    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+                }
+                
+                .btn-add-email {
+                    padding: 10px 18px;
+                    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    transition: all 0.3s;
+                    white-space: nowrap;
+                }
+                
+                .btn-add-email:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+                }
+                
+                .modulo-footer {
+                    padding-top: 12px;
+                    border-top: 1px solid #f3f4f6;
+                    font-size: 11px;
+                    color: #9ca3af;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                
+                @media (max-width: 768px) {
+                    .modulos-grid { grid-template-columns: 1fr; }
+                    .add-email-form { flex-direction: column; }
+                }
+            </style>
+        `;
+    }
+
+    // ============ ADICIONAR EMAIL ============
+    async adicionarEmailPermissao(modulo) {
+        const input = document.getElementById(`new-email-${modulo}`);
+        const email = input?.value.trim();
+        
+        if (!email) {
+            this.showToast('❌ Digite um email', 'error');
+            return;
+        }
+        
+        if (!email.includes('@')) {
+            this.showToast('❌ Email inválido', 'error');
+            return;
+        }
+        
+        try {
+            this.showToast('🔄 Adicionando email...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/permissoes-modulos/modulos/${modulo}/emails`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(`✅ Email ${email} adicionado!`, 'success');
+                await this.loadPermissoesEspeciais();
+            } else {
+                throw new Error(data.error || 'Erro ao adicionar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ REMOVER EMAIL ============
+    async removerEmailPermissao(modulo, email) {
+        const confirmar = await this.confirmar(
+            '🗑️ Remover Email',
+            `Tem certeza que deseja remover o email <strong>${email}</strong>?<br><br>
+            Este usuário perderá acesso a esta funcionalidade.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🔄 Removendo email...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/permissoes-modulos/modulos/${modulo}/emails/${encodeURIComponent(email)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(`✅ Email removido!`, 'success');
+                await this.loadPermissoesEspeciais();
+            } else {
+                throw new Error(data.error || 'Erro ao remover');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
     }
 

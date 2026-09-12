@@ -897,12 +897,20 @@ const assistenteSocialRoutes = require('./routes/assistente-social');
 app.use('/api/assistente-social', assistenteSocialRoutes);
 
 //PROTAGONISMO
-
 const protagonismoRoutes = require('./routes/protagonismo');
 const protagonismoPublicoRoutes = require('./routes/protagonismo-publico');
 
 app.use('/api/protagonismo', protagonismoRoutes);
 app.use('/api/protagonismo-publico', protagonismoPublicoRoutes);
+
+//Rotas de autorização
+const autorizacaoRoutes = require('./routes/autorizacao-routes');
+app.use('/api/gestao-geral/autorizacao', autorizacaoRoutes);
+
+//Rotas de permissões de módulos
+const permissaoModulosRoutes = require('./routes/permissao-modulos-routes');
+app.use('/api/admin/permissoes-modulos', permissaoModulosRoutes);
+
 
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ ATUALIZADA 09/09/26

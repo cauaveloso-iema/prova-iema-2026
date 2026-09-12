@@ -12398,7 +12398,11 @@ window.addEventListener('scroll', function() {
         
         // Logout
         function logout() {
-            localStorage.clear();
+            // 🔥 Preserva "Lembrar de mim"
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            sessionStorage.removeItem('auth_token');
+            sessionStorage.removeItem('user_data');
             window.location.href = 'login.html';
         }
         

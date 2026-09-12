@@ -135,12 +135,33 @@ body {
 
 .card-body { padding: 20px; }
 
+.card-header .btn-outline-light {
+    background: transparent;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 30px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.card-header .btn-outline-light:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: white;
+}
+
 /* ============================================
    TABS
    ============================================ */
 .nav-tabs {
     border-bottom: 2px solid #e5e7eb;
     gap: 5px;
+    flex-wrap: wrap;
 }
 
 .nav-tabs .nav-link {
@@ -151,6 +172,8 @@ body {
     border-radius: 12px 12px 0 0;
     transition: all 0.3s;
     background: transparent;
+    font-size: 14px;
+    cursor: pointer;
 }
 
 .nav-tabs .nav-link:hover {
@@ -163,6 +186,8 @@ body {
     background: white;
     border-bottom: 3px solid #1e3c72;
 }
+
+.nav-tabs .nav-link.active i { color: #1e3c72; }
 
 /* ============================================
    STATS GRID
@@ -253,6 +278,7 @@ body {
     overflow: hidden;
     border: 3px solid #1e3c72;
     background: #000;
+    min-height: 250px;
 }
 
 .qr-scanner-container video {
@@ -263,19 +289,32 @@ body {
 /* ============================================
    LISTA DE ALUNOS
    ============================================ */
-#listaAlunosManual {
+#listaAlunosManual,
+#listaAlunosManualAutorizacao,
+#listaAlunosManualJustificativa,
+#listaAlunosManualSegundaChamada {
     max-height: 500px;
     overflow-y: auto;
     padding-right: 5px;
 }
 
-#listaAlunosManual::-webkit-scrollbar { width: 6px; }
-#listaAlunosManual::-webkit-scrollbar-thumb {
+#listaAlunosManual::-webkit-scrollbar,
+#listaAlunosManualAutorizacao::-webkit-scrollbar,
+#listaAlunosManualJustificativa::-webkit-scrollbar,
+#listaAlunosManualSegundaChamada::-webkit-scrollbar { width: 6px; }
+
+#listaAlunosManual::-webkit-scrollbar-thumb,
+#listaAlunosManualAutorizacao::-webkit-scrollbar-thumb,
+#listaAlunosManualJustificativa::-webkit-scrollbar-thumb,
+#listaAlunosManualSegundaChamada::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 10px;
 }
 
-#listaAlunosManual .list-group-item {
+#listaAlunosManual .list-group-item,
+#listaAlunosManualAutorizacao .list-group-item,
+#listaAlunosManualJustificativa .list-group-item,
+#listaAlunosManualSegundaChamada .list-group-item {
     border: 1px solid #e5e7eb;
     border-radius: 12px !important;
     margin-bottom: 8px;
@@ -285,19 +324,28 @@ body {
     background: white;
 }
 
-#listaAlunosManual .list-group-item:hover {
+#listaAlunosManual .list-group-item:hover,
+#listaAlunosManualAutorizacao .list-group-item:hover,
+#listaAlunosManualJustificativa .list-group-item:hover,
+#listaAlunosManualSegundaChamada .list-group-item:hover {
     background: #eff6ff;
     border-color: #1e3c72;
     transform: translateX(5px);
     box-shadow: 0 4px 12px rgba(30, 60, 114, 0.15);
 }
 
-#listaAlunosManual .list-group-item strong {
+#listaAlunosManual .list-group-item strong,
+#listaAlunosManualAutorizacao .list-group-item strong,
+#listaAlunosManualJustificativa .list-group-item strong,
+#listaAlunosManualSegundaChamada .list-group-item strong {
     color: #1f2937;
     font-size: 15px;
 }
 
-#listaAlunosManual .list-group-item small {
+#listaAlunosManual .list-group-item small,
+#listaAlunosManualAutorizacao .list-group-item small,
+#listaAlunosManualJustificativa .list-group-item small,
+#listaAlunosManualSegundaChamada .list-group-item small {
     color: #6b7280;
     font-size: 12px;
 }
@@ -409,6 +457,7 @@ body {
     color: #4b5563;
     font-size: 14px;
     margin-bottom: 6px;
+    display: block;
 }
 
 .form-control, .form-select {
@@ -418,6 +467,7 @@ body {
     font-size: 14px;
     transition: all 0.3s;
     width: 100%;
+    background: white;
 }
 
 .form-control:focus, .form-select:focus {
@@ -425,6 +475,8 @@ body {
     box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
     outline: none;
 }
+
+textarea.form-control { resize: vertical; min-height: 60px; }
 
 .btn-primary-custom {
     background: linear-gradient(135deg, #1e3c72, #2a5298);
@@ -459,6 +511,8 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
 }
 
 .btn-secondary-custom:hover { background: #e5e7eb; }
@@ -582,6 +636,16 @@ tr:hover td { background: #f8f9fa; }
 .btn-success { background: #10b981; color: white; }
 .btn-success:hover { background: #059669; transform: translateY(-2px); }
 
+.btn-outline-primary {
+    background: transparent;
+    color: #1e3c72;
+    border: 1px solid #1e3c72;
+}
+.btn-outline-primary:hover {
+    background: #1e3c72;
+    color: white;
+}
+
 /* ============================================
    LISTA GENÉRICA
    ============================================ */
@@ -597,6 +661,12 @@ tr:hover td { background: #f8f9fa; }
 .list-group-item:hover {
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     transform: translateX(5px);
+}
+
+.list-group {
+    list-style: none;
+    padding: 0;
+    margin: 0;
 }
 
 /* ============================================
@@ -649,7 +719,7 @@ tr:hover td { background: #f8f9fa; }
 }
 
 /* ============================================
-   AUTCOMPLETE (dentro do HTML mas por segurança)
+   AUTOCOMPLETE
    ============================================ */
 .autocomplete-aluno-wrapper { position: relative; }
 
@@ -679,9 +749,47 @@ tr:hover td { background: #f8f9fa; }
     gap: 10px;
 }
 
+.autocomplete-aluno-item:last-child { border-bottom: none; }
+
 .autocomplete-aluno-item:hover,
 .autocomplete-aluno-item.selected {
     background: #eff6ff;
+}
+
+.autocomplete-aluno-item .aluno-nome {
+    font-weight: 600;
+    color: #1f2937;
+    flex: 1;
+}
+
+.autocomplete-aluno-item .aluno-nome mark {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 0 2px;
+    border-radius: 3px;
+    font-weight: 700;
+}
+
+.autocomplete-aluno-item .aluno-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.autocomplete-aluno-item .aluno-turma {
+    background: #dbeafe;
+    color: #1e40af;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.autocomplete-aluno-item .aluno-matricula {
+    font-size: 10px;
+    color: #9ca3af;
 }
 
 .autocomplete-aluno-empty {
@@ -689,6 +797,27 @@ tr:hover td { background: #f8f9fa; }
     text-align: center;
     color: #9ca3af;
     font-size: 13px;
+}
+
+.autocomplete-aluno-loading {
+    padding: 16px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.autocomplete-aluno-loading::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    border: 2px solid #e5e7eb;
+    border-top: 2px solid #1e3c72;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }
 
 /* ============================================
@@ -729,6 +858,283 @@ tr:hover td { background: #f8f9fa; }
 }
 
 /* ============================================
+   MÓDULOS EXTRAS
+   ============================================ */
+
+#formAutorizacao .card[style*="f8fafc"],
+#formJustificativa .card[style*="f8fafc"],
+#formSegundaChamada .card[style*="f8fafc"] {
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+}
+
+#formAutorizacao .card-body,
+#formJustificativa .card-body,
+#formSegundaChamada .card-body {
+    padding: 20px;
+}
+
+#formAutorizacao h6,
+#formJustificativa h6,
+#formSegundaChamada h6 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e3c72;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#listaAutorizacoes,
+#listaJustificativas,
+#listaSegundaChamada {
+    min-height: 120px;
+}
+
+#listaAutorizacoes .loading-spinner,
+#listaJustificativas .loading-spinner,
+#listaSegundaChamada .loading-spinner {
+    width: 24px;
+    height: 24px;
+    border-width: 2px;
+    margin-bottom: 10px;
+}
+
+#listaAutorizacoes p,
+#listaJustificativas p,
+#listaSegundaChamada p {
+    color: #6b7280;
+    font-size: 13px;
+    margin: 0;
+}
+
+#listaAutorizacoes .text-muted,
+#listaJustificativas .text-muted,
+#listaSegundaChamada .text-muted {
+    padding: 30px 15px;
+    text-align: center;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px dashed #cbd5e1;
+}
+
+td div[style*="font-size:12px"],
+td div[style*="font-size: 12px"] {
+    line-height: 1.4;
+}
+
+td div[style*="font-size:12px"] small,
+td div[style*="font-size: 12px"] small {
+    color: #6b7280;
+    font-size: 10px;
+}
+
+#listaAutorizacoes .badge,
+#listaJustificativas .badge,
+#listaSegundaChamada .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+}
+
+#listaAutorizacoes .btn-sm,
+#listaJustificativas .btn-sm,
+#listaSegundaChamada .btn-sm {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+#listaAutorizacoes .btn-sm:hover,
+#listaJustificativas .btn-sm:hover,
+#listaSegundaChamada .btn-sm:hover {
+    transform: scale(1.1);
+}
+
+/* ============================================
+   ASSINATURA DIGITAL (TOUCH/MOUSE)
+   ============================================ */
+.assinatura-wrapper {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px;
+    margin-top: 14px;
+}
+
+.assinatura-wrapper .form-label {
+    font-weight: 600;
+    color: #1e3c72;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+}
+
+.assinatura-wrapper .form-label i {
+    font-size: 16px;
+    color: #1e3c72;
+}
+
+.assinatura-wrapper .form-label small {
+    font-weight: 400;
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.assinatura-container {
+    position: relative;
+    width: 100%;
+    height: 130px;
+    border: 2px dashed #94a3b8;
+    border-radius: 10px;
+    background: white;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.assinatura-container:hover {
+    border-color: #1e3c72;
+}
+
+.assinatura-container.ativa {
+    border-color: #1e3c72;
+    border-style: solid;
+    box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.15);
+}
+
+.assinatura-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.assinatura-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #cbd5e1;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    user-select: none;
+    transition: opacity 0.2s;
+}
+
+.assinatura-placeholder i {
+    font-size: 32px;
+    color: #cbd5e1;
+}
+
+.assinatura-placeholder span {
+    font-weight: 500;
+    font-size: 13px;
+}
+
+.assinatura-placeholder.escondido {
+    opacity: 0;
+}
+
+.assinatura-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+    gap: 8px;
+}
+
+.assinatura-actions .btn {
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.assinatura-actions .btn-outline-danger {
+    background: transparent;
+    color: #ef4444;
+    border: 1px solid #ef4444;
+}
+
+.assinatura-actions .btn-outline-danger:hover {
+    background: #ef4444;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(239, 68, 68, 0.3);
+}
+
+/* ============================================
+   AVISO DE INTEGRAÇÃO AUTOMÁTICA
+   ============================================ */
+.aviso-integracao {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-left: 4px solid #1e3c72;
+    border-radius: 10px;
+    padding: 12px 15px;
+    margin-top: 14px;
+    font-size: 13px;
+    color: #1e40af;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    animation: slideIn 0.3s ease;
+}
+
+.aviso-integracao i {
+    color: #1e3c72;
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.aviso-integracao strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #1e3c72;
+    font-weight: 700;
+}
+
+/* ============================================
+   BOOTSTRAP UTILITY OVERRIDES
+   ============================================ */
+.badge.bg-info.text-dark { background: #cffafe !important; color: #155e75 !important; }
+.badge.bg-primary { background: #1e3c72 !important; }
+.badge.bg-danger { background: #ef4444 !important; }
+.badge.bg-success { background: #10b981 !important; }
+.badge.bg-secondary { background: #6b7280 !important; }
+.badge.bg-light.text-dark { background: #f3f4f6 !important; color: #1f2937 !important; }
+
+.alert-info { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+.alert-warning { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+
+.text-danger { color: #ef4444 !important; }
+.text-muted { color: #6b7280 !important; }
+.text-primary { color: #1e3c72 !important; }
+.text-success { color: #10b981 !important; }
+.text-info { color: #3b82f6 !important; }
+.text-warning { color: #f59e0b !important; }
+
+/* ============================================
    RESPONSIVO
    ============================================ */
 @media (max-width: 1024px) {
@@ -743,4 +1149,38 @@ tr:hover td { background: #f8f9fa; }
     .aluno-foto { width: 80px; height: 80px; }
     .metric-value { font-size: 1.8rem; }
     .modo-selector { flex-direction: column; }
+    
+    .nav-tabs .nav-link {
+        font-size: 12px;
+        padding: 10px 12px;
+    }
+    
+    #formAutorizacao .row,
+    #formJustificativa .row,
+    #formSegundaChamada .row {
+        flex-direction: column;
+    }
+    
+    #formAutorizacao .col-md-6,
+    #formAutorizacao .col-md-3,
+    #formAutorizacao .col-md-4,
+    #formJustificativa .col-md-6,
+    #formJustificativa .col-md-3,
+    #formSegundaChamada .col-md-6,
+    #formSegundaChamada .col-md-3 {
+        width: 100%;
+    }
+    
+    /* Assinatura em mobile — maior */
+    .assinatura-container {
+        height: 180px;
+    }
+    
+    .assinatura-placeholder i {
+        font-size: 40px;
+    }
+    
+    .assinatura-placeholder span {
+        font-size: 14px;
+    }
 }
