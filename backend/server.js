@@ -922,27 +922,16 @@ async function testarModelosDisponiveis(groq) {
     return [];
   }
   
-  // Lista ATUALIZADA com modelos confirmados e funcionais
+  // 🔥 LISTA ATUALIZADA - Setembro/2025
   const modelosParaTestar = [
-    // Modelos confirmados como disponíveis
-    "allam-2-7b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
-    "openai/gpt-oss-safeguard-20b",
-    "qwen/qwen3.6-27b",
-    "qwen/qwen3.8-27b",
-    
-    // Modelos antigos (para verificar se ainda funcionam)
-    "llama-3.2-90b-vision-preview",
-    "llama-3.2-11b-vision-preview",
-    "llama-3.2-3b-preview",
-    "llama-3.1-8b-instant",
-    "llama-3.1-70b-versatile",
-    "llama-3-70b-8192",
-    "llama-3-8b-8192",
-    "mixtral-8x7b-32768",
+    "qwen/qwen3-32b",
+    "moonshotai/kimi-k2-instruct",
     "gemma2-9b-it",
-    "gemma-7b-it"
+    "allam-2-7b"
   ];
 
   console.log('🔍 Testando modelos disponíveis na Groq...');
@@ -4664,10 +4653,14 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       }
 
       const modelosAtuais = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-70b-versatile",
-        "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768"
+          "llama-3.3-70b-versatile",      // Melhor qualidade (se disponível)
+          "llama-3.1-8b-instant",         // Rápido e confiável
+          "openai/gpt-oss-120b",          // Alternativa OpenAI (Groq)
+          "openai/gpt-oss-20b",           // Alternativa OpenAI menor
+          "qwen/qwen3-32b",               // Alternativa Qwen
+          "moonshotai/kimi-k2-instruct",  // Alternativa Moonshot
+          "gemma2-9b-it",                 // Alternativa Google
+          "allam-2-7b"                    // Fallback final
       ];
 
       const contextoAnexos = await processarAnexosParaIA(anexos);
