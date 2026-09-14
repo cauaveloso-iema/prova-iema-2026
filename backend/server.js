@@ -1304,6 +1304,31 @@ const validateInputs = (validations) => {
   };
 };
 
+// ============ MIDDLEWARE PARA RASTREAR ATIVIDADE DO USUÁRIO ============
+// Este middleware atualiza o campo lastActive toda vez que o usuário faz uma requisição autenticada
+const rastrearAtividade = async (req, res, next) => {
+    if (req.userId) {
+        // Atualizar lastActive de forma assíncrona (não bloqueia a resposta)
+        User.findByIdAndUpdate(
+            req.userId,
+            { 
+                lastActive: new Date(),
+                lastLogin: new Date()
+            },
+            { new: false }
+        ).catch(err => {
+            // Silenciar erros para não afetar a requisição
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('⚠️ Erro ao atualizar lastActive:', err.message);
+            }
+        });
+    }
+    next();
+};
+
+// Aplicar o rastreador em todas as rotas de API
+app.use('/api', rastrearAtividade);
+
 // ============================================================================
 // ROTAS PÚBLICAS
 // ============================================================================
@@ -10962,49 +10987,182 @@ const isSuperAdmin = (req, res, next) => {
 };
 
 // Dashboard - Estatísticas gerais
+// ============================================================================
+// ROTA: DASHBOARD ADMIN (VERSÃO COMPLETA COM TODOS OS PERFIS)
+// ============================================================================
+
 app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
+
+        // ====================================================================
+        // 1. CONTAGEM DE USUÁRIOS POR PERFIL (TODOS OS PERFIS)
+        // ====================================================================
+        const userCounts = await User.aggregate([
+            { 
+                $group: { 
+                    _id: '$role', 
+                    count: { $sum: 1 } 
+                } 
+            }
+        ]);
+
+
+        // Objeto inicial com TODOS os perfis possíveis = 0
+        const stats = {
+            // Totais gerais
+            totalUsuarios: 0,
+            usuariosOnline: 0,
+            
+            // Contagem por perfil (TODOS)
+            totalAlunos: 0,
+            totalProfessores: 0,
+            totalAdmins: 0,           // Soma de admin + super_admin
+            totalSuperAdmins: 0,
+            totalSetorPedagogico: 0,
+            totalCoordenacaoPatio: 0,
+            totalCozinha: 0,
+            totalGestaoGeral: 0,
+            totalEnfermaria: 0,
+            totalSupervisao: 0,
+            totalPsicologia: 0,
+            totalAssistenteSocial: 0,
+            totalProtagonismo: 0,
+            
+            // Outras estatísticas
+            totalTurmas: 0,
+            turmasAtivas: 0,
+            totalProvas: 0,
+            totalQuestoes: 0,
+            totalResultados: 0,
+            alunosComAcessibilidade: 0,
+            provasPorStatus: {},
+            usuariosPorMes: [],
+            atividadesRecentes: []
+        };
+
+        // Mapear todos os roles retornados
+        userCounts.forEach(item => {
+            const role = item._id;
+            const count = item.count;
+
+            // Somar no total geral
+            stats.totalUsuarios += count;
+
+            // Mapear por role específico
+            switch (role) {
+                case 'aluno': 
+                    stats.totalAlunos = count; 
+                    break;
+                case 'professor': 
+                    stats.totalProfessores = count; 
+                    break;
+                case 'admin': 
+                    stats.totalAdmins += count; 
+                    break;
+                case 'super_admin': 
+                    stats.totalSuperAdmins = count;
+                    stats.totalAdmins += count; // Também soma em admins
+                    break;
+                case 'setor_pedagogico': 
+                    stats.totalSetorPedagogico = count; 
+                    break;
+                case 'coordenacao_patio': 
+                    stats.totalCoordenacaoPatio = count; 
+                    break;
+                case 'cozinha': 
+                    stats.totalCozinha = count; 
+                    break;
+                case 'gestao_geral': 
+                    stats.totalGestaoGeral = count; 
+                    break;
+                case 'enfermaria': 
+                    stats.totalEnfermaria = count; 
+                    break;
+                case 'supervisao': 
+                    stats.totalSupervisao = count; 
+                    break;
+                case 'psicologia': 
+                    stats.totalPsicologia = count; 
+                    break;
+                case 'assistente-social': 
+                    stats.totalAssistenteSocial = count; 
+                    break;
+                case 'protagonismo': 
+                    stats.totalProtagonismo = count; 
+                    break;
+                default:
+                    console.log(`   ⚠️ Role não mapeado: ${role} (${count} usuários)`);
+            }
+        });
+
+        // ====================================================================
+        // 2. CONTAGEM DE USUÁRIOS ONLINE (ÚLTIMOS 5 MINUTOS)
+        // ====================================================================
+        const cincoMinutosAtras = new Date(Date.now() - 5 * 60 * 1000);
+        
+        stats.usuariosOnline = await User.countDocuments({
+            ativo: true,
+            $or: [
+                { lastActive: { $gte: cincoMinutosAtras } },
+                { lastLogin: { $gte: cincoMinutosAtras } }
+            ]
+        });
+
+        // ====================================================================
+        // 3. OUTRAS ESTATÍSTICAS (PROVAS, TURMAS, RESULTADOS)
+        // ====================================================================
         const [
-            totalUsuarios,
-            totalAlunos,
-            totalProfessores,
-            totalAdmins,
             totalTurmas,
+            turmasAtivas,
             totalProvas,
             totalQuestoes,
             totalResultados,
+            alunosComAcessibilidade,
             usuariosPorMes,
-            provasPorStatus,
-            turmasAtivas,
-            alunosComAcessibilidade
+            provasPorStatus
         ] = await Promise.all([
-            User.countDocuments(),
-            User.countDocuments({ role: 'aluno' }),
-            User.countDocuments({ role: 'professor' }),
-            User.countDocuments({ role: { $in: ['admin', 'super_admin'] } }),
             Turma.countDocuments(),
+            Turma.countDocuments({ ativa: true }),
             Prova.countDocuments(),
-            Prova.aggregate([{ $project: { count: { $size: "$questoes" } } }, { $group: { _id: null, total: { $sum: "$count" } } }]),
+            Prova.aggregate([
+                { $project: { count: { $size: "$questoes" } } },
+                { $group: { _id: null, total: { $sum: "$count" } } }
+            ]),
             Resultado.countDocuments(),
+            User.countDocuments({ precisaAcessibilidade: true, role: 'aluno' }),
             User.aggregate([
-                { $group: { 
-                    _id: { $month: "$createdAt" }, 
-                    count: { $sum: 1 } 
-                }},
+                { 
+                    $group: { 
+                        _id: { $month: "$createdAt" }, 
+                        count: { $sum: 1 } 
+                    }
+                },
                 { $sort: { _id: 1 } }
             ]),
             Prova.aggregate([
-                { $group: { 
-                    _id: "$status", 
-                    count: { $sum: 1 } 
-                }}
-            ]),
-            Turma.countDocuments({ ativa: true }),
-            User.countDocuments({ precisaAcessibilidade: true, role: 'aluno' })
+                { $group: { _id: "$status", count: { $sum: 1 } } }
+            ])
         ]);
 
-        // Atividades recentes
-        const atividadesRecentes = await Promise.all([
+        stats.totalTurmas = totalTurmas;
+        stats.turmasAtivas = turmasAtivas;
+        stats.totalProvas = totalProvas;
+        stats.totalQuestoes = totalQuestoes[0]?.total || 0;
+        stats.totalResultados = totalResultados;
+        stats.alunosComAcessibilidade = alunosComAcessibilidade;
+        stats.usuariosPorMes = usuariosPorMes.map(item => ({ 
+            mes: item._id, 
+            total: item.count 
+        }));
+        stats.provasPorStatus = provasPorStatus.reduce((acc, item) => ({ 
+            ...acc, 
+            [item._id]: item.count 
+        }), {});
+
+        // ====================================================================
+        // 4. ATIVIDADES RECENTES
+        // ====================================================================
+        const [resultadosRecentes, provasRealizadasRecentes] = await Promise.all([
             Resultado.find()
                 .sort({ createdAt: -1 })
                 .limit(5)
@@ -11019,39 +11177,100 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
                 .lean()
         ]);
 
-        const recentes = [...atividadesRecentes[0], ...atividadesRecentes[1]]
-            .sort((a, b) => new Date(b.createdAt || b.dataRealizacao) - new Date(a.createdAt || a.dataRealizacao))
+        const recentes = [...resultadosRecentes, ...provasRealizadasRecentes]
+            .sort((a, b) => {
+                const dataA = new Date(a.createdAt || a.dataRealizacao);
+                const dataB = new Date(b.createdAt || b.dataRealizacao);
+                return dataB - dataA;
+            })
             .slice(0, 10);
 
+        stats.atividadesRecentes = recentes.map(r => ({
+            id: r._id,
+            tipo: r.userId ? 'resultado' : 'prova_realizada',
+            usuario: r.userId?.nome || r.alunoId?.nome || 'Desconhecido',
+            acao: r.userId ? 'finalizou a prova' : 'realizou a prova',
+            prova: r.provaId?.titulo || 'Prova',
+            data: r.createdAt || r.dataRealizacao
+        }));
+
+        // ====================================================================
+        // 5. RESPOSTA FINAL
+        // ====================================================================
         res.json({
             success: true,
-            data: {
-                totalUsuarios,
-                totalAlunos,
-                totalProfessores,
-                totalAdmins,
-                totalTurmas,
-                totalProvas,
-                totalQuestoes: totalQuestoes[0]?.total || 0,
-                totalResultados,
-                usuariosPorMes: usuariosPorMes.map(item => ({ mes: item._id, total: item.count })),
-                provasPorStatus: provasPorStatus.reduce((acc, item) => ({ ...acc, [item._id]: item.count }), {}),
-                turmasAtivas,
-                alunosComAcessibilidade,
-                atividadesRecentes: recentes.map(r => ({
-                    id: r._id,
-                    tipo: r.userId ? 'resultado' : 'prova_realizada',
-                    usuario: r.userId?.nome || r.alunoId?.nome || 'Desconhecido',
-                    acao: r.userId ? 'finalizou a prova' : 'realizou a prova',
-                    prova: r.provaId?.titulo || 'Prova',
-                    data: r.createdAt || r.dataRealizacao
-                }))
-            }
+            data: stats
         });
 
     } catch (error) {
         console.error('❌ Erro no dashboard admin:', error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao carregar dados do dashboard: ' + error.message 
+        });
+    }
+});
+
+// ============================================================================
+// ROTA: LISTAR USUÁRIOS ONLINE (ÚLTIMOS 5 MINUTOS)
+// ============================================================================
+
+app.get('/api/admin/usuarios-online', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        
+        // Considerar online = ativo nos últimos 5 minutos
+        const cincoMinutosAtras = new Date(Date.now() - 5 * 60 * 1000);
+        
+        const usuariosOnline = await User.find({
+            ativo: true,
+            $or: [
+                { lastActive: { $gte: cincoMinutosAtras } },
+                { lastLogin: { $gte: cincoMinutosAtras } }
+            ]
+        })
+        .select('nome email role matricula turma curso eixo departamento ultimaAtualizacaoPerfil lastActive lastLogin fotoPerfil qrCodeUsuario onesignalPlayerId')
+        .sort({ lastActive: -1, lastLogin: -1 })
+        .lean();
+        
+        // Formatar dados
+        const usuariosFormatados = usuariosOnline.map(u => ({
+            id: u._id,
+            nome: u.nome || 'Sem nome',
+            email: u.email || '',
+            role: u.role || 'desconhecido',
+            matricula: u.matricula || null,
+            turma: u.turma || null,
+            curso: u.curso || null,
+            eixo: u.eixo || null,
+            departamento: u.departamento || null,
+            fotoPerfil: u.fotoPerfil || null,
+            temPush: !!(u.onesignalPlayerId),
+            ultimaAtividade: u.lastActive || u.lastLogin,
+            tempoOnline: u.lastActive 
+                ? Math.floor((Date.now() - new Date(u.lastActive).getTime()) / 60000)
+                : (u.lastLogin ? Math.floor((Date.now() - new Date(u.lastLogin).getTime()) / 60000) : 0)
+        }));
+        
+        // Estatísticas por perfil
+        const porPerfil = usuariosFormatados.reduce((acc, u) => {
+            acc[u.role] = (acc[u.role] || 0) + 1;
+            return acc;
+        }, {});
+        
+        res.json({
+            success: true,
+            total: usuariosFormatados.length,
+            usuarios: usuariosFormatados,
+            porPerfil: porPerfil,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar usuários online:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao listar usuários online: ' + error.message
+        });
     }
 });
 
@@ -13333,15 +13552,6 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
     const taxaAprovacao = notasValidas.length > 0 
       ? ((aprovados / notasValidas.length) * 100).toFixed(1)
       : '0.0';
-    
-    console.log(`✅ Resultados processados:`);
-    console.log(`   - Total: ${todosResultados.length}`);
-    console.log(`   - Manuais: ${notasManuais}`);
-    console.log(`   - Automáticas: ${notasAutomaticas}`);
-    console.log(`   - Aprovados: ${aprovados}`);
-    console.log(`   - Reprovados: ${reprovados}`);
-    console.log(`   - Pendentes: ${pendentes}`);
-    console.log(`   - Cancelados: ${cancelados}`);
     
     res.json({
       success: true,

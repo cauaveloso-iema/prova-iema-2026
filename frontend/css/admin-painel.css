@@ -1891,3 +1891,1228 @@ body {
     background: linear-gradient(135deg, #1e3c72, #2a5298); 
     color: white; 
 }
+
+
+/* ============================================================================
+   ============================================================================
+   🔥🔥🔥 ADIÇÕES PARA O NOVO DASHBOARD PROFISSIONAL 🔥🔥🔥
+   (Mantendo TUDO que já existe acima + Adicionando apenas o novo)
+   ============================================================================
+   ============================================================================ */
+
+/* ============================================================================
+   DASHBOARD - HEADER DE SAUDAÇÃO
+   ============================================================================ */
+.dashboard-welcome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0 24px 0;
+    margin-bottom: 8px;
+    animation: fadeInDashboard 0.4s ease-out;
+}
+
+@keyframes fadeInDashboard {
+    from { 
+        opacity: 0; 
+        transform: translateY(-10px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+.welcome-left h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 600;
+    color: #1f2937;
+    letter-spacing: -0.3px;
+}
+
+.welcome-left p {
+    margin: 6px 0 0;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.welcome-right {
+    text-align: right;
+}
+
+.welcome-date {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 2px;
+    text-transform: capitalize;
+}
+
+.welcome-time {
+    font-size: 26px;
+    font-weight: 600;
+    color: #1f2937;
+    letter-spacing: -0.5px;
+}
+
+/* ============================================================================
+   DASHBOARD - LAYOUT EM 2 COLUNAS
+   ============================================================================ */
+.dashboard-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 24px;
+    align-items: start;
+    animation: fadeInDashboard 0.5s ease-out 0.1s both;
+}
+
+.dashboard-main {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+
+.dashboard-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: 90px;
+    align-self: start;
+}
+
+/* ============================================================================
+   DASHBOARD - CARD PRINCIPAL DE USUÁRIOS (COM TODOS OS PERFIS)
+   ============================================================================ */
+.dash-card-full {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    border: 1px solid #f0f0f0;
+    animation: fadeInDashboard 0.4s ease-out;
+}
+
+.dash-card-full-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #f3f4f6;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.dash-card-full-title {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.dash-card-full-title .dash-card-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.dash-card-full-title .dash-card-icon.blue {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.dash-card-full-title h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.dash-card-full-title p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.dash-card-full-value {
+    text-align: right;
+}
+
+.dash-card-full-value span {
+    display: block;
+    font-size: 42px;
+    font-weight: 800;
+    color: #1f2937;
+    line-height: 1;
+    letter-spacing: -1px;
+}
+
+.dash-card-full-value small {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+/* GRID DE TODOS OS PERFIS */
+.perfis-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.perfil-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #f9fafb;
+    border-radius: 10px;
+    border-left: 4px solid #e5e7eb;
+    transition: all 0.2s ease;
+}
+
+.perfil-item:hover {
+    background: #f3f4f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.perfil-icon {
+    font-size: 24px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.perfil-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.perfil-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.perfil-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: #1f2937;
+    line-height: 1.1;
+}
+
+/* ============================================================================
+   DASHBOARD - CARDS DE ESTATÍSTICAS (4 EM LINHA)
+   ============================================================================ */
+.dashboard-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.dash-card {
+    background: white;
+    border-radius: 14px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    border: 1px solid #f0f0f0;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.dash-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.dash-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.dash-card-icon.blue {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+.dash-card-icon.green {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+.dash-card-icon.orange {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+.dash-card-icon.cyan {
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+}
+
+.dash-card-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.dash-card-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+
+.dash-card-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.1;
+    margin-bottom: 10px;
+    letter-spacing: -0.5px;
+}
+
+.dash-card-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.dash-card-details span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.dash-card-details i {
+    font-size: 10px;
+    color: #9ca3af;
+}
+
+.dash-card-details strong {
+    color: #374151;
+    font-weight: 700;
+}
+
+/* ===== CARD DE USUÁRIOS ONLINE (DESTACADO VERDE) ===== */
+.dash-card-online {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    border: none !important;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.dash-card-online::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+    animation: onlineGlow 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes onlineGlow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+.dash-card-online .dash-card-label,
+.dash-card-online .dash-card-value,
+.dash-card-online .dash-card-details,
+.dash-card-online .dash-card-details strong {
+    color: white !important;
+}
+
+.dash-card-online .dash-card-details i {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.dash-card-online .dash-card-icon {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+}
+
+/* EFEITO DE PULSO NO ÍCONE ONLINE */
+.dash-card-icon.online-pulse {
+    position: relative;
+    animation: iconPulse 2s ease-in-out infinite;
+}
+
+.dash-card-icon.online-pulse::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.4);
+    animation: pulseRing 2s ease-out infinite;
+    pointer-events: none;
+}
+
+@keyframes iconPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+@keyframes pulseRing {
+    0% { 
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.6;
+    }
+    100% { 
+        transform: translate(-50%, -50%) scale(1.8);
+        opacity: 0;
+    }
+}
+
+/* ============================================================================
+   DASHBOARD - GRÁFICOS
+   ============================================================================ */
+.dashboard-charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.dash-chart-card {
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    border: 1px solid #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    min-height: 340px;
+}
+
+.dash-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.dash-chart-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dash-chart-title i {
+    color: #3b82f6;
+    font-size: 16px;
+    background: #eff6ff;
+    padding: 7px;
+    border-radius: 8px;
+}
+
+.dash-chart-title h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.dash-chart-filter {
+    padding: 6px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #4b5563;
+    background: white;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.dash-chart-filter:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+
+.dash-chart-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    min-height: 240px;
+}
+
+.dash-chart-body canvas {
+    max-height: 260px;
+    width: 100% !important;
+}
+
+/* ESTADO VAZIO DO GRÁFICO */
+.dash-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    width: 100%;
+}
+
+.dash-empty-icon {
+    width: 64px;
+    height: 64px;
+    background: #f3f4f6;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    color: #9ca3af;
+    font-size: 28px;
+}
+
+.dash-empty-state h4 {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.dash-empty-state p {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: #6b7280;
+    max-width: 240px;
+    line-height: 1.5;
+}
+
+.btn-create-first-prova {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-create-first-prova:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.dash-chart-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: #6b7280;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.dash-chart-legend span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+/* ============================================================================
+   DASHBOARD - ATIVIDADES RECENTES
+   ============================================================================ */
+.dash-activity-card {
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    border: 1px solid #f0f0f0;
+}
+
+.dash-activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.dash-activity-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dash-activity-title i {
+    color: #3b82f6;
+    font-size: 16px;
+    background: #eff6ff;
+    padding: 7px;
+    border-radius: 8px;
+}
+
+.dash-activity-title h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.dash-activity-link {
+    font-size: 12px;
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.dash-activity-link:hover {
+    color: #2563eb;
+    gap: 8px;
+}
+
+.dash-activity-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.dash-activity-list .activity-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f9fafb;
+}
+
+.dash-activity-list .activity-item:last-child {
+    border-bottom: none;
+}
+
+.dash-activity-list .activity-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.dash-activity-list .activity-icon.admin {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.dash-activity-list .activity-icon.usuario {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.dash-activity-list .activity-icon.resultado {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.dash-activity-list .activity-icon.prova {
+    background: #ede9fe;
+    color: #7c3aed;
+}
+
+.dash-activity-list .activity-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.dash-activity-list .activity-content p {
+    margin: 0 0 3px;
+    font-size: 13px;
+    color: #374151;
+    line-height: 1.4;
+}
+
+.dash-activity-list .activity-content p strong {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.dash-activity-list .activity-content small {
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.dash-activity-list .activity-time {
+    font-size: 11px;
+    color: #9ca3af;
+    white-space: nowrap;
+}
+
+.dash-activity-list .activity-badge {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.dash-activity-list .activity-badge.sistema {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.dash-activity-list .activity-badge.usuarios {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.dash-activity-list .activity-badge.seguranca {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.dash-activity-list .activity-badge.provas {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+/* ============================================================================
+   DASHBOARD - SIDEBAR CARDS (SEGURANÇA + AÇÕES RÁPIDAS)
+   ============================================================================ */
+.dash-sidebar-card {
+    background: white;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    border: 1px solid #f0f0f0;
+}
+
+.dash-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 18px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.dash-sidebar-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dash-sidebar-title i {
+    color: #1f2937;
+    font-size: 16px;
+}
+
+.dash-sidebar-title h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.dash-sidebar-body {
+    padding: 14px 18px;
+}
+
+/* ITENS DE SEGURANÇA */
+.security-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    font-size: 12px;
+    border-bottom: 1px solid #f9fafb;
+}
+
+.security-item:last-child {
+    border-bottom: none;
+}
+
+.security-item-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #4b5563;
+}
+
+.security-item-left i {
+    font-size: 12px;
+    width: 16px;
+    text-align: center;
+}
+
+.security-status {
+    font-size: 11px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.security-status.ok {
+    color: #10b981;
+}
+
+.security-status.neutral {
+    color: #6b7280;
+}
+
+.dash-sidebar-footer {
+    padding: 0 18px 16px;
+}
+
+.btn-manage-security {
+    width: 100%;
+    padding: 10px 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.btn-manage-security:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+/* AÇÕES RÁPIDAS */
+.quick-actions {
+    padding: 8px 10px;
+}
+
+.quick-action-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    color: #374151;
+    font-size: 13px;
+}
+
+.quick-action-item:hover {
+    background: #f9fafb;
+    transform: translateX(2px);
+}
+
+.quick-action-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4b5563;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.quick-action-item span {
+    flex: 1;
+    font-weight: 500;
+}
+
+.quick-action-item > i:last-child {
+    color: #d1d5db;
+    font-size: 11px;
+}
+
+/* ============================================================================
+   RESPONSIVIDADE DO NOVO DASHBOARD
+   ============================================================================ */
+@media (max-width: 1400px) {
+    .perfis-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 1200px) {
+    .dashboard-layout {
+        grid-template-columns: 1fr;
+    }
+    
+    .dashboard-sidebar {
+        position: static;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+}
+
+@media (max-width: 900px) {
+    .perfis-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .dashboard-charts-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .dashboard-stats-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .dashboard-sidebar {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-welcome {
+        flex-direction: column;
+        text-align: center;
+        gap: 12px;
+    }
+    
+    .welcome-right {
+        text-align: center;
+    }
+    
+    .welcome-left h1 {
+        font-size: 22px;
+    }
+    
+    .welcome-time {
+        font-size: 22px;
+    }
+    
+    .dashboard-stats-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .perfis-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .dash-card-full-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .dash-card-full-value {
+        text-align: center;
+    }
+    
+    .dash-card-full-value span {
+        font-size: 36px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dash-card-value {
+        font-size: 24px;
+    }
+    
+    .dash-card-full-value span {
+        font-size: 32px;
+    }
+    
+    .perfil-value {
+        font-size: 18px;
+    }
+    
+    .perfil-icon {
+        font-size: 20px;
+    }
+}
+
+/* ============================================================================
+   MODAL DE USUÁRIOS ONLINE
+   ============================================================================ */
+
+.usuarios-online-header {
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.usuarios-online-stat {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.stat-icon-wrapper {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: white;
+}
+
+.stat-icon-wrapper.online-pulse-icon {
+    animation: pulseOnline 2s ease-in-out infinite;
+}
+
+@keyframes pulseOnline {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.stat-valor {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 12px;
+    opacity: 0.9;
+    margin-top: 3px;
+}
+
+.usuarios-online-perfis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 60%;
+}
+
+.perfil-chip {
+    padding: 4px 10px;
+    border-radius: 30px;
+    font-size: 11px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.usuarios-online-lista {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #f9fafb;
+}
+
+.usuario-online-card {
+    background: white;
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid #f0f0f0;
+    transition: all 0.2s ease;
+}
+
+.usuario-online-card:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    border-color: #10b981;
+}
+
+.usuario-online-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.online-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    background: #10b981;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulseGreen 2s infinite;
+}
+
+@keyframes pulseGreen {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+.usuario-online-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.usuario-online-nome {
+    font-weight: 600;
+    font-size: 14px;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 3px;
+}
+
+.role-badge-online {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.usuario-online-email {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.usuario-online-email i {
+    color: #9ca3af;
+    font-size: 10px;
+}
+
+.usuario-online-detalhes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+
+.usuario-online-detalhes span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.usuario-online-detalhes i {
+    color: #9ca3af;
+    font-size: 10px;
+}
+
+.usuario-online-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.usuario-online-tempo {
+    font-size: 11px;
+    color: #10b981;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Responsividade */
+@media (max-width: 640px) {
+    .usuarios-online-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .usuarios-online-perfis {
+        max-width: 100%;
+        justify-content: center;
+    }
+    
+    .usuario-online-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .usuario-online-nome {
+        justify-content: center;
+    }
+    
+    .usuario-online-email,
+    .usuario-online-detalhes {
+        justify-content: center;
+    }
+    
+    .usuario-online-footer {
+        justify-content: center;
+        flex-direction: column;
+        gap: 6px;
+    }
+}

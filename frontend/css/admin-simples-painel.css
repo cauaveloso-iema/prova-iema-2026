@@ -1,3 +1,9 @@
+/* ============================================================================
+   ADMIN SIMPLES - PAINEL CSS COMPLETO
+   Layout moderno, mas com identidade visual própria (azul-petróleo)
+   ============================================================================ */
+
+/* ========== RESET ========== */
 * {
     margin: 0;
     padding: 0;
@@ -7,6 +13,7 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: #f5f5f5;
+    overflow-x: hidden;
 }
 
 .admin-container {
@@ -14,7 +21,9 @@ body {
     min-height: 100vh;
 }
 
-/* Sidebar */
+/* ============================================================================
+   1. SIDEBAR
+   ============================================================================ */
 .sidebar {
     width: 260px;
     background: #2c3e50;
@@ -153,7 +162,9 @@ body {
     background: #c0392b;
 }
 
-/* Main Content */
+/* ============================================================================
+   2. MAIN CONTENT
+   ============================================================================ */
 .main-content {
     flex: 1;
     margin-left: 260px;
@@ -223,7 +234,9 @@ body {
     font-size: 14px;
 }
 
-/* Notificações Panel */
+/* ============================================================================
+   3. NOTIFICAÇÕES - PAINEL LATERAL
+   ============================================================================ */
 .notificacoes-panel {
     position: fixed;
     top: 80px;
@@ -398,7 +411,9 @@ body {
     opacity: 0.5;
 }
 
-/* Stats Cards */
+/* ============================================================================
+   4. STATS CARDS (ANTIGOS - MANTIDOS PARA COMPATIBILIDADE)
+   ============================================================================ */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -456,7 +471,9 @@ body {
     margin-top: 5px;
 }
 
-/* Tab Content */
+/* ============================================================================
+   5. TAB CONTENT
+   ============================================================================ */
 .tab-content {
     background: white;
     border-radius: 10px;
@@ -572,7 +589,9 @@ body {
     background: #e67e22;
 }
 
-/* Table */
+/* ============================================================================
+   6. TABELAS
+   ============================================================================ */
 .table-responsive {
     overflow-x: auto;
 }
@@ -601,7 +620,9 @@ tr:hover td {
     background: #f8f9fa;
 }
 
-/* Status Badges */
+/* ============================================================================
+   7. STATUS BADGES
+   ============================================================================ */
 .status-badge {
     padding: 3px 8px;
     border-radius: 12px;
@@ -617,7 +638,9 @@ tr:hover td {
 .status-badge.warning { background: #fff3cd; color: #856404; }
 .status-badge.primary { background: #cfe2ff; color: #084298; }
 
-/* Role Badges */
+/* ============================================================================
+   8. ROLE BADGES
+   ============================================================================ */
 .role-badge {
     padding: 3px 8px;
     border-radius: 12px;
@@ -626,7 +649,6 @@ tr:hover td {
     display: inline-block;
 }
 
-/* Enfermaria Badge */
 .role-badge.enfermaria {
     background: linear-gradient(135deg, #0891b2, #06b6d4);
     color: white;
@@ -660,7 +682,79 @@ tr:hover td {
 .role-badge.professor { background: #d1e7dd; color: #0f5132; }
 .role-badge.aluno { background: #fff3cd; color: #856404; }
 
-/* Action Buttons */
+.role-badge.supervisao { 
+    background: linear-gradient(135deg, #1e3a8a, #1e40af); 
+    color: white; 
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.supervisao i { 
+    color: white; 
+    margin-right: 4px;
+}
+
+.role-badge.psicologia { 
+    background: linear-gradient(135deg, #14b8a6, #0d9488); 
+    color: white; 
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.psicologia i { 
+    color: white; 
+    margin-right: 4px;
+}
+
+.role-badge.assistente-social { 
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed); 
+    color: white; 
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.assistente-social i { 
+    color: white; 
+    margin-right: 4px;
+}
+
+.role-badge.protagonismo { 
+    background: linear-gradient(135deg, #f97316, #ea580c); 
+    color: white; 
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.protagonismo i { 
+    color: white; 
+    margin-right: 4px;
+}
+
+.role-badge.super_admin {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
+.role-badge.super_admin i {
+    color: white;
+    margin-right: 4px;
+}
+
+/* ============================================================================
+   9. ACTION BUTTONS
+   ============================================================================ */
 .action-buttons {
     display: flex;
     gap: 3px;
@@ -692,7 +786,9 @@ tr:hover td {
 .btn-icon.success:hover { background: #d4edda; color: #27ae60; }
 .btn-icon.warning:hover { background: #fff3cd; color: #f39c12; }
 
-/* Filters Bar */
+/* ============================================================================
+   10. FILTROS
+   ============================================================================ */
 .filters-bar {
     background: #f8f9fa;
     padding: 15px;
@@ -742,7 +838,9 @@ tr:hover td {
     gap: 5px;
 }
 
-/* Pagination */
+/* ============================================================================
+   11. PAGINAÇÃO
+   ============================================================================ */
 .pagination {
     display: flex;
     justify-content: center;
@@ -770,7 +868,9 @@ tr:hover td {
     cursor: not-allowed;
 }
 
-/* Modal */
+/* ============================================================================
+   12. MODAIS
+   ============================================================================ */
 .modal {
     display: none;
     position: fixed;
@@ -854,7 +954,9 @@ tr:hover td {
     cursor: pointer;
 }
 
-/* Form */
+/* ============================================================================
+   13. FORMULÁRIOS
+   ============================================================================ */
 .form-group {
     margin-bottom: 15px;
 }
@@ -895,7 +997,9 @@ tr:hover td {
     font-size: 18px;
 }
 
-/* Loading */
+/* ============================================================================
+   14. LOADING
+   ============================================================================ */
 .loading-spinner {
     text-align: center;
     padding: 40px;
@@ -928,7 +1032,9 @@ tr:hover td {
     animation: spin 1s linear infinite;
 }
 
-/* Empty State */
+/* ============================================================================
+   15. EMPTY STATE
+   ============================================================================ */
 .empty-state {
     text-align: center;
     padding: 40px;
@@ -951,7 +1057,9 @@ tr:hover td {
     font-size: 13px;
 }
 
-/* Toast */
+/* ============================================================================
+   16. TOAST
+   ============================================================================ */
 .toast {
     position: fixed;
     bottom: 20px;
@@ -977,7 +1085,9 @@ tr:hover td {
 .toast.info { background: #17a2b8; }
 .toast.warning { background: #ffc107; color: #333; }
 
-/* Responsive */
+/* ============================================================================
+   17. RESPONSIVE
+   ============================================================================ */
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-260px);
@@ -1018,7 +1128,9 @@ tr:hover td {
     }
 }
 
-/* Acessibilidade */
+/* ============================================================================
+   18. ACESSIBILIDADE
+   ============================================================================ */
 .badge-acessibilidade {
     background: #f39c12;
     color: white;
@@ -1028,97 +1140,560 @@ tr:hover td {
     margin-left: 5px;
 }
 
-/* Badge para Setor Pedagógico */
-.role-badge.setor_pedagogico {
-    background: #a855f7;
-    color: white;
-}
-.role-badge.setor_pedagogico i {
-    color: white;
-    margin-right: 4px;
-}
-
-/* Estilo para o avatar no modal de notificações */
 .usuario-item .role-badge {
     font-size: 0.7rem;
     font-weight: 600;
 }
 
-/* ============================================ */
-/* BADGES DE PERFIS - NOVOS PERFIS              */
-/* ============================================ */
+/* ============================================================================
+   ============================================================================
+   🔥🔥🔥 NOVO: DASHBOARD ADMIN SIMPLES (IDENTIDADE PRÓPRIA) 🔥🔥🔥
+   ============================================================================
+   ============================================================================ */
 
-/* Supervisão - Azul Escuro */
-.role-badge.supervisao { 
-    background: linear-gradient(135deg, #1e3a8a, #1e40af); 
-    color: white; 
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    display: inline-block;
-}
-.role-badge.supervisao i { 
-    color: white; 
-    margin-right: 4px;
-}
-
-/* Psicologia - Verde-Água / Teal */
-.role-badge.psicologia { 
-    background: linear-gradient(135deg, #14b8a6, #0d9488); 
-    color: white; 
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    display: inline-block;
-}
-.role-badge.psicologia i { 
-    color: white; 
-    margin-right: 4px;
-}
-
-/* Assistente Social - Violeta */
-.role-badge.assistente-social { 
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed); 
-    color: white; 
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    display: inline-block;
-}
-.role-badge.assistente-social i { 
-    color: white; 
-    margin-right: 4px;
-}
-
-/* Protagonismo - Laranja */
-.role-badge.protagonismo { 
-    background: linear-gradient(135deg, #f97316, #ea580c); 
-    color: white; 
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    display: inline-block;
-}
-.role-badge.protagonismo i { 
-    color: white; 
-    margin-right: 4px;
-}
-
-/* Super Admin - Roxo */
-.role-badge.super_admin {
-    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+/* ============================================================================
+   19. DASHBOARD - HEADER DE SAUDAÇÃO (ADMIN SIMPLES)
+   ============================================================================ */
+.dashboard-welcome-simples {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #0891b2, #0e7490);
+    border-radius: 14px;
     color: white;
-    padding: 3px 8px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(8, 145, 178, 0.25);
+    animation: fadeInSimples 0.4s ease-out;
+}
+
+@keyframes fadeInSimples {
+    from { 
+        opacity: 0; 
+        transform: translateY(-10px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+.welcome-simples-left h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+}
+
+.welcome-simples-left p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.welcome-simples-right {
+    text-align: right;
+}
+
+.welcome-simples-date {
+    font-size: 12px;
+    opacity: 0.85;
+    margin-bottom: 2px;
+    text-transform: capitalize;
+}
+
+.welcome-simples-time {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+/* ============================================================================
+   20. DASHBOARD - CARDS DE RESUMO (4 CARDS)
+   ============================================================================ */
+.dashboard-cards-simples {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.card-simples {
+    background: white;
     border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    border: 1px solid #f0f0f0;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border-left: 4px solid #e5e7eb;
+}
+
+.card-simples:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.card-simples.usuarios { border-left-color: #3498db; }
+.card-simples.turmas { border-left-color: #27ae60; }
+.card-simples.provas { border-left-color: #f39c12; }
+.card-simples.resultados { border-left-color: #8e44ad; }
+
+.card-simples-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: white;
+    flex-shrink: 0;
+}
+
+.card-simples.usuarios .card-simples-icon { background: linear-gradient(135deg, #3498db, #2980b9); }
+.card-simples.turmas .card-simples-icon { background: linear-gradient(135deg, #27ae60, #229954); }
+.card-simples.provas .card-simples-icon { background: linear-gradient(135deg, #f39c12, #e67e22); }
+.card-simples.resultados .card-simples-icon { background: linear-gradient(135deg, #8e44ad, #7d3c98); }
+
+.card-simples-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.card-simples-label {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.card-simples-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+}
+
+.card-simples-detail {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ============================================================================
+   21. DASHBOARD - LAYOUT EM 2 COLUNAS
+   ============================================================================ */
+.dashboard-simples-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+    align-items: start;
+}
+
+.dashboard-simples-main {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+
+.dashboard-simples-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: 20px;
+    align-self: start;
+}
+
+/* ============================================================================
+   22. DASHBOARD - ATIVIDADES RECENTES
+   ============================================================================ */
+.painel-simples-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    border: 1px solid #f0f0f0;
+}
+
+.painel-simples-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.painel-simples-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.painel-simples-title i {
+    color: #0891b2;
+    font-size: 16px;
+    background: #ecfeff;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.painel-simples-title h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.painel-simples-link {
+    font-size: 12px;
+    color: #0891b2;
+    text-decoration: none;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.painel-simples-link:hover {
+    color: #0e7490;
+    gap: 8px;
+}
+
+.painel-simples-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.atividade-simples-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f9fafb;
+}
+
+.atividade-simples-item:last-child {
+    border-bottom: none;
+}
+
+.atividade-simples-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.atividade-simples-icon.cadastro {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.atividade-simples-icon.resultado {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.atividade-simples-icon.prova {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.atividade-simples-icon.sistema {
+    background: #ecfeff;
+    color: #0891b2;
+}
+
+.atividade-simples-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.atividade-simples-content p {
+    margin: 0 0 3px;
+    font-size: 13px;
+    color: #374151;
+    line-height: 1.4;
+}
+
+.atividade-simples-content p strong {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.atividade-simples-content small {
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.atividade-simples-time {
+    font-size: 11px;
+    color: #9ca3af;
+    white-space: nowrap;
+    text-align: right;
+}
+
+/* ============================================================================
+   23. DASHBOARD - AÇÕES RÁPIDAS (SIDEBAR DIREITA)
+   ============================================================================ */
+.acoes-rapidas-simples {
+    padding: 8px 10px;
+}
+
+.acao-rapida-simples-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    color: #374151;
+    font-size: 13px;
+    border: 1px solid transparent;
+}
+
+.acao-rapida-simples-item:hover {
+    background: #f0f9ff;
+    border-color: #e0f2fe;
+    transform: translateX(3px);
+}
+
+.acao-rapida-simples-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0891b2;
+    font-size: 15px;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.acao-rapida-simples-item:hover .acao-rapida-simples-icon {
+    background: #0891b2;
+    color: white;
+}
+
+.acao-rapida-simples-item span {
+    flex: 1;
+    font-weight: 500;
+}
+
+.acao-rapida-simples-item > i:last-child {
+    color: #d1d5db;
+    font-size: 11px;
+    transition: all 0.2s;
+}
+
+.acao-rapida-simples-item:hover > i:last-child {
+    color: #0891b2;
+    transform: translateX(3px);
+}
+
+/* ============================================================================
+   24. DASHBOARD - ATALHOS (SIDEBAR DIREITA)
+   ============================================================================ */
+.atalhos-simples {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px;
+}
+
+.atalho-simples-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 10px;
+    border-radius: 10px;
+    background: #f9fafb;
+    border: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    color: #374151;
+}
+
+.atalho-simples-item:hover {
+    background: #ecfeff;
+    border-color: #0891b2;
+    transform: translateY(-2px);
+}
+
+.atalho-simples-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0891b2;
+    font-size: 16px;
+    margin-bottom: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.atalho-simples-label {
     font-size: 11px;
     font-weight: 600;
-    display: inline-block;
+    text-align: center;
+    color: #4b5563;
+    line-height: 1.3;
 }
-.role-badge.super_admin i {
-    color: white;
-    margin-right: 4px;
+
+/* ============================================================================
+   25. DASHBOARD - INFO SISTEMA
+   ============================================================================ */
+.info-sistema-simples {
+    padding: 16px;
 }
+
+.info-sistema-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 0;
+    font-size: 12px;
+    border-bottom: 1px solid #f9fafb;
+}
+
+.info-sistema-item:last-child {
+    border-bottom: none;
+}
+
+.info-sistema-label {
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.info-sistema-label i {
+    font-size: 11px;
+    color: #9ca3af;
+    width: 14px;
+    text-align: center;
+}
+
+.info-sistema-valor {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 11px;
+}
+
+.info-sistema-valor.ok {
+    color: #059669;
+}
+
+.info-sistema-valor.warning {
+    color: #d97706;
+}
+
+/* ============================================================================
+   26. DASHBOARD - EMPTY STATE
+   ============================================================================ */
+.empty-dashboard-simples {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.empty-dashboard-simples i {
+    font-size: 44px;
+    color: #d1d5db;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.empty-dashboard-simples h4 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.empty-dashboard-simples p {
+    margin: 0;
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+/* ============================================================================
+   27. RESPONSIVIDADE DO DASHBOARD SIMPLES
+   ============================================================================ */
+@media (max-width: 1200px) {
+    .dashboard-simples-layout {
+        grid-template-columns: 1fr;
+    }
+    
+    .dashboard-simples-sidebar {
+        position: static;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+}
+
+@media (max-width: 900px) {
+    .dashboard-cards-simples {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .dashboard-simples-sidebar {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .dashboard-welcome-simples {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+        padding: 16px 20px;
+    }
+    
+    .welcome-simples-right {
+        text-align: center;
+    }
+    
+    .welcome-simples-left h1 {
+        font-size: 18px;
+    }
+    
+    .welcome-simples-time {
+        font-size: 18px;
+    }
+    
+    .dashboard-cards-simples {
+        grid-template-columns: 1fr;
+    }
+    
+    .atalhos-simples {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ============================================================================
+   FIM DO CSS
+   ============================================================================ */

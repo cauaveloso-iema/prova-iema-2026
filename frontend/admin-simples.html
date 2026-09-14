@@ -1643,63 +1643,344 @@
                 this.fecharPainelNotificacoes();
             }
 
-            // ============ DASHBOARD ============
+            // ============ DASHBOARD (VERSÃO NOVA - IDENTIDADE ADMIN SIMPLES) ============
             async carregarDashboard() {
                 const content = document.getElementById('contentArea');
                 
                 try {
+                    const token = localStorage.getItem('auth_token');
+                    
+                    // Buscar dados do dashboard
                     const response = await fetch('/api/admin/dashboard', {
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
 
                     const data = await response.json();
                     const stats = data.success ? data.data : this.getDadosExemplo();
 
+                    // Saudação dinâmica
+                    const hora = new Date().getHours();
+                    let saudacao = 'Bom dia';
+                    if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
+                    else if (hora >= 18 || hora < 6) saudacao = 'Boa noite';
+                    
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    const primeiroNome = (userData.nome || 'Admin').split(' ')[0];
+
+                    const hoje = new Date();
+                    const dataFormatada = hoje.toLocaleDateString('pt-BR', { 
+                        weekday: 'long', 
+                        day: 'numeric', 
+                        month: 'long', 
+                        year: 'numeric' 
+                    });
+                    const horaFormatada = hoje.toLocaleTimeString('pt-BR', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+
+                    // Calcular estatísticas adicionais
+                    const totalUsuarios = stats.totalUsuarios || 0;
+                    const totalTurmas = stats.totalTurmas || 0;
+                    const totalProvas = stats.totalProvas || 0;
+                    const totalResultados = stats.totalResultados || 0;
+                    const turmasAtivas = stats.turmasAtivas || 0;
+                    const provasAtivas = stats.provasPorStatus?.ativa || 0;
+                    const totalAlunos = stats.totalAlunos || 0;
+                    const totalProfessores = stats.totalProfessores || 0;
+
+                    // ================================================================
+                    // RENDERIZAR DASHBOARD
+                    // ================================================================
                     content.innerHTML = `
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <div class="stat-icon blue"><i class="fas fa-users"></i></div>
-                                <div class="stat-content">
-                                    <h3>Total de Usuários</h3>
-                                    <div class="stat-number">${stats.totalUsuarios || 0}</div>
-                                    <div class="stat-detail">${stats.totalAlunos || 0} alunos • ${stats.totalProfessores || 0} professores</div>
+                        <!-- HEADER DE SAUDAÇÃO -->
+                        <div class="dashboard-welcome-simples">
+                            <div class="welcome-simples-left">
+                                <h1>👋 Olá, ${primeiroNome}!</h1>
+                                <p>Aqui está o resumo do Sistema de Provas.</p>
+                            </div>
+                            <div class="welcome-simples-right">
+                                <div class="welcome-simples-date">${dataFormatada}</div>
+                                <div class="welcome-simples-time">${horaFormatada}</div>
+                            </div>
+                        </div>
+
+                        <!-- CARDS DE RESUMO (4 CARDS COMPACTOS) -->
+                        <div class="dashboard-cards-simples">
+                            
+                            <!-- Card Usuários -->
+                            <div class="card-simples usuarios" onclick="adminSimples.mudarAba('usuarios')">
+                                <div class="card-simples-icon">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="card-simples-content">
+                                    <div class="card-simples-label">Usuários</div>
+                                    <div class="card-simples-value">${totalUsuarios}</div>
+                                    <div class="card-simples-detail">
+                                        <i class="fas fa-user-graduate"></i> ${totalAlunos} alunos • 
+                                        <i class="fas fa-chalkboard-teacher"></i> ${totalProfessores} prof.
+                                    </div>
                                 </div>
                             </div>
-                            <div class="stat-card">
-                                <div class="stat-icon green"><i class="fas fa-school"></i></div>
-                                <div class="stat-content">
-                                    <h3>Turmas</h3>
-                                    <div class="stat-number">${stats.totalTurmas || 0}</div>
-                                    <div class="stat-detail">${stats.turmasAtivas || 0} ativas</div>
+
+                            <!-- Card Turmas -->
+                            <div class="card-simples turmas" onclick="adminSimples.mudarAba('turmas')">
+                                <div class="card-simples-icon">
+                                    <i class="fas fa-school"></i>
+                                </div>
+                                <div class="card-simples-content">
+                                    <div class="card-simples-label">Turmas</div>
+                                    <div class="card-simples-value">${totalTurmas}</div>
+                                    <div class="card-simples-detail">
+                                        <i class="fas fa-check-circle"></i> ${turmasAtivas} ativas
+                                    </div>
                                 </div>
                             </div>
-                            <div class="stat-card">
-                                <div class="stat-icon orange"><i class="fas fa-file-alt"></i></div>
-                                <div class="stat-content">
-                                    <h3>Provas</h3>
-                                    <div class="stat-number">${stats.totalProvas || 0}</div>
-                                    <div class="stat-detail">${stats.provasPorStatus?.ativa || 0} ativas</div>
+
+                            <!-- Card Provas -->
+                            <div class="card-simples provas" onclick="adminSimples.mudarAba('provas')">
+                                <div class="card-simples-icon">
+                                    <i class="fas fa-file-alt"></i>
+                                </div>
+                                <div class="card-simples-content">
+                                    <div class="card-simples-label">Provas</div>
+                                    <div class="card-simples-value">${totalProvas}</div>
+                                    <div class="card-simples-detail">
+                                        <i class="fas fa-fire"></i> ${provasAtivas} ativas
+                                    </div>
                                 </div>
                             </div>
-                            <div class="stat-card">
-                                <div class="stat-icon purple"><i class="fas fa-chart-bar"></i></div>
-                                <div class="stat-content">
-                                    <h3>Resultados</h3>
-                                    <div class="stat-number">${stats.totalResultados || 0}</div>
-                                    <div class="stat-detail">Média: ${stats.mediaGeral || '0.0'}</div>
+
+                            <!-- Card Resultados -->
+                            <div class="card-simples resultados" onclick="adminSimples.mudarAba('resultados')">
+                                <div class="card-simples-icon">
+                                    <i class="fas fa-chart-bar"></i>
+                                </div>
+                                <div class="card-simples-content">
+                                    <div class="card-simples-label">Resultados</div>
+                                    <div class="card-simples-value">${totalResultados}</div>
+                                    <div class="card-simples-detail">
+                                        <i class="fas fa-check-double"></i> correções
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div style="background: white; border-radius: 10px; padding: 20px;">
-                            <h3 style="margin-bottom: 15px;">📋 Últimas Atividades</h3>
-                            <div id="atividades">
-                                ${this.gerarAtividades(stats.atividadesRecentes)}
+                        <!-- LAYOUT EM 2 COLUNAS -->
+                        <div class="dashboard-simples-layout">
+                            
+                            <!-- COLUNA PRINCIPAL -->
+                            <div class="dashboard-simples-main">
+                                
+                                <!-- CARD: ATIVIDADES RECENTES -->
+                                <div class="painel-simples-card">
+                                    <div class="painel-simples-header">
+                                        <div class="painel-simples-title">
+                                            <i class="fas fa-history"></i>
+                                            <h3>Atividades Recentes</h3>
+                                        </div>
+                                        <a href="#" class="painel-simples-link" onclick="event.preventDefault(); adminSimples.verHistorico();">
+                                            Ver histórico <i class="fas fa-arrow-right"></i>
+                                        </a>
+                                    </div>
+                                    <div class="painel-simples-list" id="atividadesRecentes">
+                                        ${this.gerarAtividades(stats.atividadesRecentes)}
+                                    </div>
+                                </div>
+
+                                <!-- CARD: ESTATÍSTICAS RÁPIDAS -->
+                                <div class="painel-simples-card">
+                                    <div class="painel-simples-header">
+                                        <div class="painel-simples-title">
+                                            <i class="fas fa-chart-pie"></i>
+                                            <h3>Estatísticas Rápidas</h3>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 8px;">
+                                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                                            
+                                            <div style="background: #f0f9ff; padding: 15px; border-radius: 10px; border-left: 3px solid #0891b2;">
+                                                <div style="font-size: 11px; color: #0891b2; font-weight: 600; margin-bottom: 5px;">
+                                                    <i class="fas fa-users"></i> ALUNOS ATIVOS
+                                                </div>
+                                                <div style="font-size: 22px; font-weight: 700; color: #1f2937;">
+                                                    ${stats.totalAlunos || 0}
+                                                </div>
+                                            </div>
+                                            
+                                            <div style="background: #f0fdf4; padding: 15px; border-radius: 10px; border-left: 3px solid #10b981;">
+                                                <div style="font-size: 11px; color: #059669; font-weight: 600; margin-bottom: 5px;">
+                                                    <i class="fas fa-user-graduate"></i> ACESSIBILIDADE
+                                                </div>
+                                                <div style="font-size: 22px; font-weight: 700; color: #1f2937;">
+                                                    ${stats.alunosComAcessibilidade || 0}
+                                                </div>
+                                            </div>
+                                            
+                                            <div style="background: #fef3c7; padding: 15px; border-radius: 10px; border-left: 3px solid #f59e0b;">
+                                                <div style="font-size: 11px; color: #d97706; font-weight: 600; margin-bottom: 5px;">
+                                                    <i class="fas fa-question-circle"></i> QUESTÕES
+                                                </div>
+                                                <div style="font-size: 22px; font-weight: 700; color: #1f2937;">
+                                                    ${stats.totalQuestoes || 0}
+                                                </div>
+                                            </div>
+                                            
+                                            <div style="background: #f3e8ff; padding: 15px; border-radius: 10px; border-left: 3px solid #8b5cf6;">
+                                                <div style="font-size: 11px; color: #7c3aed; font-weight: 600; margin-bottom: 5px;">
+                                                    <i class="fas fa-graduation-cap"></i> CURSOS/EIXOS
+                                                </div>
+                                                <div style="font-size: 22px; font-weight: 700; color: #1f2937;">
+                                                    ${(this.cursos?.length || 0)} / ${(this.eixos?.length || 0)}
+                                                </div>
+                                            </div>
+                                            
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- COLUNA DIREITA (SIDEBAR) -->
+                            <div class="dashboard-simples-sidebar">
+                                
+                                <!-- CARD: AÇÕES RÁPIDAS -->
+                                <div class="painel-simples-card">
+                                    <div class="painel-simples-header">
+                                        <div class="painel-simples-title">
+                                            <i class="fas fa-bolt"></i>
+                                            <h3>Ações Rápidas</h3>
+                                        </div>
+                                    </div>
+                                    <div class="acoes-rapidas-simples">
+                                        <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('usuarios')">
+                                            <div class="acao-rapida-simples-icon">
+                                                <i class="fas fa-users"></i>
+                                            </div>
+                                            <span>Gerenciar usuários</span>
+                                            <i class="fas fa-chevron-right"></i>
+                                        </a>
+                                        <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('turmas')">
+                                            <div class="acao-rapida-simples-icon">
+                                                <i class="fas fa-school"></i>
+                                            </div>
+                                            <span>Gerenciar turmas</span>
+                                            <i class="fas fa-chevron-right"></i>
+                                        </a>
+                                        <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('provas')">
+                                            <div class="acao-rapida-simples-icon">
+                                                <i class="fas fa-file-alt"></i>
+                                            </div>
+                                            <span>Criar prova</span>
+                                            <i class="fas fa-chevron-right"></i>
+                                        </a>
+                                        <a class="acao-rapida-simples-item" onclick="adminSimples.abrirModalEnvioNotificacao()">
+                                            <div class="acao-rapida-simples-icon">
+                                                <i class="fas fa-bullhorn"></i>
+                                            </div>
+                                            <span>Enviar notificação</span>
+                                            <i class="fas fa-chevron-right"></i>
+                                        </a>
+                                        <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('resultados')">
+                                            <div class="acao-rapida-simples-icon">
+                                                <i class="fas fa-chart-line"></i>
+                                            </div>
+                                            <span>Ver resultados</span>
+                                            <i class="fas fa-chevron-right"></i>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <!-- CARD: ATALHOS -->
+                                <div class="painel-simples-card">
+                                    <div class="painel-simples-header">
+                                        <div class="painel-simples-title">
+                                            <i class="fas fa-th-large"></i>
+                                            <h3>Atalhos</h3>
+                                        </div>
+                                    </div>
+                                    <div class="atalhos-simples">
+                                        <a class="atalho-simples-item" onclick="adminSimples.mudarAba('eixos')">
+                                            <div class="atalho-simples-icon"><i class="fas fa-sitemap"></i></div>
+                                            <div class="atalho-simples-label">Eixos</div>
+                                        </a>
+                                        <a class="atalho-simples-item" onclick="adminSimples.mudarAba('cursos')">
+                                            <div class="atalho-simples-icon"><i class="fas fa-graduation-cap"></i></div>
+                                            <div class="atalho-simples-label">Cursos</div>
+                                        </a>
+                                        <a class="atalho-simples-item" onclick="adminSimples.abrirModalUploadAdaptarDocumento()">
+                                            <div class="atalho-simples-icon"><i class="fas fa-universal-access"></i></div>
+                                            <div class="atalho-simples-label">Adaptar</div>
+                                        </a>
+                                        <a class="atalho-simples-item" onclick="window.location.href='editar-perfil.html'">
+                                            <div class="atalho-simples-icon"><i class="fas fa-user-edit"></i></div>
+                                            <div class="atalho-simples-label">Meu Perfil</div>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <!-- CARD: INFO DO SISTEMA -->
+                                <div class="painel-simples-card">
+                                    <div class="painel-simples-header">
+                                        <div class="painel-simples-title">
+                                            <i class="fas fa-info-circle"></i>
+                                            <h3>Info do Sistema</h3>
+                                        </div>
+                                    </div>
+                                    <div class="info-sistema-simples">
+                                        <div class="info-sistema-item">
+                                            <div class="info-sistema-label">
+                                                <i class="fas fa-code-branch"></i> Versão
+                                            </div>
+                                            <div class="info-sistema-valor">1.0.0</div>
+                                        </div>
+                                        <div class="info-sistema-item">
+                                            <div class="info-sistema-label">
+                                                <i class="fas fa-circle"></i> Status
+                                            </div>
+                                            <div class="info-sistema-valor ok">
+                                                <i class="fas fa-circle" style="font-size: 6px;"></i> Online
+                                            </div>
+                                        </div>
+                                        <div class="info-sistema-item">
+                                            <div class="info-sistema-label">
+                                                <i class="fas fa-user-shield"></i> Perfil
+                                            </div>
+                                            <div class="info-sistema-valor">
+                                                ${userData.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                                            </div>
+                                        </div>
+                                        <div class="info-sistema-item">
+                                            <div class="info-sistema-label">
+                                                <i class="fas fa-clock"></i> Última sync
+                                            </div>
+                                            <div class="info-sistema-valor">${horaFormatada}</div>
+                                        </div>
+                                        <div class="info-sistema-item">
+                                            <div class="info-sistema-label">
+                                                <i class="fas fa-database"></i> Último backup
+                                            </div>
+                                            <div class="info-sistema-valor warning">
+                                                <i class="fas fa-exclamation-triangle"></i> Pendente
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     `;
+
                 } catch (error) {
-                    content.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+                    console.error('❌ Erro ao carregar dashboard:', error);
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 60px; background: white; border-radius: 14px;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545; margin-bottom: 15px;"></i>
+                            <h3 style="color: #721c24; margin-bottom: 8px;">Erro ao carregar dashboard</h3>
+                            <p style="color: #6c757d; margin-bottom: 20px;">${error.message}</p>
+                            <button onclick="adminSimples.carregarDashboard()" class="btn-primary" style="margin: 0 auto;">
+                                <i class="fas fa-sync-alt"></i> Tentar novamente
+                            </button>
+                        </div>
+                    `;
                 }
             }
 
@@ -1718,16 +1999,75 @@
                 };
             }
 
+            // ============ GERAR ATIVIDADES RECENTES (VERSÃO MELHORADA) ============
             gerarAtividades(atividades) {
                 if (!atividades || atividades.length === 0) {
-                    return '<p style="color: #999;">Nenhuma atividade recente</p>';
+                    return `
+                        <div class="empty-dashboard-simples">
+                            <i class="fas fa-history"></i>
+                            <h4>Nenhuma atividade recente</h4>
+                            <p>As atividades do sistema aparecerão aqui</p>
+                        </div>
+                    `;
                 }
-                return atividades.slice(0, 5).map(a => `
-                    <div style="padding: 10px; border-bottom: 1px solid #eee;">
-                        <strong>${a.usuario}</strong> ${a.acao} <strong>${a.prova}</strong>
-                        <br><small>${new Date(a.data).toLocaleString()}</small>
-                    </div>
-                `).join('');
+
+                return atividades.slice(0, 6).map(a => {
+                    // Determinar tipo e ícone
+                    let tipoClass = 'sistema';
+                    let icone = 'fa-info-circle';
+                    
+                    const acao = (a.acao || '').toLowerCase();
+                    
+                    if (acao.includes('criado') || acao.includes('cadastr') || acao.includes('usuário')) {
+                        tipoClass = 'cadastro';
+                        icone = 'fa-user-plus';
+                    } else if (acao.includes('finalizou') || acao.includes('realizou') || acao.includes('resultado')) {
+                        tipoClass = 'resultado';
+                        icone = 'fa-check-circle';
+                    } else if (acao.includes('prova') || acao.includes('publicad')) {
+                        tipoClass = 'prova';
+                        icone = 'fa-file-alt';
+                    } else if (acao.includes('sistema') || acao.includes('iniciado')) {
+                        tipoClass = 'sistema';
+                        icone = 'fa-crown';
+                    }
+
+                    // Formatar data
+                    const data = a.data ? new Date(a.data) : new Date();
+                    const dataFormatada = data.toLocaleDateString('pt-BR', { 
+                        day: '2-digit', 
+                        month: '2-digit',
+                        year: '2-digit'
+                    });
+                    const horaFormatada = data.toLocaleTimeString('pt-BR', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+
+                    return `
+                        <div class="atividade-simples-item">
+                            <div class="atividade-simples-icon ${tipoClass}">
+                                <i class="fas ${icone}"></i>
+                            </div>
+                            <div class="atividade-simples-content">
+                                <p><strong>${a.usuario || 'Sistema'}</strong> ${a.acao || ''} ${a.prova ? `<strong>${a.prova}</strong>` : ''}</p>
+                                <small>${a.prova ? 'Prova' : 'Sistema'}</small>
+                            </div>
+                            <div class="atividade-simples-time">
+                                ${dataFormatada}<br>${horaFormatada}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // ============ VER HISTÓRICO COMPLETO ============
+            verHistorico() {
+                this.showToast('📊 Redirecionando para histórico...', 'info');
+                // Pode mudar para uma aba de monitoramento ou abrir modal
+                setTimeout(() => {
+                    this.showToast('ℹ️ Recurso em desenvolvimento', 'info');
+                }, 800);
             }
 
             // ============ CARREGAR USUÁRIOS (VERSÃO COMPLETA E CORRIGIDA) ============
@@ -3175,7 +3515,7 @@
             // ============ GERAR LINHAS DA TABELA DE TURMAS (COM AÇÕES COMPLETAS) ============
             gerarLinhasTurmas(turmas) {
                 if (!turmas || turmas.length === 0) {
-                    return '发展<td colspan="9" class="empty-state">Nenhuma turma encontrada</td></tr>';
+                    return '<tr><td colspan="8" class="empty-state" style="text-align: center; padding: 40px; color: #6c757d;">Nenhuma turma encontrada</td></tr>';
                 }
 
                 return turmas.map(t => {
@@ -3184,7 +3524,10 @@
                     
                     return `
                         <tr>
-                            <td><strong>${t.nome || 'N/A'}</strong>${t.codigo ? `<br><small style="color: #6c757d;">Cód: ${t.codigo}</small>` : ''}</td>
+                            <td>
+                                <strong>${t.nome || 'N/A'}</strong>
+                                ${t.codigo ? `<br><small style="color: #6c757d;">Cód: ${t.codigo}</small>` : ''}
+                            </td>
                             <td>${t.disciplina || '-'}</td>
                             <td>${t.eixo || '-'}</td>
                             <td><code>${t.codigo || '-'}</code></td>

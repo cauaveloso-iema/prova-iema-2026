@@ -218,26 +218,47 @@ class AdminPanel {
         }
     }
 
+    // ============ ATUALIZAR ESTATÍSTICAS (COM TODOS OS PERFIS) ============
     atualizarEstatisticas(stats) {
-        // Atualizar números nos cards
         const elementos = {
+            // Total geral
             'total-usuarios': stats.totalUsuarios,
+            'usuarios-online': stats.usuariosOnline,
+            
+            // Todos os perfis
             'total-alunos': stats.totalAlunos,
             'total-professores': stats.totalProfessores,
             'total-admins': stats.totalAdmins,
+            'total-super-admins': stats.totalSuperAdmins,
+            'total-setor-pedagogico': stats.totalSetorPedagogico,
+            'total-coordenacao-patio': stats.totalCoordenacaoPatio,
+            'total-cozinha': stats.totalCozinha,
+            'total-gestao-geral': stats.totalGestaoGeral,
+            'total-enfermaria': stats.totalEnfermaria,
+            'total-supervisao': stats.totalSupervisao,
+            'total-psicologia': stats.totalPsicologia,
+            'total-assistente-social': stats.totalAssistenteSocial,
+            'total-protagonismo': stats.totalProtagonismo,
+            
+            // Turmas
             'total-turmas': stats.totalTurmas,
             'turmas-ativas': stats.turmasAtivas,
+            'alunos-acessibilidade': stats.alunosComAcessibilidade,
+            
+            // Provas
             'total-provas': stats.totalProvas,
             'provas-ativas': stats.provasPorStatus?.ativa || 0,
             'provas-rascunho': stats.provasPorStatus?.rascunho || 0,
             'provas-concluidas': stats.provasPorStatus?.finalizada || 0,
+            
+            // Questões
             'total-questoes': stats.totalQuestoes,
             'total-resultados': stats.totalResultados,
-            'alunos-acessibilidade': stats.alunosComAcessibilidade,
+            
+            // Badges
             'badge-usuarios': stats.totalUsuarios,
             'badge-turmas': stats.totalTurmas,
             'badge-provas': stats.totalProvas,
-            'badge-questoes': stats.totalQuestoes,
             'badge-resultados': stats.totalResultados
         };
 
@@ -246,40 +267,81 @@ class AdminPanel {
             if (el) el.textContent = valor || 0;
         }
 
-        // Criar gráficos se existirem
         this.criarGraficos(stats);
     }
 
+    // ============ CRIAR GRÁFICOS (VERSÃO ATUALIZADA) ============
     criarGraficos(stats) {
+        // Destruir gráficos antigos
         Object.values(this.graficos).forEach(g => {
             if (g) g.destroy();
         });
+        this.graficos = {};
 
+        // ===== GRÁFICO DE USUÁRIOS POR MÊS =====
         const ctxUsuarios = document.getElementById('grafico-usuarios')?.getContext('2d');
-        if (ctxUsuarios && stats.usuariosPorMes) {
+        if (ctxUsuarios) {
+            const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            const dadosUsuarios = Array(12).fill(0).map((_, i) => {
+                const mes = stats.usuariosPorMes?.find(m => m.mes === i + 1);
+                return mes ? mes.total : 0;
+            });
+
             this.graficos.usuarios = new Chart(ctxUsuarios, {
                 type: 'bar',
                 data: {
-                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+                    labels: meses,
                     datasets: [{
                         label: 'Novos Usuários',
-                        data: Array(12).fill(0).map((_, i) => 
-                            stats.usuariosPorMes.find(m => m.mes === i + 1)?.total || 0
-                        ),
-                        backgroundColor: '#0d6efd',
-                        borderRadius: 5
+                        data: dadosUsuarios,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 6,
+                        barThickness: 'flex',
+                        maxBarThickness: 40
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            padding: 12,
+                            titleFont: { size: 13, weight: 'bold' },
+                            bodyFont: { size: 12 },
+                            cornerRadius: 8,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.parsed.y} usuários`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f3f4f6', drawBorder: false },
+                            ticks: { 
+                                color: '#9ca3af', 
+                                font: { size: 11 },
+                                stepSize: Math.max(1, Math.ceil(Math.max(...dadosUsuarios) / 5))
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { 
+                                color: '#9ca3af', 
+                                font: { size: 11 }
+                            }
+                        }
                     }
                 }
             });
         }
 
+        // ===== GRÁFICO DE PROVAS POR STATUS =====
         const ctxProvas = document.getElementById('grafico-provas')?.getContext('2d');
         if (ctxProvas && stats.provasPorStatus) {
             this.graficos.provas = new Chart(ctxProvas, {
@@ -292,15 +354,38 @@ class AdminPanel {
                             stats.provasPorStatus.rascunho || 0,
                             stats.provasPorStatus.finalizada || 0
                         ],
-                        backgroundColor: ['#198754', '#ffc107', '#6c757d'],
-                        borderWidth: 0
+                        backgroundColor: ['#10b981', '#f59e0b', '#6b7280'],
+                        borderWidth: 0,
+                        hoverOffset: 8
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    cutout: '65%',
                     plugins: {
-                        legend: { position: 'bottom' }
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 16,
+                                usePointStyle: true,
+                                pointStyle: 'rect',
+                                boxWidth: 12,
+                                boxHeight: 12,
+                                font: { size: 12 },
+                                color: '#6b7280'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            padding: 12,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.label}: ${context.parsed} provas`;
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -2390,101 +2475,456 @@ class AdminPanel {
 
     // ============ DASHBOARD ============
 
+    async carregarDadosReais() {
+        try {
+            const response = await fetch(`${this.apiBase}/dashboard`, {
+                headers: { 
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}` 
+                }
+            });
+            
+            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.atualizarEstatisticas(data.data);
+                console.log('✅ Dados do dashboard atualizados');
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar dados reais:', error);
+        }
+    }
+
+    // ============ GERAR ATIVIDADES RECENTES (VERSÃO MELHORADA) ============
+    gerarAtividadesRecentes(atividades = []) {
+        if (!atividades || atividades.length === 0) {
+            return `
+                <div class="activity-item">
+                    <div class="activity-icon admin">
+                        <i class="fas fa-crown"></i>
+                    </div>
+                    <div class="activity-content">
+                        <p><strong>Sistema</strong> iniciado</p>
+                        <small>${new Date().toLocaleString('pt-BR')}</small>
+                    </div>
+                    <span class="activity-badge sistema">Sistema</span>
+                </div>
+            `;
+        }
+
+        return atividades.map(ativ => {
+            // Determinar tipo e ícone
+            let tipoClass = 'usuario';
+            let icone = 'fa-user-plus';
+            let badgeClass = 'usuarios';
+            let badgeText = 'Usuários';
+
+            const tipo = (ativ.tipo || '').toLowerCase();
+            const acao = (ativ.acao || '').toLowerCase();
+
+            if (tipo === 'resultado' || acao.includes('finalizou') || acao.includes('realizou')) {
+                tipoClass = 'resultado';
+                icone = 'fa-check-circle';
+                badgeClass = 'provas';
+                badgeText = 'Provas';
+            } else if (tipo === 'prova' || acao.includes('prova') || acao.includes('publicada')) {
+                tipoClass = 'prova';
+                icone = 'fa-file-alt';
+                badgeClass = 'provas';
+                badgeText = 'Provas';
+            } else if (acao.includes('senha') || acao.includes('permissão') || acao.includes('permissao') || acao.includes('acesso')) {
+                tipoClass = 'admin';
+                icone = 'fa-key';
+                badgeClass = 'seguranca';
+                badgeText = 'Segurança';
+            } else if (acao.includes('sistema') || acao.includes('iniciado')) {
+                tipoClass = 'admin';
+                icone = 'fa-crown';
+                badgeClass = 'sistema';
+                badgeText = 'Sistema';
+            } else if (acao.includes('usuário') || acao.includes('usuario') || acao.includes('criado')) {
+                tipoClass = 'usuario';
+                icone = 'fa-user-plus';
+                badgeClass = 'usuarios';
+                badgeText = 'Usuários';
+            }
+
+            // Formatar data
+            const data = ativ.data ? new Date(ativ.data) : new Date();
+            const dataFormatada = data.toLocaleDateString('pt-BR', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: '2-digit' 
+            });
+            const horaFormatada = data.toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
+            return `
+                <div class="activity-item">
+                    <div class="activity-icon ${tipoClass}">
+                        <i class="fas ${icone}"></i>
+                    </div>
+                    <div class="activity-content">
+                        <p><strong>${ativ.acao || 'Ação'}</strong></p>
+                        <small>${ativ.usuario || 'Sistema'}${ativ.prova ? ` - ${ativ.prova}` : ''}</small>
+                    </div>
+                    <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                        <span class="activity-time">${dataFormatada}, ${horaFormatada}</span>
+                        <span class="activity-badge ${badgeClass}">${badgeText}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // ============ LOAD DASHBOARD (COM TODOS OS PERFIS VISÍVEIS) ============
     async loadDashboard() {
         const contentArea = document.getElementById('contentArea');
         
         try {
             const response = await fetch(`${this.apiBase}/dashboard`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                headers: { 
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}` 
+                }
             });
             
             const data = await response.json();
             const stats = data.success ? data.data : this.getDadosExemplo();
 
+            // Saudação dinâmica
+            const hora = new Date().getHours();
+            let saudacao = 'Bom dia';
+            if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
+            else if (hora >= 18 || hora < 6) saudacao = 'Boa noite';
+            
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const primeiroNome = (userData.nome || 'Admin').split(' ')[0];
+
+            const hoje = new Date();
+            const dataFormatada = hoje.toLocaleDateString('pt-BR', { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long', 
+                year: 'numeric' 
+            });
+            const horaFormatada = hoje.toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
+            // 🔥 MONTAR LISTA DE TODOS OS PERFIS (com ícones e cores)
+            const todosPerfis = [
+                { id: 'total-alunos', label: 'Alunos', valor: stats.totalAlunos, icone: '👨‍🎓', cor: '#10b981' },
+                { id: 'total-professores', label: 'Professores', valor: stats.totalProfessores, icone: '👨‍🏫', cor: '#f59e0b' },
+                { id: 'total-admins', label: 'Admins', valor: stats.totalAdmins, icone: '👑', cor: '#8b5cf6' },
+                { id: 'total-setor-pedagogico', label: 'Setor Pedagógico', valor: stats.totalSetorPedagogico, icone: '👩‍🏫', cor: '#a855f7' },
+                { id: 'total-coordenacao-patio', label: 'Coord. Pátio', valor: stats.totalCoordenacaoPatio, icone: '🏃', cor: '#f97316' },
+                { id: 'total-cozinha', label: 'Cozinha', valor: stats.totalCozinha, icone: '🍽️', cor: '#059669' },
+                { id: 'total-gestao-geral', label: 'Gestão Geral', valor: stats.totalGestaoGeral, icone: '📊', cor: '#1e40af' },
+                { id: 'total-enfermaria', label: 'Enfermaria', valor: stats.totalEnfermaria, icone: '🏥', cor: '#0891b2' },
+                { id: 'total-supervisao', label: 'Supervisão', valor: stats.totalSupervisao, icone: '🛡️', cor: '#1e3a8a' },
+                { id: 'total-psicologia', label: 'Psicologia', valor: stats.totalPsicologia, icone: '🧠', cor: '#0d9488' },
+                { id: 'total-assistente-social', label: 'Assistente Social', valor: stats.totalAssistenteSocial, icone: '🤝', cor: '#7c3aed' },
+                { id: 'total-protagonismo', label: 'Protagonismo', valor: stats.totalProtagonismo, icone: '⭐', cor: '#ea580c' }
+            ];
+
             contentArea.innerHTML = `
-                <div class="stats-grid">
-                    <div class="stat-card primary">
-                        <div class="stat-icon">
-                            <i class="fas fa-users"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>Total de Usuários</h3>
-                            <div class="stat-number" id="total-usuarios">${stats.totalUsuarios || 0}</div>
-                            <div class="stat-details">
-                                <span><i class="fas fa-user-graduate"></i> <span id="total-alunos">${stats.totalAlunos || 0}</span> alunos</span>
-                                <span><i class="fas fa-chalkboard-teacher"></i> <span id="total-professores">${stats.totalProfessores || 0}</span> professores</span>
-                                <span><i class="fas fa-user-tie"></i> <span id="total-admins">${stats.totalAdmins || 0}</span> admins</span>
-                            </div>
-                        </div>
+                <!-- HEADER DE SAUDAÇÃO -->
+                <div class="dashboard-welcome">
+                    <div class="welcome-left">
+                        <h1>${saudacao}, ${primeiroNome}! 👋</h1>
+                        <p>Aqui está um resumo do Sistema de Provas.</p>
                     </div>
-
-                    <div class="stat-card success">
-                        <div class="stat-icon">
-                            <i class="fas fa-school"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>Turmas</h3>
-                            <div class="stat-number" id="total-turmas">${stats.totalTurmas || 0}</div>
-                            <div class="stat-details">
-                                <span><i class="fas fa-check-circle"></i> <span id="turmas-ativas">${stats.turmasAtivas || 0}</span> ativas</span>
-                                <span><i class="fas fa-wheelchair"></i> <span id="alunos-acessibilidade">${stats.alunosComAcessibilidade || 0}</span> c/ acessibilidade</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="stat-card warning">
-                        <div class="stat-icon">
-                            <i class="fas fa-file-alt"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>Provas</h3>
-                            <div class="stat-number" id="total-provas">${stats.totalProvas || 0}</div>
-                            <div class="stat-details">
-                                <span><i class="fas fa-check-circle"></i> <span id="provas-ativas">${stats.provasPorStatus?.ativa || 0}</span> ativas</span>
-                                <span><i class="fas fa-clock"></i> <span id="provas-rascunho">${stats.provasPorStatus?.rascunho || 0}</span> rascunhos</span>
-                                <span><i class="fas fa-check-double"></i> <span id="provas-concluidas">${stats.provasPorStatus?.finalizada || 0}</span> concluídas</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="stat-card info">
-                        <div class="stat-icon">
-                            <i class="fas fa-question-circle"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>Questões</h3>
-                            <div class="stat-number" id="total-questoes">${stats.totalQuestoes || 0}</div>
-                            <div class="stat-details">
-                                <span><i class="fas fa-chart-bar"></i> <span id="total-resultados">${stats.totalResultados || 0}</span> resultados</span>
-                                <span><i class="fas fa-percent"></i> <span id="media-questoes">${stats.totalProvas ? (stats.totalQuestoes / stats.totalProvas).toFixed(1) : 0}</span> por prova</span>
-                            </div>
-                        </div>
+                    <div class="welcome-right">
+                        <div class="welcome-date">${dataFormatada}</div>
+                        <div class="welcome-time">${horaFormatada}</div>
                     </div>
                 </div>
 
-                <div class="charts-row">
-                    <div class="chart-card">
-                        <h3><i class="fas fa-chart-bar"></i> Novos Usuários por Mês</h3>
-                        <canvas id="grafico-usuarios"></canvas>
-                    </div>
-                    <div class="chart-card">
-                        <h3><i class="fas fa-chart-pie"></i> Status das Provas</h3>
-                        <canvas id="grafico-provas"></canvas>
-                    </div>
-                </div>
+                <!-- LAYOUT EM 2 COLUNAS -->
+                <div class="dashboard-layout">
+                    
+                    <!-- COLUNA PRINCIPAL -->
+                    <div class="dashboard-main">
+                        
+                        <!-- ===== CARD DE USUÁRIOS COM TODOS OS PERFIS ===== -->
+                        <div class="dash-card-full">
+                            <div class="dash-card-full-header">
+                                <div class="dash-card-full-title">
+                                    <div class="dash-card-icon blue">
+                                        <i class="fas fa-users"></i>
+                                    </div>
+                                    <div>
+                                        <h3>Total de Usuários</h3>
+                                        <p>Distribuição por perfil no sistema</p>
+                                    </div>
+                                </div>
+                                <div class="dash-card-full-value">
+                                    <span id="total-usuarios">${stats.totalUsuarios || 0}</span>
+                                    <small>usuários no total</small>
+                                </div>
+                            </div>
+                            
+                            <!-- GRID DE PERFIS (TODOS VISÍVEIS) -->
+                            <div class="perfis-grid">
+                                ${todosPerfis.map(perfil => `
+                                    <div class="perfil-item" style="border-left-color: ${perfil.cor};">
+                                        <div class="perfil-icon">${perfil.icone}</div>
+                                        <div class="perfil-info">
+                                            <div class="perfil-label">${perfil.label}</div>
+                                            <div class="perfil-value" id="${perfil.id}">${perfil.valor || 0}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
 
-                <div class="recent-activity">
-                    <h3><i class="fas fa-history"></i> Atividades Recentes</h3>
-                    <div class="activity-list" id="atividades-recentes">
-                        ${this.gerarAtividadesRecentes(stats.atividadesRecentes)}
+                        <!-- ===== 4 CARDS EM LINHA (ONLINE + TURMAS + PROVAS + QUESTÕES) ===== -->
+                        <div class="dashboard-stats-row">
+                            
+                            <!-- CARD: USUÁRIOS ONLINE (CLICÁVEL) -->
+                            <div class="dash-card dash-card-online" 
+                                onclick="admin.abrirModalUsuariosOnline()" 
+                                style="cursor: pointer;" 
+                                title="Clique para ver quem está online">
+                                <div class="dash-card-icon online-pulse">
+                                    <i class="fas fa-signal"></i>
+                                </div>
+                                <div class="dash-card-content">
+                                    <div class="dash-card-label">Usuários Online</div>
+                                    <div class="dash-card-value" id="usuarios-online">${stats.usuariosOnline || 0}</div>
+                                    <div class="dash-card-details">
+                                        <span><i class="fas fa-circle" style="font-size:6px;"></i> Ativos agora</span>
+                                        <span><i class="fas fa-clock"></i> últimos 5 min</span>
+                                        <span style="margin-top: 4px; display: block; font-size: 10px; opacity: 0.85;">
+                                            <i class="fas fa-hand-pointer"></i> Clique para ver
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CARD: TURMAS -->
+                            <div class="dash-card dash-card-turmas">
+                                <div class="dash-card-icon green">
+                                    <i class="fas fa-school"></i>
+                                </div>
+                                <div class="dash-card-content">
+                                    <div class="dash-card-label">Turmas</div>
+                                    <div class="dash-card-value" id="total-turmas">${stats.totalTurmas || 0}</div>
+                                    <div class="dash-card-details">
+                                        <span><i class="fas fa-check-circle"></i> <strong id="turmas-ativas">${stats.turmasAtivas || 0}</strong> ativas</span>
+                                        <span><i class="fas fa-wheelchair"></i> <strong id="alunos-acessibilidade">${stats.alunosComAcessibilidade || 0}</strong> acessib.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CARD: PROVAS -->
+                            <div class="dash-card dash-card-provas">
+                                <div class="dash-card-icon orange">
+                                    <i class="fas fa-file-alt"></i>
+                                </div>
+                                <div class="dash-card-content">
+                                    <div class="dash-card-label">Provas</div>
+                                    <div class="dash-card-value" id="total-provas">${stats.totalProvas || 0}</div>
+                                    <div class="dash-card-details">
+                                        <span><i class="fas fa-check-circle"></i> <strong id="provas-ativas">${stats.provasPorStatus?.ativa || 0}</strong> ativas</span>
+                                        <span><i class="fas fa-clock"></i> <strong id="provas-rascunho">${stats.provasPorStatus?.rascunho || 0}</strong> rascunhos</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CARD: QUESTÕES -->
+                            <div class="dash-card dash-card-questoes">
+                                <div class="dash-card-icon cyan">
+                                    <i class="fas fa-question-circle"></i>
+                                </div>
+                                <div class="dash-card-content">
+                                    <div class="dash-card-label">Questões</div>
+                                    <div class="dash-card-value" id="total-questoes">${stats.totalQuestoes || 0}</div>
+                                    <div class="dash-card-details">
+                                        <span><i class="fas fa-chart-bar"></i> <strong id="total-resultados">${stats.totalResultados || 0}</strong> resultados</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- GRÁFICOS -->
+                        <div class="dashboard-charts-row">
+                            <div class="dash-chart-card">
+                                <div class="dash-chart-header">
+                                    <div class="dash-chart-title">
+                                        <i class="fas fa-chart-bar"></i>
+                                        <h3>Novos Usuários por Mês</h3>
+                                    </div>
+                                    <select class="dash-chart-filter" id="filtroAnoUsuarios">
+                                        <option value="2026">2026</option>
+                                        <option value="2025">2025</option>
+                                    </select>
+                                </div>
+                                <div class="dash-chart-body">
+                                    <canvas id="grafico-usuarios"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="dash-chart-card">
+                                <div class="dash-chart-header">
+                                    <div class="dash-chart-title">
+                                        <i class="fas fa-chart-pie"></i>
+                                        <h3>Status das Provas</h3>
+                                    </div>
+                                    <select class="dash-chart-filter" id="filtroTipoProvas">
+                                        <option value="todos">Todos os tipos</option>
+                                        <option value="ativas">Ativas</option>
+                                        <option value="rascunhos">Rascunhos</option>
+                                    </select>
+                                </div>
+                                <div class="dash-chart-body">
+                                    ${stats.totalProvas === 0 ? `
+                                        <div class="dash-empty-state">
+                                            <div class="dash-empty-icon">
+                                                <i class="fas fa-file-alt"></i>
+                                            </div>
+                                            <h4>Nenhuma prova cadastrada</h4>
+                                            <p>Crie sua primeira prova para acompanhar os resultados aqui.</p>
+                                            <button class="btn-create-first-prova" onclick="admin.switchSection('nova-prova')">
+                                                <i class="fas fa-plus"></i> Criar Prova
+                                            </button>
+                                            <div class="dash-chart-legend">
+                                                <span><span class="legend-dot" style="background:#10b981;"></span> Ativas</span>
+                                                <span><span class="legend-dot" style="background:#f59e0b;"></span> Rascunho</span>
+                                                <span><span class="legend-dot" style="background:#6b7280;"></span> Finalizadas</span>
+                                            </div>
+                                        </div>
+                                    ` : `
+                                        <canvas id="grafico-provas"></canvas>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ATIVIDADES RECENTES -->
+                        <div class="dash-activity-card">
+                            <div class="dash-activity-header">
+                                <div class="dash-activity-title">
+                                    <i class="fas fa-history"></i>
+                                    <h3>Atividades Recentes</h3>
+                                </div>
+                                <a href="#" class="dash-activity-link" onclick="event.preventDefault(); admin.verHistoricoCompleto();">
+                                    Ver todo o histórico <i class="fas fa-arrow-right"></i>
+                                </a>
+                            </div>
+                            <div class="dash-activity-list" id="atividades-recentes">
+                                ${this.gerarAtividadesRecentes(stats.atividadesRecentes)}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUNA LATERAL -->
+                    <div class="dashboard-sidebar">
+                        
+                        <!-- CARD: SEGURANÇA DA CONTA -->
+                        <div class="dash-sidebar-card">
+                            <div class="dash-sidebar-header">
+                                <div class="dash-sidebar-title">
+                                    <i class="fas fa-shield-alt"></i>
+                                    <h3>Segurança da Conta</h3>
+                                </div>
+                                <i class="fas fa-chevron-right" style="color:#9ca3af; font-size:12px;"></i>
+                            </div>
+                            <div class="dash-sidebar-body">
+                                <div class="security-item">
+                                    <div class="security-item-left">
+                                        <i class="fas fa-lock" style="color:#10b981;"></i>
+                                        <span>Senha</span>
+                                    </div>
+                                    <span class="security-status ok">
+                                        <i class="fas fa-circle" style="font-size:6px;"></i> Protegida
+                                    </span>
+                                </div>
+                                <div class="security-item">
+                                    <div class="security-item-left">
+                                        <i class="fas fa-shield-alt" style="color:#10b981;"></i>
+                                        <span>Autenticação em 2 etapas</span>
+                                    </div>
+                                    <span class="security-status ok">
+                                        <i class="fas fa-circle" style="font-size:6px;"></i> Ativada
+                                    </span>
+                                </div>
+                                <div class="security-item">
+                                    <div class="security-item-left">
+                                        <i class="fas fa-map-marker-alt" style="color:#6b7280;"></i>
+                                        <span>Sessão atual</span>
+                                    </div>
+                                    <span class="security-status neutral">São Luís - MA</span>
+                                </div>
+                                <div class="security-item">
+                                    <div class="security-item-left">
+                                        <i class="fas fa-clock" style="color:#6b7280;"></i>
+                                        <span>Último acesso</span>
+                                    </div>
+                                    <span class="security-status neutral">${horaFormatada}</span>
+                                </div>
+                                <div class="security-item">
+                                    <div class="security-item-left">
+                                        <i class="fas fa-mobile-alt" style="color:#f59e0b;"></i>
+                                        <span>Outras sessões</span>
+                                    </div>
+                                    <span class="security-status neutral">2 ativas</span>
+                                </div>
+                            </div>
+                            <div class="dash-sidebar-footer">
+                                <button class="btn-manage-security" onclick="admin.switchSection('configuracoes')">
+                                    <i class="fas fa-cog"></i> Gerenciar segurança
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- CARD: AÇÕES RÁPIDAS -->
+                        <div class="dash-sidebar-card">
+                            <div class="dash-sidebar-header">
+                                <div class="dash-sidebar-title">
+                                    <i class="fas fa-bolt"></i>
+                                    <h3>Ações Rápidas</h3>
+                                </div>
+                                <i class="fas fa-chevron-right" style="color:#9ca3af; font-size:12px;"></i>
+                            </div>
+                            <div class="dash-sidebar-body quick-actions">
+                                <a class="quick-action-item" onclick="admin.switchSection('usuarios')">
+                                    <div class="quick-action-icon"><i class="fas fa-users-cog"></i></div>
+                                    <span>Gerenciar usuários</span>
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                                <a class="quick-action-item" onclick="admin.switchSection('nova-prova')">
+                                    <div class="quick-action-icon"><i class="fas fa-file-alt"></i></div>
+                                    <span>Criar prova</span>
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                                <a class="quick-action-item" onclick="admin.abrirModalEnvioNotificacao()">
+                                    <div class="quick-action-icon"><i class="fas fa-bullhorn"></i></div>
+                                    <span>Enviar notificação</span>
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                                <a class="quick-action-item" onclick="admin.switchSection('resultados')">
+                                    <div class="quick-action-icon"><i class="fas fa-chart-line"></i></div>
+                                    <span>Ver relatórios</span>
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
 
-            this.criarGraficos(stats);
+            // Criar gráficos
+            setTimeout(() => {
+                this.criarGraficos(stats);
+            }, 100);
 
         } catch (error) {
-            console.error('Erro ao carregar dashboard:', error);
+            console.error('❌ Erro ao carregar dashboard:', error);
             contentArea.innerHTML = `
                 <div class="error-container">
                     <i class="fas fa-exclamation-triangle"></i>
@@ -2498,32 +2938,321 @@ class AdminPanel {
         }
     }
 
-    gerarAtividadesRecentes(atividades = []) {
-        if (!atividades || atividades.length === 0) {
-            return `
-                <div class="activity-item">
-                    <div class="activity-icon admin">
-                        <i class="fas fa-crown"></i>
+    // ============ ABRIR MODAL DE USUÁRIOS ONLINE ============
+    async abrirModalUsuariosOnline() {
+        console.log('🟢 Abrindo modal de usuários online...');
+        
+        try {
+            // Buscar dados da API
+            this.showToast('🔄 Carregando usuários online...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/usuarios-online', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar usuários');
+            }
+            
+            const usuarios = data.usuarios || [];
+            const total = data.total || 0;
+            
+            // Se não há ninguém online
+            if (usuarios.length === 0) {
+                const modalBody = document.getElementById('modalBody');
+                modalBody.innerHTML = `
+                    <div style="padding: 40px 20px; text-align: center;">
+                        <div style="width: 80px; height: 80px; background: #f3f4f6; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                            <i class="fas fa-user-slash" style="font-size: 36px; color: #9ca3af;"></i>
+                        </div>
+                        <h3 style="margin: 0 0 8px; color: #1f2937; font-size: 18px;">Nenhum usuário online</h3>
+                        <p style="color: #6b7280; margin: 0; font-size: 14px;">
+                            Nenhum usuário esteve ativo nos últimos 5 minutos.
+                        </p>
                     </div>
-                    <div class="activity-content">
-                        <p><strong>Sistema</strong> iniciado</p>
-                        <small>${new Date().toLocaleString('pt-BR')}</small>
+                `;
+                
+                document.getElementById('modalTitle').innerHTML = '<i class="fas fa-signal"></i> Usuários Online';
+                document.getElementById('modalSaveBtn').style.display = 'none';
+                this.openModal();
+                return;
+            }
+            
+            // Montar HTML dos cards
+            let usuariosHtml = '';
+            usuarios.forEach(u => {
+                const iniciais = (u.nome || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                
+                // Ícone e cor por role
+                const roleInfo = this.getRoleInfo(u.role);
+                
+                // Tempo online
+                let tempoTexto = 'Agora';
+                if (u.tempoOnline === 0) tempoTexto = 'Agora';
+                else if (u.tempoOnline === 1) tempoTexto = 'há 1 min';
+                else if (u.tempoOnline < 5) tempoTexto = `há ${u.tempoOnline} min`;
+                else tempoTexto = `há ${u.tempoOnline} min`;
+                
+                // Badge de push
+                const pushBadge = u.temPush 
+                    ? '<span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 20px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;"><i class="fas fa-mobile-alt"></i> Push</span>'
+                    : '<span style="background: #f3f4f6; color: #6b7280; padding: 2px 8px; border-radius: 20px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;"><i class="fas fa-times-circle"></i> Sem push</span>';
+                
+                // Detalhes extras
+                let detalhesExtra = '';
+                if (u.turma) detalhesExtra += `<span><i class="fas fa-users"></i> ${u.turma}</span>`;
+                if (u.matricula) detalhesExtra += `<span><i class="fas fa-id-card"></i> ${u.matricula}</span>`;
+                if (u.departamento) detalhesExtra += `<span><i class="fas fa-building"></i> ${u.departamento}</span>`;
+                
+                // Avatar (foto ou iniciais)
+                const avatarHtml = u.fotoPerfil
+                    ? `<img src="${u.fotoPerfil}" style="width: 100%; height: 100%; object-fit: cover;">`
+                    : `<span style="font-size: 16px; color: white; font-weight: 700;">${iniciais}</span>`;
+                
+                usuariosHtml += `
+                    <div class="usuario-online-card">
+                        <div class="usuario-online-avatar" style="background: ${roleInfo.corGradiente}; position: relative;">
+                            ${avatarHtml}
+                            <span class="online-indicator"></span>
+                        </div>
+                        <div class="usuario-online-content">
+                            <div class="usuario-online-nome">
+                                ${u.nome}
+                                <span class="role-badge-online" style="background: ${roleInfo.corBg}; color: ${roleInfo.corTexto};">
+                                    ${roleInfo.icone} ${roleInfo.label}
+                                </span>
+                            </div>
+                            <div class="usuario-online-email">
+                                <i class="fas fa-envelope"></i> ${u.email}
+                            </div>
+                            <div class="usuario-online-detalhes">
+                                ${detalhesExtra}
+                            </div>
+                            <div class="usuario-online-footer">
+                                <span class="usuario-online-tempo">
+                                    <i class="fas fa-clock"></i> ${tempoTexto}
+                                </span>
+                                ${pushBadge}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // Modal body
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 0; max-height: 75vh; overflow-y: auto;">
+                    <!-- Header de estatísticas -->
+                    <div class="usuarios-online-header">
+                        <div class="usuarios-online-stat">
+                            <div class="stat-icon-wrapper online-pulse-icon">
+                                <i class="fas fa-signal"></i>
+                            </div>
+                            <div>
+                                <div class="stat-valor">${total}</div>
+                                <div class="stat-label">Usuários Online</div>
+                            </div>
+                        </div>
+                        
+                        <div class="usuarios-online-perfis">
+                            ${Object.entries(data.porPerfil || {}).map(([role, count]) => {
+                                const info = this.getRoleInfo(role);
+                                return `
+                                    <div class="perfil-chip" style="background: ${info.corBg}; color: ${info.corTexto};">
+                                        ${info.icone} ${info.label}: <strong>${count}</strong>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de usuários -->
+                    <div class="usuarios-online-lista">
+                        ${usuariosHtml}
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div style="padding: 12px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 11px;">
+                        <i class="fas fa-info-circle"></i> 
+                        Considera-se "online" usuários ativos nos últimos 5 minutos • 
+                        Atualizado em ${new Date().toLocaleTimeString('pt-BR')}
                     </div>
                 </div>
             `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-signal" style="color: #10b981;"></i> Usuários Online';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.openModal();
+            
+            // Auto-refresh a cada 30 segundos enquanto o modal estiver aberto
+            if (this.intervaloUsuariosOnline) {
+                clearInterval(this.intervaloUsuariosOnline);
+            }
+            this.intervaloUsuariosOnline = setInterval(() => {
+                const modal = document.getElementById('modal');
+                if (modal && modal.style.display === 'flex') {
+                    // Só atualizar se o modal estiver aberto
+                    this.atualizarListaUsuariosOnline();
+                } else {
+                    clearInterval(this.intervaloUsuariosOnline);
+                }
+            }, 30000);
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar usuários online:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
+    }
 
-        return atividades.map(ativ => `
-            <div class="activity-item">
-                <div class="activity-icon ${ativ.tipo}">
-                    <i class="fas ${ativ.tipo === 'resultado' ? 'fa-check-circle' : ativ.tipo === 'usuario' ? 'fa-user-plus' : 'fa-pencil-alt'}"></i>
-                </div>
-                <div class="activity-content">
-                    <p><strong>${ativ.usuario}</strong> ${ativ.acao} <strong>${ativ.prova}</strong></p>
-                    <small>${new Date(ativ.data).toLocaleString('pt-BR')}</small>
-                </div>
-            </div>
-        `).join('');
+    // ============ ATUALIZAR LISTA DE USUÁRIOS ONLINE ============
+    async atualizarListaUsuariosOnline() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/usuarios-online', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Atualizar apenas o contador no dashboard (sem abrir modal)
+                const contadorEl = document.getElementById('usuarios-online');
+                if (contadorEl) {
+                    contadorEl.textContent = data.total || 0;
+                }
+                
+                // Se o modal estiver aberto, atualizar seu conteúdo
+                const modal = document.getElementById('modal');
+                if (modal && modal.style.display === 'flex') {
+                    // Reabrir o modal com dados novos (simples)
+                    this.abrirModalUsuariosOnline();
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao atualizar lista:', error);
+        }
+    }
+
+    // ============ HELPER: INFO DO ROLE ============
+    getRoleInfo(role) {
+        const roles = {
+            'aluno': { 
+                icone: '👨‍🎓', 
+                label: 'Aluno', 
+                corBg: '#d1fae5', 
+                corTexto: '#065f46',
+                corGradiente: 'linear-gradient(135deg, #10b981, #059669)'
+            },
+            'professor': { 
+                icone: '👨‍🏫', 
+                label: 'Professor', 
+                corBg: '#fef3c7', 
+                corTexto: '#92400e',
+                corGradiente: 'linear-gradient(135deg, #f59e0b, #d97706)'
+            },
+            'admin': { 
+                icone: '👑', 
+                label: 'Admin', 
+                corBg: '#dbeafe', 
+                corTexto: '#1e40af',
+                corGradiente: 'linear-gradient(135deg, #3b82f6, #2563eb)'
+            },
+            'super_admin': { 
+                icone: '⭐', 
+                label: 'Super Admin', 
+                corBg: '#ede9fe', 
+                corTexto: '#6d28d9',
+                corGradiente: 'linear-gradient(135deg, #8b5cf6, #6d28d9)'
+            },
+            'setor_pedagogico': { 
+                icone: '👩‍🏫', 
+                label: 'Setor Pedagógico', 
+                corBg: '#f3e8ff', 
+                corTexto: '#7c3aed',
+                corGradiente: 'linear-gradient(135deg, #a855f7, #7c3aed)'
+            },
+            'coordenacao_patio': { 
+                icone: '🏃', 
+                label: 'Coord. Pátio', 
+                corBg: '#fef3c7', 
+                corTexto: '#d97706',
+                corGradiente: 'linear-gradient(135deg, #f59e0b, #d97706)'
+            },
+            'cozinha': { 
+                icone: '🍽️', 
+                label: 'Cozinha', 
+                corBg: '#d1fae5', 
+                corTexto: '#059669',
+                corGradiente: 'linear-gradient(135deg, #10b981, #059669)'
+            },
+            'gestao_geral': { 
+                icone: '📊', 
+                label: 'Gestão Geral', 
+                corBg: '#e0f2fe', 
+                corTexto: '#1e40af',
+                corGradiente: 'linear-gradient(135deg, #1e3c72, #2a5298)'
+            },
+            'enfermaria': { 
+                icone: '🏥', 
+                label: 'Enfermaria', 
+                corBg: '#cffafe', 
+                corTexto: '#0891b2',
+                corGradiente: 'linear-gradient(135deg, #0891b2, #06b6d4)'
+            },
+            'supervisao': { 
+                icone: '🛡️', 
+                label: 'Supervisão', 
+                corBg: '#dbeafe', 
+                corTexto: '#1e3a8a',
+                corGradiente: 'linear-gradient(135deg, #1e3a8a, #1e40af)'
+            },
+            'psicologia': { 
+                icone: '🧠', 
+                label: 'Psicologia', 
+                corBg: '#ccfbf1', 
+                corTexto: '#0d9488',
+                corGradiente: 'linear-gradient(135deg, #14b8a6, #0d9488)'
+            },
+            'assistente-social': { 
+                icone: '🤝', 
+                label: 'Assistente Social', 
+                corBg: '#ede9fe', 
+                corTexto: '#7c3aed',
+                corGradiente: 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
+            },
+            'protagonismo': { 
+                icone: '⭐', 
+                label: 'Protagonismo', 
+                corBg: '#ffedd5', 
+                corTexto: '#ea580c',
+                corGradiente: 'linear-gradient(135deg, #f97316, #ea580c)'
+            }
+        };
+        
+        return roles[role] || { 
+            icone: '👤', 
+            label: role || 'Desconhecido', 
+            corBg: '#f3f4f6', 
+            corTexto: '#6b7280',
+            corGradiente: 'linear-gradient(135deg, #6b7280, #4b5563)'
+        };
+    }
+
+    // ============ VER HISTÓRICO COMPLETO ============
+    verHistoricoCompleto() {
+        this.showToast('📊 Carregando histórico completo...', 'info');
+        this.switchSection('monitoramento');
+    }
+
+    // ============ VER HISTÓRICO COMPLETO ============
+    verHistoricoCompleto() {
+        this.showToast('📊 Carregando histórico completo...', 'info');
+        // Pode abrir um modal ou redirecionar para uma página de histórico
+        this.switchSection('monitoramento');
     }
 
     // ============ USUÁRIOS ============
