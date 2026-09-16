@@ -8,7 +8,7 @@
     "backup": "node backup-service.js",
     "backup-schedule": "node backup-scheduler.js",
     "dev": "nodemon server.js",
-    "postinstall": "echo '✅ Dependências instaladas'"
+    "postinstall": "node patch-gaxios.js"
   },
   "engines": {
     "node": "20.x"

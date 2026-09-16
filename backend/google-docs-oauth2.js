@@ -1,14 +1,10 @@
 // backend/google-docs-oauth2.js
 const { google } = require('googleapis');
-const fs = require('fs');
-const path = require('path');
 const { Readable } = require('stream');
+const mongoose = require('mongoose');
 
 class GoogleDocsOAuth2 {
     constructor() {
-        // REMOVER o caminho do arquivo - NÃO vamos mais usar arquivo
-        // this.tokensPath = path.join(__dirname, 'google-tokens.json'); // <-- REMOVER
-        
         this.CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
         this.CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
         
@@ -20,26 +16,27 @@ class GoogleDocsOAuth2 {
         console.log('\n🔧 GoogleDocsOAuth2 inicializado');
         console.log(`   🌍 Ambiente: ${this.isProduction ? 'PRODUÇÃO' : 'DESENVOLVIMENTO'}`);
         console.log(`   🔗 Redirect URI: ${this.REDIRECT_URI}`);
-        console.log(`   💾 Tokens serão salvos APENAS no MongoDB (seguro)`);
         
-        this.init();
-    }
-    
-    init() {
+        // 🔥 CRIA O oauth2Client SINCRONAMENTE NO CONSTRUTOR
         this.oauth2Client = new google.auth.OAuth2(
             this.CLIENT_ID,
             this.CLIENT_SECRET,
             this.REDIRECT_URI
         );
         
-        // Carregar tokens APENAS do MongoDB
-        this.carregarTokensDoMongoDB();
-        
         this.drive = google.drive({ version: 'v3', auth: this.oauth2Client });
         this.docs = google.docs({ version: 'v1', auth: this.oauth2Client });
+        
+        // 🔥 CARREGA OS TOKENS DO MONGODB ASSINCRONAMENTE (não bloqueia)
+        this.carregarTokensDoMongoDB().then(() => {
+            console.log('   ✅ Tokens carregados do MongoDB na inicialização');
+        }).catch(err => {
+            console.log('   ⚠️ Erro ao carregar tokens:', err.message);
+        });
     }
     
     getAuthUrl() {
+        // Agora o oauth2Client sempre existe, pois é criado no construtor
         return this.oauth2Client.generateAuthUrl({
             access_type: 'offline',
             scope: [
@@ -63,9 +60,10 @@ class GoogleDocsOAuth2 {
     
     async isAuthenticated() {
         try {
-            await this.oauth2Client.getAccessToken();
-            return true;
-        } catch {
+            const token = await this.oauth2Client.getAccessToken();
+            return !!token && !!token.token;
+        } catch (error) {
+            console.log('   ⚠️ Não autenticado:', error.message);
             return false;
         }
     }
@@ -135,7 +133,6 @@ class GoogleDocsOAuth2 {
                 const { credentials: novasCredenciais } = await this.oauth2Client.refreshAccessToken();
                 this.oauth2Client.setCredentials(novasCredenciais);
                 
-                // Salvar tokens renovados no MongoDB
                 await this.salvarTokensNoMongoDB(novasCredenciais);
                 
                 console.log('   ✅ Token renovado com sucesso');
@@ -345,13 +342,11 @@ class GoogleDocsOAuth2 {
     }
     
     // ============================================
-    // PERSISTÊNCIA NO MONGODB (APENAS)
+    // PERSISTÊNCIA NO MONGODB
     // ============================================
     
     async salvarTokensNoMongoDB(tokens) {
         try {
-            const mongoose = require('mongoose');
-            
             let Config;
             try {
                 Config = mongoose.model('Config');
@@ -387,11 +382,8 @@ class GoogleDocsOAuth2 {
     
     async carregarTokensDoMongoDB() {
         try {
-            const mongoose = require('mongoose');
-            
             if (mongoose.connection.readyState !== 1) {
-                console.log('   ⚠️ MongoDB não conectado, aguardando...');
-                setTimeout(() => this.carregarTokensDoMongoDB(), 2000);
+                console.log('   ⚠️ MongoDB não conectado. Tokens não carregados.');
                 return false;
             }
             
